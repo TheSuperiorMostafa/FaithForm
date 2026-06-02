@@ -1,0 +1,167 @@
+{
+  "name": "FaithForm Attendance Follow-up SMS",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "faithform-attendance-follow-up",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "webhookId": "faithform-attendance-follow-up"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body ?? $input.first().json;\nconst members = body.followUpMembers ?? [];\nconst serviceDate = body.serviceDate ?? '';\nconst callbackUrl = body.statusCallbackUrl;\nconst secret = $env.N8N_WEBHOOK_SECRET;\n\nif (!members.length) {\n  return [{ json: { skip: true, reason: 'No follow-up members' } }];\n}\n\nreturn members.map((m) => ({\n  json: {\n    entryId: m.entryId,\n    firstName: m.firstName,\n    lastName: m.lastName,\n    phone: m.phone,\n    serviceDate,\n    callbackUrl,\n    secret,\n  },\n}));"
+      },
+      "id": "split-members",
+      "name": "Split Follow-up Members",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-phone",
+              "leftValue": "={{ $json.phone }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-phone",
+      "name": "Has Phone?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [480, 0]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SMS_MOBILE_API_URL }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "=Bearer {{ $env.SMS_MOBILE_API_KEY }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"to\": \"{{ $json.phone }}\",\n  \"message\": \"Hi {{ $json.firstName }}, we missed you on {{ $json.serviceDate }}. Hope to see you soon! — Your church family\"\n}",
+        "options": {}
+      },
+      "id": "send-sms",
+      "name": "Send SMS",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, -80]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.callbackUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-faithform-secret",
+              "value": "={{ $json.secret }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"updates\": [\n    {\n      \"entryId\": \"{{ $json.entryId }}\",\n      \"status\": \"sent\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "callback-sent",
+      "name": "Report Sent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [960, -80]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.callbackUrl }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-faithform-secret",
+              "value": "={{ $json.secret }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"updates\": [\n    {\n      \"entryId\": \"{{ $json.entryId }}\",\n      \"status\": \"skipped\",\n      \"error\": \"No phone number on file\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "id": "callback-skipped",
+      "name": "Report Skipped",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [720, 120]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [[{ "node": "Split Follow-up Members", "type": "main", "index": 0 }]]
+    },
+    "Split Follow-up Members": {
+      "main": [[{ "node": "Has Phone?", "type": "main", "index": 0 }]]
+    },
+    "Has Phone?": {
+      "main": [
+        [{ "node": "Send SMS", "type": "main", "index": 0 }],
+        [{ "node": "Report Skipped", "type": "main", "index": 0 }]
+      ]
+    },
+    "Send SMS": {
+      "main": [[{ "node": "Report Sent", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
