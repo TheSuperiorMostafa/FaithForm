@@ -45,36 +45,43 @@ export function Sidebar({
     <aside
       data-collapsed={collapsed}
       className={cn(
-        "group/sidebar fixed inset-y-0 left-0 z-30 hidden flex-col overflow-hidden border-r border-sidebar bg-sidebar text-sidebar shadow-2xl md:flex",
+        "group/sidebar fixed inset-y-0 left-0 z-30 hidden flex-col overflow-x-hidden overflow-y-hidden border-r border-sidebar bg-sidebar text-sidebar shadow-2xl md:flex",
         collapsed ? "w-[72px]" : "w-64",
       )}
     >
       {/* Brand header */}
-      <div className="relative flex h-[72px] shrink-0 items-center gap-3 border-b border-sidebar px-3">
-        <div className="flex size-10 shrink-0 items-center justify-center">
-          <Logo size={40} priority className="shadow-lg shadow-black/20" />
-        </div>
+      <div className="relative h-[72px] shrink-0 border-b border-sidebar">
         <div
           className={cn(
-            "min-w-0 flex-1 overflow-hidden transition-none",
-            collapsed && "max-w-0 opacity-0",
+            "flex h-full items-center gap-3 px-3",
+            collapsed ? "justify-center" : "pr-4",
           )}
         >
-          <p className="truncate font-heading text-lg font-bold leading-tight text-sidebar-accent">
-            FaithForm
-          </p>
-          {churchName && (
-            <p className="truncate text-xs font-semibold uppercase tracking-wide text-white/65">
-              {churchName}
+          <div className="flex size-10 shrink-0 items-center justify-center">
+            <Logo size={40} priority className="shadow-lg shadow-black/20" />
+          </div>
+          <div
+            className={cn(
+              "min-w-0 flex-1 overflow-hidden",
+              collapsed && "hidden",
+            )}
+          >
+            <p className="truncate font-heading text-lg font-bold leading-tight text-sidebar-accent">
+              FaithForm
             </p>
-          )}
+            {churchName && (
+              <p className="truncate text-xs font-semibold uppercase tracking-wide text-white/65">
+                {churchName}
+              </p>
+            )}
+          </div>
         </div>
 
         <button
           type="button"
           onClick={toggle}
           className={cn(
-            "absolute right-1 top-1/2 z-10 flex size-7 -translate-y-1/2 items-center justify-center rounded-full border border-sidebar bg-sidebar text-white/70 shadow-sm",
+            "absolute -right-3 top-9 z-20 flex size-7 -translate-y-1/2 items-center justify-center rounded-full border border-sidebar bg-sidebar text-white/70 shadow-sm",
             "hover:bg-sidebar-accent hover:text-white hover:shadow-md",
             "opacity-0 group-hover/sidebar:opacity-100 focus-visible:opacity-100",
           )}
@@ -89,7 +96,7 @@ export function Sidebar({
       </div>
 
       {/* Nav items */}
-      <nav className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3">
+      <nav className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain p-3">
         <p
           className={cn(
             "h-6 px-1 pb-1 pt-2 text-[11px] font-bold uppercase tracking-[0.22em] text-sidebar-accent",
@@ -109,7 +116,7 @@ export function Sidebar({
                 href={item.href}
                 title={collapsed ? item.label : undefined}
                 className={cn(
-                  "group relative flex h-11 w-full items-center rounded-lg text-sm font-semibold",
+                  "group relative flex h-11 w-full min-w-0 items-center overflow-hidden rounded-lg text-sm font-semibold",
                   active
                     ? "bg-sidebar-accent/15 text-sidebar-accent"
                     : "text-white/82 hover:bg-brand-lightGold/15 hover:text-white",
@@ -149,14 +156,19 @@ export function Sidebar({
       </nav>
 
       {/* User footer — single stable layout */}
-      <div className="shrink-0 space-y-2 border-t border-sidebar p-3">
+      <div
+        className={cn(
+          "shrink-0 space-y-2 overflow-x-hidden border-t border-sidebar",
+          collapsed ? "p-2" : "p-3",
+        )}
+      >
         {showAdminLink && (
           <Link
             href="/admin"
             title="Admin dashboard"
             className={cn(
-              "flex h-10 items-center rounded-xl border border-sidebar-accent/30 bg-sidebar-accent/10 text-sidebar-accent hover:bg-sidebar-accent/20",
-              collapsed ? "justify-center px-0" : "gap-2 px-3",
+              "flex h-10 min-w-0 items-center overflow-hidden rounded-xl border border-sidebar-accent/30 bg-sidebar-accent/10 text-sidebar-accent hover:bg-sidebar-accent/20",
+              collapsed ? "justify-center" : "gap-2 px-3",
             )}
           >
             <span className="flex size-10 shrink-0 items-center justify-center">
@@ -165,7 +177,7 @@ export function Sidebar({
             <span
               className={cn(
                 "truncate text-sm font-semibold",
-                collapsed && "max-w-0 opacity-0 overflow-hidden",
+                collapsed && "hidden",
               )}
             >
               Admin dashboard
@@ -173,7 +185,14 @@ export function Sidebar({
           </Link>
         )}
 
-        <div className="flex h-[52px] items-center gap-3 rounded-xl border border-sidebar bg-white/5 p-2">
+        <div
+          className={cn(
+            "min-w-0 overflow-hidden rounded-xl border border-sidebar bg-white/5",
+            collapsed
+              ? "flex flex-col items-center gap-1.5 p-1.5"
+              : "flex h-[52px] items-center gap-3 p-2",
+          )}
+        >
           <div
             className="flex size-9 shrink-0 items-center justify-center rounded-full bg-sidebar-accent text-sm font-bold text-white"
             title={userEmail}
@@ -181,12 +200,7 @@ export function Sidebar({
           >
             {initial}
           </div>
-          <div
-            className={cn(
-              "min-w-0 flex-1 overflow-hidden",
-              collapsed && "max-w-0 opacity-0",
-            )}
-          >
+          <div className={cn("min-w-0 flex-1 overflow-hidden", collapsed && "hidden")}>
             <p className="truncate text-sm font-semibold text-white">{userEmail}</p>
             <p className="truncate text-xs capitalize text-white/60">
               {role ?? "Member"}
