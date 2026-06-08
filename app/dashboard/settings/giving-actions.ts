@@ -2,9 +2,22 @@
 
 import { revalidatePath } from "next/cache";
 import { requireChurchAuth } from "@/lib/auth/church";
+import { normalizeHexColor } from "@/lib/giving/branding";
 import { ensureDefaultFunds } from "@/lib/giving/funds";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { refreshAccountFromStripe } from "@/lib/stripe/connect";
+
+async function revalidateGivingPaths(churchId: string) {
+  revalidatePath("/dashboard/settings");
+  revalidatePath("/dashboard/giving");
+  const admin = createAdminClient();
+  const { data } = await admin.from("churches").select("slug").eq("id", churchId).maybeSingle();
+  if (data?.slug) {
+    revalidatePath(`/give/${data.slug}`);
+    revalidatePath(`/give/${data.slug}/portal`);
+    revalidatePath(`/give/${data.slug}/thank-you`);
+  }
+}
 
 function slugify(input: string): string {
   return input
@@ -188,6 +201,76 @@ export async function setDefaultFund(fundId: string): Promise<{ error?: string }
 
   if (error) return { error: error.message };
   revalidatePath("/dashboard/settings");
+  return {};
+}
+
+export async function uploadGivingLogo(
+  formData: FormData,
+): Promise<{ error?: string; logoUrl?: string }> {
+  const auth = await requireChurchAuth();
+  if (!auth.isAdmin) return { error: "Forbidden" };
+
+  const file = formData.get("logo") as File | null;
+  if (!file || file.size === 0) return { error: "No file provided." };
+  if (file.size > 2 * 1024 * 1024) return { error: "Logo must be 2MB or smaller." };
+
+  const allowed = ["image/png", "image/jpeg", "image/jpg"];
+  if (!allowed.includes(file.type)) return { error: "Logo must be PNG or JPG." };
+
+  const ext = file.type === "image/png" ? "png" : "jpg";
+  const path = `${auth.churchId}/logo.${ext}`;
+  const buffer = Buffer.from(await file.arrayBuffer());
+
+  const admin = createAdminClient();
+  const { error: uploadError } = await admin.storage
+    .from("church-logos")
+    .upload(path, buffer, { contentType: file.type, upsert: true });
+
+  if (uploadError) return { error: uploadError.message };
+
+  const { data: publicUrl } = admin.storage.from("church-logos").getPublicUrl(path);
+  const logoUrl = publicUrl.publicUrl;
+
+  const { error } = await admin
+    .from("churches")
+    .update({ logo_url: logoUrl })
+    .eq("id", auth.churchId);
+
+  if (error) return { error: error.message };
+
+  await revalidateGivingPaths(auth.churchId);
+  return { logoUrl };
+}
+
+export async function updateGivingBranding(params: {
+  primaryColor: string | null;
+  accentColor: string | null;
+}): Promise<{ error?: string }> {
+  const auth = await requireChurchAuth();
+  if (!auth.isAdmin) return { error: "Forbidden" };
+
+  const primary = normalizeHexColor(params.primaryColor);
+  const accent = normalizeHexColor(params.accentColor);
+
+  if (params.primaryColor && !primary) {
+    return { error: "Primary color must be a valid hex value (e.g. #1A2B4B)." };
+  }
+  if (params.accentColor && !accent) {
+    return { error: "Accent color must be a valid hex value (e.g. #C19A6B)." };
+  }
+
+  const admin = createAdminClient();
+  const { error } = await admin
+    .from("churches")
+    .update({
+      giving_primary_color: primary,
+      giving_accent_color: accent,
+    })
+    .eq("id", auth.churchId);
+
+  if (error) return { error: error.message };
+
+  await revalidateGivingPaths(auth.churchId);
   return {};
 }
 

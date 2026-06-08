@@ -11,7 +11,7 @@ export async function sendFailedPaymentEmail(
   params: FailedPaymentEmailParams,
 ): Promise<{ sent: boolean }> {
   const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev";
+  const from = process.env.RESEND_FROM_EMAIL ?? "noreply@faithform.io";
   const portalUrl = `${getSiteUrl()}/give/${params.churchSlug}/portal`;
   const greeting = params.donorName ? `Hi ${params.donorName}` : "Hello";
 
@@ -60,7 +60,7 @@ export async function sendPortalMagicLinkEmail(
   params: PortalMagicLinkParams,
 ): Promise<{ sent: boolean }> {
   const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM_EMAIL ?? "onboarding@resend.dev";
+  const from = process.env.RESEND_FROM_EMAIL ?? "noreply@faithform.io";
 
   const html = `
     <p>Sign in to manage your gifts to <strong>${params.churchName}</strong>:</p>

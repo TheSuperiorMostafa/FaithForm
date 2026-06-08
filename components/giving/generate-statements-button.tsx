@@ -47,7 +47,7 @@ export function GenerateStatementsButton({
       {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
       {!hasEin && (
         <p className="mt-2 text-xs text-muted-foreground">
-          EIN required — configure in Settings → Giving.
+          EIN required — configure in Settings → Giving tab.
         </p>
       )}
     </div>

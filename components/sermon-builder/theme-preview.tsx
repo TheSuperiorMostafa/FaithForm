@@ -1,6 +1,6 @@
 "use client";
 
-import type { SlideTheme } from "@/lib/sermon-builder/themes";
+import { getCategoryLabel, type SlideTheme } from "@/lib/sermon-builder/themes";
 import { cn } from "@/lib/utils";
 
 const SAMPLE_VERSE =
@@ -25,17 +25,11 @@ export function ThemePreview({ theme, selected, onSelect }: ThemePreviewProps) {
       )}
     >
       <div
-        className="relative aspect-video w-full p-3"
+        className="relative flex aspect-video w-full items-center justify-center p-3"
         style={{ background: theme.bgCss }}
       >
         <p
-          className="text-[8px] font-medium opacity-80"
-          style={{ color: `#${theme.accent}` }}
-        >
-          John 3:16
-        </p>
-        <p
-          className="mt-1 line-clamp-3 text-[9px] leading-tight"
+          className="line-clamp-3 text-center text-[9px] leading-tight"
           style={{
             color: `#${theme.text}`,
             fontFamily: theme.fontBody,
@@ -45,7 +39,12 @@ export function ThemePreview({ theme, selected, onSelect }: ThemePreviewProps) {
         </p>
       </div>
       <div className="border-t border-border bg-card px-2.5 py-2">
-        <p className="text-xs font-medium">{theme.name}</p>
+        <div className="flex items-start justify-between gap-1">
+          <p className="text-xs font-medium">{theme.name}</p>
+          <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[9px] capitalize text-muted-foreground">
+            {getCategoryLabel(theme.category)}
+          </span>
+        </div>
         <p className="line-clamp-1 text-[10px] text-muted-foreground">
           {theme.description}
         </p>

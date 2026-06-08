@@ -9,31 +9,56 @@ import {
   useElements,
   useStripe,
 } from "@stripe/react-stripe-js";
+import { GivePageHeader } from "@/components/giving/give-page-header";
+import {
+  giveBtnCta,
+  giveBtnPrimary,
+  giveLinkAccent,
+} from "@/components/giving/give-branded-styles";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { isValidHexColor } from "@/lib/giving/branding";
 import {
   chargeCentsWithFeeCoverage,
   feeCoverageAmountCents,
 } from "@/lib/giving/fees";
-import { STRIPE_NONPROFIT_RATE_LABEL } from "@/lib/stripe/config";
 import type { GivingFundRow } from "@/types/giving";
 import { formatCents } from "@/lib/utils/currency";
+import { cn } from "@/lib/utils";
 
 const PRESETS = [2500, 5000, 10000, 25000, 50000];
+
+const WEEKDAYS = [
+  { value: 0, label: "Sunday" },
+  { value: 1, label: "Monday" },
+  { value: 2, label: "Tuesday" },
+  { value: 3, label: "Wednesday" },
+  { value: 4, label: "Thursday" },
+  { value: 5, label: "Friday" },
+  { value: 6, label: "Saturday" },
+];
 
 type GiveFormProps = {
   slug: string;
   churchName: string;
   stripeAccountId: string;
+  logoUrl: string | null;
+  givingPrimaryColor: string | null;
   funds: GivingFundRow[];
+  mode?: "public" | "portal";
+  lockedEmail?: string;
+  lockedName?: string;
+  onPaymentSuccess?: () => void;
 };
 
 function CheckoutForm({
   slug,
+  isPortal,
   onSuccess,
 }: {
   slug: string;
+  isPortal?: boolean;
   onSuccess: () => void;
 }) {
   const stripe = useStripe();
@@ -51,7 +76,9 @@ function CheckoutForm({
     const { error: submitError } = await stripe.confirmPayment({
       elements,
       confirmParams: {
-        return_url: `${window.location.origin}/give/${slug}/thank-you`,
+        return_url: isPortal
+          ? `${window.location.origin}/give/${slug}/portal`
+          : `${window.location.origin}/give/${slug}/thank-you`,
       },
       redirect: "if_required",
     });
@@ -72,9 +99,9 @@ function CheckoutForm({
         }}
       />
       {error && <p className="text-sm text-destructive">{error}</p>}
-      <Button type="submit" className="w-full" disabled={!stripe || loading}>
+      <button type="submit" className={giveBtnCta()} disabled={!stripe || loading}>
         {loading ? "Processing…" : "Complete gift"}
-      </Button>
+      </button>
     </form>
   );
 }
@@ -83,19 +110,29 @@ export function GiveForm({
   slug,
   churchName,
   stripeAccountId,
+  logoUrl,
+  givingPrimaryColor,
   funds,
+  mode = "public",
+  lockedEmail,
+  lockedName,
+  onPaymentSuccess,
 }: GiveFormProps) {
   const router = useRouter();
   const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+  const isPortal = mode === "portal";
 
   const defaultFund = funds.find((f) => f.isDefault) ?? funds[0];
 
   const [amountCents, setAmountCents] = useState(5000);
+  const [amountMode, setAmountMode] = useState<"preset" | "custom">("preset");
   const [customAmount, setCustomAmount] = useState("");
   const [giftType, setGiftType] = useState<"one_time" | "recurring">("one_time");
   const [interval, setInterval] = useState<"week" | "month">("month");
-  const [donorName, setDonorName] = useState("");
-  const [donorEmail, setDonorEmail] = useState("");
+  const [billingDayOfMonth, setBillingDayOfMonth] = useState(1);
+  const [billingDayOfWeek, setBillingDayOfWeek] = useState(() => new Date().getDay());
+  const [donorName, setDonorName] = useState(lockedName ?? "");
+  const [donorEmail, setDonorEmail] = useState(lockedEmail ?? "");
   const [fundId, setFundId] = useState(defaultFund?.id ?? "");
   const [coverFees, setCoverFees] = useState(false);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
@@ -117,25 +154,31 @@ export function GiveForm({
     stripeAccount: stripeAccountId,
   });
 
-  const resolvedAmount = customAmount
-    ? Math.round(Number.parseFloat(customAmount) * 100)
-    : amountCents;
+  const resolvedAmount =
+    amountMode === "custom" && customAmount
+      ? Math.round(Number.parseFloat(customAmount) * 100)
+      : amountCents;
 
   const feeExtra = coverFees ? feeCoverageAmountCents(resolvedAmount) : 0;
   const chargeAmount = coverFees
     ? chargeCentsWithFeeCoverage(resolvedAmount)
     : resolvedAmount;
 
+  const stripeAppearance =
+    givingPrimaryColor && isValidHexColor(givingPrimaryColor)
+      ? { theme: "stripe" as const, variables: { colorPrimary: givingPrimaryColor } }
+      : { theme: "stripe" as const };
+
   const startPayment = async () => {
     if (!resolvedAmount || resolvedAmount < 100) {
-      setError("Minimum gift is $1.00");
+      setError(amountMode === "custom" ? "Enter an amount of at least $1.00" : "Minimum gift is $1.00");
       return;
     }
     if (!donorName.trim()) {
       setError("Name is required.");
       return;
     }
-    if (!donorEmail.trim()) {
+    if (!isPortal && !donorEmail.trim()) {
       setError("Email is required.");
       return;
     }
@@ -147,8 +190,11 @@ export function GiveForm({
     setLoading(true);
     setError(null);
 
-    const endpoint =
-      giftType === "one_time"
+    const endpoint = isPortal
+      ? giftType === "one_time"
+        ? "/api/give/portal/create-intent"
+        : "/api/give/portal/create-subscription"
+      : giftType === "one_time"
         ? "/api/give/create-intent"
         : "/api/give/create-subscription";
 
@@ -159,8 +205,12 @@ export function GiveForm({
             amountCents: chargeAmount,
             intendedAmountCents: resolvedAmount,
             coverFees,
-            donorEmail: donorEmail.trim(),
-            donorName: donorName.trim(),
+            ...(isPortal
+              ? { donorName: donorName.trim() }
+              : {
+                  donorEmail: donorEmail.trim(),
+                  donorName: donorName.trim(),
+                }),
             fundId,
           }
         : {
@@ -169,8 +219,14 @@ export function GiveForm({
             intendedAmountCents: resolvedAmount,
             coverFees,
             interval,
-            donorEmail: donorEmail.trim(),
-            donorName: donorName.trim(),
+            billingDayOfMonth: interval === "month" ? billingDayOfMonth : undefined,
+            billingDayOfWeek: interval === "week" ? billingDayOfWeek : undefined,
+            ...(isPortal
+              ? { donorName: donorName.trim() }
+              : {
+                  donorEmail: donorEmail.trim(),
+                  donorName: donorName.trim(),
+                }),
             fundId,
           };
 
@@ -191,20 +247,33 @@ export function GiveForm({
     setStep("pay");
   };
 
+  const handlePaymentSuccess = () => {
+    if (isPortal && onPaymentSuccess) {
+      setStep("amount");
+      setClientSecret(null);
+      onPaymentSuccess();
+      return;
+    }
+    router.push(`/give/${slug}/thank-you`);
+  };
+
   if (step === "pay" && clientSecret) {
     return (
       <div className="space-y-4">
-        <h2 className="font-heading text-xl font-bold">{churchName}</h2>
+        {!isPortal && (
+          <GivePageHeader churchName={churchName} logoUrl={logoUrl} showRateNote={false} titleAs="h2" />
+        )}
         <Elements
           stripe={stripePromise}
           options={{
             clientSecret,
-            appearance: { theme: "stripe" },
+            appearance: stripeAppearance,
           }}
         >
           <CheckoutForm
             slug={slug}
-            onSuccess={() => router.push(`/give/${slug}/thank-you`)}
+            isPortal={isPortal}
+            onSuccess={handlePaymentSuccess}
           />
         </Elements>
         <Button variant="ghost" type="button" onClick={() => setStep("amount")}>
@@ -216,81 +285,126 @@ export function GiveForm({
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="font-heading text-2xl font-bold">{churchName}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Give securely. Processing: {STRIPE_NONPROFIT_RATE_LABEL}. No FaithForm fee.
-        </p>
-      </div>
+      {!isPortal && <GivePageHeader churchName={churchName} logoUrl={logoUrl} />}
 
       <div className="flex gap-2">
-        <Button
+        <button
           type="button"
-          variant={giftType === "one_time" ? "default" : "outline"}
-          className="flex-1"
+          className={cn(giveBtnPrimary(giftType === "one_time"), "h-10 flex-1 px-4")}
           onClick={() => setGiftType("one_time")}
         >
           One-time
-        </Button>
-        <Button
+        </button>
+        <button
           type="button"
-          variant={giftType === "recurring" ? "default" : "outline"}
-          className="flex-1"
+          className={cn(giveBtnPrimary(giftType === "recurring"), "h-10 flex-1 px-4")}
           onClick={() => setGiftType("recurring")}
         >
           Recurring
-        </Button>
+        </button>
       </div>
 
       {giftType === "recurring" && (
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            size="sm"
-            variant={interval === "week" ? "default" : "outline"}
-            onClick={() => setInterval("week")}
-          >
-            Weekly
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant={interval === "month" ? "default" : "outline"}
-            onClick={() => setInterval("month")}
-          >
-            Monthly
-          </Button>
+        <div className="space-y-3">
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className={cn(giveBtnPrimary(interval === "week"), "h-8 px-3 text-sm")}
+              onClick={() => setInterval("week")}
+            >
+              Weekly
+            </button>
+            <button
+              type="button"
+              className={cn(giveBtnPrimary(interval === "month"), "h-8 px-3 text-sm")}
+              onClick={() => setInterval("month")}
+            >
+              Monthly
+            </button>
+          </div>
+
+          {interval === "month" ? (
+            <div className="space-y-2">
+              <Label htmlFor="billing-day-month">Gift date each month</Label>
+              <select
+                id="billing-day-month"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={billingDayOfMonth}
+                onChange={(e) => setBillingDayOfMonth(Number.parseInt(e.target.value, 10))}
+              >
+                {Array.from({ length: 28 }, (_, i) => i + 1).map((day) => (
+                  <option key={day} value={day}>
+                    {day}
+                    {day === 1 ? "st" : day === 2 ? "nd" : day === 3 ? "rd" : "th"} of the month
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <Label htmlFor="billing-day-week">Gift day each week</Label>
+              <select
+                id="billing-day-week"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                value={billingDayOfWeek}
+                onChange={(e) => setBillingDayOfWeek(Number.parseInt(e.target.value, 10))}
+              >
+                {WEEKDAYS.map((d) => (
+                  <option key={d.value} value={d.value}>
+                    {d.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <p className="text-xs text-muted-foreground">
+            Your first gift processes today. Future gifts run on this schedule.
+          </p>
         </div>
       )}
 
       <div className="grid grid-cols-3 gap-2">
         {PRESETS.map((cents) => (
-          <Button
+          <button
             key={cents}
             type="button"
-            variant={amountCents === cents && !customAmount ? "default" : "outline"}
+            className={cn(
+              giveBtnPrimary(amountMode === "preset" && amountCents === cents),
+              "h-10 px-3",
+            )}
             onClick={() => {
               setAmountCents(cents);
+              setAmountMode("preset");
               setCustomAmount("");
             }}
           >
             ${cents / 100}
-          </Button>
+          </button>
         ))}
+        <button
+          type="button"
+          className={cn(giveBtnPrimary(amountMode === "custom"), "h-10 px-3")}
+          onClick={() => {
+            setAmountMode("custom");
+            setCustomAmount("");
+          }}
+        >
+          Custom
+        </button>
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="custom">Custom amount ($)</Label>
+      {amountMode === "custom" && (
         <Input
-          id="custom"
           type="number"
           min="1"
           step="0.01"
-          placeholder="Other amount"
+          placeholder="Enter amount"
           value={customAmount}
           onChange={(e) => setCustomAmount(e.target.value)}
+          autoFocus
         />
-      </div>
+      )}
 
       <div className="space-y-2">
         <Label htmlFor="fund">Fund</Label>
@@ -319,17 +433,30 @@ export function GiveForm({
         />
       </div>
 
-      <div className="space-y-2">
-        <Label htmlFor="email">Email</Label>
-        <Input
-          id="email"
-          type="email"
-          required
-          value={donorEmail}
-          onChange={(e) => setDonorEmail(e.target.value)}
-          autoComplete="email"
-        />
-      </div>
+      {isPortal ? (
+        <div className="space-y-2">
+          <Label htmlFor="email">Email</Label>
+          <Input
+            id="email"
+            type="email"
+            value={lockedEmail ?? donorEmail}
+            readOnly
+            className="bg-muted"
+          />
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <Label htmlFor="email">Email</Label>
+          <Input
+            id="email"
+            type="email"
+            required
+            value={donorEmail}
+            onChange={(e) => setDonorEmail(e.target.value)}
+            autoComplete="email"
+          />
+        </div>
+      )}
 
       <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3">
         <input
@@ -354,21 +481,22 @@ export function GiveForm({
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
-      <Button
+      <button
         type="button"
-        className="w-full"
-        size="lg"
+        className={giveBtnCta("h-11 text-base")}
         disabled={loading}
         onClick={startPayment}
       >
         {loading ? "Please wait…" : "Continue to payment"}
-      </Button>
+      </button>
 
-      <p className="text-center text-xs text-muted-foreground">
-        <a href={`/give/${slug}/portal`} className="underline hover:text-foreground">
-          Donor portal — manage recurring gifts
-        </a>
-      </p>
+      {!isPortal && (
+        <p className="text-center text-xs text-muted-foreground">
+          <a href={`/give/${slug}/portal`} className={giveLinkAccent("underline")}>
+            Donor portal — manage recurring gifts
+          </a>
+        </p>
+      )}
     </div>
   );
 }

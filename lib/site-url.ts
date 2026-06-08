@@ -6,6 +6,7 @@
 /** Hostnames that must not be used unless explicitly configured by the church operator. */
 const BLOCKED_SITE_HOSTS = new Set([
   "faithform.app",
+  "faithform.vercel.app",
   "give.faithform.com",
   "faithform.com",
   "www.faithform.com",
@@ -25,7 +26,7 @@ function isUsableSiteUrl(url: string): boolean {
 }
 
 /** Stable Vercel project URL — always works without a custom domain. */
-export const DEFAULT_PRODUCTION_SITE_URL = "https://faithform.vercel.app";
+export const DEFAULT_PRODUCTION_SITE_URL = "https://faithform.io";
 
 export function getCanonicalSiteUrl(): string {
   const candidates = [

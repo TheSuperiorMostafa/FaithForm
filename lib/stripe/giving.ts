@@ -1,4 +1,5 @@
 import type Stripe from "stripe";
+import { nextWeekdayAnchorUnix } from "@/lib/giving/branding";
 import { chargeCentsWithFeeCoverage } from "@/lib/giving/fees";
 import { applicationFeeAmount } from "@/lib/stripe/config";
 import { getStripe } from "@/lib/stripe/client";
@@ -96,6 +97,8 @@ export type CreateSubscriptionInput = {
   fundId: string;
   fundSlug: string;
   fundName: string;
+  billingDayOfMonth?: number;
+  billingDayOfWeek?: number;
 };
 
 export async function createConnectedSubscription(
@@ -152,19 +155,38 @@ export async function createConnectedSubscription(
     { stripeAccount: input.stripeAccountId },
   );
 
-  const subscription = await stripe.subscriptions.create(
-    {
-      customer: customerId,
-      items: [{ price: price.id }],
-      payment_behavior: "default_incomplete",
-      payment_settings: {
-        save_default_payment_method: "on_subscription",
-      },
-      expand: ["latest_invoice.payment_intent"],
-      metadata,
+  const subscriptionMetadata: Record<string, string> = {
+    ...metadata,
+  };
+  if (input.billingDayOfMonth) {
+    subscriptionMetadata.billing_day_of_month = String(input.billingDayOfMonth);
+  }
+  if (input.billingDayOfWeek !== undefined) {
+    subscriptionMetadata.billing_day_of_week = String(input.billingDayOfWeek);
+  }
+
+  const subscriptionParams: Stripe.SubscriptionCreateParams = {
+    customer: customerId,
+    items: [{ price: price.id }],
+    payment_behavior: "default_incomplete",
+    payment_settings: {
+      save_default_payment_method: "on_subscription",
     },
-    { stripeAccount: input.stripeAccountId },
-  );
+    expand: ["latest_invoice.payment_intent"],
+    metadata: subscriptionMetadata,
+  };
+
+  if (input.interval === "month" && input.billingDayOfMonth) {
+    subscriptionParams.billing_cycle_anchor_config = {
+      day_of_month: input.billingDayOfMonth,
+    };
+  } else if (input.interval === "week" && input.billingDayOfWeek !== undefined) {
+    subscriptionParams.billing_cycle_anchor = nextWeekdayAnchorUnix(input.billingDayOfWeek);
+  }
+
+  const subscription = await stripe.subscriptions.create(subscriptionParams, {
+    stripeAccount: input.stripeAccountId,
+  });
 
   const invoice = subscription.latest_invoice as
     | (Stripe.Invoice & {

@@ -13,10 +13,10 @@ export function GivingSetupCta() {
           gifts. FaithForm charges no platform fee.
         </p>
         <Link
-          href="/dashboard/settings"
+          href="/dashboard/settings?tab=giving"
           className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground hover:opacity-90"
         >
-          Connect Stripe in Settings
+          Set up giving
         </Link>
       </CardContent>
     </Card>

@@ -21,13 +21,13 @@ Set these in **Vercel → Project → Settings → Environment Variables** (and 
 | `ESV_API_KEY` | ESV Bible API key for sermon scripture lookup | [api.esv.org](https://api.esv.org) → Account → API Key |
 | `N8N_WEBHOOK_SECRET` | Shared secret for n8n webhook calls (attendance) and OAuth state signing | Generate a long random string |
 | `INTEGRATION_OAUTH_STATE_SECRET` | Signs Google/Facebook OAuth state (optional; falls back to `N8N_WEBHOOK_SECRET`) | Long random string |
-| `NEXT_PUBLIC_SITE_URL` | Public URL of the deployed app (no trailing slash) | Your Vercel production URL, e.g. `https://faithform.vercel.app` |
+| `NEXT_PUBLIC_SITE_URL` | Public URL of the deployed app (no trailing slash) | `https://faithform.io` |
 | `GOOGLE_CLIENT_ID` | Google OAuth client ID | [Google Cloud Console](https://console.cloud.google.com) → APIs & Services → Credentials |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth client secret | Same as above |
-| `GOOGLE_REDIRECT_URI` | OAuth callback URL | `https://your-app.vercel.app/api/integrations/google/callback` |
+| `GOOGLE_REDIRECT_URI` | OAuth callback URL | `https://faithform.io/api/integrations/google/callback` |
 | `FACEBOOK_APP_ID` | Meta app ID | [Meta for Developers](https://developers.facebook.com) → your app → Settings → Basic |
 | `FACEBOOK_APP_SECRET` | Meta app secret | Same as above |
-| `FACEBOOK_REDIRECT_URI` | Facebook OAuth callback | `https://your-app.vercel.app/api/integrations/facebook/callback` |
+| `FACEBOOK_REDIRECT_URI` | Facebook OAuth callback | `https://faithform.io/api/integrations/facebook/callback` |
 
 ### Optional (automations)
 
@@ -73,13 +73,13 @@ Set these in **Vercel → Project → Settings → Environment Variables** (and 
    - Enable **Google Calendar API** and **Gmail API**
    - Configure OAuth consent screen (add test users while in testing)
    - Create OAuth 2.0 Web client; authorized redirect URI:  
-     `https://your-app.vercel.app/api/integrations/google/callback`
+     `https://faithform.io/api/integrations/google/callback`
    - Scopes used: Calendar events, Gmail compose, user email
 
 2. **Meta for Developers**
    - Create an app with **Facebook Login** and **Pages** products
    - Add OAuth redirect:  
-     `https://your-app.vercel.app/api/integrations/facebook/callback`
+     `https://faithform.io/api/integrations/facebook/callback`
    - Permissions: `pages_show_list`, `pages_manage_posts`, `pages_read_engagement`
    - The connecting user must manage at least one Facebook Page
 
@@ -119,11 +119,9 @@ Replace `<your-auth-user-uuid>` with the user's ID from **Authentication → Use
 ### 5. Configure site URL and redirects
 
 1. Go to **Authentication → URL Configuration**.
-2. Set **Site URL** to your Vercel production URL, e.g. `https://faithform.vercel.app`
+2. Set **Site URL** to `https://faithform.io`
 3. Under **Redirect URLs**, add:
-   - `https://faithform.vercel.app/auth/callback`
-
-> After your first Vercel deploy, return here and update these URLs to match your actual production domain (see [Vercel Deploy Steps](#vercel-deploy-steps) below).
+   - `https://faithform.io/auth/callback`
 
 ---
 
@@ -155,27 +153,27 @@ git push -u origin main
 
 ### After first deploy
 
-1. Copy the production URL (e.g. `https://faithform.vercel.app`).
-2. Set `NEXT_PUBLIC_SITE_URL` in Vercel to that URL (if not already set).
+1. Confirm `faithform.io` is the primary domain in **Vercel → Settings → Domains**.
+2. Set `NEXT_PUBLIC_SITE_URL` in Vercel to `https://faithform.io` (if not already set).
 3. Go back to **Supabase → Authentication → URL Configuration**:
-   - Update **Site URL** to the production Vercel URL.
-   - Add the production URL to **Redirect URLs**: `https://your-vercel-domain.vercel.app/auth/callback`
+   - Update **Site URL** to `https://faithform.io`.
+   - Add **Redirect URLs**: `https://faithform.io/auth/callback`
 4. Redeploy if you changed environment variables.
 
 ---
 
-## Custom Domain (Optional)
+## Custom Domain
 
-If you want a custom domain (e.g. `app.faithform.io`):
+Production runs at `https://faithform.io`.
 
 1. **Vercel Dashboard** → your project → **Settings → Domains**.
-2. Add your domain (e.g. `app.faithform.io`).
-3. At your domain registrar, add a **CNAME** record pointing to `cname.vercel-dns.com`.
+2. Add `faithform.io` and set it as the **primary** production domain.
+3. At your domain registrar, add the DNS records Vercel provides (apex `A` records or `CNAME` as instructed).
 4. Wait for DNS propagation and Vercel to issue an SSL certificate.
 5. Update **Supabase → Authentication → URL Configuration**:
-   - **Site URL:** `https://app.faithform.io`
-   - **Redirect URLs:** `https://app.faithform.io/auth/callback`
-6. Update `NEXT_PUBLIC_SITE_URL` in Vercel to `https://app.faithform.io` and redeploy.
+   - **Site URL:** `https://faithform.io`
+   - **Redirect URLs:** `https://faithform.io/auth/callback`
+6. Update `NEXT_PUBLIC_SITE_URL`, `GOOGLE_REDIRECT_URI`, and `FACEBOOK_REDIRECT_URI` in Vercel to use `https://faithform.io` and redeploy.
 
 ---
 

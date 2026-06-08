@@ -95,35 +95,16 @@ export async function renderSimplePptx(input: SimplePptxInput): Promise<Buffer> 
     const chunks = chunkVerses(passage.verses, 64);
 
     for (const chunk of chunks) {
-      const from = chunk[0]!.number;
-      const to = chunk[chunk.length - 1]!.number;
-      const refLabel = formatReference(
-        passage.bookName,
-        passage.chapter,
-        from,
-        to,
-      );
       const bodyText = verseChunkToText(chunk);
 
       const slide = pptx.addSlide();
       slide.background = { color: theme.bg };
 
-      slide.addText(refLabel, {
-        x: MARGIN_X,
-        y: 0.35,
-        w: BODY_W,
-        h: 0.5,
-        fontSize: 14,
-        color: theme.accent,
-        fontFace: theme.fontHead,
-        italic: theme.italicRef ?? false,
-      });
-
       slide.addText(bodyText, {
         x: MARGIN_X,
-        y: 0.85,
+        y: 0.5,
         w: BODY_W,
-        h: 5.7,
+        h: 6.2,
         fontSize: pickBodyFontSize(bodyText),
         color: theme.text,
         fontFace: theme.fontBody,

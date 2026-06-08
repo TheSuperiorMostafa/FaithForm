@@ -10,7 +10,7 @@ Copy from [`.env.example`](../.env.example):
 - `STRIPE_WEBHOOK_SECRET_SNAPSHOT` — optional; use if you also have a thin destination and need both secrets during migration
 - `STRIPE_WEBHOOK_SECRETS` — optional comma-separated list of `whsec_...` values (tries each until one verifies)
 - `PLATFORM_APPLICATION_FEE_AMOUNT` — `0` at launch
-- `NEXT_PUBLIC_SITE_URL` — your real app URL, e.g. `https://faithform.vercel.app` (give links: `{SITE_URL}/give/{slug}`)
+- `NEXT_PUBLIC_SITE_URL` — your real app URL, e.g. `https://faithform.io` (give links: `{SITE_URL}/give/{slug}`)
 - `NEXT_PUBLIC_GIVE_HOST` — optional; only if you own a dedicated give subdomain and set `NEXT_PUBLIC_GIVE_USE_DEDICATED_HOST=true`
 - `NEXT_PUBLIC_SITE_URL` — canonical app URL for Connect return URLs
 
@@ -32,7 +32,7 @@ FaithForm’s handler expects **snapshot** (classic) events — full `payment_in
 
 If you created a second destination with **Use thin events** enabled, it has a **different** signing secret (`whsec_...`) than your snapshot destination. Sending both to the same URL with only one secret in Vercel causes **400 Invalid signature** on the other destination.
 
-**Recommended:** Use one snapshot destination for `https://faithform.vercel.app/api/webhooks/stripe` and disable or delete the thin destination until you migrate intentionally.
+**Recommended:** Use one snapshot destination for `https://faithform.io/api/webhooks/stripe` and disable or delete the thin destination until you migrate intentionally.
 
 If you must run both temporarily, set in Vercel:
 
@@ -76,7 +76,7 @@ Enabled on the Payment Element via `wallets: { applePay: 'auto', googlePay: 'aut
 
 - `/dashboard/giving/gifts` — search, filter, pagination, CSV export, refunds
 - `/dashboard/giving/donors` — YTD totals per donor
-- Settings → Giving — fund CRUD, EIN, statement address
+- Settings → Giving tab — fund CRUD, EIN, statement address
 - QR code on giving home
 
 ## Local development
@@ -91,12 +91,12 @@ stripe listen --forward-to localhost:3000/api/webhooks/stripe
 
 Use the CLI `whsec_...` value as `STRIPE_WEBHOOK_SECRET`.
 
-4. Give pages are at `/give/[slug]` on your main app URL (e.g. `https://faithform.vercel.app/give/your-church-slug`).
+4. Give pages are at `/give/[slug]` on your main app URL (e.g. `https://faithform.io/give/your-church-slug`).
 
 ## Sandbox → live cutover
 
 1. Complete Connect platform settings in Stripe Dashboard (test mode).
-2. Onboard a test Standard connected account from **Dashboard → Settings → Giving**.
+2. Onboard a test Standard connected account from **Dashboard → Settings → Giving tab**.
 3. Send a test gift on `/give/[slug]` (or your full `NEXT_PUBLIC_SITE_URL/give/[slug]`).
 4. Confirm `giving_donations` rows and dashboard totals.
 5. Switch to **live** API keys in production env.
@@ -113,4 +113,4 @@ Optional: add a dedicated give subdomain to Vercel, set `NEXT_PUBLIC_GIVE_HOST` 
 - `application_fee_amount` from `PLATFORM_APPLICATION_FEE_AMOUNT` (0 at launch)
 - Card data via Stripe Payment Element only (PCI SAQ A)
 - Church dashboard: `/dashboard/giving`
-- Public give page: `{NEXT_PUBLIC_SITE_URL}/give/{slug}` (e.g. `https://faithform.vercel.app/give/{slug}`)
+- Public give page: `{NEXT_PUBLIC_SITE_URL}/give/{slug}` (e.g. `https://faithform.io/give/{slug}`)

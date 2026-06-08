@@ -36,7 +36,6 @@ function previewSizeClass(text: string): string {
 export function SlidePreview({
   themeId,
   verses,
-  reference,
   translation,
   className,
 }: SlidePreviewProps) {
@@ -53,12 +52,6 @@ export function SlidePreview({
       )}
       style={{ background: theme.bgCss }}
     >
-      <p
-        className="absolute left-4 top-3 text-xs font-medium"
-        style={{ color: `#${theme.accent}` }}
-      >
-        {reference}
-      </p>
       <p
         className={cn(
           "absolute inset-x-4 top-1/2 max-h-[70%] -translate-y-1/2 overflow-hidden text-center font-medium leading-snug",

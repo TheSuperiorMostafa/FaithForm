@@ -27,9 +27,15 @@ type ChurchStripeRow = {
   stripe_onboarding_status: StripeOnboardingStatus;
   stripe_requirements_due: string[] | null;
   giving_enabled_at: string | null;
+  logo_url?: string | null;
+  giving_primary_color?: string | null;
+  giving_accent_color?: string | null;
   ein?: string | null;
   statement_address?: string | null;
 };
+
+const CHURCH_GIVING_SELECT =
+  "id, name, slug, stripe_account_id, stripe_charges_enabled, stripe_payouts_enabled, stripe_details_submitted, stripe_onboarding_status, stripe_requirements_due, giving_enabled_at, logo_url, giving_primary_color, giving_accent_color, ein, statement_address";
 
 const DONATION_SELECT = `
   id,
@@ -67,6 +73,9 @@ function mapChurchProfile(row: ChurchStripeRow): ChurchGivingProfile {
       : [],
     givingEnabledAt: row.giving_enabled_at,
     givePageUrl: getGivePageUrl(row.slug),
+    logoUrl: row.logo_url ?? null,
+    givingPrimaryColor: row.giving_primary_color ?? null,
+    givingAccentColor: row.giving_accent_color ?? null,
     ein: row.ein ?? null,
     statementAddress: row.statement_address ?? null,
   };
@@ -167,9 +176,7 @@ export async function getChurchGivingProfile(
   const supabase = createClient();
   const { data, error } = await supabase
     .from("churches")
-    .select(
-      "id, name, slug, stripe_account_id, stripe_charges_enabled, stripe_payouts_enabled, stripe_details_submitted, stripe_onboarding_status, stripe_requirements_due, giving_enabled_at, ein, statement_address",
-    )
+    .select(CHURCH_GIVING_SELECT)
     .eq("id", churchId)
     .maybeSingle();
 
@@ -181,9 +188,7 @@ export async function getChurchBySlug(slug: string): Promise<ChurchGivingProfile
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("churches")
-    .select(
-      "id, name, slug, stripe_account_id, stripe_charges_enabled, stripe_payouts_enabled, stripe_details_submitted, stripe_onboarding_status, stripe_requirements_due, giving_enabled_at, ein, statement_address",
-    )
+    .select(CHURCH_GIVING_SELECT)
     .eq("slug", slug)
     .maybeSingle();
 

@@ -8,7 +8,7 @@ import {
   fetchChapterAction,
 } from "@/app/dashboard/sermon-builder/actions";
 import { SlidePreview } from "@/components/sermon-builder/slide-preview";
-import { ThemePreview } from "@/components/sermon-builder/theme-preview";
+import { ThemePicker } from "@/components/sermon-builder/theme-picker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -23,10 +23,7 @@ import type {
   TranslationBook,
 } from "@/lib/bible/types";
 import { buildScriptureRef } from "@/lib/sermon-builder/parse-ref";
-import {
-  DEFAULT_THEME_ID,
-  SLIDE_THEMES,
-} from "@/lib/sermon-builder/themes";
+import { DEFAULT_THEME_ID } from "@/lib/sermon-builder/themes";
 import {
   MAX_SIMPLE_PASSAGES,
   type SimplePassageInput,
@@ -522,16 +519,7 @@ export function SimpleSermonBuilder({
           </p>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {SLIDE_THEMES.map((theme) => (
-              <ThemePreview
-                key={theme.id}
-                theme={theme}
-                selected={themeId === theme.id}
-                onSelect={() => setThemeId(theme.id)}
-              />
-            ))}
-          </div>
+          <ThemePicker selectedId={themeId} onSelect={setThemeId} />
         </CardContent>
       </Card>
 

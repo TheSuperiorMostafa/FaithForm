@@ -1,13 +1,7 @@
 import { redirect } from "next/navigation";
-import { Suspense } from "react";
-import Link from "next/link";
-import { AISettingsForm } from "@/components/settings/ai-settings-form";
-import { GivingCard } from "@/components/settings/giving-card";
-import { IntegrationsCard } from "@/components/settings/integrations-card";
+import { SettingsTabs } from "@/components/settings/settings-tabs";
 import { getGivingFundsForSettings } from "@/app/dashboard/settings/giving-actions";
 import { getChurchGivingProfile } from "@/lib/queries/giving";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getChurchAuth } from "@/lib/auth/church";
 import { getIntegrationStatus } from "@/lib/integrations/tokens";
 import { getChurchAISettings } from "@/lib/queries/sermons";
@@ -50,52 +44,13 @@ export default async function SettingsPage() {
         </p>
       </div>
 
-      <Suspense fallback={null}>
-        <IntegrationsCard isAdmin={auth.isAdmin} status={integrationStatus} />
-      </Suspense>
-
-      {givingProfile && (
-        <Suspense fallback={null}>
-          <GivingCard
-            isAdmin={auth.isAdmin}
-            profile={givingProfile}
-            funds={givingFunds}
-          />
-        </Suspense>
-      )}
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Display</CardTitle>
-          <CardDescription>Manage light and dark mode preferences.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ThemeToggle variant="segmented" />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Resources</CardTitle>
-          <CardDescription>Access Documents and Support tools from Settings.</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          <Link
-            href="/dashboard/library"
-            className="rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:border-accent hover:bg-accent/10"
-          >
-            Documents
-          </Link>
-          <Link
-            href="/dashboard/support"
-            className="rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:border-accent hover:bg-accent/10"
-          >
-            Support
-          </Link>
-        </CardContent>
-      </Card>
-
-      <AISettingsForm settings={settings} isAdmin={auth.isAdmin} />
+      <SettingsTabs
+        isAdmin={auth.isAdmin}
+        integrationStatus={integrationStatus}
+        settings={settings}
+        givingProfile={givingProfile}
+        givingFunds={givingFunds}
+      />
     </div>
   );
 }

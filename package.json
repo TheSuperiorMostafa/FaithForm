@@ -10,7 +10,9 @@
     "db:sermon": "node scripts/apply-sermon-migration.mjs",
     "db:stripe": "node scripts/apply-stripe-migration.mjs",
     "db:onboarding": "node scripts/apply-onboarding-migration.mjs",
-    "db:giving-enhancements": "node scripts/apply-giving-enhancements-migration.mjs"
+    "db:giving-enhancements": "node scripts/apply-giving-enhancements-migration.mjs",
+    "db:giving-branding": "node scripts/apply-giving-branding-migration.mjs",
+    "validate:themes": "node scripts/validate-slide-themes.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.79",

@@ -5,6 +5,7 @@ import {
   consumeMagicLinkToken,
   getDonorPortalSession,
 } from "@/lib/giving/portal-session";
+import { getActiveFundsForChurch } from "@/lib/giving/funds";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getChurchBySlug } from "@/lib/queries/giving";
 
@@ -43,7 +44,11 @@ export default async function PortalPage({ params, searchParams }: PageProps) {
 
   if (!session) {
     return (
-      <PortalLogin slug={params.slug} churchName={church.churchName} />
+      <PortalLogin
+        slug={params.slug}
+        churchName={church.churchName}
+        logoUrl={church.logoUrl}
+      />
     );
   }
 
@@ -86,11 +91,20 @@ export default async function PortalPage({ params, searchParams }: PageProps) {
     .eq("status", "succeeded")
     .gte("created_at", yearStart);
 
+  const funds =
+    church.stripeChargesEnabled && church.stripeAccountId
+      ? await getActiveFundsForChurch(church.churchId)
+      : [];
+
   return (
     <PortalDashboard
       slug={params.slug}
       churchName={church.churchName}
       stripeAccountId={church.stripeAccountId ?? ""}
+      logoUrl={church.logoUrl}
+      givingPrimaryColor={church.givingPrimaryColor}
+      funds={funds}
+      givingEnabled={Boolean(church.stripeChargesEnabled && church.stripeAccountId)}
       donor={{
         name: (donor?.name as string) ?? null,
         email: (donor?.email as string) ?? "",

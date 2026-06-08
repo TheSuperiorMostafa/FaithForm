@@ -31,7 +31,7 @@ export function FundsSettings({ funds }: { funds: GivingFundRow[] }) {
       <div>
         <h4 className="text-sm font-medium">Giving funds</h4>
         <p className="text-xs text-muted-foreground">
-          Donors choose a fund on your give page. At least one fund must remain active.
+          Donors choose a fund on your giving page. At least one fund must remain active.
         </p>
       </div>
 

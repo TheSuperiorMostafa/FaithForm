@@ -1,0 +1,57 @@
+[data-give-branded] .give-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: opacity 0.15s;
+}
+
+[data-give-branded] .give-btn:disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+[data-give-branded] .give-btn-primary-active {
+  background-color: var(--give-primary);
+  color: #fff;
+  border: 1px solid var(--give-primary);
+}
+
+[data-give-branded] .give-btn-primary-outline {
+  background-color: transparent;
+  color: var(--give-primary);
+  border: 1px solid color-mix(in srgb, var(--give-primary) 35%, transparent);
+}
+
+[data-give-branded] .give-btn-primary-outline:hover {
+  background-color: color-mix(in srgb, var(--give-primary) 8%, transparent);
+}
+
+[data-give-branded] .give-btn-cta {
+  width: 100%;
+  padding: 0.625rem 1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  background-color: var(--give-primary);
+  color: #fff;
+  border: none;
+}
+
+[data-give-branded] .give-btn-cta:hover {
+  opacity: 0.92;
+}
+
+[data-give-branded] .give-link-accent {
+  color: var(--give-accent);
+}
+
+[data-give-branded] .give-link-accent:hover {
+  text-decoration: underline;
+}
+
+[data-give-branded] .give-shell-header {
+  background-color: var(--give-primary);
+  color: #fff;
+}

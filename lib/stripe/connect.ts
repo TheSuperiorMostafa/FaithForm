@@ -112,8 +112,8 @@ export async function createAccountLink(
   const base = getSiteUrl();
   const link = await stripe.accountLinks.create({
     account: stripeAccountId,
-    refresh_url: `${base}/dashboard/settings?stripe_refresh=1`,
-    return_url: `${base}/dashboard/settings?stripe_return=1`,
+    refresh_url: `${base}/dashboard/settings?tab=giving&stripe_refresh=1`,
+    return_url: `${base}/dashboard/settings?tab=giving&stripe_return=1`,
     type: "account_onboarding",
   });
   return link.url;

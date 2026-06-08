@@ -18,10 +18,10 @@ export default function OnboardingLayout({
         <p className="text-sm text-muted-foreground">
           Need help?{" "}
           <a
-            href="mailto:support@faithform.app"
+            href="mailto:support@faithform.io"
             className="text-foreground underline-offset-4 hover:underline"
           >
-            support@faithform.app
+            support@faithform.io
           </a>
         </p>
       </header>

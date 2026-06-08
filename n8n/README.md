@@ -35,7 +35,7 @@ After attendance submit, FaithForm POSTs:
     }
   ],
   "notes": null,
-  "statusCallbackUrl": "https://your-app.vercel.app/api/webhooks/attendance-follow-up-status"
+  "statusCallbackUrl": "https://faithform.io/api/webhooks/attendance-follow-up-status"
 }
 ```
 

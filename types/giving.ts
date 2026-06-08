@@ -36,6 +36,9 @@ export type ChurchGivingProfile = {
   stripeRequirementsDue: string[];
   givingEnabledAt: string | null;
   givePageUrl: string;
+  logoUrl: string | null;
+  givingPrimaryColor: string | null;
+  givingAccentColor: string | null;
   ein?: string | null;
   statementAddress?: string | null;
 };

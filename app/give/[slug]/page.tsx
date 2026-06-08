@@ -32,6 +32,8 @@ export default async function GivePage({ params }: PageProps) {
       slug={church.slug}
       churchName={church.churchName}
       stripeAccountId={church.stripeAccountId}
+      logoUrl={church.logoUrl}
+      givingPrimaryColor={church.givingPrimaryColor}
       funds={funds}
     />
   );

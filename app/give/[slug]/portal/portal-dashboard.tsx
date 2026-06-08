@@ -1,10 +1,13 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
+import { GiveForm } from "@/app/give/[slug]/give-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import type { GivingFundRow } from "@/types/giving";
 import { formatCents } from "@/lib/utils/currency";
 
 type Subscription = {
@@ -77,6 +80,10 @@ export function PortalDashboard({
   slug,
   churchName,
   stripeAccountId,
+  logoUrl,
+  givingPrimaryColor,
+  funds,
+  givingEnabled,
   donor,
   subscriptions,
   gifts,
@@ -87,6 +94,10 @@ export function PortalDashboard({
   slug: string;
   churchName: string;
   stripeAccountId: string;
+  logoUrl: string | null;
+  givingPrimaryColor: string | null;
+  funds: GivingFundRow[];
+  givingEnabled: boolean;
   donor: { name: string | null; email: string; hasStripeCustomer: boolean };
   subscriptions: Subscription[];
   gifts: Gift[];
@@ -94,6 +105,7 @@ export function PortalDashboard({
   donorId: string;
   year: number;
 }) {
+  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [setupSecret, setSetupSecret] = useState<string | null>(null);
   const [amountEdits, setAmountEdits] = useState<Record<string, string>>({});
@@ -139,14 +151,49 @@ export function PortalDashboard({
     });
   };
 
+  const signOut = () => {
+    startTransition(async () => {
+      await fetch("/api/give/portal/sign-out", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug }),
+      });
+      router.push(`/give/${slug}/portal`);
+      router.refresh();
+    });
+  };
+
   return (
     <div className="mx-auto max-w-lg space-y-8">
-      <div>
-        <h1 className="font-heading text-2xl font-bold">{churchName}</h1>
-        <p className="text-sm text-muted-foreground">
-          Signed in as {donor.name ?? donor.email}
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="font-heading text-2xl font-bold">{churchName}</h1>
+          <p className="text-sm text-muted-foreground">
+            Signed in as {donor.name ?? donor.email}
+          </p>
+        </div>
+        <Button type="button" variant="ghost" size="sm" disabled={pending} onClick={signOut}>
+          Sign out
+        </Button>
       </div>
+
+      {givingEnabled && funds.length > 0 && (
+        <section id="give-now" className="space-y-3">
+          <h2 className="font-heading text-lg font-semibold">Give now</h2>
+          <GiveForm
+            mode="portal"
+            slug={slug}
+            churchName={churchName}
+            stripeAccountId={stripeAccountId}
+            logoUrl={logoUrl}
+            givingPrimaryColor={givingPrimaryColor}
+            funds={funds}
+            lockedEmail={donor.email}
+            lockedName={donor.name ?? ""}
+            onPaymentSuccess={() => router.refresh()}
+          />
+        </section>
+      )}
 
       {failedSubs.length > 0 && (
         <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 text-sm">
@@ -320,11 +367,6 @@ export function PortalDashboard({
         )}
       </section>
 
-      <p className="text-center text-xs text-muted-foreground">
-        <a href={`/give/${slug}`} className="underline hover:text-foreground">
-          Make a gift
-        </a>
-      </p>
     </div>
   );
 }

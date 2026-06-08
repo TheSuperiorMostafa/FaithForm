@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "themes": [
+    {
+      "id": "midnight",
+      "name": "Midnight",
+      "description": "Deep navy with gold accents — dramatic and reverent",
+      "category": "traditional",
+      "tags": ["navy", "gold", "serif", "evening", "formal", "dramatic"],
+      "bg": "0E1428",
+      "bgCss": "#0E1428",
+      "text": "F8FAFC",
+      "accent": "C9A227",
+      "fontHead": "Georgia",
+      "fontBody": "Georgia",
+      "italicRef": true,
+      "featured": true
+    },
+    {
+      "id": "ivory",
+      "name": "Ivory Classic",
+      "description": "Warm cream with charcoal type — timeless and readable",
+      "category": "traditional",
+      "tags": ["cream", "light", "serif", "readable", "classic", "neutral"],
+      "bg": "FAF7F2",
+      "bgCss": "#FAF7F2",
+      "text": "1C1917",
+      "accent": "78716C",
+      "fontHead": "Georgia",
+      "fontBody": "Georgia",
+      "featured": true
+    },
+    {
+      "id": "sunrise",
+      "name": "Sunrise",
+      "description": "Soft coral gradient feel — warm and inviting",
+      "category": "contemporary",
+      "tags": ["coral", "warm", "gradient", "morning", "inviting", "sans-serif"],
+      "bg": "FFF1E6",
+      "bgCss": "linear-gradient(135deg, #FFF1E6 0%, #FFD6BA 100%)",
+      "text": "431407",
+      "accent": "C2410C",
+      "fontHead": "Calibri",
+      "fontBody": "Calibri",
+      "featured": true
+    },
+    {
+      "id": "forest",
+      "name": "Forest",
+      "description": "Deep green with sage text — calm and grounded",
+      "category": "nature",
+      "tags": ["green", "earth", "calm", "outdoor", "grounded", "sans-serif"],
+      "bg": "1A2E1A",
+      "bgCss": "#1A2E1A",
+      "text": "E8F0E8",
+      "accent": "86A87A",
+      "fontHead": "Calibri",
+      "fontBody": "Calibri"
+    },
+    {
+      "id": "cathedral",
+      "name": "Cathedral Stone",
+      "description": "Stone gray with burgundy accents — traditional",
+      "category": "traditional",
+      "tags": ["stone", "burgundy", "liturgical", "serif", "formal", "classic"],
+      "bg": "E8E4DF",
+      "bgCss": "#E8E4DF",
+      "text": "292524",
+      "accent": "7F1D1D",
+      "fontHead": "Times New Roman",
+      "fontBody": "Times New Roman",
+      "italicRef": true
+    },
+    {
+      "id": "royal",
+      "name": "Royal Velvet",
+      "description": "Rich purple with silver type — bold and elegant",
+      "category": "bold",
+      "tags": ["purple", "elegant", "bold", "serif", "evening", "dramatic"],
+      "bg": "2D1B4E",
+      "bgCss": "#2D1B4E",
+      "text": "F1E8FF",
+      "accent": "C4B5FD",
+      "fontHead": "Georgia",
+      "fontBody": "Georgia",
+      "italicRef": true
+    }
+  ]
+}

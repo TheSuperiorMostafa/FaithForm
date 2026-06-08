@@ -1,0 +1,63 @@
+"use client";
+
+import { useState } from "react";
+import { BottomNav } from "@/components/dashboard/bottom-nav";
+import { Sidebar } from "@/components/dashboard/sidebar";
+import { Topbar } from "@/components/dashboard/topbar";
+import { cn } from "@/lib/utils";
+
+type DashboardShellProps = {
+  userEmail: string;
+  churchName: string | null;
+  role: string | null;
+  initialCollapsed: boolean;
+  children: React.ReactNode;
+};
+
+function setCollapsedCookie(value: boolean) {
+  document.cookie = `sidebar:collapsed=${value ? "1" : "0"}; path=/; max-age=${
+    60 * 60 * 24 * 365
+  }; samesite=lax`;
+}
+
+export function DashboardShell({
+  userEmail,
+  churchName,
+  role,
+  initialCollapsed,
+  children,
+}: DashboardShellProps) {
+  const [collapsed, setCollapsed] = useState(initialCollapsed);
+
+  const handleCollapsedChange = (next: boolean) => {
+    setCollapsed(next);
+    setCollapsedCookie(next);
+  };
+
+  return (
+    <div className="h-dvh overflow-hidden bg-background">
+      <Sidebar
+        userEmail={userEmail}
+        churchName={churchName}
+        role={role}
+        collapsed={collapsed}
+        onCollapsedChange={handleCollapsedChange}
+      />
+
+      <div
+        className={cn(
+          "flex h-dvh min-w-0 flex-col overflow-hidden",
+          collapsed ? "md:ml-[72px]" : "md:ml-64",
+        )}
+      >
+        <Topbar userEmail={userEmail} churchName={churchName} />
+
+        <main className="flex-1 overflow-y-auto p-5 pb-24 md:p-8 md:pb-8">
+          {children}
+        </main>
+      </div>
+
+      <BottomNav />
+    </div>
+  );
+}

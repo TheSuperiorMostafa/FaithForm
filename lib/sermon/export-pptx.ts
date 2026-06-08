@@ -95,30 +95,17 @@ export async function renderSermonPptx(
   for (const passage of scripturePassages) {
     const rawText = (passage.text || "").trim();
     const slides = rawText ? splitForSlides(rawText) : [passage.ref];
-    const totalParts = slides.length;
 
-    slides.forEach((bodyText, idx) => {
+    slides.forEach((bodyText) => {
       const slide = pptx.addSlide();
-      const refLabel =
-        totalParts > 1 ? `${passage.ref}  (${idx + 1}/${totalParts})` : passage.ref;
-
-      slide.addText(refLabel, {
-        x: MARGIN_X,
-        y: 0.4,
-        w: BODY_W,
-        h: 0.7,
-        fontSize: 24,
-        bold: true,
-        color: BRAND_PRIMARY,
-      });
 
       slide.addText(bodyText, {
         x: MARGIN_X,
-        y: 1.25,
+        y: 0.5,
         w: BODY_W,
-        h: 5.3,
+        h: 6.2,
         fontSize: 20,
-        valign: "top",
+        valign: "middle",
         paraSpaceAfter: 8,
         fit: "shrink",
       });

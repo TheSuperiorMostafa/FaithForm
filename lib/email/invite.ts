@@ -77,7 +77,7 @@ export async function sendInviteEmail(
   );
   const apiKey = process.env.RESEND_API_KEY;
   const from =
-    process.env.RESEND_FROM_EMAIL ?? "noreply@faithform.app";
+    process.env.RESEND_FROM_EMAIL ?? "noreply@faithform.io";
 
   if (!apiKey) {
     console.log(

@@ -32,7 +32,7 @@ export default async function GivingPage() {
   if (!profile.stripeChargesEnabled) {
     return (
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-        <GivingPageHeader />
+        <GivingPageHeader showSettingsLink={auth.isAdmin} />
         <GivingSetupCta />
       </div>
     );
@@ -44,7 +44,7 @@ export default async function GivingPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
-      <GivingPageHeader />
+      <GivingPageHeader showSettingsLink={auth.isAdmin} />
 
       {summary.failedSubscriptionCount > 0 && (
         <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm">
@@ -59,26 +59,6 @@ export default async function GivingPage() {
           </Link>
         </div>
       )}
-
-      <Card>
-        <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-medium text-foreground">Your give page</p>
-            <p className="text-sm text-muted-foreground break-all">{profile.givePageUrl}</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <a
-              href={profile.givePageUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex h-8 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-medium hover:bg-muted"
-            >
-              <ExternalLink className="h-4 w-4" />
-              Open page
-            </a>
-          </div>
-        </CardContent>
-      </Card>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <StatCard
@@ -116,6 +96,26 @@ export default async function GivingPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-medium text-foreground">Your giving page</p>
+            <p className="text-sm text-muted-foreground break-all">{profile.givePageUrl}</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <a
+              href={profile.givePageUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex h-8 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-medium hover:bg-muted"
+            >
+              <ExternalLink className="h-4 w-4" />
+              Open page
+            </a>
+          </div>
+        </CardContent>
+      </Card>
 
       <QrCodeCard givePageUrl={profile.givePageUrl} />
 
@@ -170,15 +170,25 @@ export default async function GivingPage() {
   );
 }
 
-function GivingPageHeader() {
+function GivingPageHeader({ showSettingsLink = false }: { showSettingsLink?: boolean }) {
   return (
-    <div>
-      <h1 className="border-l-4 border-accent pl-3 font-heading text-[26px] font-bold">
-        Giving
-      </h1>
-      <p className="text-sm text-muted-foreground">
-        Track gifts, donors, recurring donations, and payouts to your church account.
-      </p>
+    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+      <div>
+        <h1 className="border-l-4 border-accent pl-3 font-heading text-[26px] font-bold">
+          Giving
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          Track gifts, donors, recurring donations, and payouts to your church account.
+        </p>
+      </div>
+      {showSettingsLink && (
+        <Link
+          href="/dashboard/settings?tab=giving"
+          className="shrink-0 text-sm font-medium text-accent hover:underline"
+        >
+          Giving settings
+        </Link>
+      )}
     </div>
   );
 }
