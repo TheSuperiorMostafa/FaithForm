@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { Toaster } from "sonner";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
 import { createClient } from "@/lib/supabase/server";
 
@@ -39,13 +40,16 @@ export default async function DashboardLayout({
   const initialCollapsed = cookies().get("sidebar:collapsed")?.value === "1";
 
   return (
-    <DashboardShell
-      userEmail={user.email ?? ""}
-      churchName={churchName}
-      role={role}
-      initialCollapsed={initialCollapsed}
-    >
-      {children}
-    </DashboardShell>
+    <>
+      <DashboardShell
+        userEmail={user.email ?? ""}
+        churchName={churchName}
+        role={role}
+        initialCollapsed={initialCollapsed}
+      >
+        {children}
+      </DashboardShell>
+      <Toaster richColors position="top-center" />
+    </>
   );
 }

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import {
   Phone,
   Presentation,
@@ -57,13 +58,15 @@ function StatCard({
   metric,
   icon: Icon,
   range,
+  href,
 }: {
   label: string;
   metric: StatMetric;
   icon: typeof Phone;
   range: DashboardRange;
+  href?: string;
 }) {
-  return (
+  const card = (
     <Card className="relative flex flex-col gap-2 overflow-hidden border-t-[3px] border-t-accent p-4 transition-shadow hover:shadow-card-hover sm:p-5">
       <div className="absolute right-4 top-4 flex size-8 items-center justify-center rounded-lg bg-accent/10 text-accent">
         <Icon className="size-4" strokeWidth={1.75} aria-hidden />
@@ -80,6 +83,16 @@ function StatCard({
       <StatSparkline data={metric.sparkline} className="h-9 w-full" />
     </Card>
   );
+
+  if (href) {
+    return (
+      <Link href={href} className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        {card}
+      </Link>
+    );
+  }
+
+  return card;
 }
 
 export async function StatRow({ churchId, range }: StatRowProps) {
@@ -93,6 +106,7 @@ export async function StatRow({ churchId, range }: StatRowProps) {
         metric={stats.phoneCalls}
         icon={Phone}
         range={range}
+        href="/dashboard/voice-assistant"
       />
       <StatCard
         label="SM posts"

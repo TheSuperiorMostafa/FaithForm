@@ -5,6 +5,7 @@ import {
   LayoutDashboard,
   LifeBuoy,
   Megaphone,
+  Phone,
   Settings,
   Users,
   type LucideIcon,
@@ -35,6 +36,12 @@ export const navItems: NavItem[] = [
     shortLabel: "News",
     href: "/dashboard/announcements",
     icon: Megaphone,
+  },
+  {
+    label: "Voice Assistant",
+    shortLabel: "Voice",
+    href: "/dashboard/voice-assistant",
+    icon: Phone,
   },
   {
     label: "Sermon Builder",
