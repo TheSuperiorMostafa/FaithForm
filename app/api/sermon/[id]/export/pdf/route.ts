@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { logActivity } from "@/lib/activity/log";
 import { requireChurchAuth } from "@/lib/auth/church";
 import { verifySermonAccess } from "@/lib/queries/sermons";
 import { renderSermonPdf } from "@/lib/sermon/export-pdf";
@@ -28,6 +29,13 @@ export async function GET(
 
     const buffer = await renderSermonPdf(sermon, passages);
     const filename = `${sermon.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase() || "sermon"}.pdf`;
+
+    await logActivity({
+      churchId: auth.churchId,
+      automationType: "Sermon PDF Exported",
+      taskName: sermon.title,
+      triggerSource: "sermon_module:export:pdf",
+    });
 
     return new NextResponse(new Uint8Array(buffer), {
       headers: {

@@ -326,11 +326,16 @@ async function computeDerivedMinutes(
       minutes += m;
       tasks += 1;
       addToCategory(byCategory, "Social", m);
-    } else if (asset.kind === "pptx" || asset.kind === "slides") {
+    } else if (asset.kind === "export_pptx") {
       const m = AUTOMATION_CATALOG["Facebook Post about Announcement"].minutes;
       minutes += m;
       tasks += 1;
       addToCategory(byCategory, "Social", m);
+    } else if (asset.kind === "export_pdf") {
+      const m = AUTOMATION_CATALOG["Sermon PDF Exported"].minutes;
+      minutes += m;
+      tasks += 1;
+      addToCategory(byCategory, "Admin", m);
     }
   }
 

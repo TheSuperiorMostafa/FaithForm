@@ -15,10 +15,26 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ActivityFilters } from "@/components/admin/activity-filters";
+import { ActivityPagination } from "@/components/admin/activity-pagination";
 import { ChurchGivingPanel } from "@/components/admin/church-giving-panel";
-import type { AdminChurchDetail } from "@/lib/queries/admin";
+import type {
+  AdminActivityFilters,
+  AdminActivityResult,
+  AdminChurchDetail,
+} from "@/lib/queries/admin";
 
-export function ChurchDetailTabs({ detail }: { detail: AdminChurchDetail }) {
+type ChurchDetailTabsProps = {
+  detail: AdminChurchDetail;
+  activity: AdminActivityResult;
+  activityFilters: AdminActivityFilters & { range: NonNullable<AdminActivityFilters["range"]> };
+};
+
+export function ChurchDetailTabs({
+  detail,
+  activity,
+  activityFilters,
+}: ChurchDetailTabsProps) {
   return (
     <Tabs defaultValue="overview" className="space-y-4">
       <TabsList className="w-full justify-start overflow-x-auto sm:w-auto">
@@ -163,6 +179,15 @@ export function ChurchDetailTabs({ detail }: { detail: AdminChurchDetail }) {
 
       <TabsContent value="activity">
         <Card className="overflow-hidden">
+          <ActivityFilters
+            filterOptions={activity.filterOptions}
+            current={{
+              category: activityFilters.category,
+              type: activityFilters.type,
+              range: activityFilters.range ?? "all",
+              page: activity.page,
+            }}
+          />
           <div className="overflow-x-auto">
             <table className="w-full min-w-[780px] text-sm">
               <thead className="bg-primary font-heading text-[13px] uppercase tracking-wide text-primary-foreground dark:bg-secondary dark:text-secondary-foreground">
@@ -175,7 +200,7 @@ export function ChurchDetailTabs({ detail }: { detail: AdminChurchDetail }) {
                 </tr>
               </thead>
               <tbody>
-                {detail.activity.map((row) => (
+                {activity.rows.map((row) => (
                   <tr key={row.id} className="even:bg-background/60 hover:bg-accent/10">
                     <td className="px-4 py-3 font-medium text-foreground">
                       {row.type ?? "Unknown"}
@@ -193,6 +218,16 @@ export function ChurchDetailTabs({ detail }: { detail: AdminChurchDetail }) {
               </tbody>
             </table>
           </div>
+          {activity.rows.length === 0 && (
+            <div className="p-8 text-center text-sm text-muted-foreground">
+              No activity matches the current filters.
+            </div>
+          )}
+          <ActivityPagination
+            page={activity.page}
+            totalPages={activity.totalPages}
+            total={activity.total}
+          />
         </Card>
       </TabsContent>
 

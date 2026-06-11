@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createAdminClientOrNull } from "@/lib/supabase/admin";
+import { logActivity } from "@/lib/activity/log";
 import { createClient } from "@/lib/supabase/server";
 import { patchCalendarEvent } from "@/lib/integrations/google-calendar";
 import { createAnnouncementGmailDraft } from "@/lib/integrations/gmail";
@@ -246,28 +246,30 @@ export async function publishAnnouncement(
     "google",
     ctx.supabase,
   );
-  if (googleConnected) {
-    try {
-      const draft = await createAnnouncementGmailDraft(
-        ctx.churchId,
-        {
-          title: payload.title,
-          location: payload.location,
-          startAt: payload.startAt,
-          endAt: payload.endAt,
-          notes: payload.notes,
-        },
-        ctx.supabase,
-      );
-      gmailDraftId = draft.draftId;
-      gmailDraftUrl = draft.draftUrl;
-    } catch (err) {
-      errors.push(
-        err instanceof Error ? err.message : "Gmail draft failed",
-      );
+  if (payload.pushToTeam) {
+    if (googleConnected) {
+      try {
+        const draft = await createAnnouncementGmailDraft(
+          ctx.churchId,
+          {
+            title: payload.title,
+            location: payload.location,
+            startAt: payload.startAt,
+            endAt: payload.endAt,
+            notes: payload.notes,
+          },
+          ctx.supabase,
+        );
+        gmailDraftId = draft.draftId;
+        gmailDraftUrl = draft.draftUrl;
+      } catch (err) {
+        errors.push(
+          err instanceof Error ? err.message : "Gmail draft failed",
+        );
+      }
+    } else {
+      errors.push("Google is not connected — skipped Gmail draft.");
     }
-  } else {
-    errors.push("Google is not connected — skipped Gmail draft.");
   }
 
   if (facebookPostId || gmailDraftId || errors.length > 0) {
@@ -283,21 +285,14 @@ export async function publishAnnouncement(
       .eq("church_id", ctx.churchId);
   }
 
-  try {
-    const admin = createAdminClientOrNull();
-    if (admin) {
-      await admin.from("activity_log").insert({
-        church_id: ctx.churchId,
-        automation_type: "Publish Announcement",
-        category: "Communications",
-        task_name: payload.title,
-        time_saved_minutes: 15,
-        trigger_source: "announcements_module",
-      });
-    }
-  } catch (activityError) {
-    console.error("activity_log insert failed:", activityError);
-  }
+  await logActivity({
+    churchId: ctx.churchId,
+    automationType: "Publish Announcement",
+    category: "Communications",
+    taskName: payload.title,
+    timeSavedMinutes: 15,
+    triggerSource: "announcements_module",
+  });
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/announcements");

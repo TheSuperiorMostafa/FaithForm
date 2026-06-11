@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { logActivity } from "@/lib/activity/log";
 import { getChapter } from "@/lib/bible/api";
 import {
   extractVersesFromChapter,
@@ -111,6 +112,13 @@ export async function GET(
     }
 
     const filename = `${sermon.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase() || "sermon"}.pptx`;
+
+    await logActivity({
+      churchId: auth.churchId,
+      automationType: "Sermon PPTX Exported",
+      taskName: sermon.title,
+      triggerSource: "sermon_module:export:pptx",
+    });
 
     return new NextResponse(new Uint8Array(buffer), {
       headers: {

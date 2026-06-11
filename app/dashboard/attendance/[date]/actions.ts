@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 
+import { logActivity } from "@/lib/activity/log";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { getChurchTimezone } from "@/lib/queries/attendance";
@@ -183,19 +184,12 @@ export async function submitAttendance(input: {
     };
   }
 
-  try {
-    const admin = createAdminClient();
-    await admin.from("activity_log").insert({
-      church_id: churchId,
-      automation_type: "Track Weekly Attendance",
-      category: "Admin",
-      task_name: "Weekly attendance recorded",
-      time_saved_minutes: 5,
-      trigger_source: "attendance_module",
-    });
-  } catch (activityError) {
-    console.error("activity_log insert failed:", activityError);
-  }
+  await logActivity({
+    churchId,
+    automationType: "Track Weekly Attendance",
+    taskName: "Weekly attendance recorded",
+    triggerSource: "attendance_module",
+  });
 
   const followUpMemberIds = entries
     .filter((e) => e.status === "absent" && e.followUp)

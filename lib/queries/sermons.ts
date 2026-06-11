@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { logActivity } from "@/lib/activity/log";
 import { createClient } from "@/lib/supabase/server";
 import type {
   AIProvider,
@@ -150,6 +151,14 @@ export async function createSermon(input: {
     .single();
 
   if (error) throw error;
+
+  await logActivity({
+    churchId: input.churchId,
+    automationType: "Sermon Created",
+    taskName: data.title,
+    triggerSource: "sermon_module:create",
+  });
+
   return data as Sermon;
 }
 
@@ -170,6 +179,7 @@ export async function updateSermon(
     translation: string | null;
   }>,
 ): Promise<Sermon> {
+  const existing = await getSermon(id);
   const supabase = db();
   const { data, error } = await supabase
     .from("sermons")
@@ -182,7 +192,39 @@ export async function updateSermon(
     .single();
 
   if (error) throw error;
-  return data as Sermon;
+
+  const sermon = data as Sermon;
+  if (existing?.church_id) {
+    const churchId = existing.church_id;
+    const taskName = sermon.title;
+
+    if (patch.outline !== undefined && patch.outline !== null) {
+      await logActivity({
+        churchId,
+        automationType: "Sermon Outline Generated",
+        taskName,
+        triggerSource: "sermon_module:outline",
+      });
+    }
+    if (patch.content !== undefined && patch.content !== null) {
+      await logActivity({
+        churchId,
+        automationType: "Sermon Draft Generated",
+        taskName,
+        triggerSource: "sermon_module:draft",
+      });
+    }
+    if (patch.status === "published" && existing.status !== "published") {
+      await logActivity({
+        churchId,
+        automationType: "Sermon Published",
+        taskName,
+        triggerSource: "sermon_module:publish",
+      });
+    }
+  }
+
+  return sermon;
 }
 
 export async function saveAsset(input: {
@@ -202,6 +244,26 @@ export async function saveAsset(input: {
     .single();
 
   if (error) throw error;
+
+  const sermon = await getSermon(input.sermonId);
+  if (sermon?.church_id) {
+    const assetTypeByKind: Partial<Record<SermonAssetKind, string>> = {
+      social_snippet: "Social Snippet Generated",
+      discussion_questions: "Discussion Questions Generated",
+      export_pdf: "Sermon PDF Exported",
+      export_pptx: "Sermon PPTX Exported",
+    };
+    const automationType = assetTypeByKind[input.kind];
+    if (automationType) {
+      await logActivity({
+        churchId: sermon.church_id,
+        automationType,
+        taskName: sermon.title,
+        triggerSource: `sermon_module:asset:${input.kind}`,
+      });
+    }
+  }
+
   return data;
 }
 
@@ -269,6 +331,14 @@ export async function createSeries(input: {
     .single();
 
   if (error) throw error;
+
+  await logActivity({
+    churchId: input.churchId,
+    automationType: "Sermon Series Created",
+    taskName: input.title,
+    triggerSource: "sermon_module:series",
+  });
+
   return data as SermonSeries;
 }
 

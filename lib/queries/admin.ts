@@ -79,6 +79,28 @@ export type AdminActivityRow = {
   createdAt: string;
 };
 
+export type AdminActivityRange = "7d" | "30d" | "90d" | "all";
+
+export type AdminActivityFilters = {
+  category?: string;
+  type?: string;
+  range?: AdminActivityRange;
+  page?: number;
+  pageSize?: number;
+};
+
+export type AdminActivityResult = {
+  rows: AdminActivityRow[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  filterOptions: {
+    types: string[];
+    categories: string[];
+  };
+};
+
 export type AdminChurchDetail = {
   church: {
     id: string;
@@ -105,7 +127,6 @@ export type AdminChurchDetail = {
   attendanceTrend: AdminAttendancePoint[];
   users: AdminChurchUserRow[];
   integrations: AdminIntegrationDetail[];
-  activity: AdminActivityRow[];
   supportTickets: AdminTicketListRow[];
 };
 
@@ -514,6 +535,97 @@ export async function getAdminChurches(): Promise<AdminChurchListRow[]> {
   }));
 }
 
+function activityRangeStart(range: AdminActivityRange): string | null {
+  if (range === "all") return null;
+  const days = range === "7d" ? 7 : range === "30d" ? 30 : 90;
+  const start = new Date();
+  start.setDate(start.getDate() - days);
+  return start.toISOString();
+}
+
+export async function getAdminChurchActivity(
+  churchId: string,
+  filters: AdminActivityFilters = {},
+): Promise<AdminActivityResult> {
+  const admin = createAdminClient();
+  const page = Math.max(1, filters.page ?? 1);
+  const pageSize = Math.max(1, Math.min(100, filters.pageSize ?? 50));
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  let query = admin
+    .from("activity_log")
+    .select(
+      "id, church_id, automation_type, category, task_name, time_saved_minutes, executed_at",
+      { count: "exact" },
+    )
+    .eq("church_id", churchId)
+    .order("executed_at", { ascending: false });
+
+  if (filters.category) {
+    query = query.eq("category", filters.category);
+  }
+  if (filters.type) {
+    query = query.eq("automation_type", filters.type);
+  }
+
+  const rangeStart = activityRangeStart(filters.range ?? "all");
+  if (rangeStart) {
+    query = query.gte("executed_at", rangeStart);
+  }
+
+  const [activityRes, optionsRes] = await Promise.all([
+    query.range(from, to),
+    admin
+      .from("activity_log")
+      .select("automation_type, category")
+      .eq("church_id", churchId),
+  ]);
+
+  if (activityRes.error) {
+    console.error("getAdminChurchActivity:", activityRes.error.message);
+  }
+
+  const optionRows = (optionsRes.data ?? []) as {
+    automation_type: string | null;
+    category: string | null;
+  }[];
+
+  const types = Array.from(
+    new Set(
+      optionRows
+        .map((row) => row.automation_type)
+        .filter((value): value is string => Boolean(value)),
+    ),
+  ).sort();
+
+  const categories = Array.from(
+    new Set(
+      optionRows
+        .map((row) => row.category)
+        .filter((value): value is string => Boolean(value)),
+    ),
+  ).sort();
+
+  const total = activityRes.count ?? 0;
+
+  return {
+    rows: ((activityRes.data ?? []) as ActivityRow[]).map((row) => ({
+      id: row.id,
+      type: row.automation_type,
+      category: row.category,
+      task: row.task_name,
+      timeSavedMinutes: row.time_saved_minutes ?? 0,
+      createdAt: row.executed_at,
+    })),
+    total,
+    page,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    filterOptions: { types, categories },
+  };
+}
+
 export async function getAdminChurchDetail(
   churchId: string,
 ): Promise<AdminChurchDetail | null> {
@@ -524,7 +636,6 @@ export async function getAdminChurchDetail(
     usersRes,
     integrationsRes,
     attendanceRes,
-    activityRes,
     supportTickets,
   ] = await Promise.all([
     admin
@@ -554,12 +665,6 @@ export async function getAdminChurchDetail(
       .eq("church_id", churchId)
       .order("service_date", { ascending: false })
       .limit(8),
-    admin
-      .from("activity_log")
-      .select("id, church_id, automation_type, category, task_name, time_saved_minutes, executed_at")
-      .eq("church_id", churchId)
-      .order("executed_at", { ascending: false })
-      .limit(20),
     getSupportTickets({ churchId }),
   ]);
 
@@ -655,14 +760,6 @@ export async function getAdminChurchDetail(
       joinedAt: row.created_at,
     })),
     integrations: integrationDetails,
-    activity: ((activityRes.data ?? []) as ActivityRow[]).map((row) => ({
-      id: row.id,
-      type: row.automation_type,
-      category: row.category,
-      task: row.task_name,
-      timeSavedMinutes: row.time_saved_minutes ?? 0,
-      createdAt: row.executed_at,
-    })),
     supportTickets,
   };
 }

@@ -87,6 +87,51 @@ export const AUTOMATION_CATALOG = {
     taskId: "REP",
     minutes: 45,
   },
+  "Sermon Created": {
+    category: "Admin",
+    taskId: "REP",
+    minutes: 10,
+  },
+  "Sermon Outline Generated": {
+    category: "Admin",
+    taskId: "REP",
+    minutes: 20,
+  },
+  "Sermon Draft Generated": {
+    category: "Admin",
+    taskId: "REP",
+    minutes: 30,
+  },
+  "Sermon Published": {
+    category: "Admin",
+    taskId: "REP",
+    minutes: 5,
+  },
+  "Social Snippet Generated": {
+    category: "Social",
+    taskId: "SOC",
+    minutes: 7,
+  },
+  "Discussion Questions Generated": {
+    category: "Admin",
+    taskId: "REP",
+    minutes: 10,
+  },
+  "Sermon PDF Exported": {
+    category: "Admin",
+    taskId: "REP",
+    minutes: 8,
+  },
+  "Sermon PPTX Exported": {
+    category: "Admin",
+    taskId: "REP",
+    minutes: 12,
+  },
+  "Sermon Series Created": {
+    category: "Admin",
+    taskId: "REP",
+    minutes: 15,
+  },
 } as const satisfies Record<string, AutomationEntry>;
 
 export type AutomationType = keyof typeof AUTOMATION_CATALOG;
