@@ -132,111 +132,126 @@ export function GivingCard({
           donors pay {STRIPE_NONPROFIT_RATE_LABEL} only.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-5">
-        <div className="flex flex-wrap items-center gap-2">
-          {statusBadge(profile.stripeOnboardingStatus)}
-          {profile.stripeChargesEnabled && profile.stripePayoutsEnabled && (
-            <span className="text-xs text-muted-foreground">
-              Payouts enabled
-            </span>
-          )}
-        </div>
-
-        {profile.stripeRequirementsDue.length > 0 && (
-          <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm">
-            <p className="font-medium">Stripe needs more information:</p>
-            <ul className="mt-1 list-inside list-disc text-muted-foreground">
-              {profile.stripeRequirementsDue.map((item) => (
-                <li key={item}>{item.replace(/_/g, " ")}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {message && (
-          <p className="text-sm text-muted-foreground" role="status">
-            {message}
-          </p>
-        )}
-
-        <div className="flex flex-wrap gap-2">
-          {!profile.stripeAccountId ? (
-            <Button onClick={startOnboard} disabled={pending}>
-              Connect with Stripe
-            </Button>
-          ) : profile.stripeOnboardingStatus !== "active" ? (
-            <Button onClick={refreshOnboard} disabled={pending}>
-              Continue Stripe setup
-            </Button>
-          ) : (
-            <Button
-              variant="outline"
-              onClick={() => {
-                startTransition(async () => {
-                  await syncStripeAccountStatus();
-                  setMessage("Account status refreshed.");
-                });
-              }}
-              disabled={pending}
-            >
-              Refresh status
-            </Button>
-          )}
-        </div>
-
-        <div className="space-y-2 border-t pt-4">
-          <Label htmlFor="giving-slug">Public giving page URL</Label>
-          <div className="flex flex-col gap-2 sm:flex-row">
-            <Input
-              id="giving-slug"
-              value={slug}
-              onChange={(e) => setSlug(e.target.value)}
-              disabled={!profile.stripeChargesEnabled && pending}
-            />
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={saveSlug}
-              disabled={pending}
-            >
-              Save slug
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground break-all">
-            {profile.givePageUrl}
-          </p>
-          {profile.stripeChargesEnabled && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="gap-2"
-              onClick={copyGiveLink}
-            >
-              {copied ? (
-                <Check className="h-4 w-4" />
-              ) : (
-                <Copy className="h-4 w-4" />
+      <CardContent className="space-y-4">
+        <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-2">
+              {statusBadge(profile.stripeOnboardingStatus)}
+              {profile.stripeChargesEnabled && profile.stripePayoutsEnabled && (
+                <span className="text-xs text-muted-foreground">Payouts enabled</span>
               )}
-              Copy give link
-            </Button>
-          )}
-        </div>
+            </div>
 
-        <GivingBrandingSettings
-          logoUrl={profile.logoUrl}
-          primaryColor={profile.givingPrimaryColor}
-          accentColor={profile.givingAccentColor}
-        />
+            {profile.stripeRequirementsDue.length > 0 && (
+              <div className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm">
+                <p className="font-medium">Stripe needs more information:</p>
+                <ul className="mt-1 list-inside list-disc text-muted-foreground">
+                  {profile.stripeRequirementsDue.map((item) => (
+                    <li key={item}>{item.replace(/_/g, " ")}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {message && (
+              <p className="text-sm text-muted-foreground" role="status">
+                {message}
+              </p>
+            )}
+
+            <div className="flex flex-wrap gap-2">
+              {!profile.stripeAccountId ? (
+                <Button onClick={startOnboard} disabled={pending}>
+                  Connect with Stripe
+                </Button>
+              ) : profile.stripeOnboardingStatus !== "active" ? (
+                <Button onClick={refreshOnboard} disabled={pending}>
+                  Continue Stripe setup
+                </Button>
+              ) : (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    startTransition(async () => {
+                      await syncStripeAccountStatus();
+                      setMessage("Account status refreshed.");
+                    });
+                  }}
+                  disabled={pending}
+                >
+                  Refresh status
+                </Button>
+              )}
+            </div>
+
+            <div className="space-y-2 rounded-lg border border-border p-4">
+              <Label htmlFor="giving-slug">Public giving page URL</Label>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Input
+                  id="giving-slug"
+                  value={slug}
+                  onChange={(e) => setSlug(e.target.value)}
+                  disabled={!profile.stripeChargesEnabled && pending}
+                />
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={saveSlug}
+                  disabled={pending}
+                >
+                  Save slug
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground break-all">
+                {profile.givePageUrl}
+              </p>
+              {profile.stripeChargesEnabled && (
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={copyGiveLink}
+                  >
+                    {copied ? (
+                      <Check className="h-4 w-4" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                    Copy give link
+                  </Button>
+                  <a
+                    href={profile.givePageUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-border px-3 text-sm font-medium hover:border-accent"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    Preview
+                  </a>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <GivingBrandingSettings
+            logoUrl={profile.logoUrl}
+            primaryColor={profile.givingPrimaryColor}
+            accentColor={profile.givingAccentColor}
+            className="border-t-0 pt-0 lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0"
+          />
+        </div>
 
         {profile.stripeChargesEnabled && (
-          <>
-            <FundsSettings funds={funds.filter((f) => f.isActive)} />
+          <div className="grid gap-4 border-t pt-4 lg:grid-cols-2">
+            <FundsSettings funds={funds.filter((f) => f.isActive)} className="border-t-0 pt-0" />
             <StatementSettings
               ein={profile.ein ?? null}
               statementAddress={profile.statementAddress ?? null}
+              className="border-t-0 pt-0 lg:border-l lg:pl-4"
             />
-          </>
+          </div>
         )}
       </CardContent>
     </Card>

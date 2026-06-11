@@ -47,7 +47,6 @@ export function AnnouncementVerifyForm({
   );
   const [notes, setNotes] = useState("");
   const [pushToFacebook, setPushToFacebook] = useState(false);
-  const [pushToApp, setPushToApp] = useState(false);
   const [pushToTeam, setPushToTeam] = useState(true);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -72,7 +71,6 @@ export function AnnouncementVerifyForm({
     formData.set("google_event_id", event.googleEventId);
     formData.set("google_calendar_id", event.calendarId);
     formData.set("push_to_facebook", pushToFacebook ? "true" : "false");
-    formData.set("push_to_app", pushToApp ? "true" : "false");
     formData.set("push_to_team", pushToTeam ? "true" : "false");
     formData.set("original_title", event.title);
     formData.set("original_location", event.location);
@@ -177,16 +175,16 @@ export function AnnouncementVerifyForm({
           }
         />
         <ToggleRow
-          id={`app-${event.googleEventId}`}
-          label="Updated on App?"
-          checked={pushToApp}
-          onCheckedChange={setPushToApp}
-        />
-        <ToggleRow
           id={`team-${event.googleEventId}`}
-          label="Add to Bulletin Board?"
+          label="Create Gmail draft?"
           checked={pushToTeam}
           onCheckedChange={setPushToTeam}
+          disabled={!defaults.googleConnected}
+          hint={
+            defaults.googleConnected
+              ? "Creates a draft in Gmail with event details when Google is connected."
+              : "Connect Google in Settings"
+          }
         />
       </ul>
 

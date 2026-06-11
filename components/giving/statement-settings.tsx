@@ -5,13 +5,16 @@ import { updateStatementSettings } from "@/app/dashboard/settings/giving-actions
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 
 export function StatementSettings({
   ein,
   statementAddress,
+  className,
 }: {
   ein: string | null;
   statementAddress: string | null;
+  className?: string;
 }) {
   const [pending, startTransition] = useTransition();
   const [einValue, setEinValue] = useState(ein ?? "");
@@ -29,7 +32,7 @@ export function StatementSettings({
   };
 
   return (
-    <div className="space-y-4 border-t pt-4">
+    <div className={cn("space-y-4 border-t pt-4", className)}>
       <div>
         <h4 className="text-sm font-medium">Year-end statements</h4>
         <p className="text-xs text-muted-foreground">

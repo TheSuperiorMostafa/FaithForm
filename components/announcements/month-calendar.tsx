@@ -41,7 +41,7 @@ type MonthCalendarProps = {
   facebookConnected: boolean;
 };
 
-const MAX_CHIPS_PER_CELL = 3;
+const MAX_CHIPS_PER_CELL = 4;
 
 export function MonthCalendar({
   churchId,
@@ -219,131 +219,97 @@ export function MonthCalendar({
         </p>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)]">
-        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-card dark:shadow-none">
-          <div className="grid grid-cols-7 border-b border-border bg-primary text-primary-foreground dark:bg-secondary dark:text-secondary-foreground">
-            {getWeekdayLabels().map((label) => (
-              <div
-                key={label}
-                className="px-1 py-3 text-center font-heading text-[13px] font-semibold uppercase tracking-wide"
-              >
-                <span className="hidden sm:inline">{label}</span>
-                <span className="sm:hidden">{label.slice(0, 1)}</span>
-              </div>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-7">
-            {cells.map((cell) => {
-              const dayEvents = eventsForDay(cell.date);
-              const visible = dayEvents.slice(0, MAX_CHIPS_PER_CELL);
-              const overflow = dayEvents.length - visible.length;
-              const isSelected =
-                startOfDay(cell.date).getTime() === startOfDay(selectedDay).getTime();
-
-              return (
-                <button
-                  key={cell.date.toISOString()}
-                  type="button"
-                  onClick={() => setSelectedDay(startOfDay(cell.date))}
-                  className={cn(
-                    "min-h-[4.5rem] border-b border-r border-border p-1 text-left transition-colors hover:bg-accent/5 sm:min-h-[5.5rem]",
-                    !cell.isCurrentMonth && "bg-muted/20",
-                    cell.isToday && "ring-2 ring-inset ring-accent/60",
-                    isSelected && "bg-accent/10",
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "inline-flex size-6 items-center justify-center rounded-full text-xs",
-                      cell.isToday && "bg-accent text-accent-foreground font-semibold",
-                      !cell.isCurrentMonth && "text-muted-foreground",
-                    )}
-                  >
-                    {cell.dayOfMonth}
-                  </span>
-                  <div className="mt-0.5 flex flex-col gap-0.5">
-                    {visible.map((event) => {
-                      const published = Boolean(
-                        publishedByGoogleId[event.googleEventId],
-                      );
-                      const selected =
-                        selectedEvent?.googleEventId === event.googleEventId;
-                      return (
-                        <span
-                          key={event.googleEventId}
-                          role="button"
-                          tabIndex={0}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleChipClick(event);
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              handleChipClick(event);
-                            }
-                          }}
-                          className={cn(
-                            "flex w-full items-center gap-0.5 truncate rounded-md px-1 py-0.5 text-[10px] font-semibold leading-tight sm:text-xs",
-                            published
-                              ? "bg-muted text-muted-foreground"
-                              : "bg-accent/15 text-primary hover:bg-accent/25 dark:text-accent",
-                            selected && "ring-1 ring-accent",
-                          )}
-                          title={event.title}
-                        >
-                          {published && (
-                            <Check className="size-2.5 shrink-0 sm:size-3" />
-                          )}
-                          <span className="truncate">
-                            {!published && (
-                              <span className="hidden sm:inline">
-                                {formatEventTime(event.startAt)}{" "}
-                              </span>
-                            )}
-                            {event.title}
-                          </span>
-                        </span>
-                      );
-                    })}
-                    {overflow > 0 && (
-                      <span className="px-1 text-[10px] text-muted-foreground">
-                        +{overflow} more
-                      </span>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+      <div className="w-full overflow-hidden rounded-xl border border-border bg-card shadow-card dark:shadow-none">
+        <div className="grid grid-cols-7 border-b border-border bg-primary text-primary-foreground dark:bg-secondary dark:text-secondary-foreground">
+          {getWeekdayLabels().map((label) => (
+            <div
+              key={label}
+              className="px-2 py-3 text-center font-heading text-sm font-semibold uppercase tracking-wide"
+            >
+              <span className="hidden sm:inline">{label}</span>
+              <span className="sm:hidden">{label.slice(0, 1)}</span>
+            </div>
+          ))}
         </div>
 
-        <Card className="h-fit lg:sticky lg:top-4">
-          <CardHeader>
-            <CardTitle>Announcement details</CardTitle>
-            <CardDescription>
-              Select a calendar event and verify the prefilled details.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {selectedEvent ? (
-              <AnnouncementVerifyForm
-                key={selectedEvent.googleEventId}
-                churchId={churchId}
-                event={selectedEvent}
-                defaults={defaults}
-                compact
-                onPublished={() => handlePublished(selectedEvent.googleEventId)}
-              />
-            ) : (
-              <div className="rounded-xl border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
-                No Google Calendar event selected yet.
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <div className="grid grid-cols-7">
+          {cells.map((cell) => {
+            const dayEvents = eventsForDay(cell.date);
+            const visible = dayEvents.slice(0, MAX_CHIPS_PER_CELL);
+            const overflow = dayEvents.length - visible.length;
+            const isSelected =
+              startOfDay(cell.date).getTime() === startOfDay(selectedDay).getTime();
+
+            return (
+              <button
+                key={cell.date.toISOString()}
+                type="button"
+                onClick={() => setSelectedDay(startOfDay(cell.date))}
+                className={cn(
+                  "min-h-[6rem] border-b border-r border-border p-1.5 text-left transition-colors hover:bg-accent/5 sm:min-h-[8rem] lg:min-h-[9rem]",
+                  !cell.isCurrentMonth && "bg-muted/20",
+                  cell.isToday && "ring-2 ring-inset ring-accent/60",
+                  isSelected && "bg-accent/10",
+                )}
+              >
+                <span
+                  className={cn(
+                    "inline-flex size-7 items-center justify-center rounded-full text-sm",
+                    cell.isToday && "bg-accent text-accent-foreground font-semibold",
+                    !cell.isCurrentMonth && "text-muted-foreground",
+                  )}
+                >
+                  {cell.dayOfMonth}
+                </span>
+                <div className="mt-1 flex flex-col gap-0.5">
+                  {visible.map((event) => {
+                    const published = Boolean(
+                      publishedByGoogleId[event.googleEventId],
+                    );
+                    const selected =
+                      selectedEvent?.googleEventId === event.googleEventId;
+                    return (
+                      <span
+                        key={event.googleEventId}
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleChipClick(event);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleChipClick(event);
+                          }
+                        }}
+                        className={cn(
+                          "flex w-full items-center gap-1 truncate rounded-md px-1.5 py-1 text-xs font-semibold leading-tight sm:text-sm",
+                          published
+                            ? "bg-muted text-muted-foreground"
+                            : "bg-accent/15 text-primary hover:bg-accent/25 dark:text-accent",
+                          selected && "ring-1 ring-accent",
+                        )}
+                        title={`${event.title} · ${formatEventTime(event.startAt)}`}
+                      >
+                        {published && (
+                          <Check className="size-3 shrink-0" />
+                        )}
+                        <span className="truncate">{event.title}</span>
+                      </span>
+                    );
+                  })}
+                  {overflow > 0 && (
+                    <span className="px-1 text-xs text-muted-foreground">
+                      +{overflow} more
+                    </span>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <p className="text-xs text-muted-foreground">
@@ -357,6 +323,30 @@ export function MonthCalendar({
           Submitted (opens in Google Calendar)
         </span>
       </p>
+
+      <Card className="w-full">
+        <CardHeader>
+          <CardTitle>Announcement details</CardTitle>
+          <CardDescription>
+            Select a calendar event and verify the prefilled details.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {selectedEvent ? (
+            <AnnouncementVerifyForm
+              key={selectedEvent.googleEventId}
+              churchId={churchId}
+              event={selectedEvent}
+              defaults={defaults}
+              onPublished={() => handlePublished(selectedEvent.googleEventId)}
+            />
+          ) : (
+            <div className="rounded-xl border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
+              No Google Calendar event selected yet.
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <section className="flex flex-col gap-2 md:hidden">
         <h3 className="text-sm font-semibold">Events on selected day</h3>

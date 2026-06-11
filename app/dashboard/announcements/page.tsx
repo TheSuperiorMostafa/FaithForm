@@ -64,7 +64,7 @@ export default async function AnnouncementsPage() {
   const published = await getPublishedAnnouncements(supabase, churchId);
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-5">
+    <div className="flex w-full flex-col gap-5">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="border-l-4 border-accent pl-3 font-heading text-[26px] font-bold text-foreground">

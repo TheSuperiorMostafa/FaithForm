@@ -23,8 +23,12 @@ export default async function GivingPage() {
   const profile = await getChurchGivingProfile(auth.churchId);
   if (!profile) {
     return (
-      <div className="py-16 text-center text-sm text-muted-foreground">
-        Church not found.
+      <div className="mx-auto max-w-md py-16 text-center text-sm text-muted-foreground">
+        <p>Unable to load your church giving profile.</p>
+        <p className="mt-2">
+          If this continues, contact support or check that your account is linked to a
+          church in Settings.
+        </p>
       </div>
     );
   }

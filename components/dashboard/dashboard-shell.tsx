@@ -46,7 +46,7 @@ export function DashboardShell({
 
       <div
         className={cn(
-          "flex h-dvh min-w-0 flex-col overflow-hidden",
+          "flex h-dvh min-w-0 flex-col overflow-hidden transition-[margin-left] duration-200 ease-out motion-reduce:transition-none",
           collapsed ? "md:ml-[72px]" : "md:ml-64",
         )}
       >

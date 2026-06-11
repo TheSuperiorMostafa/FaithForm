@@ -34,8 +34,10 @@ type ChurchStripeRow = {
   statement_address?: string | null;
 };
 
-const CHURCH_GIVING_SELECT =
-  "id, name, slug, stripe_account_id, stripe_charges_enabled, stripe_payouts_enabled, stripe_details_submitted, stripe_onboarding_status, stripe_requirements_due, giving_enabled_at, logo_url, giving_primary_color, giving_accent_color, ein, statement_address";
+const CHURCH_GIVING_SELECT_BASE =
+  "id, name, slug, stripe_account_id, stripe_charges_enabled, stripe_payouts_enabled, stripe_details_submitted, stripe_onboarding_status, stripe_requirements_due, giving_enabled_at, logo_url, ein, statement_address";
+
+const CHURCH_GIVING_SELECT = `${CHURCH_GIVING_SELECT_BASE}, giving_primary_color, giving_accent_color`;
 
 const DONATION_SELECT = `
   id,
@@ -170,18 +172,45 @@ function countUniqueGivers(
   return keys.size;
 }
 
+async function fetchChurchGivingRow(
+  supabase: ReturnType<typeof createClient>,
+  churchId: string,
+  select: string,
+) {
+  return supabase.from("churches").select(select).eq("id", churchId).maybeSingle();
+}
+
 export async function getChurchGivingProfile(
   churchId: string,
 ): Promise<ChurchGivingProfile | null> {
   const supabase = createClient();
-  const { data, error } = await supabase
-    .from("churches")
-    .select(CHURCH_GIVING_SELECT)
-    .eq("id", churchId)
-    .maybeSingle();
+  const { data, error } = await fetchChurchGivingRow(
+    supabase,
+    churchId,
+    CHURCH_GIVING_SELECT,
+  );
 
-  if (error || !data) return null;
-  return mapChurchProfile(data as ChurchStripeRow);
+  if (!error && data) {
+    return mapChurchProfile(data as unknown as ChurchStripeRow);
+  }
+
+  if (error) {
+    console.error("getChurchGivingProfile:", error.message);
+  }
+
+  const fallback = await fetchChurchGivingRow(
+    supabase,
+    churchId,
+    CHURCH_GIVING_SELECT_BASE,
+  );
+
+  if (fallback.error) {
+    console.error("getChurchGivingProfile fallback:", fallback.error.message);
+    return null;
+  }
+
+  if (!fallback.data) return null;
+  return mapChurchProfile(fallback.data as unknown as ChurchStripeRow);
 }
 
 export async function getChurchBySlug(slug: string): Promise<ChurchGivingProfile | null> {
@@ -192,8 +221,22 @@ export async function getChurchBySlug(slug: string): Promise<ChurchGivingProfile
     .eq("slug", slug)
     .maybeSingle();
 
-  if (error || !data) return null;
-  return mapChurchProfile(data as ChurchStripeRow);
+  if (!error && data) {
+    return mapChurchProfile(data as unknown as ChurchStripeRow);
+  }
+
+  if (error) {
+    console.error("getChurchBySlug:", error.message);
+  }
+
+  const fallback = await supabase
+    .from("churches")
+    .select(CHURCH_GIVING_SELECT_BASE)
+    .eq("slug", slug)
+    .maybeSingle();
+
+  if (fallback.error || !fallback.data) return null;
+  return mapChurchProfile(fallback.data as unknown as ChurchStripeRow);
 }
 
 export async function getGivingFunds(churchId: string): Promise<GivingFundRow[]> {

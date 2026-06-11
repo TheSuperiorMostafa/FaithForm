@@ -51,10 +51,10 @@ export function AISettingsForm({
         <CardTitle>AI provider</CardTitle>
       </CardHeader>
       <CardContent>
-        <form action={formAction} className="flex flex-col gap-5">
-          <fieldset className="space-y-3">
-            <legend className="text-sm font-semibold">Sermon Builder mode</legend>
-            <label className="flex cursor-pointer items-center gap-3 rounded-[10px] border border-border bg-background/45 p-4 transition-colors has-[:checked]:border-accent has-[:checked]:bg-accent/10">
+        <form action={formAction} className="flex flex-col gap-4">
+          <fieldset className="grid gap-3 sm:grid-cols-2">
+            <legend className="col-span-full text-sm font-semibold">Sermon Builder mode</legend>
+            <label className="flex cursor-pointer items-start gap-3 rounded-[10px] border border-border bg-background/45 p-3 transition-colors has-[:checked]:border-accent has-[:checked]:bg-accent/10">
               <input
                 type="radio"
                 name="sermon_builder_mode"
@@ -72,7 +72,7 @@ export function AISettingsForm({
                 </p>
               </div>
             </label>
-            <label className="flex cursor-pointer items-center gap-3 rounded-[10px] border border-border bg-background/45 p-4 transition-colors has-[:checked]:border-accent has-[:checked]:bg-accent/10">
+            <label className="flex cursor-pointer items-start gap-3 rounded-[10px] border border-border bg-background/45 p-3 transition-colors has-[:checked]:border-accent has-[:checked]:bg-accent/10">
               <input
                 type="radio"
                 name="sermon_builder_mode"
@@ -90,9 +90,9 @@ export function AISettingsForm({
             </label>
           </fieldset>
 
-          <fieldset className="space-y-3">
-            <legend className="text-sm font-semibold">Default model</legend>
-            <label className="flex cursor-pointer items-center gap-3 rounded-[10px] border border-border bg-background/45 p-4 transition-colors has-[:checked]:border-accent has-[:checked]:bg-accent/10">
+          <fieldset className="grid gap-3 sm:grid-cols-2">
+            <legend className="col-span-full text-sm font-semibold">Default model</legend>
+            <label className="flex cursor-pointer items-start gap-3 rounded-[10px] border border-border bg-background/45 p-3 transition-colors has-[:checked]:border-accent has-[:checked]:bg-accent/10">
               <input
                 type="radio"
                 name="ai_provider"
@@ -109,7 +109,7 @@ export function AISettingsForm({
                 </p>
               </div>
             </label>
-            <label className="flex cursor-pointer items-center gap-3 rounded-[10px] border border-border bg-background/45 p-4 transition-colors has-[:checked]:border-accent has-[:checked]:bg-accent/10">
+            <label className="flex cursor-pointer items-start gap-3 rounded-[10px] border border-border bg-background/45 p-3 transition-colors has-[:checked]:border-accent has-[:checked]:bg-accent/10">
               <input
                 type="radio"
                 name="ai_provider"
@@ -126,34 +126,36 @@ export function AISettingsForm({
             </label>
           </fieldset>
 
-          <div className="space-y-2">
-            <Label htmlFor="ai_model_override">Model override (optional)</Label>
-            <Input
-              id="ai_model_override"
-              name="ai_model_override"
-              defaultValue={settings?.ai_model_override ?? ""}
-              placeholder="e.g. claude-sonnet-4-5-20250929 (blank = default)"
-            />
-          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2 sm:col-span-2">
+              <Label htmlFor="ai_model_override">Model override (optional)</Label>
+              <Input
+                id="ai_model_override"
+                name="ai_model_override"
+                defaultValue={settings?.ai_model_override ?? ""}
+                placeholder="e.g. claude-sonnet-4-5-20250929 (blank = default)"
+              />
+            </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="denomination">Denomination / tradition</Label>
-            <Input
-              id="denomination"
-              name="denomination"
-              defaultValue={settings?.denomination ?? ""}
-              placeholder="e.g. Baptist, non-denominational"
-            />
-          </div>
+            <div className="space-y-2">
+              <Label htmlFor="denomination">Denomination / tradition</Label>
+              <Input
+                id="denomination"
+                name="denomination"
+                defaultValue={settings?.denomination ?? ""}
+                placeholder="e.g. Baptist, non-denominational"
+              />
+            </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="preaching_style">Preaching style</Label>
-            <Input
-              id="preaching_style"
-              name="preaching_style"
-              defaultValue={settings?.preaching_style ?? ""}
-              placeholder="e.g. Expository, narrative, topical"
-            />
+            <div className="space-y-2">
+              <Label htmlFor="preaching_style">Preaching style</Label>
+              <Input
+                id="preaching_style"
+                name="preaching_style"
+                defaultValue={settings?.preaching_style ?? ""}
+                placeholder="e.g. Expository, narrative, topical"
+              />
+            </div>
           </div>
 
           {state.error && (

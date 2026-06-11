@@ -46,6 +46,7 @@ export function Sidebar({
       data-collapsed={collapsed}
       className={cn(
         "group/sidebar fixed inset-y-0 left-0 z-30 hidden flex-col overflow-x-hidden overflow-y-hidden border-r border-sidebar bg-sidebar text-sidebar shadow-2xl md:flex",
+        "transition-[width] duration-200 ease-out motion-reduce:transition-none",
         collapsed ? "w-[72px]" : "w-64",
       )}
     >
@@ -53,8 +54,8 @@ export function Sidebar({
       <div className="relative h-[72px] shrink-0 border-b border-sidebar">
         <div
           className={cn(
-            "flex h-full items-center gap-3 px-3",
-            collapsed ? "justify-center" : "pr-4",
+            "flex h-full items-center px-3",
+            collapsed ? "justify-center" : "gap-3 pr-4",
           )}
         >
           <div className="flex size-10 shrink-0 items-center justify-center">
@@ -62,8 +63,10 @@ export function Sidebar({
           </div>
           <div
             className={cn(
-              "min-w-0 flex-1 overflow-hidden",
-              collapsed && "hidden",
+              "min-w-0 overflow-hidden transition-[opacity,max-width] duration-200 ease-out motion-reduce:transition-none",
+              collapsed
+                ? "hidden"
+                : "max-w-full flex-1 opacity-100",
             )}
           >
             <p className="truncate font-heading text-lg font-bold leading-tight text-sidebar-accent">
@@ -76,31 +79,33 @@ export function Sidebar({
             )}
           </div>
         </div>
-
-        <button
-          type="button"
-          onClick={toggle}
-          className={cn(
-            "absolute -right-3 top-9 z-20 flex size-7 -translate-y-1/2 items-center justify-center rounded-full border border-sidebar bg-sidebar text-white/70 shadow-sm",
-            "hover:bg-sidebar-accent hover:text-white hover:shadow-md",
-            "opacity-0 group-hover/sidebar:opacity-100 focus-visible:opacity-100",
-          )}
-          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-        >
-          {collapsed ? (
-            <ChevronRight className="size-3.5" />
-          ) : (
-            <ChevronLeft className="size-3.5" />
-          )}
-        </button>
       </div>
+
+      <button
+        type="button"
+        onClick={toggle}
+        className={cn(
+          "absolute top-1/2 z-20 flex size-7 -translate-y-1/2 items-center justify-center rounded-full border border-sidebar bg-sidebar text-white/70 shadow-sm",
+          "hover:bg-sidebar-accent hover:text-white hover:shadow-md",
+          "opacity-0 group-hover/sidebar:opacity-100 focus-visible:opacity-100",
+          collapsed ? "left-1/2 -translate-x-1/2" : "-right-3",
+        )}
+        aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+      >
+        {collapsed ? (
+          <ChevronRight className="size-3.5" />
+        ) : (
+          <ChevronLeft className="size-3.5" />
+        )}
+      </button>
 
       {/* Nav items */}
       <nav className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain p-3">
         <p
           className={cn(
-            "h-6 px-1 pb-1 pt-2 text-[11px] font-bold uppercase tracking-[0.22em] text-sidebar-accent",
-            collapsed && "invisible",
+            "h-6 shrink-0 overflow-hidden whitespace-nowrap px-1 pb-1 pt-2 text-[11px] font-bold uppercase tracking-[0.22em] text-sidebar-accent",
+            "transition-[opacity,max-width] duration-200 ease-out motion-reduce:transition-none",
+            collapsed ? "max-w-0 opacity-0" : "max-w-full opacity-100",
           )}
         >
           Ministry Tools
@@ -143,8 +148,8 @@ export function Sidebar({
 
                 <span
                   className={cn(
-                    "min-w-0 flex-1 truncate pr-3",
-                    collapsed && "max-w-0 opacity-0 overflow-hidden",
+                    "min-w-0 flex-1 truncate pr-3 transition-[opacity,max-width] duration-200 ease-out motion-reduce:transition-none",
+                    collapsed ? "max-w-0 opacity-0 overflow-hidden" : "max-w-full opacity-100",
                   )}
                 >
                   {item.label}
@@ -155,29 +160,21 @@ export function Sidebar({
         </div>
       </nav>
 
-      {/* User footer — single stable layout */}
-      <div
-        className={cn(
-          "shrink-0 space-y-2 overflow-x-hidden border-t border-sidebar",
-          collapsed ? "p-2" : "p-3",
-        )}
-      >
+      {/* User footer — fixed layout, labels clip in place */}
+      <div className="shrink-0 space-y-2 overflow-x-hidden border-t border-sidebar p-3">
         {showAdminLink && (
           <Link
             href="/admin"
             title="Admin dashboard"
-            className={cn(
-              "flex h-10 min-w-0 items-center overflow-hidden rounded-xl border border-sidebar-accent/30 bg-sidebar-accent/10 text-sidebar-accent hover:bg-sidebar-accent/20",
-              collapsed ? "justify-center" : "gap-2 px-3",
-            )}
+            className="flex h-10 w-full min-w-0 items-center overflow-hidden rounded-xl border border-sidebar-accent/30 bg-sidebar-accent/10 text-sidebar-accent hover:bg-sidebar-accent/20"
           >
-            <span className="flex size-10 shrink-0 items-center justify-center">
+            <span className="flex size-11 shrink-0 items-center justify-center">
               <ShieldCheck className="size-4" strokeWidth={1.75} />
             </span>
             <span
               className={cn(
-                "truncate text-sm font-semibold",
-                collapsed && "hidden",
+                "min-w-0 flex-1 truncate pr-3 text-sm font-semibold transition-[opacity,max-width] duration-200 ease-out motion-reduce:transition-none",
+                collapsed ? "max-w-0 opacity-0" : "max-w-full opacity-100",
               )}
             >
               Admin dashboard
@@ -187,26 +184,40 @@ export function Sidebar({
 
         <div
           className={cn(
-            "min-w-0 overflow-hidden rounded-xl border border-sidebar bg-white/5",
-            collapsed
-              ? "flex flex-col items-center gap-1.5 p-1.5"
-              : "flex h-[52px] items-center gap-3 p-2",
+            "flex h-[52px] min-w-0 items-center overflow-hidden rounded-xl border border-sidebar bg-white/5 p-2",
+            collapsed && "justify-center",
           )}
         >
           <div
-            className="flex size-9 shrink-0 items-center justify-center rounded-full bg-sidebar-accent text-sm font-bold text-white"
-            title={userEmail}
-            aria-hidden
+            className={cn(
+              "flex shrink-0 items-center justify-center",
+              collapsed ? "size-9" : "size-11",
+            )}
           >
-            {initial}
+            <div
+              className="flex size-9 items-center justify-center rounded-full bg-sidebar-accent text-sm font-bold text-white"
+              title={userEmail}
+              aria-hidden
+            >
+              {initial}
+            </div>
           </div>
-          <div className={cn("min-w-0 flex-1 overflow-hidden", collapsed && "hidden")}>
+          <div
+            className={cn(
+              "min-w-0 overflow-hidden transition-[opacity,max-width] duration-200 ease-out motion-reduce:transition-none",
+              collapsed ? "hidden" : "max-w-full flex-1 opacity-100",
+            )}
+          >
             <p className="truncate text-sm font-semibold text-white">{userEmail}</p>
             <p className="truncate text-xs capitalize text-white/60">
               {role ?? "Member"}
             </p>
           </div>
-          <form action="/auth/signout" method="post" className="shrink-0">
+          <form
+            action="/auth/signout"
+            method="post"
+            className={cn("shrink-0", collapsed && "hidden")}
+          >
             <button
               type="submit"
               aria-label="Sign out"

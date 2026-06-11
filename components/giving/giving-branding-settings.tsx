@@ -8,17 +8,20 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 
 type GivingBrandingSettingsProps = {
   logoUrl: string | null;
   primaryColor: string | null;
   accentColor: string | null;
+  className?: string;
 };
 
 export function GivingBrandingSettings({
   logoUrl,
   primaryColor,
   accentColor,
+  className,
 }: GivingBrandingSettingsProps) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [pending, startTransition] = useTransition();
@@ -72,7 +75,7 @@ export function GivingBrandingSettings({
   };
 
   return (
-    <div className="space-y-4 border-t pt-4">
+    <div className={cn("space-y-4 border-t pt-4", className)}>
       <div>
         <h4 className="text-sm font-medium">Donor page branding</h4>
         <p className="text-xs text-muted-foreground">

@@ -15,4 +15,4 @@ alter table support_tickets enable row level security;
 
 -- Church users can see their own church tickets
 create policy "church_can_view_own_tickets" on support_tickets
-  for select using (church_id = any(user_church_ids()));
+  for select using (church_id in (select public.user_church_ids()));

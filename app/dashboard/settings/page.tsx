@@ -34,7 +34,7 @@ export default async function SettingsPage() {
     ]);
 
   return (
-    <div className="mx-auto flex w-full max-w-lg flex-col gap-5">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
       <div>
         <h1 className="border-l-4 border-accent pl-3 font-heading text-[26px] font-bold">
           Settings

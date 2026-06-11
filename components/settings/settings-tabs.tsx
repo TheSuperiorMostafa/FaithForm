@@ -49,50 +49,56 @@ function SettingsTabsInner({
   const defaultTab = getDefaultTab(searchParams);
 
   return (
-    <Tabs defaultValue={defaultTab} className="flex flex-col gap-5">
+    <Tabs defaultValue={defaultTab} className="flex flex-col gap-4">
       <TabsList className="w-full justify-start">
         <TabsTrigger value="general">General</TabsTrigger>
         <TabsTrigger value="giving">Giving</TabsTrigger>
       </TabsList>
 
-      <TabsContent value="general" className="flex flex-col gap-5">
-        <IntegrationsCard isAdmin={isAdmin} status={integrationStatus} />
+      <TabsContent value="general" className="mt-0">
+        <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
+          <div className="lg:col-span-2">
+            <IntegrationsCard isAdmin={isAdmin} status={integrationStatus} />
+          </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Display</CardTitle>
-            <CardDescription>Manage light and dark mode preferences.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ThemeToggle variant="segmented" />
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Display</CardTitle>
+              <CardDescription>Light and dark mode.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ThemeToggle variant="segmented" />
+            </CardContent>
+          </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Resources</CardTitle>
-            <CardDescription>Access Documents and Support tools from Settings.</CardDescription>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3">
-            <Link
-              href="/dashboard/library"
-              className="rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:border-accent hover:bg-accent/10"
-            >
-              Documents
-            </Link>
-            <Link
-              href="/dashboard/support"
-              className="rounded-lg border border-border bg-background px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:border-accent hover:bg-accent/10"
-            >
-              Support
-            </Link>
-          </CardContent>
-        </Card>
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Resources</CardTitle>
+              <CardDescription>Documents and support.</CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-2 sm:grid-cols-2">
+              <Link
+                href="/dashboard/library"
+                className="rounded-lg border border-border bg-background px-4 py-2.5 text-center text-sm font-semibold text-foreground transition-colors hover:border-accent hover:bg-accent/10"
+              >
+                Documents
+              </Link>
+              <Link
+                href="/dashboard/support"
+                className="rounded-lg border border-border bg-background px-4 py-2.5 text-center text-sm font-semibold text-foreground transition-colors hover:border-accent hover:bg-accent/10"
+              >
+                Support
+              </Link>
+            </CardContent>
+          </Card>
 
-        <AISettingsForm settings={settings} isAdmin={isAdmin} />
+          <div className="lg:col-span-2">
+            <AISettingsForm settings={settings} isAdmin={isAdmin} />
+          </div>
+        </div>
       </TabsContent>
 
-      <TabsContent value="giving" className="flex flex-col gap-5">
+      <TabsContent value="giving" className="mt-0">
         {givingProfile ? (
           <GivingCard
             isAdmin={isAdmin}

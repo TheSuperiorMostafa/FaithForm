@@ -46,7 +46,6 @@ function parsePublishForm(formData: FormData) {
   const announcementId = String(formData.get("announcement_id") ?? "").trim() || null;
 
   const pushToFacebook = formData.get("push_to_facebook") === "true";
-  const pushToApp = formData.get("push_to_app") === "true";
   const pushToTeam = formData.get("push_to_team") === "true";
 
   const originalTitle = String(formData.get("original_title") ?? "").trim();
@@ -79,7 +78,6 @@ function parsePublishForm(formData: FormData) {
       googleCalendarId,
       announcementId,
       pushToFacebook,
-      pushToApp,
       pushToTeam,
       calendarChanged,
     },
@@ -118,7 +116,7 @@ export async function publishAnnouncement(
     event_date: payload.startAt,
     event_location: payload.location || null,
     push_to_facebook: payload.pushToFacebook,
-    push_to_app: payload.pushToApp,
+    push_to_app: false,
     push_to_team: payload.pushToTeam,
     status: "published" as const,
     is_ready: true,

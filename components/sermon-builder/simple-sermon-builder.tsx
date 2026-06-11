@@ -515,7 +515,7 @@ export function SimpleSermonBuilder({
         <CardHeader>
           <CardTitle>Slide theme</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Each verse chunk fills the entire slide — no AI, just scripture.
+            Each verse chunk fills the entire slide.
           </p>
         </CardHeader>
         <CardContent>
