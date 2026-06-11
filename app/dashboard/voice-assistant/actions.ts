@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireChurchAuth } from "@/lib/auth/church";
+import { importRetellCallsForChurch } from "@/lib/integrations/retell-calls";
 import { syncRetellAgent } from "@/lib/integrations/retell";
 import { upsertVoiceAssistantSettings } from "@/lib/queries/voice-assistant";
 import {
@@ -42,7 +43,13 @@ const saveSchema = z.object({
   afterHoursMessage: z.string().max(2000),
 });
 
-export type SaveVoiceAssistantResult = { ok: true } | { error: string };
+export type SaveVoiceAssistantResult =
+  | { ok: true; agentId?: string }
+  | { error: string };
+
+export type ImportCallsResult =
+  | { ok: true; imported: number }
+  | { error: string };
 
 export async function saveVoiceAssistantSettings(
   input: z.infer<typeof saveSchema>,
@@ -63,16 +70,44 @@ export async function saveVoiceAssistantSettings(
       officeHours: parsed.data.officeHours as OfficeHours,
     });
 
+    let agentId: string | undefined;
     try {
-      await syncRetellAgent(auth.churchId);
+      const sync = await syncRetellAgent(auth.churchId);
+      agentId = sync?.agentId;
     } catch (err) {
       console.error("[voice-assistant] Retell sync error", err);
+      return {
+        error:
+          "Settings saved, but we could not update your phone assistant. Please try saving again.",
+      };
     }
 
     revalidatePath("/dashboard/voice-assistant");
     revalidatePath("/dashboard");
-    return { ok: true };
+    return { ok: true, agentId };
   } catch {
     return { error: "Something went wrong. Please try again." };
+  }
+}
+
+export async function importVoiceAssistantCalls(): Promise<ImportCallsResult> {
+  const auth = await requireChurchAuth();
+  if (!auth.isAdmin) {
+    return { error: "Only church admins can import calls." };
+  }
+
+  try {
+    const { imported } = await importRetellCallsForChurch(auth.churchId);
+    revalidatePath("/dashboard/voice-assistant");
+    revalidatePath("/dashboard");
+    return { ok: true, imported };
+  } catch (err) {
+    console.error("[voice-assistant] import calls error", err);
+    return {
+      error:
+        err instanceof Error
+          ? err.message
+          : "Could not import calls from Retell.",
+    };
   }
 }

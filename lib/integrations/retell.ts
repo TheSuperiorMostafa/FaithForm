@@ -149,8 +149,20 @@ function buildAgentPayload(
     language: LANGUAGE_TO_RETELL[settings.language] ?? "en-US",
     voice_speed: PACE_TO_VOICE_SPEED[settings.speaking_pace] ?? 1,
     webhook_url: webhookUrl,
-    webhook_events: webhookUrl ? ["call_analyzed"] : undefined,
+    webhook_events: webhookUrl ? ["call_ended", "call_analyzed"] : undefined,
   };
+}
+
+async function publishAgent(agentId: string): Promise<void> {
+  try {
+    await retellRequest({
+      method: "POST",
+      path: `/publish-agent/${agentId}`,
+      body: {},
+    });
+  } catch (err) {
+    console.warn("[retell] publish agent skipped", agentId, err);
+  }
 }
 
 async function syncLlm(
@@ -203,11 +215,16 @@ async function syncAgent(
   return created.agent_id;
 }
 
-export async function syncRetellAgent(churchId: string): Promise<void> {
-  if (!isRetellConfigured()) return;
+export type RetellSyncResult = {
+  agentId: string;
+  llmId: string;
+};
+
+export async function syncRetellAgent(churchId: string): Promise<RetellSyncResult | null> {
+  if (!isRetellConfigured()) return null;
 
   const settings = await getVoiceAssistantSettings(churchId);
-  if (!settings) return;
+  if (!settings) return null;
 
   const [context, church] = await Promise.all([
     getVoiceAssistantContext(churchId),
@@ -215,15 +232,15 @@ export async function syncRetellAgent(churchId: string): Promise<void> {
   ]);
 
   if (!church) {
-    console.error("[retell] church profile not found", churchId);
-    return;
+    throw new Error("Church profile not found.");
   }
 
   const llmId = await syncLlm(settings, context, church);
   const agentId = await syncAgent(settings, llmId, church.name);
+  await publishAgent(agentId);
 
   const admin = createAdminClient();
-  await admin
+  const { error } = await admin
     .from("voice_assistant_settings")
     .update({
       retell_llm_id: llmId,
@@ -232,6 +249,10 @@ export async function syncRetellAgent(churchId: string): Promise<void> {
       updated_at: new Date().toISOString(),
     })
     .eq("church_id", churchId);
+
+  if (error) throw error;
+
+  return { agentId, llmId };
 }
 
 /** @deprecated Use syncRetellAgent */

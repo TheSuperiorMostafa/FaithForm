@@ -9,10 +9,12 @@ import { IdentitySection } from "@/components/voice-assistant/identity-section";
 import { KnowledgeBlock } from "@/components/voice-assistant/knowledge-block";
 import { PersonalitySection } from "@/components/voice-assistant/personality-section";
 import { PhonePreview } from "@/components/voice-assistant/phone-preview";
+import { AgentStatusCard } from "@/components/voice-assistant/agent-status-card";
 import { RecentCallsBlock } from "@/components/voice-assistant/recent-calls-block";
 import { Button } from "@/components/ui/button";
 import type {
   PhoneCallRow,
+  VoiceAgentSyncStatus,
   VoiceAssistantContext,
   VoiceAssistantFormState,
 } from "@/types/voice-assistant";
@@ -21,6 +23,7 @@ type VoiceAssistantSettingsProps = {
   initialForm: VoiceAssistantFormState;
   context: VoiceAssistantContext;
   recentCalls: PhoneCallRow[];
+  agentStatus: VoiceAgentSyncStatus;
   isAdmin: boolean;
   isConfigured: boolean;
 };
@@ -29,6 +32,7 @@ export function VoiceAssistantSettings({
   initialForm,
   context,
   recentCalls,
+  agentStatus,
   isAdmin,
   isConfigured,
 }: VoiceAssistantSettingsProps) {
@@ -51,11 +55,17 @@ export function VoiceAssistantSettings({
 
     startTransition(async () => {
       const result = await saveVoiceAssistantSettings(form);
-      if ("error" in result && result.error) {
-        toast.error("Something went wrong. Please try again.");
+      if (!("ok" in result) || !result.ok) {
+        toast.error(
+          "error" in result ? result.error : "Something went wrong. Please try again.",
+        );
         return;
       }
-      toast.success("Voice assistant updated.");
+      toast.success(
+        result.agentId
+          ? "Voice assistant updated and synced to Retell."
+          : "Voice assistant updated.",
+      );
     });
   };
 
@@ -90,14 +100,21 @@ export function VoiceAssistantSettings({
               onChange={() => {}}
             />
             <KnowledgeBlock context={context} />
-            <RecentCallsBlock calls={recentCalls} />
+            <RecentCallsBlock
+              calls={recentCalls}
+              isAdmin={false}
+              hasAgent={Boolean(agentStatus.agentId)}
+            />
           </div>
-          <PhonePreview
-            assistantName={form.assistantName}
-            greetingMessage={form.greetingMessage}
-            tone={form.tone}
-            speakingPace={form.speakingPace}
-          />
+          <div className="flex flex-col gap-6">
+            <PhonePreview
+              assistantName={form.assistantName}
+              greetingMessage={form.greetingMessage}
+              tone={form.tone}
+              speakingPace={form.speakingPace}
+            />
+            <AgentStatusCard status={agentStatus} />
+          </div>
         </div>
       </div>
     );
@@ -134,15 +151,22 @@ export function VoiceAssistantSettings({
             onChange={patchForm}
           />
           <KnowledgeBlock context={context} />
-          <RecentCallsBlock calls={recentCalls} />
+          <RecentCallsBlock
+            calls={recentCalls}
+            isAdmin={isAdmin}
+            hasAgent={Boolean(agentStatus.agentId)}
+          />
         </div>
 
-        <PhonePreview
-          assistantName={form.assistantName}
-          greetingMessage={form.greetingMessage}
-          tone={form.tone}
-          speakingPace={form.speakingPace}
-        />
+        <div className="flex flex-col gap-6">
+          <PhonePreview
+            assistantName={form.assistantName}
+            greetingMessage={form.greetingMessage}
+            tone={form.tone}
+            speakingPace={form.speakingPace}
+          />
+          <AgentStatusCard status={agentStatus} />
+        </div>
       </div>
     </div>
   );

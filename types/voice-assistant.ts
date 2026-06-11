@@ -88,7 +88,17 @@ export type PhoneCallRow = {
   caller_number: string | null;
   duration_seconds: number | null;
   outcome: string | null;
+  sentiment: string | null;
+  transcript: string | null;
   called_at: string;
+};
+
+export type VoiceAgentSyncStatus = {
+  agentId: string | null;
+  llmId: string | null;
+  phoneNumber: string | null;
+  syncedAt: string | null;
+  isConfigured: boolean;
 };
 
 export type VoiceAssistantFormState = {

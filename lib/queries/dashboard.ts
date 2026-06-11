@@ -6,6 +6,7 @@ import {
   type AutomationCategory,
   type AutomationType,
 } from "@/lib/automation-catalog";
+import { phoneCallMinutesSaved } from "@/lib/utils/phone-call-time-saved";
 
 export type AnnouncementStatus = "draft" | "scheduled" | "active" | "ended";
 
@@ -182,7 +183,11 @@ type AnnouncementRow = {
   push_to_team: boolean | null;
 };
 
-type PhoneCallRow = { called_at: string | null; created_at?: string };
+type PhoneCallRow = {
+  called_at: string | null;
+  duration_seconds: number | null;
+  created_at?: string;
+};
 type AttendanceRow = { service_date: string; submitted_at: string | null };
 type SermonAssetRow = {
   kind: string;
@@ -216,7 +221,7 @@ async function computeDerivedMinutes(
   const [phoneRes, annRes, attRes, assetsRes, activityRes] = await Promise.all([
     supabase
       .from("phone_calls")
-      .select("called_at")
+      .select("called_at, duration_seconds")
       .eq("church_id", churchId),
     supabase
       .from("announcements")
@@ -241,26 +246,22 @@ async function computeDerivedMinutes(
   let tasks = 0;
 
   const phoneCalls = (phoneRes.data ?? []) as PhoneCallRow[];
-  const phoneCount = phoneCalls.filter((r) =>
+  const phoneCallsInWindow = phoneCalls.filter((r) =>
     inWindow(r.called_at, start, endDate),
-  ).length;
-  if (phoneCount > 0) {
-    const m =
-      phoneCount * AUTOMATION_CATALOG["Phone Call + Duration of Call"].minutes;
-    minutes += m;
-    tasks += phoneCount;
-    addToCategory(byCategory, "Phone", m);
+  );
+  if (phoneCallsInWindow.length > 0) {
+    let phoneMinutes = 0;
+    for (const call of phoneCallsInWindow) {
+      phoneMinutes += phoneCallMinutesSaved(call.duration_seconds);
+    }
+    minutes += phoneMinutes;
+    tasks += phoneCallsInWindow.length;
+    addToCategory(byCategory, "Phone", phoneMinutes);
   }
 
   const announcements = (annRes.data ?? []) as AnnouncementRow[];
   for (const a of announcements) {
     if (!inWindow(a.created_at, start, endDate)) continue;
-    if (a.push_to_app) {
-      const m = AUTOMATION_CATALOG["Church App Updated"].minutes;
-      minutes += m;
-      tasks += 1;
-      addToCategory(byCategory, "Calendar", m);
-    }
     if (a.push_to_facebook) {
       const m =
         AUTOMATION_CATALOG["Facebook Post about Announcement"].minutes;

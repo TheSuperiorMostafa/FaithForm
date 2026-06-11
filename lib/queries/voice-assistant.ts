@@ -10,6 +10,7 @@ import type {
   SpeakingPace,
   VoiceAssistantContext,
   VoiceAssistantFormState,
+  VoiceAgentSyncStatus,
   VoiceAssistantSettings,
   VoiceTone,
 } from "@/types/voice-assistant";
@@ -342,16 +343,33 @@ export async function getVoiceAssistantContext(
 
 export async function getRecentPhoneCalls(
   churchId: string,
-  limit = 10,
+  limit = 25,
   supabase?: SupabaseClient,
 ): Promise<PhoneCallRow[]> {
   const client = supabase ?? db();
   const { data } = await client
     .from("phone_calls")
-    .select("id, caller_number, duration_seconds, outcome, called_at")
+    .select(
+      "id, caller_number, duration_seconds, outcome, sentiment, transcript, called_at",
+    )
     .eq("church_id", churchId)
     .order("called_at", { ascending: false })
     .limit(limit);
 
   return (data ?? []) as PhoneCallRow[];
+}
+
+export async function getVoiceAgentSyncStatus(
+  churchId: string,
+  supabase?: SupabaseClient,
+): Promise<VoiceAgentSyncStatus> {
+  const settings = await getVoiceAssistantSettings(churchId, supabase);
+
+  return {
+    agentId: settings?.retail_ai_agent_id ?? null,
+    llmId: settings?.retell_llm_id ?? null,
+    phoneNumber: settings?.retail_ai_phone_number ?? null,
+    syncedAt: settings?.agent_synced_at ?? null,
+    isConfigured: Boolean(settings?.assistant_name?.trim()),
+  };
 }

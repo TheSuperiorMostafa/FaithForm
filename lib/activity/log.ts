@@ -15,6 +15,45 @@ export type LogActivityInput = {
   executedAt?: string;
 };
 
+export async function logPhoneCallActivity(input: {
+  churchId: string;
+  phoneCallId: string;
+  retailAiCallId: string;
+  callerNumber: string | null;
+  durationSeconds: number | null;
+  executedAt: string;
+  timeSavedMinutes: number;
+}): Promise<void> {
+  const triggerSource = `phone_call:${input.retailAiCallId}`;
+
+  try {
+    const admin = createAdminClientOrNull();
+    if (!admin) return;
+
+    const { data: existing } = await admin
+      .from("activity_log")
+      .select("id")
+      .eq("trigger_source", triggerSource)
+      .maybeSingle();
+
+    if (existing?.id) return;
+
+    await logActivity({
+      churchId: input.churchId,
+      automationType: "Phone Call + Duration of Call",
+      category: "Phone",
+      taskName: input.callerNumber
+        ? `AI answered call from ${input.callerNumber}`
+        : "AI answered phone call",
+      timeSavedMinutes: input.timeSavedMinutes,
+      triggerSource,
+      executedAt: input.executedAt,
+    });
+  } catch (activityError) {
+    console.error("phone call activity_log failed:", activityError);
+  }
+}
+
 export async function logActivity(input: LogActivityInput): Promise<void> {
   try {
     const admin = createAdminClientOrNull();
