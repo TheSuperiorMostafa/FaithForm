@@ -59,6 +59,14 @@ export async function logActivity(input: LogActivityInput): Promise<void> {
     const admin = createAdminClientOrNull();
     if (!admin) return;
 
+    const { data: existing } = await admin
+      .from("activity_log")
+      .select("id")
+      .eq("trigger_source", input.triggerSource)
+      .maybeSingle();
+
+    if (existing?.id) return;
+
     const catalog = AUTOMATION_CATALOG[input.automationType as AutomationType];
     const timeSavedMinutes =
       input.timeSavedMinutes ??

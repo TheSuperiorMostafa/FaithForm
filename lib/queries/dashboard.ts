@@ -1,12 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClientOrNull } from "@/lib/supabase/admin";
 import {
-  AUTOMATION_CATALOG,
-  DERIVED_AUTOMATION_TYPES,
-  type AutomationCategory,
-  type AutomationType,
-} from "@/lib/automation-catalog";
-import { phoneCallMinutesSaved } from "@/lib/utils/phone-call-time-saved";
+  computeHoursSaved,
+  type CategoryBreakdown,
+  toHoursSaved,
+} from "@/lib/reports/hours-saved";
 
 export type AnnouncementStatus = "draft" | "scheduled" | "active" | "ended";
 
@@ -28,7 +26,7 @@ export function computeAnnouncementStatus(
 
 export type DashboardRange = "week" | "month" | "all";
 
-export type CategoryBreakdown = Record<AutomationCategory, number>;
+export type { CategoryBreakdown };
 
 export type HoursSavedResult = {
   totalMinutes: number;
@@ -68,26 +66,6 @@ export type AttendanceTrendResult = {
   lastServiceDate: string | null;
   vsFourWeekAvgPercent: number | null;
 };
-
-const EMPTY_CATEGORY: CategoryBreakdown = {
-  Calendar: 0,
-  Communication: 0,
-  Phone: 0,
-  Social: 0,
-  Admin: 0,
-};
-
-function emptyBreakdown(): CategoryBreakdown {
-  return { ...EMPTY_CATEGORY };
-}
-
-function addToCategory(
-  breakdown: CategoryBreakdown,
-  category: AutomationCategory,
-  minutes: number,
-) {
-  breakdown[category] += minutes;
-}
 
 export function parseDashboardRange(
   value: string | string[] | undefined,
@@ -146,225 +124,20 @@ function percentDelta(current: number, prior: number): number | null {
   return Math.round(((current - prior) / prior) * 100);
 }
 
-function toHours(minutes: number): number {
-  return Math.round((minutes / 60) * 10) / 10;
-}
-
-function countAttendanceReportsInRange(
-  records: { service_date: string }[],
-  start: Date | null,
-  end: Date,
-): { monthly: number; quarterly: number; annual: number } {
-  const months = new Set<string>();
-  const quarters = new Set<string>();
-  const years = new Set<string>();
-
-  for (const r of records) {
-    const d = new Date(r.service_date);
-    if (!inWindow(r.service_date, start, end)) continue;
-    const y = d.getFullYear();
-    const m = d.getMonth();
-    months.add(`${y}-${m}`);
-    quarters.add(`${y}-Q${Math.floor(m / 3)}`);
-    years.add(String(y));
-  }
-
-  return {
-    monthly: months.size,
-    quarterly: quarters.size,
-    annual: years.size,
-  };
-}
-
 type AnnouncementRow = {
   created_at: string;
-  push_to_app: boolean | null;
   push_to_facebook: boolean | null;
-  push_to_team: boolean | null;
 };
 
 type PhoneCallRow = {
   called_at: string | null;
-  duration_seconds: number | null;
-  created_at?: string;
 };
-type AttendanceRow = { service_date: string; submitted_at: string | null };
+
 type SermonAssetRow = {
   kind: string;
   created_at: string;
   sermons: { church_id: string } | { church_id: string }[] | null;
 };
-type ActivityRow = {
-  automation_type: string;
-  category: string | null;
-  time_saved_minutes: number | null;
-  executed_at: string;
-};
-
-async function computeDerivedMinutes(
-  supabase: SupabaseClient,
-  churchId: string,
-  window: DateWindow,
-  forPrior: boolean,
-): Promise<{ minutes: number; tasks: number; byCategory: CategoryBreakdown }> {
-  const start = forPrior ? window.priorStart : window.currentStart;
-  const end = forPrior
-    ? window.priorEnd ?? window.currentEnd
-    : window.currentEnd;
-
-  if (forPrior && (!start || !end)) {
-    return { minutes: 0, tasks: 0, byCategory: emptyBreakdown() };
-  }
-
-  const endDate = end ?? window.currentEnd;
-
-  const [phoneRes, annRes, attRes, assetsRes, activityRes] = await Promise.all([
-    supabase
-      .from("phone_calls")
-      .select("called_at, duration_seconds")
-      .eq("church_id", churchId),
-    supabase
-      .from("announcements")
-      .select("created_at, push_to_app, push_to_facebook, push_to_team")
-      .eq("church_id", churchId),
-    supabase
-      .from("attendance_records")
-      .select("service_date, submitted_at")
-      .eq("church_id", churchId),
-    supabase
-      .from("sermon_assets")
-      .select("kind, created_at, sermons!inner(church_id)")
-      .eq("sermons.church_id", churchId),
-    supabase
-      .from("activity_log")
-      .select("automation_type, category, time_saved_minutes, executed_at")
-      .eq("church_id", churchId),
-  ]);
-
-  const byCategory = emptyBreakdown();
-  let minutes = 0;
-  let tasks = 0;
-
-  const phoneCalls = (phoneRes.data ?? []) as PhoneCallRow[];
-  const phoneCallsInWindow = phoneCalls.filter((r) =>
-    inWindow(r.called_at, start, endDate),
-  );
-  if (phoneCallsInWindow.length > 0) {
-    let phoneMinutes = 0;
-    for (const call of phoneCallsInWindow) {
-      phoneMinutes += phoneCallMinutesSaved(call.duration_seconds);
-    }
-    minutes += phoneMinutes;
-    tasks += phoneCallsInWindow.length;
-    addToCategory(byCategory, "Phone", phoneMinutes);
-  }
-
-  const announcements = (annRes.data ?? []) as AnnouncementRow[];
-  for (const a of announcements) {
-    if (!inWindow(a.created_at, start, endDate)) continue;
-    if (a.push_to_facebook) {
-      const m =
-        AUTOMATION_CATALOG["Facebook Post about Announcement"].minutes;
-      minutes += m;
-      tasks += 1;
-      addToCategory(byCategory, "Social", m);
-    }
-    if (a.push_to_team) {
-      const m = AUTOMATION_CATALOG["Announcement Email"].minutes;
-      minutes += m;
-      tasks += 1;
-      addToCategory(byCategory, "Communication", m);
-    }
-  }
-
-  const attendance = (attRes.data ?? []) as AttendanceRow[];
-  const inRangeAttendance = attendance.filter((r) =>
-    inWindow(r.submitted_at ?? `${r.service_date}T12:00:00Z`, start, endDate),
-  );
-  if (inRangeAttendance.length > 0) {
-    const weeklyM =
-      inRangeAttendance.length *
-      AUTOMATION_CATALOG["Track Weekly Attendance"].minutes;
-    minutes += weeklyM;
-    tasks += inRangeAttendance.length;
-    addToCategory(byCategory, "Admin", weeklyM);
-
-    const reports = countAttendanceReportsInRange(
-      inRangeAttendance,
-      start,
-      endDate,
-    );
-    if (reports.monthly > 0) {
-      const m =
-        reports.monthly *
-        AUTOMATION_CATALOG["Monthly Attendance Report"].minutes;
-      minutes += m;
-      tasks += reports.monthly;
-      addToCategory(byCategory, "Admin", m);
-    }
-    if (reports.quarterly > 0) {
-      const m =
-        reports.quarterly *
-        AUTOMATION_CATALOG["Quarterly Attendance Report"].minutes;
-      minutes += m;
-      tasks += reports.quarterly;
-      addToCategory(byCategory, "Admin", m);
-    }
-    if (reports.annual > 0) {
-      const m =
-        reports.annual * AUTOMATION_CATALOG["Annual Attendance Report"].minutes;
-      minutes += m;
-      tasks += reports.annual;
-      addToCategory(byCategory, "Admin", m);
-    }
-  }
-
-  const assets = (assetsRes.data ?? []) as SermonAssetRow[];
-  for (const asset of assets) {
-    if (!inWindow(asset.created_at, start, endDate)) continue;
-    if (asset.kind === "social_snippet") {
-      const m = AUTOMATION_CATALOG["Right Now Media Post"].minutes;
-      minutes += m;
-      tasks += 1;
-      addToCategory(byCategory, "Social", m);
-    } else if (asset.kind === "export_pptx") {
-      const m = AUTOMATION_CATALOG["Facebook Post about Announcement"].minutes;
-      minutes += m;
-      tasks += 1;
-      addToCategory(byCategory, "Social", m);
-    } else if (asset.kind === "export_pdf") {
-      const m = AUTOMATION_CATALOG["Sermon PDF Exported"].minutes;
-      minutes += m;
-      tasks += 1;
-      addToCategory(byCategory, "Admin", m);
-    }
-  }
-
-  const activities = (activityRes.data ?? []) as ActivityRow[];
-  for (const row of activities) {
-    if (!inWindow(row.executed_at, start, endDate)) continue;
-    if (DERIVED_AUTOMATION_TYPES.has(row.automation_type)) continue;
-
-    const catalog = AUTOMATION_CATALOG[row.automation_type as AutomationType];
-    const m =
-      row.time_saved_minutes ??
-      catalog?.minutes ??
-      0;
-    if (m <= 0) continue;
-
-    minutes += m;
-    tasks += 1;
-    const cat =
-      (catalog?.category as AutomationCategory | undefined) ??
-      (row.category as AutomationCategory | undefined) ??
-      "Admin";
-    if (cat in byCategory) {
-      addToCategory(byCategory, cat, m);
-    }
-  }
-
-  return { minutes, tasks, byCategory };
-}
 
 export async function getCurrentChurchId(
   supabase: SupabaseClient,
@@ -412,22 +185,40 @@ export async function getHoursSavedBreakdown(
   const window = getDateWindow(range);
 
   const [current, prior] = await Promise.all([
-    computeDerivedMinutes(supabase, churchId, window, false),
-    computeDerivedMinutes(supabase, churchId, window, true),
+    computeHoursSaved(supabase, churchId, {
+      start: window.currentStart,
+      end: window.currentEnd,
+    }),
+    window.priorStart && window.priorEnd
+      ? computeHoursSaved(supabase, churchId, {
+          start: window.priorStart,
+          end: window.priorEnd,
+        })
+      : Promise.resolve({
+          minutes: 0,
+          tasks: 0,
+          byCategory: currentEmptyBreakdown(),
+          automationMinutes: new Map(),
+        }),
   ]);
 
-  const byCategory = current.byCategory;
-  const totalMinutes = current.minutes;
-
   return {
-    totalMinutes,
-    totalHours: toHours(totalMinutes),
+    totalMinutes: current.minutes,
+    totalHours: toHoursSaved(current.minutes),
     taskCount: current.tasks,
     deltaPercent:
-      range === "all"
-        ? null
-        : percentDelta(current.minutes, prior.minutes),
-    byCategory,
+      range === "all" ? null : percentDelta(current.minutes, prior.minutes),
+    byCategory: current.byCategory,
+  };
+}
+
+function currentEmptyBreakdown(): CategoryBreakdown {
+  return {
+    Calendar: 0,
+    Communication: 0,
+    Phone: 0,
+    Social: 0,
+    Admin: 0,
   };
 }
 

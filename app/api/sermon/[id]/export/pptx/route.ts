@@ -117,7 +117,7 @@ export async function GET(
       churchId: auth.churchId,
       automationType: "Sermon PPTX Exported",
       taskName: sermon.title,
-      triggerSource: "sermon_module:export:pptx",
+      triggerSource: `sermon_module:export:pptx:${params.id}`,
     });
 
     return new NextResponse(new Uint8Array(buffer), {

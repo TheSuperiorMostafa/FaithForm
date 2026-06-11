@@ -156,7 +156,7 @@ export async function createSermon(input: {
     churchId: input.churchId,
     automationType: "Sermon Created",
     taskName: data.title,
-    triggerSource: "sermon_module:create",
+    triggerSource: `sermon_module:create:${data.id}`,
   });
 
   return data as Sermon;
@@ -181,12 +181,25 @@ export async function updateSermon(
 ): Promise<Sermon> {
   const existing = await getSermon(id);
   const supabase = db();
+  const now = new Date().toISOString();
+  const dbPatch: Record<string, unknown> = {
+    ...patch,
+    updated_at: now,
+  };
+
+  if (patch.outline !== undefined && patch.outline !== null && !existing?.outline) {
+    dbPatch.outline_generated_at = now;
+  }
+  if (patch.content !== undefined && patch.content !== null && !existing?.content) {
+    dbPatch.content_generated_at = now;
+  }
+  if (patch.status === "published" && existing?.status !== "published") {
+    dbPatch.published_at = now;
+  }
+
   const { data, error } = await supabase
     .from("sermons")
-    .update({
-      ...patch,
-      updated_at: new Date().toISOString(),
-    })
+    .update(dbPatch)
     .eq("id", id)
     .select()
     .single();
@@ -198,20 +211,20 @@ export async function updateSermon(
     const churchId = existing.church_id;
     const taskName = sermon.title;
 
-    if (patch.outline !== undefined && patch.outline !== null) {
+    if (patch.outline !== undefined && patch.outline !== null && !existing.outline) {
       await logActivity({
         churchId,
         automationType: "Sermon Outline Generated",
         taskName,
-        triggerSource: "sermon_module:outline",
+        triggerSource: `sermon_module:outline:${id}`,
       });
     }
-    if (patch.content !== undefined && patch.content !== null) {
+    if (patch.content !== undefined && patch.content !== null && !existing.content) {
       await logActivity({
         churchId,
         automationType: "Sermon Draft Generated",
         taskName,
-        triggerSource: "sermon_module:draft",
+        triggerSource: `sermon_module:draft:${id}`,
       });
     }
     if (patch.status === "published" && existing.status !== "published") {
@@ -219,7 +232,7 @@ export async function updateSermon(
         churchId,
         automationType: "Sermon Published",
         taskName,
-        triggerSource: "sermon_module:publish",
+        triggerSource: `sermon_module:publish:${id}`,
       });
     }
   }
@@ -259,7 +272,7 @@ export async function saveAsset(input: {
         churchId: sermon.church_id,
         automationType,
         taskName: sermon.title,
-        triggerSource: `sermon_module:asset:${input.kind}`,
+        triggerSource: `sermon_module:asset:${input.kind}:${input.sermonId}`,
       });
     }
   }

@@ -29,6 +29,11 @@ export const AUTOMATION_CATALOG = {
     taskId: "ANN",
     minutes: 20,
   },
+  "Publish Announcement": {
+    category: "Communication",
+    taskId: "ANN",
+    minutes: 15,
+  },
   "Phone Call + Duration of Call": {
     category: "Phone",
     taskId: "CALL",
@@ -148,6 +153,14 @@ export const DERIVED_AUTOMATION_TYPES = new Set<string>([
   "Annual Attendance Report",
   "Right Now Media Post",
   "Pastor Repost Live on Personal Account",
+  "Sermon Created",
+  "Sermon Outline Generated",
+  "Sermon Draft Generated",
+  "Sermon Published",
+  "Social Snippet Generated",
+  "Discussion Questions Generated",
+  "Sermon PDF Exported",
+  "Sermon PPTX Exported",
 ]);
 
 export function getCatalogMinutes(type: string): number {

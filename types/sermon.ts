@@ -89,6 +89,9 @@ export type Sermon = {
   model_used: string | null;
   created_at: string;
   updated_at: string;
+  outline_generated_at?: string | null;
+  content_generated_at?: string | null;
+  published_at?: string | null;
 };
 
 export type SermonSeries = {

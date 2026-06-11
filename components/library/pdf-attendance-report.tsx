@@ -18,7 +18,7 @@ export type AttendancePdfProps = {
   monthLabel: string;
   weeks: AttendanceWeekRow[];
   trendSummary: string;
-  generatedAt: string;
+  reportDate: string;
 };
 
 const styles = StyleSheet.create({
@@ -72,14 +72,33 @@ const styles = StyleSheet.create({
     lineHeight: 1.5,
     color: "#002D5F",
   },
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 4,
+  },
+  poweredBy: {
+    fontSize: 8,
+    color: "#6B7280",
+    marginBottom: 2,
+    textAlign: "right",
+  },
+  reportType: {
+    fontSize: 11,
+    fontWeight: "bold",
+    color: "#002D5F",
+    textAlign: "right",
+  },
   footer: {
     position: "absolute",
     bottom: 30,
     left: 40,
     right: 40,
+    flexDirection: "row",
+    justifyContent: "space-between",
     fontSize: 8,
     color: "#6B7280",
-    textAlign: "center",
   },
 });
 
@@ -99,13 +118,21 @@ export function AttendancePdfDocument({
   monthLabel,
   weeks,
   trendSummary,
-  generatedAt,
+  reportDate,
 }: AttendancePdfProps) {
   return (
     <Document>
       <Page size="LETTER" style={styles.page}>
-        <Text style={styles.title}>{churchName}</Text>
-        <Text style={styles.subtitle}>Attendance Report — {monthLabel}</Text>
+        <View style={styles.headerRow}>
+          <View>
+            <Text style={styles.title}>{churchName}</Text>
+            <Text style={styles.subtitle}>Attendance Report — {monthLabel}</Text>
+          </View>
+          <View>
+            <Text style={styles.poweredBy}>Powered by FaithForm Technologies</Text>
+            <Text style={styles.reportType}>Attendance Report</Text>
+          </View>
+        </View>
 
         <Text style={styles.sectionTitle}>Weekly attendance</Text>
         <HeaderRow />
@@ -129,7 +156,10 @@ export function AttendancePdfDocument({
         <Text style={styles.sectionTitle}>Trend summary</Text>
         <Text style={styles.trend}>{trendSummary}</Text>
 
-        <Text style={styles.footer}>Generated {generatedAt} · FaithForm</Text>
+        <View style={styles.footer}>
+          <Text>{reportDate} · CONFIDENTIAL</Text>
+          <Text>{churchName}</Text>
+        </View>
       </Page>
     </Document>
   );

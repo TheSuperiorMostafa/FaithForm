@@ -34,7 +34,7 @@ export async function GET(
       churchId: auth.churchId,
       automationType: "Sermon PDF Exported",
       taskName: sermon.title,
-      triggerSource: "sermon_module:export:pdf",
+      triggerSource: `sermon_module:export:pdf:${params.id}`,
     });
 
     return new NextResponse(new Uint8Array(buffer), {

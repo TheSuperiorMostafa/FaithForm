@@ -98,9 +98,10 @@ export async function GET(
     };
   });
 
-  const generatedAt = new Intl.DateTimeFormat("en-US", {
-    dateStyle: "long",
-    timeStyle: "short",
+  const reportDate = new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "2-digit",
+    year: "numeric",
   }).format(new Date());
 
   const buffer = await renderToBuffer(
@@ -109,7 +110,7 @@ export async function GET(
       monthLabel: parsed.label,
       weeks,
       trendSummary: buildTrendSummary(weeks),
-      generatedAt,
+      reportDate,
     }) as ReactElement<DocumentProps>,
   );
 

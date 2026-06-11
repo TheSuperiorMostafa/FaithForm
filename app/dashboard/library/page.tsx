@@ -5,7 +5,7 @@ import { buttonVariants } from "@/components/ui/button";
 import {
   getAttendanceReportMonths,
   getCurrentChurchId,
-  getTimeSavedReportMonths,
+  getMonthlyReportMonths,
 } from "@/lib/queries/library";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
@@ -116,9 +116,9 @@ export default async function LibraryPage() {
     );
   }
 
-  const [attendanceMonths, timeSavedMonths] = await Promise.all([
+  const [attendanceMonths, monthlyMonths] = await Promise.all([
     getAttendanceReportMonths(supabase, churchId),
-    getTimeSavedReportMonths(supabase, churchId),
+    getMonthlyReportMonths(supabase, churchId),
   ]);
 
   return (
@@ -156,22 +156,22 @@ export default async function LibraryPage() {
 
       <section className="flex flex-col gap-4">
         <h2 className="font-heading text-xl font-semibold text-foreground">
-          Monthly Time Saved Reports
+          Monthly Reports
         </h2>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          {timeSavedMonths.length === 0 ? (
+          {monthlyMonths.length === 0 ? (
             <EmptyCard message="No reports yet — your first month will appear here once automations start running." />
           ) : (
-            timeSavedMonths.map((m) => {
+            monthlyMonths.map((m) => {
               const label = formatMonthLabel(m.year, m.month);
               const slug = monthSlug(m.year, m.month);
               const hours = (m.totalMinutes / 60).toFixed(1);
               return (
                 <ReportCard
-                  key={`ts-${slug}`}
-                  title={`${label} — Time Saved Report`}
-                  subtitle={`${hours} hours saved · ${m.runs} automation${m.runs === 1 ? "" : "s"}`}
-                  downloadHref={`/api/reports/time-saved/${slug}`}
+                  key={`monthly-${slug}`}
+                  title={`${label} — Monthly Report`}
+                  subtitle={`${hours} hrs saved · ${m.tasks} task${m.tasks === 1 ? "" : "s"} · ${m.calls} call${m.calls === 1 ? "" : "s"}`}
+                  downloadHref={`/api/reports/monthly/${slug}`}
                 />
               );
             })
