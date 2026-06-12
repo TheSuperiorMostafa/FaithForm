@@ -1,16 +1,23 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { getBooks, getChapter } from "@/lib/bible/api";
+import { getChapterForTranslation } from "@/lib/bible/chapter";
+import { getBooks } from "@/lib/bible/api";
+import { getBooksTranslationId } from "@/lib/bible/translations";
 import type { TranslationBookChapter, TranslationBooks } from "@/lib/bible/types";
 import { requireChurchAuth } from "@/lib/auth/church";
-import { deleteSermon, verifySermonAccess } from "@/lib/queries/sermons";
+import {
+  deleteSeries,
+  deleteSermon,
+  verifySeriesAccess,
+  verifySermonAccess,
+} from "@/lib/queries/sermons";
 import { createClient } from "@/lib/supabase/server";
 
 export async function fetchBooksAction(
   translation: string,
 ): Promise<TranslationBooks> {
-  return getBooks(translation);
+  return getBooks(getBooksTranslationId(translation));
 }
 
 export async function fetchChapterAction(
@@ -18,7 +25,7 @@ export async function fetchChapterAction(
   book: string,
   chapter: number,
 ): Promise<TranslationBookChapter> {
-  return getChapter(translation, book, chapter);
+  return getChapterForTranslation(translation, book, chapter);
 }
 
 export async function deleteSermonAction(
@@ -41,6 +48,27 @@ export async function deleteSermonAction(
   } catch (e) {
     return {
       error: e instanceof Error ? e.message : "Could not delete sermon",
+    };
+  }
+}
+
+export async function deleteSeriesAction(
+  seriesId: string,
+): Promise<{ error?: string }> {
+  try {
+    const auth = await requireChurchAuth();
+    const supabase = createClient();
+    const series = await verifySeriesAccess(supabase, seriesId, auth.churchId);
+    if (!series) {
+      return { error: "Series not found" };
+    }
+
+    await deleteSeries(seriesId);
+    revalidatePath("/dashboard/sermon-builder");
+    return {};
+  } catch (e) {
+    return {
+      error: e instanceof Error ? e.message : "Could not delete series",
     };
   }
 }

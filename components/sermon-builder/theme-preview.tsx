@@ -1,6 +1,7 @@
 "use client";
 
-import { getCategoryLabel, type SlideTheme } from "@/lib/sermon-builder/themes";
+import { getCategoryLabel } from "@/lib/sermon-builder/themes";
+import type { SlideTheme } from "@/lib/queries/slide-themes";
 import { cn } from "@/lib/utils";
 
 const SAMPLE_VERSE =
@@ -10,9 +11,24 @@ type ThemePreviewProps = {
   theme: SlideTheme;
   selected: boolean;
   onSelect: () => void;
+  compact?: boolean;
 };
 
-export function ThemePreview({ theme, selected, onSelect }: ThemePreviewProps) {
+export function ThemePreview({
+  theme,
+  selected,
+  onSelect,
+  compact = false,
+}: ThemePreviewProps) {
+  const backgroundStyle =
+    theme.backgroundType === "image" && theme.imageUrl
+      ? {
+          backgroundImage: `url(${theme.imageUrl})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }
+      : { background: theme.bgCss };
+
   return (
     <button
       type="button"
@@ -25,11 +41,21 @@ export function ThemePreview({ theme, selected, onSelect }: ThemePreviewProps) {
       )}
     >
       <div
-        className="relative flex aspect-video w-full items-center justify-center p-3"
-        style={{ background: theme.bgCss }}
+        className={cn(
+          "relative flex aspect-video w-full items-center justify-center p-3",
+          theme.backgroundType === "image" && "bg-muted",
+        )}
+        style={backgroundStyle}
       >
+        {theme.backgroundType === "image" && theme.textShadow && (
+          <div className="absolute inset-0 bg-black/25" aria-hidden />
+        )}
         <p
-          className="line-clamp-3 text-center text-[9px] leading-tight"
+          className={cn(
+            "relative line-clamp-3 text-center leading-tight",
+            compact ? "text-[8px]" : "text-[9px]",
+            theme.textShadow && "drop-shadow-md",
+          )}
           style={{
             color: `#${theme.text}`,
             fontFamily: theme.fontBody,
@@ -38,17 +64,19 @@ export function ThemePreview({ theme, selected, onSelect }: ThemePreviewProps) {
           {SAMPLE_VERSE}
         </p>
       </div>
-      <div className="border-t border-border bg-card px-2.5 py-2">
-        <div className="flex items-start justify-between gap-1">
-          <p className="text-xs font-medium">{theme.name}</p>
-          <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[9px] capitalize text-muted-foreground">
-            {getCategoryLabel(theme.category)}
-          </span>
+      {!compact && (
+        <div className="border-t border-border bg-card px-2.5 py-2">
+          <div className="flex items-start justify-between gap-1">
+            <p className="text-xs font-medium">{theme.name}</p>
+            <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[9px] capitalize text-muted-foreground">
+              {getCategoryLabel(theme.category)}
+            </span>
+          </div>
+          <p className="line-clamp-1 text-[10px] text-muted-foreground">
+            {theme.description}
+          </p>
         </div>
-        <p className="line-clamp-1 text-[10px] text-muted-foreground">
-          {theme.description}
-        </p>
-      </div>
+      )}
     </button>
   );
 }

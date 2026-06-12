@@ -41,6 +41,10 @@ export const seriesPlanSchema = z.object({
   weeks: z.array(seriesWeekSchema).min(2).max(12),
 });
 
+export const themeSuggestSchema = z.object({
+  suggestions: z.array(z.string()).length(6),
+});
+
 export const sermonContentSchema = z.object({
   intro: z.string(),
   points: z.array(

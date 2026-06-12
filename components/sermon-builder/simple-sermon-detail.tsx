@@ -6,15 +6,17 @@ import { DeleteDraftButton } from "@/components/sermon-builder/delete-draft-butt
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { SlideTheme } from "@/lib/queries/slide-themes";
 import { getTheme } from "@/lib/sermon-builder/themes";
 import type { Sermon } from "@/types/sermon";
 
 type SimpleSermonDetailProps = {
   sermon: Sermon;
+  theme?: SlideTheme | null;
 };
 
-export function SimpleSermonDetail({ sermon }: SimpleSermonDetailProps) {
-  const theme = getTheme(sermon.theme_id);
+export function SimpleSermonDetail({ sermon, theme: themeProp }: SimpleSermonDetailProps) {
+  const theme = themeProp ?? getTheme(sermon.theme_id);
   const refsSummary =
     sermon.scripture_refs.length > 0
       ? sermon.scripture_refs.join(" · ")
@@ -68,22 +70,50 @@ export function SimpleSermonDetail({ sermon }: SimpleSermonDetailProps) {
         <CardContent>
           <div
             className="overflow-hidden rounded-xl border border-border"
-            style={{ background: theme.bgCss }}
+            style={
+              theme.backgroundType === "image" && theme.imageUrl
+                ? {
+                    backgroundImage: `url(${theme.imageUrl})`,
+                    backgroundSize: "cover",
+                    backgroundPosition: "center",
+                  }
+                : { background: theme.bgCss }
+            }
           >
-            <div className="p-6 text-center">
-              <p
-                className="text-sm font-medium"
-                style={{ color: `#${theme.accent}` }}
-              >
-                {refsSummary || "Scripture slides"}
-              </p>
-              <p
-                className="mt-2 text-lg"
-                style={{ color: `#${theme.text}`, fontFamily: theme.fontBody }}
-              >
-                Scripture slides — download to view all verses
-              </p>
-            </div>
+            {theme.backgroundType === "image" && theme.textShadow && (
+              <div className="bg-black/25">
+                <div className="p-6 text-center">
+                  <p
+                    className="text-sm font-medium drop-shadow-md"
+                    style={{ color: `#${theme.accent}` }}
+                  >
+                    {refsSummary || "Scripture slides"}
+                  </p>
+                  <p
+                    className="mt-2 text-lg drop-shadow-md"
+                    style={{ color: `#${theme.text}`, fontFamily: theme.fontBody }}
+                  >
+                    Scripture slides — download to view all verses
+                  </p>
+                </div>
+              </div>
+            )}
+            {theme.backgroundType !== "image" && (
+              <div className="p-6 text-center">
+                <p
+                  className="text-sm font-medium"
+                  style={{ color: `#${theme.accent}` }}
+                >
+                  {refsSummary || "Scripture slides"}
+                </p>
+                <p
+                  className="mt-2 text-lg"
+                  style={{ color: `#${theme.text}`, fontFamily: theme.fontBody }}
+                >
+                  Scripture slides — download to view all verses
+                </p>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

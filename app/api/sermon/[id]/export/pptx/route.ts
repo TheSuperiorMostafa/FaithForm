@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { logActivity } from "@/lib/activity/log";
-import { getChapter } from "@/lib/bible/api";
+import { getChapterForTranslation } from "@/lib/bible/chapter";
 import {
   extractVersesFromChapter,
   sliceVerses,
 } from "@/lib/bible/render";
+import { getTranslationShortName, isCuratedTranslationId } from "@/lib/bible/translations";
 import { parseScriptureRef } from "@/lib/sermon-builder/parse-ref";
 import {
   renderSimplePptx,
@@ -36,7 +37,7 @@ export async function GET(
     let buffer: Buffer;
 
     if ((sermon.kind ?? "advanced") === "simple") {
-      const translation = sermon.translation ?? "BSB";
+      const translation = sermon.translation ?? "eng_kjv";
       const refs = sermon.scripture_refs.filter(Boolean);
 
       if (refs.length === 0 || !translation) {
@@ -66,7 +67,7 @@ export async function GET(
           );
         }
 
-        const chapterData = await getChapter(
+        const chapterData = await getChapterForTranslation(
           translation,
           book.id,
           parsed.chapter,
@@ -86,7 +87,8 @@ export async function GET(
         }
 
         translationLabel =
-          chapterData.translation.shortName ?? translationLabel;
+          chapterData.translation.shortName ??
+          getTranslationShortName(translation);
 
         blocks.push({
           verses,

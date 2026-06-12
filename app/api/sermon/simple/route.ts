@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { requireChurchAuth } from "@/lib/auth/church";
-import { getChapter } from "@/lib/bible/api";
+import { getChapterForTranslation } from "@/lib/bible/chapter";
 import {
   extractVersesFromChapter,
   sliceVerses,
 } from "@/lib/bible/render";
+import { getCuratedTranslations, isCuratedTranslationId } from "@/lib/bible/translations";
 import { buildScriptureRef } from "@/lib/sermon-builder/parse-ref";
 import { resolveBookId } from "@/lib/sermon-builder/resolve-book";
 import {
@@ -54,7 +55,7 @@ async function resolvePassageRef(
     const book = await resolveBookId(translation, bookName);
     if (book) {
       resolvedBookName = book.commonName || book.name;
-      const chapterData = await getChapter(translation, book.id, chapter);
+      const chapterData = await getChapterForTranslation(translation, book.id, chapter);
       const allVerses = extractVersesFromChapter(chapterData);
       const verses = sliceVerses(allVerses, verseStart, verseEnd);
 
@@ -87,13 +88,22 @@ export async function POST(request: Request) {
     if (!title) {
       return NextResponse.json({ error: "Title is required" }, { status: 400 });
     }
-    if (!translation) {
+    if (!translation || !isCuratedTranslationId(translation)) {
       return NextResponse.json(
-        { error: "Translation is required" },
+        { error: "Invalid translation" },
         { status: 400 },
       );
     }
-    if (!theme_id || !isValidThemeId(theme_id)) {
+    const translationOption = getCuratedTranslations().find(
+      (t) => t.id === translation,
+    );
+    if (!translationOption?.enabled) {
+      return NextResponse.json(
+        { error: "This translation is not available yet" },
+        { status: 400 },
+      );
+    }
+    if (!theme_id || !(await isValidThemeId(theme_id))) {
       return NextResponse.json({ error: "Invalid theme" }, { status: 400 });
     }
     if (passages.length === 0) {

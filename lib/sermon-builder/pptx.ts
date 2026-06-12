@@ -1,7 +1,8 @@
 import PptxGenJS from "pptxgenjs";
 import { chunkVerses, formatReference } from "@/lib/bible/render";
 import type { RenderedVerse } from "@/lib/bible/types";
-import { getTheme } from "@/lib/sermon-builder/themes";
+import type { SlideTheme } from "@/lib/queries/slide-themes";
+import { getThemeAsync } from "@/lib/sermon-builder/themes";
 
 const SLIDE_W = 13.33;
 const SLIDE_H = 7.5;
@@ -34,6 +35,17 @@ export function pickBodyFontSize(text: string): number {
   return 26;
 }
 
+function applySlideBackground(
+  slide: { background: PptxGenJS.BackgroundProps },
+  theme: SlideTheme,
+): void {
+  if (theme.backgroundType === "image" && theme.imageUrl) {
+    slide.background = { path: theme.imageUrl };
+    return;
+  }
+  slide.background = { color: theme.bg ?? "0E1428" };
+}
+
 export type SimplePassageBlock = {
   verses: RenderedVerse[];
   bookName: string;
@@ -49,7 +61,7 @@ export type SimplePptxInput = {
 };
 
 export async function renderSimplePptx(input: SimplePptxInput): Promise<Buffer> {
-  const theme = getTheme(input.themeId);
+  const theme = await getThemeAsync(input.themeId);
   const pptx = new PptxGenJS();
   pptx.author = "FaithForm";
   pptx.title = input.title;
@@ -66,7 +78,7 @@ export async function renderSimplePptx(input: SimplePptxInput): Promise<Buffer> 
       .join(" · ");
 
   const titleSlide = pptx.addSlide();
-  titleSlide.background = { color: theme.bg };
+  applySlideBackground(titleSlide, theme);
   titleSlide.addText(input.title, {
     x: MARGIN_X,
     y: 2.2,
@@ -98,7 +110,7 @@ export async function renderSimplePptx(input: SimplePptxInput): Promise<Buffer> 
       const bodyText = verseChunkToText(chunk);
 
       const slide = pptx.addSlide();
-      slide.background = { color: theme.bg };
+      applySlideBackground(slide, theme);
 
       slide.addText(bodyText, {
         x: MARGIN_X,

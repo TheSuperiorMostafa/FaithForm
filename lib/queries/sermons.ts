@@ -380,6 +380,27 @@ export async function updateSeries(
   return data as SermonSeries;
 }
 
+export async function deleteSeries(id: string): Promise<void> {
+  const supabase = db();
+  const { error } = await supabase.from("sermon_series").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function verifySeriesAccess(
+  supabase: SupabaseClient,
+  seriesId: string,
+  churchId: string,
+): Promise<SermonSeries | null> {
+  const { data } = await supabase
+    .from("sermon_series")
+    .select("*")
+    .eq("id", seriesId)
+    .eq("church_id", churchId)
+    .maybeSingle();
+
+  return data as SermonSeries | null;
+}
+
 export function sermonToContext(
   sermon: Sermon,
   settings?: ChurchSettings | null,

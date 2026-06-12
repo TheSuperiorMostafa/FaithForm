@@ -2,11 +2,13 @@
 
 import { chunkVerses } from "@/lib/bible/render";
 import type { RenderedVerse } from "@/lib/bible/types";
+import type { SlideTheme } from "@/lib/queries/slide-themes";
 import { getTheme } from "@/lib/sermon-builder/themes";
 import { cn } from "@/lib/utils";
 
 type SlidePreviewProps = {
   themeId: string;
+  theme?: SlideTheme | null;
   verses: RenderedVerse[];
   reference: string;
   translation?: string;
@@ -35,27 +37,42 @@ function previewSizeClass(text: string): string {
 
 export function SlidePreview({
   themeId,
+  theme: themeProp,
   verses,
   translation,
   className,
 }: SlidePreviewProps) {
-  const theme = getTheme(themeId);
+  const theme = themeProp ?? getTheme(themeId);
   const chunks = chunkVerses(verses, 80);
   const firstChunk = chunks[0] ?? verses;
   const bodyText = verseChunkToText(firstChunk);
+
+  const backgroundStyle =
+    theme.backgroundType === "image" && theme.imageUrl
+      ? {
+          backgroundImage: `url(${theme.imageUrl})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }
+      : { background: theme.bgCss };
 
   return (
     <div
       className={cn(
         "relative aspect-video w-full overflow-hidden rounded-xl border border-border shadow-card",
+        theme.backgroundType === "image" && "bg-muted",
         className,
       )}
-      style={{ background: theme.bgCss }}
+      style={backgroundStyle}
     >
+      {theme.backgroundType === "image" && theme.textShadow && (
+        <div className="absolute inset-0 bg-black/25" aria-hidden />
+      )}
       <p
         className={cn(
           "absolute inset-x-4 top-1/2 max-h-[70%] -translate-y-1/2 overflow-hidden text-center font-medium leading-snug",
           previewSizeClass(bodyText),
+          theme.textShadow && "drop-shadow-md",
         )}
         style={{
           color: `#${theme.text}`,

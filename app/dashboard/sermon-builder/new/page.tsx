@@ -2,7 +2,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { SimpleSermonBuilder } from "@/components/sermon-builder/simple-sermon-builder";
 import { SermonWizard } from "@/components/sermon-builder/sermon-wizard";
-import { getTranslations } from "@/lib/bible/api";
+import {
+  getCuratedTranslations,
+  getDefaultTranslationId,
+} from "@/lib/bible/translations";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentChurchId } from "@/lib/queries/dashboard";
 import { getChurchAISettings } from "@/lib/queries/sermons";
@@ -31,13 +34,19 @@ export default async function NewSermonPage({ searchParams }: Props) {
   const mode = settings?.sermon_builder_mode ?? "simple";
 
   if (mode === "simple") {
-    const { translations } = await getTranslations();
+    const translationOptions = getCuratedTranslations();
+    const defaultTranslation = getDefaultTranslationId(
+      settings?.default_translation,
+    );
     return (
       <div className="flex flex-col gap-4">
         <h1 className="border-l-4 border-accent pl-3 font-heading text-[26px] font-bold">
           New slide deck
         </h1>
-        <SimpleSermonBuilder translations={translations} />
+        <SimpleSermonBuilder
+          translationOptions={translationOptions}
+          defaultTranslation={defaultTranslation}
+        />
       </div>
     );
   }

@@ -92,6 +92,14 @@ ${ctx?.denomination ? `Denomination: ${ctx.denomination}` : ""}
 ${ctx?.preaching_style ? `Style: ${ctx.preaching_style}` : ""}`;
 }
 
+export function themeSuggestSystemPrompt(): string {
+  return `You recommend visually and thematically similar PowerPoint slide background themes for church sermon decks.
+Given one selected theme and a catalog of available themes (id, name, category, tags), return exactly 6 theme IDs ranked by similarity.
+Prefer matching category, seasonal context, visual style, and symbol tags.
+Do not include the selected theme ID in results.
+Output valid JSON only.`;
+}
+
 export function sectionRegeneratePrompt(
   section: string,
   ctx: SermonContext,

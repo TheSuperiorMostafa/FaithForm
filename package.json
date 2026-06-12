@@ -12,7 +12,9 @@
     "db:onboarding": "node scripts/apply-onboarding-migration.mjs",
     "db:giving-enhancements": "node scripts/apply-giving-enhancements-migration.mjs",
     "db:giving-branding": "node scripts/apply-giving-branding-migration.mjs",
-    "validate:themes": "node scripts/validate-slide-themes.mjs"
+    "validate:themes": "node scripts/validate-slide-themes.mjs",
+    "import:themes": "node scripts/import-slide-themes.mjs",
+    "db:slide-themes": "node scripts/apply-slide-themes-migration.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.79",

@@ -19,11 +19,12 @@ import {
 } from "@/lib/bible/render";
 import type {
   RenderedVerse,
-  Translation,
   TranslationBook,
 } from "@/lib/bible/types";
+import type { CuratedTranslationOption } from "@/lib/bible/translations";
 import { buildScriptureRef } from "@/lib/sermon-builder/parse-ref";
 import { DEFAULT_THEME_ID } from "@/lib/sermon-builder/themes";
+import type { SlideTheme } from "@/lib/queries/slide-themes";
 import {
   MAX_SIMPLE_PASSAGES,
   type SimplePassageInput,
@@ -40,7 +41,8 @@ type SavedPassage = {
 };
 
 type SimpleSermonBuilderProps = {
-  translations: Translation[];
+  translationOptions: CuratedTranslationOption[];
+  defaultTranslation: string;
   initial?: {
     title?: string;
     translation?: string;
@@ -62,13 +64,14 @@ function passageKey(p: {
 }
 
 export function SimpleSermonBuilder({
-  translations,
+  translationOptions,
+  defaultTranslation,
   initial,
 }: SimpleSermonBuilderProps) {
   const router = useRouter();
   const [title, setTitle] = useState(initial?.title ?? "");
   const [translation, setTranslation] = useState(
-    initial?.translation ?? translations[0]?.id ?? "BSB",
+    initial?.translation ?? defaultTranslation,
   );
   const [books, setBooks] = useState<TranslationBook[]>([]);
   const [booksLoading, setBooksLoading] = useState(false);
@@ -89,6 +92,7 @@ export function SimpleSermonBuilder({
   const [chapterError, setChapterError] = useState<string | null>(null);
   const [booksError, setBooksError] = useState<string | null>(null);
   const [themeId, setThemeId] = useState(initial?.themeId ?? DEFAULT_THEME_ID);
+  const [loadedThemes, setLoadedThemes] = useState<SlideTheme[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -97,18 +101,18 @@ export function SimpleSermonBuilder({
     [books, bookId],
   );
 
-  const englishTranslations = useMemo(
-    () =>
-      translations.filter(
-        (t) =>
-          t.language === "eng" ||
-          t.languageEnglishName?.toLowerCase().includes("english"),
-      ),
-    [translations],
+  const enabledTranslation = translationOptions.find(
+    (t) => t.id === translation && t.enabled,
   );
 
-  const translationOptions =
-    englishTranslations.length > 0 ? englishTranslations : translations;
+  useEffect(() => {
+    const current = translationOptions.find((t) => t.id === translation);
+    if (!current?.enabled) {
+      const fallback =
+        translationOptions.find((t) => t.enabled)?.id ?? defaultTranslation;
+      setTranslation(fallback);
+    }
+  }, [translation, translationOptions, defaultTranslation]);
 
   const loadBooks = useCallback(async (transId: string) => {
     setBooksLoading(true);
@@ -137,6 +141,24 @@ export function SimpleSermonBuilder({
   useEffect(() => {
     if (translation) loadBooks(translation);
   }, [translation, loadBooks]);
+
+  useEffect(() => {
+    fetch("/api/sermon/themes")
+      .then((res) => res.json())
+      .then((data) => {
+        if (Array.isArray(data.themes)) {
+          setLoadedThemes(data.themes as SlideTheme[]);
+        }
+      })
+      .catch(() => {
+        // Preview falls back to bundled JSON themes
+      });
+  }, []);
+
+  const selectedTheme = useMemo(
+    () => loadedThemes.find((t) => t.id === themeId) ?? null,
+    [loadedThemes, themeId],
+  );
 
   useEffect(() => {
     if (!translation || !bookId || !chapter) {
@@ -226,7 +248,7 @@ export function SimpleSermonBuilder({
   const totalPassageCount = collectPassagesForSave().length;
 
   const canSubmit = Boolean(
-    title.trim() && translation && themeId && totalPassageCount >= 1,
+    title.trim() && enabledTranslation && themeId && totalPassageCount >= 1,
   );
 
   const canAddPassage = Boolean(
@@ -334,7 +356,10 @@ export function SimpleSermonBuilder({
               id="translation"
               value={translation}
               onChange={(e) => {
-                setTranslation(e.target.value);
+                const next = e.target.value;
+                const option = translationOptions.find((t) => t.id === next);
+                if (!option?.enabled) return;
+                setTranslation(next);
                 setBookId("");
                 setChapter("");
                 setVerseStart("");
@@ -344,8 +369,9 @@ export function SimpleSermonBuilder({
               className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {translationOptions.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.englishName || t.name} ({t.shortName})
+                <option key={t.id} value={t.id} disabled={!t.enabled}>
+                  {t.label} ({t.shortName})
+                  {!t.enabled ? " — Coming soon" : ""}
                 </option>
               ))}
             </select>
@@ -519,7 +545,14 @@ export function SimpleSermonBuilder({
           </p>
         </CardHeader>
         <CardContent>
-          <ThemePicker selectedId={themeId} onSelect={setThemeId} />
+          <ThemePicker
+            selectedId={themeId}
+            onSelect={setThemeId}
+            context={{
+              title: title.trim() || undefined,
+              scripture: previewRef || undefined,
+            }}
+          />
         </CardContent>
       </Card>
 
@@ -530,6 +563,7 @@ export function SimpleSermonBuilder({
         <CardContent className="flex flex-col gap-4">
           <SlidePreview
             themeId={themeId}
+            theme={selectedTheme}
             verses={previewVerses}
             reference={previewRef}
             translation={previewTranslation}

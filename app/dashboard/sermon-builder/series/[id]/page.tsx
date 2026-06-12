@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
+import { DeleteSeriesButton } from "@/components/sermon-builder/delete-series-button";
 import { SeriesTimeline } from "@/components/sermon-builder/series-timeline";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentChurchId } from "@/lib/queries/dashboard";
@@ -34,12 +35,18 @@ export default async function SeriesDetailPage({
         <ArrowLeft className="size-4" strokeWidth={1.75} />
         Back
       </Link>
-      <div>
-        <h1 className="border-l-4 border-accent pl-3 font-heading text-[26px] font-bold">{series.title}</h1>
-        <p className="text-muted-foreground">{series.theme}</p>
-        {series.description && (
-          <p className="mt-2 text-sm">{series.description}</p>
-        )}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="border-l-4 border-accent pl-3 font-heading text-[26px] font-bold">{series.title}</h1>
+          <p className="text-muted-foreground">{series.theme}</p>
+          {series.description && (
+            <p className="mt-2 text-sm">{series.description}</p>
+          )}
+        </div>
+        <DeleteSeriesButton
+          seriesId={series.id}
+          seriesTitle={series.title}
+        />
       </div>
       <SeriesTimeline series={series} />
     </div>

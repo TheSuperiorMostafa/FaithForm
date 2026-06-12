@@ -45,7 +45,7 @@ export function SeriesPlanner() {
   }
 
   return (
-    <Card className="mx-auto max-w-2xl">
+    <Card className="mx-auto max-w-4xl">
       <CardHeader>
         <CardTitle>Plan a sermon series</CardTitle>
       </CardHeader>
