@@ -12,7 +12,7 @@ import {
   MAX_SIMPLE_PASSAGES,
   type SimplePassageInput,
 } from "@/lib/sermon-builder/types";
-import { isValidThemeId } from "@/lib/sermon-builder/themes";
+import { isValidSlideThemeId } from "@/lib/queries/slide-themes";
 import { createSermon } from "@/lib/queries/sermons";
 
 export const runtime = "nodejs";
@@ -103,7 +103,7 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
-    if (!theme_id || !(await isValidThemeId(theme_id))) {
+    if (!theme_id || !(await isValidSlideThemeId(theme_id))) {
       return NextResponse.json({ error: "Invalid theme" }, { status: 400 });
     }
     if (passages.length === 0) {

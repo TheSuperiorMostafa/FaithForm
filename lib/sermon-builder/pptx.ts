@@ -1,8 +1,8 @@
 import PptxGenJS from "pptxgenjs";
 import { chunkVerses, formatReference } from "@/lib/bible/render";
 import type { RenderedVerse } from "@/lib/bible/types";
-import type { SlideTheme } from "@/lib/queries/slide-themes";
-import { getThemeAsync } from "@/lib/sermon-builder/themes";
+import type { SlideTheme } from "@/lib/sermon-builder/slide-theme-shared";
+import { getThemeAsync } from "@/lib/queries/slide-themes";
 
 const SLIDE_W = 13.33;
 const SLIDE_H = 7.5;

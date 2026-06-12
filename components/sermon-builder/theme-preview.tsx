@@ -1,7 +1,7 @@
 "use client";
 
 import { getCategoryLabel } from "@/lib/sermon-builder/themes";
-import type { SlideTheme } from "@/lib/queries/slide-themes";
+import type { SlideTheme } from "@/lib/sermon-builder/slide-theme-shared";
 import { cn } from "@/lib/utils";
 
 const SAMPLE_VERSE =

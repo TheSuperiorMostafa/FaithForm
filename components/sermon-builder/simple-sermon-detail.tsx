@@ -6,7 +6,7 @@ import { DeleteDraftButton } from "@/components/sermon-builder/delete-draft-butt
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { SlideTheme } from "@/lib/queries/slide-themes";
+import type { SlideTheme } from "@/lib/sermon-builder/slide-theme-shared";
 import { getTheme } from "@/lib/sermon-builder/themes";
 import type { Sermon } from "@/types/sermon";
 

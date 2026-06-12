@@ -2,7 +2,7 @@
 
 import { chunkVerses } from "@/lib/bible/render";
 import type { RenderedVerse } from "@/lib/bible/types";
-import type { SlideTheme } from "@/lib/queries/slide-themes";
+import type { SlideTheme } from "@/lib/sermon-builder/slide-theme-shared";
 import { getTheme } from "@/lib/sermon-builder/themes";
 import { cn } from "@/lib/utils";
 

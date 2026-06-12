@@ -1,10 +1,5 @@
 import slideThemesData from "@/data/slide-themes.json";
-import {
-  getSlideThemeById,
-  isValidSlideThemeId,
-  listSlideThemes,
-  type SlideTheme,
-} from "@/lib/queries/slide-themes";
+import type { SlideTheme } from "@/lib/sermon-builder/slide-theme-shared";
 
 export type { SlideTheme };
 export type ThemeCategory = string;
@@ -57,27 +52,14 @@ function getThemeFromJson(id: string | null | undefined): SlideTheme {
   );
 }
 
-/** Sync fallback using bundled JSON (used when theme object isn't available). */
+/** Sync fallback using bundled JSON (client-safe). */
 export function getTheme(id: string | null | undefined): SlideTheme {
   return getThemeFromJson(id);
-}
-
-export async function getThemeAsync(
-  id: string | null | undefined,
-): Promise<SlideTheme> {
-  const theme = await getSlideThemeById(id);
-  return theme ?? getThemeFromJson(id);
-}
-
-export async function isValidThemeId(id: string): Promise<boolean> {
-  return isValidSlideThemeId(id);
 }
 
 export function isValidThemeIdSync(id: string): boolean {
   return JSON_THEMES.some((t) => t.id === id);
 }
-
-export { listSlideThemes, getSlideThemeById, isValidSlideThemeId };
 
 export const CATEGORY_LABELS: Record<string, string> = {
   traditional: "Traditional",
@@ -92,7 +74,6 @@ export function getCategoryLabel(category: string): string {
   return CATEGORY_LABELS[category] ?? category;
 }
 
-// Legacy exports for validate:themes script
 export const SLIDE_THEMES = JSON_THEMES;
 
 export function getThemeCategories(): {

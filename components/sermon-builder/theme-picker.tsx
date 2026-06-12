@@ -9,7 +9,7 @@ import {
   getThemeFilterOptions,
   searchSlideThemes,
   type SlideTheme,
-} from "@/lib/queries/slide-themes";
+} from "@/lib/sermon-builder/slide-theme-shared";
 import { cn } from "@/lib/utils";
 
 type ThemePickerProps = {

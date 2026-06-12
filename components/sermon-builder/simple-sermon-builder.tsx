@@ -24,7 +24,7 @@ import type {
 import type { CuratedTranslationOption } from "@/lib/bible/translations";
 import { buildScriptureRef } from "@/lib/sermon-builder/parse-ref";
 import { DEFAULT_THEME_ID } from "@/lib/sermon-builder/themes";
-import type { SlideTheme } from "@/lib/queries/slide-themes";
+import type { SlideTheme } from "@/lib/sermon-builder/slide-theme-shared";
 import {
   MAX_SIMPLE_PASSAGES,
   type SimplePassageInput,
