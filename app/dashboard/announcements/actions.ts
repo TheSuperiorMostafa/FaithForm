@@ -129,6 +129,19 @@ export async function publishAnnouncement(
 
   let announcementId = payload.announcementId;
 
+  if (!announcementId && payload.googleEventId) {
+    const { data: existing } = await ctx.supabase
+      .from("announcements")
+      .select("id")
+      .eq("church_id", ctx.churchId)
+      .eq("google_event_id", payload.googleEventId)
+      .maybeSingle();
+
+    if (existing?.id) {
+      announcementId = existing.id as string;
+    }
+  }
+
   if (announcementId) {
     const { error } = await ctx.supabase
       .from("announcements")

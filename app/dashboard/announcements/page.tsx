@@ -62,6 +62,11 @@ export default async function AnnouncementsPage() {
   }
 
   const published = await getPublishedAnnouncements(supabase, churchId);
+  const publishedAnnouncements = Object.fromEntries(
+    published
+      .filter((row) => row.google_event_id)
+      .map((row) => [row.google_event_id!, row]),
+  );
 
   return (
     <div className="flex w-full flex-col gap-5">
@@ -93,6 +98,7 @@ export default async function AnnouncementsPage() {
         initialMonthIndex={monthIndex}
         initialEvents={initialEvents}
         initialPublishedByGoogleId={publishedByGoogleId}
+        initialPublishedAnnouncements={publishedAnnouncements}
         googleConnected={googleConnected}
         facebookConnected={facebookConnected}
       />

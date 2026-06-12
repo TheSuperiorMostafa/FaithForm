@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import type { CalendarQueueItem } from "@/lib/queries/announcements";
+import type { CalendarQueueItem, AnnouncementRow } from "@/lib/queries/announcements";
 import {
   fromDatetimeLocalValue,
   toDatetimeLocalValue,
@@ -23,7 +23,8 @@ type AnnouncementVerifyFormProps = {
   churchId: string;
   event: CalendarQueueItem;
   defaults: IntegrationDefaults;
-  onPublished?: () => void;
+  publishedAnnouncementId?: string | null;
+  onPublished?: (announcement: AnnouncementRow) => void;
   compact?: boolean;
 };
 
@@ -31,6 +32,7 @@ export function AnnouncementVerifyForm({
   churchId,
   event,
   defaults,
+  publishedAnnouncementId,
   onPublished,
   compact = false,
 }: AnnouncementVerifyFormProps) {
@@ -70,6 +72,9 @@ export function AnnouncementVerifyForm({
     formData.set("notes", notes);
     formData.set("google_event_id", event.googleEventId);
     formData.set("google_calendar_id", event.calendarId);
+    if (publishedAnnouncementId) {
+      formData.set("announcement_id", publishedAnnouncementId);
+    }
     formData.set("push_to_facebook", pushToFacebook ? "true" : "false");
     formData.set("push_to_team", pushToTeam ? "true" : "false");
     formData.set("original_title", event.title);
@@ -96,8 +101,32 @@ export function AnnouncementVerifyForm({
       if (result.errors.length > 0) {
         parts.push(result.errors.join(" "));
       }
+      if (!result.announcementId) return;
+
       setSuccess(parts.join(" "));
-      onPublished?.();
+      onPublished?.({
+        id: result.announcementId,
+        church_id: churchId,
+        title: title.trim(),
+        body: notes,
+        start_at: startIso,
+        end_at: endIso,
+        event_location: location.trim() || null,
+        is_ready: true,
+        push_to_app: false,
+        push_to_facebook: pushToFacebook,
+        push_to_team: pushToTeam,
+        status: "published",
+        google_event_id: event.googleEventId,
+        google_calendar_id: event.calendarId,
+        facebook_post_id: result.facebookUrl ? "posted" : null,
+        gmail_draft_id: result.gmailDraftUrl ? "draft" : null,
+        published_at: new Date().toISOString(),
+        last_publish_error:
+          result.errors.length > 0 ? result.errors.join(" ") : null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      });
     });
   };
 
@@ -135,7 +164,7 @@ export function AnnouncementVerifyForm({
 
       <div className="flex flex-col gap-2">
         <Label>When</Label>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-start">
           <div className="min-w-0 flex-1">
             <Input
               type="datetime-local"
@@ -143,18 +172,18 @@ export function AnnouncementVerifyForm({
               onChange={(e) => setStartAt(e.target.value)}
               required
               aria-label="Start"
-              className="w-full"
+              className="w-full min-w-[16rem] text-base tabular-nums"
             />
             <span className="mt-1 block text-xs text-muted-foreground">Start</span>
           </div>
-          <ArrowRight className="hidden size-4 shrink-0 text-muted-foreground sm:block" />
+          <ArrowRight className="mx-auto hidden size-5 shrink-0 text-muted-foreground xl:mt-3 xl:block" />
           <div className="min-w-0 flex-1">
             <Input
               type="datetime-local"
               value={endAt}
               onChange={(e) => setEndAt(e.target.value)}
               aria-label="End"
-              className="w-full"
+              className="w-full min-w-[16rem] text-base tabular-nums"
             />
             <span className="mt-1 block text-xs text-muted-foreground">End</span>
           </div>
@@ -170,7 +199,7 @@ export function AnnouncementVerifyForm({
           disabled={!defaults.facebookConnected}
           hint={
             defaults.facebookConnected
-              ? "Posts a generated graphic; schedules for event start when more than 10 minutes away"
+              ? "Creates a Facebook post with event details. Schedules for event start when more than 10 minutes away."
               : "Connect Facebook in Settings"
           }
         />
