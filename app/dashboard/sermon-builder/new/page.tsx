@@ -34,8 +34,8 @@ export default async function NewSermonPage({ searchParams }: Props) {
   const mode = settings?.sermon_builder_mode ?? "simple";
 
   if (mode === "simple") {
-    const translationOptions = getCuratedTranslations();
-    const defaultTranslation = getDefaultTranslationId(
+    const translationOptions = await getCuratedTranslations();
+    const defaultTranslation = await getDefaultTranslationId(
       settings?.default_translation,
     );
     return (

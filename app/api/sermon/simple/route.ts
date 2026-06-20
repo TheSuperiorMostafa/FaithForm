@@ -5,7 +5,7 @@ import {
   extractVersesFromChapter,
   sliceVerses,
 } from "@/lib/bible/render";
-import { getCuratedTranslations, isCuratedTranslationId } from "@/lib/bible/translations";
+import { getCuratedTranslations, isCuratedTranslationId, normalizeTranslationId } from "@/lib/bible/translations";
 import { buildScriptureRef } from "@/lib/sermon-builder/parse-ref";
 import { resolveBookId } from "@/lib/sermon-builder/resolve-book";
 import {
@@ -88,14 +88,15 @@ export async function POST(request: Request) {
     if (!title) {
       return NextResponse.json({ error: "Title is required" }, { status: 400 });
     }
-    if (!translation || !isCuratedTranslationId(translation)) {
+    const normalizedTranslation = normalizeTranslationId(translation);
+    if (!translation || !isCuratedTranslationId(normalizedTranslation)) {
       return NextResponse.json(
         { error: "Invalid translation" },
         { status: 400 },
       );
     }
-    const translationOption = getCuratedTranslations().find(
-      (t) => t.id === translation,
+    const translationOption = (await getCuratedTranslations()).find(
+      (t) => t.id === normalizedTranslation,
     );
     if (!translationOption?.enabled) {
       return NextResponse.json(
@@ -141,7 +142,7 @@ export async function POST(request: Request) {
 
     const scripture_refs: string[] = [];
     for (const passage of passages) {
-      const ref = await resolvePassageRef(translation, passage);
+      const ref = await resolvePassageRef(normalizedTranslation, passage);
       scripture_refs.push(ref);
     }
 
@@ -155,7 +156,7 @@ export async function POST(request: Request) {
       duration_min: 0,
       kind: "simple",
       theme_id,
-      translation,
+      translation: normalizedTranslation,
     });
 
     return NextResponse.json({ sermon: { id: sermon.id } });

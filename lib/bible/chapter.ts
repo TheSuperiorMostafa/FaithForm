@@ -1,9 +1,12 @@
 import { getChapter } from "@/lib/bible/api";
 import type { TranslationBookChapter } from "@/lib/bible/types";
 import { getEsvChapter } from "@/lib/bible/esv-chapter";
+import { getLocalChapter } from "@/lib/bible/local-chapter";
 import {
-  getBooksTranslationId,
+  getTranslationFileCode,
   isEsvTranslation,
+  normalizeTranslationId,
+  usesLocalTranslationJson,
 } from "@/lib/bible/translations";
 
 export async function getChapterForTranslation(
@@ -11,8 +14,19 @@ export async function getChapterForTranslation(
   bookId: string,
   chapter: number,
 ): Promise<TranslationBookChapter> {
-  if (isEsvTranslation(translation)) {
+  const normalized = normalizeTranslationId(translation);
+
+  if (await usesLocalTranslationJson(normalized)) {
+    return getLocalChapter(getTranslationFileCode(normalized), bookId, chapter);
+  }
+
+  if (isEsvTranslation(normalized)) {
     return getEsvChapter(bookId, chapter);
   }
-  return getChapter(getBooksTranslationId(translation), bookId, chapter);
+
+  if (normalized === "KJV") {
+    return getChapter("eng_kjv", bookId, chapter);
+  }
+
+  throw new Error(`Translation "${translation}" is not available`);
 }

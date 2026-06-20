@@ -1,0 +1,44 @@
+#!/usr/bin/env node
+/**
+ * Applies Bible text storage migration (0022).
+ *
+ * Usage:
+ *   DATABASE_URL="postgresql://..." pnpm db:bible-text
+ */
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+import pg from "pg";
+
+const { Client } = pg;
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const sql = readFileSync(
+  join(__dirname, "../supabase/migrations/0022_bible_text_storage.sql"),
+  "utf8",
+);
+
+const databaseUrl = process.env.DATABASE_URL ?? process.env.SUPABASE_DB_URL;
+
+if (!databaseUrl) {
+  console.error(
+    "Missing DATABASE_URL. Set Supabase Postgres URI from Dashboard → Settings → Database.",
+  );
+  process.exit(1);
+}
+
+const client = new Client({
+  connectionString: databaseUrl,
+  ssl: { rejectUnauthorized: false },
+});
+
+try {
+  await client.connect();
+  console.log("Applying 0022_bible_text_storage.sql…");
+  await client.query(sql);
+  console.log("Done. bible-text bucket and catalog table are ready.");
+} catch (err) {
+  console.error("Migration failed:", err.message ?? err);
+  process.exit(1);
+} finally {
+  await client.end();
+}

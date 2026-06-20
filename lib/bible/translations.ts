@@ -1,64 +1,151 @@
-export type TranslationSource = "helloao" | "esv" | "pending";
+import {
+  hasLocalTranslation,
+  listLocalTranslationCodes,
+} from "@/lib/bible/local-data";
+
+export type TranslationSource = "helloao" | "esv" | "local";
 
 export type CuratedTranslation = {
   id: string;
   label: string;
   shortName: string;
   source: TranslationSource;
+  fileCode: string;
 };
 
 const CURATED: CuratedTranslation[] = [
-  { id: "eng_kjv", label: "King James Version", shortName: "KJV", source: "helloao" },
-  { id: "ESV", label: "English Standard Version", shortName: "ESV", source: "esv" },
-  { id: "NIV", label: "New International Version", shortName: "NIV", source: "pending" },
-  { id: "NLT", label: "New Living Translation", shortName: "NLT", source: "pending" },
-  { id: "CSB", label: "Christian Standard Bible", shortName: "CSB", source: "pending" },
-  { id: "NKJV", label: "New King James Version", shortName: "NKJV", source: "pending" },
+  {
+    id: "KJV",
+    label: "King James Version",
+    shortName: "KJV",
+    source: "local",
+    fileCode: "KJV",
+  },
+  {
+    id: "ESV",
+    label: "English Standard Version",
+    shortName: "ESV",
+    source: "esv",
+    fileCode: "ESV",
+  },
+  {
+    id: "NIV",
+    label: "New International Version",
+    shortName: "NIV",
+    source: "local",
+    fileCode: "NIV",
+  },
+  {
+    id: "NLT",
+    label: "New Living Translation",
+    shortName: "NLT",
+    source: "local",
+    fileCode: "NLT",
+  },
+  {
+    id: "CSB",
+    label: "Christian Standard Bible",
+    shortName: "CSB",
+    source: "local",
+    fileCode: "CSB",
+  },
+  {
+    id: "NKJV",
+    label: "New King James Version",
+    shortName: "NKJV",
+    source: "local",
+    fileCode: "NKJV",
+  },
 ];
 
 export type CuratedTranslationOption = CuratedTranslation & {
   enabled: boolean;
 };
 
-function isEsvEnabled(): boolean {
+const LEGACY_ID_MAP: Record<string, string> = {
+  eng_kjv: "KJV",
+  KJAV: "KJV",
+};
+
+function isEsvApiEnabled(): boolean {
   return Boolean(process.env.ESV_API_KEY);
 }
 
-export function getCuratedTranslations(): CuratedTranslationOption[] {
+export function normalizeTranslationId(id: string): string {
+  return LEGACY_ID_MAP[id] ?? id;
+}
+
+export async function getCuratedTranslations(): Promise<CuratedTranslationOption[]> {
+  const localCodes = await listLocalTranslationCodes();
+  const esvApi = isEsvApiEnabled();
+
   return CURATED.map((t) => ({
     ...t,
-    enabled:
-      t.source === "helloao" ||
-      (t.source === "esv" && isEsvEnabled()),
+    enabled: computeTranslationEnabled(t, localCodes, esvApi),
   }));
 }
 
-export function getDefaultTranslationId(
+function computeTranslationEnabled(
+  t: CuratedTranslation,
+  localCodes: Set<string>,
+  esvApi: boolean,
+): boolean {
+  if (localCodes.has(t.fileCode)) return true;
+  if (t.id === "ESV" && esvApi) return true;
+  if (t.id === "KJV") return true;
+  return false;
+}
+
+export async function getDefaultTranslationId(
   churchDefault?: string | null,
-): string {
-  const curated = getCuratedTranslations();
-  if (churchDefault === "ESV") {
-    const esv = curated.find((t) => t.id === "ESV" && t.enabled);
-    if (esv) return esv.id;
+): Promise<string> {
+  const curated = await getCuratedTranslations();
+  const normalizedDefault = churchDefault
+    ? normalizeTranslationId(churchDefault)
+    : null;
+
+  if (normalizedDefault) {
+    const match = curated.find((t) => t.id === normalizedDefault && t.enabled);
+    if (match) return match.id;
   }
-  const firstEnabled = curated.find((t) => t.enabled);
-  return firstEnabled?.id ?? "eng_kjv";
+
+  const preferred = ["ESV", "NIV", "KJV", "NLT", "CSB", "NKJV"];
+  for (const id of preferred) {
+    const match = curated.find((t) => t.id === id && t.enabled);
+    if (match) return match.id;
+  }
+
+  return "KJV";
 }
 
 export function isCuratedTranslationId(id: string): boolean {
-  return CURATED.some((t) => t.id === id);
+  const normalized = normalizeTranslationId(id);
+  return CURATED.some((t) => t.id === normalized);
+}
+
+export async function usesLocalTranslationJson(id: string): Promise<boolean> {
+  const normalized = normalizeTranslationId(id);
+  const entry = CURATED.find((t) => t.id === normalized);
+  if (!entry) return false;
+  if (normalized === "ESV" && isEsvApiEnabled()) return false;
+  return hasLocalTranslation(entry.fileCode);
 }
 
 export function isEsvTranslation(id: string): boolean {
-  return id === "ESV";
+  return normalizeTranslationId(id) === "ESV";
 }
 
-/** helloao translation id used for book lists (ESV shares KJV book ids). */
-export function getBooksTranslationId(translationId: string): string {
-  if (isEsvTranslation(translationId)) return "eng_kjv";
-  return translationId;
+/** helloao translation id used for book lists (all curated translations share KJV structure). */
+export function getBooksTranslationId(_translationId?: string): string {
+  return "eng_kjv";
 }
 
 export function getTranslationShortName(translationId: string): string {
-  return CURATED.find((t) => t.id === translationId)?.shortName ?? translationId;
+  const normalized = normalizeTranslationId(translationId);
+  return CURATED.find((t) => t.id === normalized)?.shortName ?? translationId;
+}
+
+export function getTranslationFileCode(translationId: string): string {
+  const normalized = normalizeTranslationId(translationId);
+  return CURATED.find((t) => t.id === normalized)?.fileCode ?? normalized;
 }

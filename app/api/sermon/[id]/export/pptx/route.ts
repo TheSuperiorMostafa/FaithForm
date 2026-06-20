@@ -5,7 +5,7 @@ import {
   extractVersesFromChapter,
   sliceVerses,
 } from "@/lib/bible/render";
-import { getTranslationShortName, isCuratedTranslationId } from "@/lib/bible/translations";
+import { getTranslationShortName, isCuratedTranslationId, normalizeTranslationId } from "@/lib/bible/translations";
 import { parseScriptureRef } from "@/lib/sermon-builder/parse-ref";
 import {
   renderSimplePptx,
@@ -37,7 +37,7 @@ export async function GET(
     let buffer: Buffer;
 
     if ((sermon.kind ?? "advanced") === "simple") {
-      const translation = sermon.translation ?? "eng_kjv";
+      const translation = normalizeTranslationId(sermon.translation ?? "KJV");
       const refs = sermon.scripture_refs.filter(Boolean);
 
       if (refs.length === 0 || !translation) {

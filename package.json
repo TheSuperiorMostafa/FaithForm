@@ -14,7 +14,9 @@
     "db:giving-branding": "node scripts/apply-giving-branding-migration.mjs",
     "validate:themes": "node scripts/validate-slide-themes.mjs",
     "import:themes": "node scripts/import-slide-themes.mjs",
-    "db:slide-themes": "node scripts/apply-slide-themes-migration.mjs"
+    "db:slide-themes": "node scripts/apply-slide-themes-migration.mjs",
+    "db:bible-text": "node scripts/apply-bible-text-migration.mjs",
+    "import:bible": "node scripts/import-bible-translations.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.79",

@@ -1,0 +1,3 @@
+# Place generated Bible JSON here for local dev (gitignored).
+# Generate with https://github.com/jadenzaleski/bible-translations
+# Example: data/bible/NIV.json, data/bible/ESV.json
