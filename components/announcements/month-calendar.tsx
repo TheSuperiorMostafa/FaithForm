@@ -44,7 +44,22 @@ type MonthCalendarProps = {
   facebookConnected: boolean;
 };
 
-const MAX_CHIPS_PER_CELL = 3;
+const MAX_CHIPS_PER_CELL = 4;
+
+function eventChipClassName(opts: {
+  published: boolean;
+  selected: boolean;
+}): string {
+  const { published, selected } = opts;
+  return cn(
+    "flex w-full flex-col gap-0.5 rounded-md border px-1.5 py-1 text-left leading-tight transition-colors",
+    published
+      ? "border-border/70 bg-secondary/90 text-secondary-foreground"
+      : "border-accent/60 bg-accent/15 text-foreground hover:bg-accent/25",
+    selected &&
+      "ring-2 ring-accent ring-offset-1 ring-offset-background shadow-sm",
+  );
+}
 
 export function MonthCalendar({
   churchId,
@@ -320,31 +335,29 @@ export function MonthCalendar({
                                 handleChipClick(event);
                               }
                             }}
-                            className={cn(
-                              "flex w-full flex-col gap-0.5 rounded-md px-1.5 py-1 text-left leading-tight",
-                              published
-                                ? "bg-muted text-muted-foreground"
-                                : "bg-accent/20 text-primary hover:bg-accent/30 dark:text-accent-foreground",
-                              selected &&
-                                "ring-2 ring-accent ring-offset-1 ring-offset-background",
-                            )}
+                            className={eventChipClassName({ published, selected })}
                           >
                             <span className="flex items-center gap-1">
                               {published && (
-                                <Check className="size-3 shrink-0" />
+                                <Check className="size-3 shrink-0 text-accent" />
                               )}
-                              <span className="truncate text-[11px] font-bold tabular-nums sm:text-xs">
+                              <span
+                                className={cn(
+                                  "truncate text-[11px] font-bold tabular-nums sm:text-xs",
+                                  !published && "text-accent",
+                                )}
+                              >
                                 {formatEventTime(event.startAt)}
                               </span>
                             </span>
-                            <span className="line-clamp-2 text-[11px] font-semibold sm:text-xs">
+                            <span className="line-clamp-2 text-[11px] font-semibold text-foreground sm:text-xs">
                               {event.title}
                             </span>
                           </span>
                         );
                       })}
                       {overflow > 0 && (
-                        <span className="px-1 text-[11px] text-muted-foreground">
+                        <span className="rounded px-1 text-[11px] font-semibold text-accent">
                           +{overflow} more
                         </span>
                       )}
@@ -356,16 +369,72 @@ export function MonthCalendar({
           </div>
 
           <p className="text-xs text-muted-foreground">
-            <span className="inline-flex items-center gap-1">
-              <span className="inline-block size-2.5 rounded bg-accent/50" />
+            <span className="inline-flex items-center gap-1.5">
+              <span className="inline-block size-2.5 rounded border border-accent/60 bg-accent/15" />
               Needs verify
             </span>
             <span className="mx-2">·</span>
-            <span className="inline-flex items-center gap-1">
-              <Check className="size-3" />
-              Submitted — click to view details
+            <span className="inline-flex items-center gap-1.5">
+              <span className="inline-block size-2.5 rounded border border-border/70 bg-secondary/90" />
+              <Check className="size-3 text-accent" />
+              Submitted
             </span>
           </p>
+
+          <section className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4">
+            <h3 className="text-sm font-semibold text-foreground">
+              Events on{" "}
+              {selectedDay.toLocaleDateString(undefined, {
+                weekday: "long",
+                month: "long",
+                day: "numeric",
+              })}
+            </h3>
+            {agendaEvents.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No events this day.</p>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {agendaEvents.map((event) => {
+                  const published = Boolean(
+                    publishedByGoogleId[event.googleEventId],
+                  );
+                  const selected =
+                    selectedEvent?.googleEventId === event.googleEventId;
+                  return (
+                    <li key={event.googleEventId}>
+                      <button
+                        type="button"
+                        onClick={() => handleChipClick(event)}
+                        className={cn(
+                          "w-full rounded-lg border px-3 py-2.5 text-left text-sm transition-colors",
+                          published
+                            ? "border-border/70 bg-secondary/90 text-secondary-foreground hover:bg-secondary"
+                            : "border-accent/60 bg-accent/15 text-foreground hover:bg-accent/25",
+                          selected && "ring-2 ring-accent",
+                        )}
+                      >
+                        <span className="flex items-center gap-1.5">
+                          {published && (
+                            <Check className="size-3.5 shrink-0 text-accent" />
+                          )}
+                          <span className="text-sm font-bold tabular-nums text-accent">
+                            {formatEventTime(event.startAt)}
+                          </span>
+                        </span>
+                        <span className="mt-0.5 block font-semibold text-foreground">
+                          {event.title}
+                        </span>
+                        <span className="mt-0.5 block text-xs text-muted-foreground">
+                          {event.location ? `${event.location} · ` : ""}
+                          {published ? "Submitted — view details" : "Tap to verify"}
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
         </div>
 
         <Card className="w-full xl:sticky xl:top-4 xl:self-start">
@@ -409,47 +478,6 @@ export function MonthCalendar({
           </CardContent>
         </Card>
       </div>
-
-      <section className="flex flex-col gap-2 xl:hidden">
-        <h3 className="text-sm font-semibold">Events on selected day</h3>
-        {agendaEvents.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No events this day.</p>
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {agendaEvents.map((event) => {
-              const published = Boolean(
-                publishedByGoogleId[event.googleEventId],
-              );
-              const selected =
-                selectedEvent?.googleEventId === event.googleEventId;
-              return (
-                <li key={event.googleEventId}>
-                  <button
-                    type="button"
-                    onClick={() => handleChipClick(event)}
-                    className={cn(
-                      "w-full rounded-lg border px-3 py-2.5 text-left text-sm",
-                      selected && "ring-2 ring-accent",
-                      published
-                        ? "border-border bg-muted/50"
-                        : "border-accent/40 bg-accent/10",
-                    )}
-                  >
-                    <span className="block text-sm font-bold tabular-nums text-accent">
-                      {formatEventTime(event.startAt)}
-                    </span>
-                    <span className="font-medium">{event.title}</span>
-                    <span className="mt-0.5 block text-xs text-muted-foreground">
-                      {event.location ? `${event.location} · ` : ""}
-                      {published ? "Submitted — view details" : "Tap to verify"}
-                    </span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </section>
     </div>
   );
 }
