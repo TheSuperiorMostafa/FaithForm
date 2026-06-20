@@ -15,6 +15,7 @@ import {
   buildFacebookPostMessage,
   formatDateTimeRange,
 } from "@/lib/queries/announcements";
+import { downloadSocialGraphic } from "@/lib/social/generate-graphic";
 import { hasIntegration } from "@/lib/integrations/tokens";
 import { getCurrentChurchId } from "@/lib/queries/dashboard";
 import type { PublishResult } from "@/lib/integrations/types";
@@ -47,6 +48,9 @@ function parsePublishForm(formData: FormData) {
 
   const pushToFacebook = formData.get("push_to_facebook") === "true";
   const pushToTeam = formData.get("push_to_team") === "true";
+  const facebookCaption = String(formData.get("facebook_caption") ?? "").trim();
+  const socialGraphicPath = String(formData.get("social_graphic_path") ?? "").trim();
+  const socialGraphicUrl = String(formData.get("social_graphic_url") ?? "").trim();
 
   const originalTitle = String(formData.get("original_title") ?? "").trim();
   const originalLocation = String(formData.get("original_location") ?? "").trim();
@@ -80,6 +84,9 @@ function parsePublishForm(formData: FormData) {
       pushToFacebook,
       pushToTeam,
       calendarChanged,
+      facebookCaption,
+      socialGraphicPath,
+      socialGraphicUrl,
     },
   };
 }
@@ -125,6 +132,12 @@ export async function publishAnnouncement(
     published_at: new Date().toISOString(),
     published_by: ctx.user.id,
     last_publish_error: null,
+    facebook_caption: payload.pushToFacebook ? payload.facebookCaption || null : null,
+    social_graphic_path: payload.pushToFacebook ? payload.socialGraphicPath || null : null,
+    social_graphic_url: payload.pushToFacebook ? payload.socialGraphicUrl || null : null,
+    social_preview_generated_at: payload.pushToFacebook
+      ? new Date().toISOString()
+      : null,
   };
 
   let announcementId = payload.announcementId;
@@ -175,26 +188,40 @@ export async function publishAnnouncement(
       errors.push("Facebook is not connected — skipped post.");
     } else {
       try {
-        const message = buildFacebookPostMessage({
-          title: payload.title,
-          location: payload.location,
-          startAt: payload.startAt,
-          endAt: payload.endAt,
-          notes: payload.notes,
-        });
+        let message = payload.facebookCaption;
+        let imagePng: ArrayBuffer | undefined;
 
-        const { data: churchRow } = await ctx.supabase
-          .from("churches")
-          .select("name")
-          .eq("id", ctx.churchId)
-          .maybeSingle();
+        if (payload.socialGraphicPath) {
+          if (!payload.socialGraphicPath.startsWith(`${ctx.churchId}/`)) {
+            throw new Error("Invalid social graphic path");
+          }
+          imagePng = await downloadSocialGraphic(payload.socialGraphicPath);
+        }
 
-        const imagePng = await generateAnnouncementGraphic({
-          churchName: churchRow?.name ?? "Our Church",
-          title: payload.title,
-          when: formatDateTimeRange(payload.startAt, payload.endAt),
-          location: payload.location,
-        });
+        if (!message) {
+          message = buildFacebookPostMessage({
+            title: payload.title,
+            location: payload.location,
+            startAt: payload.startAt,
+            endAt: payload.endAt,
+            notes: payload.notes,
+          });
+        }
+
+        if (!imagePng) {
+          const { data: churchRow } = await ctx.supabase
+            .from("churches")
+            .select("name")
+            .eq("id", ctx.churchId)
+            .maybeSingle();
+
+          imagePng = await generateAnnouncementGraphic({
+            churchName: churchRow?.name ?? "Our Church",
+            title: payload.title,
+            when: formatDateTimeRange(payload.startAt, payload.endAt),
+            location: payload.location,
+          });
+        }
 
         const scheduledPublishTime = resolveFacebookScheduledPublishTime(
           payload.startAt,

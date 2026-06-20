@@ -30,6 +30,36 @@ export const socialSnippetsSchema = z.object({
   email: z.string().optional(),
 });
 
+export const socialBackgroundTagSchema = z.enum([
+  "youth",
+  "worship",
+  "outreach",
+  "community",
+  "prayer",
+  "bible-study",
+  "fellowship",
+  "seasonal-christmas",
+  "seasonal-easter",
+  "family",
+  "missions",
+  "default",
+]);
+
+export const socialTemplateKeySchema = z.enum([
+  "general",
+  "youth",
+  "outreach",
+  "worship-night",
+]);
+
+export const eventSocialPreviewSchema = z.object({
+  headline: z.string().max(60),
+  facebookCaption: z.string().min(20).max(2200),
+  backgroundTag: socialBackgroundTagSchema,
+  templateKey: socialTemplateKeySchema,
+  tone: z.string().optional(),
+});
+
 export const seriesWeekSchema = z.object({
   week: z.number().int().positive(),
   title: z.string(),

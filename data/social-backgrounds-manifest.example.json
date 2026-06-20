@@ -1,0 +1,26 @@
+[
+  {
+    "id": "default-community-1",
+    "tags": ["default", "community", "fellowship"],
+    "attribution": "Replace with your license attribution",
+    "source_url": "https://example.com",
+    "sort_order": 1,
+    "file": "./images/default-community-1.jpg"
+  },
+  {
+    "id": "worship-1",
+    "tags": ["worship", "prayer"],
+    "attribution": "Replace with your license attribution",
+    "source_url": "https://example.com",
+    "sort_order": 2,
+    "file": "./images/worship-1.jpg"
+  },
+  {
+    "id": "youth-1",
+    "tags": ["youth", "community"],
+    "attribution": "Replace with your license attribution",
+    "source_url": "https://example.com",
+    "sort_order": 3,
+    "file": "./images/youth-1.jpg"
+  }
+]

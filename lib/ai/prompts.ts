@@ -75,6 +75,30 @@ Sermon summary:
 ${sermonSummary}`;
 }
 
+export type EventSocialContext = {
+  churchName: string;
+  title: string;
+  when: string;
+  location: string;
+  notes?: string;
+};
+
+export function eventSocialSystemPrompt(ctx: EventSocialContext): string {
+  return `You write Facebook posts for local church events. The copy should feel warm, inviting, and authentic — like a real church staff member wrote it, not a marketing bot.
+
+Rules:
+- facebookCaption: A complete Facebook post (hook + event details + friendly call-to-action). Include the date/time and location naturally in the body. Medium length (roughly 2-5 short paragraphs or a few sentences with line breaks). No hashtags unless they fit naturally (max 3).
+- headline: Short punchy text for a graphic overlay (max 60 characters). Not the same as the event title — make it compelling.
+- backgroundTag: Pick exactly one tag that best matches the event mood from: youth, worship, outreach, community, prayer, bible-study, fellowship, seasonal-christmas, seasonal-easter, family, missions, default.
+- templateKey: Pick one layout style from: general, youth, outreach, worship-night. Use "general" unless the event clearly fits a themed category.
+
+Church: ${ctx.churchName}
+Event title: ${ctx.title}
+When: ${ctx.when}
+Where: ${ctx.location || "See announcement for details"}
+${ctx.notes?.trim() ? `Extra notes: ${ctx.notes.trim()}` : ""}`;
+}
+
 export function seriesSystemPrompt(
   title: string,
   theme: string,

@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { ArrowRight, Calendar, ChevronDown, ChevronUp } from "lucide-react";
+import { useCallback, useState, useTransition } from "react";
+import { ArrowRight, Calendar, ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
 import { publishAnnouncement } from "@/app/dashboard/announcements/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,14 @@ import {
 type IntegrationDefaults = {
   googleConnected: boolean;
   facebookConnected: boolean;
+};
+
+type SocialPreviewPayload = {
+  headline: string;
+  facebookCaption: string;
+  graphicUrl: string;
+  graphicPath: string;
+  warning?: string;
 };
 
 type AnnouncementVerifyFormProps = {
@@ -51,6 +59,91 @@ export function AnnouncementVerifyForm({
   const [pushToFacebook, setPushToFacebook] = useState(false);
   const [pushToTeam, setPushToTeam] = useState(true);
 
+  const [facebookCaption, setFacebookCaption] = useState("");
+  const [socialGraphicUrl, setSocialGraphicUrl] = useState<string | null>(null);
+  const [socialGraphicPath, setSocialGraphicPath] = useState<string | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewWarning, setPreviewWarning] = useState<string | null>(null);
+  const [previewStale, setPreviewStale] = useState(false);
+
+  const fetchSocialPreview = useCallback(async () => {
+    const startIso = fromDatetimeLocalValue(startAt);
+    if (!startIso || !title.trim()) {
+      setPreviewError("Add a title and start time to generate a Facebook preview.");
+      return;
+    }
+
+    const endIso = endAt ? fromDatetimeLocalValue(endAt) : null;
+
+    setPreviewLoading(true);
+    setPreviewError(null);
+    setPreviewWarning(null);
+
+    try {
+      const res = await fetch("/api/announcements/social-preview", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: title.trim(),
+          location: location.trim(),
+          startAt: startIso,
+          endAt: endIso,
+          notes: notes.trim() || undefined,
+          googleEventId: event.googleEventId,
+          announcementId: publishedAnnouncementId ?? undefined,
+        }),
+      });
+
+      const data = (await res.json()) as {
+        preview?: SocialPreviewPayload;
+        error?: string;
+      };
+
+      if (!res.ok || !data.preview) {
+        throw new Error(data.error ?? "Could not generate Facebook preview");
+      }
+
+      setFacebookCaption(data.preview.facebookCaption);
+      setSocialGraphicUrl(data.preview.graphicUrl);
+      setSocialGraphicPath(data.preview.graphicPath);
+      setPreviewWarning(data.preview.warning ?? null);
+      setPreviewStale(false);
+    } catch (err) {
+      setPreviewError(
+        err instanceof Error ? err.message : "Could not generate Facebook preview",
+      );
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, [
+    startAt,
+    endAt,
+    title,
+    location,
+    notes,
+    event.googleEventId,
+    publishedAnnouncementId,
+  ]);
+
+  const handleFacebookToggle = (checked: boolean) => {
+    setPushToFacebook(checked);
+    if (checked && defaults.facebookConnected) {
+      void fetchSocialPreview();
+    }
+    if (!checked) {
+      setPreviewError(null);
+      setPreviewWarning(null);
+      setPreviewStale(false);
+    }
+  };
+
+  const markPreviewStale = () => {
+    if (pushToFacebook && socialGraphicPath) {
+      setPreviewStale(true);
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -62,6 +155,16 @@ export function AnnouncementVerifyForm({
       return;
     }
     const endIso = endAt ? fromDatetimeLocalValue(endAt) : null;
+
+    if (pushToFacebook && !facebookCaption.trim()) {
+      setError("Generate or enter a Facebook caption before publishing.");
+      return;
+    }
+
+    if (pushToFacebook && !socialGraphicPath) {
+      setError("Generate a Facebook graphic before publishing.");
+      return;
+    }
 
     const formData = new FormData();
     formData.set("church_id", churchId);
@@ -81,6 +184,13 @@ export function AnnouncementVerifyForm({
     formData.set("original_location", event.location);
     formData.set("original_start_at", event.startAt);
     formData.set("original_end_at", event.endAt ?? "");
+    if (pushToFacebook) {
+      formData.set("facebook_caption", facebookCaption.trim());
+      formData.set("social_graphic_path", socialGraphicPath ?? "");
+      if (socialGraphicUrl) {
+        formData.set("social_graphic_url", socialGraphicUrl);
+      }
+    }
 
     startTransition(async () => {
       const result = await publishAnnouncement(formData);
@@ -147,7 +257,10 @@ export function AnnouncementVerifyForm({
         <Input
           id={`title-${event.googleEventId}`}
           value={title}
-          onChange={(e) => setTitle(e.target.value)}
+          onChange={(e) => {
+            setTitle(e.target.value);
+            markPreviewStale();
+          }}
           required
         />
       </div>
@@ -157,7 +270,10 @@ export function AnnouncementVerifyForm({
         <Input
           id={`where-${event.googleEventId}`}
           value={location}
-          onChange={(e) => setLocation(e.target.value)}
+          onChange={(e) => {
+            setLocation(e.target.value);
+            markPreviewStale();
+          }}
           placeholder="Location"
         />
       </div>
@@ -169,7 +285,10 @@ export function AnnouncementVerifyForm({
             <Input
               type="datetime-local"
               value={startAt}
-              onChange={(e) => setStartAt(e.target.value)}
+              onChange={(e) => {
+                setStartAt(e.target.value);
+                markPreviewStale();
+              }}
               required
               aria-label="Start"
               className="w-full min-w-[16rem] text-base tabular-nums"
@@ -181,7 +300,10 @@ export function AnnouncementVerifyForm({
             <Input
               type="datetime-local"
               value={endAt}
-              onChange={(e) => setEndAt(e.target.value)}
+              onChange={(e) => {
+                setEndAt(e.target.value);
+                markPreviewStale();
+              }}
               aria-label="End"
               className="w-full min-w-[16rem] text-base tabular-nums"
             />
@@ -195,11 +317,11 @@ export function AnnouncementVerifyForm({
           id={`fb-${event.googleEventId}`}
           label="Shared to FB?"
           checked={pushToFacebook}
-          onCheckedChange={setPushToFacebook}
+          onCheckedChange={handleFacebookToggle}
           disabled={!defaults.facebookConnected}
           hint={
             defaults.facebookConnected
-              ? "Creates a Facebook post with event details. Schedules for event start when more than 10 minutes away."
+              ? "Creates a Facebook post with an AI caption and branded graphic. Schedules for event start when more than 10 minutes away."
               : "Connect Facebook in Settings"
           }
         />
@@ -217,6 +339,78 @@ export function AnnouncementVerifyForm({
         />
       </ul>
 
+      {pushToFacebook && defaults.facebookConnected && (
+        <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold">Facebook preview</p>
+              <p className="text-xs text-muted-foreground">
+                Edit the caption or regenerate if event details changed.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void fetchSocialPreview()}
+              disabled={previewLoading}
+            >
+              <RefreshCw
+                className={`mr-2 size-4 ${previewLoading ? "animate-spin" : ""}`}
+              />
+              {previewLoading ? "Generating…" : "Regenerate"}
+            </Button>
+          </div>
+
+          {previewStale && (
+            <p className="text-xs text-amber-700 dark:text-amber-300">
+              Event details changed — regenerate for an updated graphic and caption.
+            </p>
+          )}
+
+          {previewError && (
+            <p className="text-sm text-destructive" role="alert">
+              {previewError}
+            </p>
+          )}
+
+          {previewWarning && (
+            <p className="text-xs text-muted-foreground">{previewWarning}</p>
+          )}
+
+          {previewLoading && !socialGraphicUrl && (
+            <div className="aspect-[1200/630] w-full animate-pulse rounded-md bg-muted" />
+          )}
+
+          {socialGraphicUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={socialGraphicUrl}
+              alt="Facebook post graphic preview"
+              className="w-full rounded-md border border-border"
+            />
+          )}
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor={`fb-caption-${event.googleEventId}`}>
+              Facebook caption
+            </Label>
+            <Textarea
+              id={`fb-caption-${event.googleEventId}`}
+              value={facebookCaption}
+              onChange={(e) => setFacebookCaption(e.target.value)}
+              placeholder={
+                previewLoading
+                  ? "Generating caption…"
+                  : "Your Facebook post caption will appear here."
+              }
+              rows={6}
+              disabled={previewLoading && !facebookCaption}
+            />
+          </div>
+        </div>
+      )}
+
       <button
         type="button"
         className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
@@ -232,7 +426,10 @@ export function AnnouncementVerifyForm({
       {showNotes && (
         <Textarea
           value={notes}
-          onChange={(e) => setNotes(e.target.value)}
+          onChange={(e) => {
+            setNotes(e.target.value);
+            markPreviewStale();
+          }}
           placeholder="Extra notes for email or Facebook…"
           rows={3}
         />
@@ -249,7 +446,7 @@ export function AnnouncementVerifyForm({
         </p>
       )}
 
-      <Button type="submit" disabled={pending} className="w-full">
+      <Button type="submit" disabled={pending || (pushToFacebook && previewLoading)} className="w-full">
         {pending ? "Submitting…" : "Verify & submit"}
       </Button>
     </form>

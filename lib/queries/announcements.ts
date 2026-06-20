@@ -22,6 +22,9 @@ export type AnnouncementRow = {
   google_event_id: string | null;
   google_calendar_id: string | null;
   facebook_post_id: string | null;
+  facebook_caption?: string | null;
+  social_graphic_url?: string | null;
+  social_graphic_path?: string | null;
   gmail_draft_id: string | null;
   published_at: string | null;
   last_publish_error: string | null;

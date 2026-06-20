@@ -11,7 +11,6 @@ CREATE TABLE IF NOT EXISTS public.bible_text_translations (
 ALTER TABLE public.bible_text_translations ENABLE ROW LEVEL SECURITY;
 
 -- Catalog is read by authenticated users (enabled/disabled in UI only)
-DROP POLICY IF EXISTS bible_text_translations_select ON public.bible_text_translations;
 CREATE POLICY bible_text_translations_select ON public.bible_text_translations
   FOR SELECT TO authenticated
   USING (active = true);
