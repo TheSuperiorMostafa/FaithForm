@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { BottomNav } from "@/components/dashboard/bottom-nav";
+import { DashboardUsageTracker } from "@/components/dashboard/usage-tracker";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { Topbar } from "@/components/dashboard/topbar";
 import { cn } from "@/lib/utils";
@@ -36,6 +37,7 @@ export function DashboardShell({
 
   return (
     <div className="h-dvh overflow-hidden bg-background">
+      <DashboardUsageTracker />
       <Sidebar
         userEmail={userEmail}
         churchName={churchName}

@@ -44,3 +44,21 @@ export function formatHours(value: number): string {
     maximumFractionDigits: 1,
   });
 }
+
+export function formatDuration(seconds: number | null | undefined): string {
+  if (!seconds || seconds <= 0) return "0 min";
+
+  if (seconds < 60) return "< 1 min";
+
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) {
+    return `${minutes.toLocaleString("en-US")} min`;
+  }
+
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+  if (remainder === 0) {
+    return `${hours.toLocaleString("en-US")} hr`;
+  }
+  return `${hours.toLocaleString("en-US")} hr ${remainder} min`;
+}

@@ -20,7 +20,7 @@ export function phoneCallTaskName(
 ): string {
   const minutes = phoneCallMinutesSaved(durationSeconds);
   if (callerNumber?.trim()) {
-    return `AI phone call (${minutes} min saved)`;
+    return `AI answered call from ${callerNumber.trim()} (${minutes} min saved)`;
   }
   return `AI phone call (${minutes} min saved)`;
 }

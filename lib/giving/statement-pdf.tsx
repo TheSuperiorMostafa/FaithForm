@@ -1,35 +1,15 @@
+import React from "react";
+import { Document, Text, pdf } from "@react-pdf/renderer";
 import {
-  Document,
-  Page,
-  Text,
-  View,
-  StyleSheet,
-  pdf,
-} from "@react-pdf/renderer";
+  CalloutBox,
+  DataTable,
+  InfoCard,
+  ReportFooter,
+  ReportHeader,
+  ReportPage,
+  TotalHighlightRow,
+} from "@/components/library/pdf-primitives";
 import type { GivingDonationRow } from "@/types/giving";
-
-const styles = StyleSheet.create({
-  page: { padding: 48, fontSize: 11, fontFamily: "Helvetica" },
-  churchName: { fontSize: 18, fontWeight: "bold", marginBottom: 4 },
-  address: { fontSize: 10, color: "#64748b", marginBottom: 16 },
-  title: { fontSize: 14, fontWeight: "bold", marginBottom: 12 },
-  donor: { marginBottom: 16 },
-  row: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    borderBottomWidth: 1,
-    borderBottomColor: "#e2e8f0",
-    paddingVertical: 6,
-  },
-  header: { fontWeight: "bold", marginBottom: 8 },
-  total: { marginTop: 16, fontSize: 13, fontWeight: "bold" },
-  disclaimer: {
-    marginTop: 24,
-    fontSize: 9,
-    color: "#64748b",
-    lineHeight: 1.4,
-  },
-});
 
 export type StatementPdfInput = {
   churchName: string;
@@ -46,52 +26,80 @@ function formatMoney(cents: number): string {
 }
 
 function StatementDocument({ input }: { input: StatementPdfInput }) {
-  const totalCents = input.gifts.reduce((s, g) => s + g.amountCents, 0);
+  const totalCents = input.gifts.reduce((sum, gift) => sum + gift.amountCents, 0);
+  const reportDate = new Date().toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+
+  const churchMeta: string[] = [];
+  if (input.statementAddress) {
+    churchMeta.push(input.statementAddress);
+  }
+  if (input.ein) {
+    churchMeta.push(`EIN: ${input.ein}`);
+  }
+
+  const tableRows = input.gifts.map((gift) => ({
+    date: new Date(gift.createdAt).toLocaleDateString("en-US"),
+    fund: gift.fundName ?? "General",
+    amount: formatMoney(gift.amountCents),
+  }));
+
+  const disclaimer = `No goods or services were provided in exchange for these contributions. Please retain this statement for your tax records. ${input.churchName}${input.ein ? ` (EIN ${input.ein})` : ""} is a tax-exempt organization.`;
 
   return (
     <Document>
-      <Page size="LETTER" style={styles.page}>
-        <Text style={styles.churchName}>{input.churchName}</Text>
-        {input.statementAddress && (
-          <Text style={styles.address}>{input.statementAddress}</Text>
-        )}
-        {input.ein && <Text style={styles.address}>EIN: {input.ein}</Text>}
+      <ReportPage>
+        <ReportHeader
+          churchName={input.churchName}
+          periodLabel={String(input.year)}
+          reportType={`${input.year} Contribution Statement`}
+        />
 
-        <Text style={styles.title}>
-          {input.year} Contribution Statement
-        </Text>
+        {churchMeta.length > 0 ? (
+          <Text
+            style={{
+              fontSize: 9,
+              color: "#6B7280",
+              marginBottom: 16,
+              lineHeight: 1.4,
+            }}
+          >
+            {churchMeta.join(" · ")}
+          </Text>
+        ) : null}
 
-        <View style={styles.donor}>
-          <Text>{input.donorName}</Text>
-          <Text style={styles.address}>{input.donorEmail}</Text>
-        </View>
+        <InfoCard
+          title="DONOR"
+          name={input.donorName}
+          lines={[input.donorEmail]}
+        />
 
-        <View style={styles.row}>
-          <Text style={styles.header}>Date</Text>
-          <Text style={styles.header}>Fund</Text>
-          <Text style={styles.header}>Amount</Text>
-        </View>
+        <DataTable
+          columns={[
+            { key: "date", label: "Date", width: "28%" },
+            { key: "fund", label: "Fund", width: "44%" },
+            { key: "amount", label: "Amount", width: "28%", align: "right" },
+          ]}
+          rows={tableRows}
+          emptyMessage="No contributions recorded for this year."
+        />
 
-        {input.gifts.map((g) => (
-          <View key={g.id} style={styles.row}>
-            <Text>
-              {new Date(g.createdAt).toLocaleDateString("en-US")}
-            </Text>
-            <Text>{g.fundName ?? "General"}</Text>
-            <Text>{formatMoney(g.amountCents)}</Text>
-          </View>
-        ))}
+        <TotalHighlightRow
+          label="Total contributions"
+          value={formatMoney(totalCents)}
+        />
 
-        <Text style={styles.total}>
-          Total contributions: {formatMoney(totalCents)}
-        </Text>
+        <CalloutBox>{disclaimer}</CalloutBox>
 
-        <Text style={styles.disclaimer}>
-          No goods or services were provided in exchange for these contributions.
-          Please retain this statement for your tax records. {input.churchName}
-          {input.ein ? ` (EIN ${input.ein})` : ""} is a tax-exempt organization.
-        </Text>
-      </Page>
+        <ReportFooter
+          reportDate={reportDate}
+          churchName={input.churchName}
+          badge="Tax record"
+        />
+      </ReportPage>
     </Document>
   );
 }

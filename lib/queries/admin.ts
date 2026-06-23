@@ -1,5 +1,10 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getGivePageUrl } from "@/lib/stripe/config";
+import {
+  getChurchDashboardUsageSummary,
+  getPlatformDashboardUsageTotals,
+  getUserDashboardUsageByChurch,
+} from "@/lib/queries/dashboard-usage";
 
 export type AdminRole = "admin" | "viewer";
 export type SupportTicketStatus = "open" | "in_progress" | "resolved";
@@ -17,6 +22,8 @@ export type AdminOverview = {
     totalUsers: number;
     totalSermons: number;
     platformHoursSaved: number;
+    pastorMinutes30d: number;
+    activeChurches30d: number;
   };
   integrationHealth: {
     totalChurches: number;
@@ -54,6 +61,16 @@ export type AdminChurchUserRow = {
   email: string | null;
   role: AdminRole;
   joinedAt: string;
+  dashboardSeconds7d: number;
+  dashboardSeconds30d: number;
+  lastSeenAt: string | null;
+};
+
+export type AdminChurchUsageSummary = {
+  pastorSeconds7d: number;
+  pastorSeconds30d: number;
+  hoursSavedMinutes30d: number;
+  phoneCalls30d: number;
 };
 
 export type AdminIntegrationDetail = {
@@ -128,6 +145,7 @@ export type AdminChurchDetail = {
   users: AdminChurchUserRow[];
   integrations: AdminIntegrationDetail[];
   supportTickets: AdminTicketListRow[];
+  usageSummary: AdminChurchUsageSummary;
 };
 
 export type AdminPlatformUserRow = {
@@ -414,6 +432,7 @@ export async function getAdminOverview(): Promise<AdminOverview> {
     integrationsRes,
     newChurchesRes,
     recentTickets,
+    dashboardUsage,
   ] = await Promise.all([
     admin.from("churches").select("id", { count: "exact", head: true }),
     admin.from("church_users").select("id", { count: "exact", head: true }),
@@ -426,6 +445,7 @@ export async function getAdminOverview(): Promise<AdminOverview> {
       .gte("created_at", monthStart)
       .order("created_at", { ascending: false }),
     getSupportTickets("recent-open"),
+    getPlatformDashboardUsageTotals(),
   ]);
 
   const totalMinutes = ((activityRes.data ?? []) as { time_saved_minutes: number | null }[])
@@ -446,6 +466,8 @@ export async function getAdminOverview(): Promise<AdminOverview> {
       totalUsers: usersCount.count ?? 0,
       totalSermons: sermonsCount.count ?? 0,
       platformHoursSaved: toHours(totalMinutes),
+      pastorMinutes30d: Math.round(dashboardUsage.pastorSeconds30d / 60),
+      activeChurches30d: dashboardUsage.activeChurches30d,
     },
     integrationHealth: {
       totalChurches: churchesCount.count ?? 0,
@@ -637,6 +659,7 @@ export async function getAdminChurchDetail(
     integrationsRes,
     attendanceRes,
     supportTickets,
+    usageSummary,
   ] = await Promise.all([
     admin
       .from("churches")
@@ -666,6 +689,7 @@ export async function getAdminChurchDetail(
       .order("service_date", { ascending: false })
       .limit(8),
     getSupportTickets({ churchId }),
+    getChurchDashboardUsageSummary(churchId),
   ]);
 
   if (churchRes.error || !churchRes.data) {
@@ -683,6 +707,10 @@ export async function getAdminChurchDetail(
   };
   const churchUsers = (usersRes.data ?? []) as ChurchUserRow[];
   const authUsers = await listAuthUsersFor(churchUsers.map((row) => row.user_id));
+  const usageByUser = await getUserDashboardUsageByChurch(
+    churchId,
+    churchUsers.map((row) => row.user_id),
+  );
 
   const integrations = (integrationsRes.data ?? []) as IntegrationRow[];
   const integrationDetails: AdminIntegrationDetail[] = (["google", "facebook"] as const).map(
@@ -752,15 +780,22 @@ export async function getAdminChurchDetail(
         }
       : null,
     attendanceTrend: attendance,
-    users: churchUsers.map((row) => ({
-      id: row.id,
-      userId: row.user_id,
-      email: authUsers.get(row.user_id)?.email ?? null,
-      role: toRole(row.role),
-      joinedAt: row.created_at,
-    })),
+    users: churchUsers.map((row) => {
+      const usage = usageByUser.get(row.user_id);
+      return {
+        id: row.id,
+        userId: row.user_id,
+        email: authUsers.get(row.user_id)?.email ?? null,
+        role: toRole(row.role),
+        joinedAt: row.created_at,
+        dashboardSeconds7d: usage?.seconds7d ?? 0,
+        dashboardSeconds30d: usage?.seconds30d ?? 0,
+        lastSeenAt: usage?.lastSeenAt ?? null,
+      };
+    }),
     integrations: integrationDetails,
     supportTickets,
+    usageSummary,
   };
 }
 

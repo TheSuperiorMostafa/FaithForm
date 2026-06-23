@@ -107,23 +107,24 @@ export async function upsertPhoneCallFromRetell(
   const minutesSaved = phoneCallMinutesSaved(row.duration_seconds);
   const executedAt = row.called_at as string;
 
-  if (existing?.id) {
-    await client.from("phone_calls").update(row).eq("id", existing.id);
-    revalidatePath("/dashboard");
-    return { churchId, created: false };
+  let phoneCallId = existing?.id as string | undefined;
+
+  if (phoneCallId) {
+    await client.from("phone_calls").update(row).eq("id", phoneCallId);
+  } else {
+    const { data: inserted, error } = await client
+      .from("phone_calls")
+      .insert(row)
+      .select("id")
+      .single();
+
+    if (error) throw error;
+    phoneCallId = inserted.id as string;
   }
-
-  const { data: inserted, error } = await client
-    .from("phone_calls")
-    .insert(row)
-    .select("id")
-    .single();
-
-  if (error) throw error;
 
   await logPhoneCallActivity({
     churchId,
-    phoneCallId: inserted.id as string,
+    phoneCallId,
     retailAiCallId: call.call_id,
     callerNumber: call.from_number ?? null,
     durationSeconds: row.duration_seconds,
@@ -133,7 +134,7 @@ export async function upsertPhoneCallFromRetell(
 
   revalidatePath("/dashboard");
 
-  return { churchId, created: true };
+  return { churchId, created: !existing?.id };
 }
 
 type RetellListCallsResponse = Array<RetellCallPayload>;

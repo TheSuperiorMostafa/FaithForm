@@ -46,6 +46,18 @@ function applySlideBackground(
   slide.background = { color: theme.bg ?? "0E1428" };
 }
 
+function imageTextShadow(theme: SlideTheme): PptxGenJS.ShadowProps | undefined {
+  if (theme.backgroundType !== "image" || !theme.textShadow) return undefined;
+  return {
+    type: "outer",
+    color: "000000",
+    opacity: 0.65,
+    blur: 4,
+    offset: 2,
+    angle: 135,
+  };
+}
+
 export type SimplePassageBlock = {
   verses: RenderedVerse[];
   bookName: string;
@@ -77,6 +89,8 @@ export async function renderSimplePptx(input: SimplePptxInput): Promise<Buffer> 
       })
       .join(" · ");
 
+  const shadow = imageTextShadow(theme);
+
   const titleSlide = pptx.addSlide();
   applySlideBackground(titleSlide, theme);
   titleSlide.addText(input.title, {
@@ -90,6 +104,7 @@ export async function renderSimplePptx(input: SimplePptxInput): Promise<Buffer> 
     fontFace: theme.fontHead,
     align: "center",
     valign: "middle",
+    shadow,
   });
   titleSlide.addText(refsSummary, {
     x: MARGIN_X,
@@ -101,6 +116,7 @@ export async function renderSimplePptx(input: SimplePptxInput): Promise<Buffer> 
     fontFace: theme.fontHead,
     align: "center",
     italic: theme.italicRef ?? false,
+    shadow,
   });
 
   for (const passage of input.passages) {
@@ -125,6 +141,7 @@ export async function renderSimplePptx(input: SimplePptxInput): Promise<Buffer> 
         fit: "shrink",
         paraSpaceAfter: 6,
         lineSpacingMultiple: 1.15,
+        shadow,
       });
 
       slide.addText(input.translation, {
@@ -137,6 +154,7 @@ export async function renderSimplePptx(input: SimplePptxInput): Promise<Buffer> 
         fontFace: theme.fontHead,
         align: "right",
         italic: true,
+        shadow,
       });
     }
   }

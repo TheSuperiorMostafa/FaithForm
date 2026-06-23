@@ -16,7 +16,7 @@ export default async function NewSeriesPage() {
   if (!churchId) redirect("/dashboard");
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
       <h1 className="border-l-4 border-accent pl-3 font-heading text-[26px] font-bold">
         New series
       </h1>

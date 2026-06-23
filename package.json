@@ -13,7 +13,9 @@
     "db:giving-enhancements": "node scripts/apply-giving-enhancements-migration.mjs",
     "db:giving-branding": "node scripts/apply-giving-branding-migration.mjs",
     "validate:themes": "node scripts/validate-slide-themes.mjs",
+    "generate:pwpt-themes": "node scripts/generate-pwpt-theme-manifest.mjs",
     "import:themes": "node scripts/import-slide-themes.mjs",
+    "import:pwpt-themes": "node scripts/generate-pwpt-theme-manifest.mjs && node scripts/import-slide-themes.mjs data/pwpt-themes-manifest.json",
     "db:slide-themes": "node scripts/apply-slide-themes-migration.mjs",
     "db:bible-text": "node scripts/apply-bible-text-migration.mjs",
     "import:bible": "node scripts/import-bible-translations.mjs"
@@ -57,6 +59,7 @@
     "eslint-config-next": "14.2.35",
     "pg": "^8.21.0",
     "postcss": "^8",
+    "sharp": "^0.34.5",
     "tailwindcss": "^3.4.1",
     "tailwindcss-animate": "^1.0.7",
     "typescript": "^5"

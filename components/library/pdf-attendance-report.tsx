@@ -1,10 +1,15 @@
+import React from "react";
+import { Document } from "@react-pdf/renderer";
 import {
-  Document,
-  Page,
-  StyleSheet,
-  Text,
-  View,
-} from "@react-pdf/renderer";
+  CalloutBox,
+  DataTable,
+  KpiGrid,
+  MiniBarChart,
+  ReportFooter,
+  ReportHeader,
+  ReportPage,
+  SectionTitle,
+} from "@/components/library/pdf-primitives";
 
 export type AttendanceWeekRow = {
   date: string;
@@ -21,98 +26,6 @@ export type AttendancePdfProps = {
   reportDate: string;
 };
 
-const styles = StyleSheet.create({
-  page: {
-    padding: 40,
-    fontFamily: "Helvetica",
-    fontSize: 10,
-    color: "#002D5F",
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#002D5F",
-    marginBottom: 4,
-  },
-  subtitle: {
-    fontSize: 12,
-    color: "#6B7280",
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 11,
-    fontWeight: "bold",
-    color: "#C5A059",
-    marginBottom: 8,
-    marginTop: 16,
-  },
-  tableHeader: {
-    flexDirection: "row",
-    backgroundColor: "#002D5F",
-    color: "#FFFFFF",
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    fontWeight: "bold",
-    fontSize: 9,
-  },
-  tableRow: {
-    flexDirection: "row",
-    borderBottomWidth: 1,
-    borderBottomColor: "#DDD9D0",
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    fontSize: 9,
-  },
-  colDate: { width: "38%" },
-  colNum: { width: "18%", textAlign: "right" },
-  colFollow: { width: "26%", textAlign: "right" },
-  trend: {
-    marginTop: 8,
-    fontSize: 10,
-    lineHeight: 1.5,
-    color: "#002D5F",
-  },
-  headerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    marginBottom: 4,
-  },
-  poweredBy: {
-    fontSize: 8,
-    color: "#6B7280",
-    marginBottom: 2,
-    textAlign: "right",
-  },
-  reportType: {
-    fontSize: 11,
-    fontWeight: "bold",
-    color: "#002D5F",
-    textAlign: "right",
-  },
-  footer: {
-    position: "absolute",
-    bottom: 30,
-    left: 40,
-    right: 40,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    fontSize: 8,
-    color: "#6B7280",
-  },
-});
-
-function HeaderRow() {
-  return (
-    <View style={styles.tableHeader}>
-      <Text style={styles.colDate}>Date</Text>
-      <Text style={styles.colNum}>Present</Text>
-      <Text style={styles.colNum}>Absent</Text>
-      <Text style={styles.colFollow}>Follow-ups</Text>
-    </View>
-  );
-}
-
 export function AttendancePdfDocument({
   churchName,
   monthLabel,
@@ -120,47 +33,77 @@ export function AttendancePdfDocument({
   trendSummary,
   reportDate,
 }: AttendancePdfProps) {
+  const sundaysTracked = weeks.length;
+  const averagePresent =
+    sundaysTracked > 0
+      ? Math.round(
+          weeks.reduce((sum, week) => sum + week.present, 0) / sundaysTracked,
+        )
+      : 0;
+  const totalFollowUps = weeks.reduce((sum, week) => sum + week.followUps, 0);
+
+  const barPoints = weeks.map((week) => ({
+    label: week.date.replace(/,?\s*\d{4}$/, "").slice(0, 8),
+    value: week.present,
+  }));
+
+  const tableRows = weeks.map((week) => ({
+    date: week.date,
+    present: String(week.present),
+    absent: String(week.absent),
+    followUps: String(week.followUps),
+  }));
+
   return (
     <Document>
-      <Page size="LETTER" style={styles.page}>
-        <View style={styles.headerRow}>
-          <View>
-            <Text style={styles.title}>{churchName}</Text>
-            <Text style={styles.subtitle}>Attendance Report — {monthLabel}</Text>
-          </View>
-          <View>
-            <Text style={styles.poweredBy}>Powered by FaithForm Technologies</Text>
-            <Text style={styles.reportType}>Attendance Report</Text>
-          </View>
-        </View>
+      <ReportPage>
+        <ReportHeader
+          churchName={churchName}
+          periodLabel={monthLabel}
+          reportType="Attendance Report"
+        />
 
-        <Text style={styles.sectionTitle}>Weekly attendance</Text>
-        <HeaderRow />
-        {weeks.length === 0 ? (
-          <View style={styles.tableRow}>
-            <Text style={{ width: "100%", color: "#6B7280" }}>
-              No attendance records for this month.
-            </Text>
-          </View>
-        ) : (
-          weeks.map((week, i) => (
-            <View key={i} style={styles.tableRow}>
-              <Text style={styles.colDate}>{week.date}</Text>
-              <Text style={styles.colNum}>{week.present}</Text>
-              <Text style={styles.colNum}>{week.absent}</Text>
-              <Text style={styles.colFollow}>{week.followUps}</Text>
-            </View>
-          ))
-        )}
+        <KpiGrid
+          items={[
+            {
+              value: String(sundaysTracked),
+              label: "SUNDAYS TRACKED",
+            },
+            {
+              value: String(averagePresent),
+              label: "AVERAGE PRESENT",
+            },
+            {
+              value: String(totalFollowUps),
+              label: "TOTAL FOLLOW-UPS",
+            },
+          ]}
+        />
 
-        <Text style={styles.sectionTitle}>Trend summary</Text>
-        <Text style={styles.trend}>{trendSummary}</Text>
+        <SectionTitle>WEEKLY ATTENDANCE</SectionTitle>
+        <MiniBarChart points={barPoints} />
 
-        <View style={styles.footer}>
-          <Text>{reportDate} · CONFIDENTIAL</Text>
-          <Text>{churchName}</Text>
-        </View>
-      </Page>
+        <DataTable
+          columns={[
+            { key: "date", label: "Date", width: "38%" },
+            { key: "present", label: "Present", width: "18%", align: "right" },
+            { key: "absent", label: "Absent", width: "18%", align: "right" },
+            {
+              key: "followUps",
+              label: "Follow-ups",
+              width: "26%",
+              align: "right",
+            },
+          ]}
+          rows={tableRows}
+          emptyMessage="No attendance records for this month."
+        />
+
+        <SectionTitle>TREND SUMMARY</SectionTitle>
+        <CalloutBox>{trendSummary}</CalloutBox>
+
+        <ReportFooter reportDate={reportDate} churchName={churchName} />
+      </ReportPage>
     </Document>
   );
 }

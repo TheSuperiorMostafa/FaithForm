@@ -9,7 +9,7 @@ import {
   StatusBadge,
 } from "@/components/admin/badges";
 import { ChurchAttendanceBarChart } from "@/components/admin/charts";
-import { formatDate, formatDateTime } from "@/components/admin/format";
+import { formatDate, formatDateTime, formatDuration, formatHours } from "@/components/admin/format";
 import { SupportTicketDialog } from "@/components/admin/support-ticket-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -47,6 +47,36 @@ export function ChurchDetailTabs({
       </TabsList>
 
       <TabsContent value="overview" className="grid gap-4 xl:grid-cols-2">
+        <Card className="xl:col-span-2">
+          <CardHeader>
+            <CardTitle>Simplicity check (last 30 days)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="mb-4 text-sm text-muted-foreground">
+              Pastors should spend minimal time on FaithForm while automation handles
+              calls and admin work. Compare pastor screen time to hours saved.
+            </p>
+            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <UsageStat
+                label="Pastor time on FaithForm"
+                value={formatDuration(detail.usageSummary.pastorSeconds30d)}
+              />
+              <UsageStat
+                label="Hours saved (automation)"
+                value={`${formatHours(detail.usageSummary.hoursSavedMinutes30d / 60)} hr`}
+              />
+              <UsageStat
+                label="AI phone calls logged"
+                value={detail.usageSummary.phoneCalls30d.toLocaleString("en-US")}
+              />
+              <UsageStat
+                label="Pastor time (7 days)"
+                value={formatDuration(detail.usageSummary.pastorSeconds7d)}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
         <Card>
           <CardHeader>
             <CardTitle>Church profile</CardTitle>
@@ -95,11 +125,14 @@ export function ChurchDetailTabs({
       <TabsContent value="users">
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[620px] text-sm">
+            <table className="w-full min-w-[860px] text-sm">
               <thead className="bg-primary font-heading text-[13px] uppercase tracking-wide text-primary-foreground dark:bg-secondary dark:text-secondary-foreground">
                 <tr>
                   <th className="px-4 py-3 text-left">Email</th>
                   <th className="px-4 py-3 text-left">Role</th>
+                  <th className="px-4 py-3 text-left">Time on FaithForm (7d)</th>
+                  <th className="px-4 py-3 text-left">Time on FaithForm (30d)</th>
+                  <th className="px-4 py-3 text-left">Last seen</th>
                   <th className="px-4 py-3 text-left">Joined</th>
                   <th className="px-4 py-3 text-left">Change role</th>
                 </tr>
@@ -112,6 +145,15 @@ export function ChurchDetailTabs({
                     </td>
                     <td className="px-4 py-3">
                       <RoleBadge role={user.role} />
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {formatDuration(user.dashboardSeconds7d)}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {formatDuration(user.dashboardSeconds30d)}
+                    </td>
+                    <td className="px-4 py-3 text-muted-foreground">
+                      {formatDateTime(user.lastSeenAt)}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {formatDate(user.joinedAt)}
@@ -296,6 +338,15 @@ function DetailItem({ label, value }: { label: string; value: string }) {
     <div>
       <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className="mt-1 text-sm font-medium text-foreground">{value}</p>
+    </div>
+  );
+}
+
+function UsageStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-border/60 p-4">
+      <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="mt-2 text-2xl font-bold text-foreground">{value}</p>
     </div>
   );
 }

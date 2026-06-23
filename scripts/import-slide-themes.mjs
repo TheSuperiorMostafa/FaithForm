@@ -64,6 +64,51 @@ const supabase = createClient(supabaseUrl, serviceKey, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
 
+async function ensureBucket() {
+  const { data: buckets, error: listError } =
+    await supabase.storage.listBuckets();
+  if (listError) {
+    console.error("Could not list storage buckets:", listError.message);
+    process.exit(1);
+  }
+
+  if (buckets?.some((bucket) => bucket.name === BUCKET || bucket.id === BUCKET)) {
+    return;
+  }
+
+  console.log(`Creating storage bucket "${BUCKET}"…`);
+  const { error: createError } = await supabase.storage.createBucket(BUCKET, {
+    public: true,
+    fileSizeLimit: 5242880,
+    allowedMimeTypes: ["image/png", "image/jpeg", "image/jpg", "image/webp"],
+  });
+
+  if (createError) {
+    console.error(`Failed to create bucket "${BUCKET}":`, createError.message);
+    console.error(
+      "Run `pnpm db:slide-themes` with DATABASE_URL if the slide_themes migration is not applied yet.",
+    );
+    process.exit(1);
+  }
+}
+
+await ensureBucket();
+
+const { error: tableCheckError } = await supabase
+  .from("slide_themes")
+  .select("id", { count: "exact", head: true });
+
+if (tableCheckError) {
+  console.error(
+    "slide_themes table is not available:",
+    tableCheckError.message,
+  );
+  console.error(
+    "\nApply migration 0021 first:\n  DATABASE_URL=\"postgresql://...\" pnpm db:slide-themes\n",
+  );
+  process.exit(1);
+}
+
 function mimeForExt(ext) {
   switch (ext.toLowerCase()) {
     case ".png":

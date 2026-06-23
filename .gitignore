@@ -39,3 +39,6 @@ next-env.d.ts
 
 # self-hosted bible JSON (copyright — generate locally, do not commit)
 /data/bible/*.json
+
+# optimized sermon theme images (uploaded to Supabase, not committed)
+/data/sermon-theme-import/

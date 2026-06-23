@@ -4,6 +4,7 @@ import {
   getCatalogMinutes,
 } from "@/lib/automation-catalog";
 import { createAdminClientOrNull } from "@/lib/supabase/admin";
+import { phoneCallTaskName } from "@/lib/utils/phone-call-time-saved";
 
 export type LogActivityInput = {
   churchId: string;
@@ -42,9 +43,7 @@ export async function logPhoneCallActivity(input: {
       churchId: input.churchId,
       automationType: "Phone Call + Duration of Call",
       category: "Phone",
-      taskName: input.callerNumber
-        ? `AI answered call from ${input.callerNumber}`
-        : "AI answered phone call",
+      taskName: phoneCallTaskName(input.callerNumber, input.durationSeconds),
       timeSavedMinutes: input.timeSavedMinutes,
       triggerSource,
       executedAt: input.executedAt,

@@ -1,7 +1,7 @@
 import Link from "next/link";
-import { Building2, Clock, FileText, Users } from "lucide-react";
+import { Building2, Clock, FileText, Monitor, Users } from "lucide-react";
 import { PriorityBadge } from "@/components/admin/badges";
-import { formatDate, formatHours } from "@/components/admin/format";
+import { formatDate, formatDuration, formatHours } from "@/components/admin/format";
 import { PageHeader } from "@/components/admin/page-header";
 import { StatCard } from "@/components/admin/stat-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,7 +25,7 @@ export default async function AdminOverviewPage() {
         description="Monitor churches, users, integrations, and open support across FaithForm."
       />
 
-      <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-5">
         <StatCard
           label="Total churches"
           value={overview.stats.totalChurches}
@@ -49,6 +49,12 @@ export default async function AdminOverviewPage() {
           value={formatHours(overview.stats.platformHoursSaved)}
           description="From activity log minutes"
           icon={Clock}
+        />
+        <StatCard
+          label="Pastor time on FaithForm"
+          value={formatDuration(overview.stats.pastorMinutes30d * 60)}
+          description={`${overview.stats.activeChurches30d} churches active (30d)`}
+          icon={Monitor}
         />
       </div>
 
