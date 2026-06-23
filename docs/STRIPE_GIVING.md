@@ -13,6 +13,8 @@ Copy from [`.env.example`](../.env.example):
 - `NEXT_PUBLIC_SITE_URL` — your real app URL, e.g. `https://faithform.io` (give links: `{SITE_URL}/give/{slug}`)
 - `NEXT_PUBLIC_GIVE_HOST` — optional; only if you own a dedicated give subdomain and set `NEXT_PUBLIC_GIVE_USE_DEDICATED_HOST=true`
 - `NEXT_PUBLIC_SITE_URL` — canonical app URL for Connect return URLs
+- `RESEND_API_KEY` — required for donor portal magic-link emails, donation receipts, and failed-payment dunning
+- `RESEND_FROM_EMAIL` — verified sender in Resend (e.g. `noreply@faithform.io` in production; `onboarding@resend.dev` for local dev)
 
 Never commit real keys. Rotate any keys that were exposed in chat or logs.
 
@@ -70,7 +72,18 @@ Enabled on the Payment Element via `wallets: { applePay: 'auto', googlePay: 'aut
 
 ### Donor portal
 
-`/give/{slug}/portal` — magic-link email auth, card update (SetupIntent), recurring pause/cancel/amount change, gift history, annual statement PDF.
+`/give/{slug}/portal` — magic-link email auth (sign up or sign in with email), card update (SetupIntent), recurring pause/cancel/amount change, gift history, annual statement PDF.
+
+Donors can also reach the portal from the give page footer CTA or the thank-you page after a gift. Portal emails require `RESEND_API_KEY` and `RESEND_FROM_EMAIL`.
+
+### Donation receipts
+
+After each successful gift, FaithForm sends a branded receipt email via Resend (tracked with `giving_donations.receipt_email_sent_at` — migration `0025_giving_receipt_email.sql`). Stripe also emails its own receipt:
+
+- **One-time gifts:** `receipt_email` on the PaymentIntent
+- **Recurring gifts:** `receipt_email` set on the first subscription PaymentIntent after create; subsequent invoice receipts go to the Stripe customer email
+
+Apply migration `0025_giving_receipt_email.sql` alongside `0016` if you use receipt emails.
 
 ### Dashboard
 
@@ -81,7 +94,7 @@ Enabled on the Payment Element via `wallets: { applePay: 'auto', googlePay: 'aut
 
 ## Local development
 
-1. Apply migrations `0013_stripe_giving.sql` and `0016_giving_enhancements.sql` to Supabase.
+1. Apply migrations `0013_stripe_giving.sql`, `0016_giving_enhancements.sql`, and `0025_giving_receipt_email.sql` to Supabase.
 2. Set env vars in `.env.local`.
 3. Forward webhooks:
 

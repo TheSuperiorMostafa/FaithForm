@@ -194,6 +194,15 @@ export async function createConnectedSubscription(
       })
     | null;
   const paymentIntent = invoice?.payment_intent ?? null;
+
+  if (typeof paymentIntent === "object" && paymentIntent !== null) {
+    await stripe.paymentIntents.update(
+      paymentIntent.id,
+      { receipt_email: input.donorEmail },
+      { stripeAccount: input.stripeAccountId },
+    );
+  }
+
   const clientSecret =
     typeof paymentIntent === "object" && paymentIntent !== null
       ? paymentIntent.client_secret

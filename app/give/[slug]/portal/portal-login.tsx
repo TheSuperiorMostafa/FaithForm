@@ -17,19 +17,31 @@ export function PortalLogin({
 }) {
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState<string | null>(null);
+  const [isError, setIsError] = useState(false);
   const [pending, startTransition] = useTransition();
 
   const sendLink = () => {
     startTransition(async () => {
       setMessage(null);
+      setIsError(false);
       const res = await fetch("/api/give/portal/send-link", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ slug, email: email.trim() }),
       });
       const data = await res.json();
+
+      if (!res.ok) {
+        setIsError(true);
+        setMessage(
+          data.error ??
+            "We couldn't send the email right now. Please try again in a few minutes.",
+        );
+        return;
+      }
+
       setMessage(
-        data.message ?? "If that email is valid, we sent a sign-in link.",
+        data.message ?? "Check your email for a link to access the donor portal.",
       );
     });
   };
@@ -54,7 +66,10 @@ export function PortalLogin({
         />
       </div>
       {message && (
-        <p className="text-sm text-muted-foreground" role="status">
+        <p
+          className={`text-sm ${isError ? "text-destructive" : "text-muted-foreground"}`}
+          role="status"
+        >
           {message}
         </p>
       )}
@@ -64,7 +79,7 @@ export function PortalLogin({
         disabled={pending || !email.trim()}
         onClick={sendLink}
       >
-        {pending ? "Sending…" : "Email me a sign-in link"}
+        {pending ? "Sending…" : "Continue with email"}
       </Button>
       <p className="text-center text-xs text-muted-foreground">
         <a href={`/give/${slug}`} className="underline hover:text-foreground">

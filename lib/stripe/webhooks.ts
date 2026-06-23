@@ -1,7 +1,7 @@
 import type Stripe from "stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { upsertGivingDonor } from "@/lib/giving/donors";
-import { sendFailedPaymentEmail } from "@/lib/email/giving";
+import { sendDonationReceiptEmail, sendFailedPaymentEmail } from "@/lib/email/giving";
 import {
   markChurchDeauthorized,
   syncChurchFromStripeAccount,
@@ -101,7 +101,7 @@ async function upsertDonation(params: {
   feeCovered?: boolean;
   stripeFeeCents?: number | null;
   netAmountCents?: number | null;
-}) {
+}): Promise<string | null> {
   const admin = createAdminClient();
   const now = new Date().toISOString();
 
@@ -145,11 +145,83 @@ async function upsertDonation(params: {
 
     if (existing?.id) {
       await admin.from("giving_donations").update(row).eq("id", existing.id);
-      return;
+      return existing.id as string;
     }
   }
 
-  await admin.from("giving_donations").insert(row);
+  if (params.stripeInvoiceId) {
+    const { data: existing } = await admin
+      .from("giving_donations")
+      .select("id")
+      .eq("stripe_invoice_id", params.stripeInvoiceId)
+      .maybeSingle();
+
+    if (existing?.id) {
+      await admin.from("giving_donations").update(row).eq("id", existing.id);
+      return existing.id as string;
+    }
+  }
+
+  const { data: inserted } = await admin
+    .from("giving_donations")
+    .insert(row)
+    .select("id")
+    .maybeSingle();
+
+  return (inserted?.id as string | undefined) ?? null;
+}
+
+async function maybeSendDonationReceipt(params: {
+  donationId: string | null;
+  churchId: string;
+  status: DonationStatus;
+  donorEmail?: string | null;
+  donorName?: string | null;
+  amountCents: number;
+  intendedAmountCents?: number | null;
+  fundDesignation?: string | null;
+  giftType: GiftType;
+}): Promise<void> {
+  if (params.status !== "succeeded" || !params.donationId || !params.donorEmail) {
+    return;
+  }
+
+  const admin = createAdminClient();
+  const now = new Date().toISOString();
+
+  const { data: claimed } = await admin
+    .from("giving_donations")
+    .update({ receipt_email_sent_at: now, updated_at: now })
+    .eq("id", params.donationId)
+    .is("receipt_email_sent_at", null)
+    .select("id")
+    .maybeSingle();
+
+  if (!claimed?.id) return;
+
+  const { data: church } = await admin
+    .from("churches")
+    .select("name, slug, ein")
+    .eq("id", params.churchId)
+    .maybeSingle();
+
+  if (!church?.name || !church.slug) return;
+
+  await sendDonationReceiptEmail({
+    donorEmail: params.donorEmail,
+    donorName: params.donorName ?? null,
+    churchName: church.name as string,
+    churchSlug: church.slug as string,
+    ein: (church.ein as string | null) ?? null,
+    amountCents: params.intendedAmountCents ?? params.amountCents,
+    fundName: params.fundDesignation ?? null,
+    giftType: params.giftType,
+    giftDate: new Date().toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    }),
+  });
 }
 
 async function upsertSubscription(params: {
@@ -268,7 +340,7 @@ async function handlePaymentIntent(
     netAmountCents = fees.netAmountCents;
   }
 
-  await upsertDonation({
+  const donationId = await upsertDonation({
     churchId,
     amountCents: pi.amount,
     currency: pi.currency,
@@ -285,6 +357,18 @@ async function handlePaymentIntent(
     feeCovered: pi.metadata?.cover_fees === "true",
     stripeFeeCents,
     netAmountCents,
+  });
+
+  await maybeSendDonationReceipt({
+    donationId,
+    churchId,
+    status,
+    donorEmail,
+    donorName,
+    amountCents: pi.amount,
+    intendedAmountCents: parseIntendedCents(pi.metadata) ?? pi.amount,
+    fundDesignation: pi.metadata?.fund_name || pi.metadata?.fund_designation || null,
+    giftType,
   });
 }
 
@@ -371,6 +455,7 @@ async function handleInvoice(
   let fundId: string | null = null;
   let fundDesignation: string | null = null;
   let donorId: string | null = null;
+  let intendedAmountCents: number | null = null;
 
   if (subId && connectedAccount) {
     try {
@@ -386,6 +471,7 @@ async function handleInvoice(
       fundDesignation =
         sub.metadata?.fund_name || sub.metadata?.fund_designation || null;
       donorId = sub.metadata?.donor_id ?? null;
+      intendedAmountCents = parseIntendedCents(sub.metadata);
     } catch {
       /* ignore */
     }
@@ -399,12 +485,16 @@ async function handleInvoice(
   const piId =
     typeof invoicePi === "string" ? invoicePi : invoicePi?.id ?? null;
 
-  await upsertDonation({
+  const amountCents = invoice.amount_paid || invoice.amount_due;
+  const giftType = subId ? "recurring" : "one_time";
+  const status = succeeded ? "succeeded" : "failed";
+
+  const donationId = await upsertDonation({
     churchId,
-    amountCents: invoice.amount_paid || invoice.amount_due,
+    amountCents,
     currency: invoice.currency,
-    status: succeeded ? "succeeded" : "failed",
-    giftType: subId ? "recurring" : "one_time",
+    status,
+    giftType,
     stripePaymentIntentId: piId,
     stripeInvoiceId: invoice.id,
     stripeSubscriptionId: subId,
@@ -413,6 +503,19 @@ async function handleInvoice(
     fundId,
     fundDesignation,
     donorId,
+    intendedAmountCents,
+  });
+
+  await maybeSendDonationReceipt({
+    donationId,
+    churchId,
+    status,
+    donorEmail,
+    donorName,
+    amountCents,
+    intendedAmountCents,
+    fundDesignation,
+    giftType,
   });
 
   if (!succeeded && subId && donorEmail && connectedAccount) {

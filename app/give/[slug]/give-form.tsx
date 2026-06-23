@@ -55,10 +55,12 @@ type GiveFormProps = {
 function CheckoutForm({
   slug,
   isPortal,
+  donorEmail,
   onSuccess,
 }: {
   slug: string;
   isPortal?: boolean;
+  donorEmail?: string;
   onSuccess: () => void;
 }) {
   const stripe = useStripe();
@@ -73,12 +75,16 @@ function CheckoutForm({
     setLoading(true);
     setError(null);
 
+    const thankYouUrl = donorEmail
+      ? `${window.location.origin}/give/${slug}/thank-you?email=${encodeURIComponent(donorEmail)}`
+      : `${window.location.origin}/give/${slug}/thank-you`;
+
     const { error: submitError } = await stripe.confirmPayment({
       elements,
       confirmParams: {
         return_url: isPortal
           ? `${window.location.origin}/give/${slug}/portal`
-          : `${window.location.origin}/give/${slug}/thank-you`,
+          : thankYouUrl,
       },
       redirect: "if_required",
     });
@@ -254,7 +260,9 @@ export function GiveForm({
       onPaymentSuccess();
       return;
     }
-    router.push(`/give/${slug}/thank-you`);
+    router.push(
+      `/give/${slug}/thank-you?email=${encodeURIComponent(donorEmail.trim())}`,
+    );
   };
 
   if (step === "pay" && clientSecret) {
@@ -273,6 +281,7 @@ export function GiveForm({
           <CheckoutForm
             slug={slug}
             isPortal={isPortal}
+            donorEmail={donorEmail.trim() || undefined}
             onSuccess={handlePaymentSuccess}
           />
         </Elements>
@@ -491,11 +500,17 @@ export function GiveForm({
       </button>
 
       {!isPortal && (
-        <p className="text-center text-xs text-muted-foreground">
-          <a href={`/give/${slug}/portal`} className={giveLinkAccent("underline")}>
-            Donor portal — manage recurring gifts
-          </a>
-        </p>
+        <a
+          href={`/give/${slug}/portal`}
+          className="mt-4 block rounded-lg border border-border bg-muted/30 p-4 text-center transition-colors hover:bg-muted/50"
+        >
+          <span className={giveLinkAccent("block text-sm font-semibold")}>
+            Donor portal
+          </span>
+          <span className="mt-1 block text-xs text-muted-foreground">
+            Manage recurring gifts, update your card, download statements
+          </span>
+        </a>
       )}
     </div>
   );

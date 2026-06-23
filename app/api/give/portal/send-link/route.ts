@@ -49,20 +49,35 @@ export async function POST(request: Request) {
         })
       ).donorId;
 
+  const isNewDonor = !existingDonor?.id;
+
   const magicLink = await createPortalMagicLink({
     churchId: church.churchId,
     donorId,
     churchSlug: church.slug,
   });
 
-  await sendPortalMagicLinkEmail({
+  const { sent } = await sendPortalMagicLinkEmail({
     donorEmail: email,
     churchName: church.churchName,
     magicLink,
+    isNewDonor,
   });
+
+  if (!sent) {
+    return NextResponse.json(
+      {
+        error:
+          "We couldn't send the email right now. Please try again in a few minutes.",
+      },
+      { status: 503 },
+    );
+  }
 
   return NextResponse.json({
     ok: true,
-    message: "If that email is valid, we sent a sign-in link.",
+    message: isNewDonor
+      ? "Check your email for a link to create your donor account."
+      : "Check your email for a sign-in link.",
   });
 }
