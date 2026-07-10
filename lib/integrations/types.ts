@@ -1,4 +1,4 @@
-export type IntegrationProvider = "google" | "facebook";
+export type IntegrationProvider = "google" | "facebook" | "stream" | "youtube";
 
 export type ChurchIntegrationRow = {
   id: string;
@@ -19,6 +19,23 @@ export type GoogleIntegrationMetadata = {
 export type FacebookIntegrationMetadata = {
   page_id?: string;
   page_name?: string;
+  live_video_id?: string;
+};
+
+export type StreamIntegrationMetadata = {
+  relay_host?: string;
+  youtube_url?: string;
+  facebook_url?: string;
+  preview_ingest_active?: boolean;
+  preview_ingest_at?: string | null;
+};
+
+export type YouTubeIntegrationMetadata = {
+  channel_id?: string;
+  channel_title?: string;
+  can_manage_live?: boolean;
+  live_stream_id?: string;
+  live_broadcast_id?: string;
 };
 
 export type CalendarEventPreview = {

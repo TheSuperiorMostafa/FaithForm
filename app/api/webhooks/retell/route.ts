@@ -3,6 +3,7 @@ import {
   type RetellCallPayload,
   upsertPhoneCallFromRetell,
 } from "@/lib/integrations/retell-calls";
+import { verifyRetellWebhook } from "@/lib/integrations/retell-webhook-verify";
 
 type RetellWebhookPayload = {
   event: string;
@@ -10,9 +11,16 @@ type RetellWebhookPayload = {
 };
 
 export async function POST(request: Request) {
+  const rawBody = await request.text();
+  const signature = request.headers.get("x-retell-signature");
+
+  if (!verifyRetellWebhook(rawBody, signature, process.env.RETELL_API_KEY)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   let body: RetellWebhookPayload;
   try {
-    body = (await request.json()) as RetellWebhookPayload;
+    body = JSON.parse(rawBody) as RetellWebhookPayload;
   } catch {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
   }

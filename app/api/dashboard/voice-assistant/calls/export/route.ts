@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { getChurchAuth } from "@/lib/auth/church";
+import { logAdminAction } from "@/lib/activity/admin-log";
+import {
+  forbiddenResponse,
+  requireChurchAdmin,
+} from "@/lib/auth/require-church-admin";
 import {
   formatCallDuration,
   maskPhoneNumber,
@@ -15,8 +19,12 @@ function escapeCsv(value: string | null | undefined): string {
 }
 
 export async function GET() {
-  const auth = await getChurchAuth();
-  if (!auth) {
+  let auth;
+  try {
+    auth = await requireChurchAdmin();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unauthorized";
+    if (message === "Forbidden") return forbiddenResponse();
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -44,6 +52,12 @@ export async function GET() {
 
   const csv = [header, ...rows].join("\n");
   const filename = `faithform-calls-${new Date().toISOString().slice(0, 10)}.csv`;
+
+  await logAdminAction({
+    churchId: auth.churchId,
+    taskName: `Exported ${calls.length} voice calls to CSV`,
+    triggerSource: "admin:export:voice-calls",
+  });
 
   return new NextResponse(csv, {
     headers: {

@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getChurchAuth } from "@/lib/auth/church";
+import { logAdminAction } from "@/lib/activity/admin-log";
+import {
+  forbiddenResponse,
+  requireChurchAdmin,
+} from "@/lib/auth/require-church-admin";
 import { getDonationById } from "@/lib/queries/giving";
 import { refundPaymentIntent } from "@/lib/stripe/giving";
 
@@ -10,8 +14,12 @@ const bodySchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const auth = await getChurchAuth();
-  if (!auth) {
+  let auth;
+  try {
+    auth = await requireChurchAdmin();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unauthorized";
+    if (message === "Forbidden") return forbiddenResponse();
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -42,6 +50,11 @@ export async function POST(request: Request) {
       donation.stripePaymentIntentId,
       parsed.data.reason,
     );
+    await logAdminAction({
+      churchId: auth.churchId,
+      taskName: `Refunded gift ${parsed.data.donationId}`,
+      triggerSource: `admin:refund:${parsed.data.donationId}`,
+    });
     return NextResponse.json({ ok: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Refund failed";

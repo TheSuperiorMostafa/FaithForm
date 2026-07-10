@@ -1,0 +1,49 @@
+# FaithForm stream relay — MediaMTX config
+# Docs: https://github.com/bluenviron/mediamtx
+
+logLevel: info
+logDestinations: [stdout]
+
+api: yes
+apiAddress: 127.0.0.1:9997
+
+metrics: no
+
+rtmp: yes
+rtmpAddress: :1935
+
+rtsp: yes
+rtspAddress: :8554
+
+hls: yes
+hlsAddress: :8888
+hlsAllowOrigin: '*'
+hlsVariant: mpegts
+hlsSegmentDuration: 2s
+webrtc: yes
+webrtcAddress: :8889
+webrtcLocalUDPAddress: :8189
+webrtcIPsFromInterfaces: yes
+webrtcAdditionalHosts:
+  - 87.99.156.133
+  - stream.faithform.io
+webrtcHandshakeTimeout: 30s
+webrtcICEServers2:
+  - url: stun:stun.l.google.com:19302
+srt: yes
+srtAddress: :8890
+
+pathDefaults:
+  source: publisher
+  # Auth is injected at runtime with MTX_AUTHMETHOD + MTX_AUTHHTTPADDRESS
+  # from /etc/faithform-stream-relay.env.
+
+paths:
+  # Per-church ingest:
+  #   server: rtmp://stream.faithform.io/live
+  #   stream key: {churchId}/{publishKey}
+  ~^live/([0-9a-fA-F-]{36})/([A-Za-z0-9_-]{16,})$:
+    source: publisher
+    runOnReady: /home/mostafa/scripts/on-stream-ready.sh
+    runOnReadyRestart: yes
+    runOnNotReady: /home/mostafa/scripts/on-stream-stop.sh

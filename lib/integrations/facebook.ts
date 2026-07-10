@@ -1,9 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { provisionFacebookLiveRtmpUrl } from "@/lib/integrations/facebook-live";
 import {
   getIntegration,
   saveIntegration,
 } from "@/lib/integrations/tokens";
 import type { FacebookIntegrationMetadata } from "@/lib/integrations/types";
+import { absoluteAppPath } from "@/lib/site-url";
+import { setStreamRelayDestination } from "@/lib/stream/relay";
 
 const GRAPH = "https://graph.facebook.com/v21.0";
 
@@ -11,8 +14,8 @@ function getFacebookConfig() {
   const appId = process.env.FACEBOOK_APP_ID;
   const appSecret = process.env.FACEBOOK_APP_SECRET;
   const redirectUri =
-    process.env.FACEBOOK_REDIRECT_URI ??
-    `${process.env.NEXT_PUBLIC_SITE_URL}/api/integrations/facebook/callback`;
+    process.env.FACEBOOK_REDIRECT_URI?.trim() ||
+    absoluteAppPath("/api/integrations/facebook/callback");
 
   if (!appId || !appSecret) {
     throw new Error("Facebook OAuth is not configured");
@@ -38,6 +41,7 @@ export async function exchangeFacebookCode(
   churchId: string,
   userId: string,
   supabase?: SupabaseClient,
+  options?: { provisionLive?: boolean },
 ) {
   const { appId, appSecret, redirectUri } = getFacebookConfig();
 
@@ -83,9 +87,28 @@ export async function exchangeFacebookCode(
     );
   }
 
+  let liveVideoId: string | undefined;
+  if (options?.provisionLive) {
+    const { rtmpUrl, liveVideoId: createdLiveVideoId } =
+      await provisionFacebookLiveRtmpUrl(
+        page.id,
+        page.access_token,
+        `${page.name} — FaithForm`,
+      );
+    liveVideoId = createdLiveVideoId;
+    await setStreamRelayDestination(
+      churchId,
+      "facebook",
+      rtmpUrl,
+      userId,
+      supabase,
+    );
+  }
+
   const metadata: FacebookIntegrationMetadata = {
     page_id: page.id,
     page_name: page.name,
+    live_video_id: liveVideoId,
   };
 
   await saveIntegration(

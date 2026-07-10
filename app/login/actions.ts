@@ -1,17 +1,39 @@
 "use server";
 
-import { headers } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
+import {
+  assertRateLimit,
+} from "@/lib/security/rate-limit";
+import { getRequestIpFromHeaders } from "@/lib/security/request-ip";
+import { absoluteAppPath } from "@/lib/site-url";
 
 export type LoginFormState = {
   ok: boolean;
   error?: string;
 };
 
+async function enforceLoginRateLimit(action: string): Promise<LoginFormState | null> {
+  const ip = getRequestIpFromHeaders();
+  const rate = await assertRateLimit(`login:${action}:${ip}`, {
+    limit: 10,
+    windowMs: 15 * 60 * 1000,
+  });
+  if (!rate.ok) {
+    return {
+      ok: false,
+      error: "Too many attempts. Please wait a few minutes and try again.",
+    };
+  }
+  return null;
+}
+
 export async function sendMagicLink(
   _prevState: LoginFormState,
   formData: FormData,
 ): Promise<LoginFormState> {
+  const rateLimited = await enforceLoginRateLimit("magic-link");
+  if (rateLimited) return rateLimited;
+
   const email = formData.get("email")?.toString().trim();
 
   if (!email) {
@@ -23,15 +45,12 @@ export async function sendMagicLink(
     return { ok: false, error: "Please enter a valid email address." };
   }
 
-  // Must match Supabase → Authentication → URL Configuration (Site URL + Redirect URLs).
-  const siteUrl =
-    process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") ??
-    (process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL.replace(/\/$/, "")}`
-      : undefined);
-  const headersList = headers();
-  const origin = siteUrl ?? headersList.get("origin") ?? "http://localhost:3000";
-  const redirectTo = `${origin}/auth/callback`;
+  // Must resolve to an absolute URL whose origin is registered in
+  // Supabase → Authentication → URL Configuration (Site URL + Redirect URLs).
+  // absoluteAppPath treats an empty NEXT_PUBLIC_SITE_URL as unset and falls
+  // back to the canonical production origin, so magic links never point at a
+  // relative path (which silently breaks the redirect back to /auth/callback).
+  const redirectTo = absoluteAppPath("/auth/callback");
 
   const supabase = createClient();
   const { error } = await supabase.auth.signInWithOtp({
@@ -57,6 +76,9 @@ export async function signInWithPassword(
   _prevState: PasswordLoginState,
   formData: FormData,
 ): Promise<PasswordLoginState> {
+  const rateLimited = await enforceLoginRateLimit("password");
+  if (rateLimited) return rateLimited;
+
   const email = formData.get("email")?.toString().trim();
   const password = formData.get("password")?.toString();
 

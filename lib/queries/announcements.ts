@@ -200,6 +200,44 @@ export function formatDateTimeRange(
   return `${startStr} – ${endStr}`;
 }
 
+/** Separate date and time lines for cinematic social graphic overlays. */
+export function formatEventGraphicDetails(
+  startAt: string,
+  endAt: string | null,
+): { dateLine: string; timeLine: string } {
+  const start = new Date(startAt);
+
+  const dateLine = start
+    .toLocaleDateString(undefined, {
+      weekday: "short",
+      month: "long",
+      day: "numeric",
+    })
+    .toUpperCase();
+
+  const timeStart = start.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+  if (!endAt) {
+    return { dateLine, timeLine: timeStart.toUpperCase() };
+  }
+
+  const end = new Date(endAt);
+  const sameDay = start.toDateString() === end.toDateString();
+  const timeEnd = end.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+
+  const timeLine = sameDay
+    ? `${timeStart} – ${timeEnd}`.toUpperCase()
+    : `${timeStart.toUpperCase()} – ${formatDateTimeRange(startAt, endAt)}`;
+
+  return { dateLine, timeLine };
+}
+
 export function buildFacebookPostMessage(input: {
   title: string;
   location: string;

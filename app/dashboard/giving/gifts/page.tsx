@@ -72,7 +72,7 @@ export default async function GiftsPage({ searchParams }: PageProps) {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          <GiftsTable donations={result.donations} />
+          <GiftsTable donations={result.donations} isAdmin={auth.isAdmin} />
         </CardContent>
       </Card>
 

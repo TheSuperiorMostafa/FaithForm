@@ -1,12 +1,5 @@
 import { getSiteUrl } from "@/lib/stripe/config";
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
+import { escapeHtml } from "@/lib/email/escape-html";
 
 function buildGivingEmailHtml(params: {
   heading: string;
@@ -68,8 +61,8 @@ async function sendResendEmail(params: {
   html: string;
   logLabel: string;
 }): Promise<{ sent: boolean }> {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM_EMAIL ?? "noreply@faithform.io";
+  const apiKey = process.env.RESEND_API_KEY?.trim();
+  const from = process.env.RESEND_FROM_EMAIL?.trim() || "noreply@faithform.io";
 
   if (!apiKey) {
     console.log(`[giving-email] ${params.logLabel} (no RESEND_API_KEY)`);
@@ -179,7 +172,7 @@ export async function sendPortalMagicLinkEmail(
     to: params.donorEmail,
     subject,
     html,
-    logLabel: `portal link → ${params.magicLink}`,
+    logLabel: `portal link → ${params.donorEmail}`,
   });
 }
 

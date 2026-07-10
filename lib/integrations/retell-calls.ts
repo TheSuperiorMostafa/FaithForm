@@ -28,13 +28,7 @@ export type UpsertRetellCallResult = {
   created: boolean;
 };
 
-function readChurchIdFromCall(call: RetellCallPayload): string | null {
-  const metadataId = call.metadata?.church_id;
-  if (typeof metadataId === "string" && metadataId) return metadataId;
-
-  const dynamicId = call.retell_llm_dynamic_variables?.church_id;
-  if (dynamicId) return dynamicId;
-
+function readChurchIdFromCall(_call: RetellCallPayload): string | null {
   return null;
 }
 

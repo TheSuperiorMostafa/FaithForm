@@ -3,6 +3,11 @@ import { z } from "zod";
 import { linkDonorStripeCustomer, upsertGivingDonor } from "@/lib/giving/donors";
 import { getFundById } from "@/lib/giving/funds";
 import { getChurchBySlug } from "@/lib/queries/giving";
+import {
+  assertRateLimit,
+  getClientIp,
+  rateLimitResponse,
+} from "@/lib/security/rate-limit";
 import { createConnectedSubscription } from "@/lib/stripe/giving";
 import { isStripeConfigured } from "@/lib/stripe/client";
 
@@ -53,6 +58,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 
+  const ip = getClientIp(request);
+  const rate = await assertRateLimit(`give-sub:${ip}:${parsed.data.slug}`, {
+    limit: 10,
+    windowMs: 15 * 60 * 1000,
+  });
+  if (!rate.ok) {
+    return rateLimitResponse(rate.retryAfterSeconds);
+  }
+
   const church = await getChurchBySlug(parsed.data.slug);
   if (!church?.stripeAccountId || !church.stripeChargesEnabled) {
     return NextResponse.json({ error: "Giving not available" }, { status: 404 });
@@ -91,7 +105,7 @@ export async function POST(request: Request) {
       fundName: fund.name,
     });
 
-  await linkDonorStripeCustomer(donorId, customerId);
+  await linkDonorStripeCustomer(church.churchId, donorId, customerId);
 
   return NextResponse.json({
     subscriptionId: subscription.id,

@@ -1,11 +1,14 @@
 import {
   BookOpen,
+  Contact,
   FileText,
+  Film,
   Heart,
   LayoutDashboard,
   LifeBuoy,
   Megaphone,
   Phone,
+  RadioTower,
   Settings,
   Users,
   type LucideIcon,
@@ -16,6 +19,8 @@ export type NavItem = {
   href: string;
   icon: LucideIcon;
   shortLabel?: string;
+  /** Hide from mobile bottom nav (sidebar only). */
+  sidebarOnly?: boolean;
 };
 
 export const navItems: NavItem[] = [
@@ -32,10 +37,30 @@ export const navItems: NavItem[] = [
     icon: Users,
   },
   {
+    label: "People",
+    shortLabel: "People",
+    href: "/dashboard/people",
+    icon: Contact,
+  },
+  {
     label: "Announcements",
     shortLabel: "News",
     href: "/dashboard/announcements",
     icon: Megaphone,
+  },
+  {
+    label: "Live Streaming",
+    shortLabel: "Live",
+    href: "/dashboard/live-streaming",
+    icon: RadioTower,
+    sidebarOnly: true,
+  },
+  {
+    label: "Media",
+    shortLabel: "Media",
+    href: "/dashboard/media",
+    icon: Film,
+    sidebarOnly: true,
   },
   {
     label: "Voice Assistant",

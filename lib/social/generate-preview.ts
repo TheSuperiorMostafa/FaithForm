@@ -4,6 +4,7 @@ import { aiGenerateObject } from "@/lib/ai";
 import { eventSocialSystemPrompt } from "@/lib/ai/prompts";
 import { eventSocialPreviewSchema } from "@/lib/ai/schemas";
 import { formatDateTimeRange } from "@/lib/queries/announcements";
+import { resolveFlyerHeadline } from "@/lib/social/headline-display";
 import {
   generateSocialGraphic,
   loadChurchBranding,
@@ -27,7 +28,7 @@ export type SocialPreviewResult = {
   templateKey: string;
   graphicUrl: string;
   graphicPath: string;
-  usedPlacid: boolean;
+  usedAiImage: boolean;
   warning?: string;
   modelUsed: string;
 };
@@ -63,26 +64,29 @@ export async function generateSocialPreview(
   });
 
   const draftKey = buildDraftKey(input);
+  const flyerHeadline = resolveFlyerHeadline(input.title, object.headline);
 
   const graphic = await generateSocialGraphic(supabase, branding, {
     churchId: input.churchId,
     title: input.title,
     when,
     location: input.location,
-    headline: object.headline,
+    headline: flyerHeadline,
     templateKey: object.templateKey,
     backgroundTag: object.backgroundTag,
     draftKey,
+    startAt: input.startAt,
+    endAt: input.endAt,
   });
 
   return {
-    headline: object.headline,
+    headline: flyerHeadline,
     facebookCaption: object.facebookCaption,
     backgroundTag: object.backgroundTag,
     templateKey: object.templateKey,
     graphicUrl: graphic.graphicUrl,
     graphicPath: graphic.graphicPath,
-    usedPlacid: graphic.usedPlacid,
+    usedAiImage: graphic.usedAiImage,
     warning: graphic.warning,
     modelUsed,
   };

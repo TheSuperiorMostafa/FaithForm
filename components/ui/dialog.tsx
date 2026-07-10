@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -66,6 +67,11 @@ function DialogContent({
 }: React.ComponentProps<"dialog"> & { showClose?: boolean }) {
   const { open, setOpen } = useDialog();
   const ref = React.useRef<HTMLDialogElement>(null);
+  const [mounted, setMounted] = React.useState(false);
+
+  React.useEffect(() => {
+    setMounted(true);
+  }, []);
 
   React.useEffect(() => {
     const el = ref.current;
@@ -77,7 +83,12 @@ function DialogContent({
     }
   }, [open]);
 
-  return (
+  // Render into <body> via a portal so the native modal <dialog> escapes any
+  // scrollable / transformed ancestor (e.g. the dashboard's overflow-y-auto
+  // main), which otherwise paints the dialog twice (top layer + in-flow ghost).
+  if (!mounted) return null;
+
+  return createPortal(
     <dialog
       ref={ref}
       className={cn(
@@ -101,7 +112,8 @@ function DialogContent({
         </button>
       )}
       {children}
-    </dialog>
+    </dialog>,
+    document.body,
   );
 }
 

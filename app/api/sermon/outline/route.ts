@@ -6,9 +6,10 @@ import { outlineSystemPrompt } from "@/lib/ai/prompts";
 import {
   createSermon,
   getChurchAISettings,
-  sermonToContext,
   updateSermon,
+  verifySermonAccess,
 } from "@/lib/queries/sermons";
+import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -63,27 +64,34 @@ export async function POST(request: Request) {
       preaching_style: settings?.preaching_style ?? null,
     };
 
-    let sermon =
-      sermonId
-        ? await updateSermon(sermonId, {
-            topic: ctx.topic,
-            scripture_refs: ctx.scripture_refs,
-            audience: ctx.audience,
-            duration_min: ctx.duration_min,
-            style_notes: ctx.style_notes,
-            title: title ?? undefined,
-          })
-        : await createSermon({
-            churchId: auth.churchId,
-            userId: auth.userId,
-            topic: ctx.topic,
-            scripture_refs: ctx.scripture_refs,
-            audience: ctx.audience,
-            duration_min: ctx.duration_min,
-            style_notes: ctx.style_notes,
-            title,
-            series_id: series_id ?? null,
-          });
+    let sermon;
+    if (sermonId) {
+      const supabase = createClient();
+      const existing = await verifySermonAccess(supabase, sermonId, auth.churchId);
+      if (!existing) {
+        return NextResponse.json({ error: "Sermon not found" }, { status: 404 });
+      }
+      sermon = await updateSermon(sermonId, {
+        topic: ctx.topic,
+        scripture_refs: ctx.scripture_refs,
+        audience: ctx.audience,
+        duration_min: ctx.duration_min,
+        style_notes: ctx.style_notes,
+        title: title ?? undefined,
+      });
+    } else {
+      sermon = await createSermon({
+        churchId: auth.churchId,
+        userId: auth.userId,
+        topic: ctx.topic,
+        scripture_refs: ctx.scripture_refs,
+        audience: ctx.audience,
+        duration_min: ctx.duration_min,
+        style_notes: ctx.style_notes,
+        title,
+        series_id: series_id ?? null,
+      });
+    }
 
     const { object, modelUsed } = await aiGenerateObject({
       churchId: auth.churchId,
@@ -104,12 +112,10 @@ export async function POST(request: Request) {
     console.error("[sermon/outline] failed", e);
     const message = e instanceof Error ? e.message : "Outline generation failed";
     const status = message === "Unauthorized" ? 401 : 500;
-    return NextResponse.json(
-      {
-        error: message,
-        detail: e instanceof Error ? e.stack?.split("\n").slice(0, 4).join("\n") : undefined,
-      },
-      { status },
-    );
+    const body: { error: string; detail?: string } = { error: message };
+    if (process.env.NODE_ENV !== "production" && e instanceof Error && e.stack) {
+      body.detail = e.stack.split("\n").slice(0, 4).join("\n");
+    }
+    return NextResponse.json(body, { status });
   }
 }

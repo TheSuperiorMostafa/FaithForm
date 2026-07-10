@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import JSZip from "jszip";
+import { logAdminAction } from "@/lib/activity/admin-log";
+import {
+  forbiddenResponse,
+  requireChurchAdmin,
+} from "@/lib/auth/require-church-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getChurchAuth } from "@/lib/auth/church";
 import { renderGivingStatementPdf } from "@/lib/giving/statement-pdf";
 import { getDonorGiftsForYear } from "@/lib/queries/giving";
 
@@ -10,8 +14,12 @@ export const maxDuration = 120;
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  const auth = await getChurchAuth();
-  if (!auth) {
+  let auth;
+  try {
+    auth = await requireChurchAdmin();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unauthorized";
+    if (message === "Forbidden") return forbiddenResponse();
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -39,6 +47,7 @@ export async function POST(request: Request) {
     .eq("church_id", auth.churchId);
 
   const zip = new JSZip();
+  let statementCount = 0;
 
   for (const donor of donors ?? []) {
     const gifts = await getDonorGiftsForYear(
@@ -63,7 +72,14 @@ export async function POST(request: Request) {
       .toLowerCase();
 
     zip.file(`statement-${year}-${safeName}.pdf`, buffer);
+    statementCount += 1;
   }
+
+  await logAdminAction({
+    churchId: auth.churchId,
+    taskName: `Generated ${statementCount} giving statements for ${year}`,
+    triggerSource: `admin:statements:generate:${year}`,
+  });
 
   const zipBuffer = await zip.generateAsync({ type: "nodebuffer" });
 

@@ -65,6 +65,7 @@ export type ChurchSettings = {
   preaching_style: string | null;
   denomination: string | null;
   sermon_builder_mode: SermonBuilderMode;
+  attendance_follow_up_messages: string[] | null;
   created_at: string;
   updated_at: string;
 };
@@ -84,6 +85,7 @@ export type Sermon = {
   kind: SermonKind;
   theme_id: string | null;
   translation: string | null;
+  sermon_date: string | null;
   content: SermonContent | null;
   outline: SermonOutline | null;
   model_used: string | null;

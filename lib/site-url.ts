@@ -56,6 +56,14 @@ export function absoluteAppPath(path: string): string {
   return `${getCanonicalSiteUrl()}${normalized}`;
 }
 
+export function getLivePageUrl(slug: string): string {
+  return absoluteAppPath(`/live/${slug}`);
+}
+
+export function getLiveEmbedUrl(slug: string): string {
+  return absoluteAppPath(`/live/${slug}/embed`);
+}
+
 /**
  * Public church give page: {site}/give/{slug}
  * Optional dedicated subdomain only when NEXT_PUBLIC_GIVE_USE_DEDICATED_HOST=true.

@@ -18,7 +18,7 @@ export function BottomNav() {
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-sidebar text-sidebar shadow-2xl md:hidden">
       <div className="flex items-stretch justify-around px-1 pb-[env(safe-area-inset-bottom)]">
-        {navItems.map((item) => {
+        {navItems.filter((item) => !item.sidebarOnly).map((item) => {
           const active = isActive(pathname, item.href);
           const Icon = item.icon;
 

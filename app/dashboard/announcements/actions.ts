@@ -6,7 +6,7 @@ import { logActivity } from "@/lib/activity/log";
 import { createClient } from "@/lib/supabase/server";
 import { patchCalendarEvent } from "@/lib/integrations/google-calendar";
 import { createAnnouncementGmailDraft } from "@/lib/integrations/gmail";
-import { generateAnnouncementGraphic } from "@/lib/integrations/announcement-graphic";
+import { generateEmergencySocialGraphic, downloadSocialGraphic } from "@/lib/social/generate-graphic";
 import {
   postAnnouncementToFacebookPage,
   resolveFacebookScheduledPublishTime,
@@ -15,7 +15,6 @@ import {
   buildFacebookPostMessage,
   formatDateTimeRange,
 } from "@/lib/queries/announcements";
-import { downloadSocialGraphic } from "@/lib/social/generate-graphic";
 import { hasIntegration } from "@/lib/integrations/tokens";
 import { getCurrentChurchId } from "@/lib/queries/dashboard";
 import type { PublishResult } from "@/lib/integrations/types";
@@ -112,6 +111,15 @@ export async function publishAnnouncement(
   let gmailDraftId: string | null = null;
   let gmailDraftUrl: string | undefined;
 
+  const socialFields = {
+    facebook_caption: payload.pushToFacebook ? payload.facebookCaption || null : null,
+    social_graphic_path: payload.pushToFacebook ? payload.socialGraphicPath || null : null,
+    social_graphic_url: payload.pushToFacebook ? payload.socialGraphicUrl || null : null,
+    social_preview_generated_at: payload.pushToFacebook
+      ? new Date().toISOString()
+      : null,
+  };
+
   const row = {
     church_id: ctx.churchId,
     title: payload.title,
@@ -132,13 +140,67 @@ export async function publishAnnouncement(
     published_at: new Date().toISOString(),
     published_by: ctx.user.id,
     last_publish_error: null,
-    facebook_caption: payload.pushToFacebook ? payload.facebookCaption || null : null,
-    social_graphic_path: payload.pushToFacebook ? payload.socialGraphicPath || null : null,
-    social_graphic_url: payload.pushToFacebook ? payload.socialGraphicUrl || null : null,
-    social_preview_generated_at: payload.pushToFacebook
-      ? new Date().toISOString()
-      : null,
+    ...socialFields,
   };
+
+  function isMissingSocialColumnError(message: string): boolean {
+    return /facebook_caption|social_graphic_|social_preview_generated_at/i.test(
+      message,
+    );
+  }
+
+  function rowWithoutSocialFields(data: typeof row) {
+    const {
+      facebook_caption: _c,
+      social_graphic_path: _p,
+      social_graphic_url: _u,
+      social_preview_generated_at: _t,
+      ...baseRow
+    } = data;
+    return baseRow;
+  }
+
+  async function persistAnnouncement(
+    data: typeof row,
+    id: string | null,
+  ): Promise<{ id: string; error: string | null }> {
+    if (id) {
+      let { error } = await ctx.supabase
+        .from("announcements")
+        .update(data)
+        .eq("id", id)
+        .eq("church_id", ctx.churchId);
+
+      if (error && isMissingSocialColumnError(error.message)) {
+        ({ error } = await ctx.supabase
+          .from("announcements")
+          .update(rowWithoutSocialFields(data))
+          .eq("id", id)
+          .eq("church_id", ctx.churchId));
+      }
+
+      return { id, error: error?.message ?? null };
+    }
+
+    let { data: inserted, error } = await ctx.supabase
+      .from("announcements")
+      .insert({ ...data, created_by: ctx.user!.id })
+      .select("id")
+      .single();
+
+    if (error && isMissingSocialColumnError(error.message)) {
+      ({ data: inserted, error } = await ctx.supabase
+        .from("announcements")
+        .insert({ ...rowWithoutSocialFields(data), created_by: ctx.user!.id })
+        .select("id")
+        .single());
+    }
+
+    return {
+      id: (inserted?.id as string | undefined) ?? "",
+      error: error?.message ?? null,
+    };
+  }
 
   let announcementId = payload.announcementId;
 
@@ -155,28 +217,16 @@ export async function publishAnnouncement(
     }
   }
 
-  if (announcementId) {
-    const { error } = await ctx.supabase
-      .from("announcements")
-      .update(row)
-      .eq("id", announcementId)
-      .eq("church_id", ctx.churchId);
+  const saved = await persistAnnouncement(row, announcementId);
 
-    if (error) {
-      return { ok: false, errors: [error.message] };
-    }
-  } else {
-    const { data, error } = await ctx.supabase
-      .from("announcements")
-      .insert({ ...row, created_by: ctx.user.id })
-      .select("id")
-      .single();
-
-    if (error || !data) {
-      return { ok: false, errors: [error?.message ?? "Could not save announcement"] };
-    }
-    announcementId = data.id;
+  if (saved.error || (!announcementId && !saved.id)) {
+    return {
+      ok: false,
+      errors: [saved.error ?? "Could not save announcement"],
+    };
   }
+
+  announcementId = saved.id;
 
   if (payload.pushToFacebook) {
     const fbConnected = await hasIntegration(
@@ -209,17 +259,12 @@ export async function publishAnnouncement(
         }
 
         if (!imagePng) {
-          const { data: churchRow } = await ctx.supabase
-            .from("churches")
-            .select("name")
-            .eq("id", ctx.churchId)
-            .maybeSingle();
-
-          imagePng = await generateAnnouncementGraphic({
-            churchName: churchRow?.name ?? "Our Church",
+          imagePng = await generateEmergencySocialGraphic(ctx.supabase, ctx.churchId, {
             title: payload.title,
             when: formatDateTimeRange(payload.startAt, payload.endAt),
             location: payload.location,
+            startAt: payload.startAt,
+            endAt: payload.endAt,
           });
         }
 

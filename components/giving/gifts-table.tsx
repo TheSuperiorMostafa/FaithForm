@@ -8,7 +8,13 @@ function displayDonor(d: GivingDonationRow): string {
   return "Guest";
 }
 
-export function GiftsTable({ donations }: { donations: GivingDonationRow[] }) {
+export function GiftsTable({
+  donations,
+  isAdmin,
+}: {
+  donations: GivingDonationRow[];
+  isAdmin: boolean;
+}) {
   if (donations.length === 0) {
     return (
       <p className="py-8 text-center text-sm text-muted-foreground">
@@ -64,7 +70,7 @@ export function GiftsTable({ donations }: { donations: GivingDonationRow[] }) {
                   : "—"}
               </td>
               <td className="px-4 py-3">
-                <RefundButton donation={d} />
+                {isAdmin ? <RefundButton donation={d} /> : null}
               </td>
             </tr>
           ))}

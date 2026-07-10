@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { SettingsTabs } from "@/components/settings/settings-tabs";
 import { getGivingFundsForSettings } from "@/app/dashboard/settings/giving-actions";
 import { getChurchGivingProfile } from "@/lib/queries/giving";
+import { getFollowUpMessageTemplates } from "@/lib/queries/follow-up-settings";
 import { getChurchAuth } from "@/lib/auth/church";
 import { getIntegrationStatus } from "@/lib/integrations/tokens";
 import { getChurchAISettings } from "@/lib/queries/sermons";
@@ -25,12 +26,19 @@ export default async function SettingsPage() {
     );
   }
 
-  const [settings, integrationStatus, givingProfile, givingFunds] =
+  const [
+    settings,
+    integrationStatus,
+    givingProfile,
+    givingFunds,
+    followUpTemplates,
+  ] =
     await Promise.all([
       getChurchAISettings(auth.churchId),
       getIntegrationStatus(auth.churchId, supabase),
       getChurchGivingProfile(auth.churchId),
       getGivingFundsForSettings(auth.churchId),
+      getFollowUpMessageTemplates(auth.churchId, supabase),
     ]);
 
   return (
@@ -50,6 +58,7 @@ export default async function SettingsPage() {
         settings={settings}
         givingProfile={givingProfile}
         givingFunds={givingFunds}
+        followUpTemplates={followUpTemplates}
       />
     </div>
   );

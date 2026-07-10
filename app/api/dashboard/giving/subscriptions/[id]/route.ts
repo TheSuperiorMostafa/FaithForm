@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { getChurchAuth } from "@/lib/auth/church";
+import { logAdminAction } from "@/lib/activity/admin-log";
+import {
+  forbiddenResponse,
+  requireChurchAdmin,
+} from "@/lib/auth/require-church-admin";
 import { getSubscriptionById } from "@/lib/queries/giving";
 import {
   cancelSubscription,
@@ -15,8 +19,12 @@ const bodySchema = z.object({
 type RouteContext = { params: { id: string } };
 
 export async function POST(request: Request, context: RouteContext) {
-  const auth = await getChurchAuth();
-  if (!auth) {
+  let auth;
+  try {
+    auth = await requireChurchAdmin();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unauthorized";
+    if (message === "Forbidden") return forbiddenResponse();
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -45,6 +53,13 @@ export async function POST(request: Request, context: RouteContext) {
     } else {
       await cancelSubscription(sub.stripeAccountId, sub.stripeSubscriptionId);
     }
+
+    await logAdminAction({
+      churchId: auth.churchId,
+      taskName: `${parsed.data.action} subscription ${context.params.id}`,
+      triggerSource: `admin:subscription:${parsed.data.action}:${context.params.id}`,
+    });
+
     return NextResponse.json({ ok: true });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Action failed";

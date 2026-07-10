@@ -3,6 +3,7 @@ import {
   redirectToApp,
   redirectToSettings,
 } from "@/lib/integrations/app-redirect";
+import { assertOAuthSessionUser } from "@/lib/integrations/assert-oauth-session";
 import { verifyOAuthState } from "@/lib/integrations/oauth-state";
 import { createClient } from "@/lib/supabase/server";
 
@@ -27,6 +28,9 @@ export async function GET(request: Request) {
     return redirectToSettings({ integration_error: "invalid_state" }, returnTo);
   }
 
+  const sessionMismatch = await assertOAuthSessionUser(payload.userId, returnTo);
+  if (sessionMismatch) return sessionMismatch;
+
   try {
     const supabase = createClient();
     await exchangeFacebookCode(
@@ -34,6 +38,7 @@ export async function GET(request: Request) {
       payload.churchId,
       payload.userId,
       supabase,
+      { provisionLive: false },
     );
     if (returnTo) {
       const url = new URL(returnTo, "http://localhost");

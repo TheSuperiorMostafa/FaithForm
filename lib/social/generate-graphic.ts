@@ -1,14 +1,16 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import sharp from "sharp";
 
 import {
-  isPlacidConfigured,
-  renderSocialGraphic,
-  resolvePlacidTemplateUuidFromEnv,
-} from "@/lib/integrations/placid";
-import { generateAnnouncementGraphic } from "@/lib/integrations/announcement-graphic";
+  generateEventBackgroundImage,
+  isAiImageConfigured,
+} from "@/lib/ai/image";
+import { formatEventGraphicDetails } from "@/lib/queries/announcements";
 import { pickBackgroundImage } from "@/lib/social/background-images";
+import { generateCinematicPlaceholderBackground } from "@/lib/social/cinematic-placeholder";
 import {
   SOCIAL_GRAPHICS_BUCKET,
+  type SocialBackgroundTag,
   type SocialTemplateKey,
 } from "@/lib/social/constants";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -29,31 +31,17 @@ export type SocialPreviewInput = {
   templateKey: SocialTemplateKey;
   backgroundTag: string;
   draftKey: string;
+  startAt?: string;
+  endAt?: string | null;
 };
 
 export type SocialPreviewGraphic = {
   graphicUrl: string;
   graphicPath: string;
-  usedPlacid: boolean;
+  usedAiImage: boolean;
+  imageModelUsed?: string;
   warning?: string;
 };
-
-export async function resolveSocialTemplateUuid(
-  supabase: SupabaseClient,
-  templateKey: SocialTemplateKey,
-): Promise<string | null> {
-  const { data } = await supabase
-    .from("social_templates")
-    .select("placid_template_uuid")
-    .eq("key", templateKey)
-    .eq("active", true)
-    .maybeSingle();
-
-  const fromDb = (data?.placid_template_uuid as string | undefined)?.trim();
-  if (fromDb) return fromDb;
-
-  return resolvePlacidTemplateUuidFromEnv(templateKey);
-}
 
 export async function loadChurchBranding(
   supabase: SupabaseClient,
@@ -73,36 +61,97 @@ export async function loadChurchBranding(
   };
 }
 
-function buildPlacidLayers(
+async function fetchLogoForModel(
+  logoUrl: string | null,
+): Promise<{ bytes: ArrayBuffer; mimeType: string } | null> {
+  if (!logoUrl) return null;
+  try {
+    const res = await fetch(logoUrl);
+    if (!res.ok) return null;
+    const bytes = await res.arrayBuffer();
+    const mimeType =
+      res.headers.get("content-type")?.split(";")[0] || "image/png";
+    return { bytes, mimeType };
+  } catch {
+    return null;
+  }
+}
+
+/** Normalize any provider image into a Facebook-ready 1200x630 PNG. */
+async function normalizePng(bytes: ArrayBuffer): Promise<ArrayBuffer> {
+  const png = await sharp(Buffer.from(bytes))
+    .resize(1200, 630, { fit: "cover", position: "centre" })
+    .png()
+    .toBuffer();
+  return png.buffer.slice(
+    png.byteOffset,
+    png.byteOffset + png.byteLength,
+  ) as ArrayBuffer;
+}
+
+/**
+ * Fully AI-generated flyer: the model renders the entire design (title, date,
+ * time, location) baked into the image, with the real church logo composited in.
+ */
+async function generateAiFlyer(
   branding: ChurchBranding,
   input: SocialPreviewInput,
-  backgroundUrl: string | null,
-): Record<string, { text?: string; image?: string; color?: string; hide?: boolean }> {
-  const layers: Record<
-    string,
-    { text?: string; image?: string; color?: string; hide?: boolean }
-  > = {
-    title: { text: input.title },
-    headline: { text: input.headline },
-    when: { text: input.when },
-    location: {
-      text: input.location.trim() || "See announcement for details",
-    },
-    primary_color: { color: branding.primaryColor },
-    accent_color: { color: branding.accentColor },
-  };
+): Promise<{ imageBytes: ArrayBuffer; modelUsed: string } | null> {
+  if (!isAiImageConfigured()) return null;
 
-  if (backgroundUrl) {
-    layers.background = { image: backgroundUrl };
+  const { dateLine, timeLine } = input.startAt
+    ? formatEventGraphicDetails(input.startAt, input.endAt ?? null)
+    : { dateLine: input.when, timeLine: "" };
+
+  const logo = await fetchLogoForModel(branding.logoUrl);
+
+  try {
+    const { imageBytes, modelUsed } = await generateEventBackgroundImage({
+      title: input.title,
+      headline: input.headline,
+      backgroundTag: input.backgroundTag as SocialBackgroundTag,
+      churchName: branding.name,
+      primaryColor: branding.primaryColor,
+      accentColor: branding.accentColor,
+      location: input.location,
+      mode: "flyer",
+      dateLine,
+      timeLine,
+      logo,
+    });
+
+    return { imageBytes: await normalizePng(imageBytes), modelUsed };
+  } catch {
+    return null;
+  }
+}
+
+/** Photo-only fallback when AI is unavailable: stock photo, else placeholder. */
+async function generatePhotoFallback(
+  supabase: SupabaseClient,
+  branding: ChurchBranding,
+  input: SocialPreviewInput,
+): Promise<ArrayBuffer> {
+  try {
+    const stock = await pickBackgroundImage(
+      supabase,
+      input.backgroundTag as SocialBackgroundTag,
+    );
+    if (stock?.publicUrl) {
+      const res = await fetch(stock.publicUrl);
+      if (res.ok) {
+        return normalizePng(await res.arrayBuffer());
+      }
+    }
+  } catch {
+    // fall through to placeholder
   }
 
-  if (branding.logoUrl) {
-    layers.church_logo = { image: branding.logoUrl };
-  } else {
-    layers.church_logo = { hide: true };
-  }
-
-  return layers;
+  const placeholder = await generateCinematicPlaceholderBackground(
+    branding.primaryColor,
+    branding.accentColor,
+  );
+  return normalizePng(placeholder);
 }
 
 async function uploadSocialGraphic(
@@ -123,97 +172,91 @@ async function uploadSocialGraphic(
     .upload(graphicPath, imageBytes, {
       contentType: "image/png",
       upsert: true,
+      // Short TTL so regenerated graphics are not served stale from the CDN.
+      cacheControl: "60",
     });
 
   if (error) {
     throw new Error(`Failed to store social graphic: ${error.message}`);
   }
 
-  const graphicUrl = `${supabaseUrl}/storage/v1/object/public/${SOCIAL_GRAPHICS_BUCKET}/${graphicPath}`;
+  // Cache-bust the display URL. The path is reused (upsert overwrites in place),
+  // so without a unique query param the browser keeps showing the previous PNG.
+  const version = Date.now().toString(36);
+  const graphicUrl = `${supabaseUrl}/storage/v1/object/public/${SOCIAL_GRAPHICS_BUCKET}/${graphicPath}?v=${version}`;
 
   return { graphicUrl, graphicPath };
 }
 
+/**
+ * Generate a fully AI-generated cinematic announcement flyer. Falls back to a
+ * plain cinematic photo (no text) only if AI image generation is unavailable.
+ */
 export async function generateSocialGraphic(
   supabase: SupabaseClient,
   branding: ChurchBranding,
   input: SocialPreviewInput,
 ): Promise<SocialPreviewGraphic> {
-  const background = await pickBackgroundImage(
-    supabase,
-    input.backgroundTag as Parameters<typeof pickBackgroundImage>[1],
-  );
-
-  const templateUuid = await resolveSocialTemplateUuid(supabase, input.templateKey);
-
-  if (isPlacidConfigured() && templateUuid) {
-    try {
-      const layers = buildPlacidLayers(
-        branding,
-        input,
-        background?.publicUrl ?? null,
-      );
-      const placidResult = await renderSocialGraphic({
-        templateUuid,
-        layers,
-      });
-
-      const stored = await uploadSocialGraphic(
-        input.churchId,
-        input.draftKey,
-        placidResult.imageBytes,
-      );
-
-      return {
-        ...stored,
-        usedPlacid: true,
-      };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Placid render failed";
-      const fallback = await generateFallbackGraphic(
-        supabase,
-        branding,
-        input,
-        message,
-      );
-      return fallback;
-    }
+  const flyer = await generateAiFlyer(branding, input);
+  if (flyer) {
+    const stored = await uploadSocialGraphic(
+      input.churchId,
+      input.draftKey,
+      flyer.imageBytes,
+    );
+    return {
+      ...stored,
+      usedAiImage: true,
+      imageModelUsed: flyer.modelUsed,
+    };
   }
 
-  return generateFallbackGraphic(
-    supabase,
-    branding,
-    input,
-    !isPlacidConfigured()
-      ? "Placid is not configured — using default graphic"
-      : "No Placid template configured — using default graphic",
-  );
-}
-
-async function generateFallbackGraphic(
-  supabase: SupabaseClient,
-  branding: ChurchBranding,
-  input: SocialPreviewInput,
-  warning: string,
-): Promise<SocialPreviewGraphic> {
-  const imageBytes = await generateAnnouncementGraphic({
-    churchName: branding.name,
-    title: input.headline || input.title,
-    when: input.when,
-    location: input.location,
-  });
-
+  const photoBytes = await generatePhotoFallback(supabase, branding, input);
   const stored = await uploadSocialGraphic(
     input.churchId,
     input.draftKey,
-    imageBytes,
+    photoBytes,
   );
-
   return {
     ...stored,
-    usedPlacid: false,
-    warning,
+    usedAiImage: false,
+    warning:
+      "AI flyer generation is unavailable — used a cinematic photo. Set GEMINI_API_KEY to enable full flyers.",
   };
+}
+
+/** Last-resort graphic for publish when no stored preview exists. */
+export async function generateEmergencySocialGraphic(
+  supabase: SupabaseClient,
+  churchId: string,
+  input: {
+    title: string;
+    headline?: string;
+    when: string;
+    location: string;
+    startAt?: string;
+    endAt?: string | null;
+    backgroundTag?: string;
+  },
+): Promise<ArrayBuffer> {
+  const branding = await loadChurchBranding(supabase, churchId);
+  const previewInput: SocialPreviewInput = {
+    churchId,
+    title: input.title,
+    when: input.when,
+    location: input.location,
+    headline: input.headline ?? input.title,
+    templateKey: "general",
+    backgroundTag: input.backgroundTag ?? "default",
+    draftKey: `emergency-${Date.now()}`,
+    startAt: input.startAt,
+    endAt: input.endAt,
+  };
+
+  const flyer = await generateAiFlyer(branding, previewInput);
+  if (flyer) return flyer.imageBytes;
+
+  return generatePhotoFallback(supabase, branding, previewInput);
 }
 
 export async function downloadSocialGraphic(

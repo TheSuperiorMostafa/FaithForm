@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { AISettingsForm } from "@/components/settings/ai-settings-form";
+import { FollowUpMessagesForm } from "@/components/settings/follow-up-messages-form";
 import { GivingCard } from "@/components/settings/giving-card";
 import { IntegrationsCard } from "@/components/settings/integrations-card";
 import type { IntegrationsCardProps } from "@/components/settings/integrations-card";
@@ -25,6 +26,7 @@ type SettingsTabsProps = {
   settings: ChurchSettings | null;
   givingProfile: ChurchGivingProfile | null;
   givingFunds: GivingFundRow[];
+  followUpTemplates: string[];
 };
 
 function getDefaultTab(searchParams: URLSearchParams): string {
@@ -35,6 +37,9 @@ function getDefaultTab(searchParams: URLSearchParams): string {
   ) {
     return "giving";
   }
+  if (searchParams.get("tab") === "attendance") {
+    return "attendance";
+  }
   return "general";
 }
 
@@ -44,6 +49,7 @@ function SettingsTabsInner({
   settings,
   givingProfile,
   givingFunds,
+  followUpTemplates,
 }: SettingsTabsProps) {
   const searchParams = useSearchParams();
   const defaultTab = getDefaultTab(searchParams);
@@ -52,6 +58,7 @@ function SettingsTabsInner({
     <Tabs defaultValue={defaultTab} className="flex flex-col gap-4">
       <TabsList className="w-full justify-start">
         <TabsTrigger value="general">General</TabsTrigger>
+        <TabsTrigger value="attendance">Attendance</TabsTrigger>
         <TabsTrigger value="giving">Giving</TabsTrigger>
       </TabsList>
 
@@ -84,6 +91,12 @@ function SettingsTabsInner({
                 Documents
               </Link>
               <Link
+                href="/dashboard/live-streaming"
+                className="rounded-lg border border-border bg-background px-4 py-2.5 text-center text-sm font-semibold text-foreground transition-colors hover:border-accent hover:bg-accent/10"
+              >
+                Live Streaming
+              </Link>
+              <Link
                 href="/dashboard/support"
                 className="rounded-lg border border-border bg-background px-4 py-2.5 text-center text-sm font-semibold text-foreground transition-colors hover:border-accent hover:bg-accent/10"
               >
@@ -96,6 +109,13 @@ function SettingsTabsInner({
             <AISettingsForm settings={settings} isAdmin={isAdmin} />
           </div>
         </div>
+      </TabsContent>
+
+      <TabsContent value="attendance" className="mt-0">
+        <FollowUpMessagesForm
+          isAdmin={isAdmin}
+          templates={followUpTemplates}
+        />
       </TabsContent>
 
       <TabsContent value="giving" className="mt-0">

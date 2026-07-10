@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 
 import { AttendanceSummary } from "./attendance-summary";
 import { AttendanceWizard } from "./attendance-wizard";
+import { ATTENDANCE_FOLLOW_UP_ENABLED } from "@/lib/attendance/features";
 import {
   getActiveMembers,
   getChurchTimezone,
@@ -52,7 +53,9 @@ export default async function AttendanceDatePage({ params }: PageProps) {
 
   const [members, streaks] = await Promise.all([
     getActiveMembers(supabase, churchId),
-    getMissedStreaks(supabase, churchId, date),
+    ATTENDANCE_FOLLOW_UP_ENABLED
+      ? getMissedStreaks(supabase, churchId, date)
+      : Promise.resolve(new Map()),
   ]);
 
   const streaksObject = Object.fromEntries(streaks.entries());

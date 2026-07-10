@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Calendar,
+  CalendarPlus,
   Check,
   ChevronLeft,
   ChevronRight,
@@ -11,6 +12,7 @@ import {
 } from "lucide-react";
 import { AnnouncementSubmittedView } from "@/components/announcements/announcement-submitted-view";
 import { AnnouncementVerifyForm } from "@/components/announcements/announcement-verify-form";
+import { CreateEventDialog } from "@/components/announcements/create-event-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -82,6 +84,7 @@ export function MonthCalendar({
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
   const [selectedDay, setSelectedDay] = useState<Date>(() => startOfDay(new Date()));
   const [selectedEvent, setSelectedEvent] = useState<CalendarEventPreview | null>(
     () => pickAnnouncementEvent(initialEvents, initialPublishedByGoogleId),
@@ -95,31 +98,39 @@ export function MonthCalendar({
     [year, monthIndex, today],
   );
 
-  const fetchMonth = useCallback(async (y: number, m: number) => {
-    const { startISO, endISO } = getMonthWindow(y, m);
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(
-        `/api/announcements/calendar?start=${encodeURIComponent(startISO)}&end=${encodeURIComponent(endISO)}`,
-      );
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error ?? "Failed to load calendar");
+  const fetchMonth = useCallback(
+    async (y: number, m: number, preferredGoogleId?: string) => {
+      const { startISO, endISO } = getMonthWindow(y, m);
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await fetch(
+          `/api/announcements/calendar?start=${encodeURIComponent(startISO)}&end=${encodeURIComponent(endISO)}`,
+        );
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error ?? "Failed to load calendar");
+        }
+        const nextEvents: CalendarEventPreview[] = data.events ?? [];
+        const nextPublished = data.publishedByGoogleId ?? {};
+        const nextPublishedRows = data.publishedAnnouncements ?? {};
+        setEvents(nextEvents);
+        setPublishedByGoogleId(nextPublished);
+        setPublishedAnnouncements(nextPublishedRows);
+        const preferred = preferredGoogleId
+          ? nextEvents.find((e) => e.googleEventId === preferredGoogleId)
+          : undefined;
+        setSelectedEvent(
+          preferred ?? pickAnnouncementEvent(nextEvents, nextPublished),
+        );
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to load calendar");
+      } finally {
+        setLoading(false);
       }
-      const nextEvents = data.events ?? [];
-      const nextPublished = data.publishedByGoogleId ?? {};
-      const nextPublishedRows = data.publishedAnnouncements ?? {};
-      setEvents(nextEvents);
-      setPublishedByGoogleId(nextPublished);
-      setPublishedAnnouncements(nextPublishedRows);
-      setSelectedEvent(pickAnnouncementEvent(nextEvents, nextPublished));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load calendar");
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+    },
+    [],
+  );
 
   const goToMonth = (y: number, m: number) => {
     setYear(y);
@@ -179,6 +190,27 @@ export function MonthCalendar({
       ...prev,
       [selectedEvent.googleEventId]: announcement,
     }));
+  };
+
+  const handleEventCreated = (event: CalendarEventPreview) => {
+    const eventDate = new Date(event.startAt);
+    const y = eventDate.getFullYear();
+    const m = eventDate.getMonth();
+    setSelectedDay(startOfDay(eventDate));
+
+    if (y !== year || m !== monthIndex) {
+      setYear(y);
+      setMonthIndex(m);
+      void fetchMonth(y, m, event.googleEventId);
+      return;
+    }
+
+    setEvents((prev) =>
+      prev.some((e) => e.googleEventId === event.googleEventId)
+        ? prev
+        : [...prev, event],
+    );
+    setSelectedEvent(event);
   };
 
   const eventsForDay = (day: Date) =>
@@ -255,6 +287,14 @@ export function MonthCalendar({
           )}
           <Button type="button" variant="outline" size="sm" onClick={goToday}>
             Today
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            onClick={() => setCreateOpen(true)}
+          >
+            <CalendarPlus className="size-4" strokeWidth={1.75} />
+            New event
           </Button>
         </div>
       </div>
@@ -471,13 +511,28 @@ export function MonthCalendar({
                 onPublished={handlePublished}
               />
             ) : (
-              <div className="rounded-xl border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
-                Click a day or event on the calendar to get started.
+              <div className="flex flex-col items-center gap-4 rounded-xl border border-dashed border-border px-4 py-10 text-center">
+                <p className="text-sm text-muted-foreground">
+                  {events.length === 0
+                    ? "No events on your calendar yet. Create one to announce it."
+                    : "Click a day or event on the calendar to get started."}
+                </p>
+                <Button type="button" onClick={() => setCreateOpen(true)}>
+                  <CalendarPlus className="size-4" strokeWidth={1.75} />
+                  New event
+                </Button>
               </div>
             )}
           </CardContent>
         </Card>
       </div>
+
+      <CreateEventDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        defaultDate={selectedDay}
+        onCreated={handleEventCreated}
+      />
     </div>
   );
 }

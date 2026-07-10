@@ -37,6 +37,15 @@ function rewriteGiveSubdomain(request: NextRequest): NextResponse | null {
 }
 
 export async function updateSession(request: NextRequest) {
+  if (process.env.NODE_ENV === "production") {
+    try {
+      const { assertProductionEnv } = await import("@/lib/env/production");
+      assertProductionEnv();
+    } catch (error) {
+      console.error("[security] production env validation failed:", error);
+    }
+  }
+
   const giveRewrite = rewriteGiveSubdomain(request);
   if (giveRewrite) return giveRewrite;
 

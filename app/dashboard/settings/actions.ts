@@ -2,7 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { getChurchAuth } from "@/lib/auth/church";
+import { upsertFollowUpMessageTemplates } from "@/lib/queries/follow-up-settings";
 import { upsertChurchSettings } from "@/lib/queries/sermons";
+import {
+  DEFAULT_FOLLOW_UP_TEMPLATES,
+  FOLLOW_UP_TEMPLATE_COUNT,
+  validateFollowUpTemplates,
+} from "@/lib/sms/follow-up-messages";
 import type { AIProvider, SermonBuilderMode } from "@/types/sermon";
 
 export type SettingsFormState = {
@@ -51,6 +57,49 @@ export async function updateAISettings(
     return {
       ok: false,
       error: e instanceof Error ? e.message : "Could not save settings.",
+    };
+  }
+}
+
+export async function updateFollowUpMessages(
+  _prev: SettingsFormState,
+  formData: FormData,
+): Promise<SettingsFormState> {
+  const auth = await getChurchAuth();
+  if (!auth) {
+    return { ok: false, error: "Not signed in." };
+  }
+  if (!auth.isAdmin) {
+    return {
+      ok: false,
+      error: "Only church admins can change follow-up messages.",
+    };
+  }
+
+  const reset = formData.get("reset")?.toString() === "1";
+  const templates = reset
+    ? [...DEFAULT_FOLLOW_UP_TEMPLATES]
+    : Array.from({ length: FOLLOW_UP_TEMPLATE_COUNT }, (_, index) =>
+        formData.get(`message_${index}`)?.toString() ?? "",
+      );
+
+  const validated = validateFollowUpTemplates(templates);
+  if (!validated.ok) {
+    return { ok: false, error: validated.error };
+  }
+
+  try {
+    await upsertFollowUpMessageTemplates(
+      auth.churchId,
+      validated.templates,
+    );
+    revalidatePath("/dashboard/settings");
+    revalidatePath("/dashboard/attendance");
+    return { ok: true };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Could not save messages.",
     };
   }
 }

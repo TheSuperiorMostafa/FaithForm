@@ -65,6 +65,7 @@ export async function upsertGivingDonor(params: {
 }
 
 export async function linkDonorStripeCustomer(
+  churchId: string,
   donorId: string,
   stripeCustomerId: string,
 ): Promise<void> {
@@ -75,5 +76,6 @@ export async function linkDonorStripeCustomer(
       stripe_customer_id: stripeCustomerId,
       updated_at: new Date().toISOString(),
     })
-    .eq("id", donorId);
+    .eq("id", donorId)
+    .eq("church_id", churchId);
 }

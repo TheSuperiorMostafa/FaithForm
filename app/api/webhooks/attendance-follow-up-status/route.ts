@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 
+import { compareSecret } from "@/lib/security/compare-secret";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 type FollowUpStatusUpdate = {
@@ -12,7 +13,7 @@ export async function POST(request: Request) {
   const secret = request.headers.get("x-faithform-secret");
   const expected = process.env.N8N_WEBHOOK_SECRET;
 
-  if (!expected || secret !== expected) {
+  if (!compareSecret(secret, expected)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -31,9 +32,18 @@ export async function POST(request: Request) {
   }
 
   const admin = createAdminClient();
+  let updated = 0;
 
   for (const update of updates) {
     if (!update.entryId) continue;
+
+    const { data: entry } = await admin
+      .from("attendance_entries")
+      .select("id, church_id")
+      .eq("id", update.entryId)
+      .maybeSingle();
+
+    if (!entry?.id) continue;
 
     if (update.status === "sent") {
       await admin
@@ -42,7 +52,8 @@ export async function POST(request: Request) {
           follow_up_sent_at: new Date().toISOString(),
           follow_up_error: null,
         })
-        .eq("id", update.entryId);
+        .eq("id", update.entryId)
+        .eq("church_id", entry.church_id as string);
     } else if (update.status === "failed" || update.status === "skipped") {
       await admin
         .from("attendance_entries")
@@ -53,9 +64,12 @@ export async function POST(request: Request) {
               ? "No phone number on file"
               : "SMS delivery failed"),
         })
-        .eq("id", update.entryId);
+        .eq("id", update.entryId)
+        .eq("church_id", entry.church_id as string);
     }
+
+    updated += 1;
   }
 
-  return NextResponse.json({ ok: true, updated: updates.length });
+  return NextResponse.json({ ok: true, updated });
 }

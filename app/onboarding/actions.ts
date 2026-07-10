@@ -14,6 +14,8 @@ import {
   type InviteValidationResult,
   type ValidInvite,
 } from "@/lib/onboarding/validate-invite";
+import { requireOnboardingInvitee } from "@/lib/onboarding/require-invitee";
+import { validateImageBuffer } from "@/lib/security/validate-image";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { absoluteAppPath } from "@/lib/site-url";
@@ -125,12 +127,9 @@ export async function updateChurchProfile(
     skipOptional?: boolean;
   },
 ): Promise<ActionResult> {
-  const inviteResult = await fetchInviteByToken(token);
-  if (!inviteResult.ok) {
-    return { ok: false, error: inviteResult.message };
-  }
-  if (inviteResult.invite.churchId !== churchId) {
-    return { ok: false, error: "Invalid church for this invite." };
+  const auth = await requireOnboardingInvitee(token, churchId);
+  if (!auth.ok) {
+    return { ok: false, error: auth.error };
   }
 
   const admin = createAdminClient();
@@ -165,12 +164,9 @@ export async function uploadChurchLogo(
   token: string,
   formData: FormData,
 ): Promise<{ ok: true; logoUrl: string } | { ok: false; error: string }> {
-  const inviteResult = await fetchInviteByToken(token);
-  if (!inviteResult.ok) {
-    return { ok: false, error: inviteResult.message };
-  }
-  if (inviteResult.invite.churchId !== churchId) {
-    return { ok: false, error: "Invalid church for this invite." };
+  const auth = await requireOnboardingInvitee(token, churchId);
+  if (!auth.ok) {
+    return { ok: false, error: auth.error };
   }
 
   const file = formData.get("logo") as File | null;
@@ -182,20 +178,19 @@ export async function uploadChurchLogo(
     return { ok: false, error: "Logo must be 2MB or smaller." };
   }
 
-  const allowed = ["image/png", "image/jpeg", "image/jpg"];
-  if (!allowed.includes(file.type)) {
-    return { ok: false, error: "Logo must be PNG or JPG." };
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const validated = await validateImageBuffer(buffer);
+  if (!validated) {
+    return { ok: false, error: "Logo must be a valid PNG or JPG image." };
   }
 
-  const ext = file.type === "image/png" ? "png" : "jpg";
-  const path = `${churchId}/logo.${ext}`;
-  const buffer = Buffer.from(await file.arrayBuffer());
+  const path = `${churchId}/logo.${validated.ext}`;
 
   const admin = createAdminClient();
   const { error: uploadError } = await admin.storage
     .from("church-logos")
-    .upload(path, buffer, {
-      contentType: file.type,
+    .upload(path, validated.buffer, {
+      contentType: validated.contentType,
       upsert: true,
     });
 
@@ -220,12 +215,9 @@ export async function getOnboardingIntegrationStatus(
   churchId: string,
   token: string,
 ): Promise<IntegrationStatusResult | { ok: false; error: string }> {
-  const inviteResult = await fetchInviteByToken(token);
-  if (!inviteResult.ok) {
-    return { ok: false, error: inviteResult.message };
-  }
-  if (inviteResult.invite.churchId !== churchId) {
-    return { ok: false, error: "Invalid church for this invite." };
+  const auth = await requireOnboardingInvitee(token, churchId);
+  if (!auth.ok) {
+    return { ok: false, error: auth.error };
   }
 
   const admin = createAdminClient();

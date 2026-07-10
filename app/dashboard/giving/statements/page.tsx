@@ -48,10 +48,16 @@ export default async function StatementsPage() {
           <CardTitle className="text-base">Bulk generate {year}</CardTitle>
         </CardHeader>
         <CardContent>
-          <GenerateStatementsButton
-            year={year}
-            hasEin={Boolean(profile.ein)}
-          />
+          {auth.isAdmin ? (
+            <GenerateStatementsButton
+              year={year}
+              hasEin={Boolean(profile.ein)}
+            />
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Only church admins can generate bulk statements.
+            </p>
+          )}
         </CardContent>
       </Card>
 

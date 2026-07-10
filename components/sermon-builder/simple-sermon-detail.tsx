@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Download, Presentation } from "lucide-react";
+import { Download, Pencil, Presentation } from "lucide-react";
 import { DeleteDraftButton } from "@/components/sermon-builder/delete-draft-button";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +21,14 @@ export function SimpleSermonDetail({ sermon, theme: themeProp }: SimpleSermonDet
     sermon.scripture_refs.length > 0
       ? sermon.scripture_refs.join(" · ")
       : "";
+  const formattedDate = sermon.sermon_date
+    ? new Date(`${sermon.sermon_date}T12:00:00`).toLocaleDateString(undefined, {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      })
+    : null;
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-5">
@@ -28,9 +36,11 @@ export function SimpleSermonDetail({ sermon, theme: themeProp }: SimpleSermonDet
         <div>
           <h1 className="border-l-4 border-accent pl-3 font-heading text-[26px] font-bold">{sermon.title}</h1>
           <p className="mt-1 text-sm text-muted-foreground">
+            {formattedDate && <span>{formattedDate}</span>}
+            {formattedDate && refsSummary && " · "}
             {refsSummary}
-            {sermon.translation && refsSummary && ` · ${sermon.translation}`}
-            {!refsSummary && sermon.translation}
+            {sermon.translation && (formattedDate || refsSummary) && ` · ${sermon.translation}`}
+            {!formattedDate && !refsSummary && sermon.translation}
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
             <Badge variant="outline">Slide deck</Badge>
@@ -38,6 +48,17 @@ export function SimpleSermonDetail({ sermon, theme: themeProp }: SimpleSermonDet
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            size="lg"
+            nativeButton={false}
+            render={
+              <Link href={`/dashboard/sermon-builder/${sermon.id}/edit`}>
+                <Pencil className="size-4" strokeWidth={1.75} />
+                Edit deck
+              </Link>
+            }
+          />
           {sermon.status === "draft" && (
             <DeleteDraftButton
               sermonId={sermon.id}

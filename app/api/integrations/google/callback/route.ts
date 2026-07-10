@@ -1,8 +1,10 @@
 import { exchangeGoogleCode } from "@/lib/integrations/google-oauth";
+import { exchangeYouTubeCode } from "@/lib/integrations/youtube-live";
 import {
   redirectToApp,
   redirectToSettings,
 } from "@/lib/integrations/app-redirect";
+import { assertOAuthSessionUser } from "@/lib/integrations/assert-oauth-session";
 import { verifyOAuthState } from "@/lib/integrations/oauth-state";
 import { createClient } from "@/lib/supabase/server";
 
@@ -23,12 +25,30 @@ export async function GET(request: Request) {
     return redirectToSettings({ integration_error: "missing_code" }, returnTo);
   }
 
-  if (!payload || payload.provider !== "google") {
+  if (
+    !payload ||
+    (payload.provider !== "google" && payload.provider !== "youtube")
+  ) {
     return redirectToSettings({ integration_error: "invalid_state" }, returnTo);
   }
 
+  const sessionMismatch = await assertOAuthSessionUser(payload.userId, returnTo);
+  if (sessionMismatch) return sessionMismatch;
+
   try {
     const supabase = createClient();
+    if (payload.provider === "youtube") {
+      await exchangeYouTubeCode(
+        code,
+        payload.churchId,
+        payload.userId,
+        supabase,
+      );
+      const url = new URL(returnTo ?? "/dashboard/live-streaming", "http://localhost");
+      url.searchParams.set("youtube_connected", "1");
+      return redirectToApp(`${url.pathname}${url.search}`);
+    }
+
     await exchangeGoogleCode(
       code,
       payload.churchId,

@@ -43,6 +43,20 @@ type SavedPassage = {
 type SimpleSermonBuilderProps = {
   translationOptions: CuratedTranslationOption[];
   defaultTranslation: string;
+  editSermon?: {
+    id: string;
+    title: string;
+    translation: string;
+    themeId: string;
+    sermonDate: string | null;
+    passages: Array<{
+      ref: string;
+      book: string;
+      chapter: number;
+      verseStart: number;
+      verseEnd: number;
+    }>;
+  };
   initial?: {
     title?: string;
     translation?: string;
@@ -51,8 +65,13 @@ type SimpleSermonBuilderProps = {
     verseStart?: number;
     verseEnd?: number;
     themeId?: string;
+    sermonDate?: string;
   };
 };
+
+function todayLocal(): string {
+  return new Date().toLocaleDateString("en-CA");
+}
 
 function passageKey(p: {
   book: string;
@@ -66,12 +85,19 @@ function passageKey(p: {
 export function SimpleSermonBuilder({
   translationOptions,
   defaultTranslation,
+  editSermon,
   initial,
 }: SimpleSermonBuilderProps) {
   const router = useRouter();
-  const [title, setTitle] = useState(initial?.title ?? "");
+  const isEditing = Boolean(editSermon);
+  const [title, setTitle] = useState(
+    editSermon?.title ?? initial?.title ?? "",
+  );
+  const [sermonDate, setSermonDate] = useState(
+    editSermon?.sermonDate ?? initial?.sermonDate ?? todayLocal(),
+  );
   const [translation, setTranslation] = useState(
-    initial?.translation ?? defaultTranslation,
+    editSermon?.translation ?? initial?.translation ?? defaultTranslation,
   );
   const [books, setBooks] = useState<TranslationBook[]>([]);
   const [booksLoading, setBooksLoading] = useState(false);
@@ -83,7 +109,19 @@ export function SimpleSermonBuilder({
   const [verseEnd, setVerseEnd] = useState<number | "">(
     initial?.verseEnd ?? "",
   );
-  const [passages, setPassages] = useState<SavedPassage[]>([]);
+  const [passages, setPassages] = useState<SavedPassage[]>(() =>
+    editSermon
+      ? editSermon.passages.map((p) => ({
+          id: crypto.randomUUID(),
+          ref: p.ref,
+          book: p.book,
+          bookId: "",
+          chapter: p.chapter,
+          verseStart: p.verseStart,
+          verseEnd: p.verseEnd,
+        }))
+      : [],
+  );
   const [maxVerses, setMaxVerses] = useState(0);
   const [previewVerses, setPreviewVerses] = useState<RenderedVerse[]>([]);
   const [previewRef, setPreviewRef] = useState("");
@@ -91,7 +129,9 @@ export function SimpleSermonBuilder({
   const [chapterLoading, setChapterLoading] = useState(false);
   const [chapterError, setChapterError] = useState<string | null>(null);
   const [booksError, setBooksError] = useState<string | null>(null);
-  const [themeId, setThemeId] = useState(initial?.themeId ?? DEFAULT_THEME_ID);
+  const [themeId, setThemeId] = useState(
+    editSermon?.themeId ?? initial?.themeId ?? DEFAULT_THEME_ID,
+  );
   const [loadedThemes, setLoadedThemes] = useState<SlideTheme[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -248,7 +288,11 @@ export function SimpleSermonBuilder({
   const totalPassageCount = collectPassagesForSave().length;
 
   const canSubmit = Boolean(
-    title.trim() && enabledTranslation && themeId && totalPassageCount >= 1,
+    title.trim() &&
+      sermonDate &&
+      enabledTranslation &&
+      themeId &&
+      totalPassageCount >= 1,
   );
 
   const canAddPassage = Boolean(
@@ -257,6 +301,7 @@ export function SimpleSermonBuilder({
 
   const missingFields: string[] = [];
   if (!title.trim()) missingFields.push("a name");
+  if (!sermonDate) missingFields.push("a sermon date");
   if (totalPassageCount < 1) missingFields.push("at least one passage");
 
   function handleAddPassage() {
@@ -299,23 +344,34 @@ export function SimpleSermonBuilder({
     setError(null);
 
     try {
-      const res = await fetch("/api/sermon/simple", {
-        method: "POST",
+      const payload = {
+        title: title.trim(),
+        translation,
+        passages: allPassages,
+        theme_id: themeId,
+        sermon_date: sermonDate,
+      };
+
+      const url = isEditing
+        ? `/api/sermon/simple/${editSermon!.id}`
+        : "/api/sermon/simple";
+      const method = isEditing ? "PATCH" : "POST";
+
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: title.trim(),
-          translation,
-          passages: allPassages,
-          theme_id: themeId,
-        }),
+        body: JSON.stringify(payload),
       });
 
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error ?? "Could not save slide deck");
+        throw new Error(
+          data.error ??
+            (isEditing ? "Could not update slide deck" : "Could not save slide deck"),
+        );
       }
 
-      const sermonId = data.sermon?.id;
+      const sermonId = isEditing ? editSermon!.id : data.sermon?.id;
       if (!sermonId) throw new Error("No sermon ID returned");
 
       const link = document.createElement("a");
@@ -348,6 +404,19 @@ export function SimpleSermonBuilder({
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. Sunday Morning — John 3"
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="sermon-date">Sermon date</Label>
+            <Input
+              id="sermon-date"
+              type="date"
+              value={sermonDate}
+              onChange={(e) => setSermonDate(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              When this sermon will be preached.
+            </p>
           </div>
 
           <div className="space-y-2">
@@ -602,12 +671,14 @@ export function SimpleSermonBuilder({
           {saving ? (
             <>
               <Loader2 className="size-4 animate-spin" />
-              Creating deck…
+              {isEditing ? "Saving changes…" : "Creating deck…"}
             </>
           ) : (
             <>
               <Download className="size-4" />
-              Save &amp; download PowerPoint
+              {isEditing
+                ? "Update & download PowerPoint"
+                : "Save & download PowerPoint"}
             </>
           )}
         </Button>

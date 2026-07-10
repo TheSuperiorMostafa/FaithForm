@@ -147,6 +147,7 @@ export async function getCurrentChurchId(
     .from("church_users")
     .select("church_id")
     .eq("user_id", userId)
+    .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
 
@@ -158,6 +159,10 @@ export async function getCurrentChurchId(
     return data.church_id;
   }
 
+  if (process.env.NODE_ENV === "production") {
+    return null;
+  }
+
   const admin = createAdminClientOrNull();
   if (!admin) {
     return null;
@@ -167,6 +172,7 @@ export async function getCurrentChurchId(
     .from("church_users")
     .select("church_id")
     .eq("user_id", userId)
+    .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
 

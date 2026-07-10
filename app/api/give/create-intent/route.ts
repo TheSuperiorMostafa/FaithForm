@@ -3,6 +3,11 @@ import { z } from "zod";
 import { upsertGivingDonor } from "@/lib/giving/donors";
 import { getFundById } from "@/lib/giving/funds";
 import { getChurchBySlug } from "@/lib/queries/giving";
+import {
+  assertRateLimit,
+  getClientIp,
+  rateLimitResponse,
+} from "@/lib/security/rate-limit";
 import { createConnectedPaymentIntent } from "@/lib/stripe/giving";
 import { isStripeConfigured } from "@/lib/stripe/client";
 
@@ -31,6 +36,15 @@ export async function POST(request: Request) {
   const parsed = bodySchema.safeParse(json);
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  }
+
+  const ip = getClientIp(request);
+  const rate = await assertRateLimit(`give-intent:${ip}:${parsed.data.slug}`, {
+    limit: 20,
+    windowMs: 15 * 60 * 1000,
+  });
+  if (!rate.ok) {
+    return rateLimitResponse(rate.retryAfterSeconds);
   }
 
   const church = await getChurchBySlug(parsed.data.slug);

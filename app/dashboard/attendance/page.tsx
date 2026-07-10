@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { Check } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { ATTENDANCE_FOLLOW_UP_ENABLED } from "@/lib/attendance/features";
 import {
   getChurchTimezone,
   getRecentSundayRecords,
@@ -52,7 +53,13 @@ export default async function AttendancePage() {
           Weekly Attendance
         </h1>
         <p className="text-base text-muted-foreground">
-          Select a service date to mark attendance or view a completed record.
+          Select a service date to mark attendance or view a completed record.{" "}
+          <Link
+            href="/dashboard/people"
+            className="font-semibold text-accent hover:underline"
+          >
+            Manage people &amp; phones
+          </Link>
         </p>
       </header>
 
@@ -91,8 +98,13 @@ export default async function AttendancePage() {
 
               {status ? (
                 <p className="text-base font-medium text-green-700 dark:text-green-300">
-                  {status.totalPresent} present, {status.followedUp} followed
-                  up
+                  {status.totalPresent} present
+                  {status.totalAbsent > 0
+                    ? `, ${status.totalAbsent} absent`
+                    : ""}
+                  {ATTENDANCE_FOLLOW_UP_ENABLED && status.followedUp > 0
+                    ? `, ${status.followedUp} followed up`
+                    : ""}
                 </p>
               ) : (
                 <p className="text-base text-muted-foreground">

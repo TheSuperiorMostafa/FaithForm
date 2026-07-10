@@ -128,6 +128,7 @@ export async function createSermon(input: {
   kind?: SermonKind;
   theme_id?: string | null;
   translation?: string | null;
+  sermon_date?: string | null;
 }): Promise<Sermon> {
   const supabase = db();
   const { data, error } = await supabase
@@ -145,6 +146,7 @@ export async function createSermon(input: {
       kind: input.kind ?? "advanced",
       theme_id: input.theme_id ?? null,
       translation: input.translation ?? null,
+      sermon_date: input.sermon_date ?? null,
       status: "draft",
     })
     .select()
@@ -177,6 +179,7 @@ export async function updateSermon(
     model_used: string | null;
     theme_id: string | null;
     translation: string | null;
+    sermon_date: string | null;
   }>,
 ): Promise<Sermon> {
   const existing = await getSermon(id);

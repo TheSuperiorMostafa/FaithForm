@@ -6,6 +6,8 @@ import type {
   FacebookIntegrationMetadata,
   GoogleIntegrationMetadata,
   IntegrationProvider,
+  StreamIntegrationMetadata,
+  YouTubeIntegrationMetadata,
 } from "@/lib/integrations/types";
 
 type IntegrationStatusRow = {
@@ -25,6 +27,17 @@ const EMPTY_STATUS = {
     pageName: null as string | null,
     pageId: null as string | null,
   },
+  stream: {
+    connected: false,
+    relayHost: null as string | null,
+    youtubeUrl: null as string | null,
+    facebookUrl: null as string | null,
+  },
+  youtube: {
+    connected: false,
+    channelId: null as string | null,
+    channelTitle: null as string | null,
+  },
 };
 
 export async function getIntegrationStatus(
@@ -42,9 +55,13 @@ export async function getIntegrationStatus(
   const rows = data as IntegrationStatusRow[];
   const google = rows.find((r) => r.provider === "google");
   const facebook = rows.find((r) => r.provider === "facebook");
+  const stream = rows.find((r) => r.provider === "stream");
+  const youtube = rows.find((r) => r.provider === "youtube");
 
   const googleMeta = (google?.metadata ?? {}) as GoogleIntegrationMetadata;
   const facebookMeta = (facebook?.metadata ?? {}) as FacebookIntegrationMetadata;
+  const streamMeta = (stream?.metadata ?? {}) as StreamIntegrationMetadata;
+  const youtubeMeta = (youtube?.metadata ?? {}) as YouTubeIntegrationMetadata;
 
   return {
     google: {
@@ -57,6 +74,17 @@ export async function getIntegrationStatus(
       pageName: facebookMeta.page_name ?? null,
       pageId: facebookMeta.page_id ?? null,
     },
+    stream: {
+      connected: Boolean(stream?.connected),
+      relayHost: streamMeta.relay_host ?? null,
+      youtubeUrl: streamMeta.youtube_url ?? null,
+      facebookUrl: streamMeta.facebook_url ?? null,
+    },
+    youtube: {
+      connected: Boolean(youtube?.connected),
+      channelId: youtubeMeta.channel_id ?? null,
+      channelTitle: youtubeMeta.channel_title ?? null,
+    },
   };
 }
 
@@ -66,9 +94,10 @@ export async function hasIntegration(
   supabase: SupabaseClient,
 ): Promise<boolean> {
   const status = await getIntegrationStatus(churchId, supabase);
-  return provider === "google"
-    ? status.google.connected
-    : status.facebook.connected;
+  if (provider === "google") return status.google.connected;
+  if (provider === "facebook") return status.facebook.connected;
+  if (provider === "youtube") return status.youtube.connected;
+  return status.stream.connected;
 }
 
 export async function getIntegration(
@@ -82,25 +111,26 @@ export async function getIntegration(
       p_provider: provider,
     });
 
-    if (error || !data?.length) return null;
+    if (!error && data?.length) {
+      const row = data[0] as {
+        access_token: string;
+        refresh_token: string | null;
+        token_expires_at: string | null;
+        metadata: Record<string, unknown>;
+      };
 
-    const row = data[0] as {
-      access_token: string;
-      refresh_token: string | null;
-      token_expires_at: string | null;
-      metadata: Record<string, unknown>;
-    };
-
-    return {
-      id: "",
-      church_id: churchId,
-      provider,
-      access_token: row.access_token,
-      refresh_token: row.refresh_token,
-      token_expires_at: row.token_expires_at,
-      metadata: row.metadata ?? {},
-      connected_by: null,
-    };
+      return {
+        id: "",
+        church_id: churchId,
+        provider,
+        access_token: row.access_token,
+        refresh_token: row.refresh_token,
+        token_expires_at: row.token_expires_at,
+        metadata: row.metadata ?? {},
+        connected_by: null,
+      };
+    }
+    // Service-role clients have no user session, so the RPC admin check fails.
   }
 
   const admin = createAdminClientOrNull();

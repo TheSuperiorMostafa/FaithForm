@@ -1,0 +1,11 @@
+{
+  "name": "faithform-stream-agent",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node faithform-stream-agent.mjs"
+  },
+  "dependencies": {
+    "obs-websocket-js": "^5.0.6"
+  }
+}

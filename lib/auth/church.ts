@@ -9,6 +9,19 @@ export type ChurchAuth = {
   isAdmin: boolean;
 };
 
+async function fetchChurchUserLink(
+  client: SupabaseClient,
+  userId: string,
+) {
+  return client
+    .from("church_users")
+    .select("church_id, role")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+}
+
 export async function getChurchAuth(
   supabase?: SupabaseClient,
 ): Promise<ChurchAuth | null> {
@@ -19,27 +32,20 @@ export async function getChurchAuth(
 
   if (!user) return null;
 
-  const { data: link, error } = await client
-    .from("church_users")
-    .select("church_id, role")
-    .eq("user_id", user.id)
-    .limit(1)
-    .maybeSingle();
+  const { data: link, error } = await fetchChurchUserLink(client, user.id);
 
   if (error) {
     console.error("getChurchAuth church_users:", error.message);
   }
 
   let resolvedLink = link;
-  if (!resolvedLink?.church_id) {
+  if (!resolvedLink?.church_id && process.env.NODE_ENV !== "production") {
     const admin = createAdminClientOrNull();
     if (admin) {
-      const { data: adminLink, error: adminError } = await admin
-        .from("church_users")
-        .select("church_id, role")
-        .eq("user_id", user.id)
-        .limit(1)
-        .maybeSingle();
+      const { data: adminLink, error: adminError } = await fetchChurchUserLink(
+        admin,
+        user.id,
+      );
 
       if (adminError) {
         console.error("getChurchAuth admin church_users:", adminError.message);
@@ -56,7 +62,7 @@ export async function getChurchAuth(
     userId: user.id,
     churchId: resolvedLink.church_id as string,
     role,
-    isAdmin: role === "admin" || role === "owner",
+    isAdmin: role === "admin",
   };
 }
 

@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { getChurchAuth } from "@/lib/auth/church";
+import { logAdminAction } from "@/lib/activity/admin-log";
+import {
+  forbiddenResponse,
+  requireChurchAdmin,
+} from "@/lib/auth/require-church-admin";
 import { searchGifts } from "@/lib/queries/giving";
 import type { DonationStatus, GiftType, GiftsSearchFilters } from "@/types/giving";
 
@@ -11,8 +15,12 @@ function escapeCsv(value: string): string {
 }
 
 export async function GET(request: Request) {
-  const auth = await getChurchAuth();
-  if (!auth) {
+  let auth;
+  try {
+    auth = await requireChurchAdmin();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unauthorized";
+    if (message === "Forbidden") return forbiddenResponse();
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -64,6 +72,12 @@ export async function GET(request: Request) {
   );
 
   const csv = [header, ...rows].join("\n");
+
+  await logAdminAction({
+    churchId: auth.churchId,
+    taskName: `Exported ${result.donations.length} gifts to CSV`,
+    triggerSource: "admin:export:gifts",
+  });
 
   return new NextResponse(csv, {
     headers: {

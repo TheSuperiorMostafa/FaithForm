@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireChurchAuth } from "@/lib/auth/church";
+import { validateImageBuffer } from "@/lib/security/validate-image";
 import { normalizeHexColor } from "@/lib/giving/branding";
 import { ensureDefaultFunds } from "@/lib/giving/funds";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -214,17 +215,16 @@ export async function uploadGivingLogo(
   if (!file || file.size === 0) return { error: "No file provided." };
   if (file.size > 2 * 1024 * 1024) return { error: "Logo must be 2MB or smaller." };
 
-  const allowed = ["image/png", "image/jpeg", "image/jpg"];
-  if (!allowed.includes(file.type)) return { error: "Logo must be PNG or JPG." };
-
-  const ext = file.type === "image/png" ? "png" : "jpg";
-  const path = `${auth.churchId}/logo.${ext}`;
   const buffer = Buffer.from(await file.arrayBuffer());
+  const validated = await validateImageBuffer(buffer);
+  if (!validated) return { error: "Logo must be a valid PNG or JPG image." };
+
+  const path = `${auth.churchId}/logo.${validated.ext}`;
 
   const admin = createAdminClient();
   const { error: uploadError } = await admin.storage
     .from("church-logos")
-    .upload(path, buffer, { contentType: file.type, upsert: true });
+    .upload(path, validated.buffer, { contentType: validated.contentType, upsert: true });
 
   if (uploadError) return { error: uploadError.message };
 

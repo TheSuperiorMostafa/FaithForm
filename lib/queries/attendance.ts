@@ -21,6 +21,7 @@ export type AttendanceEntryWithMember = {
   follow_up_requested: boolean;
   follow_up_sent_at: string | null;
   follow_up_error: string | null;
+  follow_up_sms_id: string | null;
   member: AttendanceMember | null;
 };
 
@@ -143,6 +144,7 @@ export async function getRecordByDate(
       follow_up_requested,
       follow_up_sent_at,
       follow_up_error,
+      follow_up_sms_id,
       member:members (
         id,
         first_name,
@@ -174,6 +176,7 @@ export async function getRecordByDate(
         follow_up_requested: entry.follow_up_requested,
         follow_up_sent_at: entry.follow_up_sent_at ?? null,
         follow_up_error: entry.follow_up_error ?? null,
+        follow_up_sms_id: entry.follow_up_sms_id ?? null,
         member,
       };
     },
@@ -234,7 +237,25 @@ export async function getMissedStreaks(
   churchId: string,
   asOfDate: string,
 ): Promise<Map<string, MissedStreak>> {
+  const counts = await getPriorConsecutiveAbsences(supabase, churchId, asOfDate);
   const streaks = new Map<string, MissedStreak>();
+
+  for (const [memberId, consecutive] of Array.from(counts.entries())) {
+    if (consecutive >= 2) {
+      streaks.set(memberId, { consecutiveAbsent: consecutive });
+    }
+  }
+
+  return streaks;
+}
+
+export async function getPriorConsecutiveAbsences(
+  supabase: SupabaseClient,
+  churchId: string,
+  asOfDate: string,
+  memberIds?: string[],
+): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
 
   const { data: records, error: recordsError } = await supabase
     .from("attendance_records")
@@ -245,7 +266,7 @@ export async function getMissedStreaks(
     .limit(8);
 
   if (recordsError || !records?.length) {
-    return streaks;
+    return counts;
   }
 
   const recordIds = records.map((r) => r.id);
@@ -257,7 +278,7 @@ export async function getMissedStreaks(
     .not("member_id", "is", null);
 
   if (entriesError || !entries?.length) {
-    return streaks;
+    return counts;
   }
 
   const entriesByRecord = new Map<string, typeof entries>();
@@ -268,11 +289,17 @@ export async function getMissedStreaks(
     );
   }
 
-  const memberIds = new Set(
-    entries.map((e) => e.member_id).filter((id): id is string => Boolean(id)),
-  );
+  const targetMemberIds = memberIds?.length
+    ? memberIds
+    : Array.from(
+        new Set(
+          entries
+            .map((e) => e.member_id)
+            .filter((id): id is string => Boolean(id)),
+        ),
+      );
 
-  for (const memberId of Array.from(memberIds)) {
+  for (const memberId of targetMemberIds) {
     let consecutive = 0;
 
     for (const record of records) {
@@ -286,10 +313,10 @@ export async function getMissedStreaks(
       consecutive++;
     }
 
-    if (consecutive >= 2) {
-      streaks.set(memberId, { consecutiveAbsent: consecutive });
+    if (consecutive > 0) {
+      counts.set(memberId, consecutive);
     }
   }
 
-  return streaks;
+  return counts;
 }

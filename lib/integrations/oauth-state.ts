@@ -3,9 +3,15 @@ import { createHmac, timingSafeEqual } from "crypto";
 const SEP = ".";
 
 function getSecret() {
-  const secret =
-    process.env.INTEGRATION_OAUTH_STATE_SECRET ??
-    process.env.N8N_WEBHOOK_SECRET;
+  const oauthSecret = process.env.INTEGRATION_OAUTH_STATE_SECRET?.trim();
+  if (process.env.NODE_ENV === "production") {
+    if (!oauthSecret || oauthSecret === "replace-me-long-random-string") {
+      throw new Error("Missing INTEGRATION_OAUTH_STATE_SECRET in production");
+    }
+    return oauthSecret;
+  }
+
+  const secret = oauthSecret ?? process.env.N8N_WEBHOOK_SECRET;
   if (!secret) {
     throw new Error("Missing INTEGRATION_OAUTH_STATE_SECRET or N8N_WEBHOOK_SECRET");
   }
@@ -15,7 +21,7 @@ function getSecret() {
 export function signOAuthState(payload: {
   churchId: string;
   userId: string;
-  provider: "google" | "facebook";
+  provider: "google" | "facebook" | "youtube";
   returnTo?: string;
 }): string {
   const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
@@ -26,7 +32,7 @@ export function signOAuthState(payload: {
 export function verifyOAuthState(state: string): {
   churchId: string;
   userId: string;
-  provider: "google" | "facebook";
+  provider: "google" | "facebook" | "youtube";
   returnTo?: string;
 } | null {
   const [body, sig] = state.split(SEP);
@@ -48,7 +54,7 @@ export function verifyOAuthState(state: string): {
     ) as {
       churchId: string;
       userId: string;
-      provider: "google" | "facebook";
+      provider: "google" | "facebook" | "youtube";
     };
     if (!parsed.churchId || !parsed.userId || !parsed.provider) return null;
     return parsed;

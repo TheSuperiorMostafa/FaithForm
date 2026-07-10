@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { escapeHtml } from "@/lib/email/escape-html";
 import { absoluteAppPath, getCanonicalSiteUrl } from "@/lib/site-url";
 
 function buildInviteHtml(params: {
@@ -7,7 +8,7 @@ function buildInviteHtml(params: {
   adminFirstName?: string;
 }): string {
   const greeting = params.adminFirstName
-    ? `Hi ${params.adminFirstName},`
+    ? `Hi ${escapeHtml(params.adminFirstName)},`
     : "Hello,";
 
   return `<!DOCTYPE html>
@@ -30,7 +31,7 @@ function buildInviteHtml(params: {
             <td style="padding:40px;">
               <p style="margin:0 0 16px;font-size:16px;color:#6B7280;line-height:1.5;">${greeting}</p>
               <h1 style="margin:0 0 20px;font-size:24px;font-weight:700;color:#002D5F;line-height:1.3;">
-                You've been invited to set up ${params.churchName} on FaithForm
+                You've been invited to set up ${escapeHtml(params.churchName)} on FaithForm
               </h1>
               <p style="margin:0 0 28px;font-size:16px;color:#374151;line-height:1.6;">
                 FaithForm helps your church team track attendance, manage announcements,
@@ -81,7 +82,7 @@ export async function sendInviteEmail(
 
   if (!apiKey) {
     console.log(
-      `[FaithForm] Invite email (no RESEND_API_KEY): ${params.email} → ${inviteUrl}`,
+      `[FaithForm] Invite email (no RESEND_API_KEY): ${params.email} (not sent)`,
     );
     return { sent: false, inviteUrl };
   }
@@ -104,7 +105,7 @@ export async function sendInviteEmail(
   }
 
   console.log(
-    `[FaithForm] Invite sent to ${params.email} → ${inviteUrl} (site: ${getCanonicalSiteUrl()})`,
+    `[FaithForm] Invite sent to ${params.email} (site: ${getCanonicalSiteUrl()})`,
   );
 
   return { sent: true, inviteUrl };

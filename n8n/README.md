@@ -1,6 +1,8 @@
 # n8n workflows
 
-## Attendance follow-up SMS
+> **Note:** Attendance follow-up SMS is now sent directly from the FaithForm app via SMSMobileAPI. The `attendance-follow-up.json` workflow below is **deprecated** and kept only for reference.
+
+## Attendance follow-up SMS (deprecated)
 
 Import [`attendance-follow-up.json`](./attendance-follow-up.json) into your n8n instance.
 
@@ -13,7 +15,11 @@ Import [`attendance-follow-up.json`](./attendance-follow-up.json) into your n8n 
    - `SMS_MOBILE_API_URL`
    - `SMS_MOBILE_API_KEY`
 
-### Payload (from FaithForm)
+### Current approach
+
+Set `SMS_MOBILE_API_KEY` in FaithForm (see [DEPLOY.md](../DEPLOY.md)). See [SMSMobileAPI docs](https://smsmobileapi.com/doc/).
+
+### Payload (legacy)
 
 After attendance submit, FaithForm POSTs:
 
@@ -39,7 +45,7 @@ After attendance submit, FaithForm POSTs:
 }
 ```
 
-### Status callback
+### Status callback (legacy)
 
 After sending (or skipping) each SMS, POST to `statusCallbackUrl` with header `x-faithform-secret`:
 

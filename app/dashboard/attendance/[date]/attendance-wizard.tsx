@@ -7,6 +7,7 @@ import { Checkbox } from "@base-ui/react/checkbox";
 import { ArrowLeft, Check, Plus, Search } from "lucide-react";
 
 import { addMember, submitAttendance } from "./actions";
+import { ATTENDANCE_FOLLOW_UP_ENABLED } from "@/lib/attendance/features";
 import { Button } from "@/components/ui/button";
 import type { AttendanceMember, MissedStreak } from "@/lib/queries/attendance";
 import { formatServiceDate } from "@/lib/utils/dates";
@@ -248,8 +249,7 @@ export function AttendanceWizard({
           </h1>
           <p className="text-base text-muted-foreground">
             {formatServiceDate(serviceDate)} — {submitResult.present} present,{" "}
-            {submitResult.absent} absent, {submitResult.followUps} follow-up
-            {submitResult.followUps === 1 ? "" : "s"} queued.
+            {submitResult.absent} absent.
           </p>
         </div>
         <Button
@@ -278,13 +278,13 @@ export function AttendanceWizard({
           {formatServiceDate(serviceDate)}
         </h1>
         <p className="text-base text-muted-foreground">
-          {step === "mark"
+          {step === "mark" || !ATTENDANCE_FOLLOW_UP_ENABLED
             ? "Mark each member as present or absent."
             : "Choose who should receive a follow-up text."}
         </p>
       </div>
 
-      {step === "mark" ? (
+      {step === "mark" || !ATTENDANCE_FOLLOW_UP_ENABLED ? (
         <>
           <div className="relative">
             <Search
@@ -486,15 +486,52 @@ export function AttendanceWizard({
             Add Someone New
           </Button>
 
+          {!ATTENDANCE_FOLLOW_UP_ENABLED ? (
+            <div className="flex flex-col gap-2">
+              <label
+                htmlFor="service-notes"
+                className="text-base font-semibold text-foreground"
+              >
+                Any notes about this service?
+              </label>
+              <textarea
+                id="service-notes"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                rows={4}
+                placeholder="Optional notes..."
+                className="w-full resize-none rounded-[10px] border-[1.5px] border-border bg-card px-4 py-3 text-base text-foreground outline-none ring-ring focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              />
+            </div>
+          ) : null}
+
+          {submitError ? (
+            <p className="text-base text-destructive" role="alert">
+              {submitError}
+            </p>
+          ) : null}
+
           <div className="fixed bottom-20 left-0 right-0 z-40 border-t border-border bg-background/95 px-4 py-3 backdrop-blur md:bottom-0 md:left-60">
             <Button
               type="button"
               size="lg"
               className="mx-auto h-14 w-full max-w-2xl text-base"
-              disabled={counts.unmarked > 0}
-              onClick={handleContinueToFollowUp}
+              disabled={
+                ATTENDANCE_FOLLOW_UP_ENABLED
+                  ? counts.unmarked > 0
+                  : counts.unmarked > 0 || isSubmitting
+              }
+              onClick={
+                ATTENDANCE_FOLLOW_UP_ENABLED
+                  ? handleContinueToFollowUp
+                  : handleSubmit
+              }
             >
-              Continue
+              {ATTENDANCE_FOLLOW_UP_ENABLED
+                ? "Continue"
+                : isSubmitting
+                  ? "Submitting..."
+                  : "Submit Attendance"}
             </Button>
           </div>
         </>

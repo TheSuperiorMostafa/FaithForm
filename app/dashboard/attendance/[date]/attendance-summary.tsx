@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft, Check, Clock, AlertCircle } from "lucide-react";
 
+import { ATTENDANCE_FOLLOW_UP_ENABLED } from "@/lib/attendance/features";
 import { Button } from "@/components/ui/button";
 import type { AttendanceEntryWithMember } from "@/lib/queries/attendance";
 import type { AttendanceRecordWithEntries } from "@/lib/queries/attendance";
@@ -73,20 +74,22 @@ export function AttendanceSummary({
             {record.total_absent ?? absent.length}
           </p>
         </div>
-        <div className="col-span-2 rounded-xl border border-border bg-card p-5 shadow-card dark:shadow-none sm:col-span-1">
-          <p className="text-sm text-muted-foreground">Follow-ups</p>
-          <p className="mt-1 font-heading text-4xl font-bold text-accent">
-            {followUps.length}
-          </p>
-          {followUps.length > 0 ? (
-            <p className="mt-1 text-xs text-muted-foreground">
-              {followUpsSent.length} sent
-              {followUpsQueued.length > 0
-                ? ` · ${followUpsQueued.length} queued`
-                : ""}
+        {ATTENDANCE_FOLLOW_UP_ENABLED ? (
+          <div className="col-span-2 rounded-xl border border-border bg-card p-5 shadow-card dark:shadow-none sm:col-span-1">
+            <p className="text-sm text-muted-foreground">Follow-ups</p>
+            <p className="mt-1 font-heading text-4xl font-bold text-accent">
+              {followUps.length}
             </p>
-          ) : null}
-        </div>
+            {followUps.length > 0 ? (
+              <p className="mt-1 text-xs text-muted-foreground">
+                {followUpsSent.length} sent
+                {followUpsQueued.length > 0
+                  ? ` · ${followUpsQueued.length} queued`
+                  : ""}
+              </p>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       {record.notes ? (
@@ -98,7 +101,7 @@ export function AttendanceSummary({
         </section>
       ) : null}
 
-      {followUps.length > 0 ? (
+      {ATTENDANCE_FOLLOW_UP_ENABLED && followUps.length > 0 ? (
         <section className="flex flex-col gap-3">
           <h2 className="font-heading text-lg font-semibold text-foreground">
             Follow-up texts
@@ -178,7 +181,9 @@ export function AttendanceSummary({
                   key={entry.id}
                   className={cn(
                     "flex min-h-14 items-center gap-3 rounded-xl border border-border bg-card px-4",
-                    !entry.follow_up_requested && "opacity-70",
+                    ATTENDANCE_FOLLOW_UP_ENABLED &&
+                      !entry.follow_up_requested &&
+                      "opacity-70",
                   )}
                 >
                   <div
@@ -190,7 +195,7 @@ export function AttendanceSummary({
                   <span className="text-base font-medium text-foreground">
                     {member.first_name} {member.last_name}
                   </span>
-                  {!entry.follow_up_requested ? (
+                  {ATTENDANCE_FOLLOW_UP_ENABLED && !entry.follow_up_requested ? (
                     <span className="ml-auto text-sm text-muted-foreground">
                       No follow-up
                     </span>

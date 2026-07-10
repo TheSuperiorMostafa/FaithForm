@@ -29,6 +29,8 @@ export function SermonList({ sermons }: { sermons: Sermon[] }) {
                 <div className="min-w-0">
                   <p className="truncate font-heading text-lg font-semibold">{s.title}</p>
                   <p className="truncate text-sm text-muted-foreground">
+                    {s.sermon_date &&
+                      `${new Date(`${s.sermon_date}T12:00:00`).toLocaleDateString()} · `}
                     {s.topic}
                     {s.scripture_refs.length > 0 &&
                       ` · ${s.scripture_refs.join(", ")}`}

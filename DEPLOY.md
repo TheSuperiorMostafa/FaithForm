@@ -22,9 +22,15 @@ Set these in **Vercel → Project → Settings → Environment Variables** (and 
 | `N8N_WEBHOOK_SECRET` | Shared secret for n8n webhook calls (attendance) and OAuth state signing | Generate a long random string |
 | `INTEGRATION_OAUTH_STATE_SECRET` | Signs Google/Facebook OAuth state (optional; falls back to `N8N_WEBHOOK_SECRET`) | Long random string |
 | `NEXT_PUBLIC_SITE_URL` | Public URL of the deployed app (no trailing slash) | `https://faithform.io` |
+| `STREAM_RELAY_HOST` | RTMP relay hostname shown in Settings | `stream.faithform.io` |
+| `NEXT_PUBLIC_STREAM_RELAY_HOST` | Optional client-facing copy of relay hostname | `stream.faithform.io` |
+| `STREAM_RELAY_WEBHOOK_SECRET` | Shared secret used between MediaMTX and FaithForm stream routes | Long random string |
 | `GOOGLE_CLIENT_ID` | Google OAuth client ID | [Google Cloud Console](https://console.cloud.google.com) → APIs & Services → Credentials |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth client secret | Same as above |
 | `GOOGLE_REDIRECT_URI` | OAuth callback URL | `https://faithform.io/api/integrations/google/callback` |
+| `YOUTUBE_CLIENT_ID` | YouTube OAuth client ID (for live automation) | Google Cloud Console → APIs & Services → Credentials |
+| `YOUTUBE_CLIENT_SECRET` | YouTube OAuth client secret | Same as above |
+| `YOUTUBE_REDIRECT_URI` | YouTube OAuth callback URL | `https://faithform.io/api/integrations/youtube/callback` |
 | `FACEBOOK_APP_ID` | Meta app ID | [Meta for Developers](https://developers.facebook.com) → your app → Settings → Basic |
 | `FACEBOOK_APP_SECRET` | Meta app secret | Same as above |
 | `FACEBOOK_REDIRECT_URI` | Facebook OAuth callback | `https://faithform.io/api/integrations/facebook/callback` |
@@ -33,10 +39,12 @@ Set these in **Vercel → Project → Settings → Environment Variables** (and 
 
 | Variable | What it is |
 |----------|------------|
-| `N8N_ATTENDANCE_WEBHOOK_URL` | n8n Webhook trigger URL for attendance follow-up SMS (import `n8n/attendance-follow-up.json`) |
-| `SMS_MOBILE_API_URL` / `SMS_MOBILE_API_KEY` | SMS provider credentials (configure in n8n, not in the Next.js app) |
-| `RESEND_API_KEY` | Planned for transactional email |
+| `SMS_MOBILE_API_KEY` | [SMSMobileAPI](https://smsmobileapi.com/doc/) key for attendance follow-up texts (sent from your connected phone) |
+| `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM_NUMBER` | Optional Twilio fallback if `SMS_MOBILE_API_KEY` is not set |
+| `RESEND_API_KEY` | Transactional email (onboarding invites) |
 | `INTERNAL_ALERT_EMAIL` | Planned for staff alerts |
+
+**Attendance follow-up SMS ops:** Install the SMSMobileAPI app on the church phone, keep it online, and add `SMS_MOBILE_API_KEY` to Vercel. Members need phone numbers on their profiles. Messages escalate (1st miss → template 1, … 5th+ → template 5).
 
 ---
 
@@ -84,6 +92,57 @@ Set these in **Vercel → Project → Settings → Environment Variables** (and 
    - The connecting user must manage at least one Facebook Page
 
 3. In FaithForm **Settings → Integrations**, connect Google then Facebook as a church admin.
+
+### YouTube Live API setup (automation)
+
+1. In Google Cloud Console, enable **YouTube Data API v3** for your production project.
+2. Configure OAuth consent screen and add your production domain.
+3. Create OAuth web credentials with redirect URI: `https://faithform.io/api/integrations/youtube/callback`.
+4. Add `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`, and `YOUTUBE_REDIRECT_URI` to Vercel env.
+5. In FaithForm **Live Streaming**, connect YouTube under Platform API automation.
+
+### Live streaming relay
+
+1. Point `stream.faithform.io` at your relay box and add the three stream env vars above to Vercel.
+2. Run the new Supabase migration `0030_stream_relay.sql` (or `pnpm db:stream-relay` with `DATABASE_URL` set).
+3. Upload the contents of `infra/stream-relay/` to the relay server and run:
+
+   ```bash
+   sudo bash ~/scripts/bootstrap.sh
+   ```
+
+4. Add the same `STREAM_RELAY_WEBHOOK_SECRET` value to `/etc/faithform-stream-relay.env` on the relay.
+5. In FaithForm **Live Streaming**, connect YouTube/Facebook, schedule services, and copy the watch URL + encoder credentials.
+
+6. Run stream scheduling migrations: `pnpm db:stream-scheduling` (applies `0033`–`0035`).
+
+7. Set `NEXT_PUBLIC_STREAM_HLS_BASE_URL=https://stream.faithform.io:8888` and `STREAM_CRON_SECRET` in Vercel.
+
+8. **Browser studio ingest (WebSocket)** — the relay runs `ws-ingest.py` on port `8090`. Expose it through a stable HTTPS/WSS endpoint and set in Vercel:
+
+   ```bash
+   STREAM_WS_INGEST_UPSTREAM_URL=wss://ingest.stream.faithform.io
+   STREAM_HLS_UPSTREAM_URL=https://hls.stream.faithform.io
+   ```
+
+   **Named Cloudflare Tunnel (recommended)** — do not rely on ephemeral `trycloudflare.com` URLs after relay restarts:
+
+   1. Install `cloudflared` on the relay box and authenticate: `cloudflared tunnel login`
+   2. Create a tunnel: `cloudflared tunnel create faithform-stream`
+   3. Route DNS in Cloudflare:
+      - `hls.stream.faithform.io` → `http://127.0.0.1:8888`
+      - `ingest.stream.faithform.io` → `http://127.0.0.1:8090` (WebSocket upgrade supported)
+   4. Run the tunnel as a systemd service so URLs survive reboots.
+   5. Update Vercel env vars above and redeploy.
+
+   If you open HLS port `8888` on the relay firewall instead, you can skip the HLS tunnel and keep only the WS ingest tunnel for browser studio.
+
+9. **Scheduled start / syndication retry** — Vercel Hobby allows only daily crons, so poll these endpoints every 2 minutes from an external cron (e.g. cron-job.org) or the relay box:
+
+   - `GET https://faithform.io/api/stream/scheduled-start?secret=YOUR_STREAM_CRON_SECRET`
+   - `GET https://faithform.io/api/stream/syndication/retry?secret=YOUR_STREAM_CRON_SECRET`
+
+   Or upgrade to Vercel Pro and add both paths to `vercel.json` crons at `*/2 * * * *`.
 
    Or run only the sermon migration locally:
 

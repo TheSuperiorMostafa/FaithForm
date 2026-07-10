@@ -1,12 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { headers } from "next/headers";
 
+import { sendAttendanceFollowUpTexts } from "@/lib/attendance/send-follow-up-texts";
+import { ATTENDANCE_FOLLOW_UP_ENABLED } from "@/lib/attendance/features";
 import { logActivity } from "@/lib/activity/log";
+import { createMember } from "@/app/dashboard/people/actions";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { getChurchTimezone } from "@/lib/queries/attendance";
+import { getChurchTimezone, getPriorConsecutiveAbsences } from "@/lib/queries/attendance";
 import { getCurrentChurchId } from "@/lib/queries/dashboard";
 import { isSundayDate } from "@/lib/utils/dates";
 
@@ -70,41 +72,25 @@ export async function addMember(input: {
   lastName: string;
   phone?: string;
 }): Promise<AddMemberResult> {
-  const context = await resolveChurchContext();
+  const result = await createMember(input);
 
-  if (!context.ok) {
-    return { ok: false, error: context.error };
+  if (!result.ok) {
+    return result;
   }
 
-  const firstName = input.firstName.trim();
-  const lastName = input.lastName.trim();
-  const phone = input.phone?.trim() || null;
+  revalidatePath(`/dashboard/attendance`);
 
-  if (!firstName || !lastName) {
-    return { ok: false, error: "First and last name are required." };
-  }
-
-  const admin = createAdminClient();
-
-  const { data, error } = await admin
-    .from("members")
-    .insert({
-      church_id: context.churchId,
-      first_name: firstName,
-      last_name: lastName,
-      phone,
-      is_active: true,
-    })
-    .select("id, first_name, last_name, phone, photo_url")
-    .single();
-
-  if (error || !data) {
-    return { ok: false, error: error?.message ?? "Could not add member." };
-  }
-
-  revalidatePath("/dashboard/attendance");
-
-  return { ok: true, member: { ...data, attendance_count: 0 } };
+  return {
+    ok: true,
+    member: {
+      id: result.member.id,
+      first_name: result.member.first_name,
+      last_name: result.member.last_name,
+      phone: result.member.phone,
+      photo_url: result.member.photo_url,
+      attendance_count: 0,
+    },
+  };
 }
 
 export async function submitAttendance(input: {
@@ -127,6 +113,20 @@ export async function submitAttendance(input: {
 
   if (entries.length === 0) {
     return { ok: false, error: "No attendance entries to save." };
+  }
+
+  const memberIds = entries.map((entry) => entry.memberId);
+  const { data: validMembers } = await supabase
+    .from("members")
+    .select("id")
+    .eq("church_id", churchId)
+    .in("id", memberIds);
+
+  if ((validMembers?.length ?? 0) !== memberIds.length) {
+    return {
+      ok: false,
+      error: "One or more members are invalid for this church.",
+    };
   }
 
   const { data: existing } = await supabase
@@ -201,12 +201,20 @@ export async function submitAttendance(input: {
     firstName: string;
     lastName: string;
     phone: string | null;
+    consecutiveAbsent: number;
   };
 
   let followUpMembers: FollowUpMemberPayload[] = [];
 
   if (followUpMemberIds.length > 0) {
     const admin = createAdminClient();
+    const priorAbsences = await getPriorConsecutiveAbsences(
+      supabase,
+      churchId,
+      serviceDate,
+      followUpMemberIds,
+    );
+
     const { data: followUpEntries } = await admin
       .from("attendance_entries")
       .select("id, member_id")
@@ -220,6 +228,7 @@ export async function submitAttendance(input: {
     const { data: memberRows } = await admin
       .from("members")
       .select("id, first_name, last_name, phone")
+      .eq("church_id", churchId)
       .in("id", followUpMemberIds);
 
     followUpMembers = (memberRows ?? []).map((member) => ({
@@ -228,38 +237,16 @@ export async function submitAttendance(input: {
       firstName: member.first_name,
       lastName: member.last_name,
       phone: member.phone,
+      consecutiveAbsent: (priorAbsences.get(member.id) ?? 0) + 1,
     }));
   }
 
-  const webhookPayload = {
-    churchId,
-    serviceDate,
-    recordId: record.id,
-    totalPresent,
-    totalAbsent,
-    followUpMemberIds,
-    followUpMembers,
-    notes: notes?.trim() || null,
-    statusCallbackUrl: `${process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"}/api/webhooks/attendance-follow-up-status`,
-  };
-
-  try {
-    const headersList = headers();
-    const origin =
-      headersList.get("origin") ??
-      process.env.NEXT_PUBLIC_SITE_URL ??
-      "http://localhost:3000";
-
-    await fetch(`${origin}/api/webhooks/attendance-submitted`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-faithform-secret": process.env.N8N_WEBHOOK_SECRET ?? "",
-      },
-      body: JSON.stringify(webhookPayload),
-    });
-  } catch (webhookError) {
-    console.error("attendance webhook failed:", webhookError);
+  if (ATTENDANCE_FOLLOW_UP_ENABLED && followUpMembers.length > 0) {
+    try {
+      await sendAttendanceFollowUpTexts(churchId, followUpMembers);
+    } catch (followUpError) {
+      console.error("attendance follow-up SMS failed:", followUpError);
+    }
   }
 
   revalidatePath("/dashboard/attendance");

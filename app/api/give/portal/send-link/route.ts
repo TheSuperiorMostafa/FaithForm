@@ -3,8 +3,13 @@ import { z } from "zod";
 import { sendPortalMagicLinkEmail } from "@/lib/email/giving";
 import { upsertGivingDonor } from "@/lib/giving/donors";
 import { createPortalMagicLink } from "@/lib/giving/portal-session";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { getChurchBySlug } from "@/lib/queries/giving";
+import {
+  assertRateLimit,
+  getClientIp,
+  rateLimitResponse,
+} from "@/lib/security/rate-limit";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 const bodySchema = z.object({
   slug: z.string().min(1),
@@ -22,6 +27,15 @@ export async function POST(request: Request) {
   const parsed = bodySchema.safeParse(json);
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  }
+
+  const ip = getClientIp(request);
+  const rate = await assertRateLimit(`portal-link:${ip}:${parsed.data.slug}`, {
+    limit: 5,
+    windowMs: 15 * 60 * 1000,
+  });
+  if (!rate.ok) {
+    return rateLimitResponse(rate.retryAfterSeconds);
   }
 
   const church = await getChurchBySlug(parsed.data.slug);

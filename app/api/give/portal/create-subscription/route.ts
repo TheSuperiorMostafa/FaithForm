@@ -115,7 +115,7 @@ export async function POST(request: Request) {
       fundName: fund.name,
     });
 
-  await linkDonorStripeCustomer(donorId, customerId);
+  await linkDonorStripeCustomer(church.churchId, donorId, customerId);
 
   return NextResponse.json({
     subscriptionId: subscription.id,
