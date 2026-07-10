@@ -9,7 +9,6 @@ export WS_INGEST_HOST=127.0.0.1
 export WS_INGEST_PORT=8090
 export FFMPEG_PATH=/home/mostafa/bin/ffmpeg
 
-pkill -f "http-ingest.py" 2>/dev/null || true
 pkill -f "ws-ingest.py" 2>/dev/null || true
 sleep 1
 

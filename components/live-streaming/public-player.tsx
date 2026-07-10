@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Radio, Volume2, VolumeX } from "lucide-react";
+import { Maximize, Minimize, Radio, Volume2, VolumeX } from "lucide-react";
 import Link from "next/link";
 import {
   attachHlsErrorRecovery,
@@ -10,6 +10,11 @@ import {
   seekVideoToLiveEdge,
 } from "@/lib/stream/hls-player";
 import { getGivePageUrl } from "@/lib/site-url";
+import {
+  isElementFullscreen,
+  subscribeFullscreenChange,
+  togglePlayerFullscreen,
+} from "@/lib/stream/fullscreen";
 import { cn } from "@/lib/utils";
 
 type PublicPlayerProps = {
@@ -36,11 +41,13 @@ export function PublicPlayer({
   givingColor,
 }: PublicPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const playerRef = useRef<HTMLDivElement>(null);
   const [countdown, setCountdown] = useState<string | null>(null);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [audioMuted, setAudioMuted] = useState(true);
   const [secondsBehind, setSecondsBehind] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   useEffect(() => {
     if (status !== "countdown" || !startsAt || !countdownEnabled) {
@@ -84,6 +91,11 @@ export function PublicPlayer({
     video.addEventListener("play", onPlay);
     video.addEventListener("pause", onPause);
 
+    const onWebkitBeginFullscreen = () => setIsFullscreen(true);
+    const onWebkitEndFullscreen = () => setIsFullscreen(false);
+    video.addEventListener("webkitbeginfullscreen", onWebkitBeginFullscreen);
+    video.addEventListener("webkitendfullscreen", onWebkitEndFullscreen);
+
     void (async () => {
       const { default: Hls } = await import("hls.js");
       if (cancelled || !videoRef.current) return;
@@ -124,10 +136,18 @@ export function PublicPlayer({
       cancelled = true;
       video.removeEventListener("play", onPlay);
       video.removeEventListener("pause", onPause);
+      video.removeEventListener("webkitbeginfullscreen", onWebkitBeginFullscreen);
+      video.removeEventListener("webkitendfullscreen", onWebkitEndFullscreen);
       stopLiveSync?.();
       hls?.destroy();
     };
   }, [status, playbackUrl]);
+
+  useEffect(() => {
+    return subscribeFullscreenChange(() => {
+      setIsFullscreen(isElementFullscreen(playerRef.current));
+    });
+  }, []);
 
   const handleJumpToLive = () => {
     const video = videoRef.current;
@@ -143,6 +163,13 @@ export function PublicPlayer({
     video.muted = next;
     setAudioMuted(next);
     if (!next) void video.play().catch(() => null);
+  };
+
+  const handleToggleFullscreen = () => {
+    const player = playerRef.current;
+    const video = videoRef.current;
+    if (!player) return;
+    void togglePlayerFullscreen({ container: player, video });
   };
 
   const showJumpToLive = secondsBehind > 5;
@@ -162,16 +189,36 @@ export function PublicPlayer({
         </div>
       </header>
 
-      <div className="overflow-hidden rounded-2xl border border-border bg-black shadow-lg">
+      <div className="overflow-hidden rounded-2xl border border-border bg-black shadow-lg [&:has(:fullscreen)]:overflow-visible">
         {status === "live" && playbackUrl ? (
-          <div className="relative">
+          <div
+            ref={playerRef}
+            className={cn(
+              "relative aspect-video w-full bg-black",
+              isFullscreen &&
+                "fixed inset-0 z-[9999] flex aspect-auto h-dvh w-dvw max-h-none max-w-none items-center justify-center",
+              "[&:-webkit-full-screen]:fixed [&:-webkit-full-screen]:inset-0 [&:-webkit-full-screen]:z-[9999]",
+              "[&:-webkit-full-screen]:flex [&:-webkit-full-screen]:aspect-auto [&:-webkit-full-screen]:h-dvh",
+              "[&:-webkit-full-screen]:w-dvw [&:-webkit-full-screen]:max-h-none [&:-webkit-full-screen]:max-w-none",
+              "[&:-webkit-full-screen]:items-center [&:-webkit-full-screen]:justify-center",
+              "[&:fullscreen]:fixed [&:fullscreen]:inset-0 [&:fullscreen]:z-[9999]",
+              "[&:fullscreen]:flex [&:fullscreen]:aspect-auto [&:fullscreen]:h-dvh [&:fullscreen]:w-dvw",
+              "[&:fullscreen]:max-h-none [&:fullscreen]:max-w-none",
+              "[&:fullscreen]:items-center [&:fullscreen]:justify-center",
+            )}
+          >
             <video
               ref={videoRef}
-              className="aspect-video w-full"
+              className={cn(
+                "h-full w-full bg-black",
+                isFullscreen
+                  ? "max-h-dvh max-w-dvw object-contain"
+                  : "aspect-video object-cover",
+              )}
               autoPlay
               muted={audioMuted}
               playsInline
-              disablePictureInPicture
+              controls={false}
             />
 
             <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-3">
@@ -186,7 +233,7 @@ export function PublicPlayer({
               ) : null}
             </div>
 
-            <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-3 bg-gradient-to-t from-black/80 to-transparent px-3 pb-3 pt-10">
+            <div className="absolute inset-x-0 bottom-0 z-10 flex items-center justify-between gap-3 bg-gradient-to-t from-black/80 to-transparent px-3 pb-3 pt-10">
               <button
                 type="button"
                 onClick={handleToggleMute}
@@ -225,6 +272,19 @@ export function PublicPlayer({
                     {isPlaying ? "Playing live" : "Connecting…"}
                   </span>
                 )}
+
+                <button
+                  type="button"
+                  onClick={handleToggleFullscreen}
+                  className="inline-flex items-center justify-center rounded-lg bg-black/60 p-2 text-white backdrop-blur-sm transition hover:bg-black/80"
+                  aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+                >
+                  {isFullscreen ? (
+                    <Minimize className="size-4" aria-hidden />
+                  ) : (
+                    <Maximize className="size-4" aria-hidden />
+                  )}
+                </button>
               </div>
             </div>
 
