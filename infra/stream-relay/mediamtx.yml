@@ -19,7 +19,8 @@ hls: yes
 hlsAddress: :8888
 hlsAllowOrigin: '*'
 hlsVariant: mpegts
-hlsSegmentDuration: 2s
+hlsSegmentDuration: 1s
+hlsSegmentCount: 4
 webrtc: yes
 webrtcAddress: :8889
 webrtcLocalUDPAddress: :8189

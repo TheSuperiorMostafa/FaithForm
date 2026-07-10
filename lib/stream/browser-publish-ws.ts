@@ -47,7 +47,7 @@ export async function publishViaWebSocket(
     }
   });
 
-  recorder.start(250);
+  recorder.start(100);
 
   return {
     stop: () => {

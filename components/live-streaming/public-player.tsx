@@ -1,10 +1,16 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Volume2, VolumeX } from "lucide-react";
+import { Radio, Volume2, VolumeX } from "lucide-react";
 import Link from "next/link";
-import { attachHlsErrorRecovery, createHlsPlayer } from "@/lib/stream/hls-player";
+import {
+  attachHlsErrorRecovery,
+  attachLiveEdgeSync,
+  createLiveHlsPlayer,
+  seekVideoToLiveEdge,
+} from "@/lib/stream/hls-player";
 import { getGivePageUrl } from "@/lib/site-url";
+import { cn } from "@/lib/utils";
 
 type PublicPlayerProps = {
   churchName: string;
@@ -33,6 +39,8 @@ export function PublicPlayer({
   const [countdown, setCountdown] = useState<string | null>(null);
   const [playbackError, setPlaybackError] = useState<string | null>(null);
   const [audioMuted, setAudioMuted] = useState(true);
+  const [secondsBehind, setSecondsBehind] = useState(0);
+  const [isPlaying, setIsPlaying] = useState(false);
 
   useEffect(() => {
     if (status !== "countdown" || !startsAt || !countdownEnabled) {
@@ -60,17 +68,28 @@ export function PublicPlayer({
   useEffect(() => {
     if (status !== "live" || !playbackUrl || !videoRef.current) {
       setPlaybackError(null);
+      setSecondsBehind(0);
+      setIsPlaying(false);
       return;
     }
 
     let hls: import("hls.js").default | null = null;
+    let stopLiveSync: (() => void) | null = null;
     let cancelled = false;
+    const video = videoRef.current;
+
+    const onPlay = () => setIsPlaying(true);
+    const onPause = () => setIsPlaying(false);
+
+    video.addEventListener("play", onPlay);
+    video.addEventListener("pause", onPause);
 
     void (async () => {
       const { default: Hls } = await import("hls.js");
       if (cancelled || !videoRef.current) return;
+
       if (Hls.isSupported()) {
-        const instance = createHlsPlayer(Hls);
+        const instance = createLiveHlsPlayer(Hls);
         attachHlsErrorRecovery(instance, Hls, () => {
           if (!cancelled) {
             setPlaybackError("Could not play the live stream. Try refreshing.");
@@ -80,19 +99,53 @@ export function PublicPlayer({
         instance.attachMedia(videoRef.current);
         instance.on(Hls.Events.MANIFEST_PARSED, () => {
           setPlaybackError(null);
+          seekVideoToLiveEdge(videoRef.current!, 1);
           void videoRef.current?.play().catch(() => null);
         });
         hls = instance;
       } else if (videoRef.current.canPlayType("application/vnd.apple.mpegurl")) {
         videoRef.current.src = playbackUrl;
+        videoRef.current.addEventListener(
+          "loadedmetadata",
+          () => {
+            seekVideoToLiveEdge(videoRef.current!, 1);
+            void videoRef.current?.play().catch(() => null);
+          },
+          { once: true },
+        );
       }
+
+      stopLiveSync = attachLiveEdgeSync(videoRef.current, (drift) => {
+        if (!cancelled) setSecondsBehind(Math.max(0, drift));
+      });
     })();
 
     return () => {
       cancelled = true;
+      video.removeEventListener("play", onPlay);
+      video.removeEventListener("pause", onPause);
+      stopLiveSync?.();
       hls?.destroy();
     };
   }, [status, playbackUrl]);
+
+  const handleJumpToLive = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    seekVideoToLiveEdge(video, 0.5);
+    void video.play().catch(() => null);
+  };
+
+  const handleToggleMute = () => {
+    const video = videoRef.current;
+    if (!video) return;
+    const next = !audioMuted;
+    video.muted = next;
+    setAudioMuted(next);
+    if (!next) void video.play().catch(() => null);
+  };
+
+  const showJumpToLive = secondsBehind > 5;
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8">
@@ -115,43 +168,68 @@ export function PublicPlayer({
             <video
               ref={videoRef}
               className="aspect-video w-full"
-              controls
               autoPlay
               muted={audioMuted}
               playsInline
+              disablePictureInPicture
             />
-            {audioMuted ? (
+
+            <div className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between p-3">
+              <span className="inline-flex items-center gap-2 rounded-full bg-red-600 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-white shadow-lg">
+                <span className="size-2 animate-pulse rounded-full bg-white" />
+                Live
+              </span>
+              {showJumpToLive ? (
+                <span className="rounded-full bg-black/60 px-2.5 py-1 text-[11px] text-white/80 backdrop-blur-sm">
+                  {Math.round(secondsBehind)}s behind
+                </span>
+              ) : null}
+            </div>
+
+            <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-3 bg-gradient-to-t from-black/80 to-transparent px-3 pb-3 pt-10">
               <button
                 type="button"
-                onClick={() => {
-                  const video = videoRef.current;
-                  if (!video) return;
-                  video.muted = false;
-                  setAudioMuted(false);
-                  void video.play().catch(() => null);
-                }}
-                className="absolute left-4 top-4 inline-flex items-center gap-2 rounded-full bg-black/70 px-4 py-2 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-black/85"
+                onClick={handleToggleMute}
+                className="inline-flex items-center gap-2 rounded-lg bg-black/60 px-3 py-2 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-black/80"
               >
-                <VolumeX className="size-4" aria-hidden />
-                Tap to unmute
+                {audioMuted ? (
+                  <>
+                    <VolumeX className="size-4" aria-hidden />
+                    Unmute
+                  </>
+                ) : (
+                  <>
+                    <Volume2 className="size-4" aria-hidden />
+                    Mute
+                  </>
+                )}
               </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  const video = videoRef.current;
-                  if (!video) return;
-                  video.muted = true;
-                  setAudioMuted(true);
-                }}
-                className="absolute left-4 top-4 inline-flex items-center gap-2 rounded-full bg-black/50 px-3 py-1.5 text-xs text-white/90 backdrop-blur-sm"
-              >
-                <Volume2 className="size-3.5" aria-hidden />
-                Mute
-              </button>
-            )}
+
+              <div className="flex items-center gap-2">
+                {showJumpToLive ? (
+                  <button
+                    type="button"
+                    onClick={handleJumpToLive}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-white/15 px-3 py-2 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-white/25"
+                  >
+                    <Radio className="size-4" aria-hidden />
+                    Jump to live
+                  </button>
+                ) : (
+                  <span
+                    className={cn(
+                      "text-xs text-white/70",
+                      isPlaying && "text-emerald-300",
+                    )}
+                  >
+                    {isPlaying ? "Playing live" : "Connecting…"}
+                  </span>
+                )}
+              </div>
+            </div>
+
             {playbackError ? (
-              <p className="absolute inset-x-0 bottom-0 bg-black/70 px-4 py-2 text-center text-xs text-white/90">
+              <p className="absolute inset-x-0 bottom-14 bg-black/70 px-4 py-2 text-center text-xs text-white/90">
                 {playbackError}
               </p>
             ) : null}
