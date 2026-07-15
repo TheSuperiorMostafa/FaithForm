@@ -34,7 +34,7 @@ export function validateMemberInput(
     if (!normalized) {
       return {
         ok: false,
-        error: "Enter a valid phone number (e.g. 2709709414).",
+        error: "Enter a valid phone number (e.g. 502xxxxxxx).",
       };
     }
     phone = normalized;

@@ -176,7 +176,7 @@ export function MemberFormPanel({
             value={phone}
             onChange={(event) => setPhone(event.target.value)}
             readOnly={readOnly}
-            placeholder="(270) 970-9414"
+            placeholder="(502) xxx-xxxx"
             className={inputClassName}
           />
           {!readOnly ? (
