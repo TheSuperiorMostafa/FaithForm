@@ -182,14 +182,47 @@ export function MonthCalendar({
 
   const handlePublished = (announcement: AnnouncementRow) => {
     if (!selectedEvent?.googleEventId) return;
+    const googleEventId = selectedEvent.googleEventId;
+
+    // Prefer the Google event id from the submitted announcement when present.
+    const eventId = announcement.google_event_id ?? googleEventId;
+
+    const updatedEvent: CalendarEventPreview = {
+      ...selectedEvent,
+      googleEventId: eventId,
+      title: announcement.title,
+      location: announcement.event_location ?? "",
+      startAt: announcement.start_at,
+      endAt: announcement.end_at,
+    };
+
     setPublishedByGoogleId((prev) => ({
       ...prev,
-      [selectedEvent.googleEventId]: announcement.id,
+      [eventId]: announcement.id,
     }));
     setPublishedAnnouncements((prev) => ({
       ...prev,
-      [selectedEvent.googleEventId]: announcement,
+      [eventId]: announcement,
     }));
+
+    // Immediately reflect edits on the month grid (title, day, time).
+    setEvents((prev) => {
+      const without = prev.filter((e) => e.googleEventId !== eventId);
+      return [...without, updatedEvent];
+    });
+    setSelectedEvent(updatedEvent);
+
+    const eventDate = new Date(updatedEvent.startAt);
+    const y = eventDate.getFullYear();
+    const m = eventDate.getMonth();
+    setSelectedDay(startOfDay(eventDate));
+
+    // Refetch so Google Calendar patches (and published maps) stay in sync.
+    if (y !== year || m !== monthIndex) {
+      setYear(y);
+      setMonthIndex(m);
+    }
+    void fetchMonth(y, m, eventId);
   };
 
   const handleEventCreated = (event: CalendarEventPreview) => {

@@ -14,7 +14,7 @@ import {
   MAX_SIMPLE_PASSAGES,
   type SimplePassageInput,
 } from "@/lib/sermon-builder/types";
-import { isValidSlideThemeId } from "@/lib/queries/slide-themes";
+import { isValidSlideThemeId, listSlideThemes } from "@/lib/queries/slide-themes";
 
 export type SimpleSermonSaveBody = {
   title: string;
@@ -92,7 +92,7 @@ export async function validateSimpleSermonBody(
 ): Promise<{ error: string; status: number } | ValidatedSimpleSermon> {
   const title = body.title?.trim();
   const translation = body.translation?.trim();
-  const theme_id = body.theme_id?.trim();
+  let theme_id = body.theme_id?.trim() ?? "";
   const sermon_date = body.sermon_date?.trim() || null;
   const passages = normalizePassages(body);
 
@@ -110,7 +110,15 @@ export async function validateSimpleSermonBody(
     return { error: "This translation is not available yet", status: 400 };
   }
   if (!theme_id || !(await isValidSlideThemeId(theme_id))) {
-    return { error: "Invalid theme", status: 400 };
+    const themes = await listSlideThemes();
+    const fallback =
+      themes.find((t) => t.id === "midnight") ??
+      themes.find((t) => t.featured) ??
+      themes[0];
+    if (!fallback) {
+      return { error: "Invalid theme", status: 400 };
+    }
+    theme_id = fallback.id;
   }
   if (!isValidSermonDate(sermon_date)) {
     return { error: "Invalid sermon date", status: 400 };

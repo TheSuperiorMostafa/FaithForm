@@ -96,7 +96,9 @@ export async function createPortalMagicLink(params: {
   });
 
   const { getCanonicalSiteUrl } = await import("@/lib/site-url");
-  return `${getCanonicalSiteUrl()}/give/${params.churchSlug}/portal?token=${token}`;
+  const site = getCanonicalSiteUrl().replace(/\/$/, "");
+  // Route Handler (not the portal page) so the session cookie can be set.
+  return `${site}/api/give/portal/auth?slug=${encodeURIComponent(params.churchSlug)}&token=${encodeURIComponent(token)}`;
 }
 
 export async function consumeMagicLinkToken(

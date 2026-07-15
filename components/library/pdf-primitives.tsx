@@ -353,7 +353,6 @@ export function ReportHeader({
         </View>
       </View>
       <View style={styles.headerRight}>
-        <Text style={styles.poweredBy}>Powered by FaithForm</Text>
         <Text style={styles.reportType}>{reportType}</Text>
       </View>
     </View>

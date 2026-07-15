@@ -131,26 +131,34 @@ export async function createSermon(input: {
   sermon_date?: string | null;
 }): Promise<Sermon> {
   const supabase = db();
-  const { data, error } = await supabase
-    .from("sermons")
-    .insert({
-      church_id: input.churchId,
-      created_by: input.userId,
-      title: input.title ?? "Untitled Sermon",
-      topic: input.topic,
-      scripture_refs: input.scripture_refs,
-      audience: input.audience,
-      duration_min: input.duration_min,
-      style_notes: input.style_notes ?? null,
-      series_id: input.series_id ?? null,
-      kind: input.kind ?? "advanced",
-      theme_id: input.theme_id ?? null,
-      translation: input.translation ?? null,
-      sermon_date: input.sermon_date ?? null,
-      status: "draft",
-    })
-    .select()
-    .single();
+  const row: Record<string, unknown> = {
+    church_id: input.churchId,
+    created_by: input.userId,
+    title: input.title ?? "Untitled Sermon",
+    topic: input.topic,
+    scripture_refs: input.scripture_refs,
+    audience: input.audience,
+    duration_min: input.duration_min,
+    style_notes: input.style_notes ?? null,
+    series_id: input.series_id ?? null,
+    kind: input.kind ?? "advanced",
+    theme_id: input.theme_id ?? null,
+    translation: input.translation ?? null,
+    sermon_date: input.sermon_date ?? null,
+    status: "draft",
+  };
+
+  let { data, error } = await supabase.from("sermons").insert(row).select().single();
+
+  // Older DBs may not have sermon_date yet — retry without it so create still works.
+  if (
+    error &&
+    /sermon_date/i.test(error.message) &&
+    Object.prototype.hasOwnProperty.call(row, "sermon_date")
+  ) {
+    delete row.sermon_date;
+    ({ data, error } = await supabase.from("sermons").insert(row).select().single());
+  }
 
   if (error) throw error;
 
@@ -200,12 +208,26 @@ export async function updateSermon(
     dbPatch.published_at = now;
   }
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from("sermons")
     .update(dbPatch)
     .eq("id", id)
     .select()
     .single();
+
+  if (
+    error &&
+    /sermon_date/i.test(error.message) &&
+    Object.prototype.hasOwnProperty.call(dbPatch, "sermon_date")
+  ) {
+    delete dbPatch.sermon_date;
+    ({ data, error } = await supabase
+      .from("sermons")
+      .update(dbPatch)
+      .eq("id", id)
+      .select()
+      .single());
+  }
 
   if (error) throw error;
 

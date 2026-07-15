@@ -38,12 +38,29 @@ export function pickBodyFontSize(text: string): number {
 function applySlideBackground(
   slide: { background: PptxGenJS.BackgroundProps },
   theme: SlideTheme,
+  imageData?: string | null,
 ): void {
-  if (theme.backgroundType === "image" && theme.imageUrl) {
-    slide.background = { path: theme.imageUrl };
+  if (theme.backgroundType === "image" && imageData) {
+    slide.background = { data: imageData };
     return;
   }
+  // Fall back to solid color if remote image fetch failed.
   slide.background = { color: theme.bg ?? "0E1428" };
+}
+
+async function resolveThemeImageData(
+  theme: SlideTheme,
+): Promise<string | null> {
+  if (theme.backgroundType !== "image" || !theme.imageUrl) return null;
+  try {
+    const res = await fetch(theme.imageUrl);
+    if (!res.ok) return null;
+    const buffer = Buffer.from(await res.arrayBuffer());
+    const contentType = res.headers.get("content-type") || "image/jpeg";
+    return `data:${contentType};base64,${buffer.toString("base64")}`;
+  } catch {
+    return null;
+  }
 }
 
 function imageTextShadow(theme: SlideTheme): PptxGenJS.ShadowProps | undefined {
@@ -74,6 +91,7 @@ export type SimplePptxInput = {
 
 export async function renderSimplePptx(input: SimplePptxInput): Promise<Buffer> {
   const theme = await getThemeAsync(input.themeId);
+  const imageData = await resolveThemeImageData(theme);
   const pptx = new PptxGenJS();
   pptx.author = "FaithForm";
   pptx.title = input.title;
@@ -92,7 +110,7 @@ export async function renderSimplePptx(input: SimplePptxInput): Promise<Buffer> 
   const shadow = imageTextShadow(theme);
 
   const titleSlide = pptx.addSlide();
-  applySlideBackground(titleSlide, theme);
+  applySlideBackground(titleSlide, theme, imageData);
   titleSlide.addText(input.title, {
     x: MARGIN_X,
     y: 2.2,
@@ -126,7 +144,7 @@ export async function renderSimplePptx(input: SimplePptxInput): Promise<Buffer> 
       const bodyText = verseChunkToText(chunk);
 
       const slide = pptx.addSlide();
-      applySlideBackground(slide, theme);
+      applySlideBackground(slide, theme, imageData);
 
       slide.addText(bodyText, {
         x: MARGIN_X,

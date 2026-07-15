@@ -10,14 +10,18 @@ export function PortalLogin({
   slug,
   churchName,
   logoUrl,
+  initialMessage = null,
+  initialIsError = false,
 }: {
   slug: string;
   churchName: string;
   logoUrl?: string | null;
+  initialMessage?: string | null;
+  initialIsError?: boolean;
 }) {
   const [email, setEmail] = useState("");
-  const [message, setMessage] = useState<string | null>(null);
-  const [isError, setIsError] = useState(false);
+  const [message, setMessage] = useState<string | null>(initialMessage);
+  const [isError, setIsError] = useState(initialIsError);
   const [pending, startTransition] = useTransition();
 
   const sendLink = () => {

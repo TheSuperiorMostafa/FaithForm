@@ -86,16 +86,22 @@ export const navItems: NavItem[] = [
     href: "/dashboard/library",
     icon: FileText,
   },
+];
+
+/** Utility links pinned near the user footer (above Admin). */
+export const utilityNavItems: NavItem[] = [
   {
     label: "Support",
     shortLabel: "Help",
     href: "/dashboard/support",
     icon: LifeBuoy,
+    sidebarOnly: true,
   },
   {
     label: "Settings",
     shortLabel: "Settings",
     href: "/dashboard/settings",
     icon: Settings,
+    sidebarOnly: true,
   },
 ];

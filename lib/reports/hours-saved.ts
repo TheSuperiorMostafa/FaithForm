@@ -245,6 +245,7 @@ export async function computeHoursSaved(
     minutes += weeklyM;
     tasks += inRangeAttendance.length;
 
+    // Only credit reports FaithForm actually generates today (monthly PDF).
     const reports = countAttendanceReportsInRange(
       inRangeAttendance,
       start,
@@ -259,26 +260,6 @@ export async function computeHoursSaved(
       );
       minutes += m;
       tasks += reports.monthly;
-    }
-    if (reports.quarterly > 0) {
-      const m = creditCatalogEntry(
-        automationMinutes,
-        byCategory,
-        "Quarterly Attendance Report",
-        reports.quarterly,
-      );
-      minutes += m;
-      tasks += reports.quarterly;
-    }
-    if (reports.annual > 0) {
-      const m = creditCatalogEntry(
-        automationMinutes,
-        byCategory,
-        "Annual Attendance Report",
-        reports.annual,
-      );
-      minutes += m;
-      tasks += reports.annual;
     }
   }
 

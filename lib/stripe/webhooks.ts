@@ -201,7 +201,7 @@ async function maybeSendDonationReceipt(params: {
 
   const { data: church } = await admin
     .from("churches")
-    .select("name, slug, ein")
+    .select("name, slug, ein, giving_primary_color, giving_accent_color")
     .eq("id", params.churchId)
     .maybeSingle();
 
@@ -221,6 +221,8 @@ async function maybeSendDonationReceipt(params: {
       month: "long",
       day: "numeric",
     }),
+    primaryColor: (church.giving_primary_color as string | null) ?? null,
+    accentColor: (church.giving_accent_color as string | null) ?? null,
   });
 }
 
@@ -522,7 +524,7 @@ async function handleInvoice(
     const admin = createAdminClient();
     const { data: church } = await admin
       .from("churches")
-      .select("name, slug")
+      .select("name, slug, giving_primary_color, giving_accent_color")
       .eq("id", churchId)
       .maybeSingle();
 
@@ -540,6 +542,8 @@ async function handleInvoice(
         donorName,
         churchName: (church?.name as string) ?? "Your church",
         churchSlug: (church?.slug as string) ?? "",
+        primaryColor: (church?.giving_primary_color as string | null) ?? null,
+        accentColor: (church?.giving_accent_color as string | null) ?? null,
       });
 
       if (subRow?.id) {

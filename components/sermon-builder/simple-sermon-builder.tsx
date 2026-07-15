@@ -11,6 +11,7 @@ import { SlidePreview } from "@/components/sermon-builder/slide-preview";
 import { ThemePicker } from "@/components/sermon-builder/theme-picker";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -186,9 +187,16 @@ export function SimpleSermonBuilder({
     fetch("/api/sermon/themes")
       .then((res) => res.json())
       .then((data) => {
-        if (Array.isArray(data.themes)) {
-          setLoadedThemes(data.themes as SlideTheme[]);
-        }
+        if (!Array.isArray(data.themes)) return;
+        const themes = data.themes as SlideTheme[];
+        setLoadedThemes(themes);
+        // Default "midnight" (or an edited theme) may be missing from the
+        // active catalog — coerce so save validation doesn't reject.
+        setThemeId((current) => {
+          if (themes.some((t) => t.id === current)) return current;
+          const featured = themes.find((t) => t.featured);
+          return featured?.id ?? themes[0]?.id ?? current;
+        });
       })
       .catch(() => {
         // Preview falls back to bundled JSON themes
@@ -374,12 +382,31 @@ export function SimpleSermonBuilder({
       const sermonId = isEditing ? editSermon!.id : data.sermon?.id;
       if (!sermonId) throw new Error("No sermon ID returned");
 
+      const exportRes = await fetch(`/api/sermon/${sermonId}/export/pptx`);
+      if (!exportRes.ok) {
+        let exportError = "Slide deck saved, but PPTX download failed";
+        try {
+          const exportData = (await exportRes.json()) as { error?: string };
+          if (exportData.error) exportError = exportData.error;
+        } catch {
+          // non-JSON error body
+        }
+        setError(exportError);
+        router.push(`/dashboard/sermon-builder/${sermonId}`);
+        return;
+      }
+
+      const blob = await exportRes.blob();
+      const objectUrl = URL.createObjectURL(blob);
       const link = document.createElement("a");
-      link.href = `/api/sermon/${sermonId}/export/pptx`;
-      link.download = "";
+      const disposition = exportRes.headers.get("Content-Disposition");
+      const matched = disposition?.match(/filename="([^"]+)"/);
+      link.href = objectUrl;
+      link.download = matched?.[1] ?? "sermon.pptx";
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      URL.revokeObjectURL(objectUrl);
 
       router.push(`/dashboard/sermon-builder/${sermonId}`);
     } catch (e) {
@@ -408,11 +435,10 @@ export function SimpleSermonBuilder({
 
           <div className="space-y-2">
             <Label htmlFor="sermon-date">Sermon date</Label>
-            <Input
+            <DatePicker
               id="sermon-date"
-              type="date"
               value={sermonDate}
-              onChange={(e) => setSermonDate(e.target.value)}
+              onChange={setSermonDate}
             />
             <p className="text-xs text-muted-foreground">
               When this sermon will be preached.
@@ -428,12 +454,9 @@ export function SimpleSermonBuilder({
                 const next = e.target.value;
                 const option = translationOptions.find((t) => t.id === next);
                 if (!option?.enabled) return;
+                // Book IDs are shared across curated translations — keep
+                // book/chapter/verse and saved passages when switching.
                 setTranslation(next);
-                setBookId("");
-                setChapter("");
-                setVerseStart("");
-                setVerseEnd("");
-                setPassages([]);
               }}
               className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >

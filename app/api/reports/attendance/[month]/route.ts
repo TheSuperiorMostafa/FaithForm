@@ -4,47 +4,20 @@ import { createElement, type ReactElement } from "react";
 
 import { AttendancePdfDocument } from "@/components/library/pdf-attendance-report";
 import { getChurchName } from "@/lib/queries/library";
+import {
+  buildAttendanceComparisonMetrics,
+  formatAttendanceTableDate,
+} from "@/lib/reports/attendance-metrics";
 import { requireChurchContext } from "@/lib/reports/auth";
 import { createClient } from "@/lib/supabase/server";
-import {
-  formatServiceDate,
-  parseMonthParam,
-} from "@/lib/utils/reports";
+import { parseMonthParam } from "@/lib/utils/reports";
 
 export const runtime = "nodejs";
-
-type AttendanceEntry = { follow_up_requested: boolean | null };
 
 type AttendanceRecord = {
   service_date: string;
   total_present: number | null;
-  total_absent: number | null;
-  attendance_entries: AttendanceEntry[] | null;
 };
-
-function buildTrendSummary(
-  weeks: { present: number; followUps: number }[],
-): string {
-  if (weeks.length === 0) {
-    return "No attendance data recorded for this month.";
-  }
-
-  const avg =
-    weeks.reduce((sum, w) => sum + w.present, 0) / weeks.length;
-  const first = weeks[0].present;
-  const last = weeks[weeks.length - 1].present;
-  const totalFollowUps = weeks.reduce((sum, w) => sum + w.followUps, 0);
-  const delta = last - first;
-
-  let trend = "held steady";
-  if (delta > 0) trend = `trended up by ${delta} from first to last service`;
-  else if (delta < 0)
-    trend = `trended down by ${Math.abs(delta)} from first to last service`;
-
-  const sundayLabel = weeks.length === 1 ? "Sunday" : "Sundays";
-
-  return `Average attendance: ${Math.round(avg)} present per service across ${weeks.length} ${sundayLabel}. Attendance ${trend}. ${totalFollowUps} follow-up${totalFollowUps === 1 ? "" : "s"} sent.`;
-}
 
 export async function GET(
   _request: Request,
@@ -63,15 +36,17 @@ export async function GET(
 
   const { churchId } = ctx;
 
+  // Need ~18 months of history for YTD / prior-YTD / rolling 6-month averages.
+  const historyStart = new Date(parsed.year - 1, 0, 1);
+  const historyStartIso = `${historyStart.getFullYear()}-01-01`;
+
   const [churchName, recordsResult] = await Promise.all([
     getChurchName(supabase, churchId),
     supabase
       .from("attendance_records")
-      .select(
-        "service_date,total_present,total_absent,attendance_entries(follow_up_requested)",
-      )
+      .select("service_date,total_present")
       .eq("church_id", churchId)
-      .gte("service_date", parsed.startDateIso)
+      .gte("service_date", historyStartIso)
       .lt("service_date", parsed.endDateIso)
       .order("service_date", { ascending: true }),
   ]);
@@ -86,17 +61,31 @@ export async function GET(
 
   const records = (recordsResult.data ?? []) as AttendanceRecord[];
 
-  const weeks = records.map((row) => {
-    const entries = row.attendance_entries ?? [];
-    const followUps = entries.filter((e) => e.follow_up_requested === true)
-      .length;
-    return {
-      date: formatServiceDate(row.service_date),
-      present: row.total_present ?? 0,
-      absent: row.total_absent ?? 0,
-      followUps,
-    };
-  });
+  const allRows = records.map((row) => ({
+    serviceDate: row.service_date,
+    sundaySchool: null as number | null,
+    morningWorship: row.total_present,
+  }));
+
+  const weeks = allRows
+    .filter((row) => {
+      return (
+        row.serviceDate >= parsed.startDateIso &&
+        row.serviceDate < parsed.endDateIso
+      );
+    })
+    .map((row) => ({
+      dateLabel: formatAttendanceTableDate(row.serviceDate),
+      serviceDate: row.serviceDate,
+      sundaySchool: row.sundaySchool,
+      morningWorship: row.morningWorship,
+    }));
+
+  const metrics = buildAttendanceComparisonMetrics(
+    allRows,
+    parsed.year,
+    parsed.month,
+  );
 
   const reportDate = new Intl.DateTimeFormat("en-US", {
     month: "short",
@@ -109,7 +98,7 @@ export async function GET(
       churchName,
       monthLabel: parsed.label,
       weeks,
-      trendSummary: buildTrendSummary(weeks),
+      metrics,
       reportDate,
     }) as ReactElement<DocumentProps>,
   );

@@ -76,6 +76,8 @@ export async function POST(request: Request) {
     churchName: church.churchName,
     magicLink,
     isNewDonor,
+    primaryColor: church.givingPrimaryColor,
+    accentColor: church.givingAccentColor,
   });
 
   if (!sent) {

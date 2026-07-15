@@ -1,10 +1,7 @@
 import { redirect } from "next/navigation";
 import { PortalDashboard } from "@/app/give/[slug]/portal/portal-dashboard";
 import { PortalLogin } from "@/app/give/[slug]/portal/portal-login";
-import {
-  consumeMagicLinkToken,
-  getDonorPortalSession,
-} from "@/lib/giving/portal-session";
+import { getDonorPortalSession } from "@/lib/giving/portal-session";
 import { getActiveFundsForChurch } from "@/lib/giving/funds";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getChurchBySlug } from "@/lib/queries/giving";
@@ -21,33 +18,38 @@ function fundNameFromJoin(
 
 type PageProps = {
   params: { slug: string };
-  searchParams: { token?: string };
+  searchParams: { error?: string; token?: string };
 };
 
 export default async function PortalPage({ params, searchParams }: PageProps) {
+  // Legacy magic links pointed here with ?token=. Cookie writes must happen in a
+  // Route Handler, so bounce to /api/give/portal/auth instead of setting here.
+  if (searchParams.token) {
+    redirect(
+      `/api/give/portal/auth?slug=${encodeURIComponent(params.slug)}&token=${encodeURIComponent(searchParams.token)}`,
+    );
+  }
+
   const church = await getChurchBySlug(params.slug);
   if (!church) {
     return <p className="text-sm text-muted-foreground">Church not found.</p>;
   }
 
-  if (searchParams.token) {
-    const consumed = await consumeMagicLinkToken(
-      searchParams.token,
-      params.slug,
-    );
-    if (consumed) {
-      redirect(`/give/${params.slug}/portal`);
-    }
-  }
-
   const session = await getDonorPortalSession(params.slug);
 
   if (!session) {
+    const linkError =
+      searchParams.error === "invalid_link" || searchParams.error === "link_failed"
+        ? "That sign-in link is invalid or has expired. Request a new one below."
+        : null;
+
     return (
       <PortalLogin
         slug={params.slug}
         churchName={church.churchName}
         logoUrl={church.logoUrl}
+        initialMessage={linkError}
+        initialIsError={Boolean(linkError)}
       />
     );
   }

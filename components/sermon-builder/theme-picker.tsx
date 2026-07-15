@@ -95,7 +95,15 @@ export function ThemePicker({ selectedId, onSelect, context }: ThemePickerProps)
       .then((data) => {
         if (cancelled) return;
         if (data.themes) {
-          setThemes(data.themes as SlideTheme[]);
+          const nextThemes = data.themes as SlideTheme[];
+          setThemes(nextThemes);
+          if (
+            nextThemes.length > 0 &&
+            !nextThemes.some((t) => t.id === selectedId)
+          ) {
+            const featured = nextThemes.find((t) => t.featured);
+            onSelect(featured?.id ?? nextThemes[0]!.id);
+          }
         } else {
           setLoadError(data.error ?? "Could not load themes");
         }
@@ -109,6 +117,8 @@ export function ThemePicker({ selectedId, onSelect, context }: ThemePickerProps)
     return () => {
       cancelled = true;
     };
+    // Only run on mount — parent coerces themeId after themes load as well.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const filterOptions = useMemo(() => getThemeFilterOptions(themes), [themes]);

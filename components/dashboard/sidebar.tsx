@@ -6,7 +6,7 @@ import { ChevronLeft, ChevronRight, LogOut, ShieldCheck } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import { isBootstrapSuperAdminEmail } from "@/lib/auth/superadmin-emails";
 import { cn } from "@/lib/utils";
-import { navItems } from "./nav-items";
+import { navItems, utilityNavItems } from "./nav-items";
 
 type SidebarProps = {
   userEmail: string;
@@ -23,6 +23,57 @@ function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+function SidebarLink({
+  item,
+  pathname,
+  collapsed,
+}: {
+  item: (typeof navItems)[number];
+  pathname: string;
+  collapsed: boolean;
+}) {
+  const active = isActive(pathname, item.href);
+  const Icon = item.icon;
+
+  return (
+    <Link
+      href={item.href}
+      title={collapsed ? item.label : undefined}
+      className={cn(
+        "group relative flex h-11 w-full min-w-0 items-center overflow-hidden rounded-lg text-sm font-semibold",
+        active
+          ? "bg-sidebar-accent/15 text-sidebar-accent"
+          : "text-white/82 hover:bg-brand-lightGold/15 hover:text-white",
+      )}
+    >
+      <span
+        className={cn(
+          "absolute left-0 top-1/2 h-7 w-1 -translate-y-1/2 rounded-r-full bg-sidebar-accent",
+          active ? "opacity-100" : "opacity-0",
+        )}
+        aria-hidden
+      />
+
+      <span className="flex size-11 shrink-0 items-center justify-center">
+        <Icon
+          className={cn("size-[22px] shrink-0", active && "text-sidebar-accent")}
+          strokeWidth={1.75}
+          aria-hidden
+        />
+      </span>
+
+      <span
+        className={cn(
+          "min-w-0 flex-1 truncate pr-3 transition-[opacity,max-width] duration-200 ease-out motion-reduce:transition-none",
+          collapsed ? "max-w-0 opacity-0 overflow-hidden" : "max-w-full opacity-100",
+        )}
+      >
+        {item.label}
+      </span>
+    </Link>
+  );
+}
+
 export function Sidebar({
   userEmail,
   churchName,
@@ -34,10 +85,7 @@ export function Sidebar({
   const showAdminLink = isBootstrapSuperAdminEmail(userEmail);
 
   const initial = (userEmail ?? "F").charAt(0).toUpperCase();
-  const resourceNavHrefs = new Set(["/dashboard/library"]);
-  const navItemsForSidebar = navItems.filter(
-    (item) => !resourceNavHrefs.has(item.href),
-  );
+  const navItemsForSidebar = navItems;
 
   const toggle = () => onCollapsedChange(!collapsed);
 
@@ -64,9 +112,7 @@ export function Sidebar({
           <div
             className={cn(
               "min-w-0 overflow-hidden transition-[opacity,max-width] duration-200 ease-out motion-reduce:transition-none",
-              collapsed
-                ? "hidden"
-                : "max-w-full flex-1 opacity-100",
+              collapsed ? "hidden" : "max-w-full flex-1 opacity-100",
             )}
           >
             <p className="truncate font-heading text-lg font-bold leading-tight text-sidebar-accent">
@@ -111,57 +157,50 @@ export function Sidebar({
           Ministry Tools
         </p>
         <div className="space-y-1.5">
-          {navItemsForSidebar.map((item) => {
+          {navItemsForSidebar.map((item) => (
+            <SidebarLink
+              key={item.href}
+              item={item}
+              pathname={pathname}
+              collapsed={collapsed}
+            />
+          ))}
+        </div>
+      </nav>
+
+      {/* Utility + user footer */}
+      <div className="shrink-0 space-y-2 overflow-x-hidden border-t border-sidebar p-3">
+        <div
+          className={cn(
+            "flex gap-1.5",
+            collapsed ? "flex-col items-center" : "flex-row",
+          )}
+        >
+          {utilityNavItems.map((item) => {
             const active = isActive(pathname, item.href);
             const Icon = item.icon;
-
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                title={collapsed ? item.label : undefined}
+                title={item.label}
                 className={cn(
-                  "group relative flex h-11 w-full min-w-0 items-center overflow-hidden rounded-lg text-sm font-semibold",
+                  "inline-flex min-w-0 items-center justify-center gap-1.5 rounded-lg border text-xs font-semibold transition-colors",
+                  collapsed
+                    ? "size-9"
+                    : "h-8 flex-1 px-2",
                   active
-                    ? "bg-sidebar-accent/15 text-sidebar-accent"
-                    : "text-white/82 hover:bg-brand-lightGold/15 hover:text-white",
+                    ? "border-sidebar-accent/40 bg-sidebar-accent/15 text-sidebar-accent"
+                    : "border-white/10 bg-white/5 text-white/75 hover:border-white/20 hover:bg-brand-lightGold/15 hover:text-white",
                 )}
               >
-                <span
-                  className={cn(
-                    "absolute left-0 top-1/2 h-7 w-1 -translate-y-1/2 rounded-r-full bg-sidebar-accent",
-                    active ? "opacity-100" : "opacity-0",
-                  )}
-                  aria-hidden
-                />
-
-                <span className="flex size-11 shrink-0 items-center justify-center">
-                  <Icon
-                    className={cn(
-                      "size-[22px] shrink-0",
-                      active && "text-sidebar-accent",
-                    )}
-                    strokeWidth={1.75}
-                    aria-hidden
-                  />
-                </span>
-
-                <span
-                  className={cn(
-                    "min-w-0 flex-1 truncate pr-3 transition-[opacity,max-width] duration-200 ease-out motion-reduce:transition-none",
-                    collapsed ? "max-w-0 opacity-0 overflow-hidden" : "max-w-full opacity-100",
-                  )}
-                >
-                  {item.label}
-                </span>
+                <Icon className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+                <span className={cn(collapsed && "sr-only")}>{item.label}</span>
               </Link>
             );
           })}
         </div>
-      </nav>
 
-      {/* User footer — fixed layout, labels clip in place */}
-      <div className="shrink-0 space-y-2 overflow-x-hidden border-t border-sidebar p-3">
         {showAdminLink && (
           <Link
             href="/admin"

@@ -1,13 +1,31 @@
 import { getSiteUrl } from "@/lib/stripe/config";
 import { escapeHtml } from "@/lib/email/escape-html";
+import { isValidHexColor } from "@/lib/giving/branding";
+
+const DEFAULT_PRIMARY = "#002D5F";
+const DEFAULT_ACCENT = "#C5A059";
+
+function resolveColor(
+  value: string | null | undefined,
+  fallback: string,
+): string {
+  return value && isValidHexColor(value) ? value : fallback;
+}
 
 function buildGivingEmailHtml(params: {
+  churchName: string;
   heading: string;
   bodyHtml: string;
   ctaLabel: string;
   ctaUrl: string;
   footerNote: string;
+  primaryColor?: string | null;
+  accentColor?: string | null;
 }): string {
+  const primary = resolveColor(params.primaryColor, DEFAULT_PRIMARY);
+  const accent = resolveColor(params.accentColor, DEFAULT_ACCENT);
+  const churchName = escapeHtml(params.churchName);
+
   return `<!DOCTYPE html>
 <html>
 <head>
@@ -18,31 +36,31 @@ function buildGivingEmailHtml(params: {
   <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#F8F7F4;padding:40px 20px;">
     <tr>
       <td align="center">
-        <table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,45,95,0.08);">
+        <table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
           <tr>
-            <td style="background-color:#002D5F;padding:32px 40px;text-align:center;">
-              <span style="font-family:Georgia,serif;font-size:28px;font-weight:700;color:#ffffff;letter-spacing:-0.5px;">FaithForm</span>
+            <td style="background-color:${primary};padding:32px 40px;text-align:center;">
+              <span style="font-family:Georgia,serif;font-size:24px;font-weight:700;color:#ffffff;letter-spacing:-0.5px;">${churchName}</span>
             </td>
           </tr>
           <tr>
             <td style="padding:40px;">
-              <h1 style="margin:0 0 20px;font-size:24px;font-weight:700;color:#002D5F;line-height:1.3;">
+              <h1 style="margin:0 0 20px;font-size:24px;font-weight:700;color:${primary};line-height:1.3;text-align:center;">
                 ${escapeHtml(params.heading)}
               </h1>
               ${params.bodyHtml}
-              <table cellpadding="0" cellspacing="0" style="margin:24px 0 32px;">
+              <table cellpadding="0" cellspacing="0" style="margin:24px auto 32px;" align="center">
                 <tr>
-                  <td style="background-color:#C5A059;border-radius:10px;">
+                  <td align="center" style="background-color:${accent};border-radius:10px;">
                     <a href="${params.ctaUrl}" style="display:inline-block;padding:16px 32px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;">
                       ${escapeHtml(params.ctaLabel)}
                     </a>
                   </td>
                 </tr>
               </table>
-              <p style="margin:0 0 12px;font-size:14px;color:#9CA3AF;line-height:1.5;">
+              <p style="margin:0 0 12px;font-size:14px;color:#9CA3AF;line-height:1.5;text-align:center;">
                 ${escapeHtml(params.footerNote)}
               </p>
-              <p style="margin:0;font-size:12px;color:#9CA3AF;line-height:1.5;word-break:break-all;">
+              <p style="margin:0;font-size:12px;color:#9CA3AF;line-height:1.5;word-break:break-all;text-align:center;">
                 Or copy this link: ${params.ctaUrl}
               </p>
             </td>
@@ -57,6 +75,7 @@ function buildGivingEmailHtml(params: {
 
 async function sendResendEmail(params: {
   to: string;
+  fromName: string;
   subject: string;
   html: string;
   logLabel: string;
@@ -76,7 +95,7 @@ async function sendResendEmail(params: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      from: `FaithForm <${from}>`,
+      from: `${params.fromName} <${from}>`,
       to: params.to,
       subject: params.subject,
       html: params.html,
@@ -91,10 +110,15 @@ async function sendResendEmail(params: {
   return { sent: true };
 }
 
-type FailedPaymentEmailParams = {
+type ChurchEmailBranding = {
+  churchName: string;
+  primaryColor?: string | null;
+  accentColor?: string | null;
+};
+
+type FailedPaymentEmailParams = ChurchEmailBranding & {
   donorEmail: string;
   donorName: string | null;
-  churchName: string;
   churchSlug: string;
 };
 
@@ -105,32 +129,35 @@ export async function sendFailedPaymentEmail(
   const greeting = params.donorName ? `Hi ${escapeHtml(params.donorName)}` : "Hello";
 
   const bodyHtml = `
-    <p style="margin:0 0 16px;font-size:16px;color:#374151;line-height:1.6;">${greeting},</p>
-    <p style="margin:0 0 16px;font-size:16px;color:#374151;line-height:1.6;">
+    <p style="margin:0 0 16px;font-size:16px;color:#374151;line-height:1.6;text-align:center;">${greeting},</p>
+    <p style="margin:0 0 16px;font-size:16px;color:#374151;line-height:1.6;text-align:center;">
       Your recurring gift to <strong>${escapeHtml(params.churchName)}</strong> could not be processed.
       Please update your payment method to keep your gift active.
     </p>
   `;
 
   const html = buildGivingEmailHtml({
-    heading: "Update your payment method",
+    churchName: params.churchName,
+    heading: `${params.churchName} Giving`,
     bodyHtml,
     ctaLabel: "Open donor portal",
     ctaUrl: portalUrl,
     footerNote: "Thank you for your generosity.",
+    primaryColor: params.primaryColor,
+    accentColor: params.accentColor,
   });
 
   return sendResendEmail({
     to: params.donorEmail,
+    fromName: params.churchName,
     subject: `Action needed: update your gift to ${params.churchName}`,
     html,
     logLabel: `failed payment → ${portalUrl}`,
   });
 }
 
-type PortalMagicLinkParams = {
+type PortalMagicLinkParams = ChurchEmailBranding & {
   donorEmail: string;
-  churchName: string;
   magicLink: string;
   isNewDonor: boolean;
 };
@@ -138,48 +165,49 @@ type PortalMagicLinkParams = {
 export async function sendPortalMagicLinkEmail(
   params: PortalMagicLinkParams,
 ): Promise<{ sent: boolean }> {
-  const heading = params.isNewDonor
-    ? `Create your account at ${params.churchName}`
-    : `Sign in to ${params.churchName}`;
+  const heading = `${params.churchName} Giving`;
 
   const bodyHtml = `
-    <p style="margin:0 0 16px;font-size:16px;color:#374151;line-height:1.6;">
+    <p style="margin:0 0 16px;font-size:16px;color:#374151;line-height:1.6;text-align:center;">
       ${
         params.isNewDonor
           ? `Welcome! Use the button below to set up your donor account and manage gifts to <strong>${escapeHtml(params.churchName)}</strong>.`
           : `Use the button below to sign in and manage your gifts to <strong>${escapeHtml(params.churchName)}</strong>.`
       }
     </p>
-    <p style="margin:0;font-size:16px;color:#374151;line-height:1.6;">
+    <p style="margin:0;font-size:16px;color:#374151;line-height:1.6;text-align:center;">
       You can give again, manage recurring gifts, update your card, and download tax statements.
     </p>
   `;
 
   const html = buildGivingEmailHtml({
+    churchName: params.churchName,
     heading,
     bodyHtml,
     ctaLabel: params.isNewDonor ? "Create your account" : "Open donor portal",
     ctaUrl: params.magicLink,
     footerNote:
       "This link expires in 30 minutes. If you did not request this, you can ignore this email.",
+    primaryColor: params.primaryColor,
+    accentColor: params.accentColor,
   });
 
   const subject = params.isNewDonor
     ? `Create your donor account at ${params.churchName}`
-    : `Sign in to ${params.churchName} donor portal`;
+    : `${params.churchName} Giving — sign in`;
 
   return sendResendEmail({
     to: params.donorEmail,
+    fromName: params.churchName,
     subject,
     html,
     logLabel: `portal link → ${params.donorEmail}`,
   });
 }
 
-export type DonationReceiptEmailParams = {
+export type DonationReceiptEmailParams = ChurchEmailBranding & {
   donorEmail: string;
   donorName: string | null;
-  churchName: string;
   churchSlug: string;
   ein: string | null;
   amountCents: number;
@@ -201,13 +229,14 @@ export async function sendDonationReceiptEmail(
     : "Hello";
   const giftTypeLabel =
     params.giftType === "recurring" ? "Recurring gift" : "One-time gift";
+  const primary = resolveColor(params.primaryColor, DEFAULT_PRIMARY);
   const einLine = params.ein
-    ? `<p style="margin:0 0 16px;font-size:14px;color:#6B7280;line-height:1.5;">EIN: ${escapeHtml(params.ein)}</p>`
+    ? `<p style="margin:0 0 16px;font-size:14px;color:#6B7280;line-height:1.5;text-align:center;">EIN: ${escapeHtml(params.ein)}</p>`
     : "";
 
   const bodyHtml = `
-    <p style="margin:0 0 16px;font-size:16px;color:#374151;line-height:1.6;">${greeting},</p>
-    <p style="margin:0 0 24px;font-size:16px;color:#374151;line-height:1.6;">
+    <p style="margin:0 0 16px;font-size:16px;color:#374151;line-height:1.6;text-align:center;">${greeting},</p>
+    <p style="margin:0 0 24px;font-size:16px;color:#374151;line-height:1.6;text-align:center;">
       Thank you for your gift to <strong>${escapeHtml(params.churchName)}</strong>.
       Here is your receipt for your records.
     </p>
@@ -215,7 +244,7 @@ export async function sendDonationReceiptEmail(
       <tr>
         <td style="padding:20px;">
           <p style="margin:0 0 8px;font-size:14px;color:#6B7280;">Amount</p>
-          <p style="margin:0 0 16px;font-size:20px;font-weight:700;color:#002D5F;">${formatMoney(params.amountCents)}</p>
+          <p style="margin:0 0 16px;font-size:20px;font-weight:700;color:${primary};">${formatMoney(params.amountCents)}</p>
           <p style="margin:0 0 8px;font-size:14px;color:#6B7280;">Date</p>
           <p style="margin:0 0 16px;font-size:16px;color:#374151;">${escapeHtml(params.giftDate)}</p>
           <p style="margin:0 0 8px;font-size:14px;color:#6B7280;">Fund</p>
@@ -226,22 +255,26 @@ export async function sendDonationReceiptEmail(
       </tr>
     </table>
     ${einLine}
-    <p style="margin:0;font-size:14px;color:#6B7280;line-height:1.5;">
+    <p style="margin:0;font-size:14px;color:#6B7280;line-height:1.5;text-align:center;">
       No goods or services were provided in exchange for this contribution.
       Please retain this receipt for your tax records.
     </p>
   `;
 
   const html = buildGivingEmailHtml({
-    heading: "Your giving receipt",
+    churchName: params.churchName,
+    heading: `${params.churchName} Giving`,
     bodyHtml,
     ctaLabel: "Manage your gifts",
     ctaUrl: portalUrl,
     footerNote: `Questions about your gift? Contact ${params.churchName} directly.`,
+    primaryColor: params.primaryColor,
+    accentColor: params.accentColor,
   });
 
   return sendResendEmail({
     to: params.donorEmail,
+    fromName: params.churchName,
     subject: `Receipt for your gift to ${params.churchName}`,
     html,
     logLabel: `receipt → ${params.donorEmail}`,

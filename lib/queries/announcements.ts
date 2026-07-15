@@ -200,10 +200,13 @@ export function formatDateTimeRange(
   return `${startStr} – ${endStr}`;
 }
 
-/** Separate date and time lines for cinematic social graphic overlays. */
+/**
+ * Separate date and time lines for Facebook announcement graphics.
+ * Time is start-only (e.g. "6:00 PM"), not a range — keeps the flyer clean.
+ */
 export function formatEventGraphicDetails(
   startAt: string,
-  endAt: string | null,
+  _endAt?: string | null,
 ): { dateLine: string; timeLine: string } {
   const start = new Date(startAt);
 
@@ -215,25 +218,12 @@ export function formatEventGraphicDetails(
     })
     .toUpperCase();
 
-  const timeStart = start.toLocaleTimeString(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-
-  if (!endAt) {
-    return { dateLine, timeLine: timeStart.toUpperCase() };
-  }
-
-  const end = new Date(endAt);
-  const sameDay = start.toDateString() === end.toDateString();
-  const timeEnd = end.toLocaleTimeString(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-
-  const timeLine = sameDay
-    ? `${timeStart} – ${timeEnd}`.toUpperCase()
-    : `${timeStart.toUpperCase()} – ${formatDateTimeRange(startAt, endAt)}`;
+  const timeLine = start
+    .toLocaleTimeString(undefined, {
+      hour: "numeric",
+      minute: "2-digit",
+    })
+    .toUpperCase();
 
   return { dateLine, timeLine };
 }
