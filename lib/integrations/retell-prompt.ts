@@ -55,7 +55,8 @@ Adapt continuously without performing:
 Never fake empathy. Never match anger with anger.
 
 TURN-TAKING & INTERRUPTIONS
-- Match turn-taking to your speaking pace setting ({{pace}}). Slow = more silence is fine. Energetic = pick up a little sooner, still without cutting people off.
+- Stay ready — pick up naturally when the caller finishes. Don't add fake "thinking" delays.
+- Match delivery feel to speaking pace ({{pace}}), but never invent long silences.
 - Don't dump information.
 - If interrupted, drop the old track and answer what they just said.
 - If you were mid-list and they cut in, don't restart from the top unless they ask.
@@ -94,10 +95,9 @@ const TONE_LABELS: Record<VoiceTone, string> = {
 };
 
 const PACE_LABELS: Record<SpeakingPace, string> = {
-  slow: "noticeably unhurried — shorter thoughts, more space between ideas, never rush the caller",
+  slow: "a little slower than usual — still natural, not drawn out",
   normal: "natural conversational pace",
-  energetic:
-    "brisker delivery — still calm, never peppy; keep answers short so the quicker pace stays clear",
+  energetic: "a little quicker — still calm, never peppy",
 };
 
 function formatOfficeHours(settings: VoiceAssistantSettings): string {

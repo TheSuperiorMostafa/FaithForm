@@ -50,24 +50,29 @@ const LANGUAGE_TO_RETELL: Record<string, string> = {
   ko: "ko-KR",
 };
 
-/** Retell voice_speed is [0.5, 2]. Deltas must be wide enough to hear on a phone call. */
+/**
+ * Church-receptionist speech defaults.
+ * Speaking pace only adjusts voice_speed; turn-taking stays snappy + adaptive.
+ */
 const PACE_TO_VOICE_SPEED: Record<SpeakingPace, number> = {
-  slow: 0.72,
-  normal: 1,
-  energetic: 1.35,
+  slow: 0.9,
+  normal: 1.02,
+  energetic: 1.15,
 };
 
-/** How quickly the agent takes the turn after the caller stops. */
-const PACE_TO_RESPONSIVENESS: Record<SpeakingPace, number> = {
-  slow: 0.45,
-  normal: 0.7,
-  energetic: 0.9,
-};
-
-const PACE_TO_REMINDER_MS: Record<SpeakingPace, number> = {
-  slow: 18000,
-  normal: 14000,
-  energetic: 10000,
+const CHURCH_RECEPTIONIST_SPEECH = {
+  responsiveness: 0.97,
+  enable_dynamic_responsiveness: true,
+  enable_dynamic_voice_speed: true,
+  interruption_sensitivity: 1,
+  // Pickup buffer only — low enough to feel immediate, high enough to avoid
+  // talking into the handset still coming up.
+  begin_message_delay_ms: 300,
+  reminder_trigger_ms: 14000,
+  reminder_max_count: 1,
+  end_call_after_silence_ms: 60000,
+  backchannel_frequency: 0.55,
+  backchannel_words: ["mm-hmm", "okay", "sure", "I see"] as string[],
 };
 
 export function isRetellConfigured(): boolean {
@@ -224,18 +229,21 @@ function buildAgentPayload(
     voice_id: resolveVoiceId(settings.voice_gender),
     language: LANGUAGE_TO_RETELL[settings.language] ?? "en-US",
     voice_speed: PACE_TO_VOICE_SPEED[pace],
-    // Keep the admin-chosen pace; don't let Retell drift the TTS rate mid-call.
-    enable_dynamic_voice_speed: false,
-    // Church-secretary timing, scaled by speaking pace.
-    responsiveness: PACE_TO_RESPONSIVENESS[pace],
-    enable_dynamic_responsiveness: pace === "normal",
-    interruption_sensitivity: 0.7,
+    enable_dynamic_voice_speed:
+      CHURCH_RECEPTIONIST_SPEECH.enable_dynamic_voice_speed,
+    responsiveness: CHURCH_RECEPTIONIST_SPEECH.responsiveness,
+    enable_dynamic_responsiveness:
+      CHURCH_RECEPTIONIST_SPEECH.enable_dynamic_responsiveness,
+    interruption_sensitivity:
+      CHURCH_RECEPTIONIST_SPEECH.interruption_sensitivity,
+    begin_message_delay_ms: CHURCH_RECEPTIONIST_SPEECH.begin_message_delay_ms,
     enable_backchannel: true,
-    backchannel_frequency: pace === "slow" ? 0.4 : 0.55,
-    backchannel_words: ["mm-hmm", "okay", "sure", "I see"],
-    reminder_trigger_ms: PACE_TO_REMINDER_MS[pace],
-    reminder_max_count: 1,
-    end_call_after_silence_ms: 60000,
+    backchannel_frequency: CHURCH_RECEPTIONIST_SPEECH.backchannel_frequency,
+    backchannel_words: CHURCH_RECEPTIONIST_SPEECH.backchannel_words,
+    reminder_trigger_ms: CHURCH_RECEPTIONIST_SPEECH.reminder_trigger_ms,
+    reminder_max_count: CHURCH_RECEPTIONIST_SPEECH.reminder_max_count,
+    end_call_after_silence_ms:
+      CHURCH_RECEPTIONIST_SPEECH.end_call_after_silence_ms,
     webhook_url: webhookUrl,
     webhook_events: webhookUrl ? ["call_ended", "call_analyzed"] : undefined,
   };
