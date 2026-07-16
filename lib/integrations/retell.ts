@@ -52,7 +52,8 @@ const LANGUAGE_TO_RETELL: Record<string, string> = {
 
 /**
  * Church-receptionist speech defaults.
- * Speaking pace only adjusts voice_speed; turn-taking stays snappy + adaptive.
+ * Optimize for fast reply after a clear end-of-turn — no artificial wait.
+ * Speaking pace only adjusts voice_speed.
  */
 const PACE_TO_VOICE_SPEED: Record<SpeakingPace, number> = {
   slow: 0.9,
@@ -61,17 +62,18 @@ const PACE_TO_VOICE_SPEED: Record<SpeakingPace, number> = {
 };
 
 const CHURCH_RECEPTIONIST_SPEECH = {
-  responsiveness: 0.97,
+  // Max: each -0.1 below 1.0 adds ~0.5s wait after end-of-turn.
+  responsiveness: 1,
   enable_dynamic_responsiveness: true,
   enable_dynamic_voice_speed: true,
-  interruption_sensitivity: 1,
-  // Pickup buffer only — low enough to feel immediate, high enough to avoid
-  // talking into the handset still coming up.
-  begin_message_delay_ms: 300,
+  // Caller can barge in; Retell still waits for a real end-of-turn before we speak.
+  interruption_sensitivity: 0.9,
+  begin_message_delay_ms: 0,
+  stt_mode: "fast" as const,
   reminder_trigger_ms: 14000,
   reminder_max_count: 1,
   end_call_after_silence_ms: 60000,
-  backchannel_frequency: 0.55,
+  backchannel_frequency: 0.45,
   backchannel_words: ["mm-hmm", "okay", "sure", "I see"] as string[],
 };
 
@@ -237,6 +239,7 @@ function buildAgentPayload(
     interruption_sensitivity:
       CHURCH_RECEPTIONIST_SPEECH.interruption_sensitivity,
     begin_message_delay_ms: CHURCH_RECEPTIONIST_SPEECH.begin_message_delay_ms,
+    stt_mode: CHURCH_RECEPTIONIST_SPEECH.stt_mode,
     enable_backchannel: true,
     backchannel_frequency: CHURCH_RECEPTIONIST_SPEECH.backchannel_frequency,
     backchannel_words: CHURCH_RECEPTIONIST_SPEECH.backchannel_words,
