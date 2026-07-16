@@ -203,16 +203,29 @@ function fillTemplate(
 export const CALL_RECORDING_DISCLOSURE =
   "This call is recorded for quality and training.";
 
+const RECORDING_DISCLOSURE_SENTENCE =
+  /\s*(?:This call is recorded for quality and training\.?|(?:This|The) call (?:is|may be|will be) recorded[^.!?]*[.!?]?|Calls? (?:are|may be) recorded[^.!?]*[.!?]?)[\s]*/gi;
+
 const RECORDING_DISCLOSURE_ALREADY_PRESENT =
   /\b(call (is|may be|will be) recorded|recorded for (quality|training|accuracy)|recording (this|the) call|calls? (are|may be) recorded)\b/i;
 
-/** Append recording notice if the greeting does not already disclose it. */
+/**
+ * Put the recording notice first, then the greeting.
+ * If a disclosure is already in the greeting (often at the end), move it to the front.
+ */
 export function withRecordingDisclosure(greeting: string): string {
   const trimmed = greeting.trim();
   if (!trimmed) return CALL_RECORDING_DISCLOSURE;
-  if (RECORDING_DISCLOSURE_ALREADY_PRESENT.test(trimmed)) return trimmed;
-  const base = /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
-  return `${base} ${CALL_RECORDING_DISCLOSURE}`;
+
+  let body = trimmed;
+  if (RECORDING_DISCLOSURE_ALREADY_PRESENT.test(trimmed)) {
+    body = trimmed.replace(RECORDING_DISCLOSURE_SENTENCE, " ").replace(/\s+/g, " ").trim();
+  }
+
+  if (!body) return CALL_RECORDING_DISCLOSURE;
+
+  const greetingPart = /[.!?]$/.test(body) ? body : `${body}.`;
+  return `${CALL_RECORDING_DISCLOSURE} ${greetingPart}`;
 }
 
 function escapeRegExp(value: string): string {

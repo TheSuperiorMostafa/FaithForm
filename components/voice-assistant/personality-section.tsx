@@ -193,7 +193,7 @@ export function PersonalitySection({
             <Link href="/dashboard/church-profile" className="font-medium text-accent underline">
               Church Profile → AI knowledge → Phone greeting
             </Link>
-            . A recording notice is added automatically if missing.
+            . A recording notice is spoken first automatically.
           </p>
         </div>
 

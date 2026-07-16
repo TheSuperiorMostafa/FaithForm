@@ -180,7 +180,7 @@ export const AI_KNOWLEDGE_FIELDS: {
   {
     key: "greeting",
     label: "Phone greeting",
-    description: "First thing callers hear on the voice assistant. A recording notice is added automatically if missing.",
+    description: "First thing callers hear after the recording notice. The recording disclosure is spoken first automatically.",
     rows: 3,
   },
   {
