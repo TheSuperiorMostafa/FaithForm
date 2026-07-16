@@ -6,7 +6,7 @@ import { ChevronLeft, ChevronRight, LogOut, ShieldCheck } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import { isBootstrapSuperAdminEmail } from "@/lib/auth/superadmin-emails";
 import { cn } from "@/lib/utils";
-import { navItems, utilityNavItems } from "./nav-items";
+import { navItems, churchProfileNavItem, footerUtilityNavItems } from "./nav-items";
 
 type SidebarProps = {
   userEmail: string;
@@ -170,24 +170,39 @@ export function Sidebar({
 
       {/* Utility + user footer */}
       <div className="shrink-0 space-y-2 overflow-x-hidden border-t border-sidebar p-3">
-        <div className="space-y-1">
-          <p
-            className={cn(
-              "h-6 shrink-0 overflow-hidden whitespace-nowrap px-1 pb-1 pt-0.5 text-[11px] font-bold uppercase tracking-[0.22em] text-sidebar-accent/80",
-              "transition-[opacity,max-width] duration-200 ease-out motion-reduce:transition-none",
-              collapsed ? "max-w-0 opacity-0" : "max-w-full opacity-100",
-            )}
-          >
-            Church & Account
-          </p>
-          {utilityNavItems.map((item) => (
-            <SidebarLink
-              key={item.href}
-              item={item}
-              pathname={pathname}
-              collapsed={collapsed}
-            />
-          ))}
+        <SidebarLink
+          item={churchProfileNavItem}
+          pathname={pathname}
+          collapsed={collapsed}
+        />
+
+        <div
+          className={cn(
+            "flex gap-1.5",
+            collapsed ? "flex-col items-center" : "flex-row",
+          )}
+        >
+          {footerUtilityNavItems.map((item) => {
+            const active = isActive(pathname, item.href);
+            const Icon = item.icon;
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                title={item.label}
+                className={cn(
+                  "inline-flex min-w-0 items-center justify-center gap-1.5 rounded-lg border text-xs font-semibold transition-colors",
+                  collapsed ? "size-9" : "h-8 flex-1 px-2",
+                  active
+                    ? "border-sidebar-accent/40 bg-sidebar-accent/15 text-sidebar-accent"
+                    : "border-white/10 bg-white/5 text-white/75 hover:border-white/20 hover:bg-brand-lightGold/15 hover:text-white",
+                )}
+              >
+                <Icon className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+                <span className={cn(collapsed && "sr-only")}>{item.label}</span>
+              </Link>
+            );
+          })}
         </div>
 
         {showAdminLink && (

@@ -11,12 +11,14 @@ import {
 import { TimezoneSelect } from "@/components/admin/timezone-select";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ColorPickerField } from "@/components/ui/color-picker-field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { normalizeHexColor } from "@/lib/giving/branding";
 import {
   AI_KNOWLEDGE_FIELDS,
   DAY_OF_WEEK_LABELS,
@@ -51,6 +53,9 @@ function updateDay(
 ): OfficeHours {
   return { ...hours, [day]: { ...hours[day], ...patch } };
 }
+
+const DEFAULT_PRIMARY_COLOR = "#1A2B4B";
+const DEFAULT_ACCENT_COLOR = "#C19A6B";
 
 function formsEqual(a: ChurchProfileFormState, b: ChurchProfileFormState): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
@@ -139,6 +144,10 @@ export function ChurchProfileForm({ initialForm, isAdmin }: ChurchProfileFormPro
   };
 
   const readOnly = !isAdmin;
+  const previewPrimary =
+    normalizeHexColor(form.primaryColor) ?? DEFAULT_PRIMARY_COLOR;
+  const previewAccent =
+    normalizeHexColor(form.accentColor) ?? DEFAULT_ACCENT_COLOR;
 
   return (
     <div className="flex flex-col gap-6 pb-28">
@@ -270,25 +279,45 @@ export function ChurchProfileForm({ initialForm, isAdmin }: ChurchProfileFormPro
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="primary-color">Primary brand color</Label>
-              <Input
-                id="primary-color"
-                placeholder="#1A2B4B"
-                value={form.primaryColor}
-                disabled={readOnly}
-                onChange={(e) => patch({ primaryColor: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="accent-color">Accent color</Label>
-              <Input
-                id="accent-color"
-                placeholder="#C19A6B"
-                value={form.accentColor}
-                disabled={readOnly}
-                onChange={(e) => patch({ accentColor: e.target.value })}
-              />
+            <ColorPickerField
+              id="primary-color"
+              label="Primary brand color"
+              value={form.primaryColor}
+              defaultColor={DEFAULT_PRIMARY_COLOR}
+              disabled={readOnly}
+              onChange={(primaryColor) => patch({ primaryColor })}
+            />
+            <ColorPickerField
+              id="accent-color"
+              label="Accent color"
+              value={form.accentColor}
+              defaultColor={DEFAULT_ACCENT_COLOR}
+              disabled={readOnly}
+              onChange={(accentColor) => patch({ accentColor })}
+            />
+          </div>
+
+          <div
+            className="rounded-lg border border-border p-4"
+            style={{
+              backgroundColor: `${previewPrimary}14`,
+              borderColor: `${previewAccent}66`,
+            }}
+          >
+            <p className="text-xs text-muted-foreground">Color preview</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <span
+                className="rounded-md px-3 py-1.5 text-sm font-medium text-white"
+                style={{ backgroundColor: previewPrimary }}
+              >
+                Primary button
+              </span>
+              <span
+                className="rounded-md border px-3 py-1.5 text-sm font-medium"
+                style={{ borderColor: previewPrimary, color: previewPrimary }}
+              >
+                Accent outline
+              </span>
             </div>
           </div>
         </CardContent>

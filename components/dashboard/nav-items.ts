@@ -96,15 +96,17 @@ export const navItems: NavItem[] = [
   },
 ];
 
-/** Utility links pinned near the user footer (above Admin). */
-export const utilityNavItems: NavItem[] = [
-  {
-    label: "Church Profile",
-    shortLabel: "Profile",
-    href: "/dashboard/church-profile",
-    icon: Building2,
-    sidebarOnly: true,
-  },
+/** Church Profile lives in the sidebar footer as a full nav row. */
+export const churchProfileNavItem: NavItem = {
+  label: "Church Profile",
+  shortLabel: "Profile",
+  href: "/dashboard/church-profile",
+  icon: Building2,
+  sidebarOnly: true,
+};
+
+/** Compact footer pills (Support + Settings). */
+export const footerUtilityNavItems: NavItem[] = [
   {
     label: "Support",
     shortLabel: "Help",
@@ -119,4 +121,10 @@ export const utilityNavItems: NavItem[] = [
     icon: Settings,
     sidebarOnly: true,
   },
+];
+
+/** All footer utilities (profile + compact pills). */
+export const utilityNavItems: NavItem[] = [
+  churchProfileNavItem,
+  ...footerUtilityNavItems,
 ];
