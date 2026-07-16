@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { logPhoneCallActivity } from "@/lib/activity/log";
 import { retellRequest } from "@/lib/integrations/retell-client";
+import { scorePhoneCallIfNeeded } from "@/lib/integrations/score-phone-call";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { phoneCallMinutesSaved } from "@/lib/utils/phone-call-time-saved";
 
@@ -14,6 +15,7 @@ export type RetellCallPayload = {
   end_timestamp?: number;
   disconnection_reason?: string;
   transcript?: string;
+  recording_url?: string;
   call_analysis?: {
     user_sentiment?: string;
     call_summary?: string;
@@ -74,6 +76,11 @@ export function buildPhoneCallRow(churchId: string, call: RetellCallPayload) {
     outcome: formatOutcome(call),
     sentiment: call.call_analysis?.user_sentiment ?? null,
     transcript: call.transcript ?? null,
+    recording_url: call.recording_url ?? null,
+    call_successful:
+      typeof call.call_analysis?.call_successful === "boolean"
+        ? call.call_analysis.call_successful
+        : null,
     notes: call.call_analysis?.call_summary ?? null,
     call_type: "inbound",
     called_at: call.end_timestamp
@@ -126,7 +133,16 @@ export async function upsertPhoneCallFromRetell(
     timeSavedMinutes: minutesSaved,
   });
 
+  if (phoneCallId && row.transcript) {
+    await scorePhoneCallIfNeeded(phoneCallId, { admin: client });
+  }
+
   revalidatePath("/dashboard");
+  revalidatePath("/dashboard/voice-assistant");
+  revalidatePath("/dashboard/call-log");
+  if (phoneCallId) {
+    revalidatePath(`/dashboard/call-log/${phoneCallId}`);
+  }
 
   return { churchId, created: !existing?.id };
 }

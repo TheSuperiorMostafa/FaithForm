@@ -2,6 +2,7 @@
 
 import { Phone } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { resolveGreetingTemplate } from "@/lib/integrations/retell-prompt";
 import type { SpeakingPace, VoiceTone } from "@/types/voice-assistant";
 
 const TONE_LABELS: Record<VoiceTone, string> = {
@@ -22,15 +23,15 @@ function getSimulatedExchange(tone: VoiceTone, assistantName: string) {
   const callerQuestion = "What time is your Sunday service?";
 
   const responses: Record<VoiceTone, string> = {
-    warm_friendly: `Great question! Let me check that for you. Our next worship service is this Sunday — I'd love to welcome you in person!`,
-    professional: `Certainly. I'll look up our service schedule for you. One moment, please.`,
-    traditional_formal: `Thank you for your inquiry. Allow me a moment to retrieve our service schedule for you.`,
+    warm_friendly: `Sunday mornings we meet at 10. You're welcome to come — doors usually open a little early.`,
+    professional: `Sunday service is at 10. If you'd like, I can also tell you about parking.`,
+    traditional_formal: `Our Sunday service begins at 10. You're most welcome to join us.`,
   };
 
   const followUp: Record<VoiceTone, string> = {
-    warm_friendly: `Is there anything else I can help you with today?`,
-    professional: `Is there anything else I can assist you with?`,
-    traditional_formal: `May I be of further assistance to you today?`,
+    warm_friendly: `Alright — take care.`,
+    professional: `Okay. Take care now.`,
+    traditional_formal: `Very well. God bless.`,
   };
 
   return {
@@ -56,19 +57,25 @@ export function PhonePreview({
 }: PhonePreviewProps) {
   const displayName = assistantName.trim() || "your assistant";
   const greeting =
-    greetingMessage.trim() ||
-    `Thank you for calling. This is ${displayName}, how can I help you today?`;
+    resolveGreetingTemplate(
+      greetingMessage.trim() ||
+        `Hi, you've reached your church. This is ${displayName}.`,
+      {
+        assistantName: displayName,
+        churchName: "your church",
+      },
+    );
   const exchange = getSimulatedExchange(tone, assistantName);
 
   return (
-    <Card className="h-fit lg:sticky lg:top-20">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
+    <Card>
+      <CardHeader className="space-y-0 p-4 pb-3">
+        <CardTitle className="flex items-center gap-2 text-base">
           <Phone className="size-4 text-accent" aria-hidden />
           Live preview
         </CardTitle>
       </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+      <CardContent className="flex flex-col gap-4 p-4 pt-0">
         <div className="mx-auto w-full max-w-[280px] rounded-[2rem] border-[3px] border-border bg-muted/30 p-3 shadow-sm">
           <div className="rounded-[1.5rem] border border-border bg-background p-4">
             <div className="mb-4 flex justify-center">

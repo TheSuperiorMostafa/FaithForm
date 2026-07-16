@@ -3,7 +3,6 @@ import { VoiceAssistantSettings } from "@/components/voice-assistant/voice-assis
 import { getChurchAuth } from "@/lib/auth/church";
 import {
   buildVoiceAssistantFormDefaults,
-  getRecentPhoneCalls,
   getVoiceAgentSyncStatus,
   getVoiceAssistantContext,
   getVoiceAssistantSettings,
@@ -18,14 +17,12 @@ export default async function VoiceAssistantPage() {
 
   const supabase = createClient();
 
-  const [initialForm, context, recentCalls, settings, agentStatus] =
-    await Promise.all([
-      buildVoiceAssistantFormDefaults(auth.churchId, supabase),
-      getVoiceAssistantContext(auth.churchId, supabase),
-      getRecentPhoneCalls(auth.churchId, 25, supabase),
-      getVoiceAssistantSettings(auth.churchId, supabase),
-      getVoiceAgentSyncStatus(auth.churchId, supabase),
-    ]);
+  const [initialForm, context, settings, agentStatus] = await Promise.all([
+    buildVoiceAssistantFormDefaults(auth.churchId, supabase),
+    getVoiceAssistantContext(auth.churchId, supabase),
+    getVoiceAssistantSettings(auth.churchId, supabase),
+    getVoiceAgentSyncStatus(auth.churchId, supabase),
+  ]);
 
   const isConfigured = Boolean(settings?.assistant_name?.trim());
 
@@ -33,7 +30,6 @@ export default async function VoiceAssistantPage() {
     <VoiceAssistantSettings
       initialForm={initialForm}
       context={context}
-      recentCalls={recentCalls}
       agentStatus={agentStatus}
       isAdmin={auth.isAdmin}
       isConfigured={isConfigured}

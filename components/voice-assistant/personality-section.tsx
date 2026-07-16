@@ -5,11 +5,13 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import type { VoiceAssistantFieldErrors } from "@/lib/utils/voice-assistant-validation";
 import {
   SPEAKING_PACES,
   VOICE_LANGUAGES,
   VOICE_TONES,
   type SpeakingPace,
+  type VoiceGender,
   type VoiceTone,
 } from "@/types/voice-assistant";
 
@@ -31,6 +33,19 @@ const TONE_OPTIONS: { value: VoiceTone; label: string; description: string }[] =
   },
 ];
 
+const GENDER_OPTIONS: { value: VoiceGender; label: string; description: string }[] = [
+  {
+    value: "male",
+    label: "Male",
+    description: "A clear American male voice.",
+  },
+  {
+    value: "female",
+    label: "Female",
+    description: "A warm American female voice.",
+  },
+];
+
 const PACE_LABELS: Record<SpeakingPace, string> = {
   slow: "Slow",
   normal: "Normal",
@@ -48,13 +63,17 @@ function indexToPace(index: number): SpeakingPace {
 type PersonalitySectionProps = {
   tone: VoiceTone;
   speakingPace: SpeakingPace;
+  voiceGender: VoiceGender;
   language: string;
   greetingMessage: string;
   signoffMessage: string;
   readOnly?: boolean;
+  errors?: VoiceAssistantFieldErrors;
+  showErrors?: boolean;
   onChange: (patch: {
     tone?: VoiceTone;
     speakingPace?: SpeakingPace;
+    voiceGender?: VoiceGender;
     language?: string;
     greetingMessage?: string;
     signoffMessage?: string;
@@ -64,10 +83,13 @@ type PersonalitySectionProps = {
 export function PersonalitySection({
   tone,
   speakingPace,
+  voiceGender,
   language,
   greetingMessage,
   signoffMessage,
   readOnly = false,
+  errors,
+  showErrors = false,
   onChange,
 }: PersonalitySectionProps) {
   const paceIndex = paceToIndex(speakingPace);
@@ -76,6 +98,9 @@ export function PersonalitySection({
     <Card>
       <CardHeader>
         <CardTitle>Personality</CardTitle>
+        <p className="text-sm text-muted-foreground">
+          How your assistant sounds — include that it’s an AI in the greeting.
+        </p>
       </CardHeader>
       <CardContent className="flex flex-col gap-5">
         <fieldset className="grid gap-3 sm:grid-cols-3" disabled={readOnly}>
@@ -97,6 +122,33 @@ export function PersonalitySection({
                   disabled={readOnly}
                   className="mt-0.5 size-4"
                   onChange={() => onChange({ tone: opt.value })}
+                />
+                <span className="font-semibold">{opt.label}</span>
+              </span>
+              <p className="text-xs text-muted-foreground">{opt.description}</p>
+            </label>
+          ))}
+        </fieldset>
+
+        <fieldset className="grid gap-3 sm:grid-cols-2" disabled={readOnly}>
+          <legend className="col-span-full text-sm font-semibold">Voice</legend>
+          {GENDER_OPTIONS.map((opt) => (
+            <label
+              key={opt.value}
+              className={cn(
+                "flex cursor-pointer flex-col gap-2 rounded-[10px] border border-border bg-background/45 p-3 transition-colors has-[:checked]:border-accent has-[:checked]:bg-accent/10",
+                readOnly && "cursor-default opacity-80",
+              )}
+            >
+              <span className="flex items-start gap-2">
+                <input
+                  type="radio"
+                  name="voice-gender"
+                  value={opt.value}
+                  checked={voiceGender === opt.value}
+                  disabled={readOnly}
+                  className="mt-0.5 size-4"
+                  onChange={() => onChange({ voiceGender: opt.value })}
                 />
                 <span className="font-semibold">{opt.label}</span>
               </span>
@@ -142,30 +194,38 @@ export function PersonalitySection({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="greeting-message">Greeting Message</Label>
+          <Label htmlFor="greeting-message">
+            Greeting Message <span className="text-destructive">*</span>
+          </Label>
           <Textarea
             id="greeting-message"
-            placeholder="Thank you for calling [Church Name]. This is [Assistant Name], how can I help you today?"
+            placeholder="Hi, you've reached Grace Community Church. This is Mostafa."
             value={greetingMessage}
             disabled={readOnly}
+            aria-invalid={showErrors && Boolean(errors?.greetingMessage)}
             onChange={(e) => onChange({ greetingMessage: e.target.value })}
           />
-          <p className="text-xs text-muted-foreground">
-            This is the first thing callers hear.
-          </p>
+          {showErrors && errors?.greetingMessage ? (
+            <p className="text-xs text-destructive">{errors.greetingMessage}</p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              First thing callers hear. Keep it short and natural — like
+              answering the church phone.
+            </p>
+          )}
         </div>
 
         <div className="space-y-2">
           <Label htmlFor="signoff-message">Sign-off Message</Label>
           <Textarea
             id="signoff-message"
-            placeholder="God bless you. Have a wonderful day."
+            placeholder="Alright — take care. God bless."
             value={signoffMessage}
             disabled={readOnly}
             onChange={(e) => onChange({ signoffMessage: e.target.value })}
           />
           <p className="text-xs text-muted-foreground">
-            This plays before the call ends.
+            Optional. Said naturally before the call ends.
           </p>
         </div>
       </CardContent>

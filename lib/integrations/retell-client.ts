@@ -53,8 +53,18 @@ export async function retellRequest<T>({
 
 export type RetellLlmResponse = {
   llm_id: string;
+  version?: number;
+  is_published?: boolean;
 };
 
 export type RetellAgentResponse = {
   agent_id: string;
+  version?: number;
+  is_published?: boolean;
+  base_version?: number | null;
+  response_engine?: {
+    type?: string;
+    llm_id?: string;
+    version?: number;
+  };
 };

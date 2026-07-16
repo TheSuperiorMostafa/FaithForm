@@ -36,6 +36,9 @@ export async function GET() {
     "Duration",
     "Outcome",
     "Sentiment",
+    "Score",
+    "Successful",
+    "Recording URL",
     "Transcript",
   ].join(",");
 
@@ -46,6 +49,17 @@ export async function GET() {
       escapeCsv(formatCallDuration(call.duration_seconds)),
       escapeCsv(call.outcome),
       escapeCsv(call.sentiment),
+      escapeCsv(
+        call.ai_score != null ? String(Math.round(Number(call.ai_score))) : "",
+      ),
+      escapeCsv(
+        call.call_successful == null
+          ? ""
+          : call.call_successful
+            ? "Yes"
+            : "No",
+      ),
+      escapeCsv(call.recording_url),
       escapeCsv(call.transcript),
     ].join(","),
   );

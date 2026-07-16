@@ -1,5 +1,10 @@
 import type { ChurchProfileForVoice } from "@/lib/queries/voice-assistant";
 import { getGivePageUrl } from "@/lib/stripe/config";
+import {
+  buildRetellStates,
+  RETELL_STARTING_STATE,
+  type RetellStateDefinition,
+} from "@/lib/integrations/retell-prompt-states";
 import type {
   SpeakingPace,
   VoiceAssistantContext,
@@ -7,66 +12,91 @@ import type {
   VoiceTone,
 } from "@/types/voice-assistant";
 
-const MASTER_PROMPT_TEMPLATE = `You are {{assistant_name}}, the voice assistant for {{church_name}}.
+const GENERAL_PROMPT_TEMPLATE = `You are {{assistant_name}} at {{church_name}}. You've answered this church phone for years.
 
 IDENTITY
-- You represent {{church_name}}, a {{denomination}} church located at {{address}}.
-- Your role is to warmly welcome callers and help them with any questions about the church.
+- You represent {{church_name}}, a {{denomination}} church at {{address}}.
+- You are a warm church secretary — not customer support, not a chatbot, not a call center, not a virtual assistant.
+- Friendly. Calm. Comfortable. Confident. Natural. Never overly enthusiastic. Never overly formal.
 
-PERSONALITY
-- Tone: {{tone}} — match this in every response. Never sound robotic or corporate.
-- Speaking pace: {{pace}}
-- Always sound like a caring member of the church community, not a call center agent.
-- Keep responses concise — this is a phone call, not a lecture.
-- Never say "I am an AI" unless the caller directly and seriously asks. If asked, say "I'm the virtual assistant for {{church_name}}."
+PERSONALITY FILTER (soft — stay human either way)
+- Preferred tone color: {{tone}}
+- Preferred pace feel: {{pace}}
+- These nudge you; they never turn you into a script or a corporate agent.
 
-GREETING
-When a call starts, say exactly: "{{greeting_message}}"
+HOW YOU SPEAK
+- Answer first. Explain only if they need it.
+- Short sentences. Vary length. Occasional trailing thought is fine.
+- Perfect textbook grammar every turn sounds fake — be clear, not polished.
+- One question at a time. Never stack questions.
+- Don't repeat their question back. Don't over-confirm. Don't over-explain.
+- Don't sound prepared, scripted, or like documentation.
+- Don't force the conversation forward. Comfortable silence is okay.
+- Prefer spontaneous wording. Same idea, different words next time.
 
-WHAT YOU KNOW (pulled from live data)
-- Service schedule: {{service_schedule}}
-- Upcoming events: {{upcoming_events}}
-- Pastoral staff: {{staff_list}}
-- Kids and youth programs: {{programs}}
-- Address and parking: {{address_and_parking}}
-- Giving information: {{giving_info}}
+NEVER SOUND LIKE THIS
+Avoid these habits and anything in the same family:
+- "Absolutely!" / "Certainly." / "Of course!"
+- "I'd be happy to help" / "How may I assist you today?"
+- "Thank you for your patience" / "I understand" as filler
+- Repeating the caller's question
+- Explaining obvious things
+- Long paragraph answers
+- Robotic greetings, confirmations, or transitions
+- Salesy or corporate phrasing
 
-HOW TO HANDLE COMMON CALLS
-- Service times: Answer directly and clearly. Mention if there are multiple services.
-- New visitors: Be extra warm. Mention what to expect, where to park, that they are welcome.
-- Events: List only the next 2-3 upcoming events unless they ask for more.
-- Prayer requests: Say "I'd be honored to pass your prayer request along. Would you like to share it?" Then summarize and say it will be forwarded to the pastoral team.
-- Pastoral contact: Offer to transfer or give the office contact. Never give out a pastor's personal number.
-- Giving: Briefly explain options (in-person, online) and offer to send a text with the giving link.
-- Kids/Youth: Describe the programs and age groups warmly.
-- Emergencies or crisis: Immediately say "I'm going to connect you with someone who can help" and use the transfer_emergency tool to reach {{emergency_contact}}.
+EMOTIONAL MIRRORING
+Adapt continuously without performing:
+- Confused → slow down, simpler words
+- Excited → a little brighter, still grounded
+- Upset → calmer, softer, fewer words
+- Elderly → simpler, unhurried
+- In a hurry → short answers, no extras
+Never fake empathy. Never match anger with anger.
 
-AFTER HOURS (if {{after_hours_mode}} is ON and current time is outside {{office_hours}})
-Say: "{{after_hours_message}}" Then offer to take a message or transfer for emergencies only.
+TURN-TAKING & INTERRUPTIONS
+- Don't rush to fill silence.
+- Don't dump information.
+- If interrupted, drop the old track and answer what they just said.
+- If you were mid-list and they cut in, don't restart from the top unless they ask.
 
-HUMAN TRANSFER
-If a caller is frustrated, confused, or asks for a real person, say:
-"Of course, let me connect you with our team." Then use the transfer_to_church_office tool to reach {{transfer_number}}.
+WHAT YOU KNOW (live data — stay inside this)
+Service schedule:
+{{service_schedule}}
 
-SIGN OFF
-End calls with: "{{signoff_message}}"
+Upcoming events:
+{{upcoming_events}}
 
-RULES
-- Never make up information. If you don't know something, say "I don't have that information right now, but our team would be happy to help. Would you like me to connect you?"
+Pastoral staff:
+{{staff_list}}
+
+Kids and youth programs:
+{{programs}}
+
+Address and parking:
+{{address_and_parking}}
+
+Giving:
+{{giving_info}}
+
+GUARDRAILS
+- Never invent facts. If it's not here, say you don't have it and offer the office if that helps.
 - Never discuss theology, politics, or other churches.
 - Never take financial information over the phone.
-- Always be patient. Some callers may be elderly or in distress.`;
+- Never give out a pastor's personal number.
+- Don't say you're an AI unless they directly and seriously ask. If they do: "I'm the phone assistant for {{church_name}}."
+- Be patient. Some callers are elderly, nervous, or hurting.`;
 
 const TONE_LABELS: Record<VoiceTone, string> = {
-  warm_friendly: "Warm & Friendly",
-  professional: "Professional",
-  traditional_formal: "Traditional & Formal",
+  warm_friendly: "warm and friendly — like someone who knows half the congregation by name",
+  professional: "steady and clear — still a church desk, never corporate",
+  traditional_formal: "a bit more traditional and respectful — still natural speech, not stiff",
 };
 
 const PACE_LABELS: Record<SpeakingPace, string> = {
-  slow: "Slow",
-  normal: "Normal",
-  energetic: "Energetic",
+  slow: "unhurried; leave space",
+  normal: "natural conversational pace",
+  energetic: "a touch brighter and quicker — still calm, never peppy",
 };
 
 function formatOfficeHours(settings: VoiceAssistantSettings): string {
@@ -130,30 +160,94 @@ function fillTemplate(
   });
 }
 
-export function buildRetellGeneralPrompt(
-  settings: VoiceAssistantSettings,
-  context: VoiceAssistantContext,
-  church: ChurchProfileForVoice,
+/** Replace form placeholders so Retell never speaks bracket tokens literally. */
+export function resolveGreetingTemplate(
+  template: string,
+  vars: { assistantName: string; churchName: string; officeHours?: string },
 ): string {
-  const assistantName = settings.assistant_name?.trim() || "the church assistant";
-  const greeting =
+  return template
+    .replace(/\[\s*Assistant Name\s*\]/gi, vars.assistantName)
+    .replace(/\[\s*Church Name\s*\]/gi, vars.churchName)
+    .replace(/\[\s*Name\s*\]/gi, vars.assistantName)
+    .replace(/\[\s*hours\s*\]/gi, vars.officeHours?.trim() || "our normal office hours")
+    .replace(/\{\{\s*assistant_name\s*\}\}/gi, vars.assistantName)
+    .replace(/\{\{\s*church_name\s*\}\}/gi, vars.churchName)
+    .trim();
+}
+
+export type RetellLlmConversation = {
+  general_prompt: string;
+  begin_message: string | undefined;
+  starting_state: string;
+  states: RetellStateDefinition[];
+  greeting: string;
+  signoff: string;
+  afterHoursMessage: string;
+  officeHours: string;
+  transferNumber: string;
+  emergencyContact: string;
+  hasOfficeTransfer: boolean;
+  hasEmergencyTransfer: boolean;
+};
+
+function resolveSpokenMessages(
+  settings: VoiceAssistantSettings,
+  church: ChurchProfileForVoice,
+) {
+  const assistantName = settings.assistant_name?.trim() || "the church desk";
+  const officeHours = formatOfficeHours(settings);
+  const spokenVars = {
+    assistantName,
+    churchName: church.name,
+    officeHours,
+  };
+
+  const rawGreeting =
     settings.greeting_message?.trim() ||
-    `Thank you for calling ${church.name}. This is ${assistantName}, how can I help you today?`;
-  const signoff =
-    settings.signoff_message?.trim() || "God bless you. Have a wonderful day.";
+    `Hi, you've reached ${church.name}. This is ${assistantName}.`;
+  const greeting = resolveGreetingTemplate(rawGreeting, spokenVars);
+
+  const signoff = resolveGreetingTemplate(
+    settings.signoff_message?.trim() || "Alright — take care. God bless.",
+    spokenVars,
+  );
+
+  const afterHoursMessage = resolveGreetingTemplate(
+    settings.after_hours_message?.trim() ||
+      "The office is closed right now. You can leave a message and someone will get back to you.",
+    spokenVars,
+  );
+
   const transferNumber =
     settings.church_phone?.trim() || church.phone?.trim() || "the church office";
   const emergencyContact =
     settings.emergency_phone?.trim() || "the emergency contact on file";
 
+  return {
+    assistantName,
+    officeHours,
+    greeting,
+    signoff,
+    afterHoursMessage,
+    transferNumber,
+    emergencyContact,
+  };
+}
+
+export function buildRetellGeneralPrompt(
+  settings: VoiceAssistantSettings,
+  context: VoiceAssistantContext,
+  church: ChurchProfileForVoice,
+): string {
+  const spoken = resolveSpokenMessages(settings, church);
+
   const variables: Record<string, string> = {
-    assistant_name: assistantName,
+    assistant_name: spoken.assistantName,
     church_name: church.name,
     denomination: settings.denomination?.trim() || "Christian",
     address: formatChurchAddress(church),
     tone: TONE_LABELS[settings.tone],
     pace: PACE_LABELS[settings.speaking_pace],
-    greeting_message: greeting,
     service_schedule: formatList(
       context.serviceSchedule,
       "No service times on file yet.",
@@ -172,15 +266,50 @@ export function buildRetellGeneralPrompt(
     ),
     address_and_parking: formatAddressAndParking(church),
     giving_info: formatGivingInfo(church),
-    after_hours_mode: settings.after_hours_enabled ? "ON" : "OFF",
-    office_hours: formatOfficeHours(settings),
-    after_hours_message:
-      settings.after_hours_message?.trim() ||
-      "Our office is currently closed. Please leave a message and we will get back to you.",
-    emergency_contact: emergencyContact,
-    transfer_number: transferNumber,
-    signoff_message: signoff,
   };
 
-  return fillTemplate(MASTER_PROMPT_TEMPLATE, variables);
+  return fillTemplate(GENERAL_PROMPT_TEMPLATE, variables);
+}
+
+/** Full Multi-Prompt conversation payload pieces for Retell LLM sync. */
+export function buildRetellLlmConversation(
+  settings: VoiceAssistantSettings,
+  context: VoiceAssistantContext,
+  church: ChurchProfileForVoice,
+  options?: {
+    hasOfficeTransfer?: boolean;
+    hasEmergencyTransfer?: boolean;
+  },
+): RetellLlmConversation {
+  const spoken = resolveSpokenMessages(settings, church);
+  const hasOfficeTransfer = options?.hasOfficeTransfer ?? false;
+  const hasEmergencyTransfer = options?.hasEmergencyTransfer ?? false;
+
+  const general_prompt = buildRetellGeneralPrompt(settings, context, church);
+  const states = buildRetellStates({
+    greeting_message: spoken.greeting,
+    signoff_message: spoken.signoff,
+    after_hours_message: spoken.afterHoursMessage,
+    office_hours: spoken.officeHours,
+    after_hours_mode: settings.after_hours_enabled ? "ON" : "OFF",
+    transfer_number: spoken.transferNumber,
+    emergency_contact: spoken.emergencyContact,
+    has_office_transfer: hasOfficeTransfer,
+    has_emergency_transfer: hasEmergencyTransfer,
+  });
+
+  return {
+    general_prompt,
+    begin_message: spoken.greeting,
+    starting_state: RETELL_STARTING_STATE,
+    states,
+    greeting: spoken.greeting,
+    signoff: spoken.signoff,
+    afterHoursMessage: spoken.afterHoursMessage,
+    officeHours: spoken.officeHours,
+    transferNumber: spoken.transferNumber,
+    emergencyContact: spoken.emergencyContact,
+    hasOfficeTransfer,
+    hasEmergencyTransfer,
+  };
 }

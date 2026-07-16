@@ -3,11 +3,12 @@
  *
  * Env vars:
  * - RETELL_API_KEY
- * - RETELL_DEFAULT_VOICE_ID (optional, default: 11labs-Adrian)
+ * - RETELL_DEFAULT_VOICE_ID (optional male override, default: 11labs-Adrian)
+ * - RETELL_FEMALE_VOICE_ID (optional female override, default: 11labs-Lily)
  * - NEXT_PUBLIC_SITE_URL (for webhook URL)
  */
 
-import { buildRetellGeneralPrompt } from "@/lib/integrations/retell-prompt";
+import { buildRetellLlmConversation } from "@/lib/integrations/retell-prompt";
 import {
   retellRequest,
   type RetellAgentResponse,
@@ -21,7 +22,17 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { VoiceAssistantSettings } from "@/types/voice-assistant";
 
-const DEFAULT_VOICE_ID = "11labs-Adrian";
+type RetellTool = Record<string, unknown> & { name: string };
+
+const DEFAULT_MALE_VOICE_ID = "11labs-Adrian";
+const DEFAULT_FEMALE_VOICE_ID = "11labs-Lily";
+
+function resolveVoiceId(gender: VoiceAssistantSettings["voice_gender"]): string {
+  if (gender === "female") {
+    return process.env.RETELL_FEMALE_VOICE_ID ?? DEFAULT_FEMALE_VOICE_ID;
+  }
+  return process.env.RETELL_DEFAULT_VOICE_ID ?? DEFAULT_MALE_VOICE_ID;
+}
 
 const LANGUAGE_TO_RETELL: Record<string, string> = {
   en: "en-US",
@@ -60,18 +71,22 @@ function toE164(phone: string | null | undefined): string | null {
   return null;
 }
 
-function buildTransferTools(settings: VoiceAssistantSettings) {
-  const tools: Record<string, unknown>[] = [
-    {
-      type: "end_call",
-      name: "end_call",
-      description: "End the call after helping the caller.",
-    },
-  ];
+function buildToolCatalog(settings: VoiceAssistantSettings): {
+  toolsByName: Map<string, RetellTool>;
+  hasOfficeTransfer: boolean;
+  hasEmergencyTransfer: boolean;
+} {
+  const toolsByName = new Map<string, RetellTool>();
+
+  toolsByName.set("end_call", {
+    type: "end_call",
+    name: "end_call",
+    description: "End the call after a natural goodbye.",
+  });
 
   const churchNumber = toE164(settings.church_phone);
   if (churchNumber) {
-    tools.push({
+    toolsByName.set("transfer_to_church_office", {
       type: "transfer_call",
       name: "transfer_to_church_office",
       description:
@@ -89,7 +104,7 @@ function buildTransferTools(settings: VoiceAssistantSettings) {
 
   const emergencyNumber = toE164(settings.emergency_phone);
   if (emergencyNumber) {
-    tools.push({
+    toolsByName.set("transfer_emergency", {
       type: "transfer_call",
       name: "transfer_emergency",
       description:
@@ -105,7 +120,11 @@ function buildTransferTools(settings: VoiceAssistantSettings) {
     });
   }
 
-  return tools;
+  return {
+    toolsByName,
+    hasOfficeTransfer: toolsByName.has("transfer_to_church_office"),
+    hasEmergencyTransfer: toolsByName.has("transfer_emergency"),
+  };
 }
 
 function getWebhookUrl(): string | null {
@@ -119,14 +138,54 @@ function buildLlmPayload(
   context: Awaited<ReturnType<typeof getVoiceAssistantContext>>,
   church: NonNullable<Awaited<ReturnType<typeof getChurchProfileForVoice>>>,
 ) {
+  const { toolsByName, hasOfficeTransfer, hasEmergencyTransfer } =
+    buildToolCatalog(settings);
+
+  const conversation = buildRetellLlmConversation(settings, context, church, {
+    hasOfficeTransfer,
+    hasEmergencyTransfer,
+  });
+
+  const assistantName = settings.assistant_name?.trim() || "Assistant";
+
+  const states = conversation.states.map((state) => {
+    const tools = (state.toolNames ?? [])
+      .map((name) => toolsByName.get(name))
+      .filter((tool): tool is RetellTool => Boolean(tool));
+
+    return {
+      name: state.name,
+      state_prompt: state.state_prompt,
+      ...(state.edges && state.edges.length > 0 ? { edges: state.edges } : {}),
+      ...(tools.length > 0 ? { tools } : {}),
+    };
+  });
+
+  const stateNames = new Set(states.map((s) => s.name));
+  const statesWithValidEdges = states.map((state) => {
+    if (!("edges" in state) || !state.edges) return state;
+    const edges = state.edges.filter((edge) =>
+      stateNames.has(edge.destination_state_name),
+    );
+    const { edges: _removed, ...rest } = state;
+    return {
+      ...rest,
+      ...(edges.length > 0 ? { edges } : {}),
+    };
+  });
+
   return {
-    general_prompt: buildRetellGeneralPrompt(settings, context, church),
-    begin_message: settings.greeting_message?.trim() || undefined,
-    general_tools: buildTransferTools(settings),
+    general_prompt: conversation.general_prompt,
+    begin_message: conversation.begin_message,
+    starting_state: conversation.starting_state,
+    states: statesWithValidEdges,
+    // Tools live on the states that own them so the main conversation path
+    // does not over-offer transfers or hangups.
+    general_tools: [] as RetellTool[],
     default_dynamic_variables: {
       church_id: settings.church_id,
       church_name: church.name,
-      assistant_name: settings.assistant_name?.trim() || "Assistant",
+      assistant_name: assistantName,
     },
   };
 }
@@ -136,7 +195,6 @@ function buildAgentPayload(
   settings: VoiceAssistantSettings,
   churchName: string,
 ) {
-  const voiceId = process.env.RETELL_DEFAULT_VOICE_ID ?? DEFAULT_VOICE_ID;
   const webhookUrl = getWebhookUrl();
 
   return {
@@ -145,37 +203,102 @@ function buildAgentPayload(
       llm_id: llmId,
     },
     agent_name: `${churchName} — ${settings.assistant_name?.trim() || "Voice Assistant"}`,
-    voice_id: voiceId,
+    voice_id: resolveVoiceId(settings.voice_gender),
     language: LANGUAGE_TO_RETELL[settings.language] ?? "en-US",
     voice_speed: PACE_TO_VOICE_SPEED[settings.speaking_pace] ?? 1,
+    // Church-secretary timing: wait a beat, stay interruptible, don't fill silence.
+    responsiveness: 0.7,
+    enable_dynamic_responsiveness: true,
+    interruption_sensitivity: 0.7,
+    enable_backchannel: true,
+    backchannel_frequency: 0.55,
+    backchannel_words: ["mm-hmm", "okay", "sure", "I see"],
+    reminder_trigger_ms: 14000,
+    reminder_max_count: 1,
+    end_call_after_silence_ms: 60000,
     webhook_url: webhookUrl,
     webhook_events: webhookUrl ? ["call_ended", "call_analyzed"] : undefined,
   };
 }
 
+async function publishAgentVersion(agentId: string, version: number): Promise<void> {
+  await retellRequest({
+    method: "POST",
+    path: `/publish-agent-version/${agentId}`,
+    body: { version },
+  });
+}
+
 async function publishAgent(agentId: string): Promise<void> {
-  try {
+  // get-agent returns the current draft; publish that version in place.
+  const agent = await retellRequest<RetellAgentResponse>({
+    method: "GET",
+    path: `/get-agent/${agentId}`,
+  });
+
+  const version = typeof agent.version === "number" ? agent.version : null;
+  if (version == null) {
+    // Legacy fallback for older Retell accounts.
     await retellRequest({
       method: "POST",
       path: `/publish-agent/${agentId}`,
       body: {},
     });
-  } catch (err) {
-    console.warn("[retell] publish agent skipped", agentId, err);
+    return;
   }
+
+  await publishAgentVersion(agentId, version);
+}
+
+/**
+ * Published Retell agents/LLMs are immutable. Creating an agent draft also
+ * creates a matching unpublished LLM draft we can PATCH with ?version=.
+ */
+async function ensureDraftAgent(
+  agentId: string,
+): Promise<{ agentVersion: number; llmVersion: number | null }> {
+  const agent = await retellRequest<RetellAgentResponse>({
+    method: "GET",
+    path: `/get-agent/${agentId}`,
+  });
+
+  const currentVersion = typeof agent.version === "number" ? agent.version : null;
+  if (currentVersion == null) {
+    throw new Error("Retell agent is missing a version number.");
+  }
+
+  const draft =
+    agent.is_published === false
+      ? agent
+      : await retellRequest<RetellAgentResponse>({
+          method: "POST",
+          path: `/create-agent-version/${agentId}`,
+          body: { base_version: currentVersion },
+        });
+
+  const agentVersion = typeof draft.version === "number" ? draft.version : currentVersion;
+  const llmVersion =
+    typeof draft.response_engine?.version === "number"
+      ? draft.response_engine.version
+      : null;
+
+  return { agentVersion, llmVersion };
 }
 
 async function syncLlm(
   settings: VoiceAssistantSettings,
   context: Awaited<ReturnType<typeof getVoiceAssistantContext>>,
   church: NonNullable<Awaited<ReturnType<typeof getChurchProfileForVoice>>>,
+  llmVersion?: number | null,
 ): Promise<string> {
   const payload = buildLlmPayload(settings, context, church);
 
   if (settings.retell_llm_id) {
+    const versionQuery =
+      typeof llmVersion === "number" ? `?version=${llmVersion}` : "";
     await retellRequest({
       method: "PATCH",
-      path: `/update-retell-llm/${settings.retell_llm_id}`,
+      path: `/update-retell-llm/${settings.retell_llm_id}${versionQuery}`,
       body: payload,
     });
     return settings.retell_llm_id;
@@ -194,13 +317,16 @@ async function syncAgent(
   settings: VoiceAssistantSettings,
   llmId: string,
   churchName: string,
+  agentVersion?: number | null,
 ): Promise<string> {
   const payload = buildAgentPayload(llmId, settings, churchName);
 
   if (settings.retail_ai_agent_id) {
+    const versionQuery =
+      typeof agentVersion === "number" ? `?version=${agentVersion}` : "";
     const updated = await retellRequest<RetellAgentResponse>({
       method: "PATCH",
-      path: `/update-agent/${settings.retail_ai_agent_id}`,
+      path: `/update-agent/${settings.retail_ai_agent_id}${versionQuery}`,
       body: payload,
     });
     return updated.agent_id ?? settings.retail_ai_agent_id;
@@ -235,9 +361,24 @@ export async function syncRetellAgent(churchId: string): Promise<RetellSyncResul
     throw new Error("Church profile not found.");
   }
 
-  const llmId = await syncLlm(settings, context, church);
-  const agentId = await syncAgent(settings, llmId, church.name);
-  await publishAgent(agentId);
+  let llmVersion: number | null = null;
+  let agentVersion: number | null = null;
+
+  // Existing published agents cannot be patched in place — open a draft first.
+  if (settings.retail_ai_agent_id && settings.retell_llm_id) {
+    const draft = await ensureDraftAgent(settings.retail_ai_agent_id);
+    agentVersion = draft.agentVersion;
+    llmVersion = draft.llmVersion;
+  }
+
+  const llmId = await syncLlm(settings, context, church, llmVersion);
+  const agentId = await syncAgent(settings, llmId, church.name, agentVersion);
+
+  if (typeof agentVersion === "number") {
+    await publishAgentVersion(agentId, agentVersion);
+  } else {
+    await publishAgent(agentId);
+  }
 
   const admin = createAdminClient();
   const { error } = await admin

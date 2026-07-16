@@ -10,6 +10,10 @@ export const SPEAKING_PACES = ["slow", "normal", "energetic"] as const;
 
 export type SpeakingPace = (typeof SPEAKING_PACES)[number];
 
+export const VOICE_GENDERS = ["male", "female"] as const;
+
+export type VoiceGender = (typeof VOICE_GENDERS)[number];
+
 export const DENOMINATIONS = [
   "Baptist",
   "Catholic",
@@ -62,6 +66,7 @@ export type VoiceAssistantSettings = {
   emergency_phone: string | null;
   tone: VoiceTone;
   speaking_pace: SpeakingPace;
+  voice_gender: VoiceGender;
   language: string;
   greeting_message: string | null;
   signoff_message: string | null;
@@ -83,6 +88,12 @@ export type VoiceAssistantContext = {
   programs: string[];
 };
 
+export type PhoneCallScoreBreakdown = {
+  score: number;
+  rationale: string;
+  [key: string]: unknown;
+};
+
 export type PhoneCallRow = {
   id: string;
   caller_number: string | null;
@@ -91,6 +102,12 @@ export type PhoneCallRow = {
   sentiment: string | null;
   transcript: string | null;
   called_at: string;
+  ai_score: number | null;
+  recording_url: string | null;
+  call_successful: boolean | null;
+  score_breakdown: PhoneCallScoreBreakdown | null;
+  notes: string | null;
+  scored_at: string | null;
 };
 
 export type VoiceAgentSyncStatus = {
@@ -108,6 +125,7 @@ export type VoiceAssistantFormState = {
   emergencyPhone: string;
   tone: VoiceTone;
   speakingPace: SpeakingPace;
+  voiceGender: VoiceGender;
   language: string;
   greetingMessage: string;
   signoffMessage: string;

@@ -1,7 +1,8 @@
 "use client";
 
-import { Fragment, useState, useTransition } from "react";
-import { ChevronDown, ChevronUp, Download, RefreshCw } from "lucide-react";
+import Link from "next/link";
+import { useTransition } from "react";
+import { Download, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { importVoiceAssistantCalls } from "@/app/dashboard/voice-assistant/actions";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -19,12 +20,21 @@ type RecentCallsBlockProps = {
   hasAgent: boolean;
 };
 
+function formatScore(score: number | null): string {
+  if (score == null || Number.isNaN(Number(score))) return "—";
+  return String(Math.round(Number(score)));
+}
+
+function formatSuccessful(value: boolean | null): string {
+  if (value == null) return "—";
+  return value ? "Yes" : "No";
+}
+
 export function RecentCallsBlock({
   calls,
   isAdmin,
   hasAgent,
 }: RecentCallsBlockProps) {
-  const [expandedId, setExpandedId] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
   const handleImport = () => {
@@ -89,79 +99,59 @@ export function RecentCallsBlock({
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[480px] text-left text-sm">
+            <table className="w-full min-w-[640px] text-left text-sm">
               <thead>
                 <tr className="border-b border-border text-xs text-muted-foreground">
                   <th className="pb-2 pr-4 font-medium">Date</th>
                   <th className="pb-2 pr-4 font-medium">Caller</th>
                   <th className="pb-2 pr-4 font-medium">Duration</th>
-                  <th className="pb-2 pr-4 font-medium">Sentiment</th>
-                  <th className="pb-2 font-medium">Summary</th>
+                  <th className="pb-2 pr-4 font-medium">Score</th>
+                  <th className="pb-2 pr-4 font-medium">Successful</th>
+                  <th className="pb-2 pr-4 font-medium">Summary</th>
                   <th className="pb-2 pl-2 font-medium">
                     <span className="sr-only">Details</span>
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {calls.map((call) => {
-                  const expanded = expandedId === call.id;
-                  return (
-                    <Fragment key={call.id}>
-                      <tr className="border-b border-border/60 last:border-0">
-                        <td className="py-2.5 pr-4 tabular-nums">
-                          {new Date(call.called_at).toLocaleString(undefined, {
-                            month: "short",
-                            day: "numeric",
-                            hour: "numeric",
-                            minute: "2-digit",
-                          })}
-                        </td>
-                        <td className="py-2.5 pr-4">
-                          {maskPhoneNumber(call.caller_number)}
-                        </td>
-                        <td className="py-2.5 pr-4 tabular-nums">
-                          {formatCallDuration(call.duration_seconds)}
-                        </td>
-                        <td className="py-2.5 pr-4 capitalize text-muted-foreground">
-                          {call.sentiment ?? "—"}
-                        </td>
-                        <td className="max-w-[200px] truncate py-2.5 pr-4 text-muted-foreground">
-                          {call.outcome ?? "—"}
-                        </td>
-                        <td className="py-2.5 pl-2">
-                          {call.transcript && (
-                            <button
-                              type="button"
-                              className="inline-flex items-center text-xs font-medium text-accent"
-                              onClick={() =>
-                                setExpandedId(expanded ? null : call.id)
-                              }
-                            >
-                              {expanded ? (
-                                <>
-                                  Hide
-                                  <ChevronUp className="ml-1 size-3.5" />
-                                </>
-                              ) : (
-                                <>
-                                  Transcript
-                                  <ChevronDown className="ml-1 size-3.5" />
-                                </>
-                              )}
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                      {expanded && call.transcript && (
-                        <tr className="bg-muted/20">
-                          <td colSpan={6} className="px-3 py-3 text-xs leading-relaxed">
-                            {call.transcript}
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  );
-                })}
+                {calls.map((call) => (
+                  <tr
+                    key={call.id}
+                    className="border-b border-border/60 last:border-0"
+                  >
+                    <td className="py-2.5 pr-4 tabular-nums">
+                      {new Date(call.called_at).toLocaleString(undefined, {
+                        month: "short",
+                        day: "numeric",
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
+                    </td>
+                    <td className="py-2.5 pr-4">
+                      {maskPhoneNumber(call.caller_number)}
+                    </td>
+                    <td className="py-2.5 pr-4 tabular-nums">
+                      {formatCallDuration(call.duration_seconds)}
+                    </td>
+                    <td className="py-2.5 pr-4 tabular-nums text-muted-foreground">
+                      {formatScore(call.ai_score)}
+                    </td>
+                    <td className="py-2.5 pr-4 text-muted-foreground">
+                      {formatSuccessful(call.call_successful)}
+                    </td>
+                    <td className="max-w-[200px] truncate py-2.5 pr-4 text-muted-foreground">
+                      {call.outcome ?? "—"}
+                    </td>
+                    <td className="py-2.5 pl-2">
+                      <Link
+                        href={`/dashboard/call-log/${call.id}`}
+                        className="text-xs font-medium text-accent hover:underline"
+                      >
+                        View
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

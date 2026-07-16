@@ -8,6 +8,7 @@ import {
   LifeBuoy,
   Megaphone,
   Phone,
+  PhoneCall,
   RadioTower,
   Settings,
   Users,
@@ -67,6 +68,12 @@ export const navItems: NavItem[] = [
     shortLabel: "Voice",
     href: "/dashboard/voice-assistant",
     icon: Phone,
+  },
+  {
+    label: "Call Log",
+    shortLabel: "Calls",
+    href: "/dashboard/call-log",
+    icon: PhoneCall,
   },
   {
     label: "Sermon Builder",

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { listUpcomingCalendarEvents } from "@/lib/integrations/google-calendar";
+import { resolveGreetingTemplate } from "@/lib/integrations/retell-prompt";
 import { getPublishedAnnouncements } from "@/lib/queries/announcements";
 import { getChurchAISettings } from "@/lib/queries/sermons";
 import { createClient } from "@/lib/supabase/server";
@@ -12,6 +13,7 @@ import type {
   VoiceAssistantFormState,
   VoiceAgentSyncStatus,
   VoiceAssistantSettings,
+  VoiceGender,
   VoiceTone,
 } from "@/types/voice-assistant";
 
@@ -88,6 +90,7 @@ function mapSettings(row: Record<string, unknown>): VoiceAssistantSettings {
     emergency_phone: (row.emergency_phone as string | null) ?? null,
     tone: (row.tone as VoiceTone) ?? "warm_friendly",
     speaking_pace: (row.speaking_pace as SpeakingPace) ?? "normal",
+    voice_gender: (row.voice_gender as VoiceGender) === "female" ? "female" : "male",
     language: (row.language as string) ?? "en",
     greeting_message: (row.greeting_message as string | null) ?? null,
     signoff_message: (row.signoff_message as string | null) ?? null,
@@ -158,8 +161,8 @@ export async function getChurchProfileForVoice(
 }
 
 export function buildDefaultGreeting(churchName: string, assistantName: string): string {
-  const name = assistantName.trim() || "[Assistant Name]";
-  return `Thank you for calling ${churchName}. This is ${name}, how can I help you today?`;
+  const name = assistantName.trim() || "the church desk";
+  return `Hi, you've reached ${churchName}. This is ${name}.`;
 }
 
 export async function buildVoiceAssistantFormDefaults(
@@ -183,6 +186,7 @@ export async function buildVoiceAssistantFormDefaults(
     emergencyPhone: settings?.emergency_phone ?? "",
     tone: settings?.tone ?? "warm_friendly",
     speakingPace: settings?.speaking_pace ?? "normal",
+    voiceGender: settings?.voice_gender ?? "male",
     language: settings?.language ?? "en",
     greetingMessage:
       settings?.greeting_message ?? buildDefaultGreeting(churchName, assistantName),
@@ -202,19 +206,31 @@ export async function upsertVoiceAssistantSettings(
   supabase?: SupabaseClient,
 ): Promise<VoiceAssistantSettings> {
   const client = supabase ?? db();
+  const assistantName = patch.assistantName.trim();
+  const profile = await getChurchProfileForVoice(churchId, client);
+  const churchName = profile?.name?.trim() || "your church";
+  const greetingRaw = patch.greetingMessage.trim();
+  const greetingMessage = greetingRaw
+    ? resolveGreetingTemplate(greetingRaw, {
+        assistantName: assistantName || "your church assistant",
+        churchName,
+      })
+    : null;
+
   const { data, error } = await client
     .from("voice_assistant_settings")
     .upsert(
       {
         church_id: churchId,
-        assistant_name: patch.assistantName.trim() || null,
+        assistant_name: assistantName || null,
         denomination: patch.denomination.trim() || null,
         church_phone: patch.churchPhone.trim() || null,
         emergency_phone: patch.emergencyPhone.trim() || null,
         tone: patch.tone,
         speaking_pace: patch.speakingPace,
+        voice_gender: patch.voiceGender,
         language: patch.language,
-        greeting_message: patch.greetingMessage.trim() || null,
+        greeting_message: greetingMessage,
         signoff_message: patch.signoffMessage.trim() || null,
         office_hours: patch.officeHours,
         after_hours_enabled: patch.afterHoursEnabled,
@@ -341,22 +357,39 @@ export async function getVoiceAssistantContext(
   };
 }
 
+const PHONE_CALL_SELECT =
+  "id, caller_number, duration_seconds, outcome, sentiment, transcript, called_at, ai_score, recording_url, call_successful, score_breakdown, notes, scored_at";
+
 export async function getRecentPhoneCalls(
   churchId: string,
-  limit = 25,
+  limit = 100,
   supabase?: SupabaseClient,
 ): Promise<PhoneCallRow[]> {
   const client = supabase ?? db();
   const { data } = await client
     .from("phone_calls")
-    .select(
-      "id, caller_number, duration_seconds, outcome, sentiment, transcript, called_at",
-    )
+    .select(PHONE_CALL_SELECT)
     .eq("church_id", churchId)
     .order("called_at", { ascending: false })
     .limit(limit);
 
   return (data ?? []) as PhoneCallRow[];
+}
+
+export async function getPhoneCallById(
+  churchId: string,
+  callId: string,
+  supabase?: SupabaseClient,
+): Promise<PhoneCallRow | null> {
+  const client = supabase ?? db();
+  const { data } = await client
+    .from("phone_calls")
+    .select(PHONE_CALL_SELECT)
+    .eq("church_id", churchId)
+    .eq("id", callId)
+    .maybeSingle();
+
+  return (data as PhoneCallRow | null) ?? null;
 }
 
 export async function getVoiceAgentSyncStatus(
