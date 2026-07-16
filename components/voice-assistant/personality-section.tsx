@@ -1,11 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
-import type { VoiceAssistantFieldErrors } from "@/lib/utils/voice-assistant-validation";
 import {
   SPEAKING_PACES,
   VOICE_LANGUAGES,
@@ -65,17 +65,13 @@ type PersonalitySectionProps = {
   speakingPace: SpeakingPace;
   voiceGender: VoiceGender;
   language: string;
-  greetingMessage: string;
   signoffMessage: string;
   readOnly?: boolean;
-  errors?: VoiceAssistantFieldErrors;
-  showErrors?: boolean;
   onChange: (patch: {
     tone?: VoiceTone;
     speakingPace?: SpeakingPace;
     voiceGender?: VoiceGender;
     language?: string;
-    greetingMessage?: string;
     signoffMessage?: string;
   }) => void;
 };
@@ -85,11 +81,8 @@ export function PersonalitySection({
   speakingPace,
   voiceGender,
   language,
-  greetingMessage,
   signoffMessage,
   readOnly = false,
-  errors,
-  showErrors = false,
   onChange,
 }: PersonalitySectionProps) {
   const paceIndex = paceToIndex(speakingPace);
@@ -194,25 +187,14 @@ export function PersonalitySection({
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="greeting-message">
-            Greeting Message <span className="text-destructive">*</span>
-          </Label>
-          <Textarea
-            id="greeting-message"
-            placeholder="Hi, you've reached Grace Community Church. This is Hope. This call is recorded for quality and training."
-            value={greetingMessage}
-            disabled={readOnly}
-            aria-invalid={showErrors && Boolean(errors?.greetingMessage)}
-            onChange={(e) => onChange({ greetingMessage: e.target.value })}
-          />
-          {showErrors && errors?.greetingMessage ? (
-            <p className="text-xs text-destructive">{errors.greetingMessage}</p>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              First thing callers hear. Keep it short. A recording notice is
-              added automatically if you don&apos;t include one.
-            </p>
-          )}
+          <Label>Phone greeting</Label>
+          <p className="rounded-[10px] border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+            First thing callers hear — set in{" "}
+            <Link href="/dashboard/church-profile" className="font-medium text-accent underline">
+              Church Profile → AI knowledge → Phone greeting
+            </Link>
+            . A recording notice is added automatically if missing.
+          </p>
         </div>
 
         <div className="space-y-2">

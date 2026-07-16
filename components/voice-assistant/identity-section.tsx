@@ -1,25 +1,22 @@
 "use client";
 
+import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DENOMINATIONS } from "@/types/voice-assistant";
 import type { VoiceAssistantFieldErrors } from "@/lib/utils/voice-assistant-validation";
+import type { VoiceProfileSummary } from "@/types/voice-assistant";
 
 type IdentitySectionProps = {
   assistantName: string;
-  denomination: string;
-  churchPhone: string;
   emergencyPhone: string;
+  profile: VoiceProfileSummary;
   readOnly?: boolean;
   errors?: VoiceAssistantFieldErrors;
   showErrors?: boolean;
   assistantNameRef?: React.RefObject<HTMLInputElement>;
   onChange: (patch: {
     assistantName?: string;
-    denomination?: string;
-    churchPhone?: string;
     emergencyPhone?: string;
   }) => void;
 };
@@ -29,11 +26,38 @@ function FieldError({ message }: { message?: string }) {
   return <p className="text-xs text-destructive">{message}</p>;
 }
 
+function ProfileField({
+  label,
+  value,
+  required,
+}: {
+  label: string;
+  value: string;
+  required?: boolean;
+}) {
+  return (
+    <div className="space-y-2">
+      <Label>
+        {label} {required ? <span className="text-destructive">*</span> : null}
+      </Label>
+      <p className="rounded-[10px] border border-border bg-muted/30 px-3 py-2 text-sm">
+        {value.trim() || "Not set"}
+      </p>
+      <p className="text-xs text-muted-foreground">
+        Managed in{" "}
+        <Link href="/dashboard/church-profile" className="font-medium text-accent underline">
+          Church Profile
+        </Link>
+        .
+      </p>
+    </div>
+  );
+}
+
 export function IdentitySection({
   assistantName,
-  denomination,
-  churchPhone,
   emergencyPhone,
+  profile,
   readOnly = false,
   errors,
   showErrors = false,
@@ -71,49 +95,17 @@ export function IdentitySection({
           )}
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="denomination">
-            Denomination <span className="text-destructive">*</span>
-          </Label>
-          <Select
-            id="denomination"
-            value={denomination}
-            disabled={readOnly}
-            aria-invalid={showErrors && Boolean(errors?.denomination)}
-            onChange={(e) => onChange({ denomination: e.target.value })}
-          >
-            <option value="">Select a denomination</option>
-            {DENOMINATIONS.map((d) => (
-              <option key={d} value={d}>
-                {d}
-              </option>
-            ))}
-          </Select>
-          {showErrors && <FieldError message={errors?.denomination} />}
-        </div>
+        <ProfileField
+          label="Denomination"
+          value={profile.denomination}
+          required
+        />
 
-        <div className="space-y-2">
-          <Label htmlFor="church-phone">
-            Church Phone Number <span className="text-destructive">*</span>
-          </Label>
-          <Input
-            id="church-phone"
-            type="tel"
-            placeholder="(555) 123-4567"
-            value={churchPhone}
-            disabled={readOnly}
-            aria-invalid={showErrors && Boolean(errors?.churchPhone)}
-            onChange={(e) => onChange({ churchPhone: e.target.value })}
-          />
-          {showErrors ? (
-            <FieldError message={errors?.churchPhone} />
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              Required for transferring callers who ask for a pastor or staff
-              member.
-            </p>
-          )}
-        </div>
+        <ProfileField
+          label="Church phone (transfer number)"
+          value={profile.churchPhone}
+          required
+        />
 
         <div className="space-y-2">
           <Label htmlFor="emergency-phone">Emergency Contact Number</Label>

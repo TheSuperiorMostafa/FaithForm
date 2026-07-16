@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logActivity } from "@/lib/activity/log";
 import { createClient } from "@/lib/supabase/server";
+import type { ChurchProfile } from "@/types/church-profile";
+import { buildSermonProfileContext } from "@/lib/ai/prompts";
 import type {
   AIProvider,
   ChurchSettings,
@@ -429,15 +431,19 @@ export async function verifySeriesAccess(
 export function sermonToContext(
   sermon: Sermon,
   settings?: ChurchSettings | null,
+  profile?: ChurchProfile | null,
 ) {
+  const fromProfile = buildSermonProfileContext(profile ?? null);
   return {
     topic: sermon.topic,
     scripture_refs: sermon.scripture_refs,
     audience: sermon.audience,
     duration_min: sermon.duration_min,
     style_notes: sermon.style_notes,
-    denomination: settings?.denomination ?? null,
+    denomination: fromProfile.denomination ?? settings?.denomination ?? null,
     preaching_style: settings?.preaching_style ?? null,
+    church_summary: fromProfile.church_summary,
+    church_culture: fromProfile.church_culture,
   };
 }
 

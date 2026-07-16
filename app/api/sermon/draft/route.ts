@@ -3,6 +3,7 @@ import { requireChurchAuth } from "@/lib/auth/church";
 import { aiGenerateLargeObject } from "@/lib/ai";
 import { sermonContentSchema } from "@/lib/ai/schemas";
 import { draftSystemPrompt } from "@/lib/ai/prompts";
+import { getChurchProfile } from "@/lib/queries/church-profile";
 import {
   getChurchAISettings,
   sermonToContext,
@@ -38,8 +39,11 @@ export async function POST(request: Request) {
       );
     }
 
-    const settings = await getChurchAISettings(auth.churchId);
-    const ctx = sermonToContext(sermon, settings);
+    const [settings, profile] = await Promise.all([
+      getChurchAISettings(auth.churchId),
+      getChurchProfile(auth.churchId, supabase),
+    ]);
+    const ctx = sermonToContext(sermon, settings, profile);
 
     const passages = await fetchPassages(sermon.scripture_refs);
     const scriptureText = passages.map((p) => `${p.ref}\n${p.text}`).join("\n\n");

@@ -1,12 +1,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { listUpcomingCalendarEvents } from "@/lib/integrations/google-calendar";
 import {
-  resolveGreetingTemplate,
   replaceAssistantNameInText,
   withRecordingDisclosure,
 } from "@/lib/integrations/retell-prompt";
 import { getPublishedAnnouncements } from "@/lib/queries/announcements";
-import { getChurchAISettings } from "@/lib/queries/sermons";
+import {
+  formatServiceTimeLine,
+  formatStaffLine,
+  getChurchProfile,
+} from "@/lib/queries/church-profile";
 import { createClient } from "@/lib/supabase/server";
 import type {
   DayKey,
@@ -20,8 +23,14 @@ import type {
   VoiceGender,
   VoiceTone,
 } from "@/types/voice-assistant";
+import type { AiKnowledge } from "@/types/church-profile";
 
-const DAY_KEYS: DayKey[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+import {
+  defaultOfficeHours,
+  normalizeOfficeHours,
+} from "@/lib/utils/office-hours";
+
+export { defaultOfficeHours, normalizeOfficeHours };
 
 const SERVICE_KEYWORDS = [
   "worship",
@@ -48,41 +57,6 @@ const PROGRAM_KEYWORDS = [
 
 function db() {
   return createClient();
-}
-
-export function defaultOfficeHours(): OfficeHours {
-  const weekday = { enabled: true, open: "09:00", close: "17:00" };
-  const weekend = { enabled: false, open: "09:00", close: "17:00" };
-  return {
-    mon: { ...weekday },
-    tue: { ...weekday },
-    wed: { ...weekday },
-    thu: { ...weekday },
-    fri: { ...weekday },
-    sat: { ...weekend },
-    sun: { ...weekend },
-  };
-}
-
-function normalizeOfficeHours(raw: unknown): OfficeHours {
-  const defaults = defaultOfficeHours();
-  if (!raw || typeof raw !== "object") return defaults;
-
-  const record = raw as Record<string, Partial<{ enabled: boolean; open: string; close: string }>>;
-  const result = { ...defaults };
-
-  for (const key of DAY_KEYS) {
-    const day = record[key];
-    if (day && typeof day === "object") {
-      result[key] = {
-        enabled: Boolean(day.enabled),
-        open: typeof day.open === "string" ? day.open : defaults[key].open,
-        close: typeof day.close === "string" ? day.close : defaults[key].close,
-      };
-    }
-  }
-
-  return result;
 }
 
 function mapSettings(row: Record<string, unknown>): VoiceAssistantSettings {
@@ -135,32 +109,33 @@ export type ChurchProfileForVoice = {
   website: string | null;
   slug: string | null;
   stripeChargesEnabled: boolean;
+  denomination: string | null;
+  officeHours: OfficeHours;
+  aiKnowledge: AiKnowledge;
+  holidaySchedule: string | null;
 };
 
 export async function getChurchProfileForVoice(
   churchId: string,
   supabase?: SupabaseClient,
 ): Promise<ChurchProfileForVoice | null> {
-  const client = supabase ?? db();
-  const { data } = await client
-    .from("churches")
-    .select(
-      "name, phone, address, city, state, zip, website, slug, stripe_charges_enabled",
-    )
-    .eq("id", churchId)
-    .maybeSingle();
+  const profile = await getChurchProfile(churchId, supabase);
+  if (!profile) return null;
 
-  if (!data) return null;
   return {
-    name: data.name as string,
-    phone: (data.phone as string | null) ?? null,
-    address: (data.address as string | null) ?? null,
-    city: (data.city as string | null) ?? null,
-    state: (data.state as string | null) ?? null,
-    zip: (data.zip as string | null) ?? null,
-    website: (data.website as string | null) ?? null,
-    slug: (data.slug as string | null) ?? null,
-    stripeChargesEnabled: Boolean(data.stripe_charges_enabled),
+    name: profile.name,
+    phone: profile.phone,
+    address: profile.address,
+    city: profile.city,
+    state: profile.state,
+    zip: profile.zip,
+    website: profile.website,
+    slug: profile.slug,
+    stripeChargesEnabled: profile.stripeChargesEnabled,
+    denomination: profile.denomination,
+    officeHours: profile.officeHours,
+    aiKnowledge: profile.aiKnowledge,
+    holidaySchedule: profile.holidaySchedule,
   };
 }
 
@@ -176,28 +151,16 @@ export async function buildVoiceAssistantFormDefaults(
   supabase?: SupabaseClient,
 ): Promise<VoiceAssistantFormState> {
   const client = supabase ?? db();
-  const [settings, profile, aiSettings] = await Promise.all([
-    getVoiceAssistantSettings(churchId, client),
-    getChurchProfileForVoice(churchId, client),
-    getChurchAISettings(churchId),
-  ]);
-
-  const churchName = profile?.name ?? "your church";
-  const assistantName = settings?.assistant_name ?? "";
+  const settings = await getVoiceAssistantSettings(churchId, client);
 
   return {
-    assistantName,
-    denomination: settings?.denomination ?? aiSettings?.denomination ?? "",
-    churchPhone: settings?.church_phone ?? profile?.phone ?? "",
+    assistantName: settings?.assistant_name ?? "",
     emergencyPhone: settings?.emergency_phone ?? "",
     tone: settings?.tone ?? "warm_friendly",
     speakingPace: settings?.speaking_pace ?? "normal",
     voiceGender: settings?.voice_gender ?? "male",
     language: settings?.language ?? "en",
-    greetingMessage:
-      settings?.greeting_message ?? buildDefaultGreeting(churchName, assistantName),
     signoffMessage: settings?.signoff_message ?? "God bless you. Have a wonderful day.",
-    officeHours: settings?.office_hours ?? defaultOfficeHours(),
     afterHoursEnabled: settings?.after_hours_enabled ?? false,
     afterHoursMessage: settings?.after_hours_message ?? "",
   };
@@ -205,10 +168,7 @@ export async function buildVoiceAssistantFormDefaults(
 
 export async function upsertVoiceAssistantSettings(
   churchId: string,
-  patch: Omit<
-    VoiceAssistantFormState,
-    never
-  >,
+  patch: VoiceAssistantFormState,
   supabase?: SupabaseClient,
 ): Promise<VoiceAssistantSettings> {
   const client = supabase ?? db();
@@ -217,18 +177,6 @@ export async function upsertVoiceAssistantSettings(
   const churchName = profile?.name?.trim() || "your church";
   const previous = await getVoiceAssistantSettings(churchId, client);
   const previousName = previous?.assistant_name?.trim() || null;
-
-  const greetingRaw = replaceAssistantNameInText(
-    patch.greetingMessage.trim(),
-    previousName,
-    assistantName,
-  );
-  const greetingMessage = greetingRaw
-    ? resolveGreetingTemplate(greetingRaw, {
-        assistantName: assistantName || "your church assistant",
-        churchName,
-      })
-    : null;
 
   const signoffMessage =
     replaceAssistantNameInText(
@@ -250,16 +198,12 @@ export async function upsertVoiceAssistantSettings(
       {
         church_id: churchId,
         assistant_name: assistantName || null,
-        denomination: patch.denomination.trim() || null,
-        church_phone: patch.churchPhone.trim() || null,
         emergency_phone: patch.emergencyPhone.trim() || null,
         tone: patch.tone,
         speaking_pace: patch.speakingPace,
         voice_gender: patch.voiceGender,
         language: patch.language,
-        greeting_message: greetingMessage,
         signoff_message: signoffMessage,
-        office_hours: patch.officeHours,
         after_hours_enabled: patch.afterHoursEnabled,
         after_hours_message: afterHoursMessage,
         updated_at: new Date().toISOString(),
@@ -308,14 +252,9 @@ export async function getVoiceAssistantContext(
     calendarEvents = [];
   }
 
-  const [announcements, profile, adminUsers] = await Promise.all([
+  const [announcements, profile] = await Promise.all([
     getPublishedAnnouncements(client, churchId),
-    getChurchProfileForVoice(churchId, client),
-    client
-      .from("church_users")
-      .select("role, user_id")
-      .eq("church_id", churchId)
-      .eq("role", "admin"),
+    getChurchProfile(churchId, client),
   ]);
 
   const now = new Date();
@@ -330,6 +269,9 @@ export async function getVoiceAssistantContext(
     .slice(0, 10)
     .map((e) => formatEventLine(e.title, e.startAt, e.location));
 
+  const structuredServices =
+    profile?.serviceTimes.map(formatServiceTimeLine) ?? [];
+
   const serviceFromCalendar = calendarEvents
     .filter((e) => matchesKeywords(e.title, SERVICE_KEYWORDS))
     .map((e) => formatEventLine(e.title, e.startAt, e.location));
@@ -339,6 +281,12 @@ export async function getVoiceAssistantContext(
     .map((a) =>
       formatEventLine(a.title, a.start_at, a.event_location ?? undefined),
     );
+
+  const structuredPrograms = [
+    profile?.aiKnowledge.kids?.trim(),
+    profile?.aiKnowledge.youth?.trim(),
+    profile?.aiKnowledge.volunteer?.trim(),
+  ].filter(Boolean) as string[];
 
   const programsFromCalendar = calendarEvents
     .filter(
@@ -356,31 +304,41 @@ export async function getVoiceAssistantContext(
     )
     .map((a) => a.title);
 
-  const pastoralStaff: string[] = [];
-  if (profile?.phone) {
-    pastoralStaff.push(`Main office — ${profile.phone}`);
-  }
-  const adminCount = adminUsers.data?.length ?? 0;
-  if (adminCount > 0) {
-    pastoralStaff.push(
-      `${adminCount} church ${adminCount === 1 ? "leader" : "leaders"} on staff`,
-    );
-  }
+  const publicStaff = (profile?.staff ?? [])
+    .filter((member) => member.is_public)
+    .sort((a, b) => {
+      if (a.ai_contact_priority !== b.ai_contact_priority) {
+        return b.ai_contact_priority - a.ai_contact_priority;
+      }
+      return a.sort_order - b.sort_order;
+    })
+    .map(formatStaffLine);
+
+  const pastoralStaff =
+    publicStaff.length > 0
+      ? publicStaff
+      : profile?.phone
+        ? [`Main office — ${profile.phone}`]
+        : [];
+
+  const serviceSchedule =
+    structuredServices.length > 0
+      ? uniqueLines(structuredServices)
+      : uniqueLines([...serviceFromCalendar, ...serviceFromAnnouncements]);
+
+  const programs =
+    structuredPrograms.length > 0
+      ? uniqueLines(structuredPrograms)
+      : uniqueLines([...programsFromCalendar, ...programsFromAnnouncements]);
 
   return {
-    serviceSchedule: uniqueLines([...serviceFromCalendar, ...serviceFromAnnouncements]).slice(
-      0,
-      8,
-    ),
+    serviceSchedule: serviceSchedule.slice(0, 8),
     upcomingEvents: uniqueLines([
       ...upcomingFromCalendar,
       ...upcomingFromAnnouncements,
     ]).slice(0, 8),
-    pastoralStaff,
-    programs: uniqueLines([
-      ...programsFromCalendar,
-      ...programsFromAnnouncements,
-    ]).slice(0, 8),
+    pastoralStaff: pastoralStaff.slice(0, 8),
+    programs: programs.slice(0, 8),
   };
 }
 

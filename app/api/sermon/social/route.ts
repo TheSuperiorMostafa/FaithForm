@@ -3,6 +3,7 @@ import { requireChurchAuth } from "@/lib/auth/church";
 import { aiGenerateObject } from "@/lib/ai";
 import { socialSnippetsSchema } from "@/lib/ai/schemas";
 import { socialSystemPrompt } from "@/lib/ai/prompts";
+import { getChurchProfile } from "@/lib/queries/church-profile";
 import {
   getChurchAISettings,
   saveAsset,
@@ -27,8 +28,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Sermon not found" }, { status: 404 });
     }
 
-    const settings = await getChurchAISettings(auth.churchId);
-    const ctx = sermonToContext(sermon, settings);
+    const [settings, profile] = await Promise.all([
+      getChurchAISettings(auth.churchId),
+      getChurchProfile(auth.churchId, supabase),
+    ]);
+    const ctx = sermonToContext(sermon, settings, profile);
     const summary = [sermon.title, sermon.topic, JSON.stringify(sermon.outline ?? {})].join(
       "\n",
     );

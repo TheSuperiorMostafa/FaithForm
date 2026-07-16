@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useFormState, useFormStatus } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -137,14 +138,15 @@ export function AISettingsForm({
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="denomination">Denomination / tradition</Label>
-              <Input
-                id="denomination"
-                name="denomination"
-                defaultValue={settings?.denomination ?? ""}
-                placeholder="e.g. Baptist, non-denominational"
-              />
+            <div className="space-y-2 sm:col-span-2">
+              <Label>Denomination / tradition</Label>
+              <p className="text-sm text-muted-foreground">
+                Set in{" "}
+                <Link href="/dashboard/church-profile" className="font-medium text-accent underline">
+                  Church Profile
+                </Link>
+                . Sermon AI reads from there.
+              </p>
             </div>
 
             <div className="space-y-2">

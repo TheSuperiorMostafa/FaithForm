@@ -120,16 +120,19 @@ export type VoiceAgentSyncStatus = {
 
 export type VoiceAssistantFormState = {
   assistantName: string;
-  denomination: string;
-  churchPhone: string;
   emergencyPhone: string;
   tone: VoiceTone;
   speakingPace: SpeakingPace;
   voiceGender: VoiceGender;
   language: string;
-  greetingMessage: string;
   signoffMessage: string;
-  officeHours: OfficeHours;
   afterHoursEnabled: boolean;
   afterHoursMessage: string;
+};
+
+export type VoiceProfileSummary = {
+  denomination: string;
+  churchPhone: string;
+  greetingMessage: string;
+  hasOpenOfficeDay: boolean;
 };

@@ -21,10 +21,12 @@ import type {
   VoiceAgentSyncStatus,
   VoiceAssistantContext,
   VoiceAssistantFormState,
+  VoiceProfileSummary,
 } from "@/types/voice-assistant";
 
 type VoiceAssistantSettingsProps = {
   initialForm: VoiceAssistantFormState;
+  profileSummary: VoiceProfileSummary;
   context: VoiceAssistantContext;
   agentStatus: VoiceAgentSyncStatus;
   isAdmin: boolean;
@@ -33,6 +35,7 @@ type VoiceAssistantSettingsProps = {
 
 export function VoiceAssistantSettings({
   initialForm,
+  profileSummary,
   context,
   agentStatus,
   isAdmin,
@@ -59,10 +62,10 @@ export function VoiceAssistantSettings({
   const errors = useMemo(() => validateVoiceAssistantForm(form), [form]);
   const checklist = useMemo(
     () => [
-      ...getVoiceAssistantChecklist(form),
+      ...getVoiceAssistantChecklist(form, profileSummary),
       getDialInChecklistItem(Boolean(agentStatus.phoneNumber?.trim())),
     ],
-    [form, agentStatus.phoneNumber],
+    [form, profileSummary, agentStatus.phoneNumber],
   );
   const isDirty = !formsAreEqual(form, baseline);
   const isValid = Object.keys(errors).length === 0;
@@ -79,8 +82,13 @@ export function VoiceAssistantSettings({
         const to = patch.assistantName.trim();
         if (from) {
           const swap = (value: string) =>
-            value.replace(new RegExp(`\\b${from.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "gi"), to);
-          next.greetingMessage = swap(next.greetingMessage);
+            value.replace(
+              new RegExp(
+                `\\b${from.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`,
+                "gi",
+              ),
+              to,
+            );
           next.signoffMessage = swap(next.signoffMessage);
           next.afterHoursMessage = swap(next.afterHoursMessage);
         }
@@ -101,8 +109,7 @@ export function VoiceAssistantSettings({
     if (Object.keys(nextErrors).length > 0) {
       setShowErrors(true);
       toast.error("Complete the required fields before saving.");
-      const firstKey = Object.keys(nextErrors)[0];
-      if (firstKey === "assistantName") {
+      if ("assistantName" in nextErrors) {
         assistantNameRef.current?.focus();
       }
       return;
@@ -136,9 +143,8 @@ export function VoiceAssistantSettings({
           <div className="flex min-w-0 flex-col gap-6">
             <IdentitySection
               assistantName={form.assistantName}
-              denomination={form.denomination}
-              churchPhone={form.churchPhone}
               emergencyPhone={form.emergencyPhone}
+              profile={profileSummary}
               readOnly
               onChange={() => {}}
             />
@@ -147,13 +153,12 @@ export function VoiceAssistantSettings({
               speakingPace={form.speakingPace}
               voiceGender={form.voiceGender}
               language={form.language}
-              greetingMessage={form.greetingMessage}
               signoffMessage={form.signoffMessage}
               readOnly
               onChange={() => {}}
             />
             <AvailabilitySection
-              officeHours={form.officeHours}
+              profile={profileSummary}
               afterHoursEnabled={form.afterHoursEnabled}
               afterHoursMessage={form.afterHoursMessage}
               readOnly
@@ -165,7 +170,7 @@ export function VoiceAssistantSettings({
           <aside className="self-start lg:sticky lg:top-6">
             <PhonePreview
               assistantName={form.assistantName}
-              greetingMessage={form.greetingMessage}
+              greetingMessage={profileSummary.greetingMessage}
               tone={form.tone}
               speakingPace={form.speakingPace}
             />
@@ -185,9 +190,8 @@ export function VoiceAssistantSettings({
 
           <IdentitySection
             assistantName={form.assistantName}
-            denomination={form.denomination}
-            churchPhone={form.churchPhone}
             emergencyPhone={form.emergencyPhone}
+            profile={profileSummary}
             assistantNameRef={assistantNameRef}
             errors={errors}
             showErrors={showErrors}
@@ -198,14 +202,11 @@ export function VoiceAssistantSettings({
             speakingPace={form.speakingPace}
             voiceGender={form.voiceGender}
             language={form.language}
-            greetingMessage={form.greetingMessage}
             signoffMessage={form.signoffMessage}
-            errors={errors}
-            showErrors={showErrors}
             onChange={patchForm}
           />
           <AvailabilitySection
-            officeHours={form.officeHours}
+            profile={profileSummary}
             afterHoursEnabled={form.afterHoursEnabled}
             afterHoursMessage={form.afterHoursMessage}
             errors={errors}
@@ -219,7 +220,7 @@ export function VoiceAssistantSettings({
         <aside className="self-start lg:sticky lg:top-6">
           <PhonePreview
             assistantName={form.assistantName}
-            greetingMessage={form.greetingMessage}
+            greetingMessage={profileSummary.greetingMessage}
             tone={form.tone}
             speakingPace={form.speakingPace}
           />
@@ -234,7 +235,7 @@ export function VoiceAssistantSettings({
               <p className="text-xs text-muted-foreground">
                 {isValid
                   ? "Ready to sync to your Retell agent."
-                  : "Fill required fields marked with * before saving."}
+                  : "Fill required fields before saving."}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -270,7 +271,7 @@ function PageHeader({ readOnly = false }: { readOnly?: boolean }) {
       <p className="text-sm text-muted-foreground">
         {readOnly
           ? "View how your church phone assistant is configured."
-          : "Configure identity, greeting, hours, and transfer numbers — then save when ready."}
+          : "Configure voice delivery and after-hours behavior. Church identity lives in Church Profile."}
       </p>
     </div>
   );

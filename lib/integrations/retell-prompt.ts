@@ -1,4 +1,5 @@
 import type { ChurchProfileForVoice } from "@/lib/queries/voice-assistant";
+import { formatOfficeHoursText } from "@/lib/utils/office-hours";
 import { getGivePageUrl } from "@/lib/stripe/config";
 import {
   buildRetellStates,
@@ -102,27 +103,6 @@ const PACE_LABELS: Record<SpeakingPace, string> = {
   energetic: "a little quicker — still calm, never peppy",
 };
 
-function formatOfficeHours(settings: VoiceAssistantSettings): string {
-  const dayLabels: Record<string, string> = {
-    mon: "Monday",
-    tue: "Tuesday",
-    wed: "Wednesday",
-    thu: "Thursday",
-    fri: "Friday",
-    sat: "Saturday",
-    sun: "Sunday",
-  };
-
-  const lines = Object.entries(settings.office_hours)
-    .filter(([, hours]) => hours.enabled)
-    .map(([key, hours]) => {
-      const label = dayLabels[key] ?? key;
-      return `${label}: ${hours.open} – ${hours.close}`;
-    });
-
-  return lines.length > 0 ? lines.join("; ") : "Not configured";
-}
-
 function formatList(items: string[], emptyMessage: string): string {
   if (items.length === 0) return emptyMessage;
   return items.map((item) => `- ${item}`).join("\n");
@@ -140,18 +120,74 @@ function formatChurchAddress(church: ChurchProfileForVoice): string {
 
 function formatAddressAndParking(church: ChurchProfileForVoice): string {
   const address = formatChurchAddress(church);
-  if (address === "Address not on file") {
+  const parking = church.aiKnowledge.parking?.trim();
+  const visitor = church.aiKnowledge.visitor?.trim();
+
+  const parts: string[] = [];
+  if (address !== "Address not on file") {
+    parts.push(address);
+  }
+  if (parking) parts.push(`Parking: ${parking}`);
+  else if (address !== "Address not on file") {
+    parts.push(
+      "Parking is typically available on site — invite new visitors to look for guest parking or the main entrance.",
+    );
+  }
+  if (visitor) parts.push(`First-time visitors: ${visitor}`);
+
+  if (parts.length === 0) {
     return "Address and parking details are not on file. Offer to connect the caller with the church office.";
   }
-  return `${address}. Parking is typically available on site — invite new visitors to look for guest parking or the main entrance.`;
+  return parts.join(" ");
 }
 
 function formatGivingInfo(church: ChurchProfileForVoice): string {
+  const custom = church.aiKnowledge.giving_info?.trim();
+  if (custom) return custom;
+
   if (church.stripeChargesEnabled && church.slug) {
     const giveUrl = getGivePageUrl(church.slug);
     return `Gifts can be given in person during services or online at ${giveUrl}. Offer to text the giving link if the caller would like it.`;
   }
   return "Gifts can be given in person during services. Online giving is not set up yet — offer to connect the caller with the church office for giving questions.";
+}
+
+function formatProfileKnowledgeAppendix(church: ChurchProfileForVoice): string {
+  const sections: string[] = [];
+  const add = (label: string, value?: string) => {
+    const trimmed = value?.trim();
+    if (trimmed) sections.push(`${label}:\n${trimmed}`);
+  };
+
+  add("Church summary", church.aiKnowledge.summary);
+  add("History", church.aiKnowledge.history);
+  add("Culture", church.aiKnowledge.culture);
+  add("Beliefs", church.aiKnowledge.beliefs);
+  add("Kids ministry", church.aiKnowledge.kids);
+  add("Youth ministry", church.aiKnowledge.youth);
+  add("Accessibility", church.aiKnowledge.accessibility);
+  add("FAQ", church.aiKnowledge.faq);
+  add("Holiday schedule", church.holidaySchedule ?? undefined);
+  add("Emergency instructions", church.aiKnowledge.emergency_instructions);
+
+  if (sections.length === 0) return "";
+  return `\n\nCHURCH KNOWLEDGE (from Church Profile)\n${sections.join("\n\n")}`;
+}
+
+function formatGuardrailAppendix(church: ChurchProfileForVoice): string {
+  const parts: string[] = [];
+  const personality = church.aiKnowledge.personality_notes?.trim();
+  const escalation = church.aiKnowledge.escalation_rules?.trim();
+  const restricted = church.aiKnowledge.restricted_topics?.trim();
+  const extra = church.aiKnowledge.additional_context?.trim();
+
+  if (personality) parts.push(`Personality notes: ${personality}`);
+  if (escalation) parts.push(`Escalation rules: ${escalation}`);
+  if (restricted) parts.push(`Restricted topics: ${restricted}`);
+  if (extra) parts.push(`Additional context: ${extra}`);
+
+  if (parts.length === 0) return "";
+  return `\n\nPROFILE GUIDANCE\n${parts.join("\n")}`;
 }
 
 function fillTemplate(
@@ -267,7 +303,7 @@ function resolveSpokenMessages(
   church: ChurchProfileForVoice,
 ) {
   const assistantName = settings.assistant_name?.trim() || "the church desk";
-  const officeHours = formatOfficeHours(settings);
+  const officeHours = formatOfficeHoursText(church.officeHours);
   const spokenVars = {
     assistantName,
     churchName: church.name,
@@ -275,6 +311,7 @@ function resolveSpokenMessages(
   };
 
   const rawGreeting =
+    church.aiKnowledge.greeting?.trim() ||
     settings.greeting_message?.trim() ||
     `Hi, you've reached ${church.name}. This is ${assistantName}.`;
   const greeting = withRecordingDisclosure(
@@ -302,7 +339,9 @@ function resolveSpokenMessages(
   );
 
   const transferNumber =
-    settings.church_phone?.trim() || church.phone?.trim() || "the church office";
+    church.phone?.trim() ||
+    settings.church_phone?.trim() ||
+    "the church office";
   const emergencyContact =
     settings.emergency_phone?.trim() || "the emergency contact on file";
 
@@ -327,7 +366,7 @@ export function buildRetellGeneralPrompt(
   const variables: Record<string, string> = {
     assistant_name: spoken.assistantName,
     church_name: church.name,
-    denomination: settings.denomination?.trim() || "Christian",
+    denomination: church.denomination?.trim() || settings.denomination?.trim() || "Christian",
     address: formatChurchAddress(church),
     tone: TONE_LABELS[settings.tone],
     pace: PACE_LABELS[settings.speaking_pace],
@@ -351,7 +390,11 @@ export function buildRetellGeneralPrompt(
     giving_info: formatGivingInfo(church),
   };
 
-  return fillTemplate(GENERAL_PROMPT_TEMPLATE, variables);
+  return (
+    fillTemplate(GENERAL_PROMPT_TEMPLATE, variables) +
+    formatProfileKnowledgeAppendix(church) +
+    formatGuardrailAppendix(church)
+  );
 }
 
 /** Full Multi-Prompt conversation payload pieces for Retell LLM sync. */

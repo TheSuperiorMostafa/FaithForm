@@ -116,4 +116,6 @@ export type SermonContext = {
   style_notes?: string | null;
   denomination?: string | null;
   preaching_style?: string | null;
+  church_summary?: string | null;
+  church_culture?: string | null;
 };

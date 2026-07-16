@@ -1,5 +1,6 @@
 import {
   BookOpen,
+  Building2,
   Contact,
   FileText,
   Film,
@@ -97,6 +98,13 @@ export const navItems: NavItem[] = [
 
 /** Utility links pinned near the user footer (above Admin). */
 export const utilityNavItems: NavItem[] = [
+  {
+    label: "Church Profile",
+    shortLabel: "Profile",
+    href: "/dashboard/church-profile",
+    icon: Building2,
+    sidebarOnly: true,
+  },
   {
     label: "Support",
     shortLabel: "Help",

@@ -1,49 +1,28 @@
 "use client";
 
+import Link from "next/link";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { DayHours, DayKey, OfficeHours } from "@/types/voice-assistant";
 import type { VoiceAssistantFieldErrors } from "@/lib/utils/voice-assistant-validation";
-import { cn } from "@/lib/utils";
-
-const DAY_LABELS: Record<DayKey, string> = {
-  mon: "Monday",
-  tue: "Tuesday",
-  wed: "Wednesday",
-  thu: "Thursday",
-  fri: "Friday",
-  sat: "Saturday",
-  sun: "Sunday",
-};
-
-const DAY_ORDER: DayKey[] = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+import type { VoiceProfileSummary } from "@/types/voice-assistant";
 
 type AvailabilitySectionProps = {
-  officeHours: OfficeHours;
+  profile: VoiceProfileSummary;
   afterHoursEnabled: boolean;
   afterHoursMessage: string;
   readOnly?: boolean;
   errors?: VoiceAssistantFieldErrors;
   showErrors?: boolean;
   onChange: (patch: {
-    officeHours?: OfficeHours;
     afterHoursEnabled?: boolean;
     afterHoursMessage?: string;
   }) => void;
 };
 
-function updateDay(
-  hours: OfficeHours,
-  day: DayKey,
-  patch: Partial<DayHours>,
-): OfficeHours {
-  return { ...hours, [day]: { ...hours[day], ...patch } };
-}
-
 export function AvailabilitySection({
-  officeHours,
+  profile,
   afterHoursEnabled,
   afterHoursMessage,
   readOnly = false,
@@ -56,82 +35,24 @@ export function AvailabilitySection({
       <CardHeader>
         <CardTitle>Availability</CardTitle>
         <p className="text-sm text-muted-foreground">
-          Set when staff are reachable and what callers hear after hours.
+          Office hours live in Church Profile. Configure after-hours behavior here.
         </p>
       </CardHeader>
       <CardContent className="flex flex-col gap-5">
-        <div className="space-y-3">
-          <Label>
-            Office Hours <span className="text-destructive">*</span>
-          </Label>
-          <p className="text-xs text-muted-foreground">
-            Enable at least one open day. Calls outside these hours can use your
-            after-hours message.
+        <div className="space-y-2">
+          <Label>Office hours</Label>
+          <p className="rounded-[10px] border border-border bg-muted/30 px-3 py-2 text-sm">
+            {profile.hasOpenOfficeDay
+              ? "Office hours configured in Church Profile."
+              : "Not configured yet."}
           </p>
-          <div
-            className={cn(
-              "divide-y divide-border rounded-[10px] border border-border",
-              showErrors && errors?.officeHours && "border-destructive",
-            )}
-          >
-            {DAY_ORDER.map((day) => {
-              const row = officeHours[day];
-              return (
-                <div
-                  key={day}
-                  className="grid grid-cols-[7.25rem_auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2 px-3 py-3"
-                >
-                  <span className="text-sm font-medium">{DAY_LABELS[day]}</span>
-                  <Switch
-                    checked={row.enabled}
-                    disabled={readOnly}
-                    onCheckedChange={(enabled) =>
-                      onChange({ officeHours: updateDay(officeHours, day, { enabled }) })
-                    }
-                    aria-label={`${DAY_LABELS[day]} enabled`}
-                  />
-                  {row.enabled ? (
-                    <div className="flex flex-wrap items-center justify-end gap-2">
-                      <input
-                        type="time"
-                        value={row.open}
-                        disabled={readOnly}
-                        className="min-h-10 rounded-[10px] border-[1.5px] border-border bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-                        onChange={(e) =>
-                          onChange({
-                            officeHours: updateDay(officeHours, day, {
-                              open: e.target.value,
-                            }),
-                          })
-                        }
-                      />
-                      <span className="text-sm text-muted-foreground">to</span>
-                      <input
-                        type="time"
-                        value={row.close}
-                        disabled={readOnly}
-                        className="min-h-10 rounded-[10px] border-[1.5px] border-border bg-background px-3 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-                        onChange={(e) =>
-                          onChange({
-                            officeHours: updateDay(officeHours, day, {
-                              close: e.target.value,
-                            }),
-                          })
-                        }
-                      />
-                    </div>
-                  ) : (
-                    <span className="justify-self-end text-sm text-muted-foreground">
-                      Closed
-                    </span>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          {showErrors && errors?.officeHours && (
-            <p className="text-xs text-destructive">{errors.officeHours}</p>
-          )}
+          <p className="text-xs text-muted-foreground">
+            Update in{" "}
+            <Link href="/dashboard/church-profile" className="font-medium text-accent underline">
+              Church Profile → Service information
+            </Link>
+            .
+          </p>
         </div>
 
         <div className="space-y-3 border-t border-border pt-4">

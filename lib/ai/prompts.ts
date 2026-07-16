@@ -1,3 +1,4 @@
+import type { ChurchProfile } from "@/types/church-profile";
 import type { SermonContext } from "@/types/sermon";
 
 function contextBlock(ctx: SermonContext): string {
@@ -6,12 +7,40 @@ function contextBlock(ctx: SermonContext): string {
     `Scripture: ${ctx.scripture_refs.join(", ") || "Not specified"}`,
     `Audience: ${ctx.audience}`,
     `Duration: ${ctx.duration_min} minutes`,
+    ctx.church_summary ? `Church: ${ctx.church_summary}` : null,
     ctx.preaching_style ? `Preaching style: ${ctx.preaching_style}` : null,
     ctx.denomination ? `Denomination/tradition: ${ctx.denomination}` : null,
+    ctx.church_culture ? `Congregation culture: ${ctx.church_culture}` : null,
     ctx.style_notes ? `Additional notes: ${ctx.style_notes}` : null,
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+export function buildSermonProfileContext(profile: ChurchProfile | null): {
+  denomination: string | null;
+  church_summary: string | null;
+  church_culture: string | null;
+} {
+  if (!profile) {
+    return {
+      denomination: null,
+      church_summary: null,
+      church_culture: null,
+    };
+  }
+
+  const summary =
+    profile.aiKnowledge.summary?.trim() ||
+    profile.description?.trim() ||
+    profile.tagline?.trim() ||
+    profile.name;
+
+  return {
+    denomination: profile.denomination,
+    church_summary: summary || null,
+    church_culture: profile.aiKnowledge.culture?.trim() || null,
+  };
 }
 
 export function outlineSystemPrompt(ctx: SermonContext): string {
@@ -118,6 +147,8 @@ Series title: ${title}
 Theme: ${theme}
 Anchor scripture: ${scriptureAnchor}
 ${ctx?.denomination ? `Denomination: ${ctx.denomination}` : ""}
+${ctx?.church_summary ? `Church: ${ctx.church_summary}` : ""}
+${ctx?.church_culture ? `Culture: ${ctx.church_culture}` : ""}
 ${ctx?.preaching_style ? `Style: ${ctx.preaching_style}` : ""}`;
 }
 

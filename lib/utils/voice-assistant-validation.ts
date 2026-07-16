@@ -1,15 +1,11 @@
-import type { OfficeHours, VoiceAssistantFormState } from "@/types/voice-assistant";
+import type {
+  OfficeHours,
+  VoiceAssistantFormState,
+  VoiceProfileSummary,
+} from "@/types/voice-assistant";
 
 export type VoiceAssistantFieldErrors = Partial<
-  Record<
-    | "assistantName"
-    | "denomination"
-    | "churchPhone"
-    | "greetingMessage"
-    | "afterHoursMessage"
-    | "officeHours",
-    string
-  >
+  Record<"assistantName" | "afterHoursMessage", string>
 >;
 
 export type SetupChecklistItem = {
@@ -22,11 +18,7 @@ function digitCount(value: string): number {
   return value.replace(/\D/g, "").length;
 }
 
-function hasOpenOfficeDay(hours: OfficeHours): boolean {
-  return Object.values(hours).some((day) => day.enabled);
-}
-
-/** Client-side validation aligned with AI phone setup best practices. */
+/** Client-side validation for voice delivery settings only. Profile fields validated on Church Profile. */
 export function validateVoiceAssistantForm(
   form: VoiceAssistantFormState,
 ): VoiceAssistantFieldErrors {
@@ -34,24 +26,6 @@ export function validateVoiceAssistantForm(
 
   if (form.assistantName.trim().length < 2) {
     errors.assistantName = "Give your assistant a name (at least 2 characters).";
-  }
-
-  if (!form.denomination.trim()) {
-    errors.denomination = "Select a denomination so answers match your church.";
-  }
-
-  if (digitCount(form.churchPhone) < 10) {
-    errors.churchPhone =
-      "Add a church phone number so callers can transfer to a real person.";
-  }
-
-  if (form.greetingMessage.trim().length < 20) {
-    errors.greetingMessage =
-      "Write a greeting callers hear first (at least a short sentence).";
-  }
-
-  if (!hasOpenOfficeDay(form.officeHours)) {
-    errors.officeHours = "Enable at least one open office day.";
   }
 
   if (form.afterHoursEnabled && form.afterHoursMessage.trim().length < 10) {
@@ -70,6 +44,7 @@ export function isVoiceAssistantFormValid(
 
 export function getVoiceAssistantChecklist(
   form: VoiceAssistantFormState,
+  profile: VoiceProfileSummary,
 ): SetupChecklistItem[] {
   return [
     {
@@ -79,23 +54,23 @@ export function getVoiceAssistantChecklist(
     },
     {
       id: "denomination",
-      label: "Choose denomination",
-      done: Boolean(form.denomination.trim()),
+      label: "Set denomination in Church Profile",
+      done: Boolean(profile.denomination.trim()),
     },
     {
       id: "transfer",
-      label: "Add church transfer number",
-      done: digitCount(form.churchPhone) >= 10,
+      label: "Add church phone in Church Profile",
+      done: digitCount(profile.churchPhone) >= 10,
     },
     {
       id: "greeting",
-      label: "Write a greeting",
-      done: form.greetingMessage.trim().length >= 20,
+      label: "Write a phone greeting in Church Profile",
+      done: profile.greetingMessage.trim().length >= 20,
     },
     {
       id: "hours",
-      label: "Set office hours",
-      done: hasOpenOfficeDay(form.officeHours),
+      label: "Set office hours in Church Profile",
+      done: profile.hasOpenOfficeDay,
     },
     {
       id: "afterHours",
@@ -121,4 +96,8 @@ export function formsAreEqual(
   b: VoiceAssistantFormState,
 ): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
+}
+
+export function hasOpenOfficeDay(hours: OfficeHours): boolean {
+  return Object.values(hours).some((day) => day.enabled);
 }

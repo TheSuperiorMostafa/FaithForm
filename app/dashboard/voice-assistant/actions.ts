@@ -18,25 +18,8 @@ import {
   SPEAKING_PACES,
   VOICE_GENDERS,
   VOICE_TONES,
-  type OfficeHours,
 } from "@/types/voice-assistant";
 import { createClient } from "@/lib/supabase/server";
-
-const dayHoursSchema = z.object({
-  enabled: z.boolean(),
-  open: z.string(),
-  close: z.string(),
-});
-
-const officeHoursSchema = z.object({
-  mon: dayHoursSchema,
-  tue: dayHoursSchema,
-  wed: dayHoursSchema,
-  thu: dayHoursSchema,
-  fri: dayHoursSchema,
-  sat: dayHoursSchema,
-  sun: dayHoursSchema,
-});
 
 const saveSchema = z
   .object({
@@ -45,39 +28,16 @@ const saveSchema = z
       .trim()
       .min(2, "Assistant name is required")
       .max(80),
-    denomination: z.string().trim().min(1, "Denomination is required").max(80),
-    churchPhone: z
-      .string()
-      .trim()
-      .min(1, "Church phone is required")
-      .max(30)
-      .refine((v) => v.replace(/\D/g, "").length >= 10, {
-        message: "Enter a valid church phone number",
-      }),
     emergencyPhone: z.string().max(30),
     tone: z.enum(VOICE_TONES),
     speakingPace: z.enum(SPEAKING_PACES),
     voiceGender: z.enum(VOICE_GENDERS),
     language: z.string().max(10),
-    greetingMessage: z
-      .string()
-      .trim()
-      .min(20, "Greeting message is required")
-      .max(2000),
     signoffMessage: z.string().max(1000),
-    officeHours: officeHoursSchema,
     afterHoursEnabled: z.boolean(),
     afterHoursMessage: z.string().max(2000),
   })
   .superRefine((data, ctx) => {
-    const hasOpenDay = Object.values(data.officeHours).some((d) => d.enabled);
-    if (!hasOpenDay) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: "Enable at least one office day",
-        path: ["officeHours"],
-      });
-    }
     if (
       data.afterHoursEnabled &&
       data.afterHoursMessage.trim().length < 10
@@ -127,10 +87,7 @@ export async function saveVoiceAssistantSettings(
   }
 
   try {
-    await upsertVoiceAssistantSettings(auth.churchId, {
-      ...parsed.data,
-      officeHours: parsed.data.officeHours as OfficeHours,
-    });
+    await upsertVoiceAssistantSettings(auth.churchId, parsed.data);
 
     let agentId: string | undefined;
     try {
@@ -249,7 +206,7 @@ export async function provisionVoicePhoneNumber(input?: {
 export async function syncVoicePhoneNumber(): Promise<SyncPhoneResult> {
   const auth = await requireChurchAuth();
   if (!auth.isAdmin) {
-    return { error: "Only church admins can sync the phone number." };
+    return { error: "Only church admins can sync phone numbers." };
   }
 
   try {

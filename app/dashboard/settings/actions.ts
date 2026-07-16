@@ -45,11 +45,12 @@ export async function updateAISettings(
       ai_provider,
       sermon_builder_mode,
       preaching_style: formData.get("preaching_style")?.toString() || null,
-      denomination: formData.get("denomination")?.toString() || null,
       ai_model_override:
         formData.get("ai_model_override")?.toString().trim() || null,
     });
+
     revalidatePath("/dashboard/settings");
+    revalidatePath("/dashboard/church-profile");
     revalidatePath("/dashboard/sermon-builder");
     revalidatePath("/dashboard/sermon-builder/new");
     return { ok: true };

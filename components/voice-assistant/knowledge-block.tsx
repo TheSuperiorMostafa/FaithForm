@@ -61,16 +61,15 @@ export function KnowledgeBlock({ context }: KnowledgeBlockProps) {
           emptyMessage="No programs listed yet."
         />
         <p className="border-t border-border pt-4 text-xs text-muted-foreground">
-          This information is managed in other sections of your dashboard and is
-          automatically shared with your assistant. Update your{" "}
+          Service times, staff, and AI knowledge come from{" "}
+          <Link href="/dashboard/church-profile" className="font-medium text-accent underline">
+            Church Profile
+          </Link>
+          . Live events still pull from{" "}
           <Link href="/dashboard/announcements" className="font-medium text-accent underline">
             announcements
           </Link>{" "}
-          and{" "}
-          <Link href="/dashboard/settings" className="font-medium text-accent underline">
-            church profile
-          </Link>{" "}
-          to keep this current.
+          and your calendar.
         </p>
       </CardContent>
     </Card>
