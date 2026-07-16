@@ -68,7 +68,25 @@ export function VoiceAssistantSettings({
   const isValid = Object.keys(errors).length === 0;
 
   const patchForm = (patch: Partial<VoiceAssistantFormState>) => {
-    setForm((prev) => ({ ...prev, ...patch }));
+    setForm((prev) => {
+      const next = { ...prev, ...patch };
+      if (
+        typeof patch.assistantName === "string" &&
+        patch.assistantName.trim() &&
+        patch.assistantName.trim() !== prev.assistantName.trim()
+      ) {
+        const from = prev.assistantName.trim();
+        const to = patch.assistantName.trim();
+        if (from) {
+          const swap = (value: string) =>
+            value.replace(new RegExp(`\\b${from.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "gi"), to);
+          next.greetingMessage = swap(next.greetingMessage);
+          next.signoffMessage = swap(next.signoffMessage);
+          next.afterHoursMessage = swap(next.afterHoursMessage);
+        }
+      }
+      return next;
+    });
   };
 
   const handleDiscard = () => {

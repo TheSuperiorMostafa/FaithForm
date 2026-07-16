@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { listUpcomingCalendarEvents } from "@/lib/integrations/google-calendar";
-import { resolveGreetingTemplate } from "@/lib/integrations/retell-prompt";
+import { resolveGreetingTemplate, replaceAssistantNameInText } from "@/lib/integrations/retell-prompt";
 import { getPublishedAnnouncements } from "@/lib/queries/announcements";
 import { getChurchAISettings } from "@/lib/queries/sermons";
 import { createClient } from "@/lib/supabase/server";
@@ -209,13 +209,34 @@ export async function upsertVoiceAssistantSettings(
   const assistantName = patch.assistantName.trim();
   const profile = await getChurchProfileForVoice(churchId, client);
   const churchName = profile?.name?.trim() || "your church";
-  const greetingRaw = patch.greetingMessage.trim();
+  const previous = await getVoiceAssistantSettings(churchId, client);
+  const previousName = previous?.assistant_name?.trim() || null;
+
+  const greetingRaw = replaceAssistantNameInText(
+    patch.greetingMessage.trim(),
+    previousName,
+    assistantName,
+  );
   const greetingMessage = greetingRaw
     ? resolveGreetingTemplate(greetingRaw, {
         assistantName: assistantName || "your church assistant",
         churchName,
       })
     : null;
+
+  const signoffMessage =
+    replaceAssistantNameInText(
+      patch.signoffMessage.trim(),
+      previousName,
+      assistantName,
+    ) || null;
+
+  const afterHoursMessage =
+    replaceAssistantNameInText(
+      patch.afterHoursMessage.trim(),
+      previousName,
+      assistantName,
+    ) || null;
 
   const { data, error } = await client
     .from("voice_assistant_settings")
@@ -231,10 +252,10 @@ export async function upsertVoiceAssistantSettings(
         voice_gender: patch.voiceGender,
         language: patch.language,
         greeting_message: greetingMessage,
-        signoff_message: patch.signoffMessage.trim() || null,
+        signoff_message: signoffMessage,
         office_hours: patch.officeHours,
         after_hours_enabled: patch.afterHoursEnabled,
-        after_hours_message: patch.afterHoursMessage.trim() || null,
+        after_hours_message: afterHoursMessage,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "church_id" },

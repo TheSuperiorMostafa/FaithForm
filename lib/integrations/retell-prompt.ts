@@ -162,19 +162,72 @@ function fillTemplate(
   });
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Swap a previous assistant name for the current one in spoken copy. */
+export function replaceAssistantNameInText(
+  text: string,
+  previousName: string | null | undefined,
+  nextName: string,
+): string {
+  const prev = previousName?.trim();
+  const next = nextName.trim();
+  if (!text || !prev || !next || prev.toLowerCase() === next.toLowerCase()) {
+    return text;
+  }
+  return text.replace(new RegExp(`\\b${escapeRegExp(prev)}\\b`, "gi"), next);
+}
+
+/**
+ * Keep Retell begin_message / greeting aligned with the current assistant name.
+ * Greetings are often saved with a prior name baked in (e.g. "This is Mostafa.").
+ */
+export function ensureSpokenAssistantName(
+  text: string,
+  assistantName: string,
+): string {
+  const name = assistantName.trim();
+  if (!text?.trim() || !name) return text;
+
+  const alreadyHasName = new RegExp(`\\b${escapeRegExp(name)}\\b`, "i").test(
+    text,
+  );
+  if (alreadyHasName) return text;
+
+  // "This is Mostafa." / "I'm Mostafa," / "I am Mostafa"
+  return text.replace(
+    /\b(This is|I['’]m|I am)\s+([A-Za-z][A-Za-z'’-]{0,40})\b/gi,
+    (match, intro: string, spoken: string) => {
+      const lower = spoken.toLowerCase();
+      // Avoid rewriting phrases like "This is the" / "This is our"
+      if (
+        ["the", "a", "an", "your", "our", "my", "their"].includes(lower)
+      ) {
+        return match;
+      }
+      return `${intro} ${name}`;
+    },
+  );
+}
+
 /** Replace form placeholders so Retell never speaks bracket tokens literally. */
 export function resolveGreetingTemplate(
   template: string,
   vars: { assistantName: string; churchName: string; officeHours?: string },
 ): string {
-  return template
-    .replace(/\[\s*Assistant Name\s*\]/gi, vars.assistantName)
-    .replace(/\[\s*Church Name\s*\]/gi, vars.churchName)
-    .replace(/\[\s*Name\s*\]/gi, vars.assistantName)
-    .replace(/\[\s*hours\s*\]/gi, vars.officeHours?.trim() || "our normal office hours")
-    .replace(/\{\{\s*assistant_name\s*\}\}/gi, vars.assistantName)
-    .replace(/\{\{\s*church_name\s*\}\}/gi, vars.churchName)
-    .trim();
+  return ensureSpokenAssistantName(
+    template
+      .replace(/\[\s*Assistant Name\s*\]/gi, vars.assistantName)
+      .replace(/\[\s*Church Name\s*\]/gi, vars.churchName)
+      .replace(/\[\s*Name\s*\]/gi, vars.assistantName)
+      .replace(/\[\s*hours\s*\]/gi, vars.officeHours?.trim() || "our normal office hours")
+      .replace(/\{\{\s*assistant_name\s*\}\}/gi, vars.assistantName)
+      .replace(/\{\{\s*church_name\s*\}\}/gi, vars.churchName)
+      .trim(),
+    vars.assistantName,
+  );
 }
 
 export type RetellLlmConversation = {
@@ -207,17 +260,26 @@ function resolveSpokenMessages(
   const rawGreeting =
     settings.greeting_message?.trim() ||
     `Hi, you've reached ${church.name}. This is ${assistantName}.`;
-  const greeting = resolveGreetingTemplate(rawGreeting, spokenVars);
-
-  const signoff = resolveGreetingTemplate(
-    settings.signoff_message?.trim() || "Alright — take care. God bless.",
-    spokenVars,
+  const greeting = ensureSpokenAssistantName(
+    resolveGreetingTemplate(rawGreeting, spokenVars),
+    assistantName,
   );
 
-  const afterHoursMessage = resolveGreetingTemplate(
-    settings.after_hours_message?.trim() ||
-      "The office is closed right now. You can leave a message and someone will get back to you.",
-    spokenVars,
+  const signoff = ensureSpokenAssistantName(
+    resolveGreetingTemplate(
+      settings.signoff_message?.trim() || "Alright — take care. God bless.",
+      spokenVars,
+    ),
+    assistantName,
+  );
+
+  const afterHoursMessage = ensureSpokenAssistantName(
+    resolveGreetingTemplate(
+      settings.after_hours_message?.trim() ||
+        "The office is closed right now. You can leave a message and someone will get back to you.",
+      spokenVars,
+    ),
+    assistantName,
   );
 
   const transferNumber =

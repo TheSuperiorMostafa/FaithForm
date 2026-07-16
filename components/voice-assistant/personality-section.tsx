@@ -199,7 +199,7 @@ export function PersonalitySection({
           </Label>
           <Textarea
             id="greeting-message"
-            placeholder="Hi, you've reached Grace Community Church. This is Mostafa."
+            placeholder="Hi, you've reached Grace Community Church. This is Hope."
             value={greetingMessage}
             disabled={readOnly}
             aria-invalid={showErrors && Boolean(errors?.greetingMessage)}
