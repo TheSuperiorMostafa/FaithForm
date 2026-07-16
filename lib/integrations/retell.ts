@@ -20,7 +20,10 @@ import {
   getVoiceAssistantSettings,
 } from "@/lib/queries/voice-assistant";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { VoiceAssistantSettings } from "@/types/voice-assistant";
+import type {
+  SpeakingPace,
+  VoiceAssistantSettings,
+} from "@/types/voice-assistant";
 
 type RetellTool = Record<string, unknown> & { name: string };
 
@@ -47,10 +50,24 @@ const LANGUAGE_TO_RETELL: Record<string, string> = {
   ko: "ko-KR",
 };
 
-const PACE_TO_VOICE_SPEED: Record<string, number> = {
-  slow: 0.85,
+/** Retell voice_speed is [0.5, 2]. Deltas must be wide enough to hear on a phone call. */
+const PACE_TO_VOICE_SPEED: Record<SpeakingPace, number> = {
+  slow: 0.72,
   normal: 1,
-  energetic: 1.2,
+  energetic: 1.35,
+};
+
+/** How quickly the agent takes the turn after the caller stops. */
+const PACE_TO_RESPONSIVENESS: Record<SpeakingPace, number> = {
+  slow: 0.45,
+  normal: 0.7,
+  energetic: 0.9,
+};
+
+const PACE_TO_REMINDER_MS: Record<SpeakingPace, number> = {
+  slow: 18000,
+  normal: 14000,
+  energetic: 10000,
 };
 
 export function isRetellConfigured(): boolean {
@@ -196,6 +213,7 @@ function buildAgentPayload(
   churchName: string,
 ) {
   const webhookUrl = getWebhookUrl();
+  const pace: SpeakingPace = settings.speaking_pace ?? "normal";
 
   return {
     response_engine: {
@@ -205,15 +223,17 @@ function buildAgentPayload(
     agent_name: `${churchName} — ${settings.assistant_name?.trim() || "Voice Assistant"}`,
     voice_id: resolveVoiceId(settings.voice_gender),
     language: LANGUAGE_TO_RETELL[settings.language] ?? "en-US",
-    voice_speed: PACE_TO_VOICE_SPEED[settings.speaking_pace] ?? 1,
-    // Church-secretary timing: wait a beat, stay interruptible, don't fill silence.
-    responsiveness: 0.7,
-    enable_dynamic_responsiveness: true,
+    voice_speed: PACE_TO_VOICE_SPEED[pace],
+    // Keep the admin-chosen pace; don't let Retell drift the TTS rate mid-call.
+    enable_dynamic_voice_speed: false,
+    // Church-secretary timing, scaled by speaking pace.
+    responsiveness: PACE_TO_RESPONSIVENESS[pace],
+    enable_dynamic_responsiveness: pace === "normal",
     interruption_sensitivity: 0.7,
     enable_backchannel: true,
-    backchannel_frequency: 0.55,
+    backchannel_frequency: pace === "slow" ? 0.4 : 0.55,
     backchannel_words: ["mm-hmm", "okay", "sure", "I see"],
-    reminder_trigger_ms: 14000,
+    reminder_trigger_ms: PACE_TO_REMINDER_MS[pace],
     reminder_max_count: 1,
     end_call_after_silence_ms: 60000,
     webhook_url: webhookUrl,
