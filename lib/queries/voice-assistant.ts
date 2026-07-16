@@ -1,6 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { listUpcomingCalendarEvents } from "@/lib/integrations/google-calendar";
-import { resolveGreetingTemplate, replaceAssistantNameInText } from "@/lib/integrations/retell-prompt";
+import {
+  resolveGreetingTemplate,
+  replaceAssistantNameInText,
+  withRecordingDisclosure,
+} from "@/lib/integrations/retell-prompt";
 import { getPublishedAnnouncements } from "@/lib/queries/announcements";
 import { getChurchAISettings } from "@/lib/queries/sermons";
 import { createClient } from "@/lib/supabase/server";
@@ -162,7 +166,9 @@ export async function getChurchProfileForVoice(
 
 export function buildDefaultGreeting(churchName: string, assistantName: string): string {
   const name = assistantName.trim() || "the church desk";
-  return `Hi, you've reached ${churchName}. This is ${name}.`;
+  return withRecordingDisclosure(
+    `Hi, you've reached ${churchName}. This is ${name}.`,
+  );
 }
 
 export async function buildVoiceAssistantFormDefaults(

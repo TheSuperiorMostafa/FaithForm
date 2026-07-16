@@ -99,7 +99,7 @@ export function PersonalitySection({
       <CardHeader>
         <CardTitle>Personality</CardTitle>
         <p className="text-sm text-muted-foreground">
-          How your assistant sounds — include that it’s an AI in the greeting.
+          How your assistant sounds on the church phone.
         </p>
       </CardHeader>
       <CardContent className="flex flex-col gap-5">
@@ -199,7 +199,7 @@ export function PersonalitySection({
           </Label>
           <Textarea
             id="greeting-message"
-            placeholder="Hi, you've reached Grace Community Church. This is Hope."
+            placeholder="Hi, you've reached Grace Community Church. This is Hope. This call is recorded for quality and training."
             value={greetingMessage}
             disabled={readOnly}
             aria-invalid={showErrors && Boolean(errors?.greetingMessage)}
@@ -209,8 +209,8 @@ export function PersonalitySection({
             <p className="text-xs text-destructive">{errors.greetingMessage}</p>
           ) : (
             <p className="text-xs text-muted-foreground">
-              First thing callers hear. Keep it short and natural — like
-              answering the church phone.
+              First thing callers hear. Keep it short. A recording notice is
+              added automatically if you don&apos;t include one.
             </p>
           )}
         </div>

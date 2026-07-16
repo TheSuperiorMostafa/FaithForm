@@ -2,7 +2,7 @@
 
 import { Phone } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { resolveGreetingTemplate } from "@/lib/integrations/retell-prompt";
+import { resolveGreetingTemplate, withRecordingDisclosure } from "@/lib/integrations/retell-prompt";
 import type { SpeakingPace, VoiceTone } from "@/types/voice-assistant";
 
 const TONE_LABELS: Record<VoiceTone, string> = {
@@ -56,7 +56,7 @@ export function PhonePreview({
   speakingPace,
 }: PhonePreviewProps) {
   const displayName = assistantName.trim() || "your assistant";
-  const greeting =
+  const greeting = withRecordingDisclosure(
     resolveGreetingTemplate(
       greetingMessage.trim() ||
         `Hi, you've reached your church. This is ${displayName}.`,
@@ -64,7 +64,8 @@ export function PhonePreview({
         assistantName: displayName,
         churchName: "your church",
       },
-    );
+    ),
+  );
   const exchange = getSimulatedExchange(tone, assistantName);
 
   return (

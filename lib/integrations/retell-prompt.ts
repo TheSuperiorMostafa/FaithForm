@@ -86,6 +86,7 @@ GUARDRAILS
 - Never discuss theology, politics, or other churches.
 - Never take financial information over the phone.
 - Never give out a pastor's personal number.
+- Call recording is disclosed once at the start of the call. Do not repeat the recording notice every turn.
 - Don't say you're an AI unless they directly and seriously ask. If they do: "I'm the phone assistant for {{church_name}}."
 - Be patient. Some callers are elderly, nervous, or hurting.`;
 
@@ -160,6 +161,22 @@ function fillTemplate(
   return template.replace(/\{\{(\w+)\}\}/g, (_, key: string) => {
     return variables[key] ?? "";
   });
+}
+
+/** Spoken once at call start — clear, early, plain language (inbound best practice). */
+export const CALL_RECORDING_DISCLOSURE =
+  "This call is recorded for quality and training.";
+
+const RECORDING_DISCLOSURE_ALREADY_PRESENT =
+  /\b(call (is|may be|will be) recorded|recorded for (quality|training|accuracy)|recording (this|the) call|calls? (are|may be) recorded)\b/i;
+
+/** Append recording notice if the greeting does not already disclose it. */
+export function withRecordingDisclosure(greeting: string): string {
+  const trimmed = greeting.trim();
+  if (!trimmed) return CALL_RECORDING_DISCLOSURE;
+  if (RECORDING_DISCLOSURE_ALREADY_PRESENT.test(trimmed)) return trimmed;
+  const base = /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
+  return `${base} ${CALL_RECORDING_DISCLOSURE}`;
 }
 
 function escapeRegExp(value: string): string {
@@ -260,9 +277,11 @@ function resolveSpokenMessages(
   const rawGreeting =
     settings.greeting_message?.trim() ||
     `Hi, you've reached ${church.name}. This is ${assistantName}.`;
-  const greeting = ensureSpokenAssistantName(
-    resolveGreetingTemplate(rawGreeting, spokenVars),
-    assistantName,
+  const greeting = withRecordingDisclosure(
+    ensureSpokenAssistantName(
+      resolveGreetingTemplate(rawGreeting, spokenVars),
+      assistantName,
+    ),
   );
 
   const signoff = ensureSpokenAssistantName(
