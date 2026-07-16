@@ -5,6 +5,7 @@ import { BottomNav } from "@/components/dashboard/bottom-nav";
 import { DashboardUsageTracker } from "@/components/dashboard/usage-tracker";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { Topbar } from "@/components/dashboard/topbar";
+import { VoiceAgentAutoSync } from "@/components/dashboard/voice-agent-auto-sync";
 import { cn } from "@/lib/utils";
 
 type DashboardShellProps = {
@@ -38,6 +39,7 @@ export function DashboardShell({
   return (
     <div className="h-dvh overflow-hidden bg-background">
       <DashboardUsageTracker />
+      <VoiceAgentAutoSync />
       <Sidebar
         userEmail={userEmail}
         churchName={churchName}
