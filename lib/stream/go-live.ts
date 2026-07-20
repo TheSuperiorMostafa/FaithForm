@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getIntegrationStatus } from "@/lib/integrations/tokens";
+import { getIntegration, getIntegrationStatus } from "@/lib/integrations/tokens";
 import {
   getPrimaryEncoderDevice,
   queueStreamCommand,
@@ -39,8 +39,14 @@ export async function startLiveBroadcast(
   supabase?: SupabaseClient,
 ) {
   const client = getClient(supabase);
-  const integrationStatus = await getIntegrationStatus(churchId, client);
+  const [integrationStatus, youtubeIntegration, facebookIntegration] = await Promise.all([
+    getIntegrationStatus(churchId, client),
+    getIntegration(churchId, "youtube", client),
+    getIntegration(churchId, "facebook", client),
+  ]);
   const encoder = await getPrimaryEncoderDevice(churchId, client);
+  const youtubeConnected = Boolean(youtubeIntegration?.access_token);
+  const facebookConnected = Boolean(facebookIntegration?.access_token);
 
   let event: StreamEvent | null = null;
   if (options?.eventId) {
@@ -55,28 +61,40 @@ export async function startLiveBroadcast(
         title: options?.title?.trim() || "Live Service",
         startsAt: new Date().toISOString(),
         createdBy: userId,
-        syndicateYoutube: integrationStatus.youtube.connected,
-        syndicateFacebook: integrationStatus.facebook.connected,
+        syndicateYoutube: youtubeConnected,
+        syndicateFacebook: facebookConnected,
       },
       client,
     );
   }
 
-  if (event.syndicateYoutube && !integrationStatus.youtube.connected) {
+  const shouldSyndicateYoutube = event.syndicateYoutube || (!options?.eventId && youtubeConnected);
+  const shouldSyndicateFacebook =
+    event.syndicateFacebook || (!options?.eventId && facebookConnected);
+
+  if (shouldSyndicateYoutube && !youtubeConnected) {
     throw new Error("YouTube syndication is enabled but YouTube is not connected.");
   }
-  if (event.syndicateFacebook && !integrationStatus.facebook.connected) {
+  if (shouldSyndicateFacebook && !facebookConnected) {
     throw new Error(
       "Facebook syndication is enabled but Facebook is not connected.",
     );
   }
 
   const destinations =
-    event.syndicateYoutube || event.syndicateFacebook
-      ? await provisionDestinationsForEvent(event, userId, client)
+    shouldSyndicateYoutube || shouldSyndicateFacebook
+      ? await provisionDestinationsForEvent(
+          {
+            ...event,
+            syndicateYoutube: shouldSyndicateYoutube,
+            syndicateFacebook: shouldSyndicateFacebook,
+          },
+          userId,
+          client,
+        )
       : [];
 
-  if (event.syndicateYoutube) {
+  if (shouldSyndicateYoutube) {
     await recordSyndicationAttempt(
       event.id,
       "youtube",
@@ -87,7 +105,7 @@ export async function startLiveBroadcast(
       client,
     );
   }
-  if (event.syndicateFacebook) {
+  if (shouldSyndicateFacebook) {
     await recordSyndicationAttempt(
       event.id,
       "facebook",
@@ -249,12 +267,13 @@ export async function getLiveBroadcastStatus(
   supabase?: SupabaseClient,
 ) {
   const client = getClient(supabase);
-  const [session, encoder, settings, integrationStatus, upcomingEvent, previewIngestActive, churchRow] =
+  const [session, encoder, settings, integrationStatus, youtubeInteg, upcomingEvent, previewIngestActive, churchRow] =
     await Promise.all([
       getActiveStreamSession(churchId, client),
       getPrimaryEncoderDevice(churchId, client),
       getStreamRelaySettings(churchId, { supabase: client }),
       getIntegrationStatus(churchId, client),
+      getIntegration(churchId, "youtube", client),
       import("@/lib/stream/events").then((m) =>
         m.getUpcomingStreamEvent(churchId, client),
       ),
@@ -269,6 +288,8 @@ export async function getLiveBroadcastStatus(
     supabase: client,
   });
 
+  const ytMeta = (youtubeInteg?.metadata ?? {}) as import("@/lib/integrations/types").YouTubeIntegrationMetadata;
+
   return {
     session,
     encoder,
@@ -280,8 +301,9 @@ export async function getLiveBroadcastStatus(
     platforms: {
       youtube: {
         connected: integrationStatus.youtube.connected,
-        ready: integrationStatus.youtube.connected,
+        ready: integrationStatus.youtube.connected && ytMeta.live_streaming_enabled !== false,
         channelTitle: integrationStatus.youtube.channelTitle,
+        liveStreamingError: ytMeta.live_streaming_error ?? null,
       },
       facebook: {
         connected: integrationStatus.facebook.connected,

@@ -34,6 +34,8 @@ export type YouTubeIntegrationMetadata = {
   channel_id?: string;
   channel_title?: string;
   can_manage_live?: boolean;
+  live_streaming_enabled?: boolean;
+  live_streaming_error?: string | null;
   live_stream_id?: string;
   live_broadcast_id?: string;
 };

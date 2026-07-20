@@ -89,3 +89,29 @@ FaithForm schedules simulated events; the relay publishes the uploaded file to t
 
 - Service: `journalctl -u faithform-mediamtx -f`
 - MediaMTX hooks and ffmpeg output both flow into the systemd journal
+
+## Troubleshooting
+
+### OBS shows green but nothing reaches YouTube or the dashboard
+
+Usually one of two problems on the relay box:
+
+1. **`faithform-mediamtx` is down** — check `systemctl status faithform-mediamtx`. A common cause is `hlsAllowOrigins` in `~/mediamtx/mediamtx.yml`; the installed binary only accepts the deprecated singular `hlsAllowOrigin: '*'`. MediaMTX exits immediately on unknown fields.
+2. **A manual `mediamtx` process is running without auth** — check `pgrep -a mediamtx`. More than one process, or a bare binary started outside systemd, means RTMP ingest works but `MTX_AUTHMETHOD` / `MTX_AUTHHTTPADDRESS` were never set, so publish auth and `on-stream-ready.sh` never run.
+
+**Fix:** upload and run the repair script:
+
+```bash
+# From your laptop
+scp infra/stream-relay/repair-mediamtx.sh mostafa@stream.faithform.io:~/scripts/
+scp infra/stream-relay/mediamtx.yml mostafa@stream.faithform.io:~/mediamtx/mediamtx.yml
+
+# On the server
+sudo bash ~/scripts/repair-mediamtx.sh
+```
+
+The script renames the incompatible HLS field, kills stray processes, starts systemd with auth wiring, and smoke-tests `/api/stream/publish-auth`.
+
+**When fixed:** `systemctl is-active faithform-mediamtx` returns `active`, `pgrep -a mediamtx` shows exactly one process, and an OBS publish attempt appears in the journal with an HTTP auth callback.
+
+**Note:** `hlsAllowOrigins` requires a newer MediaMTX binary. Until the relay binary is upgraded, keep `hlsAllowOrigin: '*'` in `mediamtx.yml`.

@@ -72,6 +72,32 @@ export async function getHlsPlaybackUrl(
   return `${hlsBase.replace(/\/$/, "")}/${settings.streamPath}/index.m3u8`;
 }
 
+export async function isHlsPlaybackReady(
+  playbackUrl: string,
+  options?: { timeoutMs?: number },
+): Promise<boolean> {
+  const controller = new AbortController();
+  const timeout = setTimeout(
+    () => controller.abort(),
+    options?.timeoutMs ?? 2500,
+  );
+
+  try {
+    const response = await fetch(playbackUrl, {
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    if (!response.ok) return false;
+
+    const text = await response.text();
+    return text.includes("#EXTM3U");
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export function getRelayHlsPath(churchId: string, publishKey: string): string {
   return buildStreamPath(churchId, publishKey);
 }

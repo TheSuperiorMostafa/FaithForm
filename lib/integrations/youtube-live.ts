@@ -1,6 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { google } from "googleapis";
 import { resolveGoogleOAuthRedirectUri } from "@/lib/integrations/google-oauth";
+import {
+  formatYouTubeLiveError,
+  isYouTubeLiveStreamingNotEnabledError,
+} from "@/lib/integrations/youtube-errors";
 import { getIntegration, saveIntegration } from "@/lib/integrations/tokens";
 import type { YouTubeIntegrationMetadata } from "@/lib/integrations/types";
 import { setStreamRelayDestination } from "@/lib/stream/relay";
@@ -82,8 +86,11 @@ async function provisionYouTubeLiveRtmpUrl(
         privacyStatus: "public",
       },
       contentDetails: {
+        // Auto-start when RTMP arrives; do NOT auto-stop — brief relay/
+        // network gaps would end the YouTube broadcast (~1 min idle) and
+        // look like a permanent drop/reconnect loop for viewers.
         enableAutoStart: true,
-        enableAutoStop: true,
+        enableAutoStop: false,
       },
     },
   });
@@ -131,9 +138,9 @@ export async function exchangeYouTubeCode(
   const metadata: YouTubeIntegrationMetadata = {
     channel_id: channel?.id ?? undefined,
     channel_title: channelTitle,
-    can_manage_live:
-      Boolean(channel?.status?.longUploadsStatus) &&
-      channel?.status?.longUploadsStatus !== "disallowed",
+    can_manage_live: true,
+    live_streaming_enabled: undefined,
+    live_streaming_error: null,
   };
 
   await saveIntegration(
@@ -148,6 +155,71 @@ export async function exchangeYouTubeCode(
     },
     supabase,
   );
+
+  try {
+    await probeYouTubeLiveStreamingEnabled(client, channelTitle);
+    await saveIntegration(
+      {
+        churchId,
+        provider: "youtube",
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token ?? null,
+        tokenExpiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+        metadata: {
+          ...metadata,
+          live_streaming_enabled: true,
+          live_streaming_error: null,
+        },
+        connectedBy: userId,
+      },
+      supabase,
+    );
+  } catch (error) {
+    const message = formatYouTubeLiveError(error);
+    await saveIntegration(
+      {
+        churchId,
+        provider: "youtube",
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token ?? null,
+        tokenExpiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
+        metadata: {
+          ...metadata,
+          can_manage_live: false,
+          live_streaming_enabled: false,
+          live_streaming_error: message,
+        },
+        connectedBy: userId,
+      },
+      supabase,
+    );
+  }
+}
+
+async function probeYouTubeLiveStreamingEnabled(
+  client: InstanceType<typeof google.auth.OAuth2>,
+  channelTitle: string,
+): Promise<void> {
+  const youtube = google.youtube({ version: "v3", auth: client });
+  const title = channelTitle.trim() || "FaithForm";
+
+  const { data } = await youtube.liveStreams.insert({
+    part: ["snippet", "cdn", "status"],
+    requestBody: {
+      snippet: {
+        title: `${title} — FaithForm setup check`,
+      },
+      cdn: {
+        frameRate: "variable",
+        ingestionType: "rtmp",
+        resolution: "variable",
+      },
+    },
+  });
+
+  if (data.id) {
+    await youtube.liveStreams.delete({ id: data.id });
+  }
 }
 
 export async function provisionYouTubeLiveForChurch(
@@ -201,35 +273,67 @@ export async function provisionYouTubeLiveForChurch(
 
   const existingMeta = (integration.metadata ?? {}) as YouTubeIntegrationMetadata;
   const channelTitle = existingMeta.channel_title ?? "FaithForm";
-  const { rtmpUrl, streamId, broadcastId } = await provisionYouTubeLiveRtmpUrl(
-    client,
-    channelTitle,
-  );
 
-  await saveIntegration(
-    {
-      churchId,
-      provider: "youtube",
-      accessToken: integration.access_token,
-      refreshToken: integration.refresh_token,
-      tokenExpiresAt: integration.token_expires_at
-        ? new Date(integration.token_expires_at)
-        : null,
-      metadata: {
-        ...existingMeta,
-        live_stream_id: streamId,
-        live_broadcast_id: broadcastId,
+  try {
+    const { rtmpUrl, streamId, broadcastId } = await provisionYouTubeLiveRtmpUrl(
+      client,
+      channelTitle,
+    );
+
+    await saveIntegration(
+      {
+        churchId,
+        provider: "youtube",
+        accessToken: credentials.access_token ?? integration.access_token,
+        refreshToken: credentials.refresh_token ?? integration.refresh_token,
+        tokenExpiresAt: credentials.expiry_date
+          ? new Date(credentials.expiry_date)
+          : integration.token_expires_at
+            ? new Date(integration.token_expires_at)
+            : null,
+        metadata: {
+          ...existingMeta,
+          can_manage_live: true,
+          live_streaming_enabled: true,
+          live_streaming_error: null,
+          live_stream_id: streamId,
+          live_broadcast_id: broadcastId,
+        },
+        connectedBy: integration.connected_by ?? userId,
       },
-      connectedBy: integration.connected_by ?? userId,
-    },
-    supabase,
-  );
+      supabase,
+    );
 
-  await setStreamRelayDestination(
-    churchId,
-    "youtube",
-    rtmpUrl,
-    userId,
-    supabase,
-  );
+    await setStreamRelayDestination(
+      churchId,
+      "youtube",
+      rtmpUrl,
+      userId,
+      supabase,
+    );
+  } catch (error) {
+    const message = formatYouTubeLiveError(error);
+    await saveIntegration(
+      {
+        churchId,
+        provider: "youtube",
+        accessToken: credentials.access_token ?? integration.access_token,
+        refreshToken: credentials.refresh_token ?? integration.refresh_token,
+        tokenExpiresAt: credentials.expiry_date
+          ? new Date(credentials.expiry_date)
+          : integration.token_expires_at
+            ? new Date(integration.token_expires_at)
+            : null,
+        metadata: {
+          ...existingMeta,
+          can_manage_live: !isYouTubeLiveStreamingNotEnabledError(error),
+          live_streaming_enabled: false,
+          live_streaming_error: message,
+        },
+        connectedBy: integration.connected_by ?? userId,
+      },
+      supabase,
+    );
+    throw new Error(message);
+  }
 }

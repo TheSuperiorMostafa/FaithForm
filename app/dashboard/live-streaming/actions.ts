@@ -14,6 +14,7 @@ import {
   cancelStreamEvent,
   createStreamEvent,
 } from "@/lib/stream/events";
+import { formatShareStartedMessage } from "@/lib/stream/platform-labels";
 import {
   rotateStreamRelayKey,
   saveStreamRelaySettings,
@@ -164,14 +165,19 @@ export async function goLiveBroadcast(
   }
 
   try {
-    await startLiveBroadcast(auth.churchId, auth.userId, { title });
+    const session = await startLiveBroadcast(auth.churchId, auth.userId, { title });
     await logAdminAction({
       churchId: auth.churchId,
       taskName: "Started live broadcast",
       triggerSource: "Live Streaming",
     });
     revalidateLiveStreaming();
-    return { ok: true, message: "Broadcast started." };
+    return {
+      ok: true,
+      message: formatShareStartedMessage({
+        destinations: session.destinationsSnapshot,
+      }),
+    };
   } catch (error) {
     return {
       ok: false,

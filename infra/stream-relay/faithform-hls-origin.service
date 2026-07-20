@@ -1,0 +1,18 @@
+[Unit]
+Description=FaithForm normalized HLS origin
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mostafa
+Group=mostafa
+WorkingDirectory=/home/mostafa/mediamtx
+Environment=HLS_ORIGIN_HOST=127.0.0.1
+Environment=HLS_ORIGIN_PORT=8888
+ExecStart=/usr/bin/python3 /home/mostafa/scripts/hls-origin.py
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

@@ -16,7 +16,9 @@ rtsp: yes
 rtspAddress: :8554
 
 hls: yes
-hlsAddress: :8888
+# Public HLS is served by hls-origin.py on :8888. Keep MediaMTX's built-in
+# endpoint private for diagnostics; the origin normalizes encoder timestamps.
+hlsAddress: 127.0.0.1:8887
 hlsAllowOrigin: '*'
 hlsVariant: mpegts
 hlsSegmentDuration: 1s

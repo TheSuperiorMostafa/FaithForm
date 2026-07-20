@@ -24,13 +24,13 @@ export function createLiveHlsPlayer(HlsCtor: typeof Hls): Hls {
     ...BASE_CONFIG,
     lowLatencyMode: false,
     startPosition: -1,
-    liveSyncDurationCount: 1,
-    liveMaxLatencyDurationCount: 4,
+    liveSyncDurationCount: 3,
+    liveMaxLatencyDurationCount: 8,
     maxLiveSyncPlaybackRate: 1.5,
     liveBackBufferLength: 0,
     backBufferLength: 0,
-    maxBufferLength: 8,
-    maxMaxBufferLength: 12,
+    maxBufferLength: 12,
+    maxMaxBufferLength: 20,
   });
 }
 

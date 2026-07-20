@@ -23,6 +23,7 @@ type LiveStreamingDashboardProps = {
   isAdmin: boolean;
   youtubeConnected: boolean;
   youtubeChannelTitle: string | null;
+  youtubeLiveStreamingError?: string | null;
   facebookConnected: boolean;
   facebookPageName: string | null;
   initialSession: StreamSession | null;
@@ -38,6 +39,7 @@ export function LiveStreamingDashboard({
   isAdmin,
   youtubeConnected,
   youtubeChannelTitle,
+  youtubeLiveStreamingError,
   facebookConnected,
   facebookPageName,
   initialSession,
@@ -128,6 +130,7 @@ export function LiveStreamingDashboard({
         isAdmin={isAdmin}
         youtubeConnected={youtubeConnected}
         youtubeChannelTitle={youtubeChannelTitle}
+        youtubeLiveStreamingError={youtubeLiveStreamingError}
         facebookConnected={facebookConnected}
         facebookPageName={facebookPageName}
       />

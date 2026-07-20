@@ -21,10 +21,15 @@ export async function provisionDestinationsForEvent(
   const destinations: Array<{ name: string; url: string }> = [];
 
   if (event.syndicateYoutube) {
-    await provisionYouTubeLiveForChurch(event.churchId, userId, client);
-    const stream = await getIntegration(event.churchId, "stream", client);
-    const youtubeUrl = (stream?.metadata as { youtube_url?: string })?.youtube_url;
-    if (youtubeUrl) destinations.push({ name: "youtube", url: youtubeUrl });
+    try {
+      await provisionYouTubeLiveForChurch(event.churchId, userId, client);
+      const stream = await getIntegration(event.churchId, "stream", client);
+      const youtubeUrl = (stream?.metadata as { youtube_url?: string })?.youtube_url;
+      if (youtubeUrl) destinations.push({ name: "youtube", url: youtubeUrl });
+    } catch {
+      // YouTube provisioning failed (e.g. live streaming not enabled on channel).
+      // Continue with other destinations so Go Live isn't blocked.
+    }
   }
 
   if (event.syndicateFacebook) {

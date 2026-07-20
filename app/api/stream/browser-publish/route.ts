@@ -6,7 +6,10 @@ import { getStreamRelaySettings } from "@/lib/stream/relay";
 import { createClient } from "@/lib/supabase/server";
 
 function getWsIngestBaseUrl(): string | null {
-  const raw = process.env.STREAM_WS_INGEST_UPSTREAM_URL?.trim() || null;
+  const raw =
+    process.env.STREAM_WS_INGEST_UPSTREAM_URL?.trim() ||
+    process.env.STREAM_HTTP_INGEST_UPSTREAM_URL?.trim() ||
+    null;
 
   if (!raw) return null;
   return raw.replace(/^http/i, "ws").replace(/\/$/, "");

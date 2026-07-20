@@ -3,13 +3,27 @@
 
 set -euo pipefail
 
+RELAY_HOME="${HOME:-/home/mostafa}"
+ENV_FILE="${RELAY_HOME}/faithform-stream-relay.env"
+if [[ ! -f "${ENV_FILE}" && -r /etc/faithform-stream-relay.env ]]; then
+  ENV_FILE="/etc/faithform-stream-relay.env"
+fi
+if [[ -f "${ENV_FILE}" && -r "${ENV_FILE}" ]]; then
+  # shellcheck disable=SC1090
+  set -a
+  source "${ENV_FILE}"
+  set +a
+fi
+
 APP_URL="${FAITHFORM_APP_URL:-https://faithform.io}"
 SECRET="${STREAM_RELAY_WEBHOOK_SECRET:-}"
 RECORD_DIR="/home/mostafa/mediamtx/recordings"
+HLS_ROOT="/home/mostafa/mediamtx/public-hls"
 
 SAFE_PATH="${MTX_PATH//\//_}"
 FANOUT_PID_FILE="/home/mostafa/mediamtx/pids/${SAFE_PATH}.fanout.pid"
 RECORD_PID_FILE="/home/mostafa/mediamtx/pids/${SAFE_PATH}.record.pid"
+HLS_PID_FILE="/home/mostafa/mediamtx/pids/${SAFE_PATH}.hls.pid"
 LOG_FILE="/home/mostafa/mediamtx/logs/${SAFE_PATH}.log"
 
 stop_pid() {
@@ -27,6 +41,8 @@ stop_pid() {
 
 stop_pid "$FANOUT_PID_FILE"
 stop_pid "$RECORD_PID_FILE"
+stop_pid "$HLS_PID_FILE"
+rm -rf "${HLS_ROOT:?}/${MTX_PATH}"
 
 LATEST_FILE="${RECORD_DIR}/${SAFE_PATH}.latest"
 if [[ -f "$LATEST_FILE" && -n "${SECRET}" ]]; then

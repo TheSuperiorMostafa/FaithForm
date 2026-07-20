@@ -47,33 +47,40 @@ export async function getStreamShareLinks(
   }
 
   const destinations = getDestinationPlatforms(input.session?.destinationsSnapshot);
+  const youtube = await getIntegration(churchId, "youtube", input.supabase);
+  const youtubeMeta = (youtube?.metadata ?? {}) as YouTubeIntegrationMetadata;
+  const facebook = await getIntegration(churchId, "facebook", input.supabase);
+  const facebookMeta = (facebook?.metadata ?? {}) as FacebookIntegrationMetadata;
+  const hasActiveSession = Boolean(input.session);
+  const includeYoutube = hasActiveSession
+    ? destinations.includes("youtube")
+    : Boolean(youtubeMeta.channel_id);
+  const includeFacebook = hasActiveSession
+    ? destinations.includes("facebook")
+    : Boolean(facebookMeta.live_video_id && facebookMeta.page_id) || Boolean(facebookMeta.page_id);
 
-  if (destinations.includes("youtube")) {
-    const youtube = await getIntegration(churchId, "youtube", input.supabase);
-    const meta = (youtube?.metadata ?? {}) as YouTubeIntegrationMetadata;
-    if (meta.channel_id) {
+  if (includeYoutube) {
+    if (youtubeMeta.channel_id) {
       links.push({
         id: "youtube",
         label: "YouTube Live",
-        url: `https://www.youtube.com/channel/${meta.channel_id}/live`,
+        url: `https://www.youtube.com/channel/${youtubeMeta.channel_id}/live`,
       });
     }
   }
 
-  if (destinations.includes("facebook")) {
-    const facebook = await getIntegration(churchId, "facebook", input.supabase);
-    const meta = (facebook?.metadata ?? {}) as FacebookIntegrationMetadata;
-    if (meta.live_video_id && meta.page_id) {
+  if (includeFacebook) {
+    if (facebookMeta.live_video_id && facebookMeta.page_id) {
       links.push({
         id: "facebook",
         label: "Facebook Live",
-        url: `https://www.facebook.com/${meta.page_id}/videos/${meta.live_video_id}/`,
+        url: `https://www.facebook.com/${facebookMeta.page_id}/videos/${facebookMeta.live_video_id}/`,
       });
-    } else if (meta.page_id) {
+    } else if (facebookMeta.page_id) {
       links.push({
         id: "facebook",
         label: "Facebook Page",
-        url: `https://www.facebook.com/${meta.page_id}`,
+        url: `https://www.facebook.com/${facebookMeta.page_id}`,
       });
     }
   }
