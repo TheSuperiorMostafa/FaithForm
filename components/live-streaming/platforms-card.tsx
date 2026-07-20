@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, Play, Share2 } from "lucide-react";
+import { CheckCircle2, Play, Share2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -15,7 +15,6 @@ type PlatformsCardProps = {
   isAdmin: boolean;
   youtubeConnected: boolean;
   youtubeChannelTitle: string | null;
-  youtubeLiveStreamingError?: string | null;
   facebookConnected: boolean;
   facebookPageName: string | null;
 };
@@ -24,7 +23,6 @@ export function PlatformsCard({
   isAdmin,
   youtubeConnected,
   youtubeChannelTitle,
-  youtubeLiveStreamingError,
   facebookConnected,
   facebookPageName,
 }: PlatformsCardProps) {
@@ -43,7 +41,6 @@ export function PlatformsCard({
           name="YouTube"
           connected={youtubeConnected}
           detail={youtubeChannelTitle}
-          error={youtubeLiveStreamingError}
           connectHref="/api/integrations/youtube/connect?return_to=/dashboard/live-streaming"
           connectLabel="Connect YouTube"
           isAdmin={isAdmin}
@@ -67,7 +64,6 @@ function PlatformRow({
   name,
   connected,
   detail,
-  error,
   connectHref,
   connectLabel,
   isAdmin,
@@ -76,7 +72,6 @@ function PlatformRow({
   name: string;
   connected: boolean;
   detail: string | null;
-  error?: string | null;
   connectHref: string;
   connectLabel: string;
   isAdmin: boolean;
@@ -87,37 +82,7 @@ function PlatformRow({
         <div className="mt-0.5">{icon}</div>
         <div>
           <p className="text-sm font-semibold">{name}</p>
-          {connected && error ? (
-            <div className="mt-1 space-y-1">
-              <p className="flex items-center gap-1.5 text-xs text-amber-600">
-                <AlertTriangle className="size-3.5 shrink-0" />
-                {error}
-              </p>
-              {error.toLowerCase().includes("not enabled") ? (
-                <p className="text-xs text-muted-foreground">
-                  Go to{" "}
-                  <a
-                    href="https://www.youtube.com/verify"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="underline underline-offset-2 hover:text-foreground"
-                  >
-                    youtube.com/verify
-                  </a>{" "}
-                  to verify your channel, then open{" "}
-                  <a
-                    href="https://studio.youtube.com"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="underline underline-offset-2 hover:text-foreground"
-                  >
-                    YouTube Studio → Go live
-                  </a>{" "}
-                  to enable live streaming (may take up to 24 hours).
-                </p>
-              ) : null}
-            </div>
-          ) : connected ? (
+          {connected ? (
             <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
               <CheckCircle2 className="size-3.5 text-emerald-500" />
               {detail ?? "Connected"} · Ready to stream

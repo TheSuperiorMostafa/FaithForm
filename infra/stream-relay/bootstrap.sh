@@ -33,12 +33,6 @@ setcap 'cap_net_bind_service=+ep' "${BIN_DIR}/mediamtx"
 
 chown -R "${USER_NAME}:${USER_NAME}" "${MEDIAMTX_DIR}" "${HOME_DIR}/scripts"
 chmod +x "${HOME_DIR}/scripts/"*.sh
-chmod +x "${HOME_DIR}/scripts/hls-origin.py"
-
-if [[ -f "${HOME_DIR}/scripts/faithform-hls-origin.service" ]]; then
-  install -m 644 "${HOME_DIR}/scripts/faithform-hls-origin.service" \
-    /etc/systemd/system/faithform-hls-origin.service
-fi
 
 if [[ ! -f "${ENV_FILE}" ]]; then
 cat > "${ENV_FILE}" <<EOF
@@ -73,9 +67,6 @@ EOF
 systemctl daemon-reload
 systemctl enable faithform-mediamtx
 systemctl restart faithform-mediamtx
-if [[ -f /etc/systemd/system/faithform-hls-origin.service ]]; then
-  systemctl enable --now faithform-hls-origin
-fi
 
 echo ""
 echo "Done. MediaMTX status:"

@@ -29,6 +29,7 @@ import type { StreamSession } from "@/lib/stream/sessions";
 import {
   formatBroadcastStatusLabel,
   formatShareDescription,
+  formatShareStartedMessage,
 } from "@/lib/stream/platform-labels";
 import { StreamShareLinksPanel } from "@/components/live-streaming/stream-share-links-panel";
 import type { StreamShareLinks } from "@/lib/stream/share-links";
@@ -171,7 +172,12 @@ export function BroadcastStudioCard({
         toast.error(result.error ?? "Could not go live.");
         return;
       }
-      toast.success(result.message ?? "Broadcast started.");
+      toast.success(
+        formatShareStartedMessage({
+          youtubeConnected,
+          facebookConnected,
+        }),
+      );
     });
   };
 

@@ -44,7 +44,10 @@ export function formatBroadcastStatusLabel(input: {
   facebookConnected?: boolean;
 }): string {
   const destinationPlatforms = getDestinationPlatforms(input.destinations);
-  const platforms = destinationPlatforms;
+  const platforms =
+    destinationPlatforms.length > 0
+      ? destinationPlatforms
+      : getConnectedPlatforms(input);
 
   const platformLabel = formatPlatformList(platforms);
 
@@ -61,7 +64,10 @@ export function formatShareStartedMessage(input: {
   facebookConnected?: boolean;
 }): string {
   const destinationPlatforms = getDestinationPlatforms(input.destinations);
-  const platforms = destinationPlatforms;
+  const platforms =
+    destinationPlatforms.length > 0
+      ? destinationPlatforms
+      : getConnectedPlatforms(input);
 
   const platformLabel = formatPlatformList(platforms);
   return platformLabel ? `Sharing to ${platformLabel}…` : "Broadcast started.";

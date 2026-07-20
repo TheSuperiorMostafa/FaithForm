@@ -3,7 +3,7 @@ import { getChurchBySlug } from "@/lib/queries/giving";
 import { getPublicStreamEventByChurchId } from "@/lib/stream/events";
 import { isPreviewIngestActive } from "@/lib/stream/preview-ingest";
 import { getActiveStreamSession } from "@/lib/stream/sessions";
-import { getHlsPlaybackUrl, isHlsPlaybackReady } from "@/lib/stream/playback";
+import { getHlsPlaybackUrl } from "@/lib/stream/playback";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function GET(request: Request) {
@@ -46,22 +46,13 @@ export async function GET(request: Request) {
     playerStatus = "countdown";
   }
 
-  let playbackUrl: string | null = null;
-  // The relay is the authority for a live broadcast. An external encoder can
-  // publish without first creating a dashboard session, so do not hide a
-  // verified public playlist behind stale application session state.
-  if (event?.status !== "ended") {
-    playbackUrl = await getHlsPlaybackUrl(church.churchId, {
-      supabase: admin,
-      publicAccess: true,
-    });
-
-    if (playbackUrl && (await isHlsPlaybackReady(playbackUrl))) {
-      playerStatus = "live";
-    } else {
-      playbackUrl = null;
-    }
-  }
+  const playbackUrl =
+    playerStatus === "live" && hasIngest
+      ? await getHlsPlaybackUrl(church.churchId, {
+          supabase: admin,
+          publicAccess: true,
+        })
+      : null;
 
   return NextResponse.json({
     churchName: church.churchName,

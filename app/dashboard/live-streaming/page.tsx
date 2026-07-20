@@ -52,7 +52,6 @@ export default async function LiveStreamingPage() {
         isAdmin={auth.isAdmin}
         youtubeConnected={broadcastStatus.platforms.youtube.connected}
         youtubeChannelTitle={broadcastStatus.platforms.youtube.channelTitle}
-        youtubeLiveStreamingError={broadcastStatus.platforms.youtube.liveStreamingError}
         facebookConnected={broadcastStatus.platforms.facebook.connected}
         facebookPageName={broadcastStatus.platforms.facebook.pageName}
         initialSession={broadcastStatus.session}
