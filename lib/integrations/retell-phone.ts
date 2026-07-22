@@ -1,5 +1,6 @@
 import {
   isRetellConfigured,
+  publishCurrentAgentDraft,
   syncRetellAgent,
 } from "@/lib/integrations/retell";
 import {
@@ -139,23 +140,7 @@ export async function provisionRetellPhoneForChurch(
 
   try {
     // Make sure the latest draft is published before inbound calls can use it.
-    const agent = await retellRequest<{ version?: number }>({
-      method: "GET",
-      path: `/get-agent/${agentId}`,
-    });
-    if (typeof agent.version === "number") {
-      await retellRequest({
-        method: "POST",
-        path: `/publish-agent-version/${agentId}`,
-        body: { version: agent.version },
-      });
-    } else {
-      await retellRequest({
-        method: "POST",
-        path: `/publish-agent/${agentId}`,
-        body: {},
-      });
-    }
+    await publishCurrentAgentDraft(agentId);
 
     const created = await retellRequest<RetellPhoneNumber>({
       method: "POST",

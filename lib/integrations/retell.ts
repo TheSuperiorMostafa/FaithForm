@@ -260,25 +260,25 @@ async function publishAgentVersion(agentId: string, version: number): Promise<vo
   });
 }
 
-async function publishAgent(agentId: string): Promise<void> {
-  // get-agent returns the current draft; publish that version in place.
-  const agent = await retellRequest<RetellAgentResponse>({
-    method: "GET",
-    path: `/get-agent/${agentId}`,
-  });
-
-  const version = typeof agent.version === "number" ? agent.version : null;
-  if (version == null) {
-    // Legacy fallback for older Retell accounts.
-    await retellRequest({
-      method: "POST",
-      path: `/publish-agent/${agentId}`,
-      body: {},
+/** Publish the current agent draft via Retell's versioned publish endpoint. */
+export async function publishCurrentAgentDraft(
+  agentId: string,
+  version?: number | null,
+): Promise<void> {
+  let resolvedVersion = version;
+  if (typeof resolvedVersion !== "number") {
+    const agent = await retellRequest<RetellAgentResponse>({
+      method: "GET",
+      path: `/get-agent/${agentId}`,
     });
-    return;
+    resolvedVersion = agent.version;
   }
 
-  await publishAgentVersion(agentId, version);
+  if (typeof resolvedVersion !== "number") {
+    throw new Error("Retell agent is missing a version number.");
+  }
+
+  await publishAgentVersion(agentId, resolvedVersion);
 }
 
 /**
@@ -405,11 +405,7 @@ export async function syncRetellAgent(churchId: string): Promise<RetellSyncResul
   const llmId = await syncLlm(settings, context, church, llmVersion);
   const agentId = await syncAgent(settings, llmId, church.name, agentVersion);
 
-  if (typeof agentVersion === "number") {
-    await publishAgentVersion(agentId, agentVersion);
-  } else {
-    await publishAgent(agentId);
-  }
+  await publishCurrentAgentDraft(agentId, agentVersion);
 
   const admin = createAdminClient();
   const { error } = await admin
