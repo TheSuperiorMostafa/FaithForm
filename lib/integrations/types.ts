@@ -53,6 +53,6 @@ export type PublishResult = {
   announcementId?: string;
   facebookUrl?: string;
   facebookScheduledAt?: string;
-  gmailDraftUrl?: string;
+  queuedForWeeklyEmail?: boolean;
   errors: string[];
 };

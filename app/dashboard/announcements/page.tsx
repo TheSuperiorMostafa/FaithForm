@@ -2,16 +2,21 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { MonthCalendar } from "@/components/announcements/month-calendar";
 import { PublishedAnnouncementsList } from "@/components/announcements/published-announcements-list";
+import { WeeklyAnnouncementQueue } from "@/components/announcements/weekly-announcement-queue";
 import { Button } from "@/components/ui/button";
+import { buildWeeklyAnnouncementQueue } from "@/lib/announcements/weekly-email";
+import { getChurchAuth } from "@/lib/auth/church";
 import { listCalendarEventsInRange } from "@/lib/integrations/google-calendar";
 import { getIntegrationStatus } from "@/lib/integrations/tokens";
+import { getAnnouncementEmailSettings } from "@/lib/queries/announcement-email-settings";
 import {
   getPublishedAnnouncements,
   getPublishedAnnouncementsByGoogleId,
+  type AnnouncementRow,
 } from "@/lib/queries/announcements";
 import { getCurrentChurchId } from "@/lib/queries/dashboard";
 import { createClient } from "@/lib/supabase/server";
-import { getMonthWindowForDate } from "@/lib/utils/calendar";
+import { getMondayWeekWindow, getMonthWindowForDate } from "@/lib/utils/calendar";
 
 export const dynamic = "force-dynamic";
 
@@ -36,24 +41,35 @@ export default async function AnnouncementsPage() {
     );
   }
 
+  const auth = await getChurchAuth(supabase);
   const integrationStatus = await getIntegrationStatus(churchId, supabase);
   const googleConnected = integrationStatus.google.connected;
   const facebookConnected = integrationStatus.facebook.connected;
 
   const now = new Date();
   const { year, monthIndex, startISO, endISO } = getMonthWindowForDate(now);
+  const week = getMondayWeekWindow(now);
 
   let initialEvents: Awaited<ReturnType<typeof listCalendarEventsInRange>> = [];
+  let weekEvents: Awaited<ReturnType<typeof listCalendarEventsInRange>> = [];
   let publishedByGoogleId: Record<string, string> = {};
+  let publishedAnnouncementsMap: Record<string, AnnouncementRow> = {};
   let calendarError: string | null = null;
 
   if (googleConnected) {
     try {
-      const [events, publishedMap] = await Promise.all([
+      const [events, weekCalendarEvents, publishedMap] = await Promise.all([
         listCalendarEventsInRange(churchId, startISO, endISO, supabase),
+        listCalendarEventsInRange(
+          churchId,
+          week.weekStartISO,
+          week.weekEndISO,
+          supabase,
+        ),
         getPublishedAnnouncementsByGoogleId(supabase, churchId),
       ]);
       initialEvents = events;
+      weekEvents = weekCalendarEvents;
       publishedByGoogleId = publishedMap;
     } catch (err) {
       calendarError =
@@ -62,10 +78,17 @@ export default async function AnnouncementsPage() {
   }
 
   const published = await getPublishedAnnouncements(supabase, churchId);
-  const publishedAnnouncements = Object.fromEntries(
+  publishedAnnouncementsMap = Object.fromEntries(
     published
       .filter((row) => row.google_event_id)
       .map((row) => [row.google_event_id!, row]),
+  );
+
+  const emailSettings = await getAnnouncementEmailSettings(churchId, supabase);
+  const weeklyQueue = buildWeeklyAnnouncementQueue(
+    weekEvents,
+    publishedAnnouncementsMap,
+    now,
   );
 
   return (
@@ -76,14 +99,20 @@ export default async function AnnouncementsPage() {
             Announcements
           </h1>
           <p className="text-sm text-muted-foreground">
-            Your Google Calendar month view — click an event to verify and submit.
+            Review this week&apos;s queue, verify events, and publish to
+            Facebook. Team emails roll into one Monday Gmail draft.
           </p>
         </div>
-        {!googleConnected && (
-          <Link href="/dashboard/settings">
-            <Button variant="outline">Connect Google</Button>
+        <div className="flex flex-wrap gap-2">
+          <Link href="/dashboard/settings?tab=communications">
+            <Button variant="outline">Email template</Button>
           </Link>
-        )}
+          {!googleConnected && (
+            <Link href="/dashboard/settings">
+              <Button variant="outline">Connect Google</Button>
+            </Link>
+          )}
+        </div>
       </div>
 
       {calendarError && (
@@ -92,13 +121,26 @@ export default async function AnnouncementsPage() {
         </p>
       )}
 
+      <WeeklyAnnouncementQueue
+        churchId={churchId}
+        queue={weeklyQueue}
+        published={published}
+        googleConnected={googleConnected}
+        facebookConnected={facebookConnected}
+        weekLabel={week.weekLabel}
+        weeklyDraftCreated={
+          emailSettings.lastWeeklyDraftWeekStart === week.weekStartKey
+        }
+        isAdmin={auth?.isAdmin ?? false}
+      />
+
       <MonthCalendar
         churchId={churchId}
         initialYear={year}
         initialMonthIndex={monthIndex}
         initialEvents={initialEvents}
         initialPublishedByGoogleId={publishedByGoogleId}
-        initialPublishedAnnouncements={publishedAnnouncements}
+        initialPublishedAnnouncements={publishedAnnouncementsMap}
         googleConnected={googleConnected}
         facebookConnected={facebookConnected}
       />

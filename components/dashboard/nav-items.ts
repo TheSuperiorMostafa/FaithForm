@@ -2,14 +2,11 @@ import {
   BookOpen,
   Building2,
   Contact,
-  FileText,
-  Film,
   Heart,
   LayoutDashboard,
   LifeBuoy,
   Megaphone,
   Phone,
-  PhoneCall,
   RadioTower,
   Settings,
   Users,
@@ -27,7 +24,7 @@ export type NavItem = {
 
 export const navItems: NavItem[] = [
   {
-    label: "Dashboard",
+    label: "Home",
     shortLabel: "Home",
     href: "/dashboard",
     icon: LayoutDashboard,
@@ -51,18 +48,16 @@ export const navItems: NavItem[] = [
     icon: Megaphone,
   },
   {
-    label: "Live Streaming",
+    label: "Sermon Builder",
+    shortLabel: "Sermon",
+    href: "/dashboard/sermon-builder",
+    icon: BookOpen,
+  },
+  {
+    label: "Live Stream",
     shortLabel: "Live",
     href: "/dashboard/live-streaming",
     icon: RadioTower,
-    sidebarOnly: true,
-  },
-  {
-    label: "Media",
-    shortLabel: "Media",
-    href: "/dashboard/media",
-    icon: Film,
-    sidebarOnly: true,
   },
   {
     label: "Voice Assistant",
@@ -71,28 +66,10 @@ export const navItems: NavItem[] = [
     icon: Phone,
   },
   {
-    label: "Call Log",
-    shortLabel: "Calls",
-    href: "/dashboard/call-log",
-    icon: PhoneCall,
-  },
-  {
-    label: "Sermon Builder",
-    shortLabel: "Sermon",
-    href: "/dashboard/sermon-builder",
-    icon: BookOpen,
-  },
-  {
     label: "Giving",
     shortLabel: "Give",
     href: "/dashboard/giving",
     icon: Heart,
-  },
-  {
-    label: "Documents",
-    shortLabel: "Docs",
-    href: "/dashboard/library",
-    icon: FileText,
   },
 ];
 

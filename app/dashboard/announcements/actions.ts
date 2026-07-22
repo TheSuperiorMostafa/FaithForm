@@ -3,9 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { logActivity } from "@/lib/activity/log";
+import { createWeeklyAnnouncementGmailDraft } from "@/lib/announcements/weekly-email";
+import { getChurchAuth } from "@/lib/auth/church";
 import { createClient } from "@/lib/supabase/server";
 import { patchCalendarEvent } from "@/lib/integrations/google-calendar";
-import { createAnnouncementGmailDraft } from "@/lib/integrations/gmail";
 import { generateEmergencySocialGraphic, downloadSocialGraphic } from "@/lib/social/generate-graphic";
 import {
   postAnnouncementToFacebookPage,
@@ -15,6 +16,7 @@ import {
   buildFacebookPostMessage,
   formatDateTimeRange,
 } from "@/lib/queries/announcements";
+import { getChurchAnnouncementFacebookSchedule } from "@/lib/queries/church-profile";
 import { hasIntegration } from "@/lib/integrations/tokens";
 import { getCurrentChurchId } from "@/lib/queries/dashboard";
 import type { PublishResult } from "@/lib/integrations/types";
@@ -108,8 +110,6 @@ export async function publishAnnouncement(
   let facebookPostId: string | null = null;
   let facebookUrl: string | undefined;
   let facebookScheduledAt: string | undefined;
-  let gmailDraftId: string | null = null;
-  let gmailDraftUrl: string | undefined;
 
   const socialFields = {
     facebook_caption: payload.pushToFacebook ? payload.facebookCaption || null : null,
@@ -270,6 +270,10 @@ export async function publishAnnouncement(
 
         const scheduledPublishTime = resolveFacebookScheduledPublishTime(
           payload.startAt,
+          await getChurchAnnouncementFacebookSchedule(
+            ctx.churchId,
+            ctx.supabase,
+          ),
         );
 
         const result = await postAnnouncementToFacebookPage(
@@ -329,39 +333,16 @@ export async function publishAnnouncement(
     "google",
     ctx.supabase,
   );
-  if (payload.pushToTeam) {
-    if (googleConnected) {
-      try {
-        const draft = await createAnnouncementGmailDraft(
-          ctx.churchId,
-          {
-            title: payload.title,
-            location: payload.location,
-            startAt: payload.startAt,
-            endAt: payload.endAt,
-            notes: payload.notes,
-          },
-          ctx.supabase,
-        );
-        gmailDraftId = draft.draftId;
-        gmailDraftUrl = draft.draftUrl;
-      } catch (err) {
-        errors.push(
-          err instanceof Error ? err.message : "Gmail draft failed",
-        );
-      }
-    } else {
-      errors.push("Google is not connected — skipped Gmail draft.");
-    }
+  if (payload.pushToTeam && !googleConnected) {
+    errors.push("Google is not connected — weekly email not queued.");
   }
 
-  if (facebookPostId || gmailDraftId || errors.length > 0) {
+  if (facebookPostId || errors.length > 0) {
     await ctx.supabase
       .from("announcements")
       .update({
         facebook_post_id: facebookPostId,
         facebook_scheduled_publish_time: facebookScheduledAt ?? null,
-        gmail_draft_id: gmailDraftId,
         last_publish_error: errors.length > 0 ? errors.join(" ") : null,
       })
       .eq("id", announcementId)
@@ -385,8 +366,37 @@ export async function publishAnnouncement(
     announcementId: announcementId!,
     facebookUrl,
     facebookScheduledAt,
-    gmailDraftUrl,
+    queuedForWeeklyEmail: payload.pushToTeam && googleConnected,
     errors,
+  };
+}
+
+export async function createWeeklyAnnouncementDraftAction(options?: {
+  force?: boolean;
+}) {
+  const ctx = await requireChurchAndUser();
+  if (!ctx.churchId || !ctx.user) return { error: "No church linked" };
+
+  const auth = await getChurchAuth(ctx.supabase);
+  if (!auth?.isAdmin) {
+    return { error: "Only church admins can create weekly Gmail drafts." };
+  }
+
+  const result = await createWeeklyAnnouncementGmailDraft(ctx.churchId, {
+    force: options?.force,
+    supabase: ctx.supabase,
+  });
+
+  revalidatePath("/dashboard/announcements");
+
+  if (!result.ok) {
+    return { error: result.error, skipped: result.skipped ?? false };
+  }
+
+  return {
+    success: true,
+    draftUrl: result.draftUrl,
+    eventCount: result.eventCount,
   };
 }
 

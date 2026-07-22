@@ -137,7 +137,7 @@ export function VoiceAssistantSettings({
 
   if (!isAdmin) {
     return (
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
+      <div className="flex flex-col gap-6">
         <PageHeader readOnly />
         <div className="grid items-start gap-6 lg:grid-cols-[1fr_340px]">
           <div className="flex min-w-0 flex-col gap-6">
@@ -181,7 +181,7 @@ export function VoiceAssistantSettings({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 pb-28">
+    <div className="flex flex-col gap-6 pb-28">
       <PageHeader />
 
       <div className="grid items-start gap-6 lg:grid-cols-[1fr_340px]">
@@ -264,15 +264,10 @@ export function VoiceAssistantSettings({
 
 function PageHeader({ readOnly = false }: { readOnly?: boolean }) {
   return (
-    <div>
-      <h1 className="font-heading text-2xl font-bold tracking-tight">
-        Voice Assistant
-      </h1>
-      <p className="text-sm text-muted-foreground">
-        {readOnly
-          ? "View how your church phone assistant is configured."
-          : "Configure voice delivery and after-hours behavior. Church identity lives in Church Profile."}
-      </p>
-    </div>
+    <p className="text-sm text-muted-foreground">
+      {readOnly
+        ? "View how your church phone assistant is configured."
+        : "Configure voice delivery and after-hours behavior. Church identity lives in Church Profile."}
+    </p>
   );
 }

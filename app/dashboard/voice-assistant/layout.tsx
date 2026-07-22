@@ -1,0 +1,36 @@
+import type { ReactNode } from "react";
+import { SectionLinkTabs } from "@/components/dashboard/section-link-tabs";
+
+const voiceAssistantTabs = [
+  {
+    label: "Assistant",
+    href: "/dashboard/voice-assistant",
+    isActive: (pathname: string) => pathname === "/dashboard/voice-assistant",
+  },
+  {
+    label: "Call Log",
+    href: "/dashboard/voice-assistant/calls",
+    isActive: (pathname: string) =>
+      pathname.startsWith("/dashboard/voice-assistant/calls"),
+  },
+];
+
+export default function VoiceAssistantLayout({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  return (
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
+      <header>
+        <h1 className="font-heading text-2xl font-bold tracking-tight">
+          Voice Assistant
+        </h1>
+      </header>
+
+      <SectionLinkTabs tabs={voiceAssistantTabs} />
+
+      {children}
+    </div>
+  );
+}

@@ -1,7 +1,7 @@
 import React from "react";
 import { Document, StyleSheet, Text, View } from "@react-pdf/renderer";
 import {
-  MiniBarChart,
+  MiniLineChart,
   ReportFooter,
   ReportPage,
   SectionTitle,
@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   metricLine: {
-    marginBottom: 8,
+    marginBottom: 16,
   },
   metricLabel: {
     fontSize: 8,
@@ -207,7 +207,7 @@ export function AttendancePdfDocument({
         </View>
 
         <SectionTitle>{`Morning Worship Attendance – ${monthLabel}`}</SectionTitle>
-        <MiniBarChart points={chartPoints} />
+        <MiniLineChart points={chartPoints} />
 
         <View style={styles.metricsRow}>
           <View style={styles.metricsCol}>

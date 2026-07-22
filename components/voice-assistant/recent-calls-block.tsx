@@ -144,7 +144,7 @@ export function RecentCallsBlock({
                     </td>
                     <td className="py-2.5 pl-2">
                       <Link
-                        href={`/dashboard/call-log/${call.id}`}
+                        href={`/dashboard/voice-assistant/calls/${call.id}`}
                         className="text-xs font-medium text-accent hover:underline"
                       >
                         View

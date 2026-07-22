@@ -207,7 +207,9 @@ export function AnnouncementVerifyForm({
       } else if (result.facebookUrl) {
         parts.push("Posted to Facebook.");
       }
-      if (result.gmailDraftUrl) parts.push("Gmail draft created.");
+      if (result.queuedForWeeklyEmail) {
+        parts.push("Queued for this week's team email.");
+      }
       if (result.errors.length > 0) {
         parts.push(result.errors.join(" "));
       }
@@ -230,7 +232,7 @@ export function AnnouncementVerifyForm({
         google_event_id: event.googleEventId,
         google_calendar_id: event.calendarId,
         facebook_post_id: result.facebookUrl ? "posted" : null,
-        gmail_draft_id: result.gmailDraftUrl ? "draft" : null,
+        gmail_draft_id: null,
         published_at: new Date().toISOString(),
         last_publish_error:
           result.errors.length > 0 ? result.errors.join(" ") : null,
@@ -321,19 +323,19 @@ export function AnnouncementVerifyForm({
           disabled={!defaults.facebookConnected}
           hint={
             defaults.facebookConnected
-              ? "Creates a Facebook post with an AI caption and branded graphic. Schedules for event start when more than 10 minutes away."
+              ? "Creates a Facebook post with an AI caption and branded graphic. Schedules for the day before the event at your Church Profile post time."
               : "Connect Facebook in Settings"
           }
         />
         <ToggleRow
           id={`team-${event.googleEventId}`}
-          label="Create Gmail draft?"
+          label="Include in weekly email?"
           checked={pushToTeam}
           onCheckedChange={setPushToTeam}
           disabled={!defaults.googleConnected}
           hint={
             defaults.googleConnected
-              ? "Creates a draft in Gmail with event details when Google is connected."
+              ? "Adds this event to Monday's Gmail draft with the rest of this week's calendar."
               : "Connect Google in Settings"
           }
         />

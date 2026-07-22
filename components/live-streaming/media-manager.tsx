@@ -58,15 +58,10 @@ export function MediaManager({ recordings, isAdmin }: MediaManagerProps) {
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-      <header>
-        <h1 className="font-heading text-2xl font-bold tracking-tight">
-          Media library
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Recordings from live streams. Trim and publish on-demand videos.
-        </p>
-      </header>
+    <div className="flex flex-col gap-6">
+      <p className="text-sm text-muted-foreground">
+        Recordings from live streams. Trim and publish on-demand videos.
+      </p>
 
       {recordings.length === 0 ? (
         <Card>

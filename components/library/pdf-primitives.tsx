@@ -1,7 +1,11 @@
 import {
+  Circle,
   Image,
+  Line,
   Page,
+  Polyline,
   StyleSheet,
+  Svg,
   Text,
   View,
 } from "@react-pdf/renderer";
@@ -62,11 +66,16 @@ const styles = StyleSheet.create({
     color: pdfColors.gold,
     textAlign: "right",
   },
+  heroBlock: {
+    alignItems: "center",
+    marginBottom: pdfSpacing.section,
+  },
   heroValue: {
     fontSize: pdfFontSizes.hero,
     fontWeight: "bold",
     color: pdfColors.gold,
     marginBottom: 4,
+    textAlign: "center",
   },
   heroLabel: {
     fontSize: pdfFontSizes.subtitle,
@@ -74,13 +83,14 @@ const styles = StyleSheet.create({
     color: pdfColors.navy,
     letterSpacing: 0.6,
     marginBottom: 6,
+    textAlign: "center",
   },
   heroSubtitle: {
     fontSize: pdfFontSizes.body,
     color: pdfColors.muted,
     lineHeight: 1.5,
-    marginBottom: pdfSpacing.section,
-    maxWidth: "92%",
+    textAlign: "center",
+    maxWidth: "88%",
   },
   kpiGrid: {
     flexDirection: "row",
@@ -177,8 +187,18 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingRight: 8,
   },
+  progressLabelLarge: {
+    fontSize: 11,
+    color: pdfColors.navy,
+    flex: 1,
+    paddingRight: 8,
+  },
   progressValue: {
     fontSize: pdfFontSizes.body,
+    color: pdfColors.muted,
+  },
+  progressValueLarge: {
+    fontSize: 11,
     color: pdfColors.muted,
   },
   progressTrack: {
@@ -192,36 +212,24 @@ const styles = StyleSheet.create({
     backgroundColor: pdfColors.gold,
     borderRadius: 3,
   },
-  barChart: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    justifyContent: "space-between",
-    height: 72,
+  lineChart: {
     marginBottom: pdfSpacing.section,
-    paddingHorizontal: 4,
   },
-  barCol: {
+  lineChartFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    paddingHorizontal: 4,
+    marginTop: 4,
+  },
+  lineChartCol: {
     flex: 1,
     alignItems: "center",
     marginHorizontal: 2,
   },
-  bar: {
-    width: "70%",
-    backgroundColor: pdfColors.gold,
-    borderTopLeftRadius: 3,
-    borderTopRightRadius: 3,
-    marginBottom: 4,
-  },
-  barLabel: {
+  lineChartLabel: {
     fontSize: 6,
     color: pdfColors.muted,
     textAlign: "center",
-  },
-  barValue: {
-    fontSize: 7,
-    fontWeight: "bold",
-    color: pdfColors.navy,
-    marginBottom: 2,
   },
   bodyRow: {
     flexDirection: "row",
@@ -388,7 +396,7 @@ type HeroMetricProps = {
 
 export function HeroMetric({ value, label, subtitle }: HeroMetricProps) {
   return (
-    <View>
+    <View style={styles.heroBlock}>
       <Text style={styles.heroValue}>{value}</Text>
       <Text style={styles.heroLabel}>{label}</Text>
       {subtitle ? <Text style={styles.heroSubtitle}>{subtitle}</Text> : null}
@@ -488,15 +496,25 @@ type ProgressRowProps = {
   label: string;
   valueLabel: string;
   percent: number;
+  large?: boolean;
 };
 
-export function ProgressRow({ label, valueLabel, percent }: ProgressRowProps) {
+export function ProgressRow({
+  label,
+  valueLabel,
+  percent,
+  large = false,
+}: ProgressRowProps) {
   const width = `${Math.max(4, Math.min(100, percent))}%`;
   return (
     <View style={styles.progressRow}>
       <View style={styles.progressHeader}>
-        <Text style={styles.progressLabel}>{label}</Text>
-        <Text style={styles.progressValue}>{valueLabel}</Text>
+        <Text style={large ? styles.progressLabelLarge : styles.progressLabel}>
+          {label}
+        </Text>
+        <Text style={large ? styles.progressValueLarge : styles.progressValue}>
+          {valueLabel}
+        </Text>
       </View>
       <View style={styles.progressTrack}>
         <View style={[styles.progressFill, { width }]} />
@@ -505,27 +523,89 @@ export function ProgressRow({ label, valueLabel, percent }: ProgressRowProps) {
   );
 }
 
-type BarPoint = { label: string; value: number };
+type ChartPoint = { label: string; value: number };
 
-export function MiniBarChart({ points }: { points: BarPoint[] }) {
+const LINE_CHART_WIDTH = 520;
+const LINE_CHART_HEIGHT = 88;
+const LINE_CHART_PADDING = { top: 22, right: 20, bottom: 10, left: 20 };
+
+export function MiniLineChart({ points }: { points: ChartPoint[] }) {
   if (points.length === 0) {
     return <Text style={styles.emptyText}>No data to chart.</Text>;
   }
 
+  const plotWidth =
+    LINE_CHART_WIDTH - LINE_CHART_PADDING.left - LINE_CHART_PADDING.right;
+  const plotHeight =
+    LINE_CHART_HEIGHT - LINE_CHART_PADDING.top - LINE_CHART_PADDING.bottom;
   const max = Math.max(...points.map((p) => p.value), 1);
+  const min = Math.min(...points.map((p) => p.value), 0);
+  const range = max - min || 1;
+
+  const plotted = points.map((point, index) => {
+    const x =
+      LINE_CHART_PADDING.left +
+      (points.length === 1
+        ? plotWidth / 2
+        : (index / (points.length - 1)) * plotWidth);
+    const y =
+      LINE_CHART_PADDING.top +
+      plotHeight -
+      ((point.value - min) / range) * plotHeight;
+    return { ...point, x, y };
+  });
+
+  const linePoints = plotted.map((point) => `${point.x},${point.y}`).join(" ");
+  const baselineY = LINE_CHART_PADDING.top + plotHeight;
 
   return (
-    <View style={styles.barChart}>
-      {points.map((point) => {
-        const height = Math.max(6, Math.round((point.value / max) * 52));
-        return (
-          <View key={point.label} style={styles.barCol}>
-            <Text style={styles.barValue}>{point.value}</Text>
-            <View style={[styles.bar, { height }]} />
-            <Text style={styles.barLabel}>{point.label}</Text>
+    <View style={styles.lineChart}>
+      <Svg
+        width={LINE_CHART_WIDTH}
+        height={LINE_CHART_HEIGHT}
+        viewBox={`0 0 ${LINE_CHART_WIDTH} ${LINE_CHART_HEIGHT}`}
+      >
+        <Line
+          x1={LINE_CHART_PADDING.left}
+          y1={baselineY}
+          x2={LINE_CHART_PADDING.left + plotWidth}
+          y2={baselineY}
+          stroke={pdfColors.border}
+          strokeWidth={1}
+        />
+        <Polyline
+          points={linePoints}
+          stroke={pdfColors.gold}
+          strokeWidth={2}
+          fill="none"
+        />
+        {plotted.map((point) => (
+          <Circle
+            key={point.label}
+            cx={point.x}
+            cy={point.y}
+            r={3.5}
+            fill={pdfColors.gold}
+          />
+        ))}
+      </Svg>
+      <View style={styles.lineChartFooter}>
+        {plotted.map((point) => (
+          <View key={point.label} style={styles.lineChartCol}>
+            <Text
+              style={{
+                fontSize: 7,
+                fontWeight: "bold",
+                color: pdfColors.navy,
+                marginBottom: 2,
+              }}
+            >
+              {point.value}
+            </Text>
+            <Text style={styles.lineChartLabel}>{point.label}</Text>
           </View>
-        );
-      })}
+        ))}
+      </View>
     </View>
   );
 }

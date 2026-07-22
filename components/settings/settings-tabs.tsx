@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { AISettingsForm } from "@/components/settings/ai-settings-form";
+import { AnnouncementEmailForm } from "@/components/settings/announcement-email-form";
 import { FollowUpMessagesForm } from "@/components/settings/follow-up-messages-form";
 import { GivingCard } from "@/components/settings/giving-card";
 import { IntegrationsCard } from "@/components/settings/integrations-card";
@@ -18,6 +19,7 @@ import {
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ChurchGivingProfile, GivingFundRow } from "@/types/giving";
+import type { AnnouncementEmailTemplate } from "@/lib/email/announcement-template";
 import type { ChurchSettings } from "@/types/sermon";
 
 type SettingsTabsProps = {
@@ -27,6 +29,7 @@ type SettingsTabsProps = {
   givingProfile: ChurchGivingProfile | null;
   givingFunds: GivingFundRow[];
   followUpTemplates: string[];
+  announcementEmailTemplate: AnnouncementEmailTemplate;
 };
 
 function getDefaultTab(searchParams: URLSearchParams): string {
@@ -40,6 +43,9 @@ function getDefaultTab(searchParams: URLSearchParams): string {
   if (searchParams.get("tab") === "attendance") {
     return "attendance";
   }
+  if (searchParams.get("tab") === "communications") {
+    return "communications";
+  }
   return "general";
 }
 
@@ -50,6 +56,7 @@ function SettingsTabsInner({
   givingProfile,
   givingFunds,
   followUpTemplates,
+  announcementEmailTemplate,
 }: SettingsTabsProps) {
   const searchParams = useSearchParams();
   const defaultTab = getDefaultTab(searchParams);
@@ -58,6 +65,7 @@ function SettingsTabsInner({
     <Tabs defaultValue={defaultTab} className="flex flex-col gap-4">
       <TabsList className="w-full justify-start">
         <TabsTrigger value="general">General</TabsTrigger>
+        <TabsTrigger value="communications">Communications</TabsTrigger>
         <TabsTrigger value="attendance">Attendance</TabsTrigger>
         <TabsTrigger value="giving">Giving</TabsTrigger>
       </TabsList>
@@ -109,6 +117,13 @@ function SettingsTabsInner({
             <AISettingsForm settings={settings} isAdmin={isAdmin} />
           </div>
         </div>
+      </TabsContent>
+
+      <TabsContent value="communications" className="mt-0">
+        <AnnouncementEmailForm
+          isAdmin={isAdmin}
+          template={announcementEmailTemplate}
+        />
       </TabsContent>
 
       <TabsContent value="attendance" className="mt-0">

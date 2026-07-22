@@ -7,6 +7,7 @@ import {
 import type { FacebookIntegrationMetadata } from "@/lib/integrations/types";
 import { absoluteAppPath } from "@/lib/site-url";
 import { setStreamRelayDestination } from "@/lib/stream/relay";
+import { shiftYmd, toYMD, zonedDateTimeToUtcMs } from "@/lib/utils/dates";
 
 const GRAPH = "https://graph.facebook.com/v21.0";
 
@@ -233,17 +234,57 @@ export async function postToFacebookPage(
   return { postId: result.postId, url: result.url };
 }
 
-/** Facebook requires scheduled posts to be at least ~10 minutes in the future */
+/** Facebook requires scheduled posts to be at least ~10 minutes in the future. */
+const FACEBOOK_MIN_SCHEDULE_LEAD_MS = 10 * 60 * 1000;
+
+const DEFAULT_ANNOUNCEMENT_FACEBOOK_POST_TIME = "09:00";
+
+export type FacebookScheduleOptions = {
+  /** HH:mm in the church timezone. */
+  postTime?: string;
+  /** IANA timezone for the church. */
+  timezone?: string;
+};
+
+/**
+ * Schedule announcement Facebook posts for the day before the event at the
+ * church's configured time. Posts immediately when that slot has already passed.
+ */
 export function resolveFacebookScheduledPublishTime(
   startAtIso: string,
+  options?: FacebookScheduleOptions,
 ): number | undefined {
   const startMs = new Date(startAtIso).getTime();
   if (Number.isNaN(startMs)) return undefined;
 
-  const minLeadMs = 10 * 60 * 1000;
-  if (startMs - Date.now() < minLeadMs) {
+  const timezone = options?.timezone?.trim() || "America/New_York";
+  const postTime = normalizePostTime(
+    options?.postTime ?? DEFAULT_ANNOUNCEMENT_FACEBOOK_POST_TIME,
+  );
+
+  const eventDate = toYMD(new Date(startAtIso), timezone);
+  const publishDate = shiftYmd(eventDate, -1);
+  const scheduledMs = zonedDateTimeToUtcMs(publishDate, postTime, timezone);
+  const now = Date.now();
+
+  if (scheduledMs - now < FACEBOOK_MIN_SCHEDULE_LEAD_MS) {
     return undefined;
   }
 
-  return Math.floor(startMs / 1000);
+  return Math.floor(scheduledMs / 1000);
+}
+
+function normalizePostTime(value: string): string {
+  const trimmed = value.trim();
+  const match = trimmed.match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return DEFAULT_ANNOUNCEMENT_FACEBOOK_POST_TIME;
+  const hours = Math.min(23, Math.max(0, Number(match[1])));
+  const minutes = Math.min(59, Math.max(0, Number(match[2])));
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
+export function formatAnnouncementFacebookPostTime(
+  postTime: string | null | undefined,
+): string {
+  return normalizePostTime(postTime ?? DEFAULT_ANNOUNCEMENT_FACEBOOK_POST_TIME);
 }

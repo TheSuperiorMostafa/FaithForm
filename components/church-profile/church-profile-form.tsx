@@ -780,6 +780,25 @@ export function ChurchProfileForm({ initialForm, isAdmin }: ChurchProfileFormPro
           </p>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2 sm:col-span-2">
+            <Label htmlFor="announcement-facebook-post-time">
+              Announcement Facebook post time
+            </Label>
+            <Input
+              id="announcement-facebook-post-time"
+              type="time"
+              value={form.announcementFacebookPostTime}
+              disabled={readOnly}
+              onChange={(e) =>
+                patch({ announcementFacebookPostTime: e.target.value })
+              }
+            />
+            <p className="text-xs text-muted-foreground">
+              When you publish an announcement to Facebook, FaithForm schedules
+              the post for the day before the event at this time in your church
+              timezone.
+            </p>
+          </div>
           {(
             [
               ["facebookUrl", "Facebook"],

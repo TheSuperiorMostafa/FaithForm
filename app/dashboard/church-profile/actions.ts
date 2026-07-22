@@ -86,6 +86,7 @@ const saveSchema = z
     xUrl: z.string().max(500),
     podcastUrl: z.string().max(500),
     livestreamUrl: z.string().max(500),
+    announcementFacebookPostTime: z.string().regex(/^\d{2}:\d{2}$/),
     aiKnowledge: z.record(z.string(), z.string()),
     serviceTimes: z.array(serviceTimeSchema),
     staff: z.array(staffSchema),
@@ -162,6 +163,7 @@ export async function saveChurchProfile(
     revalidatePath("/dashboard/voice-assistant");
     revalidatePath("/dashboard/settings");
     revalidatePath("/dashboard/giving");
+    revalidatePath("/dashboard/announcements");
     return { ok: true };
   } catch (e) {
     return {

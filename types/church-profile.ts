@@ -98,6 +98,7 @@ export type ChurchProfile = {
   xUrl: string | null;
   podcastUrl: string | null;
   livestreamUrl: string | null;
+  announcementFacebookPostTime: string;
   slug: string | null;
   stripeChargesEnabled: boolean;
   aiKnowledge: AiKnowledge;
@@ -134,6 +135,7 @@ export type ChurchProfileFormState = {
   xUrl: string;
   podcastUrl: string;
   livestreamUrl: string;
+  announcementFacebookPostTime: string;
   aiKnowledge: AiKnowledge;
   serviceTimes: ServiceTimeFormRow[];
   staff: StaffFormRow[];

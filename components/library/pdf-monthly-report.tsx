@@ -70,15 +70,15 @@ export function MonthlyPdfDocument({
           items={[
             {
               value: String(tasksCompletedThisMonth),
-              label: "TASKS COMPLETED",
+              label: "Tasks off your plate",
             },
             {
               value: String(callsHandledThisMonth),
-              label: "CALLS HANDLED",
+              label: "Calls you did not have to think about",
             },
             {
               value: `${lifetimeHoursSaved.toFixed(2)} hrs`,
-              label: "LIFETIME HOURS SAVED",
+              label: "Total hours returned",
             },
           ]}
         />
@@ -95,6 +95,7 @@ export function MonthlyPdfDocument({
                 topAutomations.map((row) => (
                   <ProgressRow
                     key={row.rank}
+                    large
                     label={`${row.rank}. ${row.label}`}
                     valueLabel={`${row.minutes} min`}
                     percent={(row.minutes / maxAutomationMinutes) * 100}

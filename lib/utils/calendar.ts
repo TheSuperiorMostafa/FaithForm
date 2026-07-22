@@ -27,6 +27,61 @@ export function endOfWeekSaturday(date: Date): Date {
   return endOfDay(d);
 }
 
+/** Monday on or before the given date (ISO week start). */
+export function startOfWeekMonday(date: Date): Date {
+  const d = startOfDay(date);
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  return d;
+}
+
+/** Sunday on or after the given date (ISO week end). */
+export function endOfWeekSunday(date: Date): Date {
+  const d = startOfWeekMonday(date);
+  d.setDate(d.getDate() + 6);
+  return endOfDay(d);
+}
+
+export type WeekWindow = {
+  weekStart: Date;
+  weekEnd: Date;
+  weekStartISO: string;
+  weekEndISO: string;
+  weekLabel: string;
+  weekStartKey: string;
+};
+
+/** Monday–Sunday window containing `date`. */
+export function getMondayWeekWindow(date: Date = new Date()): WeekWindow {
+  const weekStart = startOfWeekMonday(date);
+  const weekEnd = endOfWeekSunday(date);
+
+  const weekLabel = `${weekStart.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  })} – ${weekEnd.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  })}`;
+
+  const weekStartKey = [
+    weekStart.getFullYear(),
+    String(weekStart.getMonth() + 1).padStart(2, "0"),
+    String(weekStart.getDate()).padStart(2, "0"),
+  ].join("-");
+
+  return {
+    weekStart,
+    weekEnd,
+    weekStartISO: weekStart.toISOString(),
+    weekEndISO: weekEnd.toISOString(),
+    weekLabel,
+    weekStartKey,
+  };
+}
+
 export type MonthWindow = {
   year: number;
   monthIndex: number;

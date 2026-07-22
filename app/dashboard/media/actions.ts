@@ -35,6 +35,7 @@ export async function updateRecordingTrim(
       trimEndSec,
       status: "ready",
     });
+    revalidatePath("/dashboard/live-streaming/media");
     revalidatePath("/dashboard/media");
     return { ok: true, message: "Trim saved." };
   } catch (error) {
@@ -65,6 +66,7 @@ export async function publishRecording(
       title: title?.trim() || undefined,
       publishedAt: new Date().toISOString(),
     });
+    revalidatePath("/dashboard/live-streaming/media");
     revalidatePath("/dashboard/media");
     return { ok: true, message: "Recording published." };
   } catch (error) {

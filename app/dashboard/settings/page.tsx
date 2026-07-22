@@ -3,6 +3,7 @@ import { SettingsTabs } from "@/components/settings/settings-tabs";
 import { getGivingFundsForSettings } from "@/app/dashboard/settings/giving-actions";
 import { getChurchGivingProfile } from "@/lib/queries/giving";
 import { getFollowUpMessageTemplates } from "@/lib/queries/follow-up-settings";
+import { getAnnouncementEmailSettings } from "@/lib/queries/announcement-email-settings";
 import { getChurchAuth } from "@/lib/auth/church";
 import { getIntegrationStatus } from "@/lib/integrations/tokens";
 import { getChurchAISettings } from "@/lib/queries/sermons";
@@ -32,6 +33,7 @@ export default async function SettingsPage() {
     givingProfile,
     givingFunds,
     followUpTemplates,
+    announcementEmailSettings,
   ] =
     await Promise.all([
       getChurchAISettings(auth.churchId),
@@ -39,6 +41,7 @@ export default async function SettingsPage() {
       getChurchGivingProfile(auth.churchId),
       getGivingFundsForSettings(auth.churchId),
       getFollowUpMessageTemplates(auth.churchId, supabase),
+      getAnnouncementEmailSettings(auth.churchId, supabase),
     ]);
 
   return (
@@ -59,6 +62,7 @@ export default async function SettingsPage() {
         givingProfile={givingProfile}
         givingFunds={givingFunds}
         followUpTemplates={followUpTemplates}
+        announcementEmailTemplate={announcementEmailSettings}
       />
     </div>
   );

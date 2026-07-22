@@ -87,24 +87,19 @@ export function LiveStreamingDashboard({
   };
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-      <header>
-        <h1 className="font-heading text-2xl font-bold tracking-tight">
-          Live Streaming
-        </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Preview in the studio, then go live
-          {youtubeConnected || facebookConnected
-            ? ` to ${[
-                youtubeConnected ? "YouTube" : null,
-                facebookConnected ? "Facebook" : null,
-              ]
-                .filter(Boolean)
-                .join(" and ")}`
-            : " on your FaithForm watch page"}
-          .
-        </p>
-      </header>
+    <div className="flex flex-col gap-6">
+      <p className="text-sm text-muted-foreground">
+        Preview in the studio, then go live
+        {youtubeConnected || facebookConnected
+          ? ` to ${[
+              youtubeConnected ? "YouTube" : null,
+              facebookConnected ? "Facebook" : null,
+            ]
+              .filter(Boolean)
+              .join(" and ")}`
+          : " on your FaithForm watch page"}
+        .
+      </p>
 
       <BroadcastStudioCard
         isAdmin={isAdmin}

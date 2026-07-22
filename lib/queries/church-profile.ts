@@ -5,6 +5,7 @@ import {
   normalizeOfficeHours,
 } from "@/lib/utils/office-hours";
 import { createClient } from "@/lib/supabase/server";
+import { formatAnnouncementFacebookPostTime } from "@/lib/integrations/facebook";
 import type {
   AiKnowledge,
   ChurchProfile,
@@ -46,6 +47,7 @@ const CHURCH_SELECT = `
   x_url,
   podcast_url,
   livestream_url,
+  announcement_facebook_post_time,
   slug,
   stripe_charges_enabled,
   ai_knowledge
@@ -134,6 +136,11 @@ function mapChurchRow(
     xUrl: (row.x_url as string | null) ?? null,
     podcastUrl: (row.podcast_url as string | null) ?? null,
     livestreamUrl: (row.livestream_url as string | null) ?? null,
+    announcementFacebookPostTime: formatAnnouncementFacebookPostTime(
+      row.announcement_facebook_post_time
+        ? String(row.announcement_facebook_post_time).slice(0, 5)
+        : null,
+    ),
     slug: (row.slug as string | null) ?? null,
     stripeChargesEnabled: Boolean(row.stripe_charges_enabled),
     aiKnowledge: normalizeAiKnowledge(row.ai_knowledge),
@@ -172,6 +179,7 @@ export function profileToFormState(profile: ChurchProfile): ChurchProfileFormSta
     xUrl: profile.xUrl ?? "",
     podcastUrl: profile.podcastUrl ?? "",
     livestreamUrl: profile.livestreamUrl ?? "",
+    announcementFacebookPostTime: profile.announcementFacebookPostTime,
     aiKnowledge: { ...profile.aiKnowledge },
     serviceTimes: profile.serviceTimes.map((st) => ({
       clientId: st.id,
@@ -231,6 +239,7 @@ export function emptyChurchProfileForm(churchName = ""): ChurchProfileFormState 
     xUrl: null,
     podcastUrl: null,
     livestreamUrl: null,
+    announcementFacebookPostTime: "09:00",
     slug: null,
     stripeChargesEnabled: false,
     aiKnowledge: {},
@@ -324,6 +333,7 @@ export async function upsertChurchProfile(
       x_url: cleanOptional(input.xUrl),
       podcast_url: cleanOptional(input.podcastUrl),
       livestream_url: cleanOptional(input.livestreamUrl),
+      announcement_facebook_post_time: input.announcementFacebookPostTime,
       ai_knowledge: input.aiKnowledge,
     })
     .eq("id", churchId);
@@ -358,6 +368,34 @@ export async function upsertChurchProfile(
   const profile = await getChurchProfile(churchId, supabase);
   if (!profile) throw new Error("Failed to load church profile after save.");
   return profile;
+}
+
+export async function getChurchAnnouncementFacebookSchedule(
+  churchId: string,
+  supabase?: SupabaseClient,
+): Promise<{ timezone: string; postTime: string }> {
+  const client = supabase ?? db();
+  const { data, error } = await client
+    .from("churches")
+    .select("timezone, announcement_facebook_post_time")
+    .eq("id", churchId)
+    .maybeSingle();
+
+  if (error || !data) {
+    return {
+      timezone: "America/New_York",
+      postTime: formatAnnouncementFacebookPostTime(null),
+    };
+  }
+
+  return {
+    timezone: (data.timezone as string) || "America/New_York",
+    postTime: formatAnnouncementFacebookPostTime(
+      data.announcement_facebook_post_time
+        ? String(data.announcement_facebook_post_time).slice(0, 5)
+        : null,
+    ),
+  };
 }
 
 async function syncServiceTimes(

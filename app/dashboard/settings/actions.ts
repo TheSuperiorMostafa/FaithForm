@@ -3,7 +3,13 @@
 import { revalidatePath } from "next/cache";
 import { getChurchAuth } from "@/lib/auth/church";
 import { upsertFollowUpMessageTemplates } from "@/lib/queries/follow-up-settings";
+import { upsertAnnouncementEmailSettings } from "@/lib/queries/announcement-email-settings";
 import { upsertChurchSettings } from "@/lib/queries/sermons";
+import {
+  DEFAULT_ANNOUNCEMENT_EMAIL_BODY,
+  DEFAULT_ANNOUNCEMENT_EMAIL_SUBJECT,
+  validateAnnouncementEmailTemplate,
+} from "@/lib/email/announcement-template";
 import {
   DEFAULT_FOLLOW_UP_TEMPLATES,
   FOLLOW_UP_TEMPLATE_COUNT,
@@ -101,6 +107,59 @@ export async function updateFollowUpMessages(
     return {
       ok: false,
       error: e instanceof Error ? e.message : "Could not save messages.",
+    };
+  }
+}
+
+export async function updateAnnouncementEmailSettings(
+  _prev: SettingsFormState,
+  formData: FormData,
+): Promise<SettingsFormState> {
+  const auth = await getChurchAuth();
+  if (!auth) {
+    return { ok: false, error: "Not signed in." };
+  }
+  if (!auth.isAdmin) {
+    return {
+      ok: false,
+      error: "Only church admins can change announcement email settings.",
+    };
+  }
+
+  const reset = formData.get("reset")?.toString() === "1";
+  const subject = reset
+    ? DEFAULT_ANNOUNCEMENT_EMAIL_SUBJECT
+    : (formData.get("announcement_email_subject")?.toString() ?? "");
+  const body = reset
+    ? DEFAULT_ANNOUNCEMENT_EMAIL_BODY
+    : (formData.get("announcement_email_body")?.toString() ?? "");
+  const toRaw = reset
+    ? ""
+    : (formData.get("announcement_email_to")?.toString() ?? "");
+  const to = toRaw.trim() || null;
+  const weeklyEmailEnabled = reset
+    ? true
+    : formData.get("weekly_email_enabled")?.toString() === "true";
+
+  const validated = validateAnnouncementEmailTemplate(subject, body, to);
+  if (!validated.ok) {
+    return { ok: false, error: validated.error };
+  }
+
+  try {
+    await upsertAnnouncementEmailSettings(auth.churchId, {
+      subject,
+      body,
+      to,
+      weeklyEmailEnabled,
+    });
+    revalidatePath("/dashboard/settings");
+    revalidatePath("/dashboard/announcements");
+    return { ok: true };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Could not save email template.",
     };
   }
 }

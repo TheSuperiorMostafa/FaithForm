@@ -23,6 +23,67 @@ export function toYMD(date: Date, timezone: string): string {
   return `${year}-${month}-${day}`;
 }
 
+/** Shift a YYYY-MM-DD calendar date by a number of days (calendar math, UTC-safe). */
+export function shiftYmd(ymd: string, deltaDays: number): string {
+  const [year, month, day] = ymd.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+  date.setUTCDate(date.getUTCDate() + deltaDays);
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * Convert a local date + time in an IANA timezone to UTC milliseconds.
+ * `date` is YYYY-MM-DD, `time` is HH:mm (24h).
+ */
+export function zonedDateTimeToUtcMs(
+  date: string,
+  time: string,
+  timeZone: string,
+): number {
+  const [year, month, day] = date.split("-").map(Number);
+  const [hour, minute] = time.split(":").map(Number);
+
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+
+  let utcMs = Date.UTC(year, month - 1, day, hour, minute, 0);
+  const targetMs = Date.UTC(year, month - 1, day, hour, minute, 0);
+
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const parts = Object.fromEntries(
+      formatter
+        .formatToParts(new Date(utcMs))
+        .filter((part) => part.type !== "literal")
+        .map((part) => [part.type, part.value]),
+    );
+
+    const actualMs = Date.UTC(
+      Number(parts.year),
+      Number(parts.month) - 1,
+      Number(parts.day),
+      Number(parts.hour),
+      Number(parts.minute),
+      Number(parts.second ?? 0),
+    );
+
+    if (actualMs === targetMs) {
+      return utcMs;
+    }
+
+    utcMs += targetMs - actualMs;
+  }
+
+  return utcMs;
+}
+
 export function getWeekdayName(date: Date, timezone: string): string {
   return new Intl.DateTimeFormat("en-US", {
     timeZone: timezone,
