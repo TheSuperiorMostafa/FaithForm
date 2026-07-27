@@ -12,9 +12,18 @@ function pickRecorderMimeType(): string {
   return "video/webm";
 }
 
+/**
+ * Roughly a second of video at the configured bitrate. Beyond this the uplink
+ * is not keeping up and latency is growing monotonically.
+ */
+const MAX_BUFFERED_BYTES = 400_000;
+/** How long the backlog may stay over the ceiling before we give up. */
+const BACKLOG_GRACE_MS = 5_000;
+
 export async function publishViaWebSocket(
   wsUrl: string,
   stream: MediaStream,
+  onFatal?: (message: string) => void,
 ): Promise<{ stop: () => void }> {
   if (stream.getAudioTracks().length === 0) {
     throw new Error(
@@ -31,6 +40,36 @@ export async function publishViaWebSocket(
     audioBitsPerSecond: 128_000,
   });
 
+  // WebM over a socket is one continuous byte stream, so individual chunks can
+  // never be dropped without corrupting it for the relay's demuxer. Instead,
+  // watch the send backlog: a sustained overrun means the uplink cannot carry
+  // the broadcast, and failing loudly beats silently growing delay forever.
+  let backlogSince: number | null = null;
+  const backlogWatchdog = window.setInterval(() => {
+    if (ws.readyState !== WebSocket.OPEN) return;
+
+    if (ws.bufferedAmount <= MAX_BUFFERED_BYTES) {
+      backlogSince = null;
+      return;
+    }
+
+    backlogSince ??= performance.now();
+    if (performance.now() - backlogSince >= BACKLOG_GRACE_MS) {
+      onFatal?.(
+        "Your upload speed cannot keep up with the broadcast. The stream was stopped.",
+      );
+      cleanup();
+    }
+  }, 1_000);
+
+  const cleanup = () => {
+    window.clearInterval(backlogWatchdog);
+    if (recorder.state !== "inactive") {
+      recorder.stop();
+    }
+    ws.close();
+  };
+
   recorder.addEventListener("dataavailable", (event) => {
     if (event.data.size > 0 && ws.readyState === WebSocket.OPEN) {
       ws.send(event.data);
@@ -38,10 +77,11 @@ export async function publishViaWebSocket(
   });
 
   recorder.addEventListener("error", () => {
-    ws.close();
+    cleanup();
   });
 
   ws.addEventListener("close", () => {
+    window.clearInterval(backlogWatchdog);
     if (recorder.state !== "inactive") {
       recorder.stop();
     }
@@ -50,12 +90,7 @@ export async function publishViaWebSocket(
   recorder.start(100);
 
   return {
-    stop: () => {
-      if (recorder.state !== "inactive") {
-        recorder.stop();
-      }
-      ws.close();
-    },
+    stop: cleanup,
   };
 }
 

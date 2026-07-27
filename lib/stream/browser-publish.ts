@@ -23,30 +23,47 @@ export async function publishViaWhip(
     pc.addTrack(track, stream);
   }
 
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
+  // Any failure between here and a connected ICE state must tear the peer
+  // connection down, or it leaks and the camera indicator stays lit.
+  let location: string | null = null;
+  try {
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
 
-  if (!offer.sdp) {
-    throw new Error("Could not create WebRTC offer.");
+    if (!offer.sdp) {
+      throw new Error("Could not create WebRTC offer.");
+    }
+
+    const response = await fetch(whipUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/sdp" },
+      body: offer.sdp,
+    });
+
+    if (!response.ok) {
+      const detail = await response.text().catch(() => "");
+      throw new Error(detail || `WHIP publish failed (${response.status}).`);
+    }
+
+    const answerSdp = await response.text();
+    location = response.headers.get("Location");
+
+    await pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
+
+    await waitForIceConnection(pc);
+  } catch (error) {
+    for (const sender of pc.getSenders()) {
+      sender.track?.stop();
+    }
+    pc.close();
+    if (location) {
+      void fetch("/api/stream/whip", {
+        method: "DELETE",
+        headers: { Location: location },
+      }).catch(() => null);
+    }
+    throw error;
   }
-
-  const response = await fetch(whipUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/sdp" },
-    body: offer.sdp,
-  });
-
-  if (!response.ok) {
-    const detail = await response.text().catch(() => "");
-    throw new Error(detail || `WHIP publish failed (${response.status}).`);
-  }
-
-  const answerSdp = await response.text();
-  const location = response.headers.get("Location");
-
-  await pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
-
-  await waitForIceConnection(pc);
 
   const stop = () => {
     if (location) {

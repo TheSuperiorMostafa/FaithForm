@@ -139,6 +139,12 @@ export function useStudioBroadcast(branding: StudioBranding) {
       const { stop: stopIngest } = await publishViaWebSocket(
         config.wsIngestUrl,
         stream,
+        (message) => {
+          // Uplink could not sustain the broadcast; surface it and reset the
+          // studio rather than leaving the UI showing a dead "live" state.
+          toast.error(message);
+          stopStudio();
+        },
       );
       stopIngestRef.current = stopIngest;
     } else {
@@ -150,7 +156,7 @@ export function useStudioBroadcast(branding: StudioBranding) {
       stopIngestRef.current = stopWhip;
       whipLocationRef.current = location;
     }
-  }, []);
+  }, [stopStudio]);
 
   const ensureScreenStream = useCallback(async (): Promise<MediaStream> => {
     if (screenStreamRef.current?.getVideoTracks().some((t) => t.readyState === "live")) {
