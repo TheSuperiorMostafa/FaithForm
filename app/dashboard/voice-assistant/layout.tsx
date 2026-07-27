@@ -1,17 +1,19 @@
 import type { ReactNode } from "react";
-import { SectionLinkTabs } from "@/components/dashboard/section-link-tabs";
+import {
+  SectionLinkTabs,
+  type SectionLinkTab,
+} from "@/components/dashboard/section-link-tabs";
 
-const voiceAssistantTabs = [
+const voiceAssistantTabs: SectionLinkTab[] = [
   {
     label: "Assistant",
     href: "/dashboard/voice-assistant",
-    isActive: (pathname: string) => pathname === "/dashboard/voice-assistant",
+    match: "exact",
   },
   {
     label: "Call Log",
     href: "/dashboard/voice-assistant/calls",
-    isActive: (pathname: string) =>
-      pathname.startsWith("/dashboard/voice-assistant/calls"),
+    match: "prefix",
   },
 ];
 

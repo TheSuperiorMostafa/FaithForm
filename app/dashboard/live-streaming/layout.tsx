@@ -1,17 +1,19 @@
 import type { ReactNode } from "react";
-import { SectionLinkTabs } from "@/components/dashboard/section-link-tabs";
+import {
+  SectionLinkTabs,
+  type SectionLinkTab,
+} from "@/components/dashboard/section-link-tabs";
 
-const liveStreamTabs = [
+const liveStreamTabs: SectionLinkTab[] = [
   {
     label: "Stream",
     href: "/dashboard/live-streaming",
-    isActive: (pathname: string) => pathname === "/dashboard/live-streaming",
+    match: "exact",
   },
   {
     label: "Media",
     href: "/dashboard/live-streaming/media",
-    isActive: (pathname: string) =>
-      pathname.startsWith("/dashboard/live-streaming/media"),
+    match: "prefix",
   },
 ];
 
