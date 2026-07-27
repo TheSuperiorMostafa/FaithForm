@@ -59,6 +59,7 @@ start_fanout() {
   if [[ ${#urls_ref[@]} -eq 1 ]]; then
     "$FFMPEG" -nostdin -loglevel warning \
       -rtsp_transport tcp -timeout 5000000 \
+      -analyzeduration 10000000 -probesize 10000000 \
       -i "$RTSP_URL" \
       -c copy -f flv "${urls_ref[0]}" >>"$LOG_FILE" 2>&1 &
     echo $! >"$FANOUT_PID_FILE"
@@ -75,6 +76,7 @@ start_fanout() {
 
   "$FFMPEG" -nostdin -loglevel warning \
     -rtsp_transport tcp -timeout 5000000 \
+      -analyzeduration 10000000 -probesize 10000000 \
     -i "$RTSP_URL" \
     -c copy -f tee "$tee_spec" >>"$LOG_FILE" 2>&1 &
   echo $! >"$FANOUT_PID_FILE"
@@ -84,6 +86,7 @@ RECORD_FILE="${RECORD_DIR}/${SAFE_PATH}-$(date +%s).mp4"
 echo "[relay] recording to ${RECORD_FILE}" >>"$LOG_FILE"
 "$FFMPEG" -nostdin -loglevel warning \
   -rtsp_transport tcp -timeout 5000000 \
+      -analyzeduration 10000000 -probesize 10000000 \
   -i "$RTSP_URL" \
   -c copy -f mp4 -movflags +faststart "$RECORD_FILE" >>"$LOG_FILE" 2>&1 &
 echo $! >"$RECORD_PID_FILE"

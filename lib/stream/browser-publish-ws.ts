@@ -9,7 +9,14 @@ function pickRecorderMimeType(): string {
       return candidate;
     }
   }
-  return "video/webm";
+  // Previously this returned "video/webm" regardless. On a browser without WebM
+  // recording (Safari records MP4 only) that produced a stream the relay's
+  // `ffmpeg -f webm` could not parse, so ingest died a few seconds in with a
+  // broken pipe and no indication of why. Fail here instead, actionably.
+  throw new Error(
+    "This browser cannot record WebM video. Use Chrome or Edge to broadcast, " +
+      "or stream from OBS instead.",
+  );
 }
 
 /**
