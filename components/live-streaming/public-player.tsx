@@ -8,6 +8,7 @@ import {
   attachLiveEdgeSync,
   createLiveHlsPlayer,
   seekVideoToLiveEdge,
+  LIVE_EDGE_TARGET_OFFSET_SEC,
 } from "@/lib/stream/hls-player";
 import { getGivePageUrl } from "@/lib/site-url";
 import {
@@ -82,6 +83,7 @@ export function PublicPlayer({
 
     let hls: import("hls.js").default | null = null;
     let stopLiveSync: (() => void) | null = null;
+    let stopErrorRecovery: (() => void) | null = null;
     let cancelled = false;
     const video = videoRef.current;
 
@@ -102,7 +104,7 @@ export function PublicPlayer({
 
       if (Hls.isSupported()) {
         const instance = createLiveHlsPlayer(Hls);
-        attachHlsErrorRecovery(instance, Hls, () => {
+        stopErrorRecovery = attachHlsErrorRecovery(instance, Hls, () => {
           if (!cancelled) {
             setPlaybackError("Could not play the live stream. Try refreshing.");
           }
@@ -111,16 +113,19 @@ export function PublicPlayer({
         instance.attachMedia(videoRef.current);
         instance.on(Hls.Events.MANIFEST_PARSED, () => {
           setPlaybackError(null);
-          seekVideoToLiveEdge(videoRef.current!, 1);
+          // No manual seek here: startPosition/liveSyncDurationCount already
+          // place playback at the live edge with a viable buffer. Forcing a
+          // seek to ~1s behind starves that buffer and stalls immediately.
           void videoRef.current?.play().catch(() => null);
         });
         hls = instance;
       } else if (videoRef.current.canPlayType("application/vnd.apple.mpegurl")) {
+        // Native HLS (Safari/iOS) has no hls.js config, so position it here.
         videoRef.current.src = playbackUrl;
         videoRef.current.addEventListener(
           "loadedmetadata",
           () => {
-            seekVideoToLiveEdge(videoRef.current!, 1);
+            seekVideoToLiveEdge(videoRef.current!, LIVE_EDGE_TARGET_OFFSET_SEC);
             void videoRef.current?.play().catch(() => null);
           },
           { once: true },
@@ -128,7 +133,9 @@ export function PublicPlayer({
       }
 
       stopLiveSync = attachLiveEdgeSync(videoRef.current, (drift) => {
-        if (!cancelled) setSecondsBehind(Math.max(0, drift));
+        // Quantize to whole seconds: the UI only renders a rounded value, so
+        // storing the raw float re-renders the player on every 2s tick.
+        if (!cancelled) setSecondsBehind(Math.max(0, Math.round(drift)));
       });
     })();
 
@@ -139,6 +146,7 @@ export function PublicPlayer({
       video.removeEventListener("webkitbeginfullscreen", onWebkitBeginFullscreen);
       video.removeEventListener("webkitendfullscreen", onWebkitEndFullscreen);
       stopLiveSync?.();
+      stopErrorRecovery?.();
       hls?.destroy();
     };
   }, [status, playbackUrl]);
@@ -152,7 +160,7 @@ export function PublicPlayer({
   const handleJumpToLive = () => {
     const video = videoRef.current;
     if (!video) return;
-    seekVideoToLiveEdge(video, 0.5);
+    seekVideoToLiveEdge(video, LIVE_EDGE_TARGET_OFFSET_SEC);
     void video.play().catch(() => null);
   };
 

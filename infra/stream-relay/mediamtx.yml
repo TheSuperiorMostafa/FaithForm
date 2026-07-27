@@ -19,8 +19,14 @@ hls: yes
 hlsAddress: :8888
 hlsAllowOrigin: '*'
 hlsVariant: mpegts
+# 1s segments keep latency low (the encoder emits a keyframe every 30 frames at
+# 30fps, so segments align exactly with GOP boundaries).
 hlsSegmentDuration: 1s
-hlsSegmentCount: 4
+# The playlist must expose enough history that a viewer who briefly stalls can
+# still find their position. At 4 segments the whole live window was 4s, so any
+# hiccup longer than that dropped the player off the playlist and forced a
+# rebuffer. 8 gives an 8s window without changing latency.
+hlsSegmentCount: 8
 webrtc: yes
 webrtcAddress: :8889
 webrtcLocalUDPAddress: :8189

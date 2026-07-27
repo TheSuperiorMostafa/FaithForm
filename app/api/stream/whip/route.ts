@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { getChurchAuth } from "@/lib/auth/church";
 import { getStreamRelaySettings } from "@/lib/stream/relay";
 import { createClient } from "@/lib/supabase/server";
+import { isAbortError, startStreamTimer } from "@/lib/stream/telemetry";
+
+export const dynamic = "force-dynamic";
 
 function getWhipUpstreamBase(): string {
   return (
@@ -11,10 +14,33 @@ function getWhipUpstreamBase(): string {
   ).replace(/\/$/, "");
 }
 
+/**
+ * The WHIP resource URL is supplied by the client on teardown and fetched
+ * server-side, so it must be pinned to the configured relay origin. Without
+ * this the DELETE handler is an authenticated SSRF into internal networks.
+ */
+function isAllowedResourceUrl(candidate: string): boolean {
+  try {
+    const base = new URL(getWhipUpstreamBase());
+    const target = new URL(candidate, base);
+    return (
+      target.protocol === base.protocol &&
+      target.hostname === base.hostname &&
+      target.port === base.port
+    );
+  } catch {
+    return false;
+  }
+}
+
 export async function POST(request: Request) {
+  const timer = startStreamTimer({ route: "stream/whip", method: "POST" });
   const supabase = createClient();
   const auth = await getChurchAuth(supabase);
+  timer.mark("auth");
+
   if (!auth?.isAdmin) {
+    timer.end("error", { category: "auth", status: 403 });
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -22,8 +48,10 @@ export async function POST(request: Request) {
     includeSecret: true,
     supabase,
   });
+  timer.mark("settings");
 
   if (!settings.streamPath) {
+    timer.end("error", { category: "config", status: 400 });
     return NextResponse.json({ error: "Stream not configured" }, { status: 400 });
   }
 
@@ -33,6 +61,7 @@ export async function POST(request: Request) {
 
   let upstreamResponse: Response;
   try {
+    timer.mark("upstream_start");
     upstreamResponse = await fetch(upstream, {
       method: "POST",
       headers: {
@@ -40,8 +69,16 @@ export async function POST(request: Request) {
         Authorization: `Basic ${basicAuth}`,
       },
       body: sdp,
+      // Stop negotiating the moment the broadcaster gives up on the request.
+      signal: request.signal,
     });
-  } catch {
+    timer.mark("upstream_headers");
+  } catch (error) {
+    if (isAbortError(error) || request.signal.aborted) {
+      timer.end("aborted", { category: "client_abort" });
+      return new NextResponse(null, { status: 499 });
+    }
+    timer.end("error", { category: "upstream_unreachable", status: 502 });
     return NextResponse.json(
       { error: "Could not reach the stream relay for browser publish." },
       { status: 502 },
@@ -50,6 +87,10 @@ export async function POST(request: Request) {
 
   const answer = await upstreamResponse.text();
   if (!upstreamResponse.ok) {
+    timer.end("error", {
+      category: "upstream_status",
+      status: upstreamResponse.status,
+    });
     return NextResponse.json(
       {
         error:
@@ -62,11 +103,18 @@ export async function POST(request: Request) {
 
   const headers = new Headers();
   headers.set("Content-Type", "application/sdp");
+  headers.set("Cache-Control", "no-store");
+  headers.set("X-Stream-Request-Id", timer.requestId);
 
   const location = upstreamResponse.headers.get("Location");
   if (location) {
     headers.set("Location", location);
+    // fetch() cannot read Location unless it is explicitly exposed, and
+    // teardown depends on the client having it.
+    headers.set("Access-Control-Expose-Headers", "Location");
   }
+
+  timer.end("ok", { status: upstreamResponse.status, churchId: auth.churchId });
 
   return new NextResponse(answer, {
     status: upstreamResponse.status,
@@ -75,22 +123,40 @@ export async function POST(request: Request) {
 }
 
 export async function DELETE(request: Request) {
+  const timer = startStreamTimer({ route: "stream/whip", method: "DELETE" });
   const location = request.headers.get("Location");
   if (!location) {
+    timer.end("error", { category: "bad_request", status: 400 });
     return NextResponse.json({ error: "Missing Location header" }, { status: 400 });
   }
 
   const supabase = createClient();
   const auth = await getChurchAuth(supabase);
+  timer.mark("auth");
+
   if (!auth?.isAdmin) {
+    timer.end("error", { category: "auth", status: 403 });
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  try {
-    await fetch(location, { method: "DELETE" });
-  } catch {
-    return NextResponse.json({ error: "Could not stop browser publish." }, { status: 502 });
+  if (!isAllowedResourceUrl(location)) {
+    timer.end("error", { category: "bad_request", status: 400 });
+    return NextResponse.json(
+      { error: "Invalid WHIP resource location" },
+      { status: 400 },
+    );
   }
 
+  try {
+    await fetch(new URL(location, getWhipUpstreamBase()), { method: "DELETE" });
+  } catch {
+    timer.end("error", { category: "upstream_unreachable", status: 502 });
+    return NextResponse.json(
+      { error: "Could not stop browser publish." },
+      { status: 502 },
+    );
+  }
+
+  timer.end("ok", { churchId: auth.churchId });
   return NextResponse.json({ ok: true });
 }

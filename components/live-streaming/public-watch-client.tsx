@@ -24,26 +24,71 @@ type PublicWatchClientProps = {
   embed?: boolean;
 };
 
+function sameStatus(a: PublicStatus, b: PublicStatus): boolean {
+  return (Object.keys(a) as (keyof PublicStatus)[]).every(
+    (key) => a[key] === b[key],
+  );
+}
+
 export function PublicWatchClient({ slug, embed = false }: PublicWatchClientProps) {
   const [status, setStatus] = useState<PublicStatus | null>(null);
 
   useEffect(() => {
+    const controller = new AbortController();
     let cancelled = false;
+    let timer: number | null = null;
+    let failures = 0;
 
     const poll = async () => {
-      const res = await fetch(`/api/stream/public-status?slug=${slug}`, {
-        cache: "no-store",
-      });
-      if (!res.ok || cancelled) return;
-      const data = (await res.json()) as PublicStatus;
-      setStatus(data);
+      try {
+        const res = await fetch(
+          `/api/stream/public-status?slug=${encodeURIComponent(slug)}`,
+          { cache: "no-store", signal: controller.signal },
+        );
+        if (cancelled) return;
+        if (!res.ok) {
+          failures += 1;
+          return;
+        }
+        const data = (await res.json()) as PublicStatus;
+        if (cancelled) return;
+        failures = 0;
+        // Only swap state when something actually changed; replacing the object
+        // every poll re-rendered the whole player subtree for no reason.
+        setStatus((prev) => (prev && sameStatus(prev, data) ? prev : data));
+      } catch {
+        // An abort on unmount is expected. Anything else is a transient network
+        // failure, which the backoff below handles. Previously this rejection
+        // was unhandled and surfaced as a console error on every blip.
+        if (!cancelled) failures += 1;
+      }
     };
 
-    void poll();
-    const id = setInterval(() => void poll(), 5000);
+    const schedule = () => {
+      if (cancelled) return;
+      // Back off while the endpoint is failing, and idle right down while the
+      // tab is hidden — each call costs several queries, so background tabs
+      // were pure load with nobody watching.
+      const base = document.hidden ? 30_000 : 5_000;
+      const delay = Math.min(base * 2 ** Math.min(failures, 4), 60_000);
+      timer = window.setTimeout(() => {
+        void poll().then(schedule);
+      }, delay);
+    };
+
+    void poll().then(schedule);
+
+    // Resync immediately when the viewer returns to the tab.
+    const onVisibilityChange = () => {
+      if (!document.hidden && !cancelled) void poll();
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
     return () => {
       cancelled = true;
-      clearInterval(id);
+      controller.abort();
+      if (timer !== null) window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [slug]);
 
