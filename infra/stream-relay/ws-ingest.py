@@ -96,20 +96,36 @@ async def pipe_ffmpeg(ws, rtmp_url: str) -> None:
         "veryfast",
         "-tune",
         "zerolatency",
+        # The studio compositor publishes 1920x1080 (8160 macroblocks at
+        # 120x68). Level 3.1 caps out at 3600 macroblocks / 108000 MB per
+        # second — i.e. 720p30 — so x264 rejected every frame, ffmpeg died with
+        # a broken pipe, and nothing ever reached RTMP. 4.1 covers 1080p30.
+        # Main profile also replaces baseline: baseline has no CABAC or
+        # B-frames, so it needs noticeably more bitrate for the same quality,
+        # and every browser and mobile device in use today decodes main.
         "-profile:v",
-        "baseline",
+        "main",
         "-level",
-        "3.1",
+        "4.1",
         "-pix_fmt",
         "yuv420p",
         "-r",
         "30",
+        # Keyframe every 30 frames at 30fps = one per second, matching
+        # hlsSegmentDuration in mediamtx.yml so segments cut on GOP boundaries.
         "-g",
         "30",
         "-keyint_min",
         "30",
         "-sc_threshold",
         "0",
+        # Cap the bitrate. Unbounded 1080p CRF output can spike well past what
+        # the relay's uplink and the tunnel can carry, which shows up as
+        # stuttering rather than as an error.
+        "-maxrate",
+        "4500k",
+        "-bufsize",
+        "9000k",
         "-c:a",
         "aac",
         "-ar",
