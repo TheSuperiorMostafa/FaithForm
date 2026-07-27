@@ -78,10 +78,19 @@ async def pipe_ffmpeg(ws, rtmp_url: str) -> None:
         "+genpts+flush_packets",
         "-flags",
         "+low_delay",
+        # These were 32 bytes / 0 microseconds — ffmpeg's absolute minimum,
+        # presumably chasing startup latency. It is far too little to parse the
+        # WebM header and find the H264 parameter sets: ffmpeg warned "not
+        # enough frames to estimate rate" on every session and emitted a stream
+        # whose video had no SPS/PPS, so MediaMTX received nothing usable,
+        # closed the RTMP connection on its 10s read timeout, and ffmpeg died
+        # with a broken pipe a few seconds into every broadcast.
+        # 2s of analysis covers two 1s GOPs, so a keyframe is always seen. This
+        # is a one-time startup cost, not added steady-state latency.
         "-probesize",
-        "32",
+        "5000000",
         "-analyzeduration",
-        "0",
+        "2000000",
         "-f",
         "webm",
         "-i",
@@ -157,11 +166,38 @@ async def pipe_ffmpeg(ws, rtmp_url: str) -> None:
     stderr_task = asyncio.create_task(read_stderr())
 
     try:
+        # Log what the browser actually delivers. Without this it is impossible
+        # to tell "the browser stopped sending" from "ffmpeg could not parse
+        # what it sent" — both surface identically as a broken pipe here.
+        total = 0
+        chunks = 0
+        started = time.monotonic()
+        last_report = started
+
         async for message in ws:
             if isinstance(message, bytes):
                 assert proc.stdin is not None
+                total += len(message)
+                chunks += 1
                 proc.stdin.write(message)
                 await proc.stdin.drain()
+
+                now = time.monotonic()
+                if now - last_report >= 2:
+                    elapsed = now - started
+                    kbps = (total * 8 / 1000) / elapsed if elapsed > 0 else 0
+                    print(
+                        f"[ws-ingest] rx {total} bytes in {chunks} chunks "
+                        f"over {elapsed:.1f}s ({kbps:.0f} kbps)",
+                        flush=True,
+                    )
+                    last_report = now
+
+        print(
+            f"[ws-ingest] websocket ended: {total} bytes in {chunks} chunks "
+            f"over {time.monotonic() - started:.1f}s",
+            flush=True,
+        )
     finally:
         if proc.stdin is not None:
             proc.stdin.close()
