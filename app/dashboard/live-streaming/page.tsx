@@ -54,6 +54,18 @@ export default async function LiveStreamingPage() {
         youtubeChannelTitle={broadcastStatus.platforms.youtube.channelTitle}
         facebookConnected={broadcastStatus.platforms.facebook.connected}
         facebookPageName={broadcastStatus.platforms.facebook.pageName}
+        youtubePush={{
+          connected: broadcastStatus.platforms.youtube.connected,
+          detail: broadcastStatus.platforms.youtube.channelTitle,
+          destinationReady: broadcastStatus.platforms.youtube.destinationReady,
+          lastPush: broadcastStatus.platforms.youtube.lastPush,
+        }}
+        facebookPush={{
+          connected: broadcastStatus.platforms.facebook.connected,
+          detail: broadcastStatus.platforms.facebook.pageName,
+          destinationReady: broadcastStatus.platforms.facebook.destinationReady,
+          lastPush: broadcastStatus.platforms.facebook.lastPush,
+        }}
         initialSession={broadcastStatus.session}
         initialPreviewIngest={broadcastStatus.previewIngestActive}
         initialShareLinks={broadcastStatus.shareLinks}

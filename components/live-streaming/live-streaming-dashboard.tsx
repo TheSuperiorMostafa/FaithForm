@@ -16,6 +16,7 @@ import type { StreamEvent } from "@/lib/stream/events";
 import type { StreamSession } from "@/lib/stream/sessions";
 import type { StreamRelaySettings } from "@/lib/stream/relay";
 import type { StreamShareLinks } from "@/lib/stream/share-links";
+import type { PlatformPushState } from "@/components/live-streaming/platforms-card";
 import type { StudioBranding } from "@/lib/stream/studio-compositor";
 
 type LiveStreamingDashboardProps = {
@@ -25,6 +26,8 @@ type LiveStreamingDashboardProps = {
   youtubeChannelTitle: string | null;
   facebookConnected: boolean;
   facebookPageName: string | null;
+  youtubePush: PlatformPushState;
+  facebookPush: PlatformPushState;
   initialSession: StreamSession | null;
   initialPreviewIngest: boolean;
   initialShareLinks: StreamShareLinks;
@@ -40,6 +43,8 @@ export function LiveStreamingDashboard({
   youtubeChannelTitle,
   facebookConnected,
   facebookPageName,
+  youtubePush,
+  facebookPush,
   initialSession,
   initialPreviewIngest,
   initialShareLinks,
@@ -121,10 +126,8 @@ export function LiveStreamingDashboard({
 
       <PlatformsCard
         isAdmin={isAdmin}
-        youtubeConnected={youtubeConnected}
-        youtubeChannelTitle={youtubeChannelTitle}
-        facebookConnected={facebookConnected}
-        facebookPageName={facebookPageName}
+        youtube={youtubePush}
+        facebook={facebookPush}
       />
 
       <ScheduleCard

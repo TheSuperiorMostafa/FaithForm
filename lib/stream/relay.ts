@@ -183,7 +183,7 @@ export async function saveStreamRelaySettings(
 
 export async function ensureStreamRelayCredentials(
   churchId: string,
-  userId: string,
+  userId: string | null,
   supabase?: SupabaseClient,
 ): Promise<StreamRelaySettings> {
   const existing = await getIntegration(churchId, STREAM_PROVIDER, supabase);
@@ -205,7 +205,7 @@ export async function ensureStreamRelayCredentials(
       refreshToken: null,
       tokenExpiresAt: null,
       metadata: { relay_host: relayHost },
-      connectedBy: userId,
+      connectedBy: userId ?? undefined,
     },
     supabase,
   );
@@ -220,7 +220,9 @@ export async function setStreamRelayDestination(
   churchId: string,
   destination: "youtube" | "facebook",
   url: string,
-  userId: string,
+  // Nullable: background jobs may have no acting user. `connected_by` is an FK
+  // to auth.users, so a placeholder id would violate the constraint.
+  userId: string | null,
   supabase?: SupabaseClient,
 ): Promise<void> {
   const sanitized = sanitizeRelayDestinationUrl(url);
@@ -247,7 +249,7 @@ export async function setStreamRelayDestination(
           ? { youtube_url: sanitized }
           : { facebook_url: sanitized }),
       },
-      connectedBy: userId,
+      connectedBy: userId ?? undefined,
     },
     supabase,
   );
@@ -255,7 +257,7 @@ export async function setStreamRelayDestination(
 
 export async function clearStreamRelayDestinations(
   churchId: string,
-  userId: string,
+  userId: string | null,
   supabase?: SupabaseClient,
 ): Promise<void> {
   const existing = await getIntegration(churchId, STREAM_PROVIDER, supabase);
@@ -277,7 +279,7 @@ export async function clearStreamRelayDestinations(
         youtube_url: undefined,
         facebook_url: undefined,
       },
-      connectedBy: userId,
+      connectedBy: userId ?? undefined,
     },
     supabase,
   );

@@ -20,6 +20,8 @@ import {
   type StreamEvent,
 } from "@/lib/stream/events";
 import {
+  clearRelayDestinations,
+  getLatestSyndicationStatus,
   provisionDestinationsForEvent,
   recordSyndicationAttempt,
   syndicationRetryUntil,
@@ -34,7 +36,9 @@ function getClient(supabase?: SupabaseClient) {
 
 export async function startLiveBroadcast(
   churchId: string,
-  userId: string,
+  // Nullable so scheduled/cron starts with no acting user do not write an
+  // invalid auth.users reference into created_by / started_by / connected_by.
+  userId: string | null,
   options?: { title?: string; eventId?: string },
   supabase?: SupabaseClient,
 ) {
@@ -62,39 +66,54 @@ export async function startLiveBroadcast(
     );
   }
 
-  if (event.syndicateYoutube && !integrationStatus.youtube.connected) {
-    throw new Error("YouTube syndication is enabled but YouTube is not connected.");
-  }
-  if (event.syndicateFacebook && !integrationStatus.facebook.connected) {
-    throw new Error(
-      "Facebook syndication is enabled but Facebook is not connected.",
-    );
-  }
+  // A disconnected platform is a syndication problem, not a reason to block
+  // the service. It gets recorded as a failed attempt below and picked up by
+  // the retry job once the church reconnects.
+  const syndicateYoutube =
+    event.syndicateYoutube && integrationStatus.youtube.connected;
+  const syndicateFacebook =
+    event.syndicateFacebook && integrationStatus.facebook.connected;
 
-  const destinations =
-    event.syndicateYoutube || event.syndicateFacebook
-      ? await provisionDestinationsForEvent(event, userId, client)
-      : [];
+  // Always start from a clean slate. Destinations persist on the church's
+  // stream integration, so last week's RTMP URLs would otherwise still be in
+  // the relay config — pushing this service to an ended broadcast, or to a
+  // platform the operator has since turned off.
+  await clearRelayDestinations(churchId, userId, client);
+
+  const provisioned =
+    syndicateYoutube || syndicateFacebook
+      ? await provisionDestinationsForEvent(
+          { ...event, syndicateYoutube, syndicateFacebook },
+          userId,
+          client,
+        )
+      : { destinations: [], errors: {} };
+
+  const destinations = provisioned.destinations;
 
   if (event.syndicateYoutube) {
+    const ok = destinations.some((d) => d.name === "youtube");
     await recordSyndicationAttempt(
       event.id,
       "youtube",
-      destinations.some((d) => d.name === "youtube") ? "success" : "failed",
-      destinations.some((d) => d.name === "youtube")
+      ok ? "success" : "failed",
+      ok
         ? undefined
-        : "YouTube provision failed",
+        : (provisioned.errors.youtube ??
+          "YouTube is not connected for this church."),
       client,
     );
   }
   if (event.syndicateFacebook) {
+    const ok = destinations.some((d) => d.name === "facebook");
     await recordSyndicationAttempt(
       event.id,
       "facebook",
-      destinations.some((d) => d.name === "facebook") ? "success" : "failed",
-      destinations.some((d) => d.name === "facebook")
+      ok ? "success" : "failed",
+      ok
         ? undefined
-        : "Facebook provision failed",
+        : (provisioned.errors.facebook ??
+          "Facebook is not connected for this church."),
       client,
     );
   }
@@ -197,6 +216,9 @@ export async function endLiveBroadcast(
     .eq("status", "live")
     .limit(1);
 
+  // Stop the relay pushing to broadcasts that are now over.
+  await clearRelayDestinations(churchId, session.startedBy, client);
+
   const liveEvent = events?.[0];
   if (liveEvent) {
     await updateStreamEvent(liveEvent.id, { status: "ended" }, client);
@@ -217,7 +239,7 @@ export async function endLiveBroadcast(
           youtubePrivacy: liveEvent.youtube_privacy,
           chatEnabled: liveEvent.chat_enabled,
           countdownEnabled: liveEvent.countdown_enabled,
-          createdBy: liveEvent.created_by ?? churchId,
+          createdBy: liveEvent.created_by ?? null,
         },
         client,
       );
@@ -249,18 +271,27 @@ export async function getLiveBroadcastStatus(
   supabase?: SupabaseClient,
 ) {
   const client = getClient(supabase);
-  const [session, encoder, settings, integrationStatus, upcomingEvent, previewIngestActive, churchRow] =
-    await Promise.all([
-      getActiveStreamSession(churchId, client),
-      getPrimaryEncoderDevice(churchId, client),
-      getStreamRelaySettings(churchId, { supabase: client }),
-      getIntegrationStatus(churchId, client),
-      import("@/lib/stream/events").then((m) =>
-        m.getUpcomingStreamEvent(churchId, client),
-      ),
-      isPreviewIngestActive(churchId, client),
-      client.from("churches").select("slug").eq("id", churchId).maybeSingle(),
-    ]);
+  const [
+    session,
+    encoder,
+    settings,
+    integrationStatus,
+    upcomingEvent,
+    previewIngestActive,
+    churchRow,
+    syndication,
+  ] = await Promise.all([
+    getActiveStreamSession(churchId, client),
+    getPrimaryEncoderDevice(churchId, client),
+    getStreamRelaySettings(churchId, { supabase: client }),
+    getIntegrationStatus(churchId, client),
+    import("@/lib/stream/events").then((m) =>
+      m.getUpcomingStreamEvent(churchId, client),
+    ),
+    isPreviewIngestActive(churchId, client),
+    client.from("churches").select("slug").eq("id", churchId).maybeSingle(),
+    getLatestSyndicationStatus(churchId, client),
+  ]);
 
   const slug = (churchRow.data?.slug as string | undefined) ?? "";
   const shareLinks = await getStreamShareLinks(churchId, {
@@ -282,11 +313,16 @@ export async function getLiveBroadcastStatus(
         connected: integrationStatus.youtube.connected,
         ready: integrationStatus.youtube.connected,
         channelTitle: integrationStatus.youtube.channelTitle,
+        // Destination the relay will actually push to this service.
+        destinationReady: Boolean(settings.youtubeUrl),
+        lastPush: syndication.youtube ?? null,
       },
       facebook: {
         connected: integrationStatus.facebook.connected,
         ready: integrationStatus.facebook.connected,
         pageName: integrationStatus.facebook.pageName,
+        destinationReady: Boolean(settings.facebookUrl),
+        lastPush: syndication.facebook ?? null,
       },
     },
   };

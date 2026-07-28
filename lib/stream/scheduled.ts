@@ -27,7 +27,7 @@ export async function startDueScheduledEvents(
   for (const row of events) {
     const eventId = row.id as string;
     const churchId = row.church_id as string;
-    const createdBy = (row.created_by as string | null) ?? churchId;
+    const createdBy = row.created_by as string | null;
     const isSimulated = Boolean(row.simulated);
 
     try {

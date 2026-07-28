@@ -176,7 +176,7 @@ export async function createStreamEvent(
     countdownEnabled?: boolean;
     simulated?: boolean;
     simulatedSourcePath?: string | null;
-    createdBy: string;
+    createdBy: string | null;
   },
   supabase?: SupabaseClient,
 ): Promise<StreamEvent> {
@@ -195,7 +195,7 @@ export async function createStreamEvent(
       countdown_enabled: input.countdownEnabled ?? true,
       simulated: input.simulated ?? false,
       simulated_source_path: input.simulatedSourcePath ?? null,
-      created_by: input.createdBy,
+      created_by: input.createdBy ?? null,
     })
     .select("*")
     .single();

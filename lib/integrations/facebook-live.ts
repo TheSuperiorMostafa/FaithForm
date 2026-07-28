@@ -42,7 +42,7 @@ export async function provisionFacebookLiveRtmpUrl(
 
 export async function provisionFacebookLiveForChurch(
   churchId: string,
-  userId: string,
+  userId: string | null,
   supabase?: SupabaseClient,
 ) {
   const integration = await getIntegration(churchId, "facebook", supabase);
@@ -76,7 +76,7 @@ export async function provisionFacebookLiveForChurch(
         ...metadata,
         live_video_id: liveVideoId,
       },
-      connectedBy: integration.connected_by ?? userId,
+      connectedBy: integration.connected_by ?? userId ?? undefined,
     },
     supabase,
   );

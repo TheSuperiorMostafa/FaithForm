@@ -3,85 +3,142 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { provisionFacebookLiveForChurch } from "@/lib/integrations/facebook-live";
 import { getIntegration } from "@/lib/integrations/tokens";
 import type { YouTubeIntegrationMetadata } from "@/lib/integrations/types";
-import { provisionYouTubeLiveForChurch } from "@/lib/integrations/youtube-live";
+import {
+  getYouTubeAuthClient,
+  provisionYouTubeLiveForChurch,
+} from "@/lib/integrations/youtube-live";
 import { google } from "googleapis";
-import { resolveGoogleOAuthRedirectUri } from "@/lib/integrations/google-oauth";
 import type { StreamEvent } from "@/lib/stream/events";
 import { clearStreamRelayDestinations } from "@/lib/stream/relay";
 
 const RETRY_WINDOW_MS = 15 * 60 * 1000;
 const RETRY_INTERVAL_MS = 2 * 60 * 1000;
 
+export type SyndicationPlatform = "youtube" | "facebook";
+
+export type ProvisionResult = {
+  destinations: Array<{ name: string; url: string }>;
+  errors: Partial<Record<SyndicationPlatform, string>>;
+};
+
+function errorMessage(err: unknown, fallback: string): string {
+  if (err instanceof Error && err.message.trim()) return err.message;
+  return fallback;
+}
+
+/**
+ * Provisions RTMP destinations for the platforms this event syndicates to.
+ *
+ * Each platform is isolated: one failing must not stop the other, and must not
+ * stop the broadcast itself. Failures come back as messages so the caller can
+ * record them for the retry job and show them to the operator.
+ */
 export async function provisionDestinationsForEvent(
   event: StreamEvent,
-  userId: string,
+  userId: string | null,
   supabase?: SupabaseClient,
-): Promise<Array<{ name: string; url: string }>> {
+): Promise<ProvisionResult> {
   const client = supabase ?? createAdminClient();
   const destinations: Array<{ name: string; url: string }> = [];
+  const errors: Partial<Record<SyndicationPlatform, string>> = {};
 
   if (event.syndicateYoutube) {
-    await provisionYouTubeLiveForChurch(event.churchId, userId, client);
-    const stream = await getIntegration(event.churchId, "stream", client);
-    const youtubeUrl = (stream?.metadata as { youtube_url?: string })?.youtube_url;
-    if (youtubeUrl) destinations.push({ name: "youtube", url: youtubeUrl });
+    try {
+      await provisionYouTubeLiveForChurch(event.churchId, userId, client, {
+        title: event.title,
+        privacyStatus: event.youtubePrivacy,
+      });
+      const stream = await getIntegration(event.churchId, "stream", client);
+      const youtubeUrl = (stream?.metadata as { youtube_url?: string })
+        ?.youtube_url;
+      if (youtubeUrl) {
+        destinations.push({ name: "youtube", url: youtubeUrl });
+      } else {
+        errors.youtube = "YouTube did not return an RTMP destination.";
+      }
+    } catch (err) {
+      errors.youtube = errorMessage(err, "YouTube provisioning failed.");
+    }
   }
 
   if (event.syndicateFacebook) {
-    await provisionFacebookLiveForChurch(event.churchId, userId, client);
-    const stream = await getIntegration(event.churchId, "stream", client);
-    const facebookUrl = (stream?.metadata as { facebook_url?: string })?.facebook_url;
-    if (facebookUrl) destinations.push({ name: "facebook", url: facebookUrl });
+    try {
+      await provisionFacebookLiveForChurch(event.churchId, userId, client);
+      const stream = await getIntegration(event.churchId, "stream", client);
+      const facebookUrl = (stream?.metadata as { facebook_url?: string })
+        ?.facebook_url;
+      if (facebookUrl) {
+        destinations.push({ name: "facebook", url: facebookUrl });
+      } else {
+        errors.facebook = "Facebook did not return an RTMP destination.";
+      }
+    } catch (err) {
+      errors.facebook = errorMessage(err, "Facebook provisioning failed.");
+    }
   }
 
-  return destinations;
+  return { destinations, errors };
 }
 
+/**
+ * Nudges the bound broadcast to `live`.
+ *
+ * Broadcasts are created with `enableAutoStart`, so YouTube normally promotes
+ * them on its own the moment ingest goes active — this is a fallback for when
+ * that does not happen. It checks the current status first, because
+ * transitioning a broadcast that is already live returns `redundantTransition`
+ * and transitioning one whose stream has not connected yet returns
+ * `errorStreamInactive`. Both are expected, not failures.
+ */
 export async function transitionYouTubeBroadcastLive(
   churchId: string,
   supabase?: SupabaseClient,
-): Promise<void> {
+): Promise<{ ok: boolean; status?: string; error?: string }> {
   const integration = await getIntegration(churchId, "youtube", supabase);
-  if (!integration) return;
+  if (!integration) return { ok: false, error: "YouTube is not connected." };
 
   const meta = (integration.metadata ?? {}) as YouTubeIntegrationMetadata;
   const broadcastId = meta.live_broadcast_id;
-  if (!broadcastId) return;
+  if (!broadcastId) {
+    return { ok: false, error: "No YouTube broadcast has been provisioned." };
+  }
 
-  const clientId =
-    process.env.YOUTUBE_CLIENT_ID?.trim() ?? process.env.GOOGLE_CLIENT_ID?.trim();
-  const clientSecret =
-    process.env.YOUTUBE_CLIENT_SECRET?.trim() ??
-    process.env.GOOGLE_CLIENT_SECRET?.trim();
-  if (!clientId || !clientSecret) return;
-
-  const client = new google.auth.OAuth2(
-    clientId,
-    clientSecret,
-    resolveGoogleOAuthRedirectUri(),
-  );
-  client.setCredentials({
-    access_token: integration.access_token,
-    refresh_token: integration.refresh_token ?? undefined,
-    expiry_date: integration.token_expires_at
-      ? new Date(integration.token_expires_at).getTime()
-      : undefined,
-  });
-
-  const youtube = google.youtube({ version: "v3", auth: client });
   try {
-    await youtube.liveBroadcasts.transition({
-      broadcastStatus: "testing",
-      id: broadcastId,
+    const { client } = await getYouTubeAuthClient(churchId, supabase);
+    const youtube = google.youtube({ version: "v3", auth: client });
+
+    const { data } = await youtube.liveBroadcasts.list({
       part: ["status"],
+      id: [broadcastId],
     });
+
+    const lifeCycle = data.items?.[0]?.status?.lifeCycleStatus ?? undefined;
+
+    // Already where we want it (or on the way there).
+    if (lifeCycle === "live" || lifeCycle === "liveStarting") {
+      return { ok: true, status: lifeCycle };
+    }
+    if (lifeCycle === "complete" || lifeCycle === "revoked") {
+      return { ok: false, status: lifeCycle, error: `Broadcast is ${lifeCycle}.` };
+    }
+
     await youtube.liveBroadcasts.transition({
       broadcastStatus: "live",
       id: broadcastId,
       part: ["status"],
     });
-  } catch {
-    // YouTube may auto-transition with enableAutoStart
+
+    return { ok: true, status: "live" };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "transition failed";
+
+    // Auto-start will take care of it once the encoder actually connects.
+    if (/errorStreamInactive|redundantTransition|invalidTransition/i.test(message)) {
+      return { ok: true, status: "pending_ingest" };
+    }
+
+    console.error("transitionYouTubeBroadcastLive:", message);
+    return { ok: false, error: message };
   }
 }
 
@@ -99,6 +156,55 @@ export async function recordSyndicationAttempt(
     status,
     error_message: errorMessage ?? null,
   });
+}
+
+export type SyndicationStatus = {
+  status: "pending" | "success" | "failed";
+  errorMessage: string | null;
+  attemptedAt: string | null;
+};
+
+/**
+ * Latest push result per platform for the church's most recent stream event.
+ * Drives the "did it actually reach YouTube/Facebook?" indicator in the UI.
+ */
+export async function getLatestSyndicationStatus(
+  churchId: string,
+  supabase?: SupabaseClient,
+): Promise<Partial<Record<SyndicationPlatform, SyndicationStatus>>> {
+  const client = supabase ?? createAdminClient();
+
+  const { data: events } = await client
+    .from("stream_events")
+    .select("id")
+    .eq("church_id", churchId)
+    .order("starts_at", { ascending: false })
+    .limit(1);
+
+  const eventId = events?.[0]?.id as string | undefined;
+  if (!eventId) return {};
+
+  const { data: attempts } = await client
+    .from("stream_syndication_attempts")
+    .select("platform, status, error_message, attempted_at")
+    .eq("stream_event_id", eventId)
+    .order("attempted_at", { ascending: false });
+
+  const result: Partial<Record<SyndicationPlatform, SyndicationStatus>> = {};
+
+  for (const row of attempts ?? []) {
+    const platform = row.platform as SyndicationPlatform;
+    if (platform !== "youtube" && platform !== "facebook") continue;
+    // Ordered newest-first, so the first row per platform wins.
+    if (result[platform]) continue;
+    result[platform] = {
+      status: row.status as SyndicationStatus["status"],
+      errorMessage: (row.error_message as string | null) ?? null,
+      attemptedAt: (row.attempted_at as string | null) ?? null,
+    };
+  }
+
+  return result;
 }
 
 export async function retryPendingSyndication(
@@ -121,6 +227,8 @@ export async function retryPendingSyndication(
     const event = row as {
       id: string;
       church_id: string;
+      title: string | null;
+      youtube_privacy: "public" | "unlisted" | "private" | null;
       syndicate_youtube: boolean;
       syndicate_facebook: boolean;
       created_by: string | null;
@@ -143,8 +251,12 @@ export async function retryPendingSyndication(
       try {
         await provisionYouTubeLiveForChurch(
           event.church_id,
-          event.created_by ?? event.church_id,
+          event.created_by,
           client,
+          {
+            title: event.title ?? undefined,
+            privacyStatus: event.youtube_privacy ?? "public",
+          },
         );
         await recordSyndicationAttempt(event.id, "youtube", "success", undefined, client);
         retried++;
@@ -167,7 +279,7 @@ export async function retryPendingSyndication(
       try {
         await provisionFacebookLiveForChurch(
           event.church_id,
-          event.created_by ?? event.church_id,
+          event.created_by,
           client,
         );
         await recordSyndicationAttempt(event.id, "facebook", "success", undefined, client);
@@ -198,7 +310,7 @@ export function syndicationRetryUntil(): string {
 
 export async function clearRelayDestinations(
   churchId: string,
-  userId: string,
+  userId: string | null,
   supabase?: SupabaseClient,
 ) {
   await clearStreamRelayDestinations(churchId, userId, supabase);

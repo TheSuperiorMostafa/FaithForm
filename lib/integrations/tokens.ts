@@ -40,19 +40,57 @@ const EMPTY_STATUS = {
   },
 };
 
+/**
+ * Reads integration rows for a church.
+ *
+ * The RPC is `security definer` but filters on `public.user_church_ids()`,
+ * which resolves through `auth.uid()`. A service-role client has no user
+ * session, so `auth.uid()` is null and the RPC matches nothing — background
+ * work (cron jobs, go-live, scheduled streams) would otherwise see every
+ * integration as disconnected. Fall back to a direct read in that case, the
+ * same way `getIntegration` already does.
+ */
+async function loadIntegrationStatusRows(
+  churchId: string,
+  supabase?: SupabaseClient,
+): Promise<IntegrationStatusRow[]> {
+  if (supabase) {
+    const { data, error } = await supabase.rpc("get_church_integration_status", {
+      p_church_id: churchId,
+    });
+
+    if (!error && data?.length) {
+      return data as IntegrationStatusRow[];
+    }
+  }
+
+  const admin = createAdminClientOrNull();
+  if (!admin) return [];
+
+  const { data, error } = await admin
+    .from("church_integrations")
+    .select("provider, access_token, metadata")
+    .eq("church_id", churchId);
+
+  if (error || !data) return [];
+
+  return data.map((row) => ({
+    provider: row.provider as string,
+    connected: Boolean((row.access_token as string | null)?.trim()),
+    metadata: (row.metadata ?? {}) as Record<string, unknown>,
+  }));
+}
+
 export async function getIntegrationStatus(
   churchId: string,
-  supabase: SupabaseClient,
+  supabase?: SupabaseClient,
 ) {
-  const { data, error } = await supabase.rpc("get_church_integration_status", {
-    p_church_id: churchId,
-  });
+  const rows = await loadIntegrationStatusRows(churchId, supabase);
 
-  if (error || !data) {
+  if (rows.length === 0) {
     return EMPTY_STATUS;
   }
 
-  const rows = data as IntegrationStatusRow[];
   const google = rows.find((r) => r.provider === "google");
   const facebook = rows.find((r) => r.provider === "facebook");
   const stream = rows.find((r) => r.provider === "stream");
@@ -91,7 +129,7 @@ export async function getIntegrationStatus(
 export async function hasIntegration(
   churchId: string,
   provider: IntegrationProvider,
-  supabase: SupabaseClient,
+  supabase?: SupabaseClient,
 ): Promise<boolean> {
   const status = await getIntegrationStatus(churchId, supabase);
   if (provider === "google") return status.google.connected;

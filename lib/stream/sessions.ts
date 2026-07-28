@@ -90,7 +90,7 @@ export async function createStreamSession(
   input: {
     churchId: string;
     title?: string | null;
-    startedBy: string;
+    startedBy: string | null;
     encoderDeviceId?: string | null;
     streamEventId?: string | null;
     destinationsSnapshot?: Array<{ name: string; url: string }>;
