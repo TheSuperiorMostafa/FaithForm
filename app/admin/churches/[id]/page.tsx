@@ -1,11 +1,15 @@
 import { notFound } from "next/navigation";
 import { ChurchDetailTabs } from "@/components/admin/church-detail-tabs";
 import { PageHeader } from "@/components/admin/page-header";
+import { getChurchFeatureFlags } from "@/lib/features/access";
+import type { FeatureKey } from "@/lib/features/catalog";
 import {
   getAdminChurchActivity,
   getAdminChurchDetail,
   type AdminActivityRange,
 } from "@/lib/queries/admin";
+import { getChurchTeamMembers } from "@/lib/queries/team";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -45,23 +49,31 @@ export default async function AdminChurchDetailPage({
     ),
   };
 
-  const [detail, activity] = await Promise.all([
+  const [detail, activity, featureFlags, teamMembers] = await Promise.all([
     getAdminChurchDetail(params.id),
     getAdminChurchActivity(params.id, activityFilters),
+    getChurchFeatureFlags(params.id, createAdminClient()),
+    getChurchTeamMembers(params.id),
   ]);
 
   if (!detail) notFound();
+
+  const featurePermissionsByMemberId = Object.fromEntries(
+    teamMembers.map((member) => [member.id, member.featurePermissions]),
+  ) as Record<string, FeatureKey[]>;
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
       <PageHeader
         title={detail.church.name}
-        description="Inspect settings, users, integrations, activity, and support for this church."
+        description="Inspect features, users, integrations, activity, and support for this church."
       />
       <ChurchDetailTabs
         detail={detail}
         activity={activity}
         activityFilters={activityFilters}
+        featureFlags={featureFlags}
+        featurePermissionsByMemberId={featurePermissionsByMemberId}
       />
     </div>
   );

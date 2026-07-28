@@ -7,6 +7,7 @@ import {
 } from "@/lib/auth/require-church-admin";
 import { getDonationById } from "@/lib/queries/giving";
 import { refundPaymentIntent } from "@/lib/stripe/giving";
+import { featureAccessDenied } from "@/lib/features/guard";
 
 const bodySchema = z.object({
   donationId: z.string().uuid(),
@@ -22,6 +23,9 @@ export async function POST(request: Request) {
     if (message === "Forbidden") return forbiddenResponse();
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const denied = await featureAccessDenied("giving");
+  if (denied) return denied;
 
   let json: unknown;
   try {

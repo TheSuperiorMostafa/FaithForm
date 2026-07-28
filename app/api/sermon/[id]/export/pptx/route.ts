@@ -17,6 +17,7 @@ import { fetchPassages } from "@/lib/scripture/esv";
 import { requireChurchAuth } from "@/lib/auth/church";
 import { verifySermonAccess } from "@/lib/queries/sermons";
 import { createClient } from "@/lib/supabase/server";
+import { featureAccessDenied } from "@/lib/features/guard";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -28,6 +29,8 @@ export async function GET(
 ) {
   try {
     const auth = await requireChurchAuth();
+    const denied = await featureAccessDenied("sermon_builder");
+    if (denied) return denied;
     const supabase = createClient();
     const sermon = await verifySermonAccess(supabase, params.id, auth.churchId);
     if (!sermon) {

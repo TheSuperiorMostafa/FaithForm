@@ -12,6 +12,7 @@ import {
   Users,
   type LucideIcon,
 } from "lucide-react";
+import type { FeatureKey } from "@/lib/features/catalog";
 
 export type NavItem = {
   label: string;
@@ -20,7 +21,20 @@ export type NavItem = {
   shortLabel?: string;
   /** Hide from mobile bottom nav (sidebar only). */
   sidebarOnly?: boolean;
+  /**
+   * Gate this row behind a feature. Items without a key (Home, Church Profile,
+   * Support, Settings) are always available.
+   */
+  feature?: FeatureKey;
 };
+
+/** Keeps nav in sync with route guards — hidden rows are also unreachable. */
+export function filterNavByFeatures(
+  items: NavItem[],
+  allowed: FeatureKey[],
+): NavItem[] {
+  return items.filter((item) => !item.feature || allowed.includes(item.feature));
+}
 
 export const navItems: NavItem[] = [
   {
@@ -34,42 +48,49 @@ export const navItems: NavItem[] = [
     shortLabel: "Attend",
     href: "/dashboard/attendance",
     icon: Users,
+    feature: "attendance",
   },
   {
     label: "People",
     shortLabel: "People",
     href: "/dashboard/people",
     icon: Contact,
+    feature: "people",
   },
   {
     label: "Announcements",
     shortLabel: "News",
     href: "/dashboard/announcements",
     icon: Megaphone,
+    feature: "announcements",
   },
   {
     label: "Sermon Builder",
     shortLabel: "Sermon",
     href: "/dashboard/sermon-builder",
     icon: BookOpen,
+    feature: "sermon_builder",
   },
   {
     label: "Live Stream",
     shortLabel: "Live",
     href: "/dashboard/live-streaming",
     icon: RadioTower,
+    feature: "live_stream",
   },
   {
     label: "Voice Assistant",
     shortLabel: "Voice",
     href: "/dashboard/voice-assistant",
     icon: Phone,
+    feature: "voice_assistant",
   },
   {
     label: "Giving",
     shortLabel: "Give",
     href: "/dashboard/giving",
     icon: Heart,
+    feature: "giving",
   },
 ];
 

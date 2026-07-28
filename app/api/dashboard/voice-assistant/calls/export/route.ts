@@ -9,6 +9,7 @@ import {
   maskPhoneNumber,
 } from "@/lib/utils/voice-assistant";
 import { getRecentPhoneCalls } from "@/lib/queries/voice-assistant";
+import { featureAccessDenied } from "@/lib/features/guard";
 
 function escapeCsv(value: string | null | undefined): string {
   const text = value ?? "";
@@ -27,6 +28,9 @@ export async function GET() {
     if (message === "Forbidden") return forbiddenResponse();
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const denied = await featureAccessDenied("voice_assistant");
+  if (denied) return denied;
 
   const calls = await getRecentPhoneCalls(auth.churchId, 500);
 

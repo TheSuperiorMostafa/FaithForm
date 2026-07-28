@@ -17,7 +17,10 @@ import { Select } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ActivityFilters } from "@/components/admin/activity-filters";
 import { ActivityPagination } from "@/components/admin/activity-pagination";
+import { ChurchFeaturesPanel } from "@/components/admin/church-features-panel";
 import { ChurchGivingPanel } from "@/components/admin/church-giving-panel";
+import type { FeatureFlags } from "@/lib/features/access";
+import { getFeature, type FeatureKey } from "@/lib/features/catalog";
 import type {
   AdminActivityFilters,
   AdminActivityResult,
@@ -28,17 +31,52 @@ type ChurchDetailTabsProps = {
   detail: AdminChurchDetail;
   activity: AdminActivityResult;
   activityFilters: AdminActivityFilters & { range: NonNullable<AdminActivityFilters["range"]> };
+  featureFlags: FeatureFlags;
+  /** church_users.id → granted features, for the Users tab. */
+  featurePermissionsByMemberId: Record<string, FeatureKey[]>;
 };
+
+function MemberAccessCell({
+  role,
+  grants,
+}: {
+  role: string;
+  grants: FeatureKey[] | undefined;
+}) {
+  if (role === "admin") {
+    return <span className="text-muted-foreground">All enabled features</span>;
+  }
+
+  if (!grants || grants.length === 0) {
+    return <span className="text-muted-foreground">None</span>;
+  }
+
+  return (
+    <span className="flex flex-wrap gap-1">
+      {grants.map((key) => (
+        <span
+          key={key}
+          className="rounded-full border border-border px-2 py-0.5 text-xs font-medium text-muted-foreground"
+        >
+          {getFeature(key).label}
+        </span>
+      ))}
+    </span>
+  );
+}
 
 export function ChurchDetailTabs({
   detail,
   activity,
   activityFilters,
+  featureFlags,
+  featurePermissionsByMemberId,
 }: ChurchDetailTabsProps) {
   return (
     <Tabs defaultValue="overview" className="space-y-4">
       <TabsList className="w-full justify-start overflow-x-auto sm:w-auto">
         <TabsTrigger value="overview">Overview</TabsTrigger>
+        <TabsTrigger value="features">Features</TabsTrigger>
         <TabsTrigger value="users">Users</TabsTrigger>
         <TabsTrigger value="integrations">Integrations</TabsTrigger>
         <TabsTrigger value="giving">Giving</TabsTrigger>
@@ -122,14 +160,23 @@ export function ChurchDetailTabs({
         </Card>
       </TabsContent>
 
+      <TabsContent value="features">
+        <ChurchFeaturesPanel
+          churchId={detail.church.id}
+          churchName={detail.church.name}
+          flags={featureFlags}
+        />
+      </TabsContent>
+
       <TabsContent value="users">
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[860px] text-sm">
+            <table className="w-full min-w-[960px] text-sm">
               <thead className="bg-primary font-heading text-[13px] uppercase tracking-wide text-primary-foreground dark:bg-secondary dark:text-secondary-foreground">
                 <tr>
                   <th className="px-4 py-3 text-left">Email</th>
                   <th className="px-4 py-3 text-left">Role</th>
+                  <th className="px-4 py-3 text-left">Feature access</th>
                   <th className="px-4 py-3 text-left">Time on FaithForm (7d)</th>
                   <th className="px-4 py-3 text-left">Time on FaithForm (30d)</th>
                   <th className="px-4 py-3 text-left">Last seen</th>
@@ -145,6 +192,12 @@ export function ChurchDetailTabs({
                     </td>
                     <td className="px-4 py-3">
                       <RoleBadge role={user.role} />
+                    </td>
+                    <td className="max-w-[18rem] px-4 py-3 text-sm">
+                      <MemberAccessCell
+                        role={user.role}
+                        grants={featurePermissionsByMemberId[user.id]}
+                      />
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {formatDuration(user.dashboardSeconds7d)}

@@ -5,6 +5,7 @@ import {
   type SimpleSermonSaveBody,
 } from "@/lib/sermon-builder/simple-sermon-save";
 import { createSermon } from "@/lib/queries/sermons";
+import { featureAccessDenied } from "@/lib/features/guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,6 +13,8 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   try {
     const auth = await requireChurchAuth();
+    const denied = await featureAccessDenied("sermon_builder");
+    if (denied) return denied;
     const body = (await request.json()) as SimpleSermonSaveBody;
 
     const validated = await validateSimpleSermonBody(body);

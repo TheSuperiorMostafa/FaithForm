@@ -6,6 +6,7 @@ import { DashboardUsageTracker } from "@/components/dashboard/usage-tracker";
 import { Sidebar } from "@/components/dashboard/sidebar";
 import { Topbar } from "@/components/dashboard/topbar";
 import { VoiceAgentAutoSync } from "@/components/dashboard/voice-agent-auto-sync";
+import type { FeatureKey } from "@/lib/features/catalog";
 import { cn } from "@/lib/utils";
 
 type DashboardShellProps = {
@@ -13,6 +14,8 @@ type DashboardShellProps = {
   churchName: string | null;
   role: string | null;
   initialCollapsed: boolean;
+  /** Features this member may open — drives which nav rows render. */
+  allowedFeatures: FeatureKey[];
   children: React.ReactNode;
 };
 
@@ -27,6 +30,7 @@ export function DashboardShell({
   churchName,
   role,
   initialCollapsed,
+  allowedFeatures,
   children,
 }: DashboardShellProps) {
   const [collapsed, setCollapsed] = useState(initialCollapsed);
@@ -46,6 +50,7 @@ export function DashboardShell({
         role={role}
         collapsed={collapsed}
         onCollapsedChange={handleCollapsedChange}
+        allowedFeatures={allowedFeatures}
       />
 
       <div
@@ -61,7 +66,7 @@ export function DashboardShell({
         </main>
       </div>
 
-      <BottomNav />
+      <BottomNav allowedFeatures={allowedFeatures} />
     </div>
   );
 }

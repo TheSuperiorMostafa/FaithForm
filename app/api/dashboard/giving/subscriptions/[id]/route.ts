@@ -6,6 +6,7 @@ import {
   requireChurchAdmin,
 } from "@/lib/auth/require-church-admin";
 import { getSubscriptionById } from "@/lib/queries/giving";
+import { featureAccessDenied } from "@/lib/features/guard";
 import {
   cancelSubscription,
   pauseSubscription,
@@ -27,6 +28,9 @@ export async function POST(request: Request, context: RouteContext) {
     if (message === "Forbidden") return forbiddenResponse();
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const denied = await featureAccessDenied("giving");
+  if (denied) return denied;
 
   let json: unknown;
   try {

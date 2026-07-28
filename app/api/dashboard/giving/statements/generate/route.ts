@@ -8,6 +8,7 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin";
 import { renderGivingStatementPdf } from "@/lib/giving/statement-pdf";
 import { getDonorGiftsForYear } from "@/lib/queries/giving";
+import { featureAccessDenied } from "@/lib/features/guard";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -22,6 +23,9 @@ export async function POST(request: Request) {
     if (message === "Forbidden") return forbiddenResponse();
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const denied = await featureAccessDenied("giving");
+  if (denied) return denied;
 
   const { searchParams } = new URL(request.url);
   const year =

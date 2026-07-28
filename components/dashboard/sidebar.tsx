@@ -5,8 +5,14 @@ import { usePathname } from "next/navigation";
 import { ChevronLeft, ChevronRight, LogOut, ShieldCheck } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import { isBootstrapSuperAdminEmail } from "@/lib/auth/superadmin-emails";
+import type { FeatureKey } from "@/lib/features/catalog";
 import { cn } from "@/lib/utils";
-import { navItems, churchProfileNavItem, footerUtilityNavItems } from "./nav-items";
+import {
+  navItems,
+  churchProfileNavItem,
+  filterNavByFeatures,
+  footerUtilityNavItems,
+} from "./nav-items";
 
 type SidebarProps = {
   userEmail: string;
@@ -14,6 +20,7 @@ type SidebarProps = {
   role: string | null;
   collapsed: boolean;
   onCollapsedChange: (collapsed: boolean) => void;
+  allowedFeatures: FeatureKey[];
 };
 
 function isActive(pathname: string, href: string) {
@@ -80,12 +87,13 @@ export function Sidebar({
   role,
   collapsed,
   onCollapsedChange,
+  allowedFeatures,
 }: SidebarProps) {
   const pathname = usePathname();
   const showAdminLink = isBootstrapSuperAdminEmail(userEmail);
 
   const initial = (userEmail ?? "F").charAt(0).toUpperCase();
-  const navItemsForSidebar = navItems;
+  const navItemsForSidebar = filterNavByFeatures(navItems, allowedFeatures);
 
   const toggle = () => onCollapsedChange(!collapsed);
 
@@ -147,15 +155,17 @@ export function Sidebar({
 
       {/* Nav items */}
       <nav className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain p-3">
-        <p
-          className={cn(
-            "h-6 shrink-0 overflow-hidden whitespace-nowrap px-1 pb-1 pt-2 text-[11px] font-bold uppercase tracking-[0.22em] text-sidebar-accent",
-            "transition-[opacity,max-width] duration-200 ease-out motion-reduce:transition-none",
-            collapsed ? "max-w-0 opacity-0" : "max-w-full opacity-100",
-          )}
-        >
-          Ministry Tools
-        </p>
+        {navItemsForSidebar.length > 0 && (
+          <p
+            className={cn(
+              "h-6 shrink-0 overflow-hidden whitespace-nowrap px-1 pb-1 pt-2 text-[11px] font-bold uppercase tracking-[0.22em] text-sidebar-accent",
+              "transition-[opacity,max-width] duration-200 ease-out motion-reduce:transition-none",
+              collapsed ? "max-w-0 opacity-0" : "max-w-full opacity-100",
+            )}
+          >
+            Ministry Tools
+          </p>
+        )}
         <div className="space-y-1.5">
           {navItemsForSidebar.map((item) => (
             <SidebarLink

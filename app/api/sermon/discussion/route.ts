@@ -11,6 +11,7 @@ import {
   verifySermonAccess,
 } from "@/lib/queries/sermons";
 import { createClient } from "@/lib/supabase/server";
+import { featureAccessDenied } from "@/lib/features/guard";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -34,6 +35,8 @@ function sermonSummary(sermon: {
 export async function POST(request: Request) {
   try {
     const auth = await requireChurchAuth();
+    const denied = await featureAccessDenied("sermon_builder");
+    if (denied) return denied;
     const { sermonId } = (await request.json()) as { sermonId: string };
 
     const supabase = createClient();

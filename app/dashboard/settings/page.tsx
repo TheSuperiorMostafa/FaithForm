@@ -5,7 +5,13 @@ import { getChurchGivingProfile } from "@/lib/queries/giving";
 import { getFollowUpMessageTemplates } from "@/lib/queries/follow-up-settings";
 import { getAnnouncementEmailSettings } from "@/lib/queries/announcement-email-settings";
 import { getChurchAuth } from "@/lib/auth/church";
+import {
+  getChurchFeatureFlags,
+  resolveAllowedFeatures,
+} from "@/lib/features/access";
+import { FEATURE_KEYS } from "@/lib/features/catalog";
 import { getIntegrationStatus } from "@/lib/integrations/tokens";
+import { getChurchTeamMembers } from "@/lib/queries/team";
 import { getChurchAISettings } from "@/lib/queries/sermons";
 import { createClient } from "@/lib/supabase/server";
 
@@ -34,6 +40,8 @@ export default async function SettingsPage() {
     givingFunds,
     followUpTemplates,
     announcementEmailSettings,
+    teamMembers,
+    featureFlags,
   ] =
     await Promise.all([
       getChurchAISettings(auth.churchId),
@@ -42,7 +50,12 @@ export default async function SettingsPage() {
       getGivingFundsForSettings(auth.churchId),
       getFollowUpMessageTemplates(auth.churchId, supabase),
       getAnnouncementEmailSettings(auth.churchId, supabase),
+      getChurchTeamMembers(auth.churchId),
+      getChurchFeatureFlags(auth.churchId, supabase),
     ]);
+
+  // Grantable features are the ones the account has switched on.
+  const availableFeatures = FEATURE_KEYS.filter((key) => featureFlags[key]);
 
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
@@ -51,7 +64,8 @@ export default async function SettingsPage() {
           Settings
         </h1>
         <p className="text-sm text-muted-foreground">
-          Connect services and manage AI preferences for your church.
+          Connect services, manage your team, and set AI preferences for your
+          church.
         </p>
       </div>
 
@@ -63,6 +77,12 @@ export default async function SettingsPage() {
         givingFunds={givingFunds}
         followUpTemplates={followUpTemplates}
         announcementEmailTemplate={announcementEmailSettings}
+        team={{
+          members: teamMembers,
+          availableFeatures,
+          currentUserId: auth.userId,
+        }}
+        allowedFeatures={resolveAllowedFeatures(auth, featureFlags)}
       />
     </div>
   );

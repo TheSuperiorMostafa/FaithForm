@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { themeSuggestSystemPrompt } from "@/lib/ai/prompts";
 import { themeSuggestSchema } from "@/lib/ai/schemas";
 import { requireChurchAuth } from "@/lib/auth/church";
+import { featureAccessDenied } from "@/lib/features/guard";
 import {
   listSlideThemes,
   scoreThemesByTagOverlap,
@@ -30,6 +31,8 @@ function compactThemeSummary(theme: SlideTheme) {
 export async function POST(request: Request) {
   try {
     await requireChurchAuth();
+    const denied = await featureAccessDenied("sermon_builder");
+    if (denied) return denied;
 
     const body = (await request.json()) as {
       selectedThemeId?: string;

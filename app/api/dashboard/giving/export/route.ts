@@ -6,6 +6,7 @@ import {
 } from "@/lib/auth/require-church-admin";
 import { searchGifts } from "@/lib/queries/giving";
 import type { DonationStatus, GiftType, GiftsSearchFilters } from "@/types/giving";
+import { featureAccessDenied } from "@/lib/features/guard";
 
 function escapeCsv(value: string): string {
   if (value.includes(",") || value.includes('"') || value.includes("\n")) {
@@ -23,6 +24,9 @@ export async function GET(request: Request) {
     if (message === "Forbidden") return forbiddenResponse();
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const denied = await featureAccessDenied("giving");
+  if (denied) return denied;
 
   const { searchParams } = new URL(request.url);
 

@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { FeatureGate } from "@/components/dashboard/feature-gate";
 import {
   SectionLinkTabs,
   type SectionLinkTab,
@@ -23,16 +24,18 @@ export default function VoiceAssistantLayout({
   children: ReactNode;
 }) {
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
-      <header>
-        <h1 className="font-heading text-2xl font-bold tracking-tight">
-          Voice Assistant
-        </h1>
-      </header>
+    <FeatureGate feature="voice_assistant">
+      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
+        <header>
+          <h1 className="font-heading text-2xl font-bold tracking-tight">
+            Voice Assistant
+          </h1>
+        </header>
 
-      <SectionLinkTabs tabs={voiceAssistantTabs} />
+        <SectionLinkTabs tabs={voiceAssistantTabs} />
 
-      {children}
-    </div>
+        {children}
+      </div>
+    </FeatureGate>
   );
 }

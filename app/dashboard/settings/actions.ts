@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getChurchAuth } from "@/lib/auth/church";
+import { featureActionError } from "@/lib/features/guard";
 import { upsertFollowUpMessageTemplates } from "@/lib/queries/follow-up-settings";
 import { upsertAnnouncementEmailSettings } from "@/lib/queries/announcement-email-settings";
 import { upsertChurchSettings } from "@/lib/queries/sermons";
@@ -83,6 +84,9 @@ export async function updateFollowUpMessages(
     };
   }
 
+  const featureError = await featureActionError("attendance");
+  if (featureError) return { ok: false, error: featureError };
+
   const reset = formData.get("reset")?.toString() === "1";
   const templates = reset
     ? [...DEFAULT_FOLLOW_UP_TEMPLATES]
@@ -125,6 +129,9 @@ export async function updateAnnouncementEmailSettings(
       error: "Only church admins can change announcement email settings.",
     };
   }
+
+  const featureError = await featureActionError("announcements");
+  if (featureError) return { ok: false, error: featureError };
 
   const reset = formData.get("reset")?.toString() === "1";
   const subject = reset

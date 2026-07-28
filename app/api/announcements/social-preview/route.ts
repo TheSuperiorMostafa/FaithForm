@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { requireChurchAuth } from "@/lib/auth/church";
 import { generateSocialPreview } from "@/lib/social/generate-preview";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { featureAccessDenied } from "@/lib/features/guard";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -21,6 +22,8 @@ type SocialPreviewRequest = {
 export async function POST(request: Request) {
   try {
     const auth = await requireChurchAuth();
+    const denied = await featureAccessDenied("announcements");
+    if (denied) return denied;
     const body = (await request.json()) as SocialPreviewRequest;
 
     const title = body.title?.trim();

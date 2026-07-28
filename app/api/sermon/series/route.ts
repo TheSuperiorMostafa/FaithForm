@@ -3,6 +3,7 @@ import { requireChurchAuth } from "@/lib/auth/church";
 import { aiGenerateObject } from "@/lib/ai";
 import { seriesPlanSchema } from "@/lib/ai/schemas";
 import { seriesSystemPrompt } from "@/lib/ai/prompts";
+import { featureAccessDenied } from "@/lib/features/guard";
 import {
   createSeries,
   getChurchAISettings,
@@ -16,6 +17,8 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   try {
     const auth = await requireChurchAuth();
+    const denied = await featureAccessDenied("sermon_builder");
+    if (denied) return denied;
     const body = await request.json();
     const {
       title,

@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getChurchAuth } from "@/lib/auth/church";
 import { renderGivingStatementPdf } from "@/lib/giving/statement-pdf";
 import { getDonorGiftsForYear } from "@/lib/queries/giving";
+import { featureAccessDenied } from "@/lib/features/guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,6 +15,8 @@ export async function GET(request: Request, context: RouteContext) {
   if (!auth) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const denied = await featureAccessDenied("giving");
+  if (denied) return denied;
 
   const { searchParams } = new URL(request.url);
   const year =

@@ -9,6 +9,8 @@ import { FollowUpMessagesForm } from "@/components/settings/follow-up-messages-f
 import { GivingCard } from "@/components/settings/giving-card";
 import { IntegrationsCard } from "@/components/settings/integrations-card";
 import type { IntegrationsCardProps } from "@/components/settings/integrations-card";
+import { TeamMembersCard } from "@/components/settings/team-members-card";
+import type { TeamMembersCardProps } from "@/components/settings/team-members-card";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
   Card,
@@ -20,6 +22,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ChurchGivingProfile, GivingFundRow } from "@/types/giving";
 import type { AnnouncementEmailTemplate } from "@/lib/email/announcement-template";
+import type { FeatureKey } from "@/lib/features/catalog";
 import type { ChurchSettings } from "@/types/sermon";
 
 type SettingsTabsProps = {
@@ -30,22 +33,27 @@ type SettingsTabsProps = {
   givingFunds: GivingFundRow[];
   followUpTemplates: string[];
   announcementEmailTemplate: AnnouncementEmailTemplate;
+  team: Omit<TeamMembersCardProps, "isAdmin">;
+  /** Feature-gated tabs are hidden when the viewer can't use them. */
+  allowedFeatures: FeatureKey[];
 };
 
-function getDefaultTab(searchParams: URLSearchParams): string {
+function getDefaultTab(
+  searchParams: URLSearchParams,
+  visibleTabs: string[],
+): string {
   if (
-    searchParams.get("tab") === "giving" ||
-    searchParams.get("stripe_return") ||
-    searchParams.get("stripe_refresh")
+    (searchParams.get("stripe_return") || searchParams.get("stripe_refresh")) &&
+    visibleTabs.includes("giving")
   ) {
     return "giving";
   }
-  if (searchParams.get("tab") === "attendance") {
-    return "attendance";
+
+  const tab = searchParams.get("tab");
+  if (tab && visibleTabs.includes(tab)) {
+    return tab;
   }
-  if (searchParams.get("tab") === "communications") {
-    return "communications";
-  }
+
   return "general";
 }
 
@@ -57,17 +65,37 @@ function SettingsTabsInner({
   givingFunds,
   followUpTemplates,
   announcementEmailTemplate,
+  team,
+  allowedFeatures,
 }: SettingsTabsProps) {
   const searchParams = useSearchParams();
-  const defaultTab = getDefaultTab(searchParams);
+
+  const showCommunications = allowedFeatures.includes("announcements");
+  const showAttendance = allowedFeatures.includes("attendance");
+  const showGiving = allowedFeatures.includes("giving");
+
+  const visibleTabs = [
+    "general",
+    "team",
+    ...(showCommunications ? ["communications"] : []),
+    ...(showAttendance ? ["attendance"] : []),
+    ...(showGiving ? ["giving"] : []),
+  ];
+
+  const defaultTab = getDefaultTab(searchParams, visibleTabs);
 
   return (
     <Tabs defaultValue={defaultTab} className="flex flex-col gap-4">
-      <TabsList className="w-full justify-start">
+      <TabsList className="w-full justify-start overflow-x-auto">
         <TabsTrigger value="general">General</TabsTrigger>
-        <TabsTrigger value="communications">Communications</TabsTrigger>
-        <TabsTrigger value="attendance">Attendance</TabsTrigger>
-        <TabsTrigger value="giving">Giving</TabsTrigger>
+        <TabsTrigger value="team">Team</TabsTrigger>
+        {showCommunications && (
+          <TabsTrigger value="communications">Communications</TabsTrigger>
+        )}
+        {showAttendance && (
+          <TabsTrigger value="attendance">Attendance</TabsTrigger>
+        )}
+        {showGiving && <TabsTrigger value="giving">Giving</TabsTrigger>}
       </TabsList>
 
       <TabsContent value="general" className="mt-0">
@@ -92,18 +120,22 @@ function SettingsTabsInner({
               <CardDescription>Documents and support.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-2 sm:grid-cols-2">
-              <Link
-                href="/dashboard/library"
-                className="rounded-lg border border-border bg-background px-4 py-2.5 text-center text-sm font-semibold text-foreground transition-colors hover:border-accent hover:bg-accent/10"
-              >
-                Documents
-              </Link>
-              <Link
-                href="/dashboard/live-streaming"
-                className="rounded-lg border border-border bg-background px-4 py-2.5 text-center text-sm font-semibold text-foreground transition-colors hover:border-accent hover:bg-accent/10"
-              >
-                Live Streaming
-              </Link>
+              {allowedFeatures.includes("library") && (
+                <Link
+                  href="/dashboard/library"
+                  className="rounded-lg border border-border bg-background px-4 py-2.5 text-center text-sm font-semibold text-foreground transition-colors hover:border-accent hover:bg-accent/10"
+                >
+                  Documents
+                </Link>
+              )}
+              {allowedFeatures.includes("live_stream") && (
+                <Link
+                  href="/dashboard/live-streaming"
+                  className="rounded-lg border border-border bg-background px-4 py-2.5 text-center text-sm font-semibold text-foreground transition-colors hover:border-accent hover:bg-accent/10"
+                >
+                  Live Streaming
+                </Link>
+              )}
               <Link
                 href="/dashboard/support"
                 className="rounded-lg border border-border bg-background px-4 py-2.5 text-center text-sm font-semibold text-foreground transition-colors hover:border-accent hover:bg-accent/10"
@@ -117,6 +149,10 @@ function SettingsTabsInner({
             <AISettingsForm settings={settings} isAdmin={isAdmin} />
           </div>
         </div>
+      </TabsContent>
+
+      <TabsContent value="team" className="mt-0">
+        <TeamMembersCard isAdmin={isAdmin} {...team} />
       </TabsContent>
 
       <TabsContent value="communications" className="mt-0">

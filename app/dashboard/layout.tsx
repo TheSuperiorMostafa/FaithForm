@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { Toaster } from "sonner";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
+import { getFeatureAccess } from "@/lib/features/access";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -37,6 +38,8 @@ export default async function DashboardLayout({
     : null;
   const role = linkRow?.role ?? null;
 
+  const featureAccess = await getFeatureAccess(supabase);
+
   const initialCollapsed = cookies().get("sidebar:collapsed")?.value === "1";
 
   return (
@@ -46,6 +49,7 @@ export default async function DashboardLayout({
         churchName={churchName}
         role={role}
         initialCollapsed={initialCollapsed}
+        allowedFeatures={featureAccess?.allowed ?? []}
       >
         {children}
       </DashboardShell>

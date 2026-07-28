@@ -24,6 +24,7 @@
     "db:stream-production": "node scripts/apply-stream-production-migration.mjs",
     "db:stream-scheduling": "node scripts/apply-stream-scheduling-migration.mjs",
     "db:youtube-live": "node scripts/apply-youtube-live-integration-migration.mjs",
+    "db:team-access": "node scripts/apply-team-access-migration.mjs",
     "import:bible": "node scripts/import-bible-translations.mjs"
   },
   "dependencies": {

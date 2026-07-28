@@ -6,13 +6,17 @@ export const revalidate = 0;
 
 import { AttendanceChartSection } from "@/components/dashboard/attendance-chart-section";
 import { HeroHoursSaved } from "@/components/dashboard/hero-hours-saved";
-import { QuickActionsSection } from "@/components/dashboard/quick-actions-section";
+import {
+  QuickActionsSection,
+  hasQuickActions,
+} from "@/components/dashboard/quick-actions-section";
 import {
   ChartSkeleton,
   HeroSkeleton,
   StatRowSkeleton,
 } from "@/components/dashboard/skeletons";
 import { StatRow } from "@/components/dashboard/stat-row";
+import { getFeatureAccess } from "@/lib/features/access";
 import { createClient } from "@/lib/supabase/server";
 import {
   getCurrentChurchId,
@@ -35,6 +39,8 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 
   const churchId = await getCurrentChurchId(supabase, user.id);
   const range = parseDashboardRange(searchParams.range);
+  const featureAccess = await getFeatureAccess(supabase);
+  const allowedFeatures = featureAccess?.allowed ?? [];
 
   if (!churchId) {
     return (
@@ -60,12 +66,17 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         <StatRow churchId={churchId} range={range} />
       </Suspense>
 
-      <section className="flex flex-col gap-3">
-        <h2 className="border-l-4 border-accent pl-3 font-heading text-[26px] font-bold text-foreground">
-          Your Weekly Inputs
-        </h2>
-        <QuickActionsSection churchId={churchId} />
-      </section>
+      {hasQuickActions(allowedFeatures) && (
+        <section className="flex flex-col gap-3">
+          <h2 className="border-l-4 border-accent pl-3 font-heading text-[26px] font-bold text-foreground">
+            Your Weekly Inputs
+          </h2>
+          <QuickActionsSection
+            churchId={churchId}
+            allowedFeatures={allowedFeatures}
+          />
+        </section>
+      )}
 
       <Suspense fallback={<ChartSkeleton />}>
         <AttendanceChartSection churchId={churchId} />

@@ -11,6 +11,7 @@ import {
   getPublishedAnnouncementsByGoogleId,
 } from "@/lib/queries/announcements";
 import { createClient } from "@/lib/supabase/server";
+import { featureAccessDenied } from "@/lib/features/guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,6 +34,8 @@ export async function GET(request: Request) {
   if (!auth) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const denied = await featureAccessDenied("announcements", supabase);
+  if (denied) return denied;
 
   const connected = await hasIntegration(auth.churchId, "google", supabase);
   if (!connected) {
@@ -95,6 +98,8 @@ export async function POST(request: Request) {
   if (!auth) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const denied = await featureAccessDenied("announcements", supabase);
+  if (denied) return denied;
   if (!auth.isAdmin) {
     return NextResponse.json(
       { error: "Only church admins can create calendar events." },

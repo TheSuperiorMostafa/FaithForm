@@ -4,6 +4,7 @@ import { getChurchGivingProfile } from "@/lib/queries/giving";
 import { getGivePageUrl } from "@/lib/stripe/config";
 import { getCanonicalSiteUrl } from "@/lib/site-url";
 import QRCode from "qrcode";
+import { featureAccessDenied } from "@/lib/features/guard";
 
 function isAllowedGiveUrl(url: string, slug: string): boolean {
   try {
@@ -25,6 +26,8 @@ export async function GET(request: Request) {
   if (!auth) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const denied = await featureAccessDenied("giving");
+  if (denied) return denied;
 
   const { searchParams } = new URL(request.url);
   const url = searchParams.get("url");

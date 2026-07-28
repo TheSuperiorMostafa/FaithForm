@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { FeatureGate } from "@/components/dashboard/feature-gate";
 import {
   SectionLinkTabs,
   type SectionLinkTab,
@@ -19,16 +20,18 @@ const liveStreamTabs: SectionLinkTab[] = [
 
 export default function LiveStreamingLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-      <header>
-        <h1 className="font-heading text-2xl font-bold tracking-tight">
-          Live Stream
-        </h1>
-      </header>
+    <FeatureGate feature="live_stream">
+      <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
+        <header>
+          <h1 className="font-heading text-2xl font-bold tracking-tight">
+            Live Stream
+          </h1>
+        </header>
 
-      <SectionLinkTabs tabs={liveStreamTabs} />
+        <SectionLinkTabs tabs={liveStreamTabs} />
 
-      {children}
-    </div>
+        {children}
+      </div>
+    </FeatureGate>
   );
 }

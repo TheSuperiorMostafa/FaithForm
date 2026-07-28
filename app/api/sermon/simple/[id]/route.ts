@@ -4,6 +4,7 @@ import { validateSimpleSermonBody } from "@/lib/sermon-builder/simple-sermon-sav
 import type { SimpleSermonSaveBody } from "@/lib/sermon-builder/simple-sermon-save";
 import { updateSermon, verifySermonAccess } from "@/lib/queries/sermons";
 import { createClient } from "@/lib/supabase/server";
+import { featureAccessDenied } from "@/lib/features/guard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,6 +15,8 @@ export async function PATCH(
 ) {
   try {
     const auth = await requireChurchAuth();
+    const denied = await featureAccessDenied("sermon_builder");
+    if (denied) return denied;
     const supabase = createClient();
     const sermon = await verifySermonAccess(supabase, params.id, auth.churchId);
     if (!sermon) {

@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import type { FeatureKey } from "@/lib/features/catalog";
 import { cn } from "@/lib/utils";
-import { navItems } from "./nav-items";
+import { filterNavByFeatures, navItems } from "./nav-items";
 
 function isActive(pathname: string, href: string) {
   if (href === "/dashboard") {
@@ -12,13 +13,20 @@ function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
-export function BottomNav() {
+export function BottomNav({
+  allowedFeatures,
+}: {
+  allowedFeatures: FeatureKey[];
+}) {
   const pathname = usePathname();
+  const items = filterNavByFeatures(navItems, allowedFeatures).filter(
+    (item) => !item.sidebarOnly,
+  );
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-sidebar text-sidebar shadow-2xl md:hidden">
       <div className="flex items-stretch justify-around px-1 pb-[env(safe-area-inset-bottom)]">
-        {navItems.filter((item) => !item.sidebarOnly).map((item) => {
+        {items.map((item) => {
           const active = isActive(pathname, item.href);
           const Icon = item.icon;
 
