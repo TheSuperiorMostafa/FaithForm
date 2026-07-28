@@ -5,10 +5,12 @@ import { redirect } from "next/navigation";
 import { logActivity } from "@/lib/activity/log";
 import { createWeeklyAnnouncementGmailDraft } from "@/lib/announcements/weekly-email";
 import { getChurchAuth } from "@/lib/auth/church";
+import { featureActionError } from "@/lib/features/guard";
 import { createClient } from "@/lib/supabase/server";
 import { patchCalendarEvent } from "@/lib/integrations/google-calendar";
 import { generateEmergencySocialGraphic, downloadSocialGraphic } from "@/lib/social/generate-graphic";
 import {
+  deleteFacebookPost,
   postAnnouncementToFacebookPage,
   resolveFacebookScheduledPublishTime,
 } from "@/lib/integrations/facebook";
@@ -98,6 +100,11 @@ export async function publishAnnouncement(
   const ctx = await requireChurchAndUser();
   if (!ctx.churchId || !ctx.user) {
     return { ok: false, errors: ["No church linked"] };
+  }
+
+  const featureError = await featureActionError("announcements", ctx.supabase);
+  if (featureError) {
+    return { ok: false, errors: [featureError] };
   }
 
   const parsed = parsePublishForm(formData);
@@ -377,6 +384,9 @@ export async function createWeeklyAnnouncementDraftAction(options?: {
   const ctx = await requireChurchAndUser();
   if (!ctx.churchId || !ctx.user) return { error: "No church linked" };
 
+  const featureError = await featureActionError("announcements", ctx.supabase);
+  if (featureError) return { error: featureError };
+
   const auth = await getChurchAuth(ctx.supabase);
   if (!auth?.isAdmin) {
     return { error: "Only church admins can create weekly Gmail drafts." };
@@ -400,9 +410,134 @@ export async function createWeeklyAnnouncementDraftAction(options?: {
   };
 }
 
+export type UnsubmitAnnouncementResult = {
+  success?: true;
+  error?: string;
+  /** Set when a Facebook post was already live and has been left in place. */
+  facebookStillLive?: boolean;
+  facebookUrl?: string;
+  /** Non-fatal problems, e.g. Facebook rejected the delete. */
+  warnings?: string[];
+};
+
+/**
+ * Rewinds a submitted announcement back to the pending queue.
+ *
+ * - Clears it from the weekly Gmail draft (`push_to_team`).
+ * - Deletes the Facebook post when it is still *scheduled*.
+ * - Leaves an already-published Facebook post alone and says so, rather than
+ *   silently removing something members may already have seen.
+ *
+ * The Google Calendar event is untouched — it is the church's source of truth,
+ * and the event still exists whether or not it has been announced.
+ */
+export async function unsubmitAnnouncement(
+  id: string,
+): Promise<UnsubmitAnnouncementResult> {
+  const ctx = await requireChurchAndUser();
+  if (!ctx.churchId || !ctx.user) return { error: "No church linked" };
+
+  const featureError = await featureActionError("announcements", ctx.supabase);
+  if (featureError) return { error: featureError };
+
+  const auth = await getChurchAuth(ctx.supabase);
+  if (!auth?.isAdmin) {
+    return { error: "Only church admins can unsubmit announcements." };
+  }
+
+  const { data: row, error: loadError } = await ctx.supabase
+    .from("announcements")
+    .select(
+      "id, title, facebook_post_id, facebook_scheduled_publish_time, status",
+    )
+    .eq("id", id)
+    .eq("church_id", ctx.churchId)
+    .maybeSingle();
+
+  if (loadError) return { error: loadError.message };
+  if (!row) return { error: "Announcement not found." };
+
+  const warnings: string[] = [];
+  let facebookStillLive = false;
+  let facebookUrl: string | undefined;
+
+  const facebookPostId = row.facebook_post_id as string | null;
+  if (facebookPostId) {
+    const scheduledAt = row.facebook_scheduled_publish_time as string | null;
+    const stillScheduled =
+      Boolean(scheduledAt) && new Date(scheduledAt!).getTime() > Date.now();
+
+    if (stillScheduled) {
+      const result = await deleteFacebookPost(
+        ctx.churchId,
+        facebookPostId,
+        ctx.supabase,
+      );
+      if (!result.ok) {
+        warnings.push(`Facebook post could not be removed: ${result.error}`);
+        facebookStillLive = true;
+        facebookUrl = `https://www.facebook.com/${facebookPostId.replace("_", "/posts/")}`;
+      }
+    } else {
+      facebookStillLive = true;
+      facebookUrl = `https://www.facebook.com/${facebookPostId.replace("_", "/posts/")}`;
+    }
+  }
+
+  const rewind = {
+    status: "pending" as const,
+    is_ready: false,
+    push_to_team: false,
+    push_to_facebook: false,
+    published_at: null,
+    last_publish_error: null,
+    // Keep the post id only when the live post survives, so the UI can still
+    // link to it and a later re-submit does not create a duplicate reference.
+    facebook_post_id: facebookStillLive ? facebookPostId : null,
+    facebook_scheduled_publish_time: null,
+    unsubmitted_at: new Date().toISOString(),
+    unsubmitted_by: ctx.user.id,
+  };
+
+  function rowWithoutAuditColumns(data: typeof rewind) {
+    const { unsubmitted_at: _a, unsubmitted_by: _b, ...rest } = data;
+    return rest;
+  }
+
+  let { error } = await ctx.supabase
+    .from("announcements")
+    .update(rewind)
+    .eq("id", id)
+    .eq("church_id", ctx.churchId);
+
+  // Tolerate a database that has not had migration 0041 applied yet.
+  if (error && /unsubmitted_(at|by)/i.test(error.message)) {
+    ({ error } = await ctx.supabase
+      .from("announcements")
+      .update(rowWithoutAuditColumns(rewind))
+      .eq("id", id)
+      .eq("church_id", ctx.churchId));
+  }
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/announcements");
+
+  return {
+    success: true,
+    facebookStillLive,
+    facebookUrl,
+    warnings: warnings.length > 0 ? warnings : undefined,
+  };
+}
+
 export async function deleteAnnouncement(id: string) {
   const ctx = await requireChurchAndUser();
   if (!ctx.churchId) return { error: "No church linked" };
+
+  const featureError = await featureActionError("announcements", ctx.supabase);
+  if (featureError) return { error: featureError };
 
   const { error } = await ctx.supabase
     .from("announcements")

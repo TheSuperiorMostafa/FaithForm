@@ -2,26 +2,93 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { google } from "googleapis";
 import { getGoogleAuthClient } from "@/lib/integrations/google-oauth";
 
-function buildMimeMessage(input: {
-  to?: string;
-  subject: string;
-  bodyHtml: string;
-}) {
-  const lines = [
-    "Content-Type: text/html; charset=utf-8",
-    "MIME-Version: 1.0",
-    input.to ? `To: ${input.to}` : "",
-    `Subject: ${input.subject}`,
-    "",
-    input.bodyHtml,
-  ].filter(Boolean);
+/** RFC 2047 encoded words must stay under 76 chars including the wrapper. */
+const ENCODED_WORD_PAYLOAD_BYTES = 42;
 
-  const message = lines.join("\r\n");
-  return Buffer.from(message)
+function isPrintableAscii(value: string): boolean {
+  return /^[\x20-\x7E]*$/.test(value);
+}
+
+/**
+ * Splits on code points (never mid-character) into chunks whose UTF-8 encoding
+ * fits one encoded word.
+ */
+function chunkByUtf8Bytes(value: string, maxBytes: number): string[] {
+  const chunks: string[] = [];
+  let current = "";
+  let currentBytes = 0;
+
+  for (const char of value) {
+    const charBytes = Buffer.byteLength(char, "utf8");
+    if (currentBytes + charBytes > maxBytes && current) {
+      chunks.push(current);
+      current = "";
+      currentBytes = 0;
+    }
+    current += char;
+    currentBytes += charBytes;
+  }
+
+  if (current) chunks.push(current);
+  return chunks.length > 0 ? chunks : [""];
+}
+
+/**
+ * Prepares a value for a mail header.
+ *
+ * Strips CR/LF (a template-authored subject must never be able to inject extra
+ * headers) and RFC 2047 encodes anything non-ASCII — the default subject alone
+ * contains an em dash, and week labels contain en dashes, which are illegal as
+ * raw bytes in a header.
+ */
+function encodeHeaderValue(value: string): string {
+  const sanitized = value.replace(/[\r\n]+/g, " ").trim();
+
+  if (isPrintableAscii(sanitized)) return sanitized;
+
+  return chunkByUtf8Bytes(sanitized, ENCODED_WORD_PAYLOAD_BYTES)
+    .map((chunk) => `=?UTF-8?B?${Buffer.from(chunk, "utf8").toString("base64")}?=`)
+    // Continuation lines are folded with CRLF + a single space.
+    .join("\r\n ");
+}
+
+function toBase64Url(value: string): string {
+  return Buffer.from(value, "utf8")
     .toString("base64")
     .replace(/\+/g, "-")
     .replace(/\//g, "_")
     .replace(/=+$/, "");
+}
+
+/** Exported for testing — `createGmailDraft` is the supported entry point. */
+export function buildMimeMessage(input: {
+  to?: string;
+  subject: string;
+  bodyHtml: string;
+}) {
+  const headers = [
+    "MIME-Version: 1.0",
+    'Content-Type: text/html; charset="UTF-8"',
+    "Content-Transfer-Encoding: base64",
+  ];
+
+  const to = input.to?.trim();
+  if (to) headers.push(`To: ${encodeHeaderValue(to)}`);
+  headers.push(`Subject: ${encodeHeaderValue(input.subject)}`);
+
+  // The body is base64 so 8-bit UTF-8 (dashes, accents, emoji) survives intact,
+  // wrapped at 76 columns per RFC 2045.
+  const body =
+    Buffer.from(input.bodyHtml, "utf8")
+      .toString("base64")
+      .match(/.{1,76}/g)
+      ?.join("\r\n") ?? "";
+
+  // The blank line between headers and body is mandatory — without it the body
+  // is parsed as another header and the draft arrives empty.
+  const message = `${headers.join("\r\n")}\r\n\r\n${body}`;
+
+  return toBase64Url(message);
 }
 
 export async function createGmailDraft(

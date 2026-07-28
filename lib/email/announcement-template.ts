@@ -85,22 +85,28 @@ function escapeHtml(text: string): string {
     .replace(/"/g, "&quot;");
 }
 
-export function formatWeeklyEmailEventBlock(event: WeeklyEmailEvent): string {
-  const when = formatDateTimeRange(event.startAt, event.endAt);
+export function formatWeeklyEmailEventBlock(
+  event: WeeklyEmailEvent,
+  timeZone?: string | null,
+): string {
+  const when = formatDateTimeRange(event.startAt, event.endAt, timeZone);
   const lines = [event.title, when];
   if (event.location.trim()) lines.push(event.location.trim());
   if (event.notes?.trim()) lines.push(event.notes.trim());
   return lines.join("\n");
 }
 
-export function formatEventsHtml(events: WeeklyEmailEvent[]): string {
+export function formatEventsHtml(
+  events: WeeklyEmailEvent[],
+  timeZone?: string | null,
+): string {
   if (events.length === 0) {
     return "<p><em>No upcoming events this week.</em></p>";
   }
 
   return events
     .map((event) => {
-      const when = formatDateTimeRange(event.startAt, event.endAt);
+      const when = formatDateTimeRange(event.startAt, event.endAt, timeZone);
       const parts = [`<p><strong>${escapeHtml(event.title)}</strong></p>`];
       parts.push(`<p><strong>When:</strong> ${escapeHtml(when)}</p>`);
       if (event.location.trim()) {
@@ -116,27 +122,41 @@ export function formatEventsHtml(events: WeeklyEmailEvent[]): string {
     .join("");
 }
 
-export function formatEventsPlain(events: WeeklyEmailEvent[]): string {
+export function formatEventsPlain(
+  events: WeeklyEmailEvent[],
+  timeZone?: string | null,
+): string {
   if (events.length === 0) return "No upcoming events this week.";
-  return events.map((event) => formatWeeklyEmailEventBlock(event)).join("\n\n");
+  return events
+    .map((event) => formatWeeklyEmailEventBlock(event, timeZone))
+    .join("\n\n");
 }
 
 function plainTextToHtml(text: string): string {
   return text
     .split(/\n{2,}/)
+    .filter((paragraph) => paragraph.trim().length > 0)
     .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, "<br>")}</p>`)
     .join("");
 }
 
+
+/**
+ * Fills the church's template and returns the pieces a mail message needs:
+ * `bodyHtml` for the Gmail draft, and `bodyText` as the plain-text equivalent
+ * for any sender that wants a text alternative.
+ */
 export function renderAnnouncementEmail(input: {
   subjectTemplate: string;
   bodyTemplate: string;
   weekLabel: string;
   churchName: string;
   events: WeeklyEmailEvent[];
-}): { subject: string; bodyHtml: string } {
-  const eventsPlain = formatEventsPlain(input.events);
-  const eventsHtml = formatEventsHtml(input.events);
+  /** IANA timezone for the church — required for correctness in cron runs. */
+  timeZone?: string | null;
+}): { subject: string; bodyHtml: string; bodyText: string } {
+  const eventsPlain = formatEventsPlain(input.events, input.timeZone);
+  const eventsHtml = formatEventsHtml(input.events, input.timeZone);
 
   const subject = input.subjectTemplate
     .replaceAll(ANNOUNCEMENT_EMAIL_SUBJECT_PLACEHOLDER, input.weekLabel)
@@ -145,17 +165,33 @@ export function renderAnnouncementEmail(input: {
       input.churchName,
     );
 
-  let body = input.bodyTemplate
+  // Everything except [Events] is substituted first; [Events] is handled
+  // separately because it is the one placeholder with two representations.
+  const filled = input.bodyTemplate
     .replaceAll(ANNOUNCEMENT_EMAIL_BODY_PLACEHOLDERS.week, input.weekLabel)
     .replaceAll(
       ANNOUNCEMENT_EMAIL_BODY_PLACEHOLDERS.churchName,
       input.churchName,
-    )
-    .replaceAll(ANNOUNCEMENT_EMAIL_BODY_PLACEHOLDERS.events, eventsPlain);
+    );
 
-  const bodyHtml = body.includes("<")
-    ? body.replaceAll(eventsPlain, eventsHtml)
-    : plainTextToHtml(body);
+  const bodyText = filled.replaceAll(
+    ANNOUNCEMENT_EMAIL_BODY_PLACEHOLDERS.events,
+    eventsPlain,
+  );
 
-  return { subject, bodyHtml };
+  // Split on the placeholder and splice the rendered event HTML between the
+  // authored segments. Substituting text first and then swapping it back out
+  // for HTML loses the formatting once the surrounding template is escaped, and
+  // breaks outright if an event title happens to repeat elsewhere in the body.
+  //
+  // The template is always treated as plain text: the settings editor is a
+  // plain textarea documenting only [Week] / [ChurchName] / [Events], so angle
+  // brackets in ordinary prose ("RSVP by <date>") must survive as text rather
+  // than being guessed at as markup.
+  const bodyHtml = filled
+    .split(ANNOUNCEMENT_EMAIL_BODY_PLACEHOLDERS.events)
+    .map(plainTextToHtml)
+    .join(eventsHtml);
+
+  return { subject, bodyHtml, bodyText };
 }

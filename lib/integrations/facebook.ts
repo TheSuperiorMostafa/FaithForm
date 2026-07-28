@@ -221,6 +221,51 @@ export async function postAnnouncementToFacebookPage(
   };
 }
 
+export type FacebookDeleteResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+/**
+ * Removes a post from the connected Page.
+ *
+ * Used when an announcement is unsubmitted while its Facebook post is still
+ * scheduled. Callers decide the policy — an already-live post is deliberately
+ * left alone so unsubmitting never silently deletes public content.
+ */
+export async function deleteFacebookPost(
+  churchId: string,
+  postId: string,
+  supabase?: SupabaseClient,
+): Promise<FacebookDeleteResult> {
+  const integration = await getIntegration(churchId, "facebook", supabase);
+  if (!integration) {
+    return { ok: false, error: "Facebook is not connected" };
+  }
+
+  const res = await fetch(
+    `${GRAPH}/${encodeURIComponent(postId)}?access_token=${encodeURIComponent(
+      integration.access_token,
+    )}`,
+    { method: "DELETE" },
+  );
+
+  const data = (await res.json().catch(() => ({}))) as {
+    success?: boolean;
+    error?: { message?: string; code?: number };
+  };
+
+  if (!res.ok) {
+    // 100 / "does not exist" means it is already gone — treat that as success.
+    const message = data.error?.message ?? "Could not delete the Facebook post";
+    if (/does not exist|Unsupported get request|cannot be loaded/i.test(message)) {
+      return { ok: true };
+    }
+    return { ok: false, error: message };
+  }
+
+  return { ok: true };
+}
+
 export async function postToFacebookPage(
   churchId: string,
   message: string,

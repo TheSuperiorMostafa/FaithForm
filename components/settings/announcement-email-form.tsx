@@ -86,7 +86,12 @@ export function AnnouncementEmailForm({
           <code className="rounded bg-muted px-1 py-0.5 text-xs">
             {ANNOUNCEMENT_EMAIL_BODY_PLACEHOLDERS.events}
           </code>
-          .
+          . Write plain text — your line breaks are kept, and each event&apos;s
+          date, time, and location are formatted for you where{" "}
+          <code className="rounded bg-muted px-1 py-0.5 text-xs">
+            {ANNOUNCEMENT_EMAIL_BODY_PLACEHOLDERS.events}
+          </code>{" "}
+          appears.
         </p>
       </CardHeader>
       <CardContent>

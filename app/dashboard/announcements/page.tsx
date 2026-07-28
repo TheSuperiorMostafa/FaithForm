@@ -16,7 +16,10 @@ import {
 } from "@/lib/queries/announcements";
 import { getCurrentChurchId } from "@/lib/queries/dashboard";
 import { createClient } from "@/lib/supabase/server";
-import { getMondayWeekWindow, getMonthWindowForDate } from "@/lib/utils/calendar";
+import {
+  getMondayWeekWindowInTimeZone,
+  getMonthWindowForDate,
+} from "@/lib/utils/calendar";
 
 export const dynamic = "force-dynamic";
 
@@ -46,9 +49,18 @@ export default async function AnnouncementsPage() {
   const googleConnected = integrationStatus.google.connected;
   const facebookConnected = integrationStatus.facebook.connected;
 
+  // The queue window follows the church's timezone, not the server's — this
+  // page renders on Vercel, where server-local time is UTC.
+  const { data: churchRow } = await supabase
+    .from("churches")
+    .select("timezone")
+    .eq("id", churchId)
+    .maybeSingle();
+  const churchTimeZone = (churchRow?.timezone as string | null) ?? null;
+
   const now = new Date();
   const { year, monthIndex, startISO, endISO } = getMonthWindowForDate(now);
-  const week = getMondayWeekWindow(now);
+  const week = getMondayWeekWindowInTimeZone(now, churchTimeZone);
 
   let initialEvents: Awaited<ReturnType<typeof listCalendarEventsInRange>> = [];
   let weekEvents: Awaited<ReturnType<typeof listCalendarEventsInRange>> = [];
@@ -89,6 +101,7 @@ export default async function AnnouncementsPage() {
     weekEvents,
     publishedAnnouncementsMap,
     now,
+    churchTimeZone,
   );
 
   return (

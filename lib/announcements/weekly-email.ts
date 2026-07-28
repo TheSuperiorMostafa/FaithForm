@@ -11,7 +11,10 @@ import type { CalendarEventPreview } from "@/lib/integrations/types";
 import { getAnnouncementEmailSettings } from "@/lib/queries/announcement-email-settings";
 import type { AnnouncementRow } from "@/lib/queries/announcements";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getMondayWeekWindow } from "@/lib/utils/calendar";
+import {
+  getMondayWeekWindowInTimeZone,
+  getZonedWeekday,
+} from "@/lib/utils/calendar";
 
 export type WeeklyQueueItem = CalendarEventPreview & {
   announcementId?: string;
@@ -33,8 +36,12 @@ export function buildWeeklyAnnouncementQueue(
   events: CalendarEventPreview[],
   publishedByGoogleId: Record<string, AnnouncementRow>,
   now: Date = new Date(),
+  timeZone?: string | null,
 ): WeeklyQueueItem[] {
-  const { weekStartISO, weekEndISO } = getMondayWeekWindow(now);
+  const { weekStartISO, weekEndISO } = getMondayWeekWindowInTimeZone(
+    now,
+    timeZone,
+  );
   const weekStartMs = new Date(weekStartISO).getTime();
   const weekEndMs = new Date(weekEndISO).getTime();
 
@@ -106,7 +113,19 @@ export async function createWeeklyAnnouncementGmailDraft(
 ): Promise<WeeklyDraftResult> {
   const supabase = options?.supabase ?? createAdminClient();
   const now = options?.now ?? new Date();
-  const week = getMondayWeekWindow(now);
+
+  const { data: church } = await supabase
+    .from("churches")
+    .select("name, timezone")
+    .eq("id", churchId)
+    .maybeSingle();
+
+  const churchName = (church?.name as string | undefined)?.trim() || "Your church";
+  const timeZone = (church?.timezone as string | undefined) ?? null;
+
+  // The week (and its idempotency key) is anchored to the church's timezone,
+  // not the server's — cron runs execute in UTC.
+  const week = getMondayWeekWindowInTimeZone(now, timeZone);
 
   const settings = await getAnnouncementEmailSettings(churchId, supabase);
   if (!settings.weeklyEmailEnabled) {
@@ -137,14 +156,6 @@ export async function createWeeklyAnnouncementGmailDraft(
       error: "Google is not connected for this church.",
     };
   }
-
-  const { data: church } = await supabase
-    .from("churches")
-    .select("name")
-    .eq("id", churchId)
-    .maybeSingle();
-
-  const churchName = (church?.name as string | undefined)?.trim() || "Your church";
 
   const events = await listCalendarEventsInRange(
     churchId,
@@ -194,6 +205,7 @@ export async function createWeeklyAnnouncementGmailDraft(
     events,
     publishedByGoogleId,
     now,
+    timeZone,
   );
   const emailEvents = weeklyQueueToEmailEvents(queue, publishedByGoogleId).filter(
     (event) =>
@@ -225,6 +237,7 @@ export async function createWeeklyAnnouncementGmailDraft(
     weekLabel: week.weekLabel,
     churchName,
     events: emailEvents,
+    timeZone,
   });
 
   const draft = await createGmailDraft(
@@ -256,6 +269,16 @@ export async function createWeeklyAnnouncementGmailDraft(
   };
 }
 
+/**
+ * Local weekdays on which an automatic draft may be created (Mon–Wed).
+ *
+ * Monday is the intended day. Tuesday and Wednesday act as a catch-up window
+ * so a failed run — an expired Google token, a deploy, a cron blip — still
+ * produces that week's draft instead of silently skipping the week. The
+ * per-church `weekStartKey` guard keeps it to one draft per week regardless.
+ */
+const AUTO_DRAFT_LOCAL_WEEKDAYS = new Set([1, 2, 3]);
+
 export async function runWeeklyAnnouncementDraftsForAllChurches(
   options?: { force?: boolean; now?: Date },
 ): Promise<{
@@ -267,11 +290,6 @@ export async function runWeeklyAnnouncementDraftsForAllChurches(
   const supabase = createAdminClient();
   const now = options?.now ?? new Date();
 
-  // Only run automatic drafts on Mondays (local server time).
-  if (!options?.force && now.getDay() !== 1) {
-    return { processed: 0, created: 0, skipped: 0, errors: [] };
-  }
-
   const { data: integrations, error } = await supabase
     .from("church_integrations")
     .select("church_id")
@@ -281,12 +299,71 @@ export async function runWeeklyAnnouncementDraftsForAllChurches(
     return { processed: 0, created: 0, skipped: 0, errors: [] };
   }
 
+  const churchIds = Array.from(
+    new Set(
+      (integrations ?? [])
+        .map((row) => row.church_id as string)
+        .filter(Boolean),
+    ),
+  );
+
+  if (churchIds.length === 0) {
+    return { processed: 0, created: 0, skipped: 0, errors: [] };
+  }
+
+  const { data: churches } = await supabase
+    .from("churches")
+    .select("id, timezone")
+    .in("id", churchIds);
+
+  const timezoneByChurch = new Map<string, string | null>(
+    (churches ?? []).map((row) => [
+      row.id as string,
+      (row.timezone as string | null) ?? null,
+    ]),
+  );
+
+  // Churches that have the announcements feature switched off by a platform
+  // admin should not receive automated drafts.
+  const disabledChurchIds = new Set<string>();
+  const { data: featureRows, error: featureError } = await supabase
+    .from("church_features")
+    .select("church_id, enabled")
+    .eq("feature_key", "announcements")
+    .in("church_id", churchIds);
+
+  if (featureError) {
+    if (!/church_features/i.test(featureError.message)) {
+      console.error("weekly draft feature flags:", featureError.message);
+    }
+  } else {
+    for (const row of featureRows ?? []) {
+      if (!row.enabled) disabledChurchIds.add(row.church_id as string);
+    }
+  }
+
   let created = 0;
   let skipped = 0;
   const errors: Array<{ churchId: string; error: string }> = [];
 
-  for (const row of integrations) {
-    const churchId = row.church_id as string;
+  for (const churchId of churchIds) {
+    if (disabledChurchIds.has(churchId)) {
+      skipped++;
+      continue;
+    }
+
+    const timeZone = timezoneByChurch.get(churchId) ?? null;
+
+    // Evaluated per church: the cron fires once daily in UTC, but each church
+    // gets its draft on its own local Monday.
+    if (
+      !options?.force &&
+      !AUTO_DRAFT_LOCAL_WEEKDAYS.has(getZonedWeekday(now, timeZone))
+    ) {
+      skipped++;
+      continue;
+    }
+
     const result = await createWeeklyAnnouncementGmailDraft(churchId, {
       force: options?.force,
       now,
@@ -303,7 +380,7 @@ export async function runWeeklyAnnouncementDraftsForAllChurches(
   }
 
   return {
-    processed: integrations.length,
+    processed: churchIds.length,
     created,
     skipped,
     errors,

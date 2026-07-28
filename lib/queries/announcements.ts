@@ -22,6 +22,7 @@ export type AnnouncementRow = {
   google_event_id: string | null;
   google_calendar_id: string | null;
   facebook_post_id: string | null;
+  facebook_scheduled_publish_time?: string | null;
   facebook_caption?: string | null;
   social_graphic_url?: string | null;
   social_graphic_path?: string | null;
@@ -45,7 +46,7 @@ export async function getAnnouncements(
   const { data, error } = await supabase
     .from("announcements")
     .select(
-      "id, church_id, title, body, start_at, end_at, event_location, is_ready, push_to_app, push_to_facebook, push_to_team, status, google_event_id, google_calendar_id, facebook_post_id, gmail_draft_id, published_at, last_publish_error, created_at, updated_at, event_title, event_date, notes",
+      "id, church_id, title, body, start_at, end_at, event_location, is_ready, push_to_app, push_to_facebook, push_to_team, status, google_event_id, google_calendar_id, facebook_post_id, facebook_scheduled_publish_time, gmail_draft_id, published_at, last_publish_error, created_at, updated_at, event_title, event_date, notes",
     )
     .eq("church_id", churchId)
     .order("start_at", { ascending: false, nullsFirst: false });
@@ -63,7 +64,7 @@ export async function getAnnouncement(
   const { data, error } = await supabase
     .from("announcements")
     .select(
-      "id, church_id, title, body, start_at, end_at, event_location, is_ready, push_to_app, push_to_facebook, push_to_team, status, google_event_id, google_calendar_id, facebook_post_id, gmail_draft_id, published_at, last_publish_error, created_at, updated_at, event_title, event_date, notes",
+      "id, church_id, title, body, start_at, end_at, event_location, is_ready, push_to_app, push_to_facebook, push_to_team, status, google_event_id, google_calendar_id, facebook_post_id, facebook_scheduled_publish_time, gmail_draft_id, published_at, last_publish_error, created_at, updated_at, event_title, event_date, notes",
     )
     .eq("church_id", churchId)
     .eq("id", id)
@@ -109,7 +110,7 @@ export async function getPublishedAnnouncements(
   const { data, error } = await supabase
     .from("announcements")
     .select(
-      "id, church_id, title, body, start_at, end_at, event_location, is_ready, push_to_app, push_to_facebook, push_to_team, status, google_event_id, google_calendar_id, facebook_post_id, gmail_draft_id, published_at, last_publish_error, created_at, updated_at, event_title, event_date, notes",
+      "id, church_id, title, body, start_at, end_at, event_location, is_ready, push_to_app, push_to_facebook, push_to_team, status, google_event_id, google_calendar_id, facebook_post_id, facebook_scheduled_publish_time, gmail_draft_id, published_at, last_publish_error, created_at, updated_at, event_title, event_date, notes",
     )
     .eq("church_id", churchId)
     .eq("status", "published")
@@ -151,6 +152,8 @@ function mapAnnouncementRow(row: Record<string, unknown>): AnnouncementRow {
     google_event_id: (row.google_event_id as string | null) ?? null,
     google_calendar_id: (row.google_calendar_id as string | null) ?? null,
     facebook_post_id: (row.facebook_post_id as string | null) ?? null,
+    facebook_scheduled_publish_time:
+      (row.facebook_scheduled_publish_time as string | null) ?? null,
     gmail_draft_id: (row.gmail_draft_id as string | null) ?? null,
     published_at: (row.published_at as string | null) ?? null,
     last_publish_error: (row.last_publish_error as string | null) ?? null,
@@ -175,27 +178,31 @@ export function groupAnnouncementsByStatus(
   };
 }
 
+/**
+ * `timeZone` matters on the server: scheduled jobs run in UTC, so a weekly
+ * email rendered without it would show every event in the wrong zone. Omit it
+ * in the browser to use the viewer's own locale/timezone.
+ */
 export function formatDateTimeRange(
   startAt: string,
   endAt: string | null,
+  timeZone?: string | null,
 ): string {
-  const start = new Date(startAt);
-  const startStr = start.toLocaleString(undefined, {
+  const options: Intl.DateTimeFormatOptions = {
     month: "short",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
-  });
+    ...(timeZone ? { timeZone } : {}),
+  };
+
+  const start = new Date(startAt);
+  const startStr = start.toLocaleString(undefined, options);
 
   if (!endAt) return `${startStr} – ongoing`;
 
   const end = new Date(endAt);
-  const endStr = end.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  const endStr = end.toLocaleString(undefined, options);
 
   return `${startStr} – ${endStr}`;
 }

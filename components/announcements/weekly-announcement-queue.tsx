@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Calendar, ChevronDown, ExternalLink, Mail, X } from "lucide-react";
 import { createWeeklyAnnouncementDraftAction } from "@/app/dashboard/announcements/actions";
 import { AnnouncementVerifyForm } from "@/components/announcements/announcement-verify-form";
+import { UnsubmitAnnouncementButton } from "@/components/announcements/unsubmit-announcement-button";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -52,6 +53,16 @@ export function WeeklyAnnouncementQueue({
   const visibleQueue = queue;
   const upcomingQueue = visibleQueue.filter((e) => !e.skippedReason);
   const defaults = { googleConnected, facebookConnected };
+
+  const publishedById = new Map(published.map((item) => [item.id, item]));
+
+  /** A scheduled post whose slot has passed is already public. */
+  const isFacebookLive = (item: AnnouncementRow | undefined): boolean => {
+    if (!item?.facebook_post_id) return false;
+    const scheduled = item.facebook_scheduled_publish_time;
+    if (!scheduled) return true;
+    return new Date(scheduled).getTime() <= Date.now();
+  };
 
   const handleCreateDraft = (force = false) => {
     setDraftMessage(null);
@@ -218,6 +229,15 @@ export function WeeklyAnnouncementQueue({
                           <ExternalLink className="size-4" strokeWidth={1.75} />
                         </a>
                       )}
+                      {isAdmin && event.published && event.announcementId && (
+                        <UnsubmitAnnouncementButton
+                          announcementId={event.announcementId}
+                          title={event.title}
+                          facebookIsLive={isFacebookLive(
+                            publishedById.get(event.announcementId),
+                          )}
+                        />
+                      )}
                       {!isPast && (
                         <Button
                           type="button"
@@ -226,11 +246,19 @@ export function WeeklyAnnouncementQueue({
                           onClick={() =>
                             setExpandedId(isOpen ? null : event.googleEventId)
                           }
-                          aria-label={isOpen ? "Close details" : "Verify and submit"}
+                          aria-label={
+                            isOpen
+                              ? "Close details"
+                              : event.published
+                                ? "Edit and resubmit"
+                                : "Verify and submit"
+                          }
                           className={isOpen ? "rounded-full" : undefined}
                         >
                           {isOpen ? (
                             <X className="size-4" strokeWidth={1.75} />
+                          ) : event.published ? (
+                            "Edit"
                           ) : (
                             "Verify & submit"
                           )}
@@ -296,7 +324,12 @@ export function WeeklyAnnouncementQueue({
                       </p>
                     )}
                   </div>
-                  <div className="flex flex-wrap gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {item.push_to_team && (
+                      <span className="inline-flex items-center rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground">
+                        Weekly email
+                      </span>
+                    )}
                     {item.facebook_post_id && (
                       <a
                         href={`https://www.facebook.com/${item.facebook_post_id}`}
@@ -308,10 +341,12 @@ export function WeeklyAnnouncementQueue({
                         </Button>
                       </a>
                     )}
-                    {item.push_to_team && (
-                      <span className="inline-flex items-center rounded-lg border border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground">
-                        Weekly email
-                      </span>
+                    {isAdmin && (
+                      <UnsubmitAnnouncementButton
+                        announcementId={item.id}
+                        title={item.title}
+                        facebookIsLive={isFacebookLive(item)}
+                      />
                     )}
                   </div>
                 </CardContent>
