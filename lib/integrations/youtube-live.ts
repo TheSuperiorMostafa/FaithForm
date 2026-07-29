@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { google } from "googleapis";
+import { google, type youtube_v3 } from "googleapis";
 import {
   isInvalidGrantError,
   resolveGoogleOAuthRedirectUri,
@@ -204,6 +204,60 @@ async function resolveIngestStream(
   };
 }
 
+/**
+ * Detaches broadcasts left bound to the ingest stream by previous services.
+ *
+ * A reusable liveStream accepts at most three bound broadcasts, and one that is
+ * still `live` keeps consuming the feed — so a service that was never closed
+ * out swallows the next one's video and the new broadcast never leaves `ready`.
+ * Completing the ones that aired and unbinding the ones that never did frees
+ * the stream. Best effort throughout: a broadcast stuck on YouTube's side must
+ * not stop this service from starting.
+ */
+async function releaseStaleBroadcasts(
+  youtube: YouTubeClient,
+  streamId: string,
+): Promise<void> {
+  let items: youtube_v3.Schema$LiveBroadcast[];
+  try {
+    const parts = ["id", "status", "contentDetails"];
+    const [active, upcoming] = await Promise.all([
+      youtube.liveBroadcasts.list({ part: parts, broadcastStatus: "active" }),
+      youtube.liveBroadcasts.list({ part: parts, broadcastStatus: "upcoming" }),
+    ]);
+    items = [...(active.data.items ?? []), ...(upcoming.data.items ?? [])];
+  } catch {
+    return;
+  }
+
+  for (const item of items) {
+    if (!item.id || item.contentDetails?.boundStreamId !== streamId) continue;
+
+    const lifeCycle = item.status?.lifeCycleStatus;
+    try {
+      if (lifeCycle === "live" || lifeCycle === "testing") {
+        await youtube.liveBroadcasts.transition({
+          broadcastStatus: "complete",
+          id: item.id,
+          part: ["status"],
+        });
+      } else {
+        // Omitting streamId removes the binding without deleting the broadcast.
+        await youtube.liveBroadcasts.bind({
+          id: item.id,
+          part: ["id", "contentDetails"],
+        });
+      }
+    } catch (err) {
+      console.error(
+        "releaseStaleBroadcasts:",
+        item.id,
+        err instanceof Error ? err.message : err,
+      );
+    }
+  }
+}
+
 async function provisionYouTubeLiveRtmpUrl(
   client: InstanceType<typeof google.auth.OAuth2>,
   options: {
@@ -223,6 +277,8 @@ async function provisionYouTubeLiveRtmpUrl(
     options.existingStreamId,
     channelTitle,
   );
+
+  await releaseStaleBroadcasts(youtube, streamId);
 
   const { data: broadcast } = await youtube.liveBroadcasts.insert({
     part: ["snippet", "status", "contentDetails"],

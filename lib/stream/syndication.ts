@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { provisionFacebookLiveForChurch } from "@/lib/integrations/facebook-live";
-import { getIntegration } from "@/lib/integrations/tokens";
+import { getIntegration, saveIntegration } from "@/lib/integrations/tokens";
 import type { YouTubeIntegrationMetadata } from "@/lib/integrations/types";
 import {
   getYouTubeAuthClient,
@@ -140,6 +140,90 @@ export async function transitionYouTubeBroadcastLive(
     console.error("transitionYouTubeBroadcastLive:", message);
     return { ok: false, error: message };
   }
+}
+
+/**
+ * Closes out the church's current broadcast when the service ends.
+ *
+ * YouTube will not do this for us. `enableAutoStop` is off so that a brief RTMP
+ * gap cannot end a service, which also means a finished service stays `live`
+ * indefinitely. Left open it keeps consuming the reusable ingest stream, and
+ * next week's broadcast never starts — the video lands on this one instead.
+ */
+export async function completeYouTubeBroadcast(
+  churchId: string,
+  supabase?: SupabaseClient,
+): Promise<{ ok: boolean; status?: string; error?: string }> {
+  const integration = await getIntegration(churchId, "youtube", supabase);
+  if (!integration) return { ok: false, error: "YouTube is not connected." };
+
+  const meta = (integration.metadata ?? {}) as YouTubeIntegrationMetadata;
+  const broadcastId = meta.live_broadcast_id;
+  if (!broadcastId) return { ok: true, status: "no_broadcast" };
+
+  let result: { ok: boolean; status?: string; error?: string } = {
+    ok: true,
+    status: "complete",
+  };
+
+  try {
+    const { client } = await getYouTubeAuthClient(churchId, supabase);
+    const youtube = google.youtube({ version: "v3", auth: client });
+
+    const { data } = await youtube.liveBroadcasts.list({
+      part: ["status"],
+      id: [broadcastId],
+    });
+    const lifeCycle = data.items?.[0]?.status?.lifeCycleStatus ?? undefined;
+
+    if (lifeCycle === "live" || lifeCycle === "testing") {
+      await youtube.liveBroadcasts.transition({
+        broadcastStatus: "complete",
+        id: broadcastId,
+        part: ["status"],
+      });
+    } else if (lifeCycle !== "complete" && lifeCycle !== "revoked") {
+      // Never aired. Omitting streamId drops the binding, so it stops occupying
+      // one of the stream's three slots without deleting the operator's record.
+      await youtube.liveBroadcasts.bind({
+        id: broadcastId,
+        part: ["id", "contentDetails"],
+      });
+      result = { ok: true, status: lifeCycle ?? "unbound" };
+    } else {
+      result = { ok: true, status: lifeCycle };
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "complete failed";
+    if (!/redundantTransition|invalidTransition|liveBroadcastNotFound/i.test(message)) {
+      console.error("completeYouTubeBroadcast:", message);
+      result = { ok: false, error: message };
+    }
+  }
+
+  // Drop the pointer regardless of outcome. The next service provisions its own
+  // broadcast, and a stale id here would send the next end-of-service at a
+  // broadcast that is already gone.
+  const current = await getIntegration(churchId, "youtube", supabase);
+  if (current) {
+    const currentMeta = (current.metadata ?? {}) as YouTubeIntegrationMetadata;
+    await saveIntegration(
+      {
+        churchId,
+        provider: "youtube",
+        accessToken: current.access_token,
+        refreshToken: current.refresh_token,
+        tokenExpiresAt: current.token_expires_at
+          ? new Date(current.token_expires_at)
+          : null,
+        metadata: { ...currentMeta, live_broadcast_id: undefined },
+        connectedBy: current.connected_by ?? undefined,
+      },
+      supabase,
+    );
+  }
+
+  return result;
 }
 
 export async function recordSyndicationAttempt(

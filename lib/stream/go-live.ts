@@ -21,6 +21,7 @@ import {
 } from "@/lib/stream/events";
 import {
   clearRelayDestinations,
+  completeYouTubeBroadcast,
   getLatestSyndicationStatus,
   provisionDestinationsForEvent,
   recordSyndicationAttempt,
@@ -218,6 +219,14 @@ export async function endLiveBroadcast(
 
   // Stop the relay pushing to broadcasts that are now over.
   await clearRelayDestinations(churchId, session.startedBy, client);
+
+  // Then close the broadcast on YouTube's side. Isolated, because a platform
+  // that will not shut down cleanly must not leave the local session stuck live.
+  try {
+    await completeYouTubeBroadcast(churchId, client);
+  } catch (err) {
+    console.error("endLiveBroadcast: completeYouTubeBroadcast", err);
+  }
 
   const liveEvent = events?.[0];
   if (liveEvent) {
