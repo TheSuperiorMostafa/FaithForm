@@ -25,6 +25,8 @@ export function useStudioBroadcast(branding: StudioBranding) {
   const [isLive, setIsLive] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [micLevel, setMicLevel] = useState(0);
+  const [videoBitrate, setVideoBitrate] = useState<number | null>(null);
+  const [reducedQuality, setReducedQuality] = useState(false);
 
   const compositorRef = useRef<StudioCompositor | null>(null);
   const cameraStreamRef = useRef<MediaStream | null>(null);
@@ -35,6 +37,9 @@ export function useStudioBroadcast(branding: StudioBranding) {
   const analyserRef = useRef<AnalyserNode | null>(null);
   const micRafRef = useRef<number | null>(null);
   const brandingRef = useRef(branding);
+  // One warning per broadcast. Quality can step down several times on a bad
+  // connection, and a toast per rung would bury the operator mid-service.
+  const warnedAboutQualityRef = useRef(false);
 
   useEffect(() => {
     brandingRef.current = branding;
@@ -118,9 +123,15 @@ export function useStudioBroadcast(branding: StudioBranding) {
     setIsLive(false);
     setLayoutState("camera");
     setPublishing(false);
+    setVideoBitrate(null);
+    setReducedQuality(false);
+    warnedAboutQualityRef.current = false;
   }, [stopMicMeter]);
 
-  const connectIngest = useCallback(async (stream: MediaStream) => {
+  const connectIngest = useCallback(async (
+    stream: MediaStream,
+    output: { width: number; height: number; fps: number },
+  ) => {
     const configRes = await fetch("/api/stream/browser-publish", {
       cache: "no-store",
     });
@@ -136,17 +147,29 @@ export function useStudioBroadcast(branding: StudioBranding) {
     };
 
     if (config.method === "websocket" && config.wsIngestUrl) {
-      const { stop: stopIngest } = await publishViaWebSocket(
-        config.wsIngestUrl,
-        stream,
-        (message) => {
-          // Uplink could not sustain the broadcast; surface it and reset the
-          // studio rather than leaving the UI showing a dead "live" state.
+      const handle = await publishViaWebSocket(config.wsIngestUrl, stream, {
+        output,
+        onCongestion: () => {
+          const shed = compositorRef.current?.shedQuality() ?? false;
+          if (shed && !warnedAboutQualityRef.current) {
+            warnedAboutQualityRef.current = true;
+            toast.warning(
+              "Your connection slowed down, so the stream quality was reduced. " +
+                "The broadcast is still going out.",
+            );
+          }
+          setReducedQuality(true);
+          return shed;
+        },
+        onFatal: (message) => {
+          // The uplink could not carry even the lowest quality. Surface it and
+          // reset the studio rather than leaving the UI showing a dead "live".
           toast.error(message);
           stopStudio();
         },
-      );
-      stopIngestRef.current = stopIngest;
+      });
+      stopIngestRef.current = handle.stop;
+      setVideoBitrate(handle.videoBitsPerSecond);
     } else {
       const { stop: stopWhip, location } = await publishViaWhip(
         config.whipUrl,
@@ -210,7 +233,7 @@ export function useStudioBroadcast(branding: StudioBranding) {
       const out = compositor.start();
       compositorRef.current = compositor;
 
-      await connectIngest(out);
+      await connectIngest(out, compositor.getOutputSettings());
       setOutputStream(out);
       setLayoutState("camera");
       setPipCornerState("bottom-right");
@@ -272,6 +295,8 @@ export function useStudioBroadcast(branding: StudioBranding) {
     isLive,
     publishing,
     micLevel,
+    videoBitrate,
+    reducedQuality,
     startStudio,
     stopStudio,
     switchLayout,

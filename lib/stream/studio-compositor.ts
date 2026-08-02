@@ -10,9 +10,22 @@ export type StudioBranding = {
 
 type DrawRect = { x: number; y: number; w: number; h: number };
 
-const OUTPUT_PRESETS = [
+/**
+ * Quality ladder, best first.
+ *
+ * Stepped down when the machine cannot draw fast enough, and now also when the
+ * uplink cannot carry what we are producing. Dropping frame rate matters more
+ * than it looks: the canvas is captured at a fixed rate, so a canvas we stop
+ * redrawing yields near-identical frames, and those cost the encoder almost
+ * nothing. That is what lets a constrained connection shed load without
+ * restarting the recorder — which is impossible mid-stream, since a WebM
+ * recording cannot change bitrate once started.
+ */
+const QUALITY_LEVELS = [
   { width: 1920, height: 1080, fps: 30 },
   { width: 1280, height: 720, fps: 30 },
+  { width: 1280, height: 720, fps: 20 },
+  { width: 960, height: 540, fps: 15 },
 ] as const;
 
 const BG_COLOR = "#0a0a0a";
@@ -45,6 +58,8 @@ export class StudioCompositor {
   private height = 1080;
   private fps = 30;
   private missedFrames = 0;
+  private levelIndex = 0;
+  private lastDrawAt = 0;
 
   constructor() {
     this.canvas = document.createElement("canvas");
@@ -62,14 +77,19 @@ export class StudioCompositor {
   start(): MediaStream {
     if (this.outputStream) return this.outputStream;
 
-    for (const preset of OUTPUT_PRESETS) {
+    for (let i = 0; i < QUALITY_LEVELS.length; i += 1) {
+      const preset = QUALITY_LEVELS[i];
       try {
+        this.levelIndex = i;
         this.width = preset.width;
         this.height = preset.height;
         this.fps = preset.fps;
         this.canvas.width = preset.width;
         this.canvas.height = preset.height;
-        this.outputStream = this.canvas.captureStream(preset.fps);
+        // Captured at the top of the ladder. Shedding later throttles how often
+        // we redraw rather than recreating the track, so the recorder — and the
+        // single continuous WebM stream it feeds — is never interrupted.
+        this.outputStream = this.canvas.captureStream(QUALITY_LEVELS[0].fps);
         break;
       } catch {
         this.outputStream = null;
@@ -184,13 +204,20 @@ export class StudioCompositor {
 
     const draw = () => {
       const start = performance.now();
+
+      // Honour the current rung's frame rate. Skipping a redraw leaves the
+      // canvas untouched, so the captured frame is identical to the last one and
+      // costs the encoder almost nothing — this is the load-shedding lever.
+      const interval = 1000 / this.fps;
+      if (start - this.lastDrawAt < interval - 1) return;
+      this.lastDrawAt = start;
+
       this.drawFrame();
       const elapsed = performance.now() - start;
-      const budget = 1000 / this.fps;
-      if (elapsed > budget * 1.5) {
+      if (elapsed > interval * 1.5) {
         this.missedFrames += 1;
-        if (this.missedFrames >= 3 && this.width > 1280) {
-          this.degradeResolution();
+        if (this.missedFrames >= 3) {
+          this.shedQuality();
         }
       } else {
         this.missedFrames = 0;
@@ -212,13 +239,41 @@ export class StudioCompositor {
     }
   }
 
-  private degradeResolution(): void {
-    if (this.width <= 1280 || !this.outputStream) return;
-    this.width = 1280;
-    this.height = 720;
-    this.canvas.width = 1280;
-    this.canvas.height = 720;
+  /**
+   * Steps down one rung of the quality ladder. Returns false at the bottom.
+   *
+   * Called both when this machine cannot draw fast enough and when the uplink
+   * cannot carry the result. Cheap and reversible-looking to the viewer: the
+   * relay scales whatever arrives back to the resolution agreed at the start of
+   * the broadcast, so the picture softens rather than cutting out.
+   */
+  shedQuality(): boolean {
+    if (!this.outputStream) return false;
+    if (this.levelIndex >= QUALITY_LEVELS.length - 1) return false;
+
+    this.levelIndex += 1;
+    const next = QUALITY_LEVELS[this.levelIndex];
+    this.width = next.width;
+    this.height = next.height;
+    this.fps = next.fps;
+    this.canvas.width = next.width;
+    this.canvas.height = next.height;
     this.missedFrames = 0;
+    return true;
+  }
+
+  /**
+   * Resolution and frame rate the broadcast is opening at, for the relay to
+   * scale to. Read once, immediately after start() — which may itself have
+   * settled below the top rung if the browser refused to capture 1080p.
+   */
+  getOutputSettings(): { width: number; height: number; fps: number } {
+    const level = QUALITY_LEVELS[this.levelIndex];
+    return { width: level.width, height: level.height, fps: level.fps };
+  }
+
+  getQualityLevel(): number {
+    return this.levelIndex;
   }
 
   private drawFrame(): void {
