@@ -96,10 +96,21 @@ export function Media({
   image,
   className,
   wrapperClassName,
+  priority = false,
 }: {
   image: SiteImage | null | undefined;
   className?: string;
   wrapperClassName?: string;
+  /**
+   * Load immediately instead of lazily. Set for anything above the fold.
+   *
+   * Lazy-loading the hero is an anti-pattern — it is the page's largest
+   * contentful paint, so deferring it delays the one image a visitor is
+   * guaranteed to see. It also fails outright wherever intersection is computed
+   * oddly (a transform-scaled iframe, a zero-size viewport at load), and the
+   * failure is silent: the image simply never appears.
+   */
+  priority?: boolean;
 }) {
   if (!image) return null;
 
@@ -118,7 +129,14 @@ export function Media({
       {/* eslint-disable-next-line @next/next/no-img-element -- src is an
           arbitrary church-supplied URL, so next/image remote patterns cannot
           enumerate it ahead of time. */}
-      <img src={image.src} alt={image.alt} className="site-media" loading="lazy" />
+      <img
+        src={image.src}
+        alt={image.alt}
+        className="site-media"
+        loading={priority ? "eager" : "lazy"}
+        fetchPriority={priority ? "high" : undefined}
+        decoding={priority ? "sync" : "async"}
+      />
     </div>
   );
 }

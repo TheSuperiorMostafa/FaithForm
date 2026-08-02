@@ -38,7 +38,26 @@ export function SitePreview({
   const [loading, setLoading] = useState(true);
   const [nonce, setNonce] = useState(0);
   const shellRef = useRef<HTMLDivElement | null>(null);
+  const frameRef = useRef<HTMLIFrameElement | null>(null);
   const [scale, setScale] = useState(1);
+
+  /**
+   * Wake any lazy image inside the frame.
+   *
+   * The frame is transform-scaled, and intersection inside a scaled iframe is
+   * unreliable — below-the-fold images can sit deferred forever, so a church
+   * sees a preview with photos missing that are really there. A preview that
+   * hides content defeats its own purpose, so this trades the (negligible, at
+   * this scale) lazy-loading win for showing the truth. Same-origin, so no
+   * change to the public site is needed.
+   */
+  const wakeImages = useCallback(() => {
+    const doc = frameRef.current?.contentDocument;
+    if (!doc) return;
+    doc.querySelectorAll("img[loading='lazy']").forEach((img) => {
+      img.setAttribute("loading", "eager");
+    });
+  }, []);
 
   const reload = useCallback(() => {
     setLoading(true);
@@ -128,10 +147,14 @@ export function SitePreview({
         ) : null}
 
         <iframe
+          ref={frameRef}
           key={`${device}-${nonce}`}
           title="Website preview"
           src={previewUrl}
-          onLoad={() => setLoading(false)}
+          onLoad={() => {
+            setLoading(false);
+            wakeImages();
+          }}
           // The preview is our own page on our own origin, but it can carry
           // church-authored custom CSS and embeds — sandbox it so a bad embed
           // can't reach the dashboard around it.

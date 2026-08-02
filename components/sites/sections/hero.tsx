@@ -31,7 +31,8 @@ function Hero({ content, ctx }: SectionComponentProps<HeroContent>) {
         ) : null}
       </div>
 
-      <Media image={content.image} className="site-hero-media" />
+      {/* The hero photo is the page's largest contentful paint — never lazy. */}
+      <Media image={content.image} className="site-hero-media" priority />
     </header>
   );
 }

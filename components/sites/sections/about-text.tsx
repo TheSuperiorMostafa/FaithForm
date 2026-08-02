@@ -38,7 +38,7 @@ function AboutText({ content, ctx }: SectionComponentProps<AboutTextContent>) {
         className={cn(centered && "site-head-center")}
       >
         {copy}
-        <Media image={content.image} className="site-figure" />
+        <Media image={content.image} className="site-figure" priority />
       </SectionShell>
     );
   }
@@ -47,7 +47,7 @@ function AboutText({ content, ctx }: SectionComponentProps<AboutTextContent>) {
     <SectionShell surface={content.surface} anchor={ctx.anchor}>
       <div className="site-split" style={{ "--site-split": ".95fr 1.05fr" } as React.CSSProperties}>
         {copy}
-        <Media image={content.image} className="site-figure" />
+        <Media image={content.image} className="site-figure" priority />
       </div>
     </SectionShell>
   );
