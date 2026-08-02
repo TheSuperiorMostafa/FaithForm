@@ -11,6 +11,27 @@ import { SermonFeedView } from "./sermon-feed-view";
  */
 export const sermonFeedSection = defineSection<SermonFeedContent>({
   type: "sermon_feed",
+  label: "Sermons",
+  // The messages themselves are managed in Website → Sermons rather than here,
+  // so this only exposes the framing copy around the feed.
+  fields: [
+    { key: "eyebrow", label: "Eyebrow", type: "text" },
+    { key: "headline", label: "Headline", type: "headline" },
+    {
+      key: "link",
+      label: "Header link",
+      type: "group",
+      fields: [
+        { key: "label", label: "Label", type: "text" },
+        { key: "href", label: "Link", type: "url" },
+      ],
+    },
+    {
+      key: "emptyMessage",
+      label: "Message when there are no sermons",
+      type: "text",
+    },
+  ],
   defaults: {
     eyebrow: null,
     headline: { lead: "Latest messages" },

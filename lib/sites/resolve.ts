@@ -90,6 +90,75 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 // ---------------------------------------------------------------------------
+// DIFF  (the inverse of deepMerge)
+// ---------------------------------------------------------------------------
+
+/**
+ * Structural equality. Arrays compare whole rather than element by element,
+ * mirroring the replace semantics on the way in -- a list is either the same
+ * list or a different one, never partially the same.
+ */
+function sameValue(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b)) return false;
+    if (a.length !== b.length) return false;
+    return a.every((item, i) => sameValue(item, b[i]));
+  }
+
+  if (isPlainObject(a) && isPlainObject(b)) {
+    const aKeys = Object.keys(a);
+    const bKeys = Object.keys(b);
+    if (aKeys.length !== bKeys.length) return false;
+    return aKeys.every((key) => sameValue(a[key], b[key]));
+  }
+
+  return false;
+}
+
+/**
+ * The minimal patch that turns `baseline` into `edited`.
+ *
+ * This is what the dashboard editor stores. Keeping it minimal is the whole
+ * reason site_overrides is a separate table from site_sections: a patch that
+ * held a full content snapshot would mask every later config regeneration
+ * behind stale copy, which is exactly the failure the split exists to prevent.
+ *
+ * A key present in `baseline` but absent from `edited` resolves to `null`
+ * rather than being dropped -- the editor deliberately clearing a field has to
+ * survive the merge, and only `null` does that (see deepMerge).
+ */
+export function diffPatch(
+  baseline: Record<string, unknown>,
+  edited: Record<string, unknown>,
+): Record<string, unknown> {
+  const patch: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(edited)) {
+    if (UNSAFE_KEYS.has(key)) continue;
+
+    const before = baseline[key];
+    if (sameValue(before, value)) continue;
+
+    if (isPlainObject(before) && isPlainObject(value)) {
+      const nested = diffPatch(before, value);
+      if (Object.keys(nested).length > 0) patch[key] = nested;
+      continue;
+    }
+
+    patch[key] = value;
+  }
+
+  for (const key of Object.keys(baseline)) {
+    if (UNSAFE_KEYS.has(key)) continue;
+    if (!(key in edited)) patch[key] = null;
+  }
+
+  return patch;
+}
+
+// ---------------------------------------------------------------------------
 // TOKENS
 // ---------------------------------------------------------------------------
 
@@ -231,16 +300,24 @@ function anchorFor(merged: Record<string, unknown>, type: string): string {
   return type.replace(/_/g, "-");
 }
 
-export function resolveSection(input: {
+/**
+ * Runs the cascade for one section.
+ *
+ * `includeSectionScope: false` stops just before the section's own override,
+ * which is what the dashboard editor diffs against: the value a field would
+ * have if this church had never hand-edited it. See `resolveSectionBaseline`.
+ */
+function runCascade(input: {
   row: SiteSectionRow;
   master: ErasedSectionMaster;
   theme: SiteThemeRow;
   profile: SiteProfile;
   overrides: OverrideIndex;
-  index: number;
-}): ResolvedSection {
-  const { row, master, theme, profile, overrides, index } = input;
+  includeSectionScope?: boolean;
+}): Record<string, unknown> {
+  const { row, master, theme, profile, overrides } = input;
 
+  // 1. master defaults
   let merged: Record<string, unknown> = { ...master.defaults };
 
   // 2. theme structural defaults for this section type
@@ -257,7 +334,48 @@ export function resolveSection(input: {
   // 5. hand edits, widest scope first so the narrowest wins
   merged = deepMerge(merged, scopedSectionPatch(overrides.church, row.type));
   merged = deepMerge(merged, scopedSectionPatch(overrides.page, row.type));
-  merged = deepMerge(merged, overrides.bySectionId.get(row.id)?.patch);
+
+  if (input.includeSectionScope !== false) {
+    merged = deepMerge(merged, overrides.bySectionId.get(row.id)?.patch);
+  }
+
+  return merged;
+}
+
+/**
+ * What this section's content would be with the church's own hand edits for it
+ * removed. The editor saves `diffPatch(baseline, edited)`, so a field left
+ * alone never enters the patch and a field reset to default drops back out.
+ */
+export function resolveSectionBaseline(input: {
+  row: SiteSectionRow;
+  master: ErasedSectionMaster;
+  theme: SiteThemeRow;
+  profile: SiteProfile;
+  overrides: SiteOverrideRow[];
+  pageId: string;
+}): Record<string, unknown> {
+  return runCascade({
+    row: input.row,
+    master: input.master,
+    theme: input.theme,
+    profile: input.profile,
+    overrides: indexOverrides(input.overrides, input.pageId),
+    includeSectionScope: false,
+  });
+}
+
+export function resolveSection(input: {
+  row: SiteSectionRow;
+  master: ErasedSectionMaster;
+  theme: SiteThemeRow;
+  profile: SiteProfile;
+  overrides: OverrideIndex;
+  index: number;
+}): ResolvedSection {
+  const { row, overrides, index } = input;
+
+  const merged = runCascade({ ...input, overrides });
 
   return {
     type: row.type,

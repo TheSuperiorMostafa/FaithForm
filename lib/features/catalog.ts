@@ -2,6 +2,7 @@ import {
   BookOpen,
   Contact,
   FolderOpen,
+  Globe,
   Heart,
   Megaphone,
   Phone,
@@ -32,6 +33,7 @@ export const FEATURE_KEYS = [
   "voice_assistant",
   "giving",
   "library",
+  "website",
 ] as const;
 
 export type FeatureKey = (typeof FEATURE_KEYS)[number];
@@ -116,6 +118,15 @@ export const FEATURES: FeatureDefinition[] = [
     href: "/dashboard/library",
     icon: FolderOpen,
     routes: ["/dashboard/library", "/dashboard/media"],
+  },
+  {
+    key: "website",
+    label: "Website",
+    description:
+      "Public church website — page content, design, sermon feed, and visitor messages.",
+    href: "/dashboard/website",
+    icon: Globe,
+    routes: ["/dashboard/website"],
   },
 ];
 

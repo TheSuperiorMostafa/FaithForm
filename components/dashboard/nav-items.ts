@@ -2,6 +2,7 @@ import {
   BookOpen,
   Building2,
   Contact,
+  Globe,
   Heart,
   LayoutDashboard,
   LifeBuoy,
@@ -91,6 +92,13 @@ export const navItems: NavItem[] = [
     href: "/dashboard/giving",
     icon: Heart,
     feature: "giving",
+  },
+  {
+    label: "Website",
+    shortLabel: "Site",
+    href: "/dashboard/website",
+    icon: Globe,
+    feature: "website",
   },
 ];
 

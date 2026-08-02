@@ -37,6 +37,33 @@ function ProgramsGrid({ content, ctx }: SectionComponentProps<ProgramsGridConten
 
 export const programsGridSection = defineSection<ProgramsGridContent>({
   type: "programs_grid",
+  label: "Programs",
+  fields: [
+    { key: "eyebrow", label: "Eyebrow", type: "text" },
+    { key: "headline", label: "Headline", type: "headline" },
+    {
+      key: "link",
+      label: "Header link",
+      type: "group",
+      fields: [
+        { key: "label", label: "Label", type: "text" },
+        { key: "href", label: "Link", type: "url" },
+      ],
+    },
+    {
+      key: "items",
+      label: "Programs",
+      type: "list",
+      addLabel: "Add program",
+      titleKey: "title",
+      itemFields: [
+        { key: "badge", label: "Badge letter", type: "text" },
+        { key: "when", label: "When", type: "text", help: "e.g. Sun · 9:45 AM" },
+        { key: "title", label: "Title", type: "text" },
+        { key: "body", label: "Description", type: "textarea" },
+      ],
+    },
+  ],
   defaults: {
     eyebrow: null,
     headline: { lead: "Find your people" },

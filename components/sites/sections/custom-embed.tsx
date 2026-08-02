@@ -38,6 +38,10 @@ function CustomEmbed({ content, ctx }: SectionComponentProps<CustomEmbedContent>
 
 export const customEmbedSection = defineSection<CustomEmbedContent>({
   type: "custom_embed",
+  label: "Custom block",
+  // No `fields` on purpose. This renders raw HTML, so it stays agency-managed:
+  // the dashboard shows it as read-only and migration 0042 blocks church admins
+  // from writing it at the database level too.
   defaults: {
     html: "",
     surface: "canvas",

@@ -36,6 +36,26 @@ function StaffGrid({ content, ctx }: SectionComponentProps<StaffGridContent>) {
 
 export const staffGridSection = defineSection<StaffGridContent>({
   type: "staff_grid",
+  label: "Our team",
+  fields: [
+    { key: "eyebrow", label: "Eyebrow", type: "text" },
+    { key: "headline", label: "Headline", type: "headline" },
+    { key: "note", label: "Side note", type: "textarea" },
+    {
+      key: "members",
+      label: "People",
+      type: "list",
+      addLabel: "Add person",
+      titleKey: "name",
+      help: "Left empty, this follows the public staff in Church Profile — edit there and it updates everywhere.",
+      itemFields: [
+        { key: "name", label: "Name", type: "text" },
+        { key: "role", label: "Role", type: "text" },
+        { key: "bio", label: "Short bio", type: "textarea" },
+        { key: "photo", label: "Photo", type: "image" },
+      ],
+    },
+  ],
   defaults: {
     eyebrow: null,
     headline: { lead: "Our team" },

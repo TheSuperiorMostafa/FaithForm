@@ -105,6 +105,35 @@ function FooterMap({ content, ctx }: SectionComponentProps<FooterMapContent>) {
 
 export const footerMapSection = defineSection<FooterMapContent>({
   type: "footer_map",
+  label: "Footer",
+  fields: [
+    { key: "title", label: "Site name", type: "text" },
+    { key: "subtitle", label: "Sub-line", type: "text" },
+    { key: "blurb", label: "Short blurb", type: "textarea" },
+    {
+      key: "extraColumns",
+      label: "Link columns",
+      type: "list",
+      addLabel: "Add column",
+      titleKey: "heading",
+      help: "The service-times column is added automatically from Church Profile.",
+      itemFields: [
+        { key: "heading", label: "Heading", type: "text" },
+        {
+          key: "links",
+          label: "Links",
+          type: "list",
+          addLabel: "Add link",
+          titleKey: "label",
+          itemFields: [
+            { key: "label", label: "Label", type: "text" },
+            { key: "href", label: "Link", type: "url" },
+          ],
+        },
+      ],
+    },
+    { key: "copyright", label: "Copyright line", type: "text" },
+  ],
   defaults: {
     logo: null,
     title: "",

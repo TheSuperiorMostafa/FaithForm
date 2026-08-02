@@ -55,6 +55,24 @@ function AboutText({ content, ctx }: SectionComponentProps<AboutTextContent>) {
 
 export const aboutTextSection = defineSection<AboutTextContent>({
   type: "about_text",
+  label: "About",
+  fields: [
+    { key: "eyebrow", label: "Eyebrow", type: "text" },
+    { key: "headline", label: "Headline", type: "headline" },
+    { key: "body", label: "Paragraphs", type: "paragraphs" },
+    {
+      key: "stats",
+      label: "Numbers",
+      type: "list",
+      addLabel: "Add number",
+      titleKey: "value",
+      itemFields: [
+        { key: "value", label: "Number", type: "text", help: "e.g. 70+" },
+        { key: "label", label: "Caption", type: "text" },
+      ],
+    },
+    { key: "image", label: "Image", type: "image" },
+  ],
   defaults: {
     eyebrow: null,
     headline: { lead: "About us" },

@@ -57,6 +57,41 @@ function VisitCta({ content, ctx }: SectionComponentProps<VisitCtaContent>) {
 
 export const visitCtaSection = defineSection<VisitCtaContent>({
   type: "visit_cta",
+  label: "Plan a visit",
+  fields: [
+    { key: "eyebrow", label: "Eyebrow", type: "text" },
+    { key: "headline", label: "Headline", type: "headline" },
+    { key: "body", label: "Intro paragraph", type: "textarea" },
+    { key: "panelHeading", label: "Panel heading", type: "text" },
+    {
+      key: "facts",
+      label: "What to know",
+      type: "list",
+      addLabel: "Add point",
+      titleKey: "title",
+      itemFields: [
+        { key: "icon", label: "Icon", type: "text", help: "A single character or emoji." },
+        { key: "title", label: "Title", type: "text" },
+        { key: "body", label: "Description", type: "textarea" },
+      ],
+    },
+    {
+      key: "form",
+      label: "Contact form",
+      type: "group",
+      help: "Messages arrive in Website → Messages and are emailed to your church.",
+      fields: [
+        { key: "enabled", label: "Show the form", type: "toggle" },
+        { key: "heading", label: "Form heading", type: "text" },
+        { key: "description", label: "Form intro", type: "textarea" },
+        { key: "submitLabel", label: "Button label", type: "text" },
+        { key: "successMessage", label: "Thank-you message", type: "textarea" },
+        { key: "showPhone", label: "Ask for a phone number", type: "toggle" },
+        { key: "showMessage", label: "Ask for a message", type: "toggle" },
+        { key: "consentNote", label: "Small print", type: "text" },
+      ],
+    },
+  ],
   defaults: {
     eyebrow: null,
     headline: { lead: "Know what to expect before you walk in." },

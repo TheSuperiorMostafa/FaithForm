@@ -297,6 +297,173 @@ async function getTheme(key: string): Promise<SiteThemeRow | null> {
   };
 }
 
+// ---------------------------------------------------------------------------
+// DASHBOARD READS
+// ---------------------------------------------------------------------------
+// The public path above is keyed by slug because that is what a hostname
+// resolves to. The dashboard already knows its church_id, so these skip the
+// lookup and scope directly.
+
+export type WebsiteAdminBundle = SiteBundle & { slug: string };
+
+/**
+ * Everything the Website section needs, or null when this church has no site
+ * yet -- which the dashboard renders as an empty state rather than an error.
+ */
+export async function getWebsiteForChurch(
+  churchId: string,
+): Promise<WebsiteAdminBundle | null> {
+  const supabase = createAdminClient();
+
+  const { data, error } = await supabase
+    .from("churches")
+    .select("slug")
+    .eq("id", churchId)
+    .maybeSingle();
+
+  const slug = (data?.slug as string | null) ?? null;
+  if (error || !slug) return null;
+
+  const bundle = await getSiteBundle(slug);
+  if (!bundle) return null;
+
+  return { ...bundle, slug };
+}
+
+export type SiteDomainRow = {
+  id: string;
+  hostname: string;
+  isPrimary: boolean;
+  verifiedAt: string | null;
+};
+
+export async function getSiteDomains(churchId: string): Promise<SiteDomainRow[]> {
+  const supabase = createAdminClient();
+
+  const { data } = await supabase
+    .from("site_domains")
+    .select("id, hostname, is_primary, verified_at")
+    .eq("church_id", churchId)
+    .order("is_primary", { ascending: false });
+
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    hostname: row.hostname as string,
+    isPrimary: Boolean(row.is_primary),
+    verifiedAt: (row.verified_at as string | null) ?? null,
+  }));
+}
+
+export type SiteMediaRow = {
+  id: string;
+  title: string;
+  series: string | null;
+  speaker: string | null;
+  publishedAt: string | null;
+  videoUrl: string | null;
+  thumbnailUrl: string | null;
+  isPublished: boolean;
+  sortOrder: number;
+};
+
+/** Unlike the public feed this includes unpublished rows, so drafts are visible. */
+export async function getSiteMediaForChurch(
+  churchId: string,
+): Promise<SiteMediaRow[]> {
+  const supabase = createAdminClient();
+
+  const { data } = await supabase
+    .from("site_media")
+    .select(
+      "id, title, series, speaker, published_at, video_url, thumbnail_url, is_published, sort_order",
+    )
+    .eq("church_id", churchId)
+    .order("published_at", { ascending: false, nullsFirst: false })
+    .order("sort_order", { ascending: true });
+
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    title: row.title as string,
+    series: (row.series as string | null) ?? null,
+    speaker: (row.speaker as string | null) ?? null,
+    publishedAt: (row.published_at as string | null) ?? null,
+    videoUrl: (row.video_url as string | null) ?? null,
+    thumbnailUrl: (row.thumbnail_url as string | null) ?? null,
+    isPublished: row.is_published !== false,
+    sortOrder: (row.sort_order as number) ?? 0,
+  }));
+}
+
+export type ContactSubmissionRow = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string | null;
+  message: string | null;
+  status: "new" | "read" | "archived";
+  emailedAt: string | null;
+  createdAt: string;
+};
+
+export async function getContactSubmissions(
+  churchId: string,
+  status?: "new" | "read" | "archived",
+): Promise<ContactSubmissionRow[]> {
+  const supabase = createAdminClient();
+
+  let query = supabase
+    .from("site_contact_submissions")
+    .select("id, name, email, phone, message, status, emailed_at, created_at")
+    .eq("church_id", churchId)
+    .order("created_at", { ascending: false })
+    .limit(200);
+
+  if (status) query = query.eq("status", status);
+
+  const { data } = await query;
+
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    name: row.name as string,
+    email: row.email as string,
+    phone: (row.phone as string | null) ?? null,
+    message: (row.message as string | null) ?? null,
+    status: (row.status as ContactSubmissionRow["status"]) ?? "new",
+    emailedAt: (row.emailed_at as string | null) ?? null,
+    createdAt: row.created_at as string,
+  }));
+}
+
+export async function countNewSubmissions(churchId: string): Promise<number> {
+  const supabase = createAdminClient();
+
+  const { count } = await supabase
+    .from("site_contact_submissions")
+    .select("id", { count: "exact", head: true })
+    .eq("church_id", churchId)
+    .eq("status", "new");
+
+  return count ?? 0;
+}
+
+export type SiteThemeOption = { key: string; name: string; description: string | null };
+
+export async function getSiteThemes(): Promise<SiteThemeOption[]> {
+  const supabase = createAdminClient();
+
+  const { data } = await supabase
+    .from("site_themes")
+    .select("key, name, description")
+    .eq("is_active", true)
+    .order("name", { ascending: true });
+
+  return (data ?? []).map((row) => ({
+    key: row.key as string,
+    name: row.name as string,
+    description: (row.description as string | null) ?? null,
+  }));
+}
+
 /** Minimal lookup for the contact route: recipient plus display name. */
 export async function getContactTargetBySlug(slug: string): Promise<{
   churchId: string;

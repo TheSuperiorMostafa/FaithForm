@@ -40,6 +40,21 @@ function ServiceTimes({ content, ctx }: SectionComponentProps<ServiceTimesConten
 
 export const serviceTimesSection = defineSection<ServiceTimesContent>({
   type: "service_times",
+  label: "Service times strip",
+  fields: [
+    {
+      key: "items",
+      label: "Cells",
+      type: "list",
+      addLabel: "Add cell",
+      titleKey: "label",
+      help: "Left empty, this tracks the service times and address in Church Profile. Editing here stops that.",
+      itemFields: [
+        { key: "label", label: "Label", type: "text" },
+        { key: "value", label: "Time", type: "text" },
+      ],
+    },
+  ],
   defaults: {
     items: [],
     columns: 4,

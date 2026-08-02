@@ -29,6 +29,46 @@ export type DeepPartial<T> = T extends readonly unknown[]
     ? { [K in keyof T]?: DeepPartial<T[K]> }
     : T;
 
+/**
+ * The editable surface a section exposes in the dashboard.
+ *
+ * A master already declares its content contract; declaring its *editable*
+ * surface in the same place keeps the "add a master, get a capability" property
+ * true of the editor too. One generic form walks these descriptors, so there
+ * are no per-section-type form components to drift out of sync with the types.
+ *
+ * Anything omitted here is simply not church-editable — surfaces and column
+ * counts are theme decisions, and leaving them out is how that stays true.
+ */
+export type SectionField =
+  | { key: string; label: string; type: "text" | "textarea" | "url"; help?: string }
+  /** lead / accent / trail — the serif-italic span is its own input. */
+  | { key: string; label: string; type: "headline"; help?: string }
+  /** src / alt / placeholder caption. */
+  | { key: string; label: string; type: "image"; help?: string }
+  /** string[] rendered as one textarea per paragraph. */
+  | { key: string; label: string; type: "paragraphs"; help?: string }
+  | { key: string; label: string; type: "toggle"; help?: string }
+  | { key: string; label: string; type: "number"; min?: number; max?: number; help?: string }
+  | {
+      key: string;
+      label: string;
+      type: "select";
+      options: { value: string; label: string }[];
+      help?: string;
+    }
+  | { key: string; label: string; type: "group"; fields: SectionField[]; help?: string }
+  | {
+      key: string;
+      label: string;
+      type: "list";
+      addLabel: string;
+      itemFields: SectionField[];
+      /** Which item field to show as the row title when collapsed. */
+      titleKey?: string;
+      help?: string;
+    };
+
 export type SectionContext = {
   /** site_sections row id. Stable across renders; useful for React keys. */
   id: string;
@@ -46,6 +86,8 @@ export type SectionComponentProps<TContent> = {
 export type SectionMaster<TContent> = {
   /** Matches site_sections.type. */
   type: string;
+  /** Human label for the dashboard section list. Falls back to the type. */
+  label?: string;
   /**
    * Cascade level 1. Must be a complete, renderable content object -- a
    * section with no config at all still has to produce a sensible page.
@@ -60,6 +102,11 @@ export type SectionMaster<TContent> = {
    * render an empty section, so a derive with no data must omit the key.
    */
   derive?: (profile: SiteProfile) => DeepPartial<TContent>;
+  /**
+   * What a church admin may edit in the dashboard. Omit to make the section
+   * structural-only (the escape hatch does this — its content is agency-managed).
+   */
+  fields?: SectionField[];
   Component: ComponentType<SectionComponentProps<TContent>>;
 };
 
@@ -73,8 +120,11 @@ export type SectionMaster<TContent> = {
  */
 export type ErasedSectionMaster = {
   type: string;
+  /** Human label for the dashboard section list. */
+  label?: string;
   defaults: Record<string, unknown>;
   derive?: (profile: SiteProfile) => Record<string, unknown>;
+  fields?: SectionField[];
   Component: ComponentType<SectionComponentProps<Record<string, unknown>>>;
 };
 

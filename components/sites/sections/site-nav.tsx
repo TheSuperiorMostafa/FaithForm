@@ -41,6 +41,36 @@ function SiteNav({ content, ctx }: SectionComponentProps<NavContent>) {
 
 export const siteNavSection = defineSection<NavContent>({
   type: "site_nav",
+  label: "Navigation",
+  fields: [
+    {
+      key: "title",
+      label: "Site name",
+      type: "text",
+      help: "Defaults to your church name. Set it here if the masthead should read differently.",
+    },
+    { key: "subtitle", label: "Sub-line", type: "text" },
+    {
+      key: "links",
+      label: "Menu links",
+      type: "list",
+      addLabel: "Add link",
+      titleKey: "label",
+      itemFields: [
+        { key: "label", label: "Label", type: "text" },
+        { key: "href", label: "Link", type: "url", help: "Use #about to jump to a section." },
+      ],
+    },
+    {
+      key: "cta",
+      label: "Button",
+      type: "group",
+      fields: [
+        { key: "label", label: "Label", type: "text" },
+        { key: "href", label: "Link", type: "url" },
+      ],
+    },
+  ],
   defaults: {
     logo: null,
     title: "",

@@ -38,6 +38,33 @@ function Hero({ content, ctx }: SectionComponentProps<HeroContent>) {
 
 export const heroSection = defineSection<HeroContent>({
   type: "hero",
+  label: "Hero",
+  fields: [
+    { key: "eyebrow", label: "Eyebrow", type: "text", help: "Small line above the headline." },
+    { key: "headline", label: "Headline", type: "headline" },
+    { key: "body", label: "Intro paragraph", type: "textarea" },
+    {
+      key: "actions",
+      label: "Buttons",
+      type: "list",
+      addLabel: "Add button",
+      titleKey: "label",
+      itemFields: [
+        { key: "label", label: "Label", type: "text" },
+        { key: "href", label: "Link", type: "url" },
+        {
+          key: "variant",
+          label: "Style",
+          type: "select",
+          options: [
+            { value: "solid", label: "Solid" },
+            { value: "outline", label: "Outline" },
+          ],
+        },
+      ],
+    },
+    { key: "image", label: "Image", type: "image" },
+  ],
   defaults: {
     eyebrow: null,
     headline: { lead: "Welcome home." },

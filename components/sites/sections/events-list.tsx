@@ -45,6 +45,30 @@ function EventsList({ content, ctx }: SectionComponentProps<EventsListContent>) 
 
 export const eventsListSection = defineSection<EventsListContent>({
   type: "events_list",
+  label: "Events",
+  fields: [
+    { key: "eyebrow", label: "Eyebrow", type: "text" },
+    { key: "headline", label: "Headline", type: "headline" },
+    {
+      key: "emptyMessage",
+      label: "Message when nothing is scheduled",
+      type: "text",
+    },
+    {
+      key: "items",
+      label: "Events",
+      type: "list",
+      addLabel: "Add event",
+      titleKey: "title",
+      help: "Left empty, this shows your approved announcements with an upcoming date.",
+      itemFields: [
+        { key: "title", label: "Title", type: "text" },
+        { key: "date", label: "Date", type: "text" },
+        { key: "location", label: "Location", type: "text" },
+        { key: "note", label: "Note", type: "textarea" },
+      ],
+    },
+  ],
   defaults: {
     eyebrow: null,
     headline: { lead: "What's coming up" },
