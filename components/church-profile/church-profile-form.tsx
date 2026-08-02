@@ -773,7 +773,7 @@ export function ChurchProfileForm({ initialForm, isAdmin }: ChurchProfileFormPro
           <CardTitle>Social media</CardTitle>
           <p className="text-sm text-muted-foreground">
             Public profile links. OAuth connections for posting stay in{" "}
-            <Link href="/dashboard/settings" className="text-accent underline">
+            <Link href="/dashboard/settings?tab=integrations" className="text-accent underline">
               Settings
             </Link>
             .

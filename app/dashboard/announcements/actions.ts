@@ -552,13 +552,5 @@ export async function deleteAnnouncement(id: string) {
   return { success: true };
 }
 
-export async function disconnectIntegration(provider: "google" | "facebook") {
-  const ctx = await requireChurchAndUser();
-  if (!ctx.churchId) return { error: "No church linked" };
-
-  const { deleteIntegration } = await import("@/lib/integrations/tokens");
-  await deleteIntegration(ctx.churchId, provider, ctx.supabase);
-
-  revalidatePath("/dashboard/settings");
-  return { success: true };
-}
+// Disconnecting moved to app/dashboard/settings/integration-actions.ts, where
+// every provider is handled in one place and admin rights are enforced.

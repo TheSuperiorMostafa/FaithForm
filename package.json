@@ -27,7 +27,8 @@
     "db:team-access": "node scripts/apply-team-access-migration.mjs",
     "db:church-sites": "node scripts/apply-church-sites-migration.mjs",
     "seed:demo-sites": "node scripts/seed-demo-sites.mjs",
-    "import:bible": "node scripts/import-bible-translations.mjs"
+    "import:bible": "node scripts/import-bible-translations.mjs",
+    "repair:facebook": "node scripts/repair-facebook-integrations.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.79",

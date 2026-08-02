@@ -5,7 +5,10 @@ import {
   GoogleReconnectRequiredError,
   isInvalidGrantError,
 } from "@/lib/integrations/google-oauth";
-import { deleteIntegration, getChurchCalendarId } from "@/lib/integrations/tokens";
+import {
+  getChurchCalendarId,
+  markIntegrationNeedsReconnect,
+} from "@/lib/integrations/tokens";
 import type { CalendarEventPreview } from "@/lib/integrations/types";
 
 export async function listCalendarEventsInRange(
@@ -30,7 +33,12 @@ export async function listCalendarEventsInRange(
     }));
   } catch (err) {
     if (isInvalidGrantError(err)) {
-      await deleteIntegration(churchId, "google", supabase);
+      await markIntegrationNeedsReconnect(
+        churchId,
+        "google",
+        "Google access was revoked or expired. Reconnect Google in Settings.",
+        supabase,
+      );
       throw new GoogleReconnectRequiredError();
     }
     throw err;
@@ -89,7 +97,12 @@ export async function insertCalendarEvent(
     }));
   } catch (err) {
     if (isInvalidGrantError(err)) {
-      await deleteIntegration(churchId, "google", supabase);
+      await markIntegrationNeedsReconnect(
+        churchId,
+        "google",
+        "Google access was revoked or expired. Reconnect Google in Settings.",
+        supabase,
+      );
       throw new GoogleReconnectRequiredError();
     }
     throw err;
@@ -170,7 +183,12 @@ export async function patchCalendarEvent(
     });
   } catch (err) {
     if (isInvalidGrantError(err)) {
-      await deleteIntegration(churchId, "google", supabase);
+      await markIntegrationNeedsReconnect(
+        churchId,
+        "google",
+        "Google access was revoked or expired. Reconnect Google in Settings.",
+        supabase,
+      );
       throw new GoogleReconnectRequiredError();
     }
     throw err;

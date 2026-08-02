@@ -121,7 +121,7 @@ export default async function AnnouncementsPage() {
             <Button variant="outline">Email template</Button>
           </Link>
           {!googleConnected && (
-            <Link href="/dashboard/settings">
+            <Link href="/dashboard/settings?tab=integrations">
               <Button variant="outline">Connect Google</Button>
             </Link>
           )}

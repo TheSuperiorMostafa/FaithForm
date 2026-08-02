@@ -354,6 +354,8 @@ export async function getLiveBroadcastStatus(
         // Destination the relay will actually push to this service.
         destinationReady: Boolean(settings.youtubeUrl),
         lastPush: syndication.youtube ?? null,
+        needsReconnect: integrationStatus.youtube.needsReconnect,
+        reconnectReason: integrationStatus.youtube.reconnectReason,
       },
       facebook: {
         connected: integrationStatus.facebook.connected,
@@ -361,6 +363,8 @@ export async function getLiveBroadcastStatus(
         pageName: integrationStatus.facebook.pageName,
         destinationReady: Boolean(settings.facebookUrl),
         lastPush: syndication.facebook ?? null,
+        needsReconnect: integrationStatus.facebook.needsReconnect,
+        reconnectReason: integrationStatus.facebook.reconnectReason,
       },
     },
   };

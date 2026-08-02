@@ -2,11 +2,14 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { google, type youtube_v3 } from "googleapis";
 import {
   isInvalidGrantError,
+  REFRESH_SKEW_MS,
+  refreshWithRetry,
   resolveGoogleOAuthRedirectUri,
 } from "@/lib/integrations/google-oauth";
 import {
-  deleteIntegration,
+  clearReconnectFlags,
   getIntegration,
+  markIntegrationNeedsReconnect,
   saveIntegration,
 } from "@/lib/integrations/tokens";
 import type { YouTubeIntegrationMetadata } from "@/lib/integrations/types";
@@ -85,54 +88,77 @@ export async function getYouTubeAuthClient(
       : undefined,
   });
 
-  const persist = async (tokens: {
-    access_token?: string | null;
-    refresh_token?: string | null;
-    expiry_date?: number | null;
-  }) => {
-    if (!tokens.access_token) return;
+  const persistCredentials = async () => {
+    const creds = client.credentials;
+    if (!creds.access_token) return;
     await saveIntegration(
       {
         churchId,
         provider: "youtube",
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token ?? integration.refresh_token,
-        tokenExpiresAt: tokens.expiry_date
-          ? new Date(tokens.expiry_date)
-          : integration.token_expires_at
-            ? new Date(integration.token_expires_at)
-            : null,
-        metadata: integration.metadata ?? {},
+        accessToken: creds.access_token,
+        refreshToken: creds.refresh_token ?? integration.refresh_token,
+        // `undefined` keeps the stored expiry instead of blanking it.
+        tokenExpiresAt: creds.expiry_date
+          ? new Date(creds.expiry_date)
+          : undefined,
+        metadata: clearReconnectFlags(integration.metadata),
         connectedBy: integration.connected_by ?? undefined,
       },
       supabase,
     );
   };
 
-  client.on("tokens", (tokens) => {
-    void persist(tokens);
+  // Catches refreshes googleapis performs mid-request. The emitter does not
+  // await listeners, so this cannot be the only persistence path.
+  client.on("tokens", () => {
+    void persistCredentials().catch((err) => {
+      console.error("youtube token persist (event):", err);
+    });
   });
 
   const expiresAt = integration.token_expires_at
     ? new Date(integration.token_expires_at).getTime()
     : 0;
   const needsRefresh =
-    !integration.access_token || expiresAt - Date.now() < 60_000;
+    !integration.access_token || expiresAt - Date.now() < REFRESH_SKEW_MS;
 
   if (needsRefresh) {
     if (!integration.refresh_token) {
-      await deleteIntegration(churchId, "youtube", supabase);
+      await markIntegrationNeedsReconnect(
+        churchId,
+        "youtube",
+        "YouTube did not return a refresh token. Reconnect YouTube in Settings.",
+        supabase,
+      );
       throw new YouTubeReconnectRequiredError();
     }
+
     try {
-      await client.getAccessToken();
+      await refreshWithRetry(client);
     } catch (err) {
       if (isInvalidGrantError(err)) {
-        await deleteIntegration(churchId, "youtube", supabase);
+        await markIntegrationNeedsReconnect(
+          churchId,
+          "youtube",
+          "YouTube access was revoked or expired. Reconnect YouTube in Settings.",
+          supabase,
+        );
         throw new YouTubeReconnectRequiredError();
       }
       throw err;
     }
+
+    // Awaited: on serverless the instance freezes right after the response, and
+    // a lost write here means a lost (rotated) refresh token next time.
+    await persistCredentials();
+
+    return {
+      client,
+      integration: {
+        ...integration,
+        access_token: client.credentials.access_token ?? integration.access_token,
+      },
+    };
   }
 
   return { client, integration };
@@ -367,10 +393,19 @@ export async function exchangeYouTubeCode(
     }
   }
 
+  // Keep the reusable ingest stream id across reconnects — recreating it
+  // changes the RTMP key and orphans the stream on the channel.
+  const existing = await getIntegration(churchId, "youtube", supabase);
+  const existingMeta = clearReconnectFlags(
+    existing?.metadata,
+  ) as YouTubeIntegrationMetadata;
+
   const metadata: YouTubeIntegrationMetadata = {
-    channel_id: channel?.id ?? undefined,
+    ...existingMeta,
+    channel_id: channel?.id ?? existingMeta.channel_id,
     channel_title: channelTitle,
     can_manage_live: canManageLive,
+    connected_at: new Date().toISOString(),
   };
 
   await saveIntegration(
@@ -378,7 +413,9 @@ export async function exchangeYouTubeCode(
       churchId,
       provider: "youtube",
       accessToken: tokens.access_token,
-      refreshToken: tokens.refresh_token ?? null,
+      // Google omits the refresh token when it considers one already granted;
+      // `undefined` keeps the stored one rather than blanking it.
+      refreshToken: tokens.refresh_token ?? undefined,
       tokenExpiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
       metadata,
       connectedBy: userId,
@@ -412,21 +449,16 @@ export async function provisionYouTubeLiveForChurch(
 
   // Persist only the metadata. The token columns are owned by
   // getYouTubeAuthClient's refresh handler — rewriting them here would put the
-  // pre-refresh (expired) access token back into the row.
+  // pre-refresh (expired) access token back into the row. Omitting the refresh
+  // token and expiry leaves saveIntegration to carry the stored values over.
   const current = await getIntegration(churchId, "youtube", supabase);
   await saveIntegration(
     {
       churchId,
       provider: "youtube",
-      accessToken: current?.access_token ?? integration.access_token,
-      refreshToken: current?.refresh_token ?? integration.refresh_token,
-      tokenExpiresAt: current?.token_expires_at
-        ? new Date(current.token_expires_at)
-        : integration.token_expires_at
-          ? new Date(integration.token_expires_at)
-          : null,
+      accessToken: current?.access_token || integration.access_token,
       metadata: {
-        ...existingMeta,
+        ...clearReconnectFlags(existingMeta),
         live_stream_id: streamId,
         live_broadcast_id: broadcastId,
       },

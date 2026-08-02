@@ -1,29 +1,24 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { provisionFacebookLiveRtmpUrl } from "@/lib/integrations/facebook-live";
 import {
-  getIntegration,
-  saveIntegration,
-} from "@/lib/integrations/tokens";
+  exchangeForLongLivedUserToken,
+  FacebookReconnectRequiredError,
+  fetchFacebookPages,
+  getFacebookConfig,
+  getFacebookPageAccessToken,
+  GRAPH,
+  isFacebookAuthError,
+  refreshFacebookPageToken,
+} from "@/lib/integrations/facebook-token";
+import { markIntegrationNeedsReconnect, saveIntegration } from "@/lib/integrations/tokens";
 import type { FacebookIntegrationMetadata } from "@/lib/integrations/types";
-import { absoluteAppPath } from "@/lib/site-url";
 import { setStreamRelayDestination } from "@/lib/stream/relay";
 import { shiftYmd, toYMD, zonedDateTimeToUtcMs } from "@/lib/utils/dates";
 
-const GRAPH = "https://graph.facebook.com/v21.0";
-
-function getFacebookConfig() {
-  const appId = process.env.FACEBOOK_APP_ID;
-  const appSecret = process.env.FACEBOOK_APP_SECRET;
-  const redirectUri =
-    process.env.FACEBOOK_REDIRECT_URI?.trim() ||
-    absoluteAppPath("/api/integrations/facebook/callback");
-
-  if (!appId || !appSecret) {
-    throw new Error("Facebook OAuth is not configured");
-  }
-
-  return { appId, appSecret, redirectUri };
-}
+export {
+  FacebookReconnectRequiredError,
+  getFacebookPageAccessToken,
+} from "@/lib/integrations/facebook-token";
 
 export function getFacebookAuthUrl(state: string): string {
   const { appId, redirectUri } = getFacebookConfig();
@@ -68,23 +63,13 @@ export async function exchangeFacebookCode(
     throw new Error(tokenData.error?.message ?? "No Facebook access token");
   }
 
-  const pagesRes = await fetch(
-    `${GRAPH}/me/accounts?access_token=${tokenData.access_token}`,
-  );
-  const pagesData = (await pagesRes.json()) as {
-    data?: Array<{
-      id: string;
-      name: string;
-      access_token: string;
-    }>;
-    error?: { message: string };
-  };
+  const longLived = await exchangeForLongLivedUserToken(tokenData.access_token);
+  const pages = await fetchFacebookPages(longLived.token);
 
-  const page = pagesData.data?.[0];
+  const page = pages[0];
   if (!page) {
     throw new Error(
-      pagesData.error?.message ??
-        "No Facebook Pages found. Connect a Page to your account first.",
+      "No Facebook Pages found. Connect a Page to your account first.",
     );
   }
 
@@ -110,6 +95,8 @@ export async function exchangeFacebookCode(
     page_id: page.id,
     page_name: page.name,
     live_video_id: liveVideoId,
+    long_lived: longLived.token !== tokenData.access_token,
+    connected_at: new Date().toISOString(),
   };
 
   await saveIntegration(
@@ -117,8 +104,11 @@ export async function exchangeFacebookCode(
       churchId,
       provider: "facebook",
       accessToken: page.access_token,
-      refreshToken: null,
-      tokenExpiresAt: null,
+      // The long-lived user token is the credential that mints Page tokens, so
+      // it belongs in the refresh_token column. Metadata is readable by every
+      // church member through the status RPC; this must not go there.
+      refreshToken: longLived.token,
+      tokenExpiresAt: longLived.expiresAt,
       metadata,
       connectedBy: userId,
     },
@@ -149,61 +139,73 @@ export async function postAnnouncementToFacebookPage(
   options: FacebookAnnouncementPostOptions,
   supabase?: SupabaseClient,
 ): Promise<FacebookPostResult> {
-  const integration = await getIntegration(churchId, "facebook", supabase);
-  if (!integration) {
-    throw new Error("Facebook is not connected");
-  }
-
-  const meta = integration.metadata as FacebookIntegrationMetadata;
-  const pageId = meta.page_id;
-  if (!pageId) {
-    throw new Error("Facebook Page ID is missing");
-  }
-
+  const { token, pageId } = await getFacebookPageAccessToken(
+    churchId,
+    supabase,
+  );
   const scheduled = Boolean(options.scheduledPublishTime);
-  let res: Response;
 
-  if (options.imagePng) {
-    const form = new FormData();
-    form.append("message", options.message);
-    form.append("access_token", integration.access_token);
-    form.append(
-      "source",
-      new Blob([options.imagePng], { type: "image/png" }),
-      "announcement.png",
-    );
-    if (scheduled && options.scheduledPublishTime) {
-      form.append("published", "false");
+  const send = async (accessToken: string): Promise<Response> => {
+    if (options.imagePng) {
+      const form = new FormData();
+      form.append("message", options.message);
+      form.append("access_token", accessToken);
       form.append(
-        "scheduled_publish_time",
-        String(options.scheduledPublishTime),
+        "source",
+        new Blob([options.imagePng], { type: "image/png" }),
+        "announcement.png",
       );
+      if (scheduled && options.scheduledPublishTime) {
+        form.append("published", "false");
+        form.append(
+          "scheduled_publish_time",
+          String(options.scheduledPublishTime),
+        );
+      }
+      return fetch(`${GRAPH}/${pageId}/photos`, { method: "POST", body: form });
     }
-    res = await fetch(`${GRAPH}/${pageId}/photos`, {
-      method: "POST",
-      body: form,
-    });
-  } else {
+
     const body: Record<string, string | number | boolean> = {
       message: options.message,
-      access_token: integration.access_token,
+      access_token: accessToken,
     };
     if (scheduled && options.scheduledPublishTime) {
       body.published = false;
       body.scheduled_publish_time = options.scheduledPublishTime;
     }
-    res = await fetch(`${GRAPH}/${pageId}/feed`, {
+    return fetch(`${GRAPH}/${pageId}/feed`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-  }
+  };
 
-  const data = (await res.json()) as {
+  type PostResponse = {
     id?: string;
     post_id?: string;
-    error?: { message: string };
+    error?: { message?: string; code?: number; type?: string };
   };
+
+  let res = await send(token);
+  let data = (await res.json().catch(() => ({}))) as PostResponse;
+
+  // A rejected Page token is recoverable: mint a fresh one from the long-lived
+  // user token and retry once before asking anyone to reconnect.
+  if (!res.ok && data.error && isFacebookAuthError(data.error)) {
+    const refreshed = await refreshFacebookPageToken(churchId, supabase);
+    if (refreshed) {
+      res = await send(refreshed);
+      data = (await res.json().catch(() => ({}))) as PostResponse;
+    } else {
+      await markIntegrationNeedsReconnect(
+        churchId,
+        "facebook",
+        "Facebook access expired. Reconnect Facebook in Settings.",
+        supabase,
+      );
+      throw new FacebookReconnectRequiredError();
+    }
+  }
 
   const postId = data.id ?? data.post_id;
   if (!res.ok || !postId) {
@@ -237,14 +239,19 @@ export async function deleteFacebookPost(
   postId: string,
   supabase?: SupabaseClient,
 ): Promise<FacebookDeleteResult> {
-  const integration = await getIntegration(churchId, "facebook", supabase);
-  if (!integration) {
-    return { ok: false, error: "Facebook is not connected" };
+  let token: string;
+  try {
+    ({ token } = await getFacebookPageAccessToken(churchId, supabase));
+  } catch (err) {
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Facebook is not connected",
+    };
   }
 
   const res = await fetch(
     `${GRAPH}/${encodeURIComponent(postId)}?access_token=${encodeURIComponent(
-      integration.access_token,
+      token,
     )}`,
     { method: "DELETE" },
   );

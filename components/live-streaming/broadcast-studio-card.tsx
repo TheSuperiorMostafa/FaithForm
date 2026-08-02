@@ -355,7 +355,14 @@ export function BroadcastStudioCard({
 
         {isAdmin && !youtubeConnected && !facebookConnected && !isSyndicating ? (
           <p className="text-xs text-muted-foreground">
-            Connect YouTube or Facebook below to share when you go live.
+            Connect YouTube or Facebook in{" "}
+            <Link
+              href="/dashboard/settings?tab=integrations"
+              className="underline underline-offset-2 hover:text-foreground"
+            >
+              Settings → Integrations
+            </Link>{" "}
+            to share when you go live.
           </p>
         ) : null}
       </CardContent>

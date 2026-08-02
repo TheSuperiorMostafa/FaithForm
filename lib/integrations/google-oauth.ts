@@ -1,12 +1,22 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { google } from "googleapis";
 import {
-  deleteIntegration,
+  clearReconnectFlags,
   getIntegration,
+  markIntegrationNeedsReconnect,
   saveIntegration,
 } from "@/lib/integrations/tokens";
 import type { GoogleIntegrationMetadata } from "@/lib/integrations/types";
 import { absoluteAppPath } from "@/lib/site-url";
+
+/**
+ * Refresh this far ahead of expiry.
+ *
+ * Five minutes rather than one: a token that expires mid-request is
+ * indistinguishable from a revoked one at the call site, and the old margin
+ * left no room for clock skew between this host and Google.
+ */
+export const REFRESH_SKEW_MS = 5 * 60_000;
 
 const SCOPES = [
   "https://www.googleapis.com/auth/calendar.events",
@@ -52,6 +62,28 @@ export function isInvalidGrantError(error: unknown): boolean {
   return Boolean(anyErr.message?.toLowerCase().includes("invalid_grant"));
 }
 
+type RefreshableClient = { getAccessToken: () => Promise<unknown> };
+
+/**
+ * Refreshes an access token, retrying once on a transient failure.
+ *
+ * Google's token endpoint returns the occasional 5xx or drops the connection.
+ * Without a retry those blips were indistinguishable from a dead grant and
+ * escalated into a full disconnect, so a single backed-off attempt is worth it.
+ * `invalid_grant` is a real verdict and is rethrown immediately.
+ */
+export async function refreshWithRetry(
+  client: RefreshableClient,
+): Promise<void> {
+  try {
+    await client.getAccessToken();
+  } catch (err) {
+    if (isInvalidGrantError(err)) throw err;
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    await client.getAccessToken();
+  }
+}
+
 /**
  * Reads the Google integration and forces a token refresh when the access token
  * is missing or expired. If the refresh token is dead (`invalid_grant`), the
@@ -94,9 +126,17 @@ export async function exchangeGoogleCode(
   const oauth2 = google.oauth2({ version: "v2", auth: client });
   const { data: userInfo } = await oauth2.userinfo.get();
 
+  // Reconnecting must not reset the church's calendar selection.
+  const existing = await getIntegration(churchId, "google", supabase);
+  const existingMeta = clearReconnectFlags(
+    existing?.metadata,
+  ) as GoogleIntegrationMetadata;
+
   const metadata: GoogleIntegrationMetadata = {
-    email: userInfo.email ?? undefined,
-    calendar_id: "primary",
+    ...existingMeta,
+    email: userInfo.email ?? existingMeta.email,
+    calendar_id: existingMeta.calendar_id ?? "primary",
+    connected_at: new Date().toISOString(),
   };
 
   await saveIntegration(
@@ -104,7 +144,9 @@ export async function exchangeGoogleCode(
       churchId,
       provider: "google",
       accessToken: tokens.access_token,
-      refreshToken: tokens.refresh_token ?? null,
+      // Google omits the refresh token when it decides one is already held;
+      // `undefined` keeps the stored one rather than blanking it.
+      refreshToken: tokens.refresh_token ?? undefined,
       tokenExpiresAt: tokens.expiry_date ? new Date(tokens.expiry_date) : null,
       metadata,
       connectedBy: userId,
@@ -133,22 +175,34 @@ export async function getGoogleAuthClient(
       : undefined,
   });
 
-  client.on("tokens", async (tokens) => {
-    if (!tokens.access_token) return;
+  const persistCredentials = async () => {
+    const creds = client.credentials;
+    if (!creds.access_token) return;
     await saveIntegration(
       {
         churchId,
         provider: "google",
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token ?? integration.refresh_token,
-        tokenExpiresAt: tokens.expiry_date
-          ? new Date(tokens.expiry_date)
-          : null,
-        metadata: integration.metadata,
+        accessToken: creds.access_token,
+        refreshToken: creds.refresh_token ?? integration.refresh_token,
+        // `undefined` keeps the stored expiry. Writing null here forced a
+        // refresh on every single request.
+        tokenExpiresAt: creds.expiry_date
+          ? new Date(creds.expiry_date)
+          : undefined,
+        metadata: clearReconnectFlags(integration.metadata),
         connectedBy: integration.connected_by ?? undefined,
       },
       supabase,
     );
+  };
+
+  // Catches refreshes googleapis performs on its own later in the request.
+  // Fire-and-forget by necessity — the emitter does not await listeners — so
+  // the deterministic write below is what the proactive path relies on.
+  client.on("tokens", () => {
+    void persistCredentials().catch((err) => {
+      console.error("google token persist (event):", err);
+    });
   });
 
   // Proactively ensure we hold a live access token. This forces a refresh when
@@ -157,22 +211,40 @@ export async function getGoogleAuthClient(
   const expiresAt = integration.token_expires_at
     ? new Date(integration.token_expires_at).getTime()
     : 0;
-  const needsRefresh = !integration.access_token || expiresAt - Date.now() < 60_000;
+  const needsRefresh =
+    !integration.access_token || expiresAt - Date.now() < REFRESH_SKEW_MS;
 
   if (needsRefresh) {
     if (!integration.refresh_token) {
-      await deleteIntegration(churchId, "google", supabase);
+      await markIntegrationNeedsReconnect(
+        churchId,
+        "google",
+        "Google did not return a refresh token. Reconnect Google in Settings.",
+        supabase,
+      );
       throw new GoogleReconnectRequiredError();
     }
+
     try {
-      await client.getAccessToken();
+      await refreshWithRetry(client);
     } catch (err) {
       if (isInvalidGrantError(err)) {
-        await deleteIntegration(churchId, "google", supabase);
+        await markIntegrationNeedsReconnect(
+          churchId,
+          "google",
+          "Google access was revoked or expired. Reconnect Google in Settings.",
+          supabase,
+        );
         throw new GoogleReconnectRequiredError();
       }
       throw err;
     }
+
+    // Awaited on purpose: the `tokens` listener above cannot be awaited, and on
+    // serverless the instance freezes the moment the response is sent. Losing
+    // this write meant losing a rotated refresh token — the next request then
+    // failed with invalid_grant and the integration looked self-disconnecting.
+    await persistCredentials();
   }
 
   return client;

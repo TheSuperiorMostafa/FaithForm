@@ -1,9 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+// Imported from facebook-token rather than facebook to keep this module free of
+// a cycle — facebook.ts imports provisionFacebookLiveRtmpUrl from here.
+import {
+  getFacebookPageAccessToken,
+  GRAPH,
+} from "@/lib/integrations/facebook-token";
 import { getIntegration, saveIntegration } from "@/lib/integrations/tokens";
 import type { FacebookIntegrationMetadata } from "@/lib/integrations/types";
 import { setStreamRelayDestination } from "@/lib/stream/relay";
-
-const GRAPH = "https://graph.facebook.com/v21.0";
 
 export async function provisionFacebookLiveRtmpUrl(
   pageId: string,
@@ -51,15 +55,18 @@ export async function provisionFacebookLiveForChurch(
   }
 
   const metadata = (integration.metadata ?? {}) as FacebookIntegrationMetadata;
-  const pageId = metadata.page_id;
-  if (!pageId) {
-    throw new Error("Facebook Page ID is missing. Reconnect Facebook.");
-  }
+
+  // Resolves through the long-lived user token, so a Page token that went stale
+  // between services is re-minted here instead of failing the go-live.
+  const { token: pageToken, pageId } = await getFacebookPageAccessToken(
+    churchId,
+    supabase,
+  );
 
   const pageName = metadata.page_name ?? "FaithForm";
   const { rtmpUrl, liveVideoId } = await provisionFacebookLiveRtmpUrl(
     pageId,
-    integration.access_token,
+    pageToken,
     `${pageName} — FaithForm`,
   );
 
@@ -67,11 +74,9 @@ export async function provisionFacebookLiveForChurch(
     {
       churchId,
       provider: "facebook",
-      accessToken: integration.access_token,
-      refreshToken: integration.refresh_token,
-      tokenExpiresAt: integration.token_expires_at
-        ? new Date(integration.token_expires_at)
-        : null,
+      accessToken: pageToken,
+      // refreshToken/tokenExpiresAt omitted: this is a metadata write, and
+      // saveIntegration keeps the stored long-lived user token in place.
       metadata: {
         ...metadata,
         live_video_id: liveVideoId,

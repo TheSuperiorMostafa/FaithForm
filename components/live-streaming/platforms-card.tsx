@@ -24,6 +24,9 @@ export type PlatformPushState = {
   /** True once an RTMP destination is provisioned for the current service. */
   destinationReady: boolean;
   lastPush: SyndicationStatus | null;
+  /** Set when a stored connection went stale and needs re-authorization. */
+  needsReconnect?: boolean;
+  reconnectReason?: string | null;
 };
 
 type PlatformsCardProps = {
@@ -42,8 +45,8 @@ export function PlatformsCard({
       <CardHeader>
         <CardTitle className="text-base">Where to broadcast</CardTitle>
         <CardDescription>
-          Connect channels for syndication. RTMP destinations are provisioned when
-          you go live or when a scheduled service starts.
+          RTMP destinations are provisioned when you go live or when a scheduled
+          service starts. Channels are connected in Settings → Integrations.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -51,22 +54,30 @@ export function PlatformsCard({
           icon={<Play className="size-4 text-red-500" />}
           name="YouTube"
           state={youtube}
-          connectHref="/api/integrations/youtube/connect?return_to=/dashboard/live-streaming"
-          connectLabel="Connect YouTube"
           isAdmin={isAdmin}
         />
         <PlatformRow
           icon={<Share2 className="size-4 text-blue-500" />}
           name="Facebook"
           state={facebook}
-          connectHref="/api/integrations/facebook/connect?return_to=/dashboard/live-streaming"
-          connectLabel="Connect Facebook"
           isAdmin={isAdmin}
         />
+
+        {isAdmin && (
+          <Link
+            href={SETTINGS_INTEGRATIONS_HREF}
+            className="block text-xs font-medium text-accent hover:underline"
+          >
+            Manage integrations in Settings →
+          </Link>
+        )}
       </CardContent>
     </Card>
   );
 }
+
+/** All connect/disconnect flows live on the Settings → Integrations tab. */
+const SETTINGS_INTEGRATIONS_HREF = "/dashboard/settings?tab=integrations";
 
 function PushStatus({ state }: { state: PlatformPushState }) {
   if (state.lastPush?.status === "failed") {
@@ -111,15 +122,11 @@ function PlatformRow({
   icon,
   name,
   state,
-  connectHref,
-  connectLabel,
   isAdmin,
 }: {
   icon: React.ReactNode;
   name: string;
   state: PlatformPushState;
-  connectHref: string;
-  connectLabel: string;
   isAdmin: boolean;
 }) {
   return (
@@ -137,15 +144,19 @@ function PlatformRow({
               <PushStatus state={state} />
             </>
           ) : (
-            <p className="mt-0.5 text-xs text-muted-foreground">Not connected</p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {state.needsReconnect
+                ? (state.reconnectReason ?? "Reconnect needed")
+                : "Not connected"}
+            </p>
           )}
         </div>
       </div>
 
       {isAdmin && !state.connected ? (
-        <Link href={connectHref} className="shrink-0">
+        <Link href={SETTINGS_INTEGRATIONS_HREF} className="shrink-0">
           <Button size="sm" variant="outline">
-            {connectLabel}
+            {state.needsReconnect ? "Reconnect" : "Connect"} in Settings
           </Button>
         </Link>
       ) : null}

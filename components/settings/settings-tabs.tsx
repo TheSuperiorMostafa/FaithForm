@@ -38,6 +38,14 @@ type SettingsTabsProps = {
   allowedFeatures: FeatureKey[];
 };
 
+/** Params an OAuth callback appends when it returns to Settings. */
+const INTEGRATION_RESULT_PARAMS = [
+  "google_connected",
+  "facebook_connected",
+  "youtube_connected",
+  "integration_error",
+];
+
 function getDefaultTab(
   searchParams: URLSearchParams,
   visibleTabs: string[],
@@ -47,6 +55,12 @@ function getDefaultTab(
     visibleTabs.includes("giving")
   ) {
     return "giving";
+  }
+
+  // Land on Integrations after an OAuth round trip, so the result banner is
+  // visible even when the callback did not carry an explicit tab.
+  if (INTEGRATION_RESULT_PARAMS.some((param) => searchParams.get(param))) {
+    return "integrations";
   }
 
   const tab = searchParams.get("tab");
@@ -76,6 +90,7 @@ function SettingsTabsInner({
 
   const visibleTabs = [
     "general",
+    "integrations",
     "team",
     ...(showCommunications ? ["communications"] : []),
     ...(showAttendance ? ["attendance"] : []),
@@ -88,6 +103,7 @@ function SettingsTabsInner({
     <Tabs defaultValue={defaultTab} className="flex flex-col gap-4">
       <TabsList className="w-full justify-start overflow-x-auto">
         <TabsTrigger value="general">General</TabsTrigger>
+        <TabsTrigger value="integrations">Integrations</TabsTrigger>
         <TabsTrigger value="team">Team</TabsTrigger>
         {showCommunications && (
           <TabsTrigger value="communications">Communications</TabsTrigger>
@@ -98,12 +114,12 @@ function SettingsTabsInner({
         {showGiving && <TabsTrigger value="giving">Giving</TabsTrigger>}
       </TabsList>
 
+      <TabsContent value="integrations" className="mt-0">
+        <IntegrationsCard isAdmin={isAdmin} status={integrationStatus} />
+      </TabsContent>
+
       <TabsContent value="general" className="mt-0">
         <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
-          <div className="lg:col-span-2">
-            <IntegrationsCard isAdmin={isAdmin} status={integrationStatus} />
-          </div>
-
           <Card>
             <CardHeader className="pb-3">
               <CardTitle className="text-base">Display</CardTitle>

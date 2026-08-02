@@ -10,9 +10,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Admin access required" }, { status: 403 });
   }
 
+  // Integrations are managed in Settings, so that is where an unqualified
+  // connect returns. The live-streaming page passes its own return_to.
   const { searchParams } = new URL(request.url);
   const returnTo =
-    searchParams.get("return_to") ?? "/dashboard/live-streaming";
+    searchParams.get("return_to") ?? "/dashboard/settings?tab=integrations";
 
   try {
     const state = signOAuthState({

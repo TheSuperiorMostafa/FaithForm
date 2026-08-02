@@ -278,7 +278,7 @@ export function MonthCalendar({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Link href="/dashboard/settings">
+          <Link href="/dashboard/settings?tab=integrations">
             <Button>Go to Settings</Button>
           </Link>
         </CardContent>

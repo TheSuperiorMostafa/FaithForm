@@ -21,11 +21,15 @@ const EMPTY_STATUS = {
     connected: false,
     email: null as string | null,
     calendarId: "primary",
+    needsReconnect: false,
+    reconnectReason: null as string | null,
   },
   facebook: {
     connected: false,
     pageName: null as string | null,
     pageId: null as string | null,
+    needsReconnect: false,
+    reconnectReason: null as string | null,
   },
   stream: {
     connected: false,
@@ -37,6 +41,8 @@ const EMPTY_STATUS = {
     connected: false,
     channelId: null as string | null,
     channelTitle: null as string | null,
+    needsReconnect: false,
+    reconnectReason: null as string | null,
   },
 };
 
@@ -106,11 +112,17 @@ export async function getIntegrationStatus(
       connected: Boolean(google?.connected),
       email: googleMeta.email ?? null,
       calendarId: googleMeta.calendar_id ?? "primary",
+      needsReconnect: Boolean(!google?.connected && googleMeta.needs_reconnect),
+      reconnectReason: googleMeta.reconnect_reason ?? null,
     },
     facebook: {
       connected: Boolean(facebook?.connected),
       pageName: facebookMeta.page_name ?? null,
       pageId: facebookMeta.page_id ?? null,
+      needsReconnect: Boolean(
+        !facebook?.connected && facebookMeta.needs_reconnect,
+      ),
+      reconnectReason: facebookMeta.reconnect_reason ?? null,
     },
     stream: {
       connected: Boolean(stream?.connected),
@@ -122,9 +134,15 @@ export async function getIntegrationStatus(
       connected: Boolean(youtube?.connected),
       channelId: youtubeMeta.channel_id ?? null,
       channelTitle: youtubeMeta.channel_title ?? null,
+      needsReconnect: Boolean(
+        !youtube?.connected && youtubeMeta.needs_reconnect,
+      ),
+      reconnectReason: youtubeMeta.reconnect_reason ?? null,
     },
   };
 }
+
+export type IntegrationStatus = Awaited<ReturnType<typeof getIntegrationStatus>>;
 
 export async function hasIntegration(
   churchId: string,
@@ -195,24 +213,49 @@ export async function getIntegration(
   };
 }
 
+export type SaveIntegrationInput = {
+  churchId: string;
+  provider: IntegrationProvider;
+  accessToken: string;
+  /**
+   * `undefined` keeps whatever refresh token is already stored; `null` clears
+   * it. Omitting it is the safe default for metadata-only writes — an upsert
+   * that always wrote `null` here silently destroyed working credentials.
+   */
+  refreshToken?: string | null;
+  /** Same contract as `refreshToken`: `undefined` keeps, `null` clears. */
+  tokenExpiresAt?: Date | null;
+  metadata?: Record<string, unknown>;
+  connectedBy?: string;
+};
+
 export async function saveIntegration(
-  input: {
-    churchId: string;
-    provider: IntegrationProvider;
-    accessToken: string;
-    refreshToken?: string | null;
-    tokenExpiresAt?: Date | null;
-    metadata?: Record<string, unknown>;
-    connectedBy?: string;
-  },
+  input: SaveIntegrationInput,
   supabase?: SupabaseClient,
 ) {
+  // Only pay for a read when the caller left a token field unspecified.
+  const mustPreserve =
+    input.refreshToken === undefined || input.tokenExpiresAt === undefined;
+  const existing = mustPreserve
+    ? await getIntegration(input.churchId, input.provider, supabase)
+    : null;
+
+  const refreshToken =
+    input.refreshToken === undefined
+      ? (existing?.refresh_token ?? null)
+      : input.refreshToken;
+
+  const tokenExpiresAt =
+    input.tokenExpiresAt === undefined
+      ? (existing?.token_expires_at ?? null)
+      : (input.tokenExpiresAt?.toISOString() ?? null);
+
   const row = {
     church_id: input.churchId,
     provider: input.provider,
     access_token: input.accessToken,
-    refresh_token: input.refreshToken ?? null,
-    token_expires_at: input.tokenExpiresAt?.toISOString() ?? null,
+    refresh_token: refreshToken,
+    token_expires_at: tokenExpiresAt,
     metadata: input.metadata ?? {},
     connected_by: input.connectedBy ?? null,
   };
@@ -237,6 +280,69 @@ export async function saveIntegration(
     .upsert(row, { onConflict: "church_id,provider" });
 
   if (error) throw new Error(error.message);
+}
+
+/**
+ * Flags a connection as needing re-authorization without destroying it.
+ *
+ * Deleting the row on every refresh failure was the main reason integrations
+ * appeared to "disconnect on their own": one transient `invalid_grant` threw
+ * away the page id, channel id, calendar selection and reusable live stream id
+ * along with the tokens. Clearing the access token is enough for the status RPC
+ * to report it as disconnected, while the metadata survives for reconnect.
+ */
+export async function markIntegrationNeedsReconnect(
+  churchId: string,
+  provider: IntegrationProvider,
+  reason: string,
+  supabase?: SupabaseClient,
+) {
+  const existing = await getIntegration(churchId, provider, supabase);
+  if (!existing) return;
+
+  const metadata: Record<string, unknown> = {
+    ...(existing.metadata ?? {}),
+    needs_reconnect: true,
+    reconnect_reason: reason,
+    disconnected_at: new Date().toISOString(),
+  };
+
+  // A targeted update, not an upsert: `getIntegration` resolves through an RPC
+  // that does not return `connected_by`, so writing a whole row here would blank
+  // it. The refresh token is deliberately left in place — it is what lets the
+  // connection heal itself if the failure turns out to have been transient.
+  const patch = { access_token: "", metadata };
+
+  if (supabase) {
+    const { error } = await supabase
+      .from("church_integrations")
+      .update(patch)
+      .eq("church_id", churchId)
+      .eq("provider", provider);
+    if (!error) return;
+  }
+
+  const admin = createAdminClientOrNull();
+  if (!admin) return;
+
+  await admin
+    .from("church_integrations")
+    .update(patch)
+    .eq("church_id", churchId)
+    .eq("provider", provider);
+}
+
+/** Strips the reconnect flags a successful (re)connect makes stale. */
+export function clearReconnectFlags(
+  metadata: Record<string, unknown> | null | undefined,
+): Record<string, unknown> {
+  const {
+    needs_reconnect: _needsReconnect,
+    reconnect_reason: _reason,
+    disconnected_at: _disconnectedAt,
+    ...rest
+  } = (metadata ?? {}) as Record<string, unknown>;
+  return rest;
 }
 
 export async function deleteIntegration(

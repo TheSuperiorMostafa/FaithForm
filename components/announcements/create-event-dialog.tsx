@@ -184,7 +184,7 @@ export function CreateEventDialog({
                 <>
                   {" "}
                   <Link
-                    href="/dashboard/settings"
+                    href="/dashboard/settings?tab=integrations"
                     className="font-semibold underline underline-offset-2"
                   >
                     Reconnect Google
