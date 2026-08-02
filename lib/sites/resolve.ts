@@ -89,6 +89,32 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return isPlainObject(value) ? value : null;
 }
 
+/**
+ * Drops `src: null` from anywhere in a section's page config.
+ *
+ * Early generated configs wrote the profile's cover URL straight into
+ * `site_sections.props`, which is read *after* `derive(profile)` in the
+ * cascade. When a church had no cover photo yet, that stored a literal
+ * `src: null` — and a cover uploaded later was then permanently shadowed by it.
+ * The generator no longer does this, and stripping the leftover here means
+ * sites built before the fix pick their cover up without regenerating.
+ *
+ * Scoped to props on purpose. `site_overrides` may still carry an explicit
+ * `src: null`, because there it means what it says: a church removed the photo
+ * from this section and does not want the profile's cover standing in for it.
+ */
+function withoutNullImageSrc(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(withoutNullImageSrc);
+  if (!isPlainObject(value)) return value;
+
+  const out: Record<string, unknown> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (key === "src" && entry === null) continue;
+    out[key] = withoutNullImageSrc(entry);
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------------
 // DIFF  (the inverse of deepMerge)
 // ---------------------------------------------------------------------------
@@ -329,7 +355,7 @@ function runCascade(input: {
   }
 
   // 4. the page config
-  merged = deepMerge(merged, row.props);
+  merged = deepMerge(merged, asRecord(withoutNullImageSrc(row.props)));
 
   // 5. hand edits, widest scope first so the narrowest wins
   merged = deepMerge(merged, scopedSectionPatch(overrides.church, row.type));

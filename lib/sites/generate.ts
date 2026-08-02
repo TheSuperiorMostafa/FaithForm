@@ -298,11 +298,12 @@ export function buildSections(
               body: copy.hero.body,
             }
           : {}),
-        image: {
-          src: profile.coverImageUrl,
-          alt: "",
-          placeholder: "a photo of your congregation",
-        },
+        // No `src` on purpose. Writing the profile's cover URL here would bake
+        // a derived value into the config layer, which sits *after* derive() in
+        // the cascade — a cover photo added later would then be permanently
+        // shadowed by whatever the value was at build time. Only the caption
+        // shown while there is no photo belongs in the config.
+        image: { alt: "", placeholder: "a photo of your congregation" },
         actions: [
           { label: "Plan your visit", href: "#visit", variant: "solid" },
           ...(profile.media.length > 0
@@ -333,8 +334,8 @@ export function buildSections(
               stats: copy.about.stats.slice(0, 3),
             }
           : {}),
+        // Same reasoning as the hero: derive() owns `src`.
         image: {
-          src: null,
           alt: "",
           placeholder: "a photo of your building or a Sunday gathering",
         },
