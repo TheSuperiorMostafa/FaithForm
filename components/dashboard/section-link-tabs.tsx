@@ -57,7 +57,7 @@ export function SectionLinkTabs({ tabs, className }: SectionLinkTabsProps) {
             className={cn(
               "inline-flex min-h-9 shrink-0 items-center justify-center rounded-lg px-4 text-sm font-semibold transition-colors",
               active
-                ? "bg-background text-foreground shadow-sm"
+                ? "bg-primary text-primary-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
