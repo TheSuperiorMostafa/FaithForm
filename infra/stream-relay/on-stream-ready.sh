@@ -90,6 +90,57 @@ notify_lifecycle() {
     -o /dev/null 2>>"$LOG_FILE" || true
 }
 
+# ffmpeg 7.0.2 crashes connecting native RTMP over IPv6 — it dies before writing
+# a single line, which is why a failing fan-out left an empty log and looked like
+# a clean 5-second exit. YouTube and Facebook both publish AAAA records and glibc
+# prefers them, so every push crashed on connect. Pinning plain RTMP to the
+# host's A record avoids the broken path entirely; the platform is happy to be
+# addressed by IP.
+#
+# rtmps is deliberately left alone: its TLS handshake must validate against the
+# hostname, and an IP literal would fail that. Those destinations need the
+# resolver fixed system-wide instead — `precedence ::ffff:0:0/96  100` in
+# /etc/gai.conf — which is also the proper fix for all of this.
+pin_ipv4() {
+  python3 - "$1" <<'PY'
+import socket, sys
+from urllib.parse import urlsplit, urlunsplit
+
+url = sys.argv[1]
+parts = urlsplit(url)
+if parts.scheme != "rtmp" or not parts.hostname:
+    print(url)
+    raise SystemExit
+
+try:
+    infos = socket.getaddrinfo(
+        parts.hostname, parts.port or 1935, socket.AF_INET, socket.SOCK_STREAM
+    )
+except OSError:
+    infos = []
+
+if not infos:
+    print(url)
+    raise SystemExit
+
+ip = infos[0][4][0]
+netloc = f"{ip}:{parts.port}" if parts.port else ip
+print(urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment)))
+PY
+}
+
+# Resolved fresh on every fan-out start, and never fed back into the
+# change-detection key — these hosts are load balanced, so a rotating address
+# would otherwise read as "destinations changed" and restart the push endlessly.
+resolve_targets() {
+  TARGETS=()
+  local url pinned
+  for url in "${DESTINATIONS[@]}"; do
+    pinned="$(pin_ipv4 "$url" 2>/dev/null || printf '%s' "$url")"
+    TARGETS+=("${pinned:-$url}")
+  done
+}
+
 stop_fanout() {
   if [[ -f "$FANOUT_PID_FILE" ]]; then
     pid=$(cat "$FANOUT_PID_FILE")
@@ -100,6 +151,7 @@ stop_fanout() {
   fi
 }
 
+TARGETS=()
 FANOUT_STARTED_AT=0
 FANOUT_BACKOFF=0
 
@@ -109,22 +161,24 @@ start_fanout() {
     return 0
   fi
 
-  echo "[relay] forwarding ${MTX_PATH} to ${#DESTINATIONS[@]} destinations" >>"$LOG_FILE"
+  resolve_targets
 
-  if [[ ${#DESTINATIONS[@]} -eq 1 ]]; then
+  echo "[relay] forwarding ${MTX_PATH} to ${#TARGETS[@]} destinations" >>"$LOG_FILE"
+
+  if [[ ${#TARGETS[@]} -eq 1 ]]; then
     "$FFMPEG" -nostdin -loglevel warning \
       -rtsp_transport tcp -timeout 5000000 \
       -analyzeduration 10000000 -probesize 10000000 \
       -i "$RTSP_URL" \
       -map 0:v:0 -map 0:a:0\? \
-      -c copy -f flv "${DESTINATIONS[0]}" >>"$LOG_FILE" 2>&1 &
+      -c copy -f flv "${TARGETS[0]}" >>"$LOG_FILE" 2>&1 &
     echo $! >"$FANOUT_PID_FILE"
     FANOUT_STARTED_AT=$(date +%s)
     return 0
   fi
 
   local tee_spec=""
-  for url in "${DESTINATIONS[@]}"; do
+  for url in "${TARGETS[@]}"; do
     if [[ -n "$tee_spec" ]]; then
       tee_spec+="|"
     fi
