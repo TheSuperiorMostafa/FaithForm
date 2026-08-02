@@ -37,6 +37,12 @@ const UPLINK_UTILISATION = 0.7;
 /** Used when the probe cannot get a reading — deliberately modest. */
 const FALLBACK_VIDEO_BPS = 1_200_000;
 
+/**
+ * Largest WebSocket message we will send. Comfortably under the relay's own
+ * frame limit, which closes the connection rather than truncating.
+ */
+const MAX_WS_MESSAGE_BYTES = 4 * 1024 * 1024;
+
 const PROBE_CHUNK_BYTES = 64 * 1024;
 const PROBE_TOTAL_BYTES = 512 * 1024;
 const PROBE_TIMEOUT_MS = 8_000;
@@ -276,10 +282,26 @@ export async function publishViaWebSocket(
   };
 
   recorder.addEventListener("dataavailable", (event) => {
-    if (event.data.size > 0 && ws.readyState === WebSocket.OPEN) {
-      bytesSent += event.data.size;
-      chunksSent += 1;
+    if (event.data.size <= 0 || ws.readyState !== WebSocket.OPEN) return;
+
+    bytesSent += event.data.size;
+    chunksSent += 1;
+
+    // A hidden tab throttles the recorder's timeslice timer as well as the
+    // render loop, so returning to the page can flush minutes of accumulated
+    // audio as one enormous blob. One such flush arrived as a 17 MB frame and
+    // the relay closed the socket outright — 1009, message too big — killing a
+    // broadcast that was otherwise healthy. Split before sending: the relay
+    // concatenates into ffmpeg's stdin, so frame boundaries carry no meaning
+    // and any split point is safe.
+    if (event.data.size <= MAX_WS_MESSAGE_BYTES) {
       ws.send(event.data);
+      return;
+    }
+
+    report("oversized_chunk", { size: event.data.size, parts: Math.ceil(event.data.size / MAX_WS_MESSAGE_BYTES) });
+    for (let offset = 0; offset < event.data.size; offset += MAX_WS_MESSAGE_BYTES) {
+      ws.send(event.data.slice(offset, offset + MAX_WS_MESSAGE_BYTES));
     }
   });
 

@@ -358,7 +358,11 @@ async def main() -> None:
     if not SECRET:
         raise SystemExit("STREAM_RELAY_WEBHOOK_SECRET is required")
 
-    async with websockets.serve(handler, HOST, PORT, max_size=8 * 1024 * 1024):
+    # The browser splits its own output well below this, but a hidden tab can
+    # flush minutes of accumulated audio at once and an over-limit frame closes
+    # the connection outright rather than being truncated — which killed a live
+    # broadcast. Keep plenty of headroom above what the client will ever send.
+    async with websockets.serve(handler, HOST, PORT, max_size=64 * 1024 * 1024):
         print(f"[ws-ingest] listening on ws://{HOST}:{PORT}", flush=True)
         await asyncio.Future()
 
