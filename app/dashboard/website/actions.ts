@@ -12,6 +12,7 @@ import {
   upsertChurchProfile,
 } from "@/lib/queries/church-profile";
 import { normalizeSiteImage } from "@/lib/security/validate-image";
+import { getAspect, type ImageAspectKey } from "@/lib/sites/image-aspects";
 import { generateSite } from "@/lib/sites/generate";
 import { SECTION_REGISTRY } from "@/lib/sites/registry";
 import {
@@ -562,9 +563,31 @@ export async function uploadSiteImage(formData: FormData): Promise<UploadResult>
     return { ok: false, error: "That image is over 12MB. Please pick a smaller one." };
   }
 
-  const normalized = await normalizeSiteImage(
-    Buffer.from(await file.arrayBuffer()),
-  );
+  // The cropper sends a rectangle in source-image pixels plus the aspect it was
+  // locked to, so the cut happens here against the original file rather than
+  // against a downscaled canvas copy in the browser.
+  const aspect = getAspect(formData.get("aspect") as ImageAspectKey | null ?? undefined);
+  const num = (key: string) => {
+    const raw = formData.get(key);
+    const parsed = typeof raw === "string" ? Number(raw) : NaN;
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
+  const cx = num("cropX");
+  const cy = num("cropY");
+  const cw = num("cropWidth");
+  const ch = num("cropHeight");
+  const crop =
+    cx !== null && cy !== null && cw !== null && ch !== null
+      ? { x: cx, y: cy, width: cw, height: ch }
+      : null;
+
+  const normalized = await normalizeSiteImage(Buffer.from(await file.arrayBuffer()), {
+    crop,
+    // Only force exact dimensions when the image was actually cropped to a
+    // locked shape; a free-form logo keeps whatever proportions it arrived in.
+    output: crop ? aspect.output : null,
+  });
 
   if (!normalized) {
     return {
@@ -619,6 +642,7 @@ const detailsSchema = z.object({
   name: z.string().trim().min(1, "Your church name is required.").max(200),
   denomination: z.string().max(120),
   logoUrl: z.string().max(500),
+  coverImageUrl: z.string().max(500),
   address: z.string().max(200),
   city: z.string().max(120),
   state: z.string().max(60),
@@ -674,6 +698,7 @@ export async function saveSiteDetails(
         name: v.name,
         denomination: v.denomination,
         logoUrl: v.logoUrl,
+        coverImageUrl: v.coverImageUrl,
         address: v.address,
         city: v.city,
         state: v.state,

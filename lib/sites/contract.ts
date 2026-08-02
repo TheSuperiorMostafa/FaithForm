@@ -1,5 +1,6 @@
 import type { ComponentType } from "react";
 
+import type { ImageAspectKey } from "@/lib/sites/image-aspects";
 import type { SiteProfile } from "@/types/site";
 
 /**
@@ -44,8 +45,18 @@ export type SectionField =
   | { key: string; label: string; type: "text" | "textarea" | "url"; help?: string }
   /** lead / accent / trail — the serif-italic span is its own input. */
   | { key: string; label: string; type: "headline"; help?: string }
-  /** src / alt / placeholder caption. */
-  | { key: string; label: string; type: "image"; help?: string }
+  /**
+   * src / alt / placeholder caption. `aspect` names the shape the site renders
+   * this image at, which is what the cropper locks to — see
+   * lib/sites/image-aspects.ts.
+   */
+  | {
+      key: string;
+      label: string;
+      type: "image";
+      aspect?: ImageAspectKey;
+      help?: string;
+    }
   /** string[] rendered as one textarea per paragraph. */
   | { key: string; label: string; type: "paragraphs"; help?: string }
   | { key: string; label: string; type: "toggle"; help?: string }

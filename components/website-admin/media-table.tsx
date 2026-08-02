@@ -138,7 +138,8 @@ export function MediaTable({
             </Field>
             <ImageUploadField
               label="Thumbnail"
-              help="Shown in the sermon list. Optional."
+              help="Shown in the sermon list and behind the play button. Optional."
+              aspect="video"
               value={draft.thumbnailUrl}
               onChange={(url) => setDraft({ ...draft, thumbnailUrl: url })}
             />

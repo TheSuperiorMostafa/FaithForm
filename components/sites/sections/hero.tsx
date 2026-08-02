@@ -63,7 +63,7 @@ export const heroSection = defineSection<HeroContent>({
         },
       ],
     },
-    { key: "image", label: "Image", type: "image" },
+    { key: "image", label: "Image", type: "image", aspect: "banner" },
   ],
   defaults: {
     eyebrow: null,

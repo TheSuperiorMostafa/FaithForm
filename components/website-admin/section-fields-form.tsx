@@ -213,6 +213,7 @@ export function SectionFieldsForm({
                 <ImageUploadField
                   label={field.label}
                   help={field.help}
+                  aspect={field.aspect}
                   value={asString(img.src)}
                   // Stored as null rather than "" so the renderer falls back to
                   // the striped placeholder instead of an empty <img>.

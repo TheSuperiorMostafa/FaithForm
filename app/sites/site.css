@@ -520,9 +520,14 @@
   gap: 22px;
 }
 
+/* 4/3 matches the `feature` crop preset in lib/sites/image-aspects.ts, so what
+ * a church frames in the cropper is exactly what renders here. Changing one
+ * without the other reintroduces the centre-cropping the cropper exists to
+ * avoid. min-height stays as a floor for the placeholder state. */
 .site-figure {
   overflow: hidden;
   border-radius: var(--site-radius-card);
+  aspect-ratio: 4 / 3;
   min-height: 320px;
 }
 

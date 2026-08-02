@@ -52,7 +52,7 @@ export const staffGridSection = defineSection<StaffGridContent>({
         { key: "name", label: "Name", type: "text" },
         { key: "role", label: "Role", type: "text" },
         { key: "bio", label: "Short bio", type: "textarea" },
-        { key: "photo", label: "Photo", type: "image" },
+        { key: "photo", label: "Photo", type: "image", aspect: "portrait" },
       ],
     },
   ],

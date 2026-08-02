@@ -92,10 +92,20 @@ export function DetailsForm({
           <ImageUploadField
             label="Logo"
             help="Shown in the header and footer. A square image works best."
-            aspect="square"
+            // Never cropped: the site renders logos with object-fit: contain,
+            // and trimming a wordmark is worse than letterboxing it.
+            aspect="free"
             value={form.logoUrl}
             disabled={!canEdit}
             onChange={(url) => set("logoUrl", url)}
+          />
+          <ImageUploadField
+            label="Cover photo"
+            help="Your main church photo. Used at the top of the page and beside your welcome text unless you set a different one there."
+            aspect="banner"
+            value={form.coverImageUrl}
+            disabled={!canEdit}
+            onChange={(url) => set("coverImageUrl", url)}
           />
         </Panel>
 
@@ -274,7 +284,7 @@ export function DetailsForm({
                   />
                   <ImageUploadField
                     label="Photo"
-                    aspect="square"
+                    aspect="portrait"
                     value={row.photoUrl}
                     disabled={!canEdit}
                     onChange={(url) => update({ photoUrl: url })}

@@ -71,7 +71,7 @@ export const aboutTextSection = defineSection<AboutTextContent>({
         { key: "label", label: "Caption", type: "text" },
       ],
     },
-    { key: "image", label: "Image", type: "image" },
+    { key: "image", label: "Image", type: "image", aspect: "feature" },
   ],
   defaults: {
     eyebrow: null,

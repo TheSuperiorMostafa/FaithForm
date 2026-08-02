@@ -30,6 +30,7 @@ export default async function WebsiteDetailsPage() {
     name: form.name,
     denomination: form.denomination,
     logoUrl: form.logoUrl,
+    coverImageUrl: form.coverImageUrl,
     address: form.address,
     city: form.city,
     state: form.state,

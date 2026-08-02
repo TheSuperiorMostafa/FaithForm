@@ -3,10 +3,14 @@
 import { useId, useRef, useState, useTransition } from "react";
 import { ImageUp, Link2, Loader2, Trash2 } from "lucide-react";
 
+import type { Area } from "react-easy-crop";
+
 import { uploadSiteImage } from "@/app/dashboard/website/actions";
+import { ImageCropper } from "@/components/website-admin/image-cropper";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getAspect, type ImageAspectKey } from "@/lib/sites/image-aspects";
 import { cn } from "@/lib/utils";
 
 /**
@@ -24,8 +28,12 @@ export function ImageUploadField({
   help,
   disabled,
   className,
-  /** Square preview suits logos and headshots; wide suits section photography. */
-  aspect = "wide",
+  /**
+   * Which shape the site renders this image at. Anything other than "free"
+   * opens the cropper so the church chooses the framing rather than letting
+   * object-fit centre-crop for them.
+   */
+  aspect = "free",
 }: {
   label: string;
   value: string;
@@ -33,7 +41,7 @@ export function ImageUploadField({
   help?: string;
   disabled?: boolean;
   className?: string;
-  aspect?: "wide" | "square";
+  aspect?: ImageAspectKey;
 }) {
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -41,11 +49,22 @@ export function ImageUploadField({
   const [error, setError] = useState<string | null>(null);
   const [showUrl, setShowUrl] = useState(false);
   const [dragging, setDragging] = useState(false);
+  const [cropping, setCropping] = useState<File | null>(null);
 
-  function upload(file: File) {
+  const preset = getAspect(aspect);
+
+  function upload(file: File, crop?: Area) {
     setError(null);
     const data = new FormData();
     data.set("file", file);
+    data.set("aspect", preset.key);
+
+    if (crop) {
+      data.set("cropX", String(crop.x));
+      data.set("cropY", String(crop.y));
+      data.set("cropWidth", String(crop.width));
+      data.set("cropHeight", String(crop.height));
+    }
 
     startTransition(async () => {
       const result = await uploadSiteImage(data);
@@ -55,6 +74,16 @@ export function ImageUploadField({
       }
       onChange(result.url);
     });
+  }
+
+  /** Shaped images go through the cropper; free-form ones upload straight away. */
+  function accept(file: File) {
+    setError(null);
+    if (preset.ratio === null) {
+      upload(file);
+      return;
+    }
+    setCropping(file);
   }
 
   function onDrop(event: React.DragEvent) {
@@ -68,7 +97,7 @@ export function ImageUploadField({
       setError("That file isn't an image.");
       return;
     }
-    upload(file);
+    accept(file);
   }
 
   return (
@@ -87,7 +116,10 @@ export function ImageUploadField({
         </button>
       </div>
 
-      {help ? <p className="text-xs text-muted-foreground">{help}</p> : null}
+      <p className="text-xs text-muted-foreground">
+        {help ? `${help} ` : ""}
+        {preset.ratio ? preset.hint : null}
+      </p>
 
       {value ? (
         <div className="flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-3">
@@ -95,10 +127,12 @@ export function ImageUploadField({
           <img
             src={value}
             alt=""
-            className={cn(
-              "shrink-0 rounded-md border border-border object-cover",
-              aspect === "square" ? "size-16" : "h-16 w-28",
-            )}
+            className="h-16 w-28 shrink-0 rounded-md border border-border object-cover"
+            style={
+              preset.ratio
+                ? { aspectRatio: String(preset.ratio), width: "auto", height: 64 }
+                : undefined
+            }
           />
           <div className="flex min-w-0 flex-1 flex-col gap-2">
             <p className="truncate text-xs text-muted-foreground">{value}</p>
@@ -179,9 +213,22 @@ export function ImageUploadField({
           const file = e.target.files?.[0];
           // Reset so picking the same file twice still fires a change.
           e.target.value = "";
-          if (file) upload(file);
+          if (file) accept(file);
         }}
       />
+
+      {cropping ? (
+        <ImageCropper
+          file={cropping}
+          aspectKey={preset.key}
+          onCancel={() => setCropping(null)}
+          onConfirm={(crop) => {
+            const file = cropping;
+            setCropping(null);
+            upload(file, crop);
+          }}
+        />
+      ) : null}
 
       {showUrl ? (
         <Input
