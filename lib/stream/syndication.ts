@@ -183,13 +183,27 @@ export async function completeYouTubeBroadcast(
         part: ["status"],
       });
     } else if (lifeCycle !== "complete" && lifeCycle !== "revoked") {
-      // Never aired. Omitting streamId drops the binding, so it stops occupying
-      // one of the stream's three slots without deleting the operator's record.
-      await youtube.liveBroadcasts.bind({
-        id: broadcastId,
-        part: ["id", "contentDetails"],
-      });
-      result = { ok: true, status: lifeCycle ?? "unbound" };
+      // Never received a frame, so there is no recording and nothing to keep.
+      // Left in place it stays on the channel as an empty scheduled stream —
+      // the "waiting for FaithForm" placeholder congregations kept finding —
+      // and holds one of the ingest stream's three bind slots, so after three
+      // abandoned attempts binding fails outright and no service can start.
+      try {
+        await youtube.liveBroadcasts.delete({ id: broadcastId });
+        result = { ok: true, status: "deleted" };
+      } catch (err) {
+        // Deletion is the tidy outcome, not a required one. Unbinding still
+        // frees the slot, which is what actually blocks the next service.
+        console.error(
+          "completeYouTubeBroadcast: delete",
+          err instanceof Error ? err.message : err,
+        );
+        await youtube.liveBroadcasts.bind({
+          id: broadcastId,
+          part: ["id", "contentDetails"],
+        });
+        result = { ok: true, status: lifeCycle ?? "unbound" };
+      }
     } else {
       result = { ok: true, status: lifeCycle };
     }

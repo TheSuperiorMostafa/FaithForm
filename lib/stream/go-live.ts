@@ -210,12 +210,31 @@ export async function endLiveBroadcast(
     );
   }
 
-  const { data: events } = await client
-    .from("stream_events")
-    .select("id, recurrence_rule, starts_at, title, syndicate_youtube, syndicate_facebook, youtube_privacy, chat_enabled, countdown_enabled, created_by")
-    .eq("church_id", churchId)
-    .eq("status", "live")
-    .limit(1);
+  // The session knows which event it belongs to, so end that one. Selecting any
+  // `live` row and taking the first is how services ended up ending each other:
+  // the query had no ordering, so with more than one row lingering it closed an
+  // arbitrary older event and left the current one live forever — which then
+  // lingered for the next service to close by mistake. Fall back to the newest
+  // live event only for sessions predating stream_event_id.
+  const eventColumns =
+    "id, recurrence_rule, starts_at, title, syndicate_youtube, syndicate_facebook, youtube_privacy, chat_enabled, countdown_enabled, created_by";
+
+  const { data: events } = session.streamEventId
+    ? await client
+        .from("stream_events")
+        .select(eventColumns)
+        // Still filtered on `live` so ending an already-ended service is inert
+        // and cannot mint a second occurrence of a weekly event.
+        .eq("id", session.streamEventId)
+        .eq("status", "live")
+        .limit(1)
+    : await client
+        .from("stream_events")
+        .select(eventColumns)
+        .eq("church_id", churchId)
+        .eq("status", "live")
+        .order("starts_at", { ascending: false })
+        .limit(1);
 
   // Stop the relay pushing to broadcasts that are now over.
   await clearRelayDestinations(churchId, session.startedBy, client);
@@ -254,6 +273,16 @@ export async function endLiveBroadcast(
       );
     }
   }
+
+  // A church has at most one broadcast at a time, so anything else still marked
+  // live is debris — either from the bug above or from a service that ended
+  // without going through here. Left behind it keeps surfacing as the church's
+  // current event on the watch page long after the service is over.
+  await client
+    .from("stream_events")
+    .update({ status: "ended" })
+    .eq("church_id", churchId)
+    .eq("status", "live");
 
   return markStreamEnded(churchId, null, client);
 }

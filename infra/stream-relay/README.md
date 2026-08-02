@@ -46,7 +46,7 @@ MediaMTX serves HLS on port `8888`. Set in Vercel:
 
 ```bash
 NEXT_PUBLIC_STREAM_HLS_BASE_URL=https://stream.faithform.io:8888
-STREAM_HLS_UPSTREAM_URL=https://hls.stream.faithform.io   # or direct :8888 if firewall open
+STREAM_HLS_UPSTREAM_URL=https://hls.faithform.io   # or direct :8888 if firewall open
 ```
 
 Open firewall/tcp for `8888` on the relay host if browsers cannot load `.m3u8` playlists, **or** proxy HLS through a named Cloudflare Tunnel (see `DEPLOY.md`).
@@ -56,10 +56,14 @@ Open firewall/tcp for `8888` on the relay host if browsers cannot load `.m3u8` p
 `ws-ingest.py` listens on `8090`. Set in Vercel:
 
 ```bash
-STREAM_WS_INGEST_UPSTREAM_URL=wss://ingest.stream.faithform.io
+STREAM_WS_INGEST_UPSTREAM_URL=wss://ingest.faithform.io
 ```
 
-Use a **named Cloudflare Tunnel** for `ingest.stream.faithform.io` → `http://127.0.0.1:8090` so browser studio survives relay restarts (avoid ephemeral `trycloudflare.com` URLs).
+Use a **named Cloudflare Tunnel** for `ingest.faithform.io` → `http://127.0.0.1:8090` so browser studio survives relay restarts (avoid ephemeral `trycloudflare.com` URLs).
+
+Keep the hostname one level deep. Cloudflare's Universal SSL covers `*.faithform.io`
+but not `*.stream.faithform.io`, so `ingest.stream.faithform.io` fails the TLS
+handshake and the browser studio cannot connect.
 
 ## SRT ingest
 

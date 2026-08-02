@@ -205,14 +205,16 @@ async function resolveIngestStream(
 }
 
 /**
- * Detaches broadcasts left bound to the ingest stream by previous services.
+ * Clears broadcasts left bound to the ingest stream by previous services.
  *
  * A reusable liveStream accepts at most three bound broadcasts, and one that is
  * still `live` keeps consuming the feed — so a service that was never closed
  * out swallows the next one's video and the new broadcast never leaves `ready`.
- * Completing the ones that aired and unbinding the ones that never did frees
- * the stream. Best effort throughout: a broadcast stuck on YouTube's side must
- * not stop this service from starting.
+ * The ones that aired are completed; the ones that never received a frame are
+ * deleted, since they hold a bind slot and otherwise sit on the channel forever
+ * as empty scheduled streams. Only broadcasts bound to FaithForm's own ingest
+ * stream are touched. Best effort throughout: a broadcast stuck on YouTube's
+ * side must not stop this service from starting.
  */
 async function releaseStaleBroadcasts(
   youtube: YouTubeClient,
@@ -242,11 +244,16 @@ async function releaseStaleBroadcasts(
           part: ["status"],
         });
       } else {
-        // Omitting streamId removes the binding without deleting the broadcast.
-        await youtube.liveBroadcasts.bind({
-          id: item.id,
-          part: ["id", "contentDetails"],
-        });
+        try {
+          await youtube.liveBroadcasts.delete({ id: item.id });
+        } catch {
+          // Freeing the bind slot is the part that matters. Omitting streamId
+          // removes the binding without deleting the broadcast.
+          await youtube.liveBroadcasts.bind({
+            id: item.id,
+            part: ["id", "contentDetails"],
+          });
+        }
       }
     } catch (err) {
       console.error(

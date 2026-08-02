@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { compareSecret } from "@/lib/security/compare-secret";
 import { onIngestStarted } from "@/lib/stream/go-live";
 import { setPreviewIngestActive } from "@/lib/stream/preview-ingest";
-import { markStreamEnded } from "@/lib/stream/sessions";
 import { parseStreamPath } from "@/lib/stream/relay";
 
 export async function POST(request: Request) {
@@ -27,12 +26,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid stream path" }, { status: 400 });
   }
 
+  // The relay re-sends `publish` on a heartbeat for as long as an encoder is
+  // publishing, which is what keeps `preview_ingest_active` honest. It also
+  // gives the YouTube transition repeated chances to land: the attempt made at
+  // go-live necessarily races the relay's destination poll, so on the first try
+  // the bound stream is still inactive and YouTube refuses. Both calls no-op
+  // once they have taken effect.
   if (body.event === "publish") {
     await setPreviewIngestActive(parsedPath.churchId, true);
     await onIngestStarted(parsedPath.churchId);
   } else if (body.event === "unpublish") {
+    // Only the flag. The session stays live until an operator ends it —
+    // `enableAutoStop` is off on YouTube so a momentary encoder gap cannot end a
+    // service, and ending it here would reintroduce exactly that.
     await setPreviewIngestActive(parsedPath.churchId, false);
-    await markStreamEnded(parsedPath.churchId);
   }
 
   return NextResponse.json({ ok: true });

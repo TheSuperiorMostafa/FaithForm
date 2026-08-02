@@ -121,17 +121,23 @@ Set these in **Vercel → Project → Settings → Environment Variables** (and 
 8. **Browser studio ingest (WebSocket)** — the relay runs `ws-ingest.py` on port `8090`. Expose it through a stable HTTPS/WSS endpoint and set in Vercel:
 
    ```bash
-   STREAM_WS_INGEST_UPSTREAM_URL=wss://ingest.stream.faithform.io
-   STREAM_HLS_UPSTREAM_URL=https://hls.stream.faithform.io
+   STREAM_WS_INGEST_UPSTREAM_URL=wss://ingest.faithform.io
+   STREAM_HLS_UPSTREAM_URL=https://hls.faithform.io
    ```
+
+   Keep tunnel hostnames **one level deep**. Cloudflare's Universal SSL covers
+   `faithform.io` and `*.faithform.io` but not `*.stream.faithform.io`, so a
+   name like `ingest.stream.faithform.io` resolves to Cloudflare and then fails
+   the TLS handshake outright — the browser studio cannot connect at all, with
+   no useful error.
 
    **Named Cloudflare Tunnel (recommended)** — do not rely on ephemeral `trycloudflare.com` URLs after relay restarts:
 
    1. Install `cloudflared` on the relay box and authenticate: `cloudflared tunnel login`
    2. Create a tunnel: `cloudflared tunnel create faithform-stream`
    3. Route DNS in Cloudflare:
-      - `hls.stream.faithform.io` → `http://127.0.0.1:8888`
-      - `ingest.stream.faithform.io` → `http://127.0.0.1:8090` (WebSocket upgrade supported)
+      - `hls.faithform.io` → `http://127.0.0.1:8888`
+      - `ingest.faithform.io` → `http://127.0.0.1:8090` (WebSocket upgrade supported)
    4. Run the tunnel as a systemd service so URLs survive reboots.
    5. Update Vercel env vars above and redeploy.
 

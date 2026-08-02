@@ -10,6 +10,9 @@ APP_URL="${FAITHFORM_APP_URL:-https://faithform.io}"
 SECRET="${STREAM_RELAY_WEBHOOK_SECRET:-}"
 RECORD_DIR="/home/mostafa/mediamtx/recordings"
 POLL_SEC=5
+# How often to tell FaithForm this path is still publishing. The app treats a
+# heartbeat older than 90s as "not publishing", so this must stay well under it.
+HEARTBEAT_SEC=30
 RTSP_PORT="${RTSP_PORT:-8554}"
 
 if [[ -z "${MTX_PATH:-}" ]]; then
@@ -32,9 +35,59 @@ DEST_CACHE="/home/mostafa/mediamtx/pids/${SAFE_PATH}.destinations"
 RTSP_URL="rtsp://127.0.0.1:${RTSP_PORT}/${MTX_PATH}"
 
 CONFIG_URL="${APP_URL%/}/api/stream/relay-config?path=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$MTX_PATH")"
+LIFECYCLE_URL="${APP_URL%/}/api/stream/lifecycle"
 
-fetch_destinations() {
-  curl -fsSL -H "x-stream-relay-secret: ${SECRET}" "$CONFIG_URL"
+DEST_PARSER='
+import json, sys
+try:
+    data = json.loads(sys.stdin.read())
+except Exception:
+    sys.exit(1)
+for item in data.get("destinations", []):
+    url = str(item.get("url", "")).strip()
+    if url:
+        print(url)
+'
+
+DESTINATIONS=()
+
+# Prints one URL per line. Returns non-zero when FaithForm could not be reached
+# or answered with something unparseable — which is not the same as "this church
+# has no destinations", and must not be treated as such.
+read_destinations() {
+  local payload
+  payload="$(curl -fsSL --max-time 10 -H "x-stream-relay-secret: ${SECRET}" "$CONFIG_URL")" || return 1
+  printf '%s' "$payload" | python3 -c "$DEST_PARSER"
+}
+
+load_destinations() {
+  local raw line
+  raw="$(read_destinations)" || return 1
+
+  DESTINATIONS=()
+  while IFS= read -r line; do
+    [[ -n "$line" ]] && DESTINATIONS+=("$line")
+  done <<<"$raw"
+  return 0
+}
+
+destinations_key() {
+  if [[ ${#DESTINATIONS[@]} -eq 0 ]]; then
+    printf ''
+    return 0
+  fi
+  printf '%s\n' "${DESTINATIONS[@]}"
+}
+
+# Lets FaithForm distinguish "an encoder is publishing right now" from a stale
+# flag left behind by a relay that died. Best effort: the broadcast must not
+# depend on the app being reachable.
+notify_lifecycle() {
+  curl -fsS --max-time 10 -X POST "$LIFECYCLE_URL" \
+    -H "x-stream-relay-secret: ${SECRET}" \
+    -H "content-type: application/json" \
+    -d "{\"event\":\"$1\",\"path\":\"${MTX_PATH}\"}" \
+    -o /dev/null 2>>"$LOG_FILE" || true
 }
 
 stop_fanout() {
@@ -47,78 +100,95 @@ stop_fanout() {
   fi
 }
 
+FANOUT_STARTED_AT=0
+FANOUT_BACKOFF=0
+
 start_fanout() {
-  local -n urls_ref=$1
   stop_fanout
-  if [[ ${#urls_ref[@]} -eq 0 ]]; then
+  if [[ ${#DESTINATIONS[@]} -eq 0 ]]; then
     return 0
   fi
 
-  echo "[relay] forwarding ${MTX_PATH} to ${#urls_ref[@]} destinations" >>"$LOG_FILE"
+  echo "[relay] forwarding ${MTX_PATH} to ${#DESTINATIONS[@]} destinations" >>"$LOG_FILE"
 
-  if [[ ${#urls_ref[@]} -eq 1 ]]; then
+  if [[ ${#DESTINATIONS[@]} -eq 1 ]]; then
     "$FFMPEG" -nostdin -loglevel warning \
       -rtsp_transport tcp -timeout 5000000 \
       -analyzeduration 10000000 -probesize 10000000 \
       -i "$RTSP_URL" \
-      -c copy -f flv "${urls_ref[0]}" >>"$LOG_FILE" 2>&1 &
+      -map 0:v:0 -map 0:a:0\? \
+      -c copy -f flv "${DESTINATIONS[0]}" >>"$LOG_FILE" 2>&1 &
     echo $! >"$FANOUT_PID_FILE"
+    FANOUT_STARTED_AT=$(date +%s)
     return 0
   fi
 
   local tee_spec=""
-  for url in "${urls_ref[@]}"; do
+  for url in "${DESTINATIONS[@]}"; do
     if [[ -n "$tee_spec" ]]; then
       tee_spec+="|"
     fi
     tee_spec+="[f=flv:onfail=ignore]${url}"
   done
 
+  # Unlike every other muxer, tee refuses to infer its streams: without explicit
+  # -map it reports "Output file does not contain any stream" and exits before
+  # opening a single destination. That is why syndicating to one platform worked
+  # and syndicating to two silently pushed nothing to either.
   "$FFMPEG" -nostdin -loglevel warning \
     -rtsp_transport tcp -timeout 5000000 \
-      -analyzeduration 10000000 -probesize 10000000 \
+    -analyzeduration 10000000 -probesize 10000000 \
     -i "$RTSP_URL" \
+    -map 0:v:0 -map 0:a:0\? \
     -c copy -f tee "$tee_spec" >>"$LOG_FILE" 2>&1 &
   echo $! >"$FANOUT_PID_FILE"
+  FANOUT_STARTED_AT=$(date +%s)
 }
 
 RECORD_FILE="${RECORD_DIR}/${SAFE_PATH}-$(date +%s).mp4"
 echo "[relay] recording to ${RECORD_FILE}" >>"$LOG_FILE"
 "$FFMPEG" -nostdin -loglevel warning \
   -rtsp_transport tcp -timeout 5000000 \
-      -analyzeduration 10000000 -probesize 10000000 \
+  -analyzeduration 10000000 -probesize 10000000 \
   -i "$RTSP_URL" \
+  -map 0:v:0 -map 0:a:0\? \
   -c copy -f mp4 -movflags +faststart "$RECORD_FILE" >>"$LOG_FILE" 2>&1 &
 echo $! >"$RECORD_PID_FILE"
 echo "$RECORD_FILE" >"${RECORD_DIR}/${SAFE_PATH}.latest"
 
-mapfile -t URLS < <(fetch_destinations | python3 -c '
-import json, sys
-data = json.loads(sys.stdin.read())
-for item in data.get("destinations", []):
-    url = str(item.get("url", "")).strip()
-    if url:
-        print(url)
-')
+notify_lifecycle publish
 
-printf '%s\n' "${URLS[@]}" >"$DEST_CACHE"
-start_fanout URLS
+CURRENT_KEY=""
+if load_destinations; then
+  CURRENT_KEY="$(destinations_key)"
+  destinations_key >"$DEST_CACHE"
+  start_fanout
+else
+  echo "[relay] could not read destinations at startup; will retry" >>"$LOG_FILE"
+fi
+
+LAST_HEARTBEAT=$(date +%s)
 
 while true; do
   sleep "$POLL_SEC"
-  mapfile -t NEW_URLS < <(fetch_destinations | python3 -c '
-import json, sys
-data = json.loads(sys.stdin.read())
-for item in data.get("destinations", []):
-    url = str(item.get("url", "")).strip()
-    if url:
-        print(url)
-')
-  mapfile -t OLD_URLS < "$DEST_CACHE"
-  if [[ "$(printf '%s\n' "${NEW_URLS[@]}")" != "$(printf '%s\n' "${OLD_URLS[@]}")" ]]; then
-    echo "[relay] destinations changed for ${MTX_PATH}" >>"$LOG_FILE"
-    printf '%s\n' "${NEW_URLS[@]}" >"$DEST_CACHE"
-    start_fanout NEW_URLS
+  NOW=$(date +%s)
+
+  if (( NOW - LAST_HEARTBEAT >= HEARTBEAT_SEC )); then
+    notify_lifecycle publish
+    LAST_HEARTBEAT=$NOW
+  fi
+
+  # A failed fetch leaves the current fan-out exactly as it is. Tearing it down
+  # on a transient 500 would drop the congregation's feed mid-service.
+  if load_destinations; then
+    NEW_KEY="$(destinations_key)"
+    if [[ "$NEW_KEY" != "$CURRENT_KEY" ]]; then
+      echo "[relay] destinations changed for ${MTX_PATH}" >>"$LOG_FILE"
+      CURRENT_KEY="$NEW_KEY"
+      destinations_key >"$DEST_CACHE"
+      FANOUT_BACKOFF=0
+      start_fanout
+    fi
   fi
 
   if [[ -f "$FANOUT_PID_FILE" ]]; then
@@ -126,9 +196,20 @@ for item in data.get("destinations", []):
     if ! kill -0 "$pid" 2>/dev/null; then
       wait "$pid" 2>/dev/null || true
       rm -f "$FANOUT_PID_FILE"
-      if [[ ${#NEW_URLS[@]} -gt 0 ]]; then
-        start_fanout NEW_URLS
+
+      # A destination that rejects the stream outright makes ffmpeg exit within
+      # a second or two. Restarting immediately spins a hot loop that floods the
+      # log and hammers the platform; back off instead, up to half a minute.
+      if (( NOW - FANOUT_STARTED_AT < 10 )); then
+        FANOUT_BACKOFF=$(( FANOUT_BACKOFF == 0 ? 5 : FANOUT_BACKOFF * 2 ))
+        (( FANOUT_BACKOFF > 30 )) && FANOUT_BACKOFF=30
+        echo "[relay] fan-out exited after $(( NOW - FANOUT_STARTED_AT ))s; retrying in ${FANOUT_BACKOFF}s" >>"$LOG_FILE"
+        sleep "$FANOUT_BACKOFF"
+      else
+        FANOUT_BACKOFF=0
       fi
+
+      start_fanout
     fi
   fi
 done
