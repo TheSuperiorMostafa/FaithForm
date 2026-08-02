@@ -268,6 +268,7 @@ export async function publishViaWebSocket(
   const cleanup = () => {
     window.clearInterval(backlogWatchdog);
     window.clearInterval(statsTimer);
+    document.removeEventListener("visibilitychange", onVisibility);
     if (recorder.state !== "inactive") {
       recorder.stop();
     }
@@ -297,6 +298,14 @@ export async function publishViaWebSocket(
   track?.addEventListener("ended", () => {
     report("track_ended", { bytesSent, chunksSent });
   });
+
+  // Correlates a stall with the operator switching away. The render clock is
+  // meant to survive that now; this is how we can tell whether it did, rather
+  // than inferring it from a gap in the byte counts.
+  const onVisibility = () => {
+    report("visibility", { hidden: document.hidden, bytesSent, chunksSent });
+  };
+  document.addEventListener("visibilitychange", onVisibility);
 
   ws.addEventListener("close", (event) => {
     window.clearInterval(backlogWatchdog);

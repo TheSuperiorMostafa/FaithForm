@@ -26,11 +26,11 @@ const OUTPUT_PRESETS = [
 /**
  * Load-shedding ladder, applied without touching the canvas size.
  *
- * Frame rate only. The canvas is captured at a fixed rate, so frames we skip are
- * byte-identical to the one before and cost the encoder almost nothing — which
- * makes throttling redraws a real reduction, not a cosmetic one. It matters
- * because a MediaRecorder's bitrate cannot be changed once it has started, so
- * this is the only lever left mid-broadcast.
+ * Frame rate only. A canvas capture track emits a frame when the canvas is drawn
+ * to, so a redraw we skip produces no frame at all rather than a duplicate one —
+ * throttling redraws is a genuine cut in output. It matters because a
+ * MediaRecorder's bitrate cannot be changed once it has started, so this is the
+ * only lever left mid-broadcast.
  */
 const SHED_LEVELS = [
   { fps: 30 },
@@ -71,6 +71,7 @@ export class StudioCompositor {
   private missedFrames = 0;
   private levelIndex = 0;
   private lastDrawAt = 0;
+  private clockWorker: Worker | null = null;
 
   private maxWidth: number | null = null;
 
@@ -123,16 +124,13 @@ export class StudioCompositor {
 
     this.running = true;
     this.missedFrames = 0;
-    this.scheduleFrame();
+    this.startClock();
     return this.outputStream;
   }
 
   stop(): void {
     this.running = false;
-    if (this.rafId !== null) {
-      cancelAnimationFrame(this.rafId);
-      this.rafId = null;
-    }
+    this.stopClock();
     for (const track of this.outputStream?.getTracks() ?? []) {
       if (track.kind === "video") track.stop();
     }
@@ -216,44 +214,91 @@ export class StudioCompositor {
     });
   }
 
-  private scheduleFrame(): void {
+  /**
+   * Ticks the render loop from a worker rather than requestAnimationFrame.
+   *
+   * A canvas capture track only emits a frame when the canvas is actually
+   * drawn to, and requestAnimationFrame stops firing when the tab is not
+   * visible. So the moment an operator switched to another tab — to check the
+   * stream on YouTube, say — redraws stopped, the capture produced no frames,
+   * the recorder had nothing to encode, and the broadcast went silent while
+   * still reporting itself as recording with an empty send queue and a live
+   * track. That is precisely what the diagnostics showed.
+   *
+   * Worker timers are not throttled the way main-thread animation callbacks
+   * are, so the tick keeps arriving and the main thread keeps drawing.
+   */
+  private startClock(): void {
+    const interval = Math.max(1, Math.round(1000 / this.fps));
+
+    if (this.clockWorker) {
+      this.clockWorker.postMessage({ interval });
+      return;
+    }
+
+    try {
+      const source =
+        "let id=null;onmessage=e=>{" +
+        "if(id!==null){clearInterval(id);id=null;}" +
+        "if(e.data&&e.data.stop)return;" +
+        "id=setInterval(()=>postMessage(0),e.data.interval);};";
+      const url = URL.createObjectURL(
+        new Blob([source], { type: "application/javascript" }),
+      );
+      this.clockWorker = new Worker(url);
+      URL.revokeObjectURL(url);
+      this.clockWorker.onmessage = () => this.tick();
+      this.clockWorker.postMessage({ interval });
+    } catch {
+      // No worker available — fall back to the old behaviour, which at least
+      // works while the tab is in front.
+      this.clockWorker = null;
+      this.scheduleFrame();
+    }
+  }
+
+  private stopClock(): void {
+    if (this.clockWorker) {
+      this.clockWorker.postMessage({ stop: true });
+      this.clockWorker.terminate();
+      this.clockWorker = null;
+    }
+    if (this.rafId !== null) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
+    }
+  }
+
+  private tick(): void {
     if (!this.running) return;
 
-    const draw = () => {
-      const start = performance.now();
+    const start = performance.now();
 
-      // Honour the current rung's frame rate. Skipping a redraw leaves the
-      // canvas untouched, so the captured frame is identical to the last one and
-      // costs the encoder almost nothing — this is the load-shedding lever.
-      const interval = 1000 / this.fps;
-      if (start - this.lastDrawAt < interval - 1) return;
-      this.lastDrawAt = start;
+    // Honour the current rung's frame rate. A redraw we skip produces no frame
+    // at all — the capture track only emits on canvas modification — so this is
+    // a genuine reduction in output, which is what makes it the shedding lever.
+    const interval = 1000 / this.fps;
+    if (start - this.lastDrawAt < interval - 1) return;
+    this.lastDrawAt = start;
 
-      this.drawFrame();
-      const elapsed = performance.now() - start;
-      if (elapsed > interval * 1.5) {
-        this.missedFrames += 1;
-        if (this.missedFrames >= 3) {
-          this.shedQuality();
-        }
-      } else {
-        this.missedFrames = 0;
+    this.drawFrame();
+
+    const elapsed = performance.now() - start;
+    if (elapsed > interval * 1.5) {
+      this.missedFrames += 1;
+      if (this.missedFrames >= 3 && this.shedQuality()) {
+        this.startClock();
       }
-    };
-
-    const video = this.cameraVideo as HTMLVideoElement & {
-      requestVideoFrameCallback?: (cb: () => void) => number;
-    };
-
-    if (typeof video.requestVideoFrameCallback === "function") {
-      video.requestVideoFrameCallback(() => {
-        draw();
-        this.rafId = requestAnimationFrame(() => this.scheduleFrame());
-      });
     } else {
-      draw();
-      this.rafId = requestAnimationFrame(() => this.scheduleFrame());
+      this.missedFrames = 0;
     }
+  }
+
+  /** Fallback loop for browsers without workers. Throttled when hidden. */
+  private scheduleFrame(): void {
+    if (!this.running) return;
+    this.tick();
+    this.rafId = requestAnimationFrame(() => this.scheduleFrame());
   }
 
   /**
@@ -283,8 +328,8 @@ export class StudioCompositor {
     this.levelIndex += 1;
     const next = SHED_LEVELS[this.levelIndex];
     this.fps = next.fps;
-
     this.missedFrames = 0;
+    if (this.clockWorker) this.startClock();
     return true;
   }
 
