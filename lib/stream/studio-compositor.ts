@@ -10,6 +10,9 @@ export type StudioBranding = {
 
 type DrawRect = { x: number; y: number; w: number; h: number };
 
+/** A canvas capture track can be asked for frames explicitly. */
+type CanvasCaptureTrack = MediaStreamTrack & { requestFrame?: () => void };
+
 /**
  * Resolutions the studio may open at, best first.
  *
@@ -72,6 +75,8 @@ export class StudioCompositor {
   private levelIndex = 0;
   private lastDrawAt = 0;
   private clockWorker: Worker | null = null;
+  private captureTrack: CanvasCaptureTrack | null = null;
+  private framesDrawn = 0;
 
   private maxWidth: number | null = null;
 
@@ -104,10 +109,28 @@ export class StudioCompositor {
 
         this.canvas.width = preset.width;
         this.canvas.height = preset.height;
-        // Captured once at the top rate. Shedding later throttles redraws only,
-        // never the canvas size, so the track keeps its dimensions and the
-        // recorder is never interrupted.
-        this.outputStream = this.canvas.captureStream(SHED_LEVELS[0].fps);
+
+        // Captured at 0 fps, which means "produce a frame only when asked".
+        // Rate-driven capture is fed by the browser's compositor, and a canvas
+        // that is not being composited — a page in the background — yields no
+        // frames however diligently it is drawn to. That is why a broadcast kept
+        // reporting itself as recording, with a live track and an empty send
+        // queue, while producing nothing at all. Asking for each frame
+        // explicitly takes the compositor out of the path.
+        const manual = this.canvas.captureStream(0);
+        const [candidate] = manual.getVideoTracks();
+        const capture = candidate as CanvasCaptureTrack | undefined;
+
+        if (capture && typeof capture.requestFrame === "function") {
+          this.captureTrack = capture;
+          this.outputStream = manual;
+        } else {
+          // No manual capture available; fall back to the rate-driven track,
+          // which works while the page is in front.
+          for (const t of manual.getTracks()) t.stop();
+          this.captureTrack = null;
+          this.outputStream = this.canvas.captureStream(SHED_LEVELS[0].fps);
+        }
         break;
       } catch {
         this.outputStream = null;
@@ -124,6 +147,7 @@ export class StudioCompositor {
 
     this.running = true;
     this.missedFrames = 0;
+    this.framesDrawn = 0;
     this.startClock();
     return this.outputStream;
   }
@@ -131,6 +155,7 @@ export class StudioCompositor {
   stop(): void {
     this.running = false;
     this.stopClock();
+    this.captureTrack = null;
     for (const track of this.outputStream?.getTracks() ?? []) {
       if (track.kind === "video") track.stop();
     }
@@ -282,6 +307,10 @@ export class StudioCompositor {
     this.lastDrawAt = start;
 
     this.drawFrame();
+    // Explicit capture: the drawn pixels become a frame now, rather than
+    // whenever the compositor next gets around to the canvas.
+    this.captureTrack?.requestFrame?.();
+    this.framesDrawn += 1;
 
     const elapsed = performance.now() - start;
     if (elapsed > interval * 1.5) {
@@ -343,6 +372,16 @@ export class StudioCompositor {
 
   getQualityLevel(): number {
     return this.levelIndex;
+  }
+
+  /** Frames handed to the capture track. Diagnostics only. */
+  getFramesDrawn(): number {
+    return this.framesDrawn;
+  }
+
+  /** Whether frames are being requested explicitly rather than by the compositor. */
+  isManualCapture(): boolean {
+    return this.captureTrack !== null;
   }
 
   private drawFrame(): void {

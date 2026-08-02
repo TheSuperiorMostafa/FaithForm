@@ -162,6 +162,8 @@ export function useStudioBroadcast(branding: StudioBranding) {
           return shed;
         },
         shedLevel: () => compositorRef.current?.getQualityLevel() ?? 0,
+        framesDrawn: () => compositorRef.current?.getFramesDrawn() ?? 0,
+        manualCapture: () => compositorRef.current?.isManualCapture() ?? false,
         onFatal: (message) => {
           // The uplink could not carry even the lowest quality. Surface it and
           // reset the studio rather than leaving the UI showing a dead "live".

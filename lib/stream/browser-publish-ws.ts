@@ -73,6 +73,10 @@ export type PublishOptions = {
   onCongestion?: () => boolean;
   /** Current shed rung, for diagnostics only. */
   shedLevel?: () => number;
+  /** Frames handed to the capture track so far, for diagnostics only. */
+  framesDrawn?: () => number;
+  /** Whether frames are requested explicitly rather than by the compositor. */
+  manualCapture?: () => boolean;
   /** Only called when the broadcast genuinely cannot continue. */
   onFatal?: (message: string) => void;
 };
@@ -209,6 +213,7 @@ export async function publishViaWebSocket(
     trackWidth: settings.width ?? null,
     trackHeight: settings.height ?? null,
     trackFps: settings.frameRate ?? null,
+    manualCapture: options.manualCapture?.() ?? null,
   });
 
   const ceiling = backlogCeiling(videoBitsPerSecond);
@@ -225,6 +230,10 @@ export async function publishViaWebSocket(
       recorder: recorder.state,
       trackState: track?.readyState ?? null,
       shedLevel: options.shedLevel?.() ?? null,
+      // The decisive pair: if frames keep being drawn while bytes stop moving,
+      // the capture or the recorder is at fault, not the render loop.
+      framesDrawn: options.framesDrawn?.() ?? null,
+      hidden: document.hidden,
     });
   }, 5_000);
 
