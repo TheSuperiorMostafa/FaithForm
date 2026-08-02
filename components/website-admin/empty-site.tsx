@@ -1,36 +1,64 @@
-import Link from "next/link";
-import { Globe } from "lucide-react";
+import { redirect } from "next/navigation";
 
-import { Button } from "@/components/ui/button";
+import { SiteBuilder } from "@/components/website-admin/site-builder";
+import { getChurchAuth } from "@/lib/auth/church";
+import { buildSiteProfile, getSiteThemes } from "@/lib/sites/queries";
 
 /**
- * Shown when the `website` feature is on but no site rows exist yet — a church
- * mid-onboarding. An error here would read as a fault; this reads as a stage.
+ * Shown when the `website` feature is on but no site rows exist yet.
+ *
+ * This is the build screen, not a "contact us" dead end — a church can create
+ * their own site from their Church Profile without waiting on anyone.
  */
-export function EmptySite() {
+export async function EmptySite() {
+  const auth = await getChurchAuth();
+  if (!auth) redirect("/login");
+
+  const [themes, profile] = await Promise.all([
+    getSiteThemes(),
+    buildSiteProfile(auth.churchId),
+  ]);
+
+  const readiness = [
+    {
+      label: "Church name and address",
+      ready: Boolean(profile?.name && profile?.address),
+      hint: profile?.address
+        ? "used in the header, footer and map"
+        : "add an address to show the map and directions",
+    },
+    {
+      label: "Service times",
+      ready: Boolean(profile?.serviceTimes.length),
+      hint: profile?.serviceTimes.length
+        ? `${profile.serviceTimes.length} on file — these become the times strip`
+        : "without these the times strip stays hidden",
+    },
+    {
+      label: "Staff",
+      ready: Boolean(profile?.staff.length),
+      hint: profile?.staff.length
+        ? `${profile.staff.length} public — these become the team section`
+        : "no public staff yet, so the team section starts hidden",
+    },
+    {
+      label: "Mission and vision",
+      ready: Boolean(profile?.missionStatement || profile?.visionStatement),
+      hint:
+        profile?.missionStatement || profile?.visionStatement
+          ? "we'll shorten these for the website"
+          : "without these the vision section stays hidden",
+    },
+    {
+      label: "Online giving",
+      ready: Boolean(profile?.givingEnabled),
+      hint: profile?.givingEnabled
+        ? "your giving page is connected"
+        : "connect Stripe in Giving to switch the donate section on",
+    },
+  ];
+
   return (
-    <div className="flex w-full flex-col items-center gap-4 rounded-2xl border border-dashed border-border bg-card px-6 py-14 text-center shadow-card">
-      <span className="flex size-14 items-center justify-center rounded-full bg-accent/10 text-accent">
-        <Globe className="size-7" strokeWidth={1.75} aria-hidden />
-      </span>
-      <div className="flex flex-col gap-1.5">
-        <h2 className="font-heading text-xl font-bold text-foreground">
-          Your website isn&apos;t built yet
-        </h2>
-        <p className="max-w-md text-sm leading-relaxed text-muted-foreground">
-          We build the first draft from your Church Profile, then hand it over
-          here for you to edit. Keeping your profile up to date is the fastest
-          way to get started.
-        </p>
-      </div>
-      <div className="flex flex-wrap justify-center gap-2">
-        <Link href="/dashboard/church-profile">
-          <Button variant="outline">Edit Church Profile</Button>
-        </Link>
-        <Link href="/dashboard/support">
-          <Button>Ask us to build it</Button>
-        </Link>
-      </div>
-    </div>
+    <SiteBuilder themes={themes} canBuild={auth.isAdmin} readiness={readiness} />
   );
 }

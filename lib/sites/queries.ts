@@ -192,60 +192,12 @@ export async function getSiteBundle(
       .eq("church_id", churchId),
   ]);
 
-  const profile: SiteProfile = {
-    slug: (church.slug as string) ?? slug,
-    name: (church.name as string) ?? "",
-    tagline: text(church, "tagline"),
-    description: text(church, "description"),
-    missionStatement: text(church, "mission_statement"),
-    visionStatement: text(church, "vision_statement"),
-    denomination: text(church, "denomination"),
-    logoUrl: text(church, "logo_url"),
-    coverImageUrl: text(church, "cover_image_url"),
-    address: text(church, "address"),
-    city: text(church, "city"),
-    state: text(church, "state"),
-    zip: text(church, "zip"),
-    phone: text(church, "phone"),
-    email: text(church, "email"),
-    googleMapsUrl: text(church, "google_maps_url"),
-    facebookUrl: text(church, "facebook_url"),
-    instagramUrl: text(church, "instagram_url"),
-    youtubeUrl: text(church, "youtube_url"),
-    livestreamUrl: text(church, "livestream_url"),
-    serviceTimes: (serviceTimesResult.data ?? []).map((row) => ({
-      label: row.label as string,
-      dayOfWeek: row.day_of_week as number,
-      startTime: row.start_time as string,
-      endTime: (row.end_time as string | null) ?? null,
-      kind: (row.kind as string) ?? "regular",
-      notes: (row.notes as string | null) ?? null,
-    })),
-    staff: (staffResult.data ?? []).map((row) => ({
-      name: row.full_name as string,
-      title: (row.title as string | null) ?? null,
-      bio: (row.bio as string | null) ?? null,
-      photoUrl: (row.photo_url as string | null) ?? null,
-    })),
-    events: (eventsResult.data ?? []).map((row) => ({
-      title: row.event_title as string,
-      date: (row.event_date as string | null) ?? null,
-      location: (row.event_location as string | null) ?? null,
-      note: (row.notes as string | null) ?? null,
-    })),
-    media: (mediaResult.data ?? []).map((row) => ({
-      id: row.id as string,
-      title: row.title as string,
-      series: (row.series as string | null) ?? null,
-      speaker: (row.speaker as string | null) ?? null,
-      date: (row.published_at as string | null) ?? null,
-      videoUrl: (row.video_url as string | null) ?? null,
-      thumbnail: row.thumbnail_url
-        ? { src: row.thumbnail_url as string, alt: row.title as string }
-        : null,
-    })),
-    givingEnabled: Boolean(church.stripe_charges_enabled),
-  };
+  const profile = mapProfile(church, {
+    serviceTimes: serviceTimesResult.data,
+    staff: staffResult.data,
+    events: eventsResult.data,
+    media: mediaResult.data,
+  });
 
   return {
     churchId,
@@ -274,6 +226,126 @@ export async function getSiteBundle(
     })),
     contactEmail: settings?.contactEmail ?? profile.email,
   };
+}
+
+type ProfileChildren = {
+  serviceTimes: Record<string, unknown>[] | null;
+  staff: Record<string, unknown>[] | null;
+  events: Record<string, unknown>[] | null;
+  media: Record<string, unknown>[] | null;
+};
+
+/** Shared by the public render path and the first-draft generator. */
+function mapProfile(church: ChurchRow, children: ProfileChildren): SiteProfile {
+  return {
+    slug: (church.slug as string) ?? "",
+    name: (church.name as string) ?? "",
+    tagline: text(church, "tagline"),
+    description: text(church, "description"),
+    missionStatement: text(church, "mission_statement"),
+    visionStatement: text(church, "vision_statement"),
+    denomination: text(church, "denomination"),
+    logoUrl: text(church, "logo_url"),
+    coverImageUrl: text(church, "cover_image_url"),
+    address: text(church, "address"),
+    city: text(church, "city"),
+    state: text(church, "state"),
+    zip: text(church, "zip"),
+    phone: text(church, "phone"),
+    email: text(church, "email"),
+    googleMapsUrl: text(church, "google_maps_url"),
+    facebookUrl: text(church, "facebook_url"),
+    instagramUrl: text(church, "instagram_url"),
+    youtubeUrl: text(church, "youtube_url"),
+    livestreamUrl: text(church, "livestream_url"),
+    serviceTimes: (children.serviceTimes ?? []).map((row) => ({
+      label: row.label as string,
+      dayOfWeek: row.day_of_week as number,
+      startTime: row.start_time as string,
+      endTime: (row.end_time as string | null) ?? null,
+      kind: (row.kind as string) ?? "regular",
+      notes: (row.notes as string | null) ?? null,
+    })),
+    staff: (children.staff ?? []).map((row) => ({
+      name: row.full_name as string,
+      title: (row.title as string | null) ?? null,
+      bio: (row.bio as string | null) ?? null,
+      photoUrl: (row.photo_url as string | null) ?? null,
+    })),
+    events: (children.events ?? []).map((row) => ({
+      title: row.event_title as string,
+      date: (row.event_date as string | null) ?? null,
+      location: (row.event_location as string | null) ?? null,
+      note: (row.notes as string | null) ?? null,
+    })),
+    media: (children.media ?? []).map((row) => ({
+      id: row.id as string,
+      title: row.title as string,
+      series: (row.series as string | null) ?? null,
+      speaker: (row.speaker as string | null) ?? null,
+      date: (row.published_at as string | null) ?? null,
+      videoUrl: (row.video_url as string | null) ?? null,
+      thumbnail: row.thumbnail_url
+        ? { src: row.thumbnail_url as string, alt: row.title as string }
+        : null,
+    })),
+    givingEnabled: Boolean(church.stripe_charges_enabled),
+  };
+}
+
+/**
+ * The church profile alone, with no site rows required.
+ *
+ * This is what the first-draft generator reads: at that point `site_pages` does
+ * not exist yet, so `getSiteBundle` would return null.
+ */
+export async function buildSiteProfile(
+  churchId: string,
+): Promise<SiteProfile | null> {
+  const supabase = createAdminClient();
+
+  const { data: churchRow, error } = await supabase
+    .from("churches")
+    .select(CHURCH_SELECT)
+    .eq("id", churchId)
+    .maybeSingle();
+
+  if (error || !churchRow) return null;
+
+  const [serviceTimes, staff, events, media] = await Promise.all([
+    supabase
+      .from("church_service_times")
+      .select("label, day_of_week, start_time, end_time, kind, notes")
+      .eq("church_id", churchId)
+      .order("sort_order", { ascending: true }),
+    supabase
+      .from("church_staff")
+      .select("full_name, title, bio, photo_url")
+      .eq("church_id", churchId)
+      .eq("is_public", true)
+      .order("sort_order", { ascending: true }),
+    supabase
+      .from("announcements")
+      .select("event_title, event_date, event_location, notes")
+      .eq("church_id", churchId)
+      .in("status", ["approved", "published"])
+      .gte("event_date", new Date().toISOString())
+      .order("event_date", { ascending: true })
+      .limit(6),
+    supabase
+      .from("site_media")
+      .select("id, title, series, speaker, published_at, video_url, thumbnail_url")
+      .eq("church_id", churchId)
+      .eq("is_published", true)
+      .limit(12),
+  ]);
+
+  return mapProfile(churchRow as ChurchRow, {
+    serviceTimes: serviceTimes.data,
+    staff: staff.data,
+    events: events.data,
+    media: media.data,
+  });
 }
 
 async function getTheme(key: string): Promise<SiteThemeRow | null> {

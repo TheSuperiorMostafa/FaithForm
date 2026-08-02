@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { requireChurchAuth } from "@/lib/auth/church";
 import { featureActionError } from "@/lib/features/guard";
+import { generateSite } from "@/lib/sites/generate";
 import { SECTION_REGISTRY } from "@/lib/sites/registry";
 import {
   diffPatch,
@@ -12,7 +13,7 @@ import {
   sanitizeCustomCss,
   sanitizeTokens,
 } from "@/lib/sites/resolve";
-import { getSiteBundle } from "@/lib/sites/queries";
+import { buildSiteProfile, getSiteBundle } from "@/lib/sites/queries";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -31,7 +32,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export type ActionResult = { ok: true } | { ok: false; error: string };
 
 const ok: ActionResult = { ok: true };
-const fail = (error: string): ActionResult => ({ ok: false, error });
+
+/** Narrow return type so it also satisfies the richer per-action results. */
+const fail = (error: string): { ok: false; error: string } => ({ ok: false, error });
 
 type Guard =
   | { ok: true; churchId: string; isAdmin: boolean }
@@ -78,6 +81,108 @@ async function ownsRow(
     .maybeSingle();
 
   return data?.church_id === churchId;
+}
+
+// ---------------------------------------------------------------------------
+// BUILD THE FIRST DRAFT
+// ---------------------------------------------------------------------------
+
+export type CreateWebsiteResult =
+  | { ok: true; aiCopyUsed: boolean }
+  | { ok: false; error: string };
+
+/**
+ * Builds a church's first website from their Church Profile.
+ *
+ * Structure is decided in code; copy is written by the model where the profile
+ * can't supply it (see lib/sites/generate.ts). The page is created as a draft
+ * so nothing goes public until the church reviews it and hits publish.
+ */
+export async function createWebsite(
+  themeKey: string,
+): Promise<CreateWebsiteResult> {
+  const auth = await guardAdmin();
+  if (!auth.ok) return fail(auth.error);
+
+  const supabase = createAdminClient();
+
+  const { data: theme } = await supabase
+    .from("site_themes")
+    .select("key")
+    .eq("key", themeKey)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (!theme) return fail("That design is not available.");
+
+  // Guard against a double-click or two admins building at once — the unique
+  // index on (church_id, path) would otherwise surface as a raw database error.
+  const { data: existing } = await supabase
+    .from("site_pages")
+    .select("id")
+    .eq("church_id", auth.churchId)
+    .eq("path", "/")
+    .maybeSingle();
+
+  if (existing) return fail("Your website has already been built.");
+
+  const profile = await buildSiteProfile(auth.churchId);
+  if (!profile) return fail("Your church profile could not be loaded.");
+
+  if (!profile.name?.trim()) {
+    return fail("Add your church name in Church Profile before building a site.");
+  }
+
+  const draft = await generateSite(auth.churchId, profile);
+
+  await supabase.from("site_settings").upsert(
+    {
+      church_id: auth.churchId,
+      theme_key: themeKey,
+      is_published: false,
+      contact_email: profile.email,
+    },
+    { onConflict: "church_id" },
+  );
+
+  const { data: page, error: pageError } = await supabase
+    .from("site_pages")
+    .insert({
+      church_id: auth.churchId,
+      path: "/",
+      title: draft.title,
+      meta_description: draft.metaDescription,
+      status: "draft",
+    })
+    .select("id")
+    .maybeSingle();
+
+  if (pageError || !page) {
+    console.error("[website] page insert failed:", pageError?.message);
+    return fail("Your website could not be created. Please try again.");
+  }
+
+  const { error: sectionsError } = await supabase.from("site_sections").insert(
+    draft.sections.map((section, index) => ({
+      page_id: page.id as string,
+      church_id: auth.churchId,
+      type: section.type,
+      sort_order: index * 10,
+      is_visible: section.isVisible,
+      props: section.props,
+    })),
+  );
+
+  if (sectionsError) {
+    // Leaving a page with no sections behind would render an empty site and
+    // block a retry on the "already built" check above.
+    await supabase.from("site_pages").delete().eq("id", page.id as string);
+    console.error("[website] section insert failed:", sectionsError.message);
+    return fail("Your website could not be created. Please try again.");
+  }
+
+  refresh();
+  return { ok: true, aiCopyUsed: draft.aiCopyUsed };
 }
 
 // ---------------------------------------------------------------------------
