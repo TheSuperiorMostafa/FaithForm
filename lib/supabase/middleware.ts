@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isBootstrapSuperAdminEmail } from "@/lib/auth/superadmin-emails";
 import { DEFAULT_PRODUCTION_SITE_URL } from "@/lib/site-url";
+import { rewriteChurchSite } from "@/lib/sites/tenant";
 import { createAdminClientOrNull } from "@/lib/supabase/admin";
 
 function rewriteGiveSubdomain(request: NextRequest): NextResponse | null {
@@ -48,6 +49,12 @@ export async function updateSession(request: NextRequest) {
 
   const giveRewrite = rewriteGiveSubdomain(request);
   if (giveRewrite) return giveRewrite;
+
+  // Church websites resolve before the auth client is built. They are public
+  // pages served on someone else's domain, so making every visitor pay for a
+  // Supabase session round trip would be pure waste.
+  const siteRewrite = await rewriteChurchSite(request);
+  if (siteRewrite) return siteRewrite;
 
   let response = NextResponse.next({ request });
 

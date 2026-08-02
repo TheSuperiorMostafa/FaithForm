@@ -5,9 +5,26 @@ import { getChurchBySlug } from "@/lib/queries/giving";
 
 type PageProps = {
   params: { slug: string };
+  searchParams?: { amount?: string };
 };
 
-export default async function GivePage({ params }: PageProps) {
+/**
+ * `?amount=` carries a gift picked on the church's own website. Untrusted
+ * input, so it is clamped to a sane range and rounded to whole cents before it
+ * ever reaches the form; anything unparseable just falls back to the default.
+ */
+function parseAmountCents(raw: string | undefined): number | undefined {
+  if (!raw) return undefined;
+
+  const dollars = Number.parseFloat(raw);
+  if (!Number.isFinite(dollars) || dollars < 1 || dollars > 100_000) {
+    return undefined;
+  }
+
+  return Math.round(dollars * 100);
+}
+
+export default async function GivePage({ params, searchParams }: PageProps) {
   const church = await getChurchBySlug(params.slug);
 
   if (!church) {
@@ -35,6 +52,7 @@ export default async function GivePage({ params }: PageProps) {
       logoUrl={church.logoUrl}
       givingPrimaryColor={church.givingPrimaryColor}
       funds={funds}
+      initialAmountCents={parseAmountCents(searchParams?.amount)}
     />
   );
 }

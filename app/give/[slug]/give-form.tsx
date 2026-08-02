@@ -50,6 +50,12 @@ type GiveFormProps = {
   lockedEmail?: string;
   lockedName?: string;
   onPaymentSuccess?: () => void;
+  /**
+   * Preselected gift, in cents. Set when a visitor picked an amount on their
+   * church's website before landing here, so the choice they just made is not
+   * silently reset to the default.
+   */
+  initialAmountCents?: number;
 };
 
 function CheckoutForm({
@@ -123,6 +129,7 @@ export function GiveForm({
   lockedEmail,
   lockedName,
   onPaymentSuccess,
+  initialAmountCents,
 }: GiveFormProps) {
   const router = useRouter();
   const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
@@ -130,9 +137,20 @@ export function GiveForm({
 
   const defaultFund = funds.find((f) => f.isDefault) ?? funds[0];
 
-  const [amountCents, setAmountCents] = useState(5000);
-  const [amountMode, setAmountMode] = useState<"preset" | "custom">("preset");
-  const [customAmount, setCustomAmount] = useState("");
+  // An incoming amount that is not one of the presets still has to be honoured,
+  // so it drops into the custom field rather than being rounded to a preset.
+  const presetMatch =
+    initialAmountCents && PRESETS.includes(initialAmountCents)
+      ? initialAmountCents
+      : null;
+
+  const [amountCents, setAmountCents] = useState(presetMatch ?? 5000);
+  const [amountMode, setAmountMode] = useState<"preset" | "custom">(
+    initialAmountCents && !presetMatch ? "custom" : "preset",
+  );
+  const [customAmount, setCustomAmount] = useState(
+    initialAmountCents && !presetMatch ? (initialAmountCents / 100).toFixed(2) : "",
+  );
   const [giftType, setGiftType] = useState<"one_time" | "recurring">("one_time");
   const [interval, setInterval] = useState<"week" | "month">("month");
   const [billingDayOfMonth, setBillingDayOfMonth] = useState(1);
