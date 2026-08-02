@@ -56,7 +56,10 @@ except Exception:
     sys.exit(0)
 s = d.get("scheduled") or {}
 y = d.get("syndication") or {}
-if s.get("started") or s.get("simulated") or y.get("retried"):
+started = s.get("started", 0)
+simulated = s.get("simulated", 0)
+retried = y.get("retried", 0)
+if started or simulated or retried:
     stamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    print(f"[{stamp}] started={s.get(\"started\", 0)} simulated={s.get(\"simulated\", 0)} retried={y.get(\"retried\", 0)}")
+    print("[%s] started=%s simulated=%s retried=%s" % (stamp, started, simulated, retried))
 '
