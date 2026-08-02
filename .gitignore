@@ -45,3 +45,6 @@ next-env.d.ts
 
 # optimized sermon theme images (uploaded to Supabase, not committed)
 /data/sermon-theme-import/
+
+# Python bytecode from relay script checks
+__pycache__/
