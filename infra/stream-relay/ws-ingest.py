@@ -273,6 +273,17 @@ async def run_session(ws, rtmp_url: str) -> None:
                 elif event == "start":
                     settings = StreamSettings(payload)
                     print(f"[ws-ingest] browser opening at {settings}", flush=True)
+                elif event == "client":
+                    # Browser-side diagnostics. A broadcast that stops sending
+                    # looks identical from here whether the recorder died, the
+                    # uplink stalled, or someone closed the tab; these are the
+                    # only signal that tells them apart.
+                    name = payload.pop("name", "?")
+                    payload.pop("event", None)
+                    at = payload.pop("at", None)
+                    detail = " ".join(f"{k}={v}" for k, v in payload.items())
+                    stamp = f"+{at}ms" if at is not None else ""
+                    print(f"[ws-ingest] client {stamp} {name} {detail}".rstrip(), flush=True)
                 continue
 
             if not isinstance(message, bytes):

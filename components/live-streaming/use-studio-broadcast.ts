@@ -161,6 +161,7 @@ export function useStudioBroadcast(branding: StudioBranding) {
           setReducedQuality(true);
           return shed;
         },
+        shedLevel: () => compositorRef.current?.getQualityLevel() ?? 0,
         onFatal: (message) => {
           // The uplink could not carry even the lowest quality. Surface it and
           // reset the studio rather than leaving the UI showing a dead "live".

@@ -11,21 +11,32 @@ export type StudioBranding = {
 type DrawRect = { x: number; y: number; w: number; h: number };
 
 /**
- * Quality ladder, best first.
+ * Resolutions the studio may open at, best first.
  *
- * Stepped down when the machine cannot draw fast enough, and now also when the
- * uplink cannot carry what we are producing. Dropping frame rate matters more
- * than it looks: the canvas is captured at a fixed rate, so a canvas we stop
- * redrawing yields near-identical frames, and those cost the encoder almost
- * nothing. That is what lets a constrained connection shed load without
- * restarting the recorder — which is impossible mid-stream, since a WebM
- * recording cannot change bitrate once started.
+ * Chosen once, before the recorder starts, and then never changed. Resizing a
+ * canvas that is being captured changes the dimensions of the live video track,
+ * and a MediaRecorder is not obliged to survive that — so the canvas is fixed
+ * for the life of the broadcast and load is shed by other means.
  */
-const QUALITY_LEVELS = [
-  { width: 1920, height: 1080, fps: 30 },
-  { width: 1280, height: 720, fps: 30 },
-  { width: 1280, height: 720, fps: 20 },
-  { width: 960, height: 540, fps: 15 },
+const OUTPUT_PRESETS = [
+  { width: 1920, height: 1080 },
+  { width: 1280, height: 720 },
+] as const;
+
+/**
+ * Load-shedding ladder, applied without touching the canvas size.
+ *
+ * Frame rate only. The canvas is captured at a fixed rate, so frames we skip are
+ * byte-identical to the one before and cost the encoder almost nothing — which
+ * makes throttling redraws a real reduction, not a cosmetic one. It matters
+ * because a MediaRecorder's bitrate cannot be changed once it has started, so
+ * this is the only lever left mid-broadcast.
+ */
+const SHED_LEVELS = [
+  { fps: 30 },
+  { fps: 20 },
+  { fps: 15 },
+  { fps: 12 },
 ] as const;
 
 const BG_COLOR = "#0a0a0a";
@@ -61,6 +72,8 @@ export class StudioCompositor {
   private levelIndex = 0;
   private lastDrawAt = 0;
 
+  private maxWidth: number | null = null;
+
   constructor() {
     this.canvas = document.createElement("canvas");
     const ctx = this.canvas.getContext("2d");
@@ -77,19 +90,23 @@ export class StudioCompositor {
   start(): MediaStream {
     if (this.outputStream) return this.outputStream;
 
-    for (let i = 0; i < QUALITY_LEVELS.length; i += 1) {
-      const preset = QUALITY_LEVELS[i];
+    const presets = this.maxWidth
+      ? OUTPUT_PRESETS.filter((p) => p.width <= this.maxWidth!)
+      : OUTPUT_PRESETS;
+
+    for (const preset of presets.length ? presets : [OUTPUT_PRESETS[OUTPUT_PRESETS.length - 1]]) {
       try {
-        this.levelIndex = i;
+        this.levelIndex = 0;
         this.width = preset.width;
         this.height = preset.height;
-        this.fps = preset.fps;
+        this.fps = SHED_LEVELS[0].fps;
+
         this.canvas.width = preset.width;
         this.canvas.height = preset.height;
-        // Captured at the top of the ladder. Shedding later throttles how often
-        // we redraw rather than recreating the track, so the recorder — and the
-        // single continuous WebM stream it feeds — is never interrupted.
-        this.outputStream = this.canvas.captureStream(QUALITY_LEVELS[0].fps);
+        // Captured once at the top rate. Shedding later throttles redraws only,
+        // never the canvas size, so the track keeps its dimensions and the
+        // recorder is never interrupted.
+        this.outputStream = this.canvas.captureStream(SHED_LEVELS[0].fps);
         break;
       } catch {
         this.outputStream = null;
@@ -240,36 +257,43 @@ export class StudioCompositor {
   }
 
   /**
-   * Steps down one rung of the quality ladder. Returns false at the bottom.
+   * Caps the opening resolution. Must be called before start().
    *
-   * Called both when this machine cannot draw fast enough and when the uplink
-   * cannot carry the result. Cheap and reversible-looking to the viewer: the
-   * relay scales whatever arrives back to the resolution agreed at the start of
-   * the broadcast, so the picture softens rather than cutting out.
+   * Set from the measured uplink, because the encoder's bitrate target is only
+   * a hint — a 1080p canvas full of detail overshoots it badly, and the only
+   * reliable way to hold the rate down is to give the encoder less to encode.
+   */
+  setMaxWidth(width: number | null): void {
+    this.maxWidth = width;
+  }
+
+  /**
+   * Steps down one rung of the shedding ladder. Returns false at the bottom.
+   *
+   * Deliberately never touches canvas.width/height: that would change the
+   * dimensions of the live track the MediaRecorder is mid-recording, which is
+   * not something a recorder is obliged to survive. Only redraw rate and
+   * internal render scale move, so the track is untouched and the picture just
+   * softens.
    */
   shedQuality(): boolean {
     if (!this.outputStream) return false;
-    if (this.levelIndex >= QUALITY_LEVELS.length - 1) return false;
+    if (this.levelIndex >= SHED_LEVELS.length - 1) return false;
 
     this.levelIndex += 1;
-    const next = QUALITY_LEVELS[this.levelIndex];
-    this.width = next.width;
-    this.height = next.height;
+    const next = SHED_LEVELS[this.levelIndex];
     this.fps = next.fps;
-    this.canvas.width = next.width;
-    this.canvas.height = next.height;
+
     this.missedFrames = 0;
     return true;
   }
 
   /**
    * Resolution and frame rate the broadcast is opening at, for the relay to
-   * scale to. Read once, immediately after start() — which may itself have
-   * settled below the top rung if the browser refused to capture 1080p.
+   * scale to. Read once, immediately after start().
    */
   getOutputSettings(): { width: number; height: number; fps: number } {
-    const level = QUALITY_LEVELS[this.levelIndex];
-    return { width: level.width, height: level.height, fps: level.fps };
+    return { width: this.width, height: this.height, fps: SHED_LEVELS[0].fps };
   }
 
   getQualityLevel(): number {

@@ -65,6 +65,8 @@ export type PublishOptions = {
   output: { width: number; height: number; fps: number };
   /** Asked to drop a rung when the uplink falls behind. Returns false at the bottom. */
   onCongestion?: () => boolean;
+  /** Current shed rung, for diagnostics only. */
+  shedLevel?: () => number;
   /** Only called when the broadcast genuinely cannot continue. */
   onFatal?: (message: string) => void;
 };
@@ -119,14 +121,17 @@ async function probeUplink(ws: WebSocket): Promise<number | null> {
   }
 
   const result = await measured;
-  if (!result || result.bytes <= 0 || result.ms < 50) return null;
+  if (!result || result.bytes <= 0 || result.ms < 2) return null;
 
   const bps = (result.bytes * 8) / (result.ms / 1000);
   // An absurdly low reading usually means the socket stalled for an unrelated
-  // reason; an absurdly high one means the measurement did not capture the
-  // real path. Neither is a basis for choosing a bitrate.
-  if (!Number.isFinite(bps) || bps < 50_000 || bps > 500_000_000) return null;
-  return bps;
+  // reason. A very fast one is not an error — half a megabyte really does cross
+  // a good connection in a few milliseconds — it just means the payload was too
+  // small to measure precisely, so it is treated as "comfortably fast" and the
+  // caller's ceiling does the rest. An earlier 50ms floor rejected exactly that
+  // case and quietly dropped every fast connection to the fallback rate.
+  if (!Number.isFinite(bps) || bps < 50_000) return null;
+  return Math.min(bps, 1_000_000_000);
 }
 
 export async function publishViaWebSocket(
@@ -176,7 +181,46 @@ export async function publishViaWebSocket(
     audioBitsPerSecond: AUDIO_BITS_PER_SECOND,
   });
 
+  // The browser is the one place none of this can be observed from the server,
+  // and a broadcast that stops sending looks identical at the relay whether the
+  // recorder died, the uplink stalled, or the operator closed the tab. Report
+  // what happened so the relay log can tell them apart.
+  const report = (event: string, data: Record<string, unknown> = {}) => {
+    if (ws.readyState !== WebSocket.OPEN) return;
+    try {
+      ws.send(JSON.stringify({ event: "client", at: Math.round(performance.now()), name: event, ...data }));
+    } catch {
+      // Diagnostics must never take the broadcast down with them.
+    }
+  };
+
+  const track = stream.getVideoTracks()[0];
+  const settings = track?.getSettings?.() ?? {};
+  report("recorder_start", {
+    mimeType,
+    requestedVideoBps: videoBitsPerSecond,
+    measuredUplinkBps: measuredUplinkBps ? Math.round(measuredUplinkBps) : null,
+    trackWidth: settings.width ?? null,
+    trackHeight: settings.height ?? null,
+    trackFps: settings.frameRate ?? null,
+  });
+
   const ceiling = backlogCeiling(videoBitsPerSecond);
+  let bytesSent = 0;
+  let chunksSent = 0;
+
+  // Cheap heartbeat of what the recorder is actually producing versus what was
+  // asked for — the gap between the two is the thing worth seeing.
+  const statsTimer = window.setInterval(() => {
+    report("stats", {
+      buffered: ws.bufferedAmount,
+      bytesSent,
+      chunksSent,
+      recorder: recorder.state,
+      trackState: track?.readyState ?? null,
+      shedLevel: options.shedLevel?.() ?? null,
+    });
+  }, 5_000);
 
   // WebM over a socket is one continuous byte stream, so individual chunks can
   // never be dropped without corrupting it for the relay's demuxer. Watch the
@@ -204,6 +248,7 @@ export async function publishViaWebSocket(
     if (!exhausted && backloggedFor >= SHED_AFTER_MS && now - lastShedAt >= SHED_AFTER_MS) {
       lastShedAt = now;
       const shed = options.onCongestion?.() ?? false;
+      report("shed", { shed, buffered: ws.bufferedAmount, backloggedForMs: Math.round(backloggedFor) });
       if (!shed) exhausted = true;
       // Give the lower rung a chance to drain before judging it again.
       overCeilingSince = now;
@@ -211,6 +256,7 @@ export async function publishViaWebSocket(
     }
 
     if (exhausted && backloggedFor >= FATAL_AFTER_MS) {
+      report("fatal_backlog", { buffered: ws.bufferedAmount, bytesSent, chunksSent });
       options.onFatal?.(
         "Your internet upload speed cannot carry the broadcast, even at the " +
           "lowest quality. The stream was stopped.",
@@ -221,6 +267,7 @@ export async function publishViaWebSocket(
 
   const cleanup = () => {
     window.clearInterval(backlogWatchdog);
+    window.clearInterval(statsTimer);
     if (recorder.state !== "inactive") {
       recorder.stop();
     }
@@ -229,19 +276,41 @@ export async function publishViaWebSocket(
 
   recorder.addEventListener("dataavailable", (event) => {
     if (event.data.size > 0 && ws.readyState === WebSocket.OPEN) {
+      bytesSent += event.data.size;
+      chunksSent += 1;
       ws.send(event.data);
     }
   });
 
-  recorder.addEventListener("error", () => {
+  recorder.addEventListener("error", (event) => {
+    const err = (event as unknown as { error?: { name?: string; message?: string } }).error;
+    report("recorder_error", { name: err?.name ?? null, message: err?.message ?? null });
     cleanup();
   });
 
-  ws.addEventListener("close", () => {
+  // A recorder that stops on its own — rather than because we stopped it — is
+  // the signature of the track underneath it going away.
+  recorder.addEventListener("stop", () => {
+    report("recorder_stopped", { bytesSent, chunksSent, trackState: track?.readyState ?? null });
+  });
+
+  track?.addEventListener("ended", () => {
+    report("track_ended", { bytesSent, chunksSent });
+  });
+
+  ws.addEventListener("close", (event) => {
     window.clearInterval(backlogWatchdog);
+    window.clearInterval(statsTimer);
     if (recorder.state !== "inactive") {
       recorder.stop();
     }
+    // Cannot be reported over the socket that just closed; left for the console.
+    console.warn("[studio] ingest socket closed", {
+      code: event.code,
+      reason: event.reason,
+      bytesSent,
+      chunksSent,
+    });
   });
 
   recorder.start(100);
