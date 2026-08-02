@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
@@ -10,6 +11,7 @@ import {
   profileToFormState,
   upsertChurchProfile,
 } from "@/lib/queries/church-profile";
+import { normalizeSiteImage } from "@/lib/security/validate-image";
 import { generateSite } from "@/lib/sites/generate";
 import { SECTION_REGISTRY } from "@/lib/sites/registry";
 import {
@@ -525,6 +527,70 @@ export async function deleteMedia(id: string): Promise<ActionResult> {
 
   refresh();
   return ok;
+}
+
+// ---------------------------------------------------------------------------
+// IMAGE UPLOAD
+// ---------------------------------------------------------------------------
+
+export type UploadResult = { ok: true; url: string } | { ok: false; error: string };
+
+const MAX_UPLOAD_BYTES = 12 * 1024 * 1024;
+
+/**
+ * Stores a church-supplied photo and hands back its public URL.
+ *
+ * Unlike the logo and cover uploads on the Church Profile page, this writes no
+ * database column — website images live inside section props, overrides and
+ * site_media, so the caller decides where the URL goes.
+ *
+ * Files land in the existing public `church-covers` bucket under a per-church
+ * `site/` prefix. Paths are prefixed with the church id so one church can never
+ * overwrite another's image by guessing a filename, and each upload gets a
+ * fresh name so replacing a photo doesn't have to fight CDN caching.
+ */
+export async function uploadSiteImage(formData: FormData): Promise<UploadResult> {
+  const auth = await guardAdmin();
+  if (!auth.ok) return { ok: false, error: auth.error };
+
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { ok: false, error: "Choose an image to upload." };
+  }
+
+  if (file.size > MAX_UPLOAD_BYTES) {
+    return { ok: false, error: "That image is over 12MB. Please pick a smaller one." };
+  }
+
+  const normalized = await normalizeSiteImage(
+    Buffer.from(await file.arrayBuffer()),
+  );
+
+  if (!normalized) {
+    return {
+      ok: false,
+      error: "That file doesn't look like an image we can use. Try a JPG, PNG, or HEIC photo.",
+    };
+  }
+
+  const name = `${Date.now().toString(36)}-${randomUUID().slice(0, 8)}.${normalized.ext}`;
+  const path = `${auth.churchId}/site/${name}`;
+  const admin = createAdminClient();
+
+  const { error } = await admin.storage
+    .from("church-covers")
+    .upload(path, normalized.buffer, {
+      contentType: normalized.contentType,
+      upsert: false,
+    });
+
+  if (error) {
+    console.error("[website] image upload failed:", error.message);
+    return { ok: false, error: "That image could not be uploaded. Please try again." };
+  }
+
+  const { data } = admin.storage.from("church-covers").getPublicUrl(path);
+  return { ok: true, url: data.publicUrl };
 }
 
 // ---------------------------------------------------------------------------

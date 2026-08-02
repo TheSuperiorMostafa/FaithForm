@@ -6,6 +6,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { saveSiteDetails, type SiteDetailsInput } from "@/app/dashboard/website/actions";
+import { ImageUploadField } from "@/components/website-admin/image-upload-field";
 import { SitePreview } from "@/components/website-admin/site-preview";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -88,13 +89,14 @@ export function DetailsForm({
               disabled={!canEdit}
             />
           </Field>
-          <Field label="Logo image URL">
-            <Input
-              value={form.logoUrl}
-              onChange={(e) => set("logoUrl", e.target.value)}
-              disabled={!canEdit}
-            />
-          </Field>
+          <ImageUploadField
+            label="Logo"
+            help="Shown in the header and footer. A square image works best."
+            aspect="square"
+            value={form.logoUrl}
+            disabled={!canEdit}
+            onChange={(url) => set("logoUrl", url)}
+          />
         </Panel>
 
         <Panel title="Where to find you">
@@ -270,11 +272,12 @@ export function DetailsForm({
                     disabled={!canEdit}
                     onChange={(e) => update({ bio: e.target.value })}
                   />
-                  <Input
-                    placeholder="Photo URL"
+                  <ImageUploadField
+                    label="Photo"
+                    aspect="square"
                     value={row.photoUrl}
                     disabled={!canEdit}
-                    onChange={(e) => update({ photoUrl: e.target.value })}
+                    onChange={(url) => update({ photoUrl: url })}
                   />
                   <div className="flex items-center justify-between gap-4">
                     <Label className="text-sm font-medium">Show on the website</Label>

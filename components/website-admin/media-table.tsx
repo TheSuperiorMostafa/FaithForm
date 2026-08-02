@@ -5,6 +5,7 @@ import { Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { deleteMedia, saveMedia } from "@/app/dashboard/website/actions";
+import { ImageUploadField } from "@/components/website-admin/image-upload-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -135,14 +136,12 @@ export function MediaTable({
                 onChange={(e) => setDraft({ ...draft, videoUrl: e.target.value })}
               />
             </Field>
-            <Field label="Thumbnail image URL">
-              <Input
-                value={draft.thumbnailUrl}
-                onChange={(e) =>
-                  setDraft({ ...draft, thumbnailUrl: e.target.value })
-                }
-              />
-            </Field>
+            <ImageUploadField
+              label="Thumbnail"
+              help="Shown in the sermon list. Optional."
+              value={draft.thumbnailUrl}
+              onChange={(url) => setDraft({ ...draft, thumbnailUrl: url })}
+            />
           </div>
 
           <div className="mt-4 flex items-center justify-between gap-4">

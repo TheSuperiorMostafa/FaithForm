@@ -2,6 +2,7 @@
 
 import { Plus, Trash2 } from "lucide-react";
 
+import { ImageUploadField } from "@/components/website-admin/image-upload-field";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -208,31 +209,30 @@ export function SectionFieldsForm({
           case "image": {
             const img = asRecord(current);
             return (
-              <FieldShell key={id} label={field.label} help={field.help}>
-                <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/30 p-3">
+              <div key={id} className="flex flex-col gap-2 rounded-lg border border-border bg-muted/30 p-3">
+                <ImageUploadField
+                  label={field.label}
+                  help={field.help}
+                  value={asString(img.src)}
+                  // Stored as null rather than "" so the renderer falls back to
+                  // the striped placeholder instead of an empty <img>.
+                  onChange={(url) => set(field.key, { ...img, src: url || null })}
+                />
+                <Input
+                  placeholder="Describe the image for screen readers"
+                  value={asString(img.alt)}
+                  onChange={(e) => set(field.key, { ...img, alt: e.target.value })}
+                />
+                {!asString(img.src) ? (
                   <Input
-                    placeholder="Image URL"
-                    value={asString(img.src)}
+                    placeholder="Placeholder caption shown until a photo is added"
+                    value={asString(img.placeholder)}
                     onChange={(e) =>
-                      set(field.key, { ...img, src: e.target.value || null })
+                      set(field.key, { ...img, placeholder: e.target.value })
                     }
                   />
-                  <Input
-                    placeholder="Describe the image for screen readers"
-                    value={asString(img.alt)}
-                    onChange={(e) => set(field.key, { ...img, alt: e.target.value })}
-                  />
-                  {!asString(img.src) ? (
-                    <Input
-                      placeholder="Placeholder caption shown until a photo is added"
-                      value={asString(img.placeholder)}
-                      onChange={(e) =>
-                        set(field.key, { ...img, placeholder: e.target.value })
-                      }
-                    />
-                  ) : null}
-                </div>
-              </FieldShell>
+                ) : null}
+              </div>
             );
           }
 
