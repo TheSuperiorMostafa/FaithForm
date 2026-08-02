@@ -3,22 +3,46 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { startLiveBroadcast } from "@/lib/stream/go-live";
 import { queueSimulatedPlayout } from "@/lib/stream/simulated";
 
+/**
+ * How late a service may start.
+ *
+ * Generous enough to ride out a cron outage, short enough that a service nobody
+ * showed up for does not go live by itself. Without a lower bound this started
+ * *any* scheduled event whose time had passed — so the first run after the cron
+ * was finally wired up went live on a three-week-old abandoned event, and would
+ * have published it to YouTube had that event syndicated. Anything older is
+ * cancelled rather than left scheduled, so it stops being reconsidered every two
+ * minutes and stops occupying the batch.
+ */
+const START_GRACE_MS = 30 * 60 * 1000;
+
 export async function startDueScheduledEvents(
   supabase?: SupabaseClient,
-): Promise<{ started: number; simulated: number }> {
+): Promise<{ started: number; simulated: number; expired?: number }> {
   const client = supabase ?? createAdminClient();
   const now = new Date().toISOString();
+  const earliest = new Date(Date.now() - START_GRACE_MS).toISOString();
+
+  const { data: expiredRows } = await client
+    .from("stream_events")
+    .update({ status: "cancelled" })
+    .eq("status", "scheduled")
+    .lt("starts_at", earliest)
+    .select("id");
+
+  const expired = expiredRows?.length ?? 0;
 
   const { data: events, error } = await client
     .from("stream_events")
     .select("*")
     .eq("status", "scheduled")
     .lte("starts_at", now)
+    .gte("starts_at", earliest)
     .order("starts_at", { ascending: true })
     .limit(20);
 
   if (error || !events?.length) {
-    return { started: 0, simulated: 0 };
+    return { started: 0, simulated: 0, expired };
   }
 
   let started = 0;
@@ -63,5 +87,5 @@ export async function startDueScheduledEvents(
     }
   }
 
-  return { started, simulated };
+  return { started, simulated, expired };
 }
