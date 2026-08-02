@@ -71,7 +71,13 @@ export const aboutTextSection = defineSection<AboutTextContent>({
         { key: "label", label: "Caption", type: "text" },
       ],
     },
-    { key: "image", label: "Image", type: "image", aspect: "feature" },
+    {
+      key: "image",
+      label: "Photo",
+      type: "image",
+      aspect: "feature",
+      help: "Its own photo, separate from the cover banner at the top of the page.",
+    },
   ],
   defaults: {
     eyebrow: null,
@@ -82,11 +88,12 @@ export const aboutTextSection = defineSection<AboutTextContent>({
     surface: "canvas",
     align: "split",
   },
+  // Deliberately does NOT fall back to the profile cover photo. The cover is
+  // the hero's wide banner; reusing it here meant one upload silently changed
+  // two pictures, and a 5.8:1 banner crop rendered inside this 4:3 frame looks
+  // wrong in both places. This photo is set on its own, in Website → Pages.
   derive: (profile) => ({
     ...(profile.description ? { body: [profile.description] } : {}),
-    ...(profile.coverImageUrl
-      ? { image: { src: profile.coverImageUrl, alt: profile.name } }
-      : {}),
   }),
   Component: AboutText,
 });

@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { toast } from "sonner";
+import { useMemo, useState } from "react";
 
 import { saveDesign } from "@/app/dashboard/website/actions";
-import { Button } from "@/components/ui/button";
+import { SaveStatus } from "@/components/website-admin/save-status";
+import { useAutosave } from "@/components/website-admin/use-autosave";
 import { ColorPickerField } from "@/components/ui/color-picker-field";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -61,26 +61,32 @@ export function DesignForm({
   const [themeKey, setThemeKey] = useState(initialThemeKey);
   const [tokens, setTokens] = useState<Record<string, string>>(initialTokens);
   const [customCss, setCustomCss] = useState(initialCustomCss);
-  const [pending, startTransition] = useTransition();
 
-  function save() {
-    startTransition(async () => {
-      const result = await saveDesign({
-        themeKey,
-        // Empty means "inherit from the theme", so it must not be stored.
-        brandTokens: Object.fromEntries(
-          Object.entries(tokens).filter(([, v]) => v.trim()),
-        ),
-        customCss,
-      });
-      result.ok
-        ? toast.success("Design saved.")
-        : toast.error(result.error);
-    });
-  }
+  // One value for the whole panel, so a colour and a theme change a moment
+  // apart collapse into a single write instead of racing each other.
+  const design = useMemo(
+    () => ({
+      themeKey,
+      // Empty means "inherit from the theme", so it must not be stored.
+      brandTokens: Object.fromEntries(
+        Object.entries(tokens).filter(([, v]) => v.trim()),
+      ),
+      customCss,
+    }),
+    [themeKey, tokens, customCss],
+  );
+
+  const { status } = useAutosave(design, saveDesign, { enabled: canEdit });
 
   return (
     <div className="flex flex-col gap-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <p className="text-sm text-muted-foreground">
+          Changes save on their own.
+        </p>
+        <SaveStatus status={status} />
+      </div>
+
       <section className="rounded-2xl border border-border bg-card p-5 shadow-card">
         <h2 className="font-heading text-lg font-bold">Theme</h2>
         <p className="text-sm text-muted-foreground">
@@ -163,16 +169,13 @@ export function DesignForm({
         </section>
       ) : null}
 
-      <div>
-        <Button type="button" onClick={save} disabled={pending || !canEdit}>
-          {pending ? "Saving…" : "Save design"}
-        </Button>
-        {!canEdit ? (
-          <p className="mt-2 text-xs text-muted-foreground">
-            Only church admins can change the design.
-          </p>
-        ) : null}
-      </div>
+      {!canEdit ? (
+        <p className="text-xs text-muted-foreground">
+          Only church admins can change the design.
+        </p>
+      ) : (
+        <SaveStatus status={status} />
+      )}
     </div>
   );
 }

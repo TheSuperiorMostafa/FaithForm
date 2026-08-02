@@ -10,7 +10,9 @@ import {
   saveSectionContent,
   setSectionVisible,
 } from "@/app/dashboard/website/actions";
+import { SaveStatus } from "@/components/website-admin/save-status";
 import { SectionFieldsForm } from "@/components/website-admin/section-fields-form";
+import { useAutosave } from "@/components/website-admin/use-autosave";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import type { SectionField } from "@/lib/sites/contract";
@@ -131,20 +133,18 @@ function SectionRow({
   const [saving, startSaving] = useTransition();
   const locked = section.fields === null;
 
-  function save() {
-    startSaving(async () => {
-      const result = await saveSectionContent({
-        sectionId: section.id,
-        content: draft,
-      });
-      if (!result.ok) {
-        toast.error(result.error);
-        return;
-      }
-      toast.success(`${section.label} saved.`);
-      onSaved?.();
-    });
-  }
+  // Only autosave while the editor is actually open. A closed section keeps its
+  // draft in state, and saving it in the background would write content the
+  // church is not looking at.
+  const { status } = useAutosave(
+    draft,
+    async (content) => {
+      const result = await saveSectionContent({ sectionId: section.id, content });
+      if (result.ok) onSaved?.();
+      return result;
+    },
+    { enabled: open && canEdit && !locked },
+  );
 
   function reset() {
     startSaving(async () => {
@@ -153,6 +153,9 @@ function SectionRow({
         toast.error(result.error);
         return;
       }
+      // Adopt what the server restored, so the fields show the default the
+      // church just asked for instead of the edits it threw away.
+      setDraft(result.content);
       toast.success(`${section.label} reset to its default content.`);
       onSaved?.();
     });
@@ -238,10 +241,8 @@ function SectionRow({
             idPrefix={section.id}
           />
 
-          <div className="mt-5 flex flex-wrap items-center gap-2">
-            <Button type="button" onClick={save} disabled={saving || !canEdit}>
-              {saving ? "Saving…" : "Save changes"}
-            </Button>
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-2">
+            <SaveStatus status={status} />
             <Button
               type="button"
               variant="ghost"
@@ -254,8 +255,8 @@ function SectionRow({
           </div>
 
           <p className="mt-3 text-xs text-muted-foreground">
-            Only what you actually change is saved, so anything left alone keeps
-            following your Church Profile.
+            Changes save on their own. Only what you actually change is stored,
+            so anything left alone keeps following your Church Profile.
           </p>
         </div>
       ) : null}

@@ -116,50 +116,52 @@ export function ImageUploadField({
         </button>
       </div>
 
-      <p className="text-xs text-muted-foreground">
-        {help ? `${help} ` : ""}
-        {preset.ratio ? preset.hint : null}
-      </p>
+      {help || preset.ratio ? (
+        <p className="text-xs text-muted-foreground">
+          {[help, preset.ratio ? preset.hint : null].filter(Boolean).join(" ")}
+        </p>
+      ) : null}
 
       {value ? (
-        <div className="flex items-start gap-3 rounded-lg border border-border bg-muted/30 p-3">
+        // Preview above, controls below. Side-by-side collapses on the wide
+        // banner preset, where the thumbnail is nearly six times as wide as it
+        // is tall and leaves no room for anything beside it. The storage URL is
+        // deliberately not shown — it is long, opaque, and of no use to anyone
+        // editing their own site.
+        <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-3">
           {/* eslint-disable-next-line @next/next/no-img-element -- user-supplied storage URL */}
           <img
             src={value}
             alt=""
-            className="h-16 w-28 shrink-0 rounded-md border border-border object-cover"
-            style={
-              preset.ratio
-                ? { aspectRatio: String(preset.ratio), width: "auto", height: 64 }
-                : undefined
-            }
+            className={cn(
+              "w-full rounded-md border border-border bg-background",
+              preset.ratio ? "object-cover" : "max-h-40 object-contain",
+            )}
+            style={preset.ratio ? { aspectRatio: String(preset.ratio) } : undefined}
           />
-          <div className="flex min-w-0 flex-1 flex-col gap-2">
-            <p className="truncate text-xs text-muted-foreground">{value}</p>
-            <div className="flex gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={disabled || pending}
-                onClick={() => inputRef.current?.click()}
-              >
-                Replace
-              </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                disabled={disabled || pending}
-                onClick={() => {
-                  setError(null);
-                  onChange("");
-                }}
-              >
-                <Trash2 className="mr-1 size-4" />
-                Remove
-              </Button>
-            </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={disabled || pending}
+              onClick={() => inputRef.current?.click()}
+            >
+              Replace
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={disabled || pending}
+              onClick={() => {
+                setError(null);
+                onChange("");
+              }}
+            >
+              <Trash2 className="mr-1 size-4" />
+              Remove
+            </Button>
           </div>
         </div>
       ) : (

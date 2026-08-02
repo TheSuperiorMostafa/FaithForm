@@ -6,6 +6,7 @@ import { ImageUploadField } from "@/components/website-admin/image-upload-field"
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import type { SectionField } from "@/lib/sites/contract";
@@ -71,8 +72,10 @@ function FieldShell({
       <Label htmlFor={htmlFor} className="text-sm font-semibold">
         {label}
       </Label>
-      {help ? <p className="text-xs text-muted-foreground">{help}</p> : null}
+      {/* Below the control, so a field with help still lines up with one
+       * without it when they share a row. */}
       {children}
+      {help ? <p className="text-xs text-muted-foreground">{help}</p> : null}
     </div>
   );
 }
@@ -164,9 +167,8 @@ export function SectionFieldsForm({
           case "select":
             return (
               <FieldShell key={id} label={field.label} help={field.help} htmlFor={id}>
-                <select
+                <Select
                   id={id}
-                  className="h-10 rounded-lg border border-input bg-background px-3 text-sm"
                   value={asString(current)}
                   onChange={(e) => set(field.key, e.target.value)}
                 >
@@ -175,7 +177,7 @@ export function SectionFieldsForm({
                       {option.label}
                     </option>
                   ))}
-                </select>
+                </Select>
               </FieldShell>
             );
 

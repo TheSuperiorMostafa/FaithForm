@@ -64,7 +64,13 @@ export const heroSection = defineSection<HeroContent>({
         },
       ],
     },
-    { key: "image", label: "Image", type: "image", aspect: "banner" },
+    {
+      key: "image",
+      label: "Banner photo",
+      type: "image",
+      aspect: "banner",
+      help: "Defaults to the cover photo from Details. Set one here to use a different photo just for this banner.",
+    },
   ],
   defaults: {
     eyebrow: null,

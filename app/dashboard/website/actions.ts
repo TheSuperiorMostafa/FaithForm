@@ -11,6 +11,7 @@ import {
   profileToFormState,
   upsertChurchProfile,
 } from "@/lib/queries/church-profile";
+import type { ChurchProfile } from "@/types/church-profile";
 import { normalizeSiteImage } from "@/lib/security/validate-image";
 import { getAspect, type ImageAspectKey } from "@/lib/sites/image-aspects";
 import { generateSite } from "@/lib/sites/generate";
@@ -203,6 +204,59 @@ const sectionContentSchema = z.object({
 });
 
 /**
+ * The content a section would show with its own hand edits removed.
+ *
+ * This one value answers both questions the editor asks: what to diff a save
+ * against, and what the section falls back to when the church resets it.
+ */
+async function sectionBaseline(
+  sectionId: string,
+  churchId: string,
+): Promise<
+  { ok: true; content: Record<string, unknown> } | { ok: false; error: string }
+> {
+  const supabase = createAdminClient();
+
+  const { data: row } = await supabase
+    .from("site_sections")
+    .select("id, church_id, page_id, type, sort_order, is_visible, props")
+    .eq("id", sectionId)
+    .maybeSingle();
+
+  if (!row || row.church_id !== churchId) {
+    return fail("That section does not belong to your church.");
+  }
+
+  if (row.type === "custom_embed") {
+    return fail("Custom blocks are managed by FaithForm. Contact support to change one.");
+  }
+
+  const master = SECTION_REGISTRY[row.type as string];
+  if (!master) return fail("That section type is no longer available.");
+
+  const bundle = await getSiteBundle(await slugFor(churchId));
+  if (!bundle) return fail("Your website could not be loaded.");
+
+  return {
+    ok: true,
+    content: resolveSectionBaseline({
+      row: {
+        id: row.id as string,
+        type: row.type as string,
+        sortOrder: (row.sort_order as number) ?? 0,
+        isVisible: row.is_visible !== false,
+        props: (row.props as Record<string, unknown> | null) ?? {},
+      },
+      master,
+      theme: bundle.theme,
+      profile: bundle.profile,
+      overrides: bundle.overrides,
+      pageId: row.page_id as string,
+    }),
+  };
+}
+
+/**
  * Saves a section edit as a **minimal** patch in site_overrides.
  *
  * The form submits the fully resolved content, so the diff is taken here
@@ -223,42 +277,10 @@ export async function saveSectionContent(
   const { sectionId, content } = parsed.data;
   const supabase = createAdminClient();
 
-  const { data: row } = await supabase
-    .from("site_sections")
-    .select("id, church_id, page_id, type, sort_order, is_visible, props")
-    .eq("id", sectionId)
-    .maybeSingle();
+  const baseline = await sectionBaseline(sectionId, auth.churchId);
+  if (!baseline.ok) return fail(baseline.error);
 
-  if (!row || row.church_id !== auth.churchId) {
-    return fail("That section does not belong to your church.");
-  }
-
-  if (row.type === "custom_embed") {
-    return fail("Custom blocks are managed by FaithForm. Contact support to change one.");
-  }
-
-  const master = SECTION_REGISTRY[row.type as string];
-  if (!master) return fail("That section type is no longer available.");
-
-  const bundle = await getSiteBundle(await slugFor(auth.churchId));
-  if (!bundle) return fail("Your website could not be loaded.");
-
-  const baseline = resolveSectionBaseline({
-    row: {
-      id: row.id as string,
-      type: row.type as string,
-      sortOrder: (row.sort_order as number) ?? 0,
-      isVisible: row.is_visible !== false,
-      props: (row.props as Record<string, unknown> | null) ?? {},
-    },
-    master,
-    theme: bundle.theme,
-    profile: bundle.profile,
-    overrides: bundle.overrides,
-    pageId: row.page_id as string,
-  });
-
-  const patch = diffPatch(baseline, content);
+  const patch = diffPatch(baseline.content, content);
 
   // Delete-then-insert rather than upsert: the uniqueness guarantee for
   // section-scope overrides is a *partial* index (`where scope = 'section'`),
@@ -292,8 +314,21 @@ export async function saveSectionContent(
   return ok;
 }
 
-/** Drops every hand edit for a section, returning it to the generated content. */
-export async function resetSection(sectionId: string): Promise<ActionResult> {
+export type ResetSectionResult =
+  | { ok: true; content: Record<string, unknown> }
+  | { ok: false; error: string };
+
+/**
+ * Drops every hand edit for a section, returning it to the generated content.
+ *
+ * The restored content comes back with the result. An open editor is holding
+ * the *edited* values in local state, and without this it would keep them —
+ * then autosave would write them straight back on the next keystroke, undoing
+ * the reset the church just asked for.
+ */
+export async function resetSection(
+  sectionId: string,
+): Promise<ResetSectionResult> {
   const auth = await guardAdmin();
   if (!auth.ok) return fail(auth.error);
 
@@ -308,8 +343,11 @@ export async function resetSection(sectionId: string): Promise<ActionResult> {
     .eq("scope", "section")
     .eq("section_id", sectionId);
 
+  const baseline = await sectionBaseline(sectionId, auth.churchId);
+  if (!baseline.ok) return fail(baseline.error);
+
   refresh();
-  return ok;
+  return { ok: true, content: baseline.content };
 }
 
 // ---------------------------------------------------------------------------
@@ -659,6 +697,21 @@ const detailsSchema = z.object({
 export type SiteDetailsInput = z.input<typeof detailsSchema>;
 
 /**
+ * The database ids assigned to rows the form created, so an autosaving form
+ * can adopt them.
+ *
+ * Without this a brand-new service time never learns its id, and every
+ * subsequent save looks like another new row: `syncServiceTimes` inserts it
+ * again and deletes the one before it. Correct at rest, but it churns the row
+ * on every keystroke.
+ */
+export type SavedRowIds = { clientId: string; id: string }[];
+
+export type SaveSiteDetailsResult =
+  | { ok: true; serviceTimes: SavedRowIds; staff: SavedRowIds }
+  | { ok: false; error: string };
+
+/**
  * Saves the church facts the website renders — name, address, contact, service
  * times, staff — from inside the Website tab.
  *
@@ -673,7 +726,7 @@ export type SiteDetailsInput = z.input<typeof detailsSchema>;
  */
 export async function saveSiteDetails(
   input: SiteDetailsInput,
-): Promise<ActionResult> {
+): Promise<SaveSiteDetailsResult> {
   const auth = await guardAdmin();
   if (!auth.ok) return fail(auth.error);
 
@@ -690,8 +743,9 @@ export async function saveSiteDetails(
 
   const form = profileToFormState(current);
 
+  let saved: ChurchProfile;
   try {
-    await upsertChurchProfile(
+    saved = await upsertChurchProfile(
       auth.churchId,
       {
         ...form,
@@ -754,9 +808,30 @@ export async function saveSiteDetails(
     return fail("Those details could not be saved.");
   }
 
+  // Rows with a blank name are skipped on the way in, so the saved rows line
+  // up one-for-one with the non-blank submitted rows, in order.
+  const savedState = profileToFormState(saved);
+  const pairUp = <T extends { clientId: string }, U extends { id?: string }>(
+    submitted: T[],
+    persisted: U[],
+  ): SavedRowIds =>
+    submitted
+      .map((row, i) => ({ clientId: row.clientId, id: persisted[i]?.id }))
+      .filter((pair): pair is { clientId: string; id: string } => Boolean(pair.id));
+
   refresh();
   revalidatePath("/dashboard/church-profile");
-  return ok;
+  return {
+    ok: true,
+    serviceTimes: pairUp(
+      v.serviceTimes.filter((r) => r.label.trim()),
+      savedState.serviceTimes,
+    ),
+    staff: pairUp(
+      v.staff.filter((r) => r.fullName.trim()),
+      savedState.staff,
+    ),
+  };
 }
 
 // ---------------------------------------------------------------------------

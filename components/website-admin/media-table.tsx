@@ -6,6 +6,8 @@ import { toast } from "sonner";
 
 import { deleteMedia, saveMedia } from "@/app/dashboard/website/actions";
 import { ImageUploadField } from "@/components/website-admin/image-upload-field";
+import { SaveStatus } from "@/components/website-admin/save-status";
+import { useAutosave } from "@/components/website-admin/use-autosave";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -58,7 +60,18 @@ export function MediaTable({
   const [draft, setDraft] = useState<Draft | null>(null);
   const [pending, startTransition] = useTransition();
 
-  function save() {
+  const editingExisting = Boolean(draft?.id);
+
+  // Only an existing message autosaves. A new one is created by pressing the
+  // button: writing rows for a half-typed title would leave a trail of empty
+  // messages behind every abandoned attempt.
+  const { status } = useAutosave(
+    draft,
+    async (value) => (value ? saveMedia(value) : { ok: true as const }),
+    { enabled: canEdit && editingExisting },
+  );
+
+  function create() {
     if (!draft) return;
     startTransition(async () => {
       const result = await saveMedia(draft);
@@ -66,7 +79,7 @@ export function MediaTable({
         toast.error(result.error);
         return;
       }
-      toast.success("Message saved.");
+      toast.success("Message added.");
       setDraft(null);
     });
   }
@@ -158,13 +171,32 @@ export function MediaTable({
             />
           </div>
 
-          <div className="mt-5 flex gap-2">
-            <Button type="button" onClick={save} disabled={pending}>
-              {pending ? "Saving…" : "Save message"}
-            </Button>
-            <Button type="button" variant="ghost" onClick={() => setDraft(null)}>
-              Cancel
-            </Button>
+          <div className="mt-5 flex flex-wrap items-center gap-3">
+            {editingExisting ? (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setDraft(null)}
+                >
+                  Done
+                </Button>
+                <SaveStatus status={status} />
+              </>
+            ) : (
+              <>
+                <Button type="button" onClick={create} disabled={pending}>
+                  {pending ? "Adding…" : "Add message"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setDraft(null)}
+                >
+                  Cancel
+                </Button>
+              </>
+            )}
           </div>
         </div>
       ) : null}
@@ -245,8 +277,10 @@ function Field({
         {label}
         {required ? <span className="text-destructive"> *</span> : null}
       </Label>
-      {help ? <p className="text-xs text-muted-foreground">{help}</p> : null}
+      {/* Below the control, so a field with help still lines up with one
+       * without it when they share a row. */}
       {children}
+      {help ? <p className="text-xs text-muted-foreground">{help}</p> : null}
     </div>
   );
 }

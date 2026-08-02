@@ -1,16 +1,22 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2 } from "lucide-react";
-import { toast } from "sonner";
 
-import { saveSiteDetails, type SiteDetailsInput } from "@/app/dashboard/website/actions";
+import {
+  saveSiteDetails,
+  type SavedRowIds,
+  type SiteDetailsInput,
+} from "@/app/dashboard/website/actions";
 import { ImageUploadField } from "@/components/website-admin/image-upload-field";
+import { SaveStatus } from "@/components/website-admin/save-status";
 import { SitePreview } from "@/components/website-admin/site-preview";
+import { useAutosave } from "@/components/website-admin/use-autosave";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { DAY_OF_WEEK_LABELS } from "@/types/church-profile";
@@ -41,7 +47,6 @@ export function DetailsForm({
 }) {
   const [form, setForm] = useState<SiteDetailsInput>(initial);
   const [savedAt, setSavedAt] = useState(0);
-  const [pending, startTransition] = useTransition();
   const router = useRouter();
 
   const set = <K extends keyof SiteDetailsInput>(
@@ -49,16 +54,49 @@ export function DetailsForm({
     value: SiteDetailsInput[K],
   ) => setForm((f) => ({ ...f, [key]: value }));
 
-  function save() {
-    startTransition(async () => {
-      const result = await saveSiteDetails(form);
-      if (!result.ok) {
-        toast.error(result.error);
-        return;
+  const { status } = useAutosave(
+    form,
+    async (value) => {
+      const result = await saveSiteDetails(value);
+      if (result.ok) {
+        adoptIds(result.serviceTimes, result.staff);
+        // Refresh the preview and the server-rendered copy of this form.
+        setSavedAt(Date.now());
+        router.refresh();
       }
-      toast.success("Saved. Your website and phone assistant are both updated.");
-      setSavedAt(Date.now());
-      router.refresh();
+      return result;
+    },
+    { enabled: canEdit },
+  );
+
+  /**
+   * Take on the ids the database assigned to rows this form created.
+   *
+   * Only when something actually changed: writing state unconditionally would
+   * make the form look edited again, autosave once more, and never settle.
+   */
+  function adoptIds(times: SavedRowIds, people: SavedRowIds) {
+    setForm((current) => {
+      const timeId = new Map(times.map((r) => [r.clientId, r.id]));
+      const staffId = new Map(people.map((r) => [r.clientId, r.id]));
+
+      let changed = false;
+      const nextTimes = current.serviceTimes.map((row) => {
+        const id = timeId.get(row.clientId);
+        if (!id || row.id === id) return row;
+        changed = true;
+        return { ...row, id };
+      });
+      const nextStaff = current.staff.map((row) => {
+        const id = staffId.get(row.clientId);
+        if (!id || row.id === id) return row;
+        changed = true;
+        return { ...row, id };
+      });
+
+      return changed
+        ? { ...current, serviceTimes: nextTimes, staff: nextStaff }
+        : current;
     });
   }
 
@@ -68,11 +106,14 @@ export function DetailsForm({
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,480px)]">
       <div className="flex min-w-0 flex-col gap-6">
-        <p className="text-sm text-muted-foreground">
-          Everything your website says about your church, editable here. These
-          are shared details — changing a service time also updates what your
-          phone assistant tells callers.
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="max-w-xl text-sm text-muted-foreground">
+            Everything your website says about your church, editable here.
+            Changes save on their own. These are shared details — changing a
+            service time also updates what your phone assistant tells callers.
+          </p>
+          <SaveStatus status={status} />
+        </div>
 
         <Panel title="Your church">
           <Field label="Church name" required>
@@ -101,7 +142,7 @@ export function DetailsForm({
           />
           <ImageUploadField
             label="Cover photo"
-            help="Your main church photo. Used at the top of the page and beside your welcome text unless you set a different one there."
+            help="The banner across the very top of your page. The photo beside your welcome text is set separately, in Pages → About."
             aspect="banner"
             value={form.coverImageUrl}
             disabled={!canEdit}
@@ -166,7 +207,9 @@ export function DetailsForm({
             times.map((row, i) => (
               <div
                 key={row.clientId}
-                className="grid gap-3 rounded-lg border border-border bg-muted/30 p-3 sm:grid-cols-[1fr_auto_auto_auto]"
+                // Fixed tracks for the day and time so every row lines up,
+                // rather than each sizing to its own content.
+                className="grid items-center gap-3 rounded-lg border border-border bg-muted/30 p-3 sm:grid-cols-[minmax(0,1fr)_11rem_9rem_auto]"
               >
                 <Input
                   placeholder="Sunday Worship"
@@ -178,8 +221,7 @@ export function DetailsForm({
                     set("serviceTimes", next);
                   }}
                 />
-                <select
-                  className="h-10 rounded-lg border border-input bg-background px-3 text-sm"
+                <Select
                   value={row.dayOfWeek}
                   disabled={!canEdit}
                   onChange={(e) => {
@@ -193,7 +235,7 @@ export function DetailsForm({
                       {day}
                     </option>
                   ))}
-                </select>
+                </Select>
                 <Input
                   type="time"
                   value={row.startTime}
@@ -339,16 +381,13 @@ export function DetailsForm({
           </Field>
         </Panel>
 
-        <div>
-          <Button type="button" onClick={save} disabled={!canEdit || pending}>
-            {pending ? "Saving…" : "Save details"}
-          </Button>
-          {!canEdit ? (
-            <p className="mt-2 text-xs text-muted-foreground">
-              Only church admins can change these.
-            </p>
-          ) : null}
-        </div>
+        {!canEdit ? (
+          <p className="text-xs text-muted-foreground">
+            Only church admins can change these.
+          </p>
+        ) : (
+          <SaveStatus status={status} />
+        )}
       </div>
 
       <SitePreview previewUrl={previewUrl} refreshToken={savedAt} sticky />
@@ -400,8 +439,11 @@ function Field({
         {label}
         {required ? <span className="text-destructive"> *</span> : null}
       </Label>
-      {help ? <p className="text-xs text-muted-foreground">{help}</p> : null}
+      {/* Help sits below the control, not between label and control. Above it,
+       * a field with help pushes its input down and stops lining up with the
+       * field beside it in the same row. */}
       {children}
+      {help ? <p className="text-xs text-muted-foreground">{help}</p> : null}
     </div>
   );
 }
