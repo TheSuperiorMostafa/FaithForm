@@ -22,11 +22,28 @@ const nextConfig = {
           },
         ],
       },
-      // Everything except the embed player. `camera`/`microphone` must be
-      // allowlisted for `self` or getUserMedia/getDisplayMedia in the browser
-      // broadcast studio fails with NotAllowedError before any prompt is shown.
+      // Church websites are framed by the dashboard's own preview pane, so they
+      // must permit same-origin framing. Deliberately `self` and not `*`: the
+      // preview always runs at faithform.io/sites/<slug>, and letting a church
+      // site be framed by an arbitrary origin invites clickjacking on the
+      // giving and contact-form controls it carries.
       {
-        source: "/((?!live/[^/]+/embed).*)",
+        source: "/sites/:path*",
+        headers: [
+          ...BASE_SECURITY_HEADERS,
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          { key: "Content-Security-Policy", value: "frame-ancestors 'self'" },
+          {
+            key: "Permissions-Policy",
+            value: "camera=(), microphone=(), geolocation=()",
+          },
+        ],
+      },
+      // Everything except the embed player and church sites. `camera`/`microphone`
+      // must be allowlisted for `self` or getUserMedia/getDisplayMedia in the
+      // browser broadcast studio fails with NotAllowedError before any prompt.
+      {
+        source: "/((?!live/[^/]+/embed|sites/).*)",
         headers: [
           ...BASE_SECURITY_HEADERS,
           { key: "X-Frame-Options", value: "DENY" },

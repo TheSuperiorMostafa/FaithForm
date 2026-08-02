@@ -1,11 +1,10 @@
 import { redirect } from "next/navigation";
 
 import { EmptySite } from "@/components/website-admin/empty-site";
-import {
-  SectionList,
-  type EditableSection,
-} from "@/components/website-admin/section-list";
+import { PagesWorkspace } from "@/components/website-admin/pages-workspace";
+import type { EditableSection } from "@/components/website-admin/section-list";
 import { getChurchAuth } from "@/lib/auth/church";
+import { getCanonicalSiteUrl } from "@/lib/site-url";
 import { SECTION_REGISTRY } from "@/lib/sites/registry";
 import { getWebsiteForChurch } from "@/lib/sites/queries";
 import { resolvePage } from "@/lib/sites/resolve";
@@ -63,19 +62,10 @@ export default async function WebsitePagesPage() {
     });
 
   return (
-    <div className="flex flex-col gap-4">
-      <p className="text-sm text-muted-foreground">
-        Reorder sections, hide the ones you don&apos;t need, and edit the words
-        on each. Changes go live as soon as you save.
-      </p>
-
-      {sections.length === 0 ? (
-        <p className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-sm text-muted-foreground">
-          This page has no sections yet.
-        </p>
-      ) : (
-        <SectionList sections={sections} canEdit={auth.isAdmin} />
-      )}
-    </div>
+    <PagesWorkspace
+      sections={sections}
+      canEdit={auth.isAdmin}
+      previewUrl={`${getCanonicalSiteUrl()}/sites/${site.slug}?preview=1`}
+    />
   );
 }

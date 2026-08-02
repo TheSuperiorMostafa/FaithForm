@@ -6,6 +6,7 @@ import { SectionLinkTabs } from "@/components/dashboard/section-link-tabs";
 const TABS = [
   { label: "Overview", href: "/dashboard/website", match: "exact" as const },
   { label: "Pages", href: "/dashboard/website/pages" },
+  { label: "Details", href: "/dashboard/website/details" },
   { label: "Design", href: "/dashboard/website/design" },
   { label: "Sermons", href: "/dashboard/website/sermons" },
   { label: "Messages", href: "/dashboard/website/messages" },

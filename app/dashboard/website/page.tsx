@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { EmptySite } from "@/components/website-admin/empty-site";
 import { PublishCard } from "@/components/website-admin/publish-card";
+import { SitePreview } from "@/components/website-admin/site-preview";
 import { getChurchAuth } from "@/lib/auth/church";
 import { getCanonicalSiteUrl } from "@/lib/site-url";
 import {
@@ -49,6 +50,8 @@ export default async function WebsiteOverviewPage() {
           href={newMessages > 0 ? "/dashboard/website/messages" : undefined}
         />
       </div>
+
+      <SitePreview previewUrl={previewUrl} />
 
       <div className="rounded-2xl border border-border bg-card p-5 shadow-card">
         <h2 className="font-heading text-lg font-bold">Web address</h2>

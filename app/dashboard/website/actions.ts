@@ -5,6 +5,11 @@ import { z } from "zod";
 
 import { requireChurchAuth } from "@/lib/auth/church";
 import { featureActionError } from "@/lib/features/guard";
+import {
+  getChurchProfile,
+  profileToFormState,
+  upsertChurchProfile,
+} from "@/lib/queries/church-profile";
 import { generateSite } from "@/lib/sites/generate";
 import { SECTION_REGISTRY } from "@/lib/sites/registry";
 import {
@@ -519,6 +524,147 @@ export async function deleteMedia(id: string): Promise<ActionResult> {
   if (error) return fail("That message could not be removed.");
 
   refresh();
+  return ok;
+}
+
+// ---------------------------------------------------------------------------
+// CHURCH DETAILS  (profile-backed content, edited from the Website tab)
+// ---------------------------------------------------------------------------
+
+const serviceTimeRow = z.object({
+  clientId: z.string(),
+  id: z.string().optional(),
+  label: z.string().trim().min(1, "Every service needs a name.").max(120),
+  dayOfWeek: z.number().int().min(0).max(6),
+  startTime: z.string().regex(/^\d{2}:\d{2}$/, "Use a time like 10:30."),
+});
+
+const staffRow = z.object({
+  clientId: z.string(),
+  id: z.string().optional(),
+  fullName: z.string().trim().min(1, "Every person needs a name.").max(120),
+  title: z.string().max(120),
+  bio: z.string().max(2000),
+  photoUrl: z.string().max(500),
+  isPublic: z.boolean(),
+});
+
+const detailsSchema = z.object({
+  name: z.string().trim().min(1, "Your church name is required.").max(200),
+  denomination: z.string().max(120),
+  logoUrl: z.string().max(500),
+  address: z.string().max(200),
+  city: z.string().max(120),
+  state: z.string().max(60),
+  zip: z.string().max(20),
+  phone: z.string().max(40),
+  email: z.string().max(200),
+  googleMapsUrl: z.string().max(500),
+  missionStatement: z.string().max(4000),
+  visionStatement: z.string().max(4000),
+  serviceTimes: z.array(serviceTimeRow).max(20),
+  staff: z.array(staffRow).max(50),
+});
+
+export type SiteDetailsInput = z.input<typeof detailsSchema>;
+
+/**
+ * Saves the church facts the website renders — name, address, contact, service
+ * times, staff — from inside the Website tab.
+ *
+ * These write through to the church profile rather than into site_overrides,
+ * because they are not website copy: the phone assistant reads the same service
+ * times and the same address. Overriding them per-surface would let a church
+ * publish 10:30 on the website while the assistant kept telling callers 10:00.
+ *
+ * The merge is deliberate. `upsertChurchProfile` replaces the whole profile,
+ * so the current state is loaded and only these fields are changed — otherwise
+ * saving from here would blank out office hours, AI knowledge and socials.
+ */
+export async function saveSiteDetails(
+  input: SiteDetailsInput,
+): Promise<ActionResult> {
+  const auth = await guardAdmin();
+  if (!auth.ok) return fail(auth.error);
+
+  const parsed = detailsSchema.safeParse(input);
+  if (!parsed.success) {
+    return fail(parsed.error.issues[0]?.message ?? "Please check the form.");
+  }
+
+  const v = parsed.data;
+  const admin = createAdminClient();
+
+  const current = await getChurchProfile(auth.churchId, admin);
+  if (!current) return fail("Your church profile could not be loaded.");
+
+  const form = profileToFormState(current);
+
+  try {
+    await upsertChurchProfile(
+      auth.churchId,
+      {
+        ...form,
+        name: v.name,
+        denomination: v.denomination,
+        logoUrl: v.logoUrl,
+        address: v.address,
+        city: v.city,
+        state: v.state,
+        zip: v.zip,
+        phone: v.phone,
+        email: v.email,
+        googleMapsUrl: v.googleMapsUrl,
+        missionStatement: v.missionStatement,
+        visionStatement: v.visionStatement,
+        // Existing rows keep their id, so end_time, kind, notes and the
+        // AI-priority flags on staff survive a save made from here.
+        serviceTimes: v.serviceTimes.map((row) => {
+          const existing = form.serviceTimes.find((s) => s.id && s.id === row.id);
+          return {
+            ...(existing ?? {
+              clientId: row.clientId,
+              endTime: "",
+              kind: "regular" as const,
+              notes: "",
+            }),
+            id: row.id,
+            clientId: row.clientId,
+            label: row.label,
+            dayOfWeek: row.dayOfWeek,
+            startTime: row.startTime,
+          };
+        }),
+        staff: v.staff.map((row) => {
+          const existing = form.staff.find((s) => s.id && s.id === row.id);
+          return {
+            ...(existing ?? {
+              clientId: row.clientId,
+              email: "",
+              phone: "",
+              isSeniorPastor: false,
+              isExecutivePastor: false,
+              aiContactPriority: 0,
+            }),
+            id: row.id,
+            clientId: row.clientId,
+            fullName: row.fullName,
+            title: row.title,
+            bio: row.bio,
+            photoUrl: row.photoUrl,
+            isPublic: row.isPublic,
+          };
+        }),
+      },
+      admin,
+    );
+  } catch (error) {
+    console.error("[website] details save failed:", error);
+    return fail("Those details could not be saved.");
+  }
+
+  refresh();
+  revalidatePath("/dashboard/church-profile");
   return ok;
 }
 

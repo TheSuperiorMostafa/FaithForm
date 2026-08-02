@@ -401,6 +401,10 @@
 
 .site-hero {
   position: relative;
+  /* flow-root, not just position:relative — without a block formatting context
+   * the media's bottom margin collapses straight out of the hero and paints a
+   * band of page background between the hero and whatever follows it. */
+  display: flow-root;
 }
 
 .site-hero-body {
@@ -443,10 +447,12 @@
   flex-wrap: wrap;
 }
 
+/* Full-bleed to the column edges and flush with the section below. The source
+ * comp inset this by 12px; edge-to-edge reads as intentional where the inset
+ * read as a misaligned bar. */
 .site-hero-media {
   height: 220px;
-  margin: 0 12px 12px;
-  border-radius: 12px;
+  margin: 0;
   overflow: hidden;
 }
 

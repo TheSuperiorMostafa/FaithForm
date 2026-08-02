@@ -1,0 +1,394 @@
+"use client";
+
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { Plus, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+
+import { saveSiteDetails, type SiteDetailsInput } from "@/app/dashboard/website/actions";
+import { SitePreview } from "@/components/website-admin/site-preview";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import { DAY_OF_WEEK_LABELS } from "@/types/church-profile";
+
+/**
+ * The church facts the website renders, editable without leaving this tab.
+ *
+ * These are profile fields, not website copy — saving here updates the same
+ * records the phone assistant and reports read. That is stated on the page
+ * rather than left to be discovered.
+ */
+
+type ServiceRow = SiteDetailsInput["serviceTimes"][number];
+type StaffRow = SiteDetailsInput["staff"][number];
+
+function newId() {
+  return Math.random().toString(36).slice(2);
+}
+
+export function DetailsForm({
+  initial,
+  canEdit,
+  previewUrl,
+}: {
+  initial: SiteDetailsInput;
+  canEdit: boolean;
+  previewUrl: string;
+}) {
+  const [form, setForm] = useState<SiteDetailsInput>(initial);
+  const [savedAt, setSavedAt] = useState(0);
+  const [pending, startTransition] = useTransition();
+  const router = useRouter();
+
+  const set = <K extends keyof SiteDetailsInput>(
+    key: K,
+    value: SiteDetailsInput[K],
+  ) => setForm((f) => ({ ...f, [key]: value }));
+
+  function save() {
+    startTransition(async () => {
+      const result = await saveSiteDetails(form);
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Saved. Your website and phone assistant are both updated.");
+      setSavedAt(Date.now());
+      router.refresh();
+    });
+  }
+
+  const times = form.serviceTimes ?? [];
+  const staff = form.staff ?? [];
+
+  return (
+    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,480px)]">
+      <div className="flex min-w-0 flex-col gap-6">
+        <p className="text-sm text-muted-foreground">
+          Everything your website says about your church, editable here. These
+          are shared details — changing a service time also updates what your
+          phone assistant tells callers.
+        </p>
+
+        <Panel title="Your church">
+          <Field label="Church name" required>
+            <Input
+              value={form.name}
+              onChange={(e) => set("name", e.target.value)}
+              disabled={!canEdit}
+            />
+          </Field>
+          <Field label="Denomination or sub-line" help="Shown under your name in the header.">
+            <Input
+              value={form.denomination}
+              onChange={(e) => set("denomination", e.target.value)}
+              disabled={!canEdit}
+            />
+          </Field>
+          <Field label="Logo image URL">
+            <Input
+              value={form.logoUrl}
+              onChange={(e) => set("logoUrl", e.target.value)}
+              disabled={!canEdit}
+            />
+          </Field>
+        </Panel>
+
+        <Panel title="Where to find you">
+          <Field label="Street address">
+            <Input
+              value={form.address}
+              onChange={(e) => set("address", e.target.value)}
+              disabled={!canEdit}
+            />
+          </Field>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Field label="City">
+              <Input value={form.city} onChange={(e) => set("city", e.target.value)} disabled={!canEdit} />
+            </Field>
+            <Field label="State">
+              <Input value={form.state} onChange={(e) => set("state", e.target.value)} disabled={!canEdit} />
+            </Field>
+            <Field label="ZIP">
+              <Input value={form.zip} onChange={(e) => set("zip", e.target.value)} disabled={!canEdit} />
+            </Field>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Phone">
+              <Input value={form.phone} onChange={(e) => set("phone", e.target.value)} disabled={!canEdit} />
+            </Field>
+            <Field label="Email" help="Where contact-form messages are sent.">
+              <Input value={form.email} onChange={(e) => set("email", e.target.value)} disabled={!canEdit} />
+            </Field>
+          </div>
+        </Panel>
+
+        <Panel
+          title="Service times"
+          action={
+            canEdit ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  set("serviceTimes", [
+                    ...times,
+                    { clientId: newId(), label: "", dayOfWeek: 0, startTime: "10:00" },
+                  ])
+                }
+              >
+                <Plus className="mr-1 size-4" /> Add service
+              </Button>
+            ) : null
+          }
+        >
+          {times.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No services yet. Add one and the times strip appears on your site.
+            </p>
+          ) : (
+            times.map((row, i) => (
+              <div
+                key={row.clientId}
+                className="grid gap-3 rounded-lg border border-border bg-muted/30 p-3 sm:grid-cols-[1fr_auto_auto_auto]"
+              >
+                <Input
+                  placeholder="Sunday Worship"
+                  value={row.label}
+                  disabled={!canEdit}
+                  onChange={(e) => {
+                    const next = [...times];
+                    next[i] = { ...row, label: e.target.value };
+                    set("serviceTimes", next);
+                  }}
+                />
+                <select
+                  className="h-10 rounded-lg border border-input bg-background px-3 text-sm"
+                  value={row.dayOfWeek}
+                  disabled={!canEdit}
+                  onChange={(e) => {
+                    const next = [...times];
+                    next[i] = { ...row, dayOfWeek: Number(e.target.value) };
+                    set("serviceTimes", next);
+                  }}
+                >
+                  {DAY_OF_WEEK_LABELS.map((day, index) => (
+                    <option key={day} value={index}>
+                      {day}
+                    </option>
+                  ))}
+                </select>
+                <Input
+                  type="time"
+                  value={row.startTime}
+                  disabled={!canEdit}
+                  onChange={(e) => {
+                    const next = [...times];
+                    next[i] = { ...row, startTime: e.target.value };
+                    set("serviceTimes", next);
+                  }}
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label={`Remove ${row.label || `service ${i + 1}`}`}
+                  disabled={!canEdit}
+                  onClick={() =>
+                    set(
+                      "serviceTimes",
+                      times.filter((_, index) => index !== i),
+                    )
+                  }
+                >
+                  <Trash2 className="size-4" />
+                </Button>
+              </div>
+            ))
+          )}
+        </Panel>
+
+        <Panel
+          title="Your team"
+          action={
+            canEdit ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  set("staff", [
+                    ...staff,
+                    { clientId: newId(), fullName: "", title: "", bio: "", photoUrl: "", isPublic: true },
+                  ])
+                }
+              >
+                <Plus className="mr-1 size-4" /> Add person
+              </Button>
+            ) : null
+          }
+        >
+          {staff.length === 0 ? (
+            <p className="text-sm text-muted-foreground">
+              No one added yet. People marked public appear in your team section.
+            </p>
+          ) : (
+            staff.map((row, i) => {
+              const update = (patch: Partial<StaffRow>) => {
+                const next = [...staff];
+                next[i] = { ...row, ...patch };
+                set("staff", next);
+              };
+
+              return (
+                <div
+                  key={row.clientId}
+                  className="flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-3"
+                >
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <Input
+                      placeholder="Full name"
+                      value={row.fullName}
+                      disabled={!canEdit}
+                      onChange={(e) => update({ fullName: e.target.value })}
+                    />
+                    <Input
+                      placeholder="Role, e.g. Lead Pastor"
+                      value={row.title}
+                      disabled={!canEdit}
+                      onChange={(e) => update({ title: e.target.value })}
+                    />
+                  </div>
+                  <Textarea
+                    rows={2}
+                    placeholder="A sentence about them"
+                    value={row.bio}
+                    disabled={!canEdit}
+                    onChange={(e) => update({ bio: e.target.value })}
+                  />
+                  <Input
+                    placeholder="Photo URL"
+                    value={row.photoUrl}
+                    disabled={!canEdit}
+                    onChange={(e) => update({ photoUrl: e.target.value })}
+                  />
+                  <div className="flex items-center justify-between gap-4">
+                    <Label className="text-sm font-medium">Show on the website</Label>
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        checked={row.isPublic}
+                        disabled={!canEdit}
+                        onCheckedChange={(checked) => update({ isPublic: checked })}
+                      />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        aria-label={`Remove ${row.fullName || `person ${i + 1}`}`}
+                        disabled={!canEdit}
+                        onClick={() =>
+                          set(
+                            "staff",
+                            staff.filter((_, index) => index !== i),
+                          )
+                        }
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </Panel>
+
+        <Panel title="Vision and mission" description="The website shows a shortened version of these.">
+          <Field label="Vision statement">
+            <Textarea
+              rows={3}
+              value={form.visionStatement}
+              disabled={!canEdit}
+              onChange={(e) => set("visionStatement", e.target.value)}
+            />
+          </Field>
+          <Field label="Mission statement">
+            <Textarea
+              rows={3}
+              value={form.missionStatement}
+              disabled={!canEdit}
+              onChange={(e) => set("missionStatement", e.target.value)}
+            />
+          </Field>
+        </Panel>
+
+        <div>
+          <Button type="button" onClick={save} disabled={!canEdit || pending}>
+            {pending ? "Saving…" : "Save details"}
+          </Button>
+          {!canEdit ? (
+            <p className="mt-2 text-xs text-muted-foreground">
+              Only church admins can change these.
+            </p>
+          ) : null}
+        </div>
+      </div>
+
+      <SitePreview previewUrl={previewUrl} refreshToken={savedAt} sticky />
+    </div>
+  );
+}
+
+function Panel({
+  title,
+  description,
+  action,
+  children,
+}: {
+  title: string;
+  description?: string;
+  action?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-2xl border border-border bg-card p-5 shadow-card">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h2 className="font-heading text-lg font-bold">{title}</h2>
+          {description ? (
+            <p className="text-sm text-muted-foreground">{description}</p>
+          ) : null}
+        </div>
+        {action}
+      </div>
+      <div className="flex flex-col gap-4">{children}</div>
+    </section>
+  );
+}
+
+function Field({
+  label,
+  help,
+  required,
+  children,
+}: {
+  label: string;
+  help?: string;
+  required?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label className="text-sm font-semibold">
+        {label}
+        {required ? <span className="text-destructive"> *</span> : null}
+      </Label>
+      {help ? <p className="text-xs text-muted-foreground">{help}</p> : null}
+      {children}
+    </div>
+  );
+}

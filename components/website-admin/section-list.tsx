@@ -31,9 +31,12 @@ export type EditableSection = {
 export function SectionList({
   sections,
   canEdit,
+  onSaved,
 }: {
   sections: EditableSection[];
   canEdit: boolean;
+  /** Fired after any successful change, so a live preview can reload. */
+  onSaved?: () => void;
 }) {
   const [order, setOrder] = useState(sections);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -52,7 +55,9 @@ export function SectionList({
       if (!result.ok) {
         setOrder(order);
         toast.error(result.error);
+        return;
       }
+      onSaved?.();
     });
   }
 
@@ -70,7 +75,9 @@ export function SectionList({
           ),
         );
         toast.error(result.error);
+        return;
       }
+      onSaved?.();
     });
   }
 
@@ -88,6 +95,7 @@ export function SectionList({
           }
           onMove={move}
           onToggleVisible={toggleVisible}
+          onSaved={onSaved}
           canEdit={canEdit}
           busy={pending}
         />
@@ -104,6 +112,7 @@ function SectionRow({
   onToggleOpen,
   onMove,
   onToggleVisible,
+  onSaved,
   canEdit,
   busy,
 }: {
@@ -114,6 +123,7 @@ function SectionRow({
   onToggleOpen: () => void;
   onMove: (index: number, direction: -1 | 1) => void;
   onToggleVisible: (section: EditableSection, visible: boolean) => void;
+  onSaved?: () => void;
   canEdit: boolean;
   busy: boolean;
 }) {
@@ -127,9 +137,12 @@ function SectionRow({
         sectionId: section.id,
         content: draft,
       });
-      result.ok
-        ? toast.success(`${section.label} saved.`)
-        : toast.error(result.error);
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success(`${section.label} saved.`);
+      onSaved?.();
     });
   }
 
@@ -141,6 +154,7 @@ function SectionRow({
         return;
       }
       toast.success(`${section.label} reset to its default content.`);
+      onSaved?.();
     });
   }
 
