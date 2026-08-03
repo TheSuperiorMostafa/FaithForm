@@ -30,6 +30,31 @@ export type EditableSection = {
   fields: SectionField[] | null;
 };
 
+/**
+ * The heading this section actually shows on the church's website.
+ *
+ * The list is otherwise labelled by section *type* — "About", "Vision &
+ * mission" — which is not what the church reads on its own page. Someone whose
+ * about section is headed "Who we are" had no way to tell which block was
+ * theirs, and concluded the fields they wanted did not exist.
+ */
+function siteHeadline(content: Record<string, unknown>): string | null {
+  const headline = content.headline;
+  if (typeof headline === "string") return headline.trim() || null;
+
+  if (headline && typeof headline === "object") {
+    const parts = headline as Record<string, unknown>;
+    const text = [parts.lead, parts.accent, parts.trail]
+      .filter((part): part is string => typeof part === "string")
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+    return text || null;
+  }
+
+  return null;
+}
+
 export function SectionList({
   sections,
   canEdit,
@@ -132,6 +157,7 @@ function SectionRow({
   const [draft, setDraft] = useState(section.content);
   const [saving, startSaving] = useTransition();
   const locked = section.fields === null;
+  const headline = siteHeadline(section.content);
 
   // Only autosave while the editor is actually open. A closed section keeps its
   // draft in state, and saving it in the background would write content the
@@ -195,10 +221,17 @@ function SectionRow({
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            {/* The church's own heading leads, since that is what they are
+             * looking for. The type name follows as the quieter subtitle. */}
             <span className="font-heading text-base font-bold">
-              {section.label}
+              {headline ?? section.label}
             </span>
+            {headline ? (
+              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                {section.label}
+              </span>
+            ) : null}
             {locked ? (
               <Lock className="size-3.5 text-muted-foreground" aria-hidden />
             ) : null}
