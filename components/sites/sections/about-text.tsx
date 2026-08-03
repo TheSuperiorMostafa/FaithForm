@@ -56,9 +56,21 @@ function AboutText({ content, ctx }: SectionComponentProps<AboutTextContent>) {
 export const aboutTextSection = defineSection<AboutTextContent>({
   type: "about_text",
   label: "About",
+  // Photo sits near the top, not last. Below the paragraphs and the Numbers
+  // list it was past a screen of text inputs and expandable rows, and churches
+  // reported the section had "no place to upload" a picture that was in fact
+  // already there. A section's image is a primary choice, so it is asked for
+  // like one.
   fields: [
     { key: "eyebrow", label: "Eyebrow", type: "text" },
     { key: "headline", label: "Headline", type: "headline" },
+    {
+      key: "image",
+      label: "Photo",
+      type: "image",
+      aspect: "feature",
+      help: "The picture beside your text. Separate from the cover banner at the top of the page.",
+    },
     { key: "body", label: "Paragraphs", type: "paragraphs" },
     {
       key: "stats",
@@ -70,13 +82,6 @@ export const aboutTextSection = defineSection<AboutTextContent>({
         { key: "value", label: "Number", type: "text", help: "e.g. 70+" },
         { key: "label", label: "Caption", type: "text" },
       ],
-    },
-    {
-      key: "image",
-      label: "Photo",
-      type: "image",
-      aspect: "feature",
-      help: "Its own photo, separate from the cover banner at the top of the page.",
     },
   ],
   defaults: {

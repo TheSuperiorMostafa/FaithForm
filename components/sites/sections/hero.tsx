@@ -40,10 +40,19 @@ function Hero({ content, ctx }: SectionComponentProps<HeroContent>) {
 export const heroSection = defineSection<HeroContent>({
   type: "hero",
   label: "Hero",
+  // Photo above the button list, for the same reason as About: last place in a
+  // form that ends in an expandable list is where a field goes to be missed.
   fields: [
     { key: "eyebrow", label: "Eyebrow", type: "text", help: "Small line above the headline." },
     { key: "headline", label: "Headline", type: "headline" },
     { key: "body", label: "Intro paragraph", type: "textarea" },
+    {
+      key: "image",
+      label: "Banner photo",
+      type: "image",
+      aspect: "banner",
+      help: "Defaults to the cover photo from Details. Set one here to use a different photo just for this banner.",
+    },
     {
       key: "actions",
       label: "Buttons",
@@ -63,13 +72,6 @@ export const heroSection = defineSection<HeroContent>({
           ],
         },
       ],
-    },
-    {
-      key: "image",
-      label: "Banner photo",
-      type: "image",
-      aspect: "banner",
-      help: "Defaults to the cover photo from Details. Set one here to use a different photo just for this banner.",
     },
   ],
   defaults: {
