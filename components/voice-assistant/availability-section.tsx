@@ -43,13 +43,13 @@ export function AvailabilitySection({
           <Label>Office hours</Label>
           <p className="rounded-[10px] border border-border bg-muted/30 px-3 py-2 text-sm">
             {profile.hasOpenOfficeDay
-              ? "Office hours configured in Church Profile."
+              ? "Office hours are configured."
               : "Not configured yet."}
           </p>
           <p className="text-xs text-muted-foreground">
-            Update in{" "}
-            <Link href="/dashboard/church-profile" className="font-medium text-accent underline">
-              Church Profile → Service information
+            Need a change?{" "}
+            <Link href="/dashboard/support" className="font-medium text-accent underline">
+              Contact support
             </Link>
             .
           </p>

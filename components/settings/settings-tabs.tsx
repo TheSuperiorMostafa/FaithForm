@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
-import { AISettingsForm } from "@/components/settings/ai-settings-form";
 import { AnnouncementEmailForm } from "@/components/settings/announcement-email-form";
 import { FollowUpMessagesForm } from "@/components/settings/follow-up-messages-form";
 import { GivingCard } from "@/components/settings/giving-card";
@@ -23,12 +22,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ChurchGivingProfile, GivingFundRow } from "@/types/giving";
 import type { AnnouncementEmailTemplate } from "@/lib/email/announcement-template";
 import type { FeatureKey } from "@/lib/features/catalog";
-import type { ChurchSettings } from "@/types/sermon";
 
 type SettingsTabsProps = {
   isAdmin: boolean;
   integrationStatus: IntegrationsCardProps["status"];
-  settings: ChurchSettings | null;
   givingProfile: ChurchGivingProfile | null;
   givingFunds: GivingFundRow[];
   followUpTemplates: string[];
@@ -74,7 +71,6 @@ function getDefaultTab(
 function SettingsTabsInner({
   isAdmin,
   integrationStatus,
-  settings,
   givingProfile,
   givingFunds,
   followUpTemplates,
@@ -144,14 +140,6 @@ function SettingsTabsInner({
                   Documents
                 </Link>
               )}
-              {allowedFeatures.includes("live_stream") && (
-                <Link
-                  href="/dashboard/live-streaming"
-                  className="rounded-lg border border-border bg-background px-4 py-2.5 text-center text-sm font-semibold text-foreground transition-colors hover:border-accent hover:bg-accent/10"
-                >
-                  Live Streaming
-                </Link>
-              )}
               <Link
                 href="/dashboard/support"
                 className="rounded-lg border border-border bg-background px-4 py-2.5 text-center text-sm font-semibold text-foreground transition-colors hover:border-accent hover:bg-accent/10"
@@ -160,10 +148,6 @@ function SettingsTabsInner({
               </Link>
             </CardContent>
           </Card>
-
-          <div className="lg:col-span-2">
-            <AISettingsForm settings={settings} isAdmin={isAdmin} />
-          </div>
         </div>
       </TabsContent>
 

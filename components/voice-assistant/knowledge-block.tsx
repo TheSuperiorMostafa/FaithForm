@@ -61,11 +61,12 @@ export function KnowledgeBlock({ context }: KnowledgeBlockProps) {
           emptyMessage="No programs listed yet."
         />
         <p className="border-t border-border pt-4 text-xs text-muted-foreground">
-          Service times, staff, and AI knowledge come from{" "}
-          <Link href="/dashboard/church-profile" className="font-medium text-accent underline">
-            Church Profile
-          </Link>
-          . Live events still pull from{" "}
+          Service times, staff, and AI knowledge are maintained for you by
+          FaithForm —{" "}
+          <Link href="/dashboard/support" className="font-medium text-accent underline">
+            ask support
+          </Link>{" "}
+          to change them. Live events still pull from{" "}
           <Link href="/dashboard/announcements" className="font-medium text-accent underline">
             announcements
           </Link>{" "}

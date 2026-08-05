@@ -189,11 +189,11 @@ export function PersonalitySection({
         <div className="space-y-2">
           <Label>Phone greeting</Label>
           <p className="rounded-[10px] border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
-            First thing callers hear — set in{" "}
-            <Link href="/dashboard/church-profile" className="font-medium text-accent underline">
-              Church Profile → AI knowledge → Phone greeting
-            </Link>
-            . A recording notice is spoken first automatically.
+            First thing callers hear — maintained for you by FaithForm.{" "}
+            <Link href="/dashboard/support" className="font-medium text-accent underline">
+              Contact support
+            </Link>{" "}
+            to reword it. A recording notice is spoken first automatically.
           </p>
         </div>
 

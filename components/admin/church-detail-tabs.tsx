@@ -17,8 +17,10 @@ import { Select } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ActivityFilters } from "@/components/admin/activity-filters";
 import { ActivityPagination } from "@/components/admin/activity-pagination";
+import { ChurchAISettingsPanel } from "@/components/admin/church-ai-settings-panel";
 import { ChurchFeaturesPanel } from "@/components/admin/church-features-panel";
 import { ChurchGivingPanel } from "@/components/admin/church-giving-panel";
+import { ChurchProfileForm } from "@/components/church-profile/church-profile-form";
 import type { FeatureFlags } from "@/lib/features/access";
 import { getFeature, type FeatureKey } from "@/lib/features/catalog";
 import type {
@@ -26,6 +28,7 @@ import type {
   AdminActivityResult,
   AdminChurchDetail,
 } from "@/lib/queries/admin";
+import type { ChurchProfileFormState } from "@/types/church-profile";
 
 type ChurchDetailTabsProps = {
   detail: AdminChurchDetail;
@@ -34,6 +37,8 @@ type ChurchDetailTabsProps = {
   featureFlags: FeatureFlags;
   /** church_users.id → granted features, for the Users tab. */
   featurePermissionsByMemberId: Record<string, FeatureKey[]>;
+  /** Church identity, services, staff and AI knowledge — we own this, not the church. */
+  profileForm: ChurchProfileFormState;
 };
 
 function MemberAccessCell({
@@ -71,11 +76,14 @@ export function ChurchDetailTabs({
   activityFilters,
   featureFlags,
   featurePermissionsByMemberId,
+  profileForm,
 }: ChurchDetailTabsProps) {
   return (
     <Tabs defaultValue="overview" className="space-y-4">
       <TabsList className="w-full justify-start overflow-x-auto sm:w-auto">
         <TabsTrigger value="overview">Overview</TabsTrigger>
+        <TabsTrigger value="profile">Profile</TabsTrigger>
+        <TabsTrigger value="ai">AI</TabsTrigger>
         <TabsTrigger value="features">Features</TabsTrigger>
         <TabsTrigger value="users">Users</TabsTrigger>
         <TabsTrigger value="integrations">Integrations</TabsTrigger>
@@ -136,6 +144,10 @@ export function ChurchDetailTabs({
               value={detail.settings?.aiProvider || "Not configured"}
             />
             <DetailItem
+              label="Sermon Builder mode"
+              value={detail.settings?.sermonBuilderMode || "simple"}
+            />
+            <DetailItem
               label="Model"
               value={detail.settings?.model || "Default model"}
             />
@@ -158,6 +170,22 @@ export function ChurchDetailTabs({
             <ChurchAttendanceBarChart points={detail.attendanceTrend} />
           </CardContent>
         </Card>
+      </TabsContent>
+
+      <TabsContent value="profile">
+        <ChurchProfileForm
+          churchId={detail.church.id}
+          initialForm={profileForm}
+          isAdmin
+        />
+      </TabsContent>
+
+      <TabsContent value="ai">
+        <ChurchAISettingsPanel
+          churchId={detail.church.id}
+          churchName={detail.church.name}
+          settings={detail.settings}
+        />
       </TabsContent>
 
       <TabsContent value="features">

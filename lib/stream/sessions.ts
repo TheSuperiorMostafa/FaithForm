@@ -86,6 +86,23 @@ export async function getActiveStreamSession(
   return data ? mapSession(data as SessionRow) : null;
 }
 
+/** Broadcast history, newest first — what the Media tab shows a church. */
+export async function listStreamSessions(
+  churchId: string,
+  options?: { limit?: number; supabase?: SupabaseClient },
+): Promise<StreamSession[]> {
+  const client = getClient(options?.supabase);
+  const { data, error } = await client
+    .from("stream_sessions")
+    .select("*")
+    .eq("church_id", churchId)
+    .order("created_at", { ascending: false })
+    .limit(options?.limit ?? 25);
+
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row) => mapSession(row as SessionRow));
+}
+
 export async function createStreamSession(
   input: {
     churchId: string;

@@ -1,68 +1,66 @@
 "use client";
 
-import Link from "next/link";
 import { useFormState, useFormStatus } from "react-dom";
+
+import {
+  updateChurchAISettings,
+  type ChurchSettingsFormState,
+} from "@/app/admin/church-settings-actions";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  updateAISettings,
-  type SettingsFormState,
-} from "@/app/dashboard/settings/actions";
-import type { ChurchSettings } from "@/types/sermon";
+import type { AdminChurchDetail } from "@/lib/queries/admin";
 
 function SubmitButton() {
   const { pending } = useFormStatus();
   return (
     <Button type="submit" disabled={pending}>
-      {pending ? "Saving…" : "Save settings"}
+      {pending ? "Saving…" : "Save AI settings"}
     </Button>
   );
 }
 
-export function AISettingsForm({
+export function ChurchAISettingsPanel({
+  churchId,
+  churchName,
   settings,
-  isAdmin,
 }: {
-  settings: ChurchSettings | null;
-  isAdmin: boolean;
+  churchId: string;
+  churchName: string;
+  settings: AdminChurchDetail["settings"];
 }) {
-  const [state, formAction] = useFormState<SettingsFormState, FormData>(
-    updateAISettings,
+  const [state, formAction] = useFormState<ChurchSettingsFormState, FormData>(
+    updateChurchAISettings,
     { ok: false },
   );
 
-  if (!isAdmin) {
-    return (
-      <Card>
-        <CardContent className="p-6 text-sm text-muted-foreground">
-          Only church admins and owners can change AI settings. Current
-          provider: <strong>{settings?.ai_provider ?? "anthropic"}</strong>.
-          Sermon Builder mode:{" "}
-          <strong>{settings?.sermon_builder_mode ?? "simple"}</strong>.
-        </CardContent>
-      </Card>
-    );
-  }
+  const provider = settings?.aiProvider === "openai" ? "openai" : "anthropic";
+  const mode = settings?.sermonBuilderMode === "advanced" ? "advanced" : "simple";
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>AI provider</CardTitle>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Model and Sermon Builder mode for {churchName}. Churches don&apos;t see
+          these — we tune them here.
+        </p>
       </CardHeader>
       <CardContent>
         <form action={formAction} className="flex flex-col gap-4">
+          <input type="hidden" name="church_id" value={churchId} />
+
           <fieldset className="grid gap-3 sm:grid-cols-2">
-            <legend className="col-span-full text-sm font-semibold">Sermon Builder mode</legend>
+            <legend className="col-span-full text-sm font-semibold">
+              Sermon Builder mode
+            </legend>
             <label className="flex cursor-pointer items-start gap-3 rounded-[10px] border border-border bg-background/45 p-3 transition-colors has-[:checked]:border-accent has-[:checked]:bg-accent/10">
               <input
                 type="radio"
                 name="sermon_builder_mode"
                 value="simple"
-                defaultChecked={
-                  (settings?.sermon_builder_mode ?? "simple") === "simple"
-                }
+                defaultChecked={mode === "simple"}
                 className="size-4"
               />
               <div>
@@ -78,7 +76,7 @@ export function AISettingsForm({
                 type="radio"
                 name="sermon_builder_mode"
                 value="advanced"
-                defaultChecked={settings?.sermon_builder_mode === "advanced"}
+                defaultChecked={mode === "advanced"}
                 className="size-4"
               />
               <div>
@@ -92,15 +90,15 @@ export function AISettingsForm({
           </fieldset>
 
           <fieldset className="grid gap-3 sm:grid-cols-2">
-            <legend className="col-span-full text-sm font-semibold">Default model</legend>
+            <legend className="col-span-full text-sm font-semibold">
+              Default model
+            </legend>
             <label className="flex cursor-pointer items-start gap-3 rounded-[10px] border border-border bg-background/45 p-3 transition-colors has-[:checked]:border-accent has-[:checked]:bg-accent/10">
               <input
                 type="radio"
                 name="ai_provider"
                 value="anthropic"
-                defaultChecked={
-                  (settings?.ai_provider ?? "anthropic") === "anthropic"
-                }
+                defaultChecked={provider === "anthropic"}
                 className="size-4"
               />
               <div>
@@ -115,7 +113,7 @@ export function AISettingsForm({
                 type="radio"
                 name="ai_provider"
                 value="openai"
-                defaultChecked={settings?.ai_provider === "openai"}
+                defaultChecked={provider === "openai"}
                 className="size-4"
               />
               <div>
@@ -133,7 +131,7 @@ export function AISettingsForm({
               <Input
                 id="ai_model_override"
                 name="ai_model_override"
-                defaultValue={settings?.ai_model_override ?? ""}
+                defaultValue={settings?.model ?? ""}
                 placeholder="e.g. claude-sonnet-4-5-20250929 (blank = default)"
               />
             </div>
@@ -141,11 +139,7 @@ export function AISettingsForm({
             <div className="space-y-2 sm:col-span-2">
               <Label>Denomination / tradition</Label>
               <p className="text-sm text-muted-foreground">
-                Set in{" "}
-                <Link href="/dashboard/church-profile" className="font-medium text-accent underline">
-                  Church Profile
-                </Link>
-                . Sermon AI reads from there.
+                Set on the Profile tab. Sermon AI reads from there.
               </p>
             </div>
 
@@ -154,7 +148,7 @@ export function AISettingsForm({
               <Input
                 id="preaching_style"
                 name="preaching_style"
-                defaultValue={settings?.preaching_style ?? ""}
+                defaultValue={settings?.preachingStyle ?? ""}
                 placeholder="e.g. Expository, narrative, topical"
               />
             </div>
@@ -164,7 +158,9 @@ export function AISettingsForm({
             <p className="text-sm text-destructive">{state.error}</p>
           )}
           {state.ok && (
-            <p className="rounded-lg border border-green-200 bg-green-100 px-3 py-2 text-sm font-semibold text-green-700 dark:border-green-500/20 dark:bg-green-500/15 dark:text-green-300">Settings saved.</p>
+            <p className="rounded-lg border border-green-200 bg-green-100 px-3 py-2 text-sm font-semibold text-green-700 dark:border-green-500/20 dark:bg-green-500/15 dark:text-green-300">
+              AI settings saved.
+            </p>
           )}
 
           <SubmitButton />

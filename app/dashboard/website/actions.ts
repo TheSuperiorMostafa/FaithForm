@@ -820,7 +820,6 @@ export async function saveSiteDetails(
       .filter((pair): pair is { clientId: string; id: string } => Boolean(pair.id));
 
   refresh();
-  revalidatePath("/dashboard/church-profile");
   return {
     ok: true,
     serviceTimes: pairUp(

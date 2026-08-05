@@ -1,6 +1,5 @@
 import {
   BookOpen,
-  Building2,
   Contact,
   Globe,
   Heart,
@@ -23,8 +22,8 @@ export type NavItem = {
   /** Hide from mobile bottom nav (sidebar only). */
   sidebarOnly?: boolean;
   /**
-   * Gate this row behind a feature. Items without a key (Home, Church Profile,
-   * Support, Settings) are always available.
+   * Gate this row behind a feature. Items without a key (Home, Support,
+   * Settings) are always available.
    */
   feature?: FeatureKey;
 };
@@ -102,15 +101,6 @@ export const navItems: NavItem[] = [
   },
 ];
 
-/** Church Profile lives in the sidebar footer as a full nav row. */
-export const churchProfileNavItem: NavItem = {
-  label: "Church Profile",
-  shortLabel: "Profile",
-  href: "/dashboard/church-profile",
-  icon: Building2,
-  sidebarOnly: true,
-};
-
 /** Compact footer pills (Support + Settings). */
 export const footerUtilityNavItems: NavItem[] = [
   {
@@ -127,10 +117,4 @@ export const footerUtilityNavItems: NavItem[] = [
     icon: Settings,
     sidebarOnly: true,
   },
-];
-
-/** All footer utilities (profile + compact pills). */
-export const utilityNavItems: NavItem[] = [
-  churchProfileNavItem,
-  ...footerUtilityNavItems,
 ];

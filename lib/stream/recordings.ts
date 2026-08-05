@@ -88,7 +88,9 @@ export async function createStreamRecording(
       title: input.title ?? null,
       storage_path: input.storagePath,
       duration_sec: input.durationSec ?? null,
-      status: "processing",
+      // The relay only calls this once the file is uploaded, and churches no
+      // longer trim or publish, so a recording is watchable the moment it lands.
+      status: "ready",
     })
     .select("*")
     .single();

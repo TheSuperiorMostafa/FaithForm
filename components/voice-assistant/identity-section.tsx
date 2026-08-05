@@ -44,11 +44,11 @@ function ProfileField({
         {value.trim() || "Not set"}
       </p>
       <p className="text-xs text-muted-foreground">
-        Managed in{" "}
-        <Link href="/dashboard/church-profile" className="font-medium text-accent underline">
-          Church Profile
-        </Link>
-        .
+        Maintained for you by FaithForm —{" "}
+        <Link href="/dashboard/support" className="font-medium text-accent underline">
+          contact support
+        </Link>{" "}
+        to change it.
       </p>
     </div>
   );

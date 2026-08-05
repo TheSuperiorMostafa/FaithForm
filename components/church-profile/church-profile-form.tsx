@@ -1,13 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
   saveChurchProfile,
   uploadChurchCoverImage,
   uploadChurchProfileLogo,
-} from "@/app/dashboard/church-profile/actions";
+} from "@/app/admin/church-profile-actions";
 import { TimezoneSelect } from "@/components/admin/timezone-select";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -42,6 +41,8 @@ const DAY_LABELS: Record<DayKey, string> = {
 };
 
 type ChurchProfileFormProps = {
+  /** Which church is being edited — this form is driven from the admin console. */
+  churchId: string;
   initialForm: ChurchProfileFormState;
   isAdmin: boolean;
 };
@@ -61,7 +62,11 @@ function formsEqual(a: ChurchProfileFormState, b: ChurchProfileFormState): boole
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-export function ChurchProfileForm({ initialForm, isAdmin }: ChurchProfileFormProps) {
+export function ChurchProfileForm({
+  churchId,
+  initialForm,
+  isAdmin,
+}: ChurchProfileFormProps) {
   const [form, setForm] = useState(initialForm);
   const [baseline, setBaseline] = useState(initialForm);
   const [showErrors, setShowErrors] = useState(false);
@@ -100,6 +105,7 @@ export function ChurchProfileForm({ initialForm, isAdmin }: ChurchProfileFormPro
 
   const handleLogoUpload = async (file: File) => {
     const fd = new FormData();
+    fd.set("churchId", churchId);
     fd.set("logo", file);
     const result = await uploadChurchProfileLogo(fd);
     if ("error" in result) {
@@ -112,6 +118,7 @@ export function ChurchProfileForm({ initialForm, isAdmin }: ChurchProfileFormPro
 
   const handleCoverUpload = async (file: File) => {
     const fd = new FormData();
+    fd.set("churchId", churchId);
     fd.set("cover", file);
     const result = await uploadChurchCoverImage(fd);
     if ("error" in result) {
@@ -132,7 +139,7 @@ export function ChurchProfileForm({ initialForm, isAdmin }: ChurchProfileFormPro
     }
 
     startTransition(async () => {
-      const result = await saveChurchProfile(form);
+      const result = await saveChurchProfile(churchId, form);
       if (!("ok" in result) || !result.ok) {
         toast.error("error" in result ? result.error : "Could not save profile.");
         return;
@@ -772,11 +779,8 @@ export function ChurchProfileForm({ initialForm, isAdmin }: ChurchProfileFormPro
         <CardHeader>
           <CardTitle>Social media</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Public profile links. OAuth connections for posting stay in{" "}
-            <Link href="/dashboard/settings?tab=integrations" className="text-accent underline">
-              Settings
-            </Link>
-            .
+            Public profile links. OAuth connections for posting are managed by
+            the church under Settings → Integrations.
           </p>
         </CardHeader>
         <CardContent className="grid gap-4 sm:grid-cols-2">

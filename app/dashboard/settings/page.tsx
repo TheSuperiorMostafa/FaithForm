@@ -12,7 +12,6 @@ import {
 import { FEATURE_KEYS } from "@/lib/features/catalog";
 import { getIntegrationStatus } from "@/lib/integrations/tokens";
 import { getChurchTeamMembers } from "@/lib/queries/team";
-import { getChurchAISettings } from "@/lib/queries/sermons";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -34,7 +33,6 @@ export default async function SettingsPage() {
   }
 
   const [
-    settings,
     integrationStatus,
     givingProfile,
     givingFunds,
@@ -44,7 +42,6 @@ export default async function SettingsPage() {
     featureFlags,
   ] =
     await Promise.all([
-      getChurchAISettings(auth.churchId),
       getIntegrationStatus(auth.churchId, supabase),
       getChurchGivingProfile(auth.churchId),
       getGivingFundsForSettings(auth.churchId),
@@ -64,7 +61,7 @@ export default async function SettingsPage() {
           Settings
         </h1>
         <p className="text-sm text-muted-foreground">
-          Connect services, manage your team, and set AI preferences for your
+          Connect services, manage your team, and set preferences for your
           church.
         </p>
       </div>
@@ -72,7 +69,6 @@ export default async function SettingsPage() {
       <SettingsTabs
         isAdmin={auth.isAdmin}
         integrationStatus={integrationStatus}
-        settings={settings}
         givingProfile={givingProfile}
         givingFunds={givingFunds}
         followUpTemplates={followUpTemplates}

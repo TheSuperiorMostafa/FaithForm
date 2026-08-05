@@ -2,14 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronLeft, ChevronRight, LogOut, ShieldCheck } from "lucide-react";
+import { ChevronLeft, ChevronRight, LogOut } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
-import { isBootstrapSuperAdminEmail } from "@/lib/auth/superadmin-emails";
 import type { FeatureKey } from "@/lib/features/catalog";
 import { cn } from "@/lib/utils";
 import {
   navItems,
-  churchProfileNavItem,
   filterNavByFeatures,
   footerUtilityNavItems,
 } from "./nav-items";
@@ -90,7 +88,6 @@ export function Sidebar({
   allowedFeatures,
 }: SidebarProps) {
   const pathname = usePathname();
-  const showAdminLink = isBootstrapSuperAdminEmail(userEmail);
 
   const initial = (userEmail ?? "F").charAt(0).toUpperCase();
   const navItemsForSidebar = filterNavByFeatures(navItems, allowedFeatures);
@@ -180,12 +177,6 @@ export function Sidebar({
 
       {/* Utility + user footer */}
       <div className="shrink-0 space-y-2 overflow-x-hidden border-t border-sidebar p-3">
-        <SidebarLink
-          item={churchProfileNavItem}
-          pathname={pathname}
-          collapsed={collapsed}
-        />
-
         <div
           className={cn(
             "flex gap-1.5",
@@ -214,26 +205,6 @@ export function Sidebar({
             );
           })}
         </div>
-
-        {showAdminLink && (
-          <Link
-            href="/admin"
-            title="Admin dashboard"
-            className="flex h-10 w-full min-w-0 items-center overflow-hidden rounded-xl border border-sidebar-accent/30 bg-sidebar-accent/10 text-sidebar-accent hover:bg-sidebar-accent/20"
-          >
-            <span className="flex size-11 shrink-0 items-center justify-center">
-              <ShieldCheck className="size-4" strokeWidth={1.75} />
-            </span>
-            <span
-              className={cn(
-                "min-w-0 flex-1 truncate pr-3 text-sm font-semibold transition-[opacity,max-width] duration-200 ease-out motion-reduce:transition-none",
-                collapsed ? "max-w-0 opacity-0" : "max-w-full opacity-100",
-              )}
-            >
-              Admin dashboard
-            </span>
-          </Link>
-        )}
 
         <div
           className={cn(

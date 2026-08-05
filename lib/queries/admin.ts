@@ -137,6 +137,7 @@ export type AdminChurchDetail = {
   };
   settings: {
     aiProvider: string | null;
+    sermonBuilderMode: string | null;
     model: string | null;
     denomination: string | null;
     preachingStyle: string | null;
@@ -670,7 +671,9 @@ export async function getAdminChurchDetail(
       .maybeSingle(),
     admin
       .from("church_settings")
-      .select("ai_provider, ai_model_override, denomination, preaching_style")
+      .select(
+        "ai_provider, sermon_builder_mode, ai_model_override, denomination, preaching_style",
+      )
       .eq("church_id", churchId)
       .maybeSingle(),
     admin
@@ -774,6 +777,7 @@ export async function getAdminChurchDetail(
     settings: settingsRes.data
       ? {
           aiProvider: String(settingsRes.data.ai_provider ?? ""),
+          sermonBuilderMode: settingsRes.data.sermon_builder_mode ?? null,
           model: settingsRes.data.ai_model_override ?? null,
           denomination: settingsRes.data.denomination ?? null,
           preachingStyle: settingsRes.data.preaching_style ?? null,

@@ -127,10 +127,10 @@ export function SiteBuilder({
         </ul>
 
         <Link
-          href="/dashboard/church-profile"
+          href="/dashboard/support"
           className="mt-4 inline-block text-sm font-semibold text-accent underline underline-offset-4"
         >
-          Update Church Profile first
+          Missing something? Ask support to fill it in
         </Link>
       </section>
 

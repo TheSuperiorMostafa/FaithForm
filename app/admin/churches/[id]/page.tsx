@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { loadChurchProfileForAdmin } from "@/app/admin/church-profile-actions";
 import { ChurchDetailTabs } from "@/components/admin/church-detail-tabs";
 import { PageHeader } from "@/components/admin/page-header";
 import { getChurchFeatureFlags } from "@/lib/features/access";
@@ -8,6 +9,10 @@ import {
   getAdminChurchDetail,
   type AdminActivityRange,
 } from "@/lib/queries/admin";
+import {
+  emptyChurchProfileForm,
+  profileToFormState,
+} from "@/lib/queries/church-profile";
 import { getChurchTeamMembers } from "@/lib/queries/team";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -49,12 +54,14 @@ export default async function AdminChurchDetailPage({
     ),
   };
 
-  const [detail, activity, featureFlags, teamMembers] = await Promise.all([
-    getAdminChurchDetail(params.id),
-    getAdminChurchActivity(params.id, activityFilters),
-    getChurchFeatureFlags(params.id, createAdminClient()),
-    getChurchTeamMembers(params.id),
-  ]);
+  const [detail, activity, featureFlags, teamMembers, profile] =
+    await Promise.all([
+      getAdminChurchDetail(params.id),
+      getAdminChurchActivity(params.id, activityFilters),
+      getChurchFeatureFlags(params.id, createAdminClient()),
+      getChurchTeamMembers(params.id),
+      loadChurchProfileForAdmin(params.id),
+    ]);
 
   if (!detail) notFound();
 
@@ -62,11 +69,15 @@ export default async function AdminChurchDetailPage({
     teamMembers.map((member) => [member.id, member.featurePermissions]),
   ) as Record<string, FeatureKey[]>;
 
+  const profileForm = profile
+    ? profileToFormState(profile)
+    : emptyChurchProfileForm();
+
   return (
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
       <PageHeader
         title={detail.church.name}
-        description="Inspect features, users, integrations, activity, and support for this church."
+        description="Manage this church's profile, AI settings, features, users, integrations, activity, and support."
       />
       <ChurchDetailTabs
         detail={detail}
@@ -74,6 +85,7 @@ export default async function AdminChurchDetailPage({
         activityFilters={activityFilters}
         featureFlags={featureFlags}
         featurePermissionsByMemberId={featurePermissionsByMemberId}
+        profileForm={profileForm}
       />
     </div>
   );

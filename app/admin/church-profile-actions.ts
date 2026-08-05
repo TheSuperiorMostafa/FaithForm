@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requireChurchAuth } from "@/lib/auth/church";
+
+import { requireSuperAdmin } from "@/lib/auth/superadmin";
 import { normalizeHexColor } from "@/lib/giving/branding";
 import { syncRetellAgent } from "@/lib/integrations/retell";
 import {
@@ -118,17 +119,19 @@ const saveSchema = z
     }
   });
 
-export type SaveChurchProfileResult =
-  | { ok: true }
-  | { error: string };
+export type SaveChurchProfileResult = { ok: true } | { error: string };
 
+/**
+ * The church profile is the source of truth for identity, service times, staff
+ * and AI knowledge — FaithForm staff maintain it on the church's behalf, so
+ * every entry point here is platform-admin only and takes an explicit church.
+ */
 export async function saveChurchProfile(
+  churchId: string,
   input: UpsertChurchProfileInput,
 ): Promise<SaveChurchProfileResult> {
-  const auth = await requireChurchAuth();
-  if (!auth.isAdmin) {
-    return { error: "Only church admins can update the church profile." };
-  }
+  await requireSuperAdmin();
+  if (!churchId) return { error: "Missing church." };
 
   const parsed = saveSchema.safeParse(input);
   if (!parsed.success) {
@@ -147,23 +150,25 @@ export async function saveChurchProfile(
 
   try {
     const admin = createAdminClient();
-    await upsertChurchProfile(auth.churchId, {
-      ...parsed.data,
-      primaryColor: primary ?? "",
-      accentColor: accent ?? "",
-    }, admin);
+    await upsertChurchProfile(
+      churchId,
+      {
+        ...parsed.data,
+        primaryColor: primary ?? "",
+        accentColor: accent ?? "",
+      },
+      admin,
+    );
 
     try {
-      await syncRetellAgent(auth.churchId);
+      await syncRetellAgent(churchId);
     } catch (syncError) {
       console.error("Church profile saved but Retell sync failed:", syncError);
     }
 
-    revalidatePath("/dashboard/church-profile");
-    revalidatePath("/dashboard/voice-assistant");
-    revalidatePath("/dashboard/settings");
-    revalidatePath("/dashboard/giving");
-    revalidatePath("/dashboard/announcements");
+    revalidatePath(`/admin/churches/${churchId}`);
+    // The church's own pages read identity, hours and staff from the profile.
+    revalidatePath("/dashboard", "layout");
     return { ok: true };
   } catch (e) {
     return {
@@ -175,8 +180,10 @@ export async function saveChurchProfile(
 export async function uploadChurchProfileLogo(
   formData: FormData,
 ): Promise<{ ok: true; logoUrl: string } | { error: string }> {
-  const auth = await requireChurchAuth();
-  if (!auth.isAdmin) return { error: "Forbidden" };
+  await requireSuperAdmin();
+
+  const churchId = formData.get("churchId")?.toString();
+  if (!churchId) return { error: "Missing church." };
 
   const file = formData.get("logo") as File | null;
   if (!file || file.size === 0) return { error: "No file provided." };
@@ -186,7 +193,7 @@ export async function uploadChurchProfileLogo(
   const validated = await validateImageBuffer(buffer);
   if (!validated) return { error: "Logo must be a valid PNG or JPG image." };
 
-  const path = `${auth.churchId}/logo.${validated.ext}`;
+  const path = `${churchId}/logo.${validated.ext}`;
   const admin = createAdminClient();
 
   const { error: uploadError } = await admin.storage
@@ -204,20 +211,22 @@ export async function uploadChurchProfileLogo(
   const { error } = await admin
     .from("churches")
     .update({ logo_url: logoUrl })
-    .eq("id", auth.churchId);
+    .eq("id", churchId);
 
   if (error) return { error: error.message };
 
-  revalidatePath("/dashboard/church-profile");
-  revalidatePath("/dashboard/giving");
+  revalidatePath(`/admin/churches/${churchId}`);
+  revalidatePath("/dashboard", "layout");
   return { ok: true, logoUrl };
 }
 
 export async function uploadChurchCoverImage(
   formData: FormData,
 ): Promise<{ ok: true; coverUrl: string } | { error: string }> {
-  const auth = await requireChurchAuth();
-  if (!auth.isAdmin) return { error: "Forbidden" };
+  await requireSuperAdmin();
+
+  const churchId = formData.get("churchId")?.toString();
+  if (!churchId) return { error: "Missing church." };
 
   const file = formData.get("cover") as File | null;
   if (!file || file.size === 0) return { error: "No file provided." };
@@ -227,7 +236,7 @@ export async function uploadChurchCoverImage(
   const validated = await validateImageBuffer(buffer);
   if (!validated) return { error: "Cover must be a valid PNG or JPG image." };
 
-  const path = `${auth.churchId}/cover.${validated.ext}`;
+  const path = `${churchId}/cover.${validated.ext}`;
   const admin = createAdminClient();
 
   const { error: uploadError } = await admin.storage
@@ -245,15 +254,14 @@ export async function uploadChurchCoverImage(
   const { error } = await admin
     .from("churches")
     .update({ cover_image_url: coverUrl })
-    .eq("id", auth.churchId);
+    .eq("id", churchId);
 
   if (error) return { error: error.message };
 
-  revalidatePath("/dashboard/church-profile");
+  revalidatePath(`/admin/churches/${churchId}`);
   return { ok: true, coverUrl };
 }
 
-export async function loadChurchProfileForPage(churchId: string) {
-  const admin = createAdminClient();
-  return getChurchProfile(churchId, admin);
+export async function loadChurchProfileForAdmin(churchId: string) {
+  return getChurchProfile(churchId, createAdminClient());
 }
