@@ -28,6 +28,21 @@ ufw allow 8888/tcp comment 'HLS playback'
 ufw allow 8890/udp comment 'SRT ingest'
 ufw --force enable
 
+# Prefer IPv4 when a destination publishes both A and AAAA records.
+#
+# ffmpeg 7.0.2 crashes connecting to RTMP over IPv6 — it dies before writing a
+# single log line, so a failing push left an empty log and looked like a clean
+# exit. YouTube and Facebook both publish AAAA records and glibc prefers them,
+# so every fan-out died on connect and no service reached either platform.
+#
+# The fan-out pins plain rtmp:// to an A record itself, but it cannot do that
+# for Facebook's rtmps:// — TLS has to validate against the hostname, and an IP
+# literal fails that. This is the fix that covers both.
+if ! grep -qE '^\s*precedence\s+::ffff:0:0/96\s+100' /etc/gai.conf 2>/dev/null; then
+  printf '\n# FaithForm: prefer IPv4 (ffmpeg RTMP over IPv6 is broken)\nprecedence ::ffff:0:0/96  100\n' >>/etc/gai.conf
+  echo "Added IPv4 precedence to /etc/gai.conf"
+fi
+
 # Let mediamtx bind to port 1935 without running as root
 setcap 'cap_net_bind_service=+ep' "${BIN_DIR}/mediamtx"
 

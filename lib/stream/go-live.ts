@@ -92,12 +92,17 @@ export async function startLiveBroadcast(
 
   const destinations = provisioned.destinations;
 
+  // Provisioning only proves a destination exists. Whether video reaches the
+  // platform is the relay's business, and it reports that back to
+  // /api/stream/syndication/report — so a successful hand-off is `pending`
+  // here, not `success`. Calling it success at this point is why the dashboard
+  // showed both platforms green through services that never went out.
   if (event.syndicateYoutube) {
     const ok = destinations.some((d) => d.name === "youtube");
     await recordSyndicationAttempt(
       event.id,
       "youtube",
-      ok ? "success" : "failed",
+      ok ? "pending" : "failed",
       ok
         ? undefined
         : (provisioned.errors.youtube ??
@@ -110,7 +115,7 @@ export async function startLiveBroadcast(
     await recordSyndicationAttempt(
       event.id,
       "facebook",
-      ok ? "success" : "failed",
+      ok ? "pending" : "failed",
       ok
         ? undefined
         : (provisioned.errors.facebook ??

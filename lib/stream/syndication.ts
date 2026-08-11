@@ -9,7 +9,10 @@ import {
 } from "@/lib/integrations/youtube-live";
 import { google } from "googleapis";
 import type { StreamEvent } from "@/lib/stream/events";
-import { clearStreamRelayDestinations } from "@/lib/stream/relay";
+import {
+  clearStreamRelayDestinations,
+  getStreamRelaySettings,
+} from "@/lib/stream/relay";
 
 const RETRY_WINDOW_MS = 15 * 60 * 1000;
 const RETRY_INTERVAL_MS = 2 * 60 * 1000;
@@ -341,9 +344,20 @@ export async function retryPendingSyndication(
     const lastYoutube = attempts?.find((a) => a.platform === "youtube");
     const lastFacebook = attempts?.find((a) => a.platform === "facebook");
 
+    // Only a platform with no destination at all is re-provisioned.
+    //
+    // The relay also reports `failed` when a push it had been given drops, and
+    // acting on that here would mint a fresh YouTube broadcast in the middle of
+    // a service — orphaning the one people are already watching. A destination
+    // that exists is the relay's problem to reconnect to, not ours to replace.
+    const settings = await getStreamRelaySettings(event.church_id, {
+      supabase: client,
+    });
+
     if (
       event.syndicate_youtube &&
-      lastYoutube?.status !== "success" &&
+      !settings.youtubeUrl &&
+      lastYoutube?.status === "failed" &&
       shouldRetry(lastYoutube?.attempted_at)
     ) {
       try {
@@ -356,7 +370,7 @@ export async function retryPendingSyndication(
             privacyStatus: event.youtube_privacy ?? "public",
           },
         );
-        await recordSyndicationAttempt(event.id, "youtube", "success", undefined, client);
+        await recordSyndicationAttempt(event.id, "youtube", "pending", undefined, client);
         retried++;
       } catch (err) {
         await recordSyndicationAttempt(
@@ -371,7 +385,8 @@ export async function retryPendingSyndication(
 
     if (
       event.syndicate_facebook &&
-      lastFacebook?.status !== "success" &&
+      !settings.facebookUrl &&
+      lastFacebook?.status === "failed" &&
       shouldRetry(lastFacebook?.attempted_at)
     ) {
       try {
@@ -380,7 +395,7 @@ export async function retryPendingSyndication(
           event.created_by,
           client,
         );
-        await recordSyndicationAttempt(event.id, "facebook", "success", undefined, client);
+        await recordSyndicationAttempt(event.id, "facebook", "pending", undefined, client);
         retried++;
       } catch (err) {
         await recordSyndicationAttempt(

@@ -36,6 +36,7 @@ RTSP_URL="rtsp://127.0.0.1:${RTSP_PORT}/${MTX_PATH}"
 
 CONFIG_URL="${APP_URL%/}/api/stream/relay-config?path=$(python3 -c 'import sys, urllib.parse; print(urllib.parse.quote(sys.argv[1], safe=""))' "$MTX_PATH")"
 LIFECYCLE_URL="${APP_URL%/}/api/stream/lifecycle"
+SYNDICATION_URL="${APP_URL%/}/api/stream/syndication/report"
 
 DEST_PARSER='
 import json, sys
@@ -90,19 +91,21 @@ notify_lifecycle() {
     -o /dev/null 2>>"$LOG_FILE" || true
 }
 
-# ffmpeg 7.0.2 crashes connecting native RTMP over IPv6 — it dies before writing
-# a single line, which is why a failing fan-out left an empty log and looked like
-# a clean 5-second exit. YouTube and Facebook both publish AAAA records and glibc
+# ffmpeg 7.0.2 crashes connecting to RTMP over IPv6 — it dies before writing a
+# single line, which is why a failing push left an empty log and looked like a
+# clean 5-second exit. YouTube and Facebook both publish AAAA records and glibc
 # prefers them, so every push crashed on connect. Pinning plain RTMP to the
 # host's A record avoids the broken path entirely; the platform is happy to be
 # addressed by IP.
 #
-# rtmps is deliberately left alone: its TLS handshake must validate against the
-# hostname, and an IP literal would fail that. Those destinations need the
-# resolver fixed system-wide instead — `precedence ::ffff:0:0/96  100` in
-# /etc/gai.conf — which is also the proper fix for all of this.
+# rtmps cannot be pinned this way: its TLS handshake must validate against the
+# hostname, and an IP literal fails that. Facebook is rtmps-only, so it needs
+# the resolver fixed system-wide — `precedence ::ffff:0:0/96  100` in
+# /etc/gai.conf, which bootstrap.sh now installs. `warn_ipv6_precedence` says so
+# out loud when it is missing, because the symptom is otherwise just a service
+# that never appears on the platform.
 pin_ipv4() {
-  python3 - "$1" <<'PY'
+  python3 - "$1" <<'PYPIN'
 import socket, sys
 from urllib.parse import urlsplit, urlunsplit
 
@@ -126,77 +129,172 @@ if not infos:
 ip = infos[0][4][0]
 netloc = f"{ip}:{parts.port}" if parts.port else ip
 print(urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment)))
-PY
+PYPIN
 }
 
-# Resolved fresh on every fan-out start, and never fed back into the
-# change-detection key — these hosts are load balanced, so a rotating address
-# would otherwise read as "destinations changed" and restart the push endlessly.
-resolve_targets() {
-  TARGETS=()
-  local url pinned
-  for url in "${DESTINATIONS[@]}"; do
-    pinned="$(pin_ipv4 "$url" 2>/dev/null || printf '%s' "$url")"
-    TARGETS+=("${pinned:-$url}")
-  done
+warn_ipv6_precedence() {
+  if ! grep -qE '^[[:space:]]*precedence[[:space:]]+::ffff:0:0/96[[:space:]]+100' /etc/gai.conf 2>/dev/null; then
+    echo "[relay] WARNING: /etc/gai.conf has no IPv4 precedence line, so rtmps destinations (Facebook) will fail to connect. Run: sudo bash ~/scripts/bootstrap.sh" >>"$LOG_FILE"
+  fi
 }
+
+# Name a destination from its URL, so the log and the dashboard can say which
+# platform is in trouble instead of quoting an RTMP address at the operator.
+platform_for_url() {
+  case "$1" in
+    *youtube*) printf 'youtube' ;;
+    *facebook*|*fbcdn*) printf 'facebook' ;;
+    *) printf 'other' ;;
+  esac
+}
+
+# Best effort: the broadcast must never depend on the app being reachable.
+report_syndication() {
+  local platform="$1" status="$2" message="$3"
+  [[ "$platform" == "other" ]] && return 0
+  python3 - "$SYNDICATION_URL" "$SECRET" "$MTX_PATH" "$platform" "$status" "$message" <<'PYREPORT' >>"$LOG_FILE" 2>&1 || true
+import json, sys, urllib.request
+
+url, secret, path, platform, status, message = sys.argv[1:7]
+body = json.dumps({
+    "path": path,
+    "platform": platform,
+    "status": status,
+    "error": message or None,
+}).encode()
+req = urllib.request.Request(url, data=body, method="POST")
+req.add_header("content-type", "application/json")
+req.add_header("x-stream-relay-secret", secret)
+try:
+    urllib.request.urlopen(req, timeout=10).read()
+except Exception as err:
+    print(f"[relay] syndication report failed: {err}")
+PYREPORT
+}
+
+# One ffmpeg per destination.
+#
+# A single `tee` process is why a bad destination took the good one down with
+# it: ffmpeg exits as a whole when a slave connection fails at the protocol
+# level, so Facebook failing to connect ended the YouTube push in the same
+# breath — both platforms dark, from one broken URL. Separate processes fail
+# separately, and each carries its own restart backoff.
+declare -A PUSH_PID=()
+declare -A PUSH_STARTED_AT=()
+declare -A PUSH_BACKOFF=()
+declare -A PUSH_RETRY_AT=()
+# Reported "actually pushing" once, after the connection has held long enough
+# to mean something. Reset on every restart so a flapping push says so.
+declare -A PUSH_CONFIRMED=()
+CONFIRM_AFTER_SEC=20
 
 stop_fanout() {
-  if [[ -f "$FANOUT_PID_FILE" ]]; then
-    pid=$(cat "$FANOUT_PID_FILE")
-    if kill -0 "$pid" 2>/dev/null; then
+  local url pid
+  for url in "${!PUSH_PID[@]}"; do
+    pid="${PUSH_PID[$url]}"
+    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
       kill "$pid" 2>/dev/null || true
     fi
-    rm -f "$FANOUT_PID_FILE"
-  fi
+  done
+  PUSH_PID=()
+  PUSH_STARTED_AT=()
+  PUSH_BACKOFF=()
+  PUSH_RETRY_AT=()
+  PUSH_CONFIRMED=()
+  rm -f "$FANOUT_PID_FILE"
 }
 
-TARGETS=()
-FANOUT_STARTED_AT=0
-FANOUT_BACKOFF=0
+# The address is resolved fresh on every (re)start and never fed into the
+# change-detection key — these hosts are load balanced, so a rotating address
+# would otherwise read as "destinations changed" and restart the push forever.
+start_push() {
+  local url="$1" target platform
+  target="$(pin_ipv4 "$url" 2>/dev/null || printf '%s' "$url")"
+  target="${target:-$url}"
+  platform="$(platform_for_url "$url")"
 
-start_fanout() {
-  stop_fanout
-  if [[ ${#DESTINATIONS[@]} -eq 0 ]]; then
-    return 0
-  fi
-
-  resolve_targets
-
-  echo "[relay] forwarding ${MTX_PATH} to ${#TARGETS[@]} destinations" >>"$LOG_FILE"
-
-  if [[ ${#TARGETS[@]} -eq 1 ]]; then
-    "$FFMPEG" -nostdin -loglevel warning \
-      -rtsp_transport tcp -timeout 5000000 \
-      -analyzeduration 10000000 -probesize 10000000 \
-      -i "$RTSP_URL" \
-      -map 0:v:0 -map 0:a:0\? \
-      -c copy -f flv "${TARGETS[0]}" >>"$LOG_FILE" 2>&1 &
-    echo $! >"$FANOUT_PID_FILE"
-    FANOUT_STARTED_AT=$(date +%s)
-    return 0
-  fi
-
-  local tee_spec=""
-  for url in "${TARGETS[@]}"; do
-    if [[ -n "$tee_spec" ]]; then
-      tee_spec+="|"
-    fi
-    tee_spec+="[f=flv:onfail=ignore]${url}"
-  done
-
-  # Unlike every other muxer, tee refuses to infer its streams: without explicit
-  # -map it reports "Output file does not contain any stream" and exits before
-  # opening a single destination. That is why syndicating to one platform worked
-  # and syndicating to two silently pushed nothing to either.
   "$FFMPEG" -nostdin -loglevel warning \
     -rtsp_transport tcp -timeout 5000000 \
     -analyzeduration 10000000 -probesize 10000000 \
     -i "$RTSP_URL" \
     -map 0:v:0 -map 0:a:0\? \
-    -c copy -f tee "$tee_spec" >>"$LOG_FILE" 2>&1 &
-  echo $! >"$FANOUT_PID_FILE"
-  FANOUT_STARTED_AT=$(date +%s)
+    -c copy -f flv "$target" >>"$LOG_FILE" 2>&1 &
+
+  PUSH_PID["$url"]=$!
+  PUSH_STARTED_AT["$url"]=$(date +%s)
+  PUSH_RETRY_AT["$url"]=0
+  PUSH_CONFIRMED["$url"]=0
+  echo "[relay] pushing ${MTX_PATH} to ${platform}" >>"$LOG_FILE"
+}
+
+start_fanout() {
+  stop_fanout
+  [[ ${#DESTINATIONS[@]} -eq 0 ]] && return 0
+
+  warn_ipv6_precedence
+  echo "[relay] forwarding ${MTX_PATH} to ${#DESTINATIONS[@]} destinations" >>"$LOG_FILE"
+
+  local url
+  for url in "${DESTINATIONS[@]}"; do
+    PUSH_BACKOFF["$url"]=0
+    start_push "$url"
+    report_syndication "$(platform_for_url "$url")" pending ""
+  done
+
+  printf '%s\n' "${PUSH_PID[@]}" >"$FANOUT_PID_FILE"
+}
+
+# Restarts any push whose ffmpeg has exited, one destination at a time.
+supervise_pushes() {
+  local now url pid platform ran backoff
+  now=$(date +%s)
+
+  for url in "${!PUSH_PID[@]}"; do
+    pid="${PUSH_PID[$url]}"
+    platform="$(platform_for_url "$url")"
+
+    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+      # Still running. Once it has held the connection past the point where a
+      # rejection would have shown up, say so — that is the only signal the
+      # dashboard has that video is genuinely reaching the platform.
+      if (( ${PUSH_CONFIRMED[$url]:-0} == 0 )) \
+        && (( now - ${PUSH_STARTED_AT[$url]:-$now} >= CONFIRM_AFTER_SEC )); then
+        PUSH_CONFIRMED["$url"]=1
+        report_syndication "$platform" success ""
+      fi
+      continue
+    fi
+
+    if [[ -n "$pid" ]]; then
+      wait "$pid" 2>/dev/null || true
+      ran=$(( now - ${PUSH_STARTED_AT[$url]:-$now} ))
+      PUSH_PID["$url"]=""
+
+      # A destination that rejects the stream outright makes ffmpeg exit within
+      # a second or two. Restarting immediately spins a hot loop that floods the
+      # log and hammers the platform; back off instead, up to half a minute.
+      if (( ran < 10 )); then
+        backoff="${PUSH_BACKOFF[$url]:-0}"
+        backoff=$(( backoff == 0 ? 5 : backoff * 2 ))
+        (( backoff > 30 )) && backoff=30
+        PUSH_BACKOFF["$url"]=$backoff
+        PUSH_RETRY_AT["$url"]=$(( now + backoff ))
+        echo "[relay] ${platform} push exited after ${ran}s; retrying in ${backoff}s" >>"$LOG_FILE"
+        report_syndication "$platform" failed \
+          "The relay could not hold a connection to ${platform} open — it dropped after ${ran}s. Retrying."
+        continue
+      fi
+
+      PUSH_BACKOFF["$url"]=0
+      PUSH_RETRY_AT["$url"]=0
+      echo "[relay] ${platform} push ended after ${ran}s; reconnecting" >>"$LOG_FILE"
+    fi
+
+    if (( now >= ${PUSH_RETRY_AT[$url]:-0} )); then
+      start_push "$url"
+      report_syndication "$platform" pending ""
+    fi
+  done
 }
 
 RECORD_FILE="${RECORD_DIR}/${SAFE_PATH}-$(date +%s).mp4"
@@ -240,30 +338,9 @@ while true; do
       echo "[relay] destinations changed for ${MTX_PATH}" >>"$LOG_FILE"
       CURRENT_KEY="$NEW_KEY"
       destinations_key >"$DEST_CACHE"
-      FANOUT_BACKOFF=0
       start_fanout
     fi
   fi
 
-  if [[ -f "$FANOUT_PID_FILE" ]]; then
-    pid=$(cat "$FANOUT_PID_FILE")
-    if ! kill -0 "$pid" 2>/dev/null; then
-      wait "$pid" 2>/dev/null || true
-      rm -f "$FANOUT_PID_FILE"
-
-      # A destination that rejects the stream outright makes ffmpeg exit within
-      # a second or two. Restarting immediately spins a hot loop that floods the
-      # log and hammers the platform; back off instead, up to half a minute.
-      if (( NOW - FANOUT_STARTED_AT < 10 )); then
-        FANOUT_BACKOFF=$(( FANOUT_BACKOFF == 0 ? 5 : FANOUT_BACKOFF * 2 ))
-        (( FANOUT_BACKOFF > 30 )) && FANOUT_BACKOFF=30
-        echo "[relay] fan-out exited after $(( NOW - FANOUT_STARTED_AT ))s; retrying in ${FANOUT_BACKOFF}s" >>"$LOG_FILE"
-        sleep "$FANOUT_BACKOFF"
-      else
-        FANOUT_BACKOFF=0
-      fi
-
-      start_fanout
-    fi
-  fi
+  supervise_pushes
 done

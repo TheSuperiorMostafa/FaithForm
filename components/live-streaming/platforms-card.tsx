@@ -79,6 +79,14 @@ export function PlatformsCard({
 /** All connect/disconnect flows live on the Settings → Integrations tab. */
 const SETTINGS_INTEGRATIONS_HREF = "/dashboard/settings?tab=integrations";
 
+/**
+ * What the relay has actually managed to do, not what was handed to it.
+ *
+ * "Destination ready" used to be the whole story, which meant the card read
+ * green for the length of a service that never reached the platform. The relay
+ * now reports each push as it starts, holds, or drops, and that is what shows
+ * here.
+ */
 function PushStatus({ state }: { state: PlatformPushState }) {
   if (state.lastPush?.status === "failed") {
     return (
@@ -98,19 +106,22 @@ function PushStatus({ state }: { state: PlatformPushState }) {
     );
   }
 
-  if (state.destinationReady) {
+  if (state.lastPush?.status === "success") {
     return (
       <p className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
         <RadioTower className="size-3.5" strokeWidth={1.75} aria-hidden />
-        Push destination ready
+        {state.destinationReady
+          ? "Video is reaching this platform"
+          : "Last service pushed successfully"}
       </p>
     );
   }
 
-  if (state.lastPush?.status === "success") {
+  if (state.destinationReady) {
     return (
-      <p className="mt-1.5 text-xs text-muted-foreground">
-        Last service pushed successfully.
+      <p className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+        <RadioTower className="size-3.5" strokeWidth={1.75} aria-hidden />
+        Destination handed to the relay — waiting for it to connect
       </p>
     );
   }
