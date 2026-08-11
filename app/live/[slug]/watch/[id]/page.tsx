@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { getChurchBySlug } from "@/lib/queries/giving";
+import { STREAM_RECORDINGS_BUCKET } from "@/lib/stream/recording-storage";
 import { getPublishedRecordingForChurch } from "@/lib/stream/recordings";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -20,7 +21,7 @@ export default async function VodWatchPage({ params }: PageProps) {
   if (!recording) notFound();
 
   const { data: signed } = await admin.storage
-    .from("stream-recordings")
+    .from(STREAM_RECORDINGS_BUCKET)
     .createSignedUrl(recording.storagePath, 60 * 60);
 
   return (
@@ -38,7 +39,7 @@ export default async function VodWatchPage({ params }: PageProps) {
         />
       ) : (
         <p className="mt-6 text-sm text-muted-foreground">
-          Video is processing. Check back soon.
+          This video is no longer available.
         </p>
       )}
     </div>

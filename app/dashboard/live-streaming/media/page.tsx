@@ -4,6 +4,7 @@ import {
   type RecordingListItem,
 } from "@/components/live-streaming/media-manager";
 import { getChurchAuth } from "@/lib/auth/church";
+import { STREAM_RECORDINGS_BUCKET } from "@/lib/stream/recording-storage";
 import { listStreamRecordings } from "@/lib/stream/recordings";
 import { listStreamSessions } from "@/lib/stream/sessions";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -25,13 +26,15 @@ export default async function LiveStreamingMediaPage() {
   ]);
 
   // Recording files live in a private bucket, so playback needs a signed URL.
-  // Signing fails while the file is still being uploaded — that's the signal
-  // the card uses to say "still processing" rather than showing a dead player.
+  // Signing only fails when the object is not there — which since the relay
+  // uploads before announcing means the file is genuinely gone, not pending.
+  // Saying "processing" for that was the bug: it never resolved, because
+  // nothing was ever going to finish.
   const admin = createAdminClient();
   const items: RecordingListItem[] = await Promise.all(
     recordings.map(async (recording) => {
       const { data } = await admin.storage
-        .from("stream-recordings")
+        .from(STREAM_RECORDINGS_BUCKET)
         .createSignedUrl(recording.storagePath, PLAYBACK_URL_TTL_SECONDS);
 
       return {

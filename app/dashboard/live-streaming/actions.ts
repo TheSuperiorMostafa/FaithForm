@@ -18,6 +18,7 @@ import {
   rotateStreamRelayKey,
   saveStreamRelaySettings,
 } from "@/lib/stream/relay";
+import { STREAM_RECORDINGS_BUCKET } from "@/lib/stream/recording-storage";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type StreamRelayActionState = {
@@ -237,7 +238,7 @@ export async function createScheduledStream(
       const storagePath = `${auth.churchId}/simulated/${Date.now()}.${ext}`;
       const buffer = Buffer.from(await simulatedFile.arrayBuffer());
       const { error: uploadError } = await admin.storage
-        .from("stream-recordings")
+        .from(STREAM_RECORDINGS_BUCKET)
         .upload(storagePath, buffer, {
           contentType: simulatedFile.type || "video/mp4",
           upsert: false,

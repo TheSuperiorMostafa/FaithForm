@@ -1,7 +1,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { STREAM_RECORDINGS_BUCKET } from "@/lib/stream/recording-storage";
 import { getStreamRelaySettings } from "@/lib/stream/relay";
 
-const SIMULATED_BUCKET = "stream-recordings";
+const SIMULATED_BUCKET = STREAM_RECORDINGS_BUCKET;
 
 export type SimulatedPlayoutJob = {
   eventId: string;

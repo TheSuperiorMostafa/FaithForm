@@ -99,8 +99,10 @@ export function MediaManager({ recordings, sessions }: MediaManagerProps) {
                         playsInline
                       />
                     ) : (
-                      <p className="text-sm text-muted-foreground">
-                        Still processing — check back shortly.
+                      <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200">
+                        This broadcast&apos;s video file never reached
+                        FaithForm, so there&apos;s nothing to play back. Newer
+                        services upload automatically when they end.
                       </p>
                     )}
                   </CardContent>
