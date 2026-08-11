@@ -30,7 +30,8 @@
     "seed:demo-sites": "node scripts/seed-demo-sites.mjs",
     "storage:buckets": "node scripts/ensure-storage-buckets.mjs",
     "import:bible": "node scripts/import-bible-translations.mjs",
-    "repair:facebook": "node scripts/repair-facebook-integrations.mjs"
+    "repair:facebook": "node scripts/repair-facebook-integrations.mjs",
+    "verify:youtube-ingest": "node scripts/verify-youtube-ingest.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.79",
