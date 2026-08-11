@@ -57,6 +57,11 @@ export default async function AttendanceFollowUpPage({
     (entry) => entry.status === "absent" && entry.member,
   );
 
+  // Without migration 0014 there is nowhere to record a send, so the request
+  // flag is the only evidence someone was contacted. Treating it as such is
+  // what keeps the page from offering to text the same person again.
+  const trackingDelivery = record?.deliveryTrackingAvailable ?? true;
+
   const streaks = await getPriorConsecutiveAbsences(
     supabase,
     auth.churchId,
@@ -71,7 +76,9 @@ export default async function AttendanceFollowUpPage({
       phone: entry.member!.phone,
       // This service counts too, so the streak the pastor sees includes today.
       consecutiveAbsent: (streaks.get(entry.member!.id) ?? 0) + 1,
-      sentAt: entry.follow_up_sent_at,
+      sentAt:
+        entry.follow_up_sent_at ??
+        (!trackingDelivery && entry.follow_up_requested ? "recorded" : null),
       error: entry.follow_up_error,
       requested: entry.follow_up_requested,
     }))

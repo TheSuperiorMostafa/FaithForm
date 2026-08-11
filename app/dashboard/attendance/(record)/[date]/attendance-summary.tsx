@@ -18,7 +18,10 @@ function getInitials(firstName: string, lastName: string) {
   return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
 }
 
-function getFollowUpStatus(entry: AttendanceEntryWithMember) {
+function getFollowUpStatus(
+  entry: AttendanceEntryWithMember,
+  trackingDelivery: boolean,
+) {
   if (entry.follow_up_sent_at) {
     return { label: "Sent", variant: "sent" as const };
   }
@@ -28,6 +31,11 @@ function getFollowUpStatus(entry: AttendanceEntryWithMember) {
   if (!entry.member?.phone) {
     return { label: "No phone on file", variant: "failed" as const };
   }
+  // Nowhere to store a delivery receipt, so "requested" is all we can honestly
+  // claim — see `deliveryTrackingAvailable`.
+  if (!trackingDelivery) {
+    return { label: "Requested", variant: "sent" as const };
+  }
   return { label: "Queued", variant: "queued" as const };
 }
 
@@ -36,7 +44,7 @@ export function AttendanceSummary({
   serviceDate,
   canFollowUp,
 }: AttendanceSummaryProps) {
-  const { record, entries } = data;
+  const { record, entries, deliveryTrackingAvailable } = data;
   const present = entries.filter((e) => e.status === "present");
   const absent = entries.filter((e) => e.status === "absent");
   const followUps = absent.filter((e) => e.follow_up_requested);
@@ -113,7 +121,10 @@ export function AttendanceSummary({
               const member = entry.member;
               if (!member) return null;
 
-              const status = getFollowUpStatus(entry);
+              const status = getFollowUpStatus(
+                entry,
+                deliveryTrackingAvailable,
+              );
 
               return (
                 <li

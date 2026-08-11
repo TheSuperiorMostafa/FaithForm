@@ -49,18 +49,46 @@ export async function sendFollowUps(input: {
 
   const admin = createAdminClient();
 
-  const { data: entries, error: entriesError } = await admin
-    .from("attendance_entries")
-    .select("id, member_id, status, follow_up_sent_at")
-    .eq("record_id", record.id)
-    .eq("church_id", auth.churchId)
-    .in("member_id", memberIds);
+  const loadEntries = (columns: string) =>
+    admin
+      .from("attendance_entries")
+      .select(columns)
+      .eq("record_id", record.id)
+      .eq("church_id", auth.churchId)
+      .in("member_id", memberIds);
+
+  // Delivery tracking arrived in migration 0014. Where it is missing, the
+  // request flag is the only record that someone was contacted, so it stands in
+  // for the send timestamp — otherwise the same person could be texted on every
+  // visit to this page.
+  let trackingDelivery = true;
+  let { data: entries, error: entriesError } = await loadEntries(
+    "id, member_id, status, follow_up_requested, follow_up_sent_at",
+  );
+
+  if (entriesError && /follow_up_sent_at/i.test(entriesError.message)) {
+    trackingDelivery = false;
+    ({ data: entries, error: entriesError } = await loadEntries(
+      "id, member_id, status, follow_up_requested",
+    ));
+  }
 
   if (entriesError) return { ok: false, error: entriesError.message };
 
-  const eligible = (entries ?? []).filter(
-    (entry) => entry.status === "absent" && !entry.follow_up_sent_at,
-  );
+  type EntryRow = {
+    id: string;
+    member_id: string | null;
+    status: string;
+    follow_up_requested: boolean;
+    follow_up_sent_at?: string | null;
+  };
+
+  const eligible = ((entries ?? []) as unknown as EntryRow[]).filter((entry) => {
+    if (entry.status !== "absent") return false;
+    return trackingDelivery
+      ? !entry.follow_up_sent_at
+      : !entry.follow_up_requested;
+  });
 
   if (eligible.length === 0) {
     return {
@@ -69,13 +97,19 @@ export async function sendFollowUps(input: {
     };
   }
 
-  const { error: markError } = await admin
+  const eligibleIds = eligible.map((entry) => entry.id);
+
+  let { error: markError } = await admin
     .from("attendance_entries")
     .update({ follow_up_requested: true, follow_up_error: null })
-    .in(
-      "id",
-      eligible.map((entry) => entry.id),
-    );
+    .in("id", eligibleIds);
+
+  if (markError && /follow_up_error/i.test(markError.message)) {
+    ({ error: markError } = await admin
+      .from("attendance_entries")
+      .update({ follow_up_requested: true })
+      .in("id", eligibleIds));
+  }
 
   if (markError) return { ok: false, error: markError.message };
 

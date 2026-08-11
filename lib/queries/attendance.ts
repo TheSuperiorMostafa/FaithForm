@@ -35,6 +35,12 @@ export type AttendanceRecordWithEntries = {
     submitted_at: string;
   };
   entries: AttendanceEntryWithMember[];
+  /**
+   * False on a database that never received migration 0014, where there is
+   * nowhere to store send results. Callers fall back to `follow_up_requested`
+   * as the record of "already contacted" so nobody gets texted twice.
+   */
+  deliveryTrackingAvailable: boolean;
 };
 
 export type MissedStreak = {
@@ -203,12 +209,14 @@ export async function getRecordByDate(
       .eq("record_id", record.id)
       .order("status", { ascending: true });
 
+  let deliveryTrackingAvailable = true;
   let { data: entries, error: entriesError } = await loadEntries(ENTRY_COLUMNS);
 
   if (entriesError && /follow_up_(sent_at|error|sms_id)/i.test(entriesError.message)) {
     console.warn(
       "getRecordByDate: follow-up delivery columns are missing — run `pnpm db:attendance-follow-up`.",
     );
+    deliveryTrackingAvailable = false;
     ({ data: entries, error: entriesError } =
       await loadEntries(LEGACY_ENTRY_COLUMNS));
   }
@@ -253,6 +261,7 @@ export async function getRecordByDate(
   return {
     record,
     entries: normalizedEntries,
+    deliveryTrackingAvailable,
   };
 }
 

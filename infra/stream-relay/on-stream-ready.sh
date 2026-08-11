@@ -91,19 +91,15 @@ notify_lifecycle() {
     -o /dev/null 2>>"$LOG_FILE" || true
 }
 
-# ffmpeg 7.0.2 crashes connecting to RTMP over IPv6 — it dies before writing a
-# single line, which is why a failing push left an empty log and looked like a
-# clean 5-second exit. YouTube and Facebook both publish AAAA records and glibc
-# prefers them, so every push crashed on connect. Pinning plain RTMP to the
-# host's A record avoids the broken path entirely; the platform is happy to be
-# addressed by IP.
+# ffmpeg 7.0.2 crashes connecting to RTMP over IPv6, dying before it writes a
+# single log line. This relay has no IPv6 connectivity, so glibc already returns
+# IPv4 first and the bug cannot bite here — but pinning plain rtmp:// to an A
+# record costs nothing and keeps that true if the host ever gains an IPv6 route.
 #
-# rtmps cannot be pinned this way: its TLS handshake must validate against the
-# hostname, and an IP literal fails that. Facebook is rtmps-only, so it needs
-# the resolver fixed system-wide — `precedence ::ffff:0:0/96  100` in
-# /etc/gai.conf, which bootstrap.sh now installs. `warn_ipv6_precedence` says so
-# out loud when it is missing, because the symptom is otherwise just a service
-# that never appears on the platform.
+# rtmps is left alone: its TLS handshake must validate against the hostname, and
+# an IP literal fails that. On a host that does have IPv6, the fix for those is
+# `precedence ::ffff:0:0/96  100` in /etc/gai.conf, which bootstrap.sh installs;
+# `warn_ipv6_precedence` only complains on such a host.
 pin_ipv4() {
   python3 - "$1" <<'PYPIN'
 import socket, sys
@@ -133,8 +129,11 @@ PYPIN
 }
 
 warn_ipv6_precedence() {
+  # Only meaningful where IPv6 is actually routable. Warning on a v4-only host
+  # would be noise pointing at the wrong thing.
+  ip -6 route show default 2>/dev/null | grep -q . || return 0
   if ! grep -qE '^[[:space:]]*precedence[[:space:]]+::ffff:0:0/96[[:space:]]+100' /etc/gai.conf 2>/dev/null; then
-    echo "[relay] WARNING: /etc/gai.conf has no IPv4 precedence line, so rtmps destinations (Facebook) will fail to connect. Run: sudo bash ~/scripts/bootstrap.sh" >>"$LOG_FILE"
+    echo "[relay] WARNING: this host has IPv6 but /etc/gai.conf has no IPv4 precedence line, so rtmps destinations (Facebook) may fail to connect. Run: sudo bash ~/scripts/bootstrap.sh" >>"$LOG_FILE"
   fi
 }
 
@@ -174,11 +173,18 @@ PYREPORT
 
 # One ffmpeg per destination.
 #
-# A single `tee` process is why a bad destination took the good one down with
-# it: ffmpeg exits as a whole when a slave connection fails at the protocol
-# level, so Facebook failing to connect ended the YouTube push in the same
-# breath — both platforms dark, from one broken URL. Separate processes fail
-# separately, and each carries its own restart backoff.
+# `tee` was the whole problem. The relay logs show single-destination pushes
+# running for the length of a service, and every two-destination push dying
+# silently after exactly five seconds — no ffmpeg diagnostic at all, just the
+# supervisor noticing it was gone, then the same again on every retry. Five
+# seconds is `-timeout 5000000` on the RTSP input: while tee is still opening
+# its second slave nothing drains the input, so the demuxer times out and takes
+# the process with it. Neither platform ever received video.
+#
+# Separate single-destination processes are the configuration already proven to
+# work here, and they fail independently — one platform refusing the stream can
+# no longer end the other. The input timeout is also raised well clear of a slow
+# TLS handshake.
 declare -A PUSH_PID=()
 declare -A PUSH_STARTED_AT=()
 declare -A PUSH_BACKOFF=()
@@ -187,6 +193,8 @@ declare -A PUSH_RETRY_AT=()
 # to mean something. Reset on every restart so a flapping push says so.
 declare -A PUSH_CONFIRMED=()
 CONFIRM_AFTER_SEC=20
+# Generous enough that a slow RTMPS handshake cannot look like a dead input.
+PUSH_INPUT_TIMEOUT_US=20000000
 
 stop_fanout() {
   local url pid
@@ -214,7 +222,7 @@ start_push() {
   platform="$(platform_for_url "$url")"
 
   "$FFMPEG" -nostdin -loglevel warning \
-    -rtsp_transport tcp -timeout 5000000 \
+    -rtsp_transport tcp -timeout "$PUSH_INPUT_TIMEOUT_US" \
     -analyzeduration 10000000 -probesize 10000000 \
     -i "$RTSP_URL" \
     -map 0:v:0 -map 0:a:0\? \

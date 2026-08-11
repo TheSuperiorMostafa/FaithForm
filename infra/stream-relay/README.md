@@ -118,25 +118,33 @@ pnpm storage:buckets
 
 ## Fan-out to YouTube and Facebook
 
-One `ffmpeg` per destination, supervised independently. A single `tee` process
-used to carry both, so a destination that failed to connect killed the whole
-process and took the working platform down with it.
+One `ffmpeg` per destination, supervised independently.
+
+A single `tee` process used to carry all of them, and that was the bug: the
+relay logs show single-destination pushes running for a whole service and every
+two-destination push dying silently after exactly five seconds — the RTSP
+input's `-timeout`, hit because nothing drains the input while tee is still
+opening its second slave. Neither platform got video. Separate processes are the
+configuration already proven to work here, and one platform refusing the stream
+can no longer end the other.
 
 Each push reports itself to `/api/stream/syndication/report` — pending when it
 starts, success once it has held for 20s, failed when it drops — which is what
 the Live Stream dashboard shows. Provisioning a destination no longer counts as
 a successful push.
 
-**IPv4 precedence is required.** ffmpeg 7.0.2 crashes connecting to RTMP over
-IPv6, and both platforms publish AAAA records. Plain `rtmp://` is pinned to an A
-record by the script, but Facebook is `rtmps://` and TLS must validate against
-the hostname — so the resolver has to prefer IPv4 system-wide:
+**On a host with IPv6, prefer IPv4.** ffmpeg 7.0.2 crashes connecting to RTMP
+over IPv6. The current relay has no IPv6 route, so this does not bite it, and
+plain `rtmp://` is pinned to an A record anyway. `rtmps://` cannot be pinned —
+TLS validates against the hostname — so a dual-stack host needs the resolver
+fixed system-wide:
 
 ```bash
 sudo bash ~/scripts/bootstrap.sh   # adds `precedence ::ffff:0:0/96  100` to /etc/gai.conf
 ```
 
-`on-stream-ready.sh` writes a warning into the path log if that line is missing.
+`on-stream-ready.sh` warns in the path log if a host has an IPv6 default route
+without that line.
 
 ## ATEM settings
 
