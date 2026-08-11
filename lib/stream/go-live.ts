@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { endFacebookLiveVideo } from "@/lib/integrations/facebook-live";
 import { getIntegrationStatus } from "@/lib/integrations/tokens";
 import {
   getPrimaryEncoderDevice,
@@ -244,12 +245,19 @@ export async function endLiveBroadcast(
   // Stop the relay pushing to broadcasts that are now over.
   await clearRelayDestinations(churchId, session.startedBy, client);
 
-  // Then close the broadcast on YouTube's side. Isolated, because a platform
-  // that will not shut down cleanly must not leave the local session stuck live.
+  // Then close the broadcast on each platform. Isolated per platform, because
+  // one that will not shut down cleanly must not leave the local session stuck
+  // live — or stop the other from being closed.
   try {
     await completeYouTubeBroadcast(churchId, client);
   } catch (err) {
     console.error("endLiveBroadcast: completeYouTubeBroadcast", err);
+  }
+
+  try {
+    await endFacebookLiveVideo(churchId, client);
+  } catch (err) {
+    console.error("endLiveBroadcast: endFacebookLiveVideo", err);
   }
 
   const liveEvent = events?.[0];

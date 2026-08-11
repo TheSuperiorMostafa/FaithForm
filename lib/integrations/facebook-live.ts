@@ -94,3 +94,78 @@ export async function provisionFacebookLiveForChurch(
     supabase,
   );
 }
+
+/**
+ * Ends the Page's current live video when the service is over.
+ *
+ * Nothing told Facebook a service had finished. It eventually times the video
+ * out on its own after the stream stops, but until then the Page shows a live
+ * broadcast that is not being fed — and a stale `live_video_id` left in
+ * metadata is a broadcast the next service could try to reuse.
+ *
+ * Best effort throughout, like `completeYouTubeBroadcast`: a platform that will
+ * not shut down cleanly must never leave the local session stuck live.
+ */
+export async function endFacebookLiveVideo(
+  churchId: string,
+  supabase?: SupabaseClient,
+): Promise<{ ok: boolean; status?: string; error?: string }> {
+  const integration = await getIntegration(churchId, "facebook", supabase);
+  if (!integration) return { ok: true, status: "not_connected" };
+
+  const metadata = (integration.metadata ?? {}) as FacebookIntegrationMetadata;
+  const liveVideoId = metadata.live_video_id;
+  if (!liveVideoId) return { ok: true, status: "no_live_video" };
+
+  let result: { ok: boolean; status?: string; error?: string } = {
+    ok: true,
+    status: "ended",
+  };
+
+  try {
+    const { token } = await getFacebookPageAccessToken(churchId, supabase);
+    const res = await fetch(`${GRAPH}/${liveVideoId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        end_live_video: "true",
+        access_token: token,
+      }),
+    });
+
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: { message?: string };
+      };
+      const message = data.error?.message ?? `HTTP ${res.status}`;
+      // Already over, or gone entirely — both are the state we wanted.
+      if (!/not.*live|already ended|does not exist|Unsupported/i.test(message)) {
+        console.error("endFacebookLiveVideo:", message);
+        result = { ok: false, error: message };
+      }
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "end failed";
+    console.error("endFacebookLiveVideo:", message);
+    result = { ok: false, error: message };
+  }
+
+  // Drop the pointer either way. The next service provisions its own video, and
+  // a stale id here would aim the next end-of-service at one already gone.
+  const current = await getIntegration(churchId, "facebook", supabase);
+  if (current) {
+    const currentMeta = (current.metadata ?? {}) as FacebookIntegrationMetadata;
+    await saveIntegration(
+      {
+        churchId,
+        provider: "facebook",
+        accessToken: current.access_token,
+        metadata: { ...currentMeta, live_video_id: undefined },
+        connectedBy: current.connected_by ?? undefined,
+      },
+      supabase,
+    );
+  }
+
+  return result;
+}
