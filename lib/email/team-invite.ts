@@ -8,6 +8,7 @@ function buildTeamInviteHtml(params: {
   email: string;
   featureLabels: string[];
   isAdmin: boolean;
+  tempPassword: string | null;
 }): string {
   const accessList = params.isAdmin
     ? "<li style=\"margin:0 0 6px;\">Full admin access to every enabled tool</li>"
@@ -19,6 +20,29 @@ function buildTeamInviteHtml(params: {
           )
           .join("")
       : "<li style=\"margin:0 0 6px;\">Your church admin will grant tool access shortly</li>";
+
+  const credentials = params.tempPassword
+    ? `<table cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 28px;border:1px solid #E5E7EB;border-radius:10px;background:#F8F7F4;">
+                  <tr>
+                    <td style="padding:20px 24px;">
+                      <p style="margin:0 0 10px;font-size:13px;font-weight:700;color:#002D5F;text-transform:uppercase;letter-spacing:0.06em;">
+                        Your temporary password
+                      </p>
+                      <p style="margin:0 0 4px;font-size:14px;color:#6B7280;">Email</p>
+                      <p style="margin:0 0 14px;font-size:16px;font-weight:600;color:#111827;">${escapeHtml(params.email)}</p>
+                      <p style="margin:0 0 4px;font-size:14px;color:#6B7280;">Temporary password</p>
+                      <p style="margin:0;font-family:'SFMono-Regular',Consolas,monospace;font-size:20px;font-weight:700;letter-spacing:1px;color:#111827;">${escapeHtml(params.tempPassword)}</p>
+                    </td>
+                  </tr>
+                </table>
+                <p style="margin:0 0 28px;font-size:15px;color:#374151;line-height:1.6;">
+                  FaithForm asks you to pick your own password the first time you
+                  sign in, and the temporary one stops working right after.
+                </p>`
+    : `<p style="margin:0 0 28px;font-size:16px;color:#374151;line-height:1.6;">
+                  Sign in with <strong>${escapeHtml(params.email)}</strong> and the
+                  FaithForm password you already use.
+                </p>`;
 
   return `<!DOCTYPE html>
 <html>
@@ -42,10 +66,10 @@ function buildTeamInviteHtml(params: {
                 You've been added to ${escapeHtml(params.churchName)} on FaithForm
               </h1>
               <p style="margin:0 0 24px;font-size:16px;color:#374151;line-height:1.6;">
-                Your account is ready. Sign in with
-                <strong>${escapeHtml(params.email)}</strong> — no password needed,
-                FaithForm emails you a one-tap sign-in link.
+                Your account is ready.
               </p>
+
+              ${credentials}
 
               <p style="margin:0 0 8px;font-size:14px;font-weight:600;color:#002D5F;text-transform:uppercase;letter-spacing:0.06em;">
                 What you can access
@@ -82,12 +106,14 @@ export type SendTeamInviteEmailParams = {
   churchName: string;
   featureLabels: string[];
   isAdmin: boolean;
+  /** Null when the person already had a FaithForm login. */
+  tempPassword?: string | null;
 };
 
 /**
- * Tells a new teammate their account exists and points them at the normal
- * magic-link sign-in. Deliberately carries no auth token of its own — the
- * existing login flow is the single, proven path into the app.
+ * Tells a new teammate their account exists and hands over the temporary
+ * password to get in with. It carries no auth token — the password is single
+ * use in practice, since FaithForm makes them replace it on first sign-in.
  */
 export async function sendTeamInviteEmail(
   params: SendTeamInviteEmailParams,
@@ -114,6 +140,7 @@ export async function sendTeamInviteEmail(
       email: params.email,
       featureLabels: params.featureLabels,
       isAdmin: params.isAdmin,
+      tempPassword: params.tempPassword ?? null,
     }),
   });
 

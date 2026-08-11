@@ -52,7 +52,9 @@ export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const setupComplete = searchParams.get("notice") === "setup_complete";
-  const [mode, setMode] = useState<"magic" | "password">("magic");
+  // Password first: teammates are set up with a temporary password, so that is
+  // the path most people arrive on. Magic link stays for anyone who prefers it.
+  const [mode, setMode] = useState<"magic" | "password">("password");
 
   const [magicState, magicAction] = useFormState(sendMagicLink, magicInitial);
   const [passwordState, passwordAction] = useFormState(
@@ -101,7 +103,7 @@ export function LoginForm() {
         <p className="mt-2 text-base text-muted-foreground">
           {mode === "magic"
             ? "Sign in with your email — no password needed."
-            : "Sign in with your email and password."}
+            : "Sign in with your email and password. New to the team? Use the temporary password your church admin gave you."}
         </p>
       </div>
 

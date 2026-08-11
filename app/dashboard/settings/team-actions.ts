@@ -4,6 +4,10 @@ import { revalidatePath } from "next/cache";
 
 import { findAuthUserByEmail } from "@/lib/auth/auth-users";
 import { getChurchAuth } from "@/lib/auth/church";
+import {
+  generateTempPassword,
+  MUST_CHANGE_PASSWORD_KEY,
+} from "@/lib/auth/temp-password";
 import { sendTeamInviteEmail } from "@/lib/email/team-invite";
 import { getChurchFeatureFlags } from "@/lib/features/access";
 import { getFeature, isFeatureKey, type FeatureKey } from "@/lib/features/catalog";
@@ -15,6 +19,13 @@ export type TeamFormState = {
   ok: boolean;
   error?: string;
   message?: string;
+  /**
+   * Shown once, right after it is minted. Nothing stores it — Supabase keeps
+   * only the hash — so the admin either passes it on now or issues a new one.
+   */
+  tempPassword?: string;
+  /** Who the temp password belongs to, so the dialog can label it. */
+  tempPasswordEmail?: string;
 };
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -103,10 +114,19 @@ export async function inviteTeamMember(
     };
   }
 
+  // A brand-new account gets a temporary password the admin can hand over on
+  // the spot; the set-password screen makes them replace it the first time
+  // they sign in. Someone who already has a FaithForm login keeps theirs.
+  let tempPassword: string | null = null;
+
   if (!authUser) {
+    tempPassword = generateTempPassword();
+
     const { data, error } = await admin.auth.admin.createUser({
       email,
+      password: tempPassword,
       email_confirm: true,
+      user_metadata: { [MUST_CHANGE_PASSWORD_KEY]: true },
     });
 
     if (error || !data.user) {
@@ -179,23 +199,91 @@ export async function inviteTeamMember(
       churchName: (church?.name as string | undefined)?.trim() || "your church",
       featureLabels: grants.map((key) => getFeature(key).label),
       isAdmin: role === "admin",
+      tempPassword,
     });
     if (!result.sent) {
-      emailNote =
-        " Email delivery is not configured, so let them know they can sign in at the login page.";
+      emailNote = tempPassword
+        ? " Email delivery is not configured, so pass the temporary password on yourself."
+        : " Email delivery is not configured, so let them know they can sign in at the login page.";
     }
   } catch (err) {
     // The membership is already live; a failed email must not roll that back.
     emailNote = ` The invite email could not be sent (${
       err instanceof Error ? err.message : "unknown error"
-    }). They can still sign in from the login page.`;
+    }). ${
+      tempPassword
+        ? "Pass the temporary password on yourself."
+        : "They can still sign in from the login page."
+    }`;
   }
 
   revalidatePath("/dashboard/settings");
 
   return {
     ok: true,
-    message: `${email} was added to your team.${emailNote}`,
+    message: tempPassword
+      ? `${email} was added to your team.${emailNote}`
+      : `${email} was added to your team — they sign in with the FaithForm password they already have.${emailNote}`,
+    tempPassword: tempPassword ?? undefined,
+    tempPasswordEmail: tempPassword ? email : undefined,
+  };
+}
+
+/**
+ * Issues a fresh temporary password for a teammate who cannot get in.
+ *
+ * The old one stops working immediately and the set-password screen comes back
+ * on their next sign-in, so a password read out over the phone never survives
+ * past the first use.
+ */
+export async function resetTeamMemberPassword(
+  _prev: TeamFormState,
+  formData: FormData,
+): Promise<TeamFormState> {
+  const guard = await requireChurchAdminContext();
+  if (!guard.ok) return { ok: false, error: guard.error };
+  const { churchId } = guard.ctx;
+
+  const memberId = formData.get("member_id")?.toString().trim() ?? "";
+  if (!memberId) return { ok: false, error: "Missing team member." };
+
+  const admin = createAdminClient();
+
+  const { data: member, error: loadError } = await admin
+    .from("church_users")
+    .select("id, user_id")
+    .eq("id", memberId)
+    .eq("church_id", churchId)
+    .maybeSingle();
+
+  if (loadError) return { ok: false, error: loadError.message };
+  if (!member) return { ok: false, error: "Team member not found." };
+
+  const { data: existing } = await admin.auth.admin.getUserById(
+    member.user_id as string,
+  );
+
+  const tempPassword = generateTempPassword();
+  const { error } = await admin.auth.admin.updateUserById(
+    member.user_id as string,
+    {
+      password: tempPassword,
+      user_metadata: {
+        ...(existing?.user?.user_metadata ?? {}),
+        [MUST_CHANGE_PASSWORD_KEY]: true,
+      },
+    },
+  );
+
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/dashboard/settings");
+
+  return {
+    ok: true,
+    message: "New temporary password ready.",
+    tempPassword,
+    tempPasswordEmail: existing?.user?.email ?? undefined,
   };
 }
 

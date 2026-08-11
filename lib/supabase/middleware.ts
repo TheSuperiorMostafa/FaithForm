@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isBootstrapSuperAdminEmail } from "@/lib/auth/superadmin-emails";
+import { mustChangePassword } from "@/lib/auth/temp-password";
 import { DEFAULT_PRODUCTION_SITE_URL } from "@/lib/site-url";
 import { rewriteChurchSite } from "@/lib/sites/tenant";
 import { createAdminClientOrNull } from "@/lib/supabase/admin";
@@ -89,6 +90,24 @@ export async function updateSession(request: NextRequest) {
   if (!user && request.nextUrl.pathname.startsWith("/dashboard")) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
+    return NextResponse.redirect(url);
+  }
+
+  // Someone signed in with the temporary password an admin handed them gets no
+  // further than the set-password screen. Scoped to the signed-in areas so a
+  // public giving or watch page still renders for them.
+  const isSignedInArea =
+    request.nextUrl.pathname.startsWith("/dashboard") ||
+    request.nextUrl.pathname.startsWith("/admin");
+
+  if (
+    user &&
+    isSignedInArea &&
+    mustChangePassword(user.user_metadata as Record<string, unknown> | null)
+  ) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/set-password";
+    url.search = "";
     return NextResponse.redirect(url);
   }
 
