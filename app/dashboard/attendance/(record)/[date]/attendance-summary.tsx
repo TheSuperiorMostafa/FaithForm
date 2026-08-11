@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { ArrowLeft, Check, Clock, AlertCircle } from "lucide-react";
 
-import { ATTENDANCE_FOLLOW_UP_ENABLED } from "@/lib/attendance/features";
 import { Button } from "@/components/ui/button";
 import type { AttendanceEntryWithMember } from "@/lib/queries/attendance";
 import type { AttendanceRecordWithEntries } from "@/lib/queries/attendance";
@@ -11,6 +10,8 @@ import { cn } from "@/lib/utils";
 type AttendanceSummaryProps = {
   data: AttendanceRecordWithEntries;
   serviceDate: string;
+  /** Only Follow-up holders get the link across to choose who gets a text. */
+  canFollowUp: boolean;
 };
 
 function getInitials(firstName: string, lastName: string) {
@@ -33,6 +34,7 @@ function getFollowUpStatus(entry: AttendanceEntryWithMember) {
 export function AttendanceSummary({
   data,
   serviceDate,
+  canFollowUp,
 }: AttendanceSummaryProps) {
   const { record, entries } = data;
   const present = entries.filter((e) => e.status === "present");
@@ -44,7 +46,7 @@ export function AttendanceSummary({
   );
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-5">
+    <div className="flex w-full flex-col gap-5">
       <div className="flex flex-col gap-2">
         <Link
           href="/dashboard/attendance"
@@ -74,7 +76,7 @@ export function AttendanceSummary({
             {record.total_absent ?? absent.length}
           </p>
         </div>
-        {ATTENDANCE_FOLLOW_UP_ENABLED ? (
+        {canFollowUp ? (
           <div className="col-span-2 rounded-xl border border-border bg-card p-5 shadow-card dark:shadow-none sm:col-span-1">
             <p className="text-sm text-muted-foreground">Follow-ups</p>
             <p className="mt-1 font-heading text-4xl font-bold text-accent">
@@ -101,7 +103,7 @@ export function AttendanceSummary({
         </section>
       ) : null}
 
-      {ATTENDANCE_FOLLOW_UP_ENABLED && followUps.length > 0 ? (
+      {canFollowUp && followUps.length > 0 ? (
         <section className="flex flex-col gap-3">
           <h2 className="font-heading text-lg font-semibold text-foreground">
             Follow-up texts
@@ -181,7 +183,7 @@ export function AttendanceSummary({
                   key={entry.id}
                   className={cn(
                     "flex min-h-14 items-center gap-3 rounded-xl border border-border bg-card px-4",
-                    ATTENDANCE_FOLLOW_UP_ENABLED &&
+                    canFollowUp &&
                       !entry.follow_up_requested &&
                       "opacity-70",
                   )}
@@ -195,7 +197,7 @@ export function AttendanceSummary({
                   <span className="text-base font-medium text-foreground">
                     {member.first_name} {member.last_name}
                   </span>
-                  {ATTENDANCE_FOLLOW_UP_ENABLED && !entry.follow_up_requested ? (
+                  {canFollowUp && !entry.follow_up_requested ? (
                     <span className="ml-auto text-sm text-muted-foreground">
                       No follow-up
                     </span>
@@ -207,14 +209,27 @@ export function AttendanceSummary({
         </section>
       ) : null}
 
-      <Button
-        render={<Link href="/dashboard/attendance" />}
-        nativeButton={false}
-        size="lg"
-        className="h-14 w-full text-base"
-      >
-        Back to Sundays
-      </Button>
+      <div className="flex flex-col gap-3 sm:flex-row">
+        {canFollowUp ? (
+          <Button
+            render={<Link href={`/dashboard/attendance/follow-up?date=${serviceDate}`} />}
+            nativeButton={false}
+            size="lg"
+            className="h-14 flex-1 text-base"
+          >
+            Choose follow-ups
+          </Button>
+        ) : null}
+        <Button
+          render={<Link href="/dashboard/attendance" />}
+          nativeButton={false}
+          size="lg"
+          variant={canFollowUp ? "outline" : "default"}
+          className="h-14 flex-1 text-base"
+        >
+          Back to Sundays
+        </Button>
+      </div>
     </div>
   );
 }

@@ -2,13 +2,12 @@ import { notFound, redirect } from "next/navigation";
 
 import { AttendanceSummary } from "./attendance-summary";
 import { AttendanceWizard } from "./attendance-wizard";
-import { ATTENDANCE_FOLLOW_UP_ENABLED } from "@/lib/attendance/features";
 import {
   getActiveMembers,
   getChurchTimezone,
-  getMissedStreaks,
   getRecordByDate,
 } from "@/lib/queries/attendance";
+import { getFeatureAccess } from "@/lib/features/access";
 import { getCurrentChurchId } from "@/lib/queries/dashboard";
 import { createClient } from "@/lib/supabase/server";
 import { isSundayDate, isValidDateParam } from "@/lib/utils/dates";
@@ -48,23 +47,17 @@ export default async function AttendanceDatePage({ params }: PageProps) {
   const existing = await getRecordByDate(supabase, churchId, date);
 
   if (existing) {
-    return <AttendanceSummary data={existing} serviceDate={date} />;
+    const access = await getFeatureAccess(supabase);
+    return (
+      <AttendanceSummary
+        data={existing}
+        serviceDate={date}
+        canFollowUp={access?.allowed.includes("attendance_follow_up") ?? false}
+      />
+    );
   }
 
-  const [members, streaks] = await Promise.all([
-    getActiveMembers(supabase, churchId),
-    ATTENDANCE_FOLLOW_UP_ENABLED
-      ? getMissedStreaks(supabase, churchId, date)
-      : Promise.resolve(new Map()),
-  ]);
+  const members = await getActiveMembers(supabase, churchId);
 
-  const streaksObject = Object.fromEntries(streaks.entries());
-
-  return (
-    <AttendanceWizard
-      serviceDate={date}
-      members={members}
-      streaks={streaksObject}
-    />
-  );
+  return <AttendanceWizard serviceDate={date} members={members} />;
 }

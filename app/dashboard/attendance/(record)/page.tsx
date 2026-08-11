@@ -3,7 +3,6 @@ import { redirect } from "next/navigation";
 import { Check } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { ATTENDANCE_FOLLOW_UP_ENABLED } from "@/lib/attendance/features";
 import {
   getChurchTimezone,
   getRecentSundayRecords,
@@ -47,7 +46,7 @@ export default async function AttendancePage() {
   );
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-5">
+    <div className="flex w-full flex-col gap-5">
       <header className="flex flex-col gap-2">
         <h1 className="border-l-4 border-accent pl-3 font-heading text-[26px] font-bold text-foreground">
           Weekly Attendance
@@ -102,7 +101,7 @@ export default async function AttendancePage() {
                   {status.totalAbsent > 0
                     ? `, ${status.totalAbsent} absent`
                     : ""}
-                  {ATTENDANCE_FOLLOW_UP_ENABLED && status.followedUp > 0
+                  {status.followedUp > 0
                     ? `, ${status.followedUp} followed up`
                     : ""}
                 </p>

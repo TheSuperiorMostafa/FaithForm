@@ -4,6 +4,7 @@ import {
   FolderOpen,
   Globe,
   Heart,
+  HeartHandshake,
   Megaphone,
   Phone,
   RadioTower,
@@ -26,6 +27,7 @@ import {
  */
 export const FEATURE_KEYS = [
   "attendance",
+  "attendance_follow_up",
   "people",
   "announcements",
   "sermon_builder",
@@ -57,10 +59,19 @@ export const FEATURES: FeatureDefinition[] = [
   {
     key: "attendance",
     label: "Attendance",
-    description: "Weekly attendance tracking and absentee follow-up messages.",
+    description: "Mark who came on Sunday and submit the weekly count.",
     href: "/dashboard/attendance",
     icon: Users,
     routes: ["/dashboard/attendance"],
+  },
+  {
+    key: "attendance_follow_up",
+    label: "Follow-up",
+    description:
+      "Pastor-only. Pick which absentees get a check-in text after a service.",
+    href: "/dashboard/attendance/follow-up",
+    icon: HeartHandshake,
+    routes: ["/dashboard/attendance/follow-up"],
   },
   {
     key: "people",
@@ -156,14 +167,22 @@ export function parseFeatureKeys(values: unknown): FeatureKey[] {
 /**
  * Which feature owns a dashboard path, if any. Routes not owned by a feature
  * (home, settings, church profile, support) are always reachable.
+ *
+ * The longest matching route wins, so a feature nested under another one keeps
+ * its own permission: `/dashboard/attendance/follow-up` belongs to Follow-up
+ * even though Attendance owns the `/dashboard/attendance` prefix.
  */
 export function featureKeyForPath(pathname: string): FeatureKey | null {
+  let match: { key: FeatureKey; length: number } | null = null;
+
   for (const feature of FEATURES) {
     for (const route of feature.routes) {
-      if (pathname === route || pathname.startsWith(`${route}/`)) {
-        return feature.key;
+      if (pathname !== route && !pathname.startsWith(`${route}/`)) continue;
+      if (!match || route.length > match.length) {
+        match = { key: feature.key, length: route.length };
       }
     }
   }
-  return null;
+
+  return match?.key ?? null;
 }

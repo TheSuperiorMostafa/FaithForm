@@ -112,6 +112,39 @@ export async function getRecentSundayRecords(
   return result;
 }
 
+export type RecordedService = {
+  id: string;
+  serviceDate: string;
+  totalPresent: number;
+  totalAbsent: number;
+};
+
+/** Services that already have attendance saved — the Follow-up page's picker. */
+export async function listRecordedServices(
+  supabase: SupabaseClient,
+  churchId: string,
+  limit = 8,
+): Promise<RecordedService[]> {
+  const { data, error } = await supabase
+    .from("attendance_records")
+    .select("id, service_date, total_present, total_absent")
+    .eq("church_id", churchId)
+    .order("service_date", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error("listRecordedServices:", error.message);
+    return [];
+  }
+
+  return (data ?? []).map((row) => ({
+    id: row.id as string,
+    serviceDate: row.service_date as string,
+    totalPresent: (row.total_present as number | null) ?? 0,
+    totalAbsent: (row.total_absent as number | null) ?? 0,
+  }));
+}
+
 export async function getRecordByDate(
   supabase: SupabaseClient,
   churchId: string,
@@ -135,34 +168,69 @@ export async function getRecordByDate(
     return null;
   }
 
-  const { data: entries, error: entriesError } = await supabase
-    .from("attendance_entries")
-    .select(
-      `
-      id,
-      status,
-      follow_up_requested,
-      follow_up_sent_at,
-      follow_up_error,
-      follow_up_sms_id,
+  const MEMBER_COLUMNS = `
       member:members (
         id,
         first_name,
         last_name,
         phone,
         photo_url
-      )
-    `,
-    )
-    .eq("record_id", record.id)
-    .order("status", { ascending: true });
+      )`;
+
+  const ENTRY_COLUMNS = `
+      id,
+      status,
+      follow_up_requested,
+      follow_up_sent_at,
+      follow_up_error,
+      follow_up_sms_id,${MEMBER_COLUMNS}
+    `;
+
+  // Delivery tracking arrived in migration 0014. A database that never got it
+  // failed this whole query, so a recorded service rendered as if nobody had
+  // been marked absent — the follow-up list came up empty every time. Fall back
+  // to the columns that always existed rather than losing the service.
+  const LEGACY_ENTRY_COLUMNS = `
+      id,
+      status,
+      follow_up_requested,${MEMBER_COLUMNS}
+    `;
+
+  const loadEntries = (columns: string) =>
+    supabase
+      .from("attendance_entries")
+      .select(columns)
+      .eq("record_id", record.id)
+      .order("status", { ascending: true });
+
+  let { data: entries, error: entriesError } = await loadEntries(ENTRY_COLUMNS);
+
+  if (entriesError && /follow_up_(sent_at|error|sms_id)/i.test(entriesError.message)) {
+    console.warn(
+      "getRecordByDate: follow-up delivery columns are missing — run `pnpm db:attendance-follow-up`.",
+    );
+    ({ data: entries, error: entriesError } =
+      await loadEntries(LEGACY_ENTRY_COLUMNS));
+  }
 
   if (entriesError) {
     console.error("getRecordByDate entries:", entriesError.message);
     return null;
   }
 
-  const normalizedEntries: AttendanceEntryWithMember[] = (entries ?? []).map(
+  type RawEntry = {
+    id: string;
+    status: string;
+    follow_up_requested: boolean;
+    follow_up_sent_at?: string | null;
+    follow_up_error?: string | null;
+    follow_up_sms_id?: string | null;
+    member: AttendanceMember | AttendanceMember[] | null;
+  };
+
+  const normalizedEntries: AttendanceEntryWithMember[] = (
+    (entries ?? []) as unknown as RawEntry[]
+  ).map(
     (entry) => {
       const rawMember = entry.member as
         | AttendanceMember

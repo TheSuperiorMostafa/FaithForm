@@ -2,20 +2,16 @@
 
 import { revalidatePath } from "next/cache";
 
-import { sendAttendanceFollowUpTexts } from "@/lib/attendance/send-follow-up-texts";
-import { ATTENDANCE_FOLLOW_UP_ENABLED } from "@/lib/attendance/features";
 import { logActivity } from "@/lib/activity/log";
 import { createMember } from "@/app/dashboard/people/actions";
-import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { getChurchTimezone, getPriorConsecutiveAbsences } from "@/lib/queries/attendance";
+import { getChurchTimezone } from "@/lib/queries/attendance";
 import { getCurrentChurchId } from "@/lib/queries/dashboard";
 import { isSundayDate } from "@/lib/utils/dates";
 
 export type AttendanceEntryInput = {
   memberId: string;
   status: "present" | "absent";
-  followUp: boolean;
 };
 
 export type AddMemberResult =
@@ -170,7 +166,8 @@ export async function submitAttendance(input: {
     church_id: churchId,
     member_id: entry.memberId,
     status: entry.status,
-    follow_up_requested: entry.status === "absent" && entry.followUp,
+    // Follow-ups are chosen afterwards, on the pastor's Follow-up page.
+    follow_up_requested: false,
   }));
 
   const { error: entriesError } = await supabase
@@ -191,66 +188,9 @@ export async function submitAttendance(input: {
     triggerSource: "attendance_module",
   });
 
-  const followUpMemberIds = entries
-    .filter((e) => e.status === "absent" && e.followUp)
-    .map((e) => e.memberId);
-
-  type FollowUpMemberPayload = {
-    entryId: string;
-    id: string;
-    firstName: string;
-    lastName: string;
-    phone: string | null;
-    consecutiveAbsent: number;
-  };
-
-  let followUpMembers: FollowUpMemberPayload[] = [];
-
-  if (followUpMemberIds.length > 0) {
-    const admin = createAdminClient();
-    const priorAbsences = await getPriorConsecutiveAbsences(
-      supabase,
-      churchId,
-      serviceDate,
-      followUpMemberIds,
-    );
-
-    const { data: followUpEntries } = await admin
-      .from("attendance_entries")
-      .select("id, member_id")
-      .eq("record_id", record.id)
-      .eq("follow_up_requested", true);
-
-    const entryByMember = new Map(
-      (followUpEntries ?? []).map((row) => [row.member_id, row.id]),
-    );
-
-    const { data: memberRows } = await admin
-      .from("members")
-      .select("id, first_name, last_name, phone")
-      .eq("church_id", churchId)
-      .in("id", followUpMemberIds);
-
-    followUpMembers = (memberRows ?? []).map((member) => ({
-      entryId: entryByMember.get(member.id) ?? "",
-      id: member.id,
-      firstName: member.first_name,
-      lastName: member.last_name,
-      phone: member.phone,
-      consecutiveAbsent: (priorAbsences.get(member.id) ?? 0) + 1,
-    }));
-  }
-
-  if (ATTENDANCE_FOLLOW_UP_ENABLED && followUpMembers.length > 0) {
-    try {
-      await sendAttendanceFollowUpTexts(churchId, followUpMembers);
-    } catch (followUpError) {
-      console.error("attendance follow-up SMS failed:", followUpError);
-    }
-  }
-
   revalidatePath("/dashboard/attendance");
   revalidatePath(`/dashboard/attendance/${serviceDate}`);
+  revalidatePath("/dashboard/attendance/follow-up");
 
   return { ok: true };
 }

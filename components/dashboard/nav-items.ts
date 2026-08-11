@@ -22,10 +22,12 @@ export type NavItem = {
   /** Hide from mobile bottom nav (sidebar only). */
   sidebarOnly?: boolean;
   /**
-   * Gate this row behind a feature. Items without a key (Home, Support,
-   * Settings) are always available.
+   * Gate this row behind features — it shows when the member holds any one of
+   * them. Attendance lists both of its grants, so a pastor with Follow-up only
+   * still reaches the section (its layout forwards them to the right tab).
+   * Items with no features (Home, Support, Settings) are always available.
    */
-  feature?: FeatureKey;
+  features?: FeatureKey[];
 };
 
 /** Keeps nav in sync with route guards — hidden rows are also unreachable. */
@@ -33,7 +35,11 @@ export function filterNavByFeatures(
   items: NavItem[],
   allowed: FeatureKey[],
 ): NavItem[] {
-  return items.filter((item) => !item.feature || allowed.includes(item.feature));
+  return items.filter(
+    (item) =>
+      !item.features?.length ||
+      item.features.some((feature) => allowed.includes(feature)),
+  );
 }
 
 export const navItems: NavItem[] = [
@@ -48,56 +54,56 @@ export const navItems: NavItem[] = [
     shortLabel: "Attend",
     href: "/dashboard/attendance",
     icon: Users,
-    feature: "attendance",
+    features: ["attendance", "attendance_follow_up"],
   },
   {
     label: "People",
     shortLabel: "People",
     href: "/dashboard/people",
     icon: Contact,
-    feature: "people",
+    features: ["people"],
   },
   {
     label: "Announcements",
     shortLabel: "News",
     href: "/dashboard/announcements",
     icon: Megaphone,
-    feature: "announcements",
+    features: ["announcements"],
   },
   {
     label: "Sermon Builder",
     shortLabel: "Sermon",
     href: "/dashboard/sermon-builder",
     icon: BookOpen,
-    feature: "sermon_builder",
+    features: ["sermon_builder"],
   },
   {
     label: "Live Stream",
     shortLabel: "Live",
     href: "/dashboard/live-streaming",
     icon: RadioTower,
-    feature: "live_stream",
+    features: ["live_stream"],
   },
   {
     label: "Voice Assistant",
     shortLabel: "Voice",
     href: "/dashboard/voice-assistant",
     icon: Phone,
-    feature: "voice_assistant",
+    features: ["voice_assistant"],
   },
   {
     label: "Giving",
     shortLabel: "Give",
     href: "/dashboard/giving",
     icon: Heart,
-    feature: "giving",
+    features: ["giving"],
   },
   {
     label: "Website",
     shortLabel: "Site",
     href: "/dashboard/website",
     icon: Globe,
-    feature: "website",
+    features: ["website"],
   },
 ];
 
