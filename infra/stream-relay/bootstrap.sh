@@ -28,19 +28,6 @@ ufw allow 8888/tcp comment 'HLS playback'
 ufw allow 8890/udp comment 'SRT ingest'
 ufw --force enable
 
-# Prefer IPv4 when a destination publishes both A and AAAA records.
-#
-# ffmpeg 7.0.2 crashes connecting to RTMP over IPv6, dying before it writes a
-# single log line. The current relay is IPv4-only so it never takes that path,
-# but a rebuild on a dual-stack host would: glibc would hand ffmpeg the AAAA
-# record and every push would die on connect. The fan-out pins plain rtmp:// to
-# an A record itself; rtmps:// cannot be pinned, because TLS has to validate
-# against the hostname. This covers both, and is a no-op without IPv6.
-if ! grep -qE '^\s*precedence\s+::ffff:0:0/96\s+100' /etc/gai.conf 2>/dev/null; then
-  printf '\n# FaithForm: prefer IPv4 (ffmpeg RTMP over IPv6 is broken)\nprecedence ::ffff:0:0/96  100\n' >>/etc/gai.conf
-  echo "Added IPv4 precedence to /etc/gai.conf"
-fi
-
 # Let mediamtx bind to port 1935 without running as root
 setcap 'cap_net_bind_service=+ep' "${BIN_DIR}/mediamtx"
 

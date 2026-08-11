@@ -141,18 +141,29 @@ starts, success once it has held for 20s, failed when it drops — which is what
 the Live Stream dashboard shows. Provisioning a destination no longer counts as
 a successful push.
 
-**On a host with IPv6, prefer IPv4.** ffmpeg 7.0.2 crashes connecting to RTMP
-over IPv6. The current relay has no IPv6 route, so this does not bite it, and
-plain `rtmp://` is pinned to an A record anyway. `rtmps://` cannot be pinned —
-TLS validates against the hostname — so a dual-stack host needs the resolver
-fixed system-wide:
+**ffmpeg must never be given a hostname.** The static ffmpeg on this box
+segfaults inside DNS resolution — measured against the real endpoints:
 
-```bash
-sudo bash ~/scripts/bootstrap.sh   # adds `precedence ::ffff:0:0/96  100` to /etc/gai.conf
-```
+| destination | result |
+| --- | --- |
+| `rtmp://a.rtmp.youtube.com/live2/…` | exit 139 (SIGSEGV) |
+| `rtmp://142.251.179.134/live2/…` | clean rejection of a bad key |
+| `rtmps://live-api-s.facebook.com:443/…` | exit 139 (SIGSEGV) |
+| `rtmps://57.144.70.149:443/…` | clean rejection of a bad key |
 
-`on-stream-ready.sh` warns in the path log if a host has an IPv6 default route
-without that line.
+This is why nothing reached a platform. Plain `rtmp://` was already pinned to an
+A record, so YouTube survived; `rtmps://` was left alone because TLS validates
+against a hostname, so Facebook crashed every time — and under the old single
+`tee` it took YouTube down with it.
+
+The relay resolves in python (which uses NSS correctly) and passes ffmpeg an
+address, keeping the certificate check with `-verifyhost`. That is stricter than
+before: `tls_verify` defaults to `0` in this build, so Facebook's certificate was
+not being verified at all.
+
+Replacing ffmpeg with the distro build (`sudo apt install ffmpeg`, 8.0.1 on
+Ubuntu 26.04) would remove the underlying crash. The relay does not depend on
+that — it never hands over a hostname — but it is worth doing.
 
 ## ATEM settings
 

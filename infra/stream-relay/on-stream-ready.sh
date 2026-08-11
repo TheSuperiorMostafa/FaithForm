@@ -91,50 +91,65 @@ notify_lifecycle() {
     -o /dev/null 2>>"$LOG_FILE" || true
 }
 
-# ffmpeg 7.0.2 crashes connecting to RTMP over IPv6, dying before it writes a
-# single log line. This relay has no IPv6 connectivity, so glibc already returns
-# IPv4 first and the bug cannot bite here — but pinning plain rtmp:// to an A
-# record costs nothing and keeps that true if the host ever gains an IPv6 route.
+# ffmpeg must never be handed a hostname.
 #
-# rtmps is left alone: its TLS handshake must validate against the hostname, and
-# an IP literal fails that. On a host that does have IPv6, the fix for those is
-# `precedence ::ffff:0:0/96  100` in /etc/gai.conf, which bootstrap.sh installs;
-# `warn_ipv6_precedence` only complains on such a host.
-pin_ipv4() {
-  python3 - "$1" <<'PYPIN'
+# The static ffmpeg build on this box segfaults inside DNS resolution. Measured
+# directly against the real endpoints:
+#
+#   rtmp://a.rtmp.youtube.com/live2/…      exit 139 (SIGSEGV)
+#   rtmp://142.251.179.134/live2/…         clean rejection of a bad key
+#   rtmps://live-api-s.facebook.com:443/…  exit 139 (SIGSEGV)
+#   rtmps://57.144.70.149:443/…            clean rejection of a bad key
+#
+# That is the whole reason nothing ever reached a platform. Plain rtmp:// was
+# already pinned to an A record here, so YouTube survived; rtmps:// was
+# deliberately left alone because TLS has to validate against a hostname, so
+# Facebook resolved in ffmpeg and crashed on every attempt — and under the old
+# single `tee` process it took the YouTube push down with it. Ten "fan-out
+# exited after 5s" lines in one service, no ffmpeg output at all, both platforms
+# dark.
+#
+# Resolution happens in python, which uses NSS properly, and rtmps keeps its
+# certificate check by verifying against the hostname explicitly. That is
+# stricter than before, not looser: `tls_verify` defaults to 0 in this build, so
+# Facebook's certificate was not being checked at all.
+CA_BUNDLE="${CA_BUNDLE:-/etc/ssl/certs/ca-certificates.crt}"
+
+# Prints the address-pinned URL on line 1, and on line 2 the hostname TLS must
+# be verified against (empty for plain rtmp, which has no TLS).
+resolve_destination() {
+  python3 - "$1" <<'PYRESOLVE'
 import socket, sys
 from urllib.parse import urlsplit, urlunsplit
 
 url = sys.argv[1]
 parts = urlsplit(url)
-if parts.scheme != "rtmp" or not parts.hostname:
+default_port = 443 if parts.scheme == "rtmps" else 1935
+
+if parts.scheme not in ("rtmp", "rtmps") or not parts.hostname:
     print(url)
+    print("")
     raise SystemExit
 
 try:
     infos = socket.getaddrinfo(
-        parts.hostname, parts.port or 1935, socket.AF_INET, socket.SOCK_STREAM
+        parts.hostname, parts.port or default_port, socket.AF_INET, socket.SOCK_STREAM
     )
 except OSError:
     infos = []
 
 if not infos:
+    # Better a hostname ffmpeg may crash on than no destination at all; the
+    # supervisor will report the failure either way.
     print(url)
+    print("")
     raise SystemExit
 
 ip = infos[0][4][0]
 netloc = f"{ip}:{parts.port}" if parts.port else ip
 print(urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment)))
-PYPIN
-}
-
-warn_ipv6_precedence() {
-  # Only meaningful where IPv6 is actually routable. Warning on a v4-only host
-  # would be noise pointing at the wrong thing.
-  ip -6 route show default 2>/dev/null | grep -q . || return 0
-  if ! grep -qE '^[[:space:]]*precedence[[:space:]]+::ffff:0:0/96[[:space:]]+100' /etc/gai.conf 2>/dev/null; then
-    echo "[relay] WARNING: this host has IPv6 but /etc/gai.conf has no IPv4 precedence line, so rtmps destinations (Facebook) may fail to connect. Run: sudo bash ~/scripts/bootstrap.sh" >>"$LOG_FILE"
-  fi
+print(parts.hostname if parts.scheme == "rtmps" else "")
+PYRESOLVE
 }
 
 # Name a destination from its URL, so the log and the dashboard can say which
@@ -220,17 +235,25 @@ stop_fanout() {
 # change-detection key — these hosts are load balanced, so a rotating address
 # would otherwise read as "destinations changed" and restart the push forever.
 start_push() {
-  local url="$1" target platform
-  target="$(pin_ipv4 "$url" 2>/dev/null || printf '%s' "$url")"
-  target="${target:-$url}"
+  local url="$1" platform resolved target verify_host
   platform="$(platform_for_url "$url")"
+
+  resolved="$(resolve_destination "$url" 2>/dev/null)"
+  target="$(printf '%s' "$resolved" | sed -n 1p)"
+  verify_host="$(printf '%s' "$resolved" | sed -n 2p)"
+  target="${target:-$url}"
+
+  local tls_opts=()
+  if [[ -n "$verify_host" ]]; then
+    tls_opts=(-tls_verify 1 -verifyhost "$verify_host" -ca_file "$CA_BUNDLE")
+  fi
 
   "$FFMPEG" -nostdin -loglevel warning \
     -rtsp_transport tcp -timeout "$PUSH_INPUT_TIMEOUT_US" \
     -analyzeduration 10000000 -probesize 10000000 \
     -i "$RTSP_URL" \
     -map 0:v:0 -map 0:a:0\? \
-    -c copy -f flv "$target" >>"$LOG_FILE" 2>&1 &
+    -c copy "${tls_opts[@]}" -f flv "$target" >>"$LOG_FILE" 2>&1 &
 
   PUSH_PID["$url"]=$!
   PUSH_STARTED_AT["$url"]=$(date +%s)
@@ -243,7 +266,6 @@ start_fanout() {
   stop_fanout
   [[ ${#DESTINATIONS[@]} -eq 0 ]] && return 0
 
-  warn_ipv6_precedence
   echo "[relay] forwarding ${MTX_PATH} to ${#DESTINATIONS[@]} destinations" >>"$LOG_FILE"
 
   local url
