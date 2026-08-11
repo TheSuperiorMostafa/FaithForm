@@ -11,7 +11,13 @@ import {
 import { sendTeamInviteEmail } from "@/lib/email/team-invite";
 import { getChurchFeatureFlags } from "@/lib/features/access";
 import { getFeature, isFeatureKey, type FeatureKey } from "@/lib/features/catalog";
-import { countChurchAdmins, toTeamRole, type TeamRole } from "@/lib/queries/team";
+import {
+  canStoreFeatureGrants,
+  countChurchAdmins,
+  FEATURE_GRANTS_UNAVAILABLE,
+  toTeamRole,
+  type TeamRole,
+} from "@/lib/queries/team";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -102,6 +108,12 @@ export async function inviteTeamMember(
     };
   }
 
+  // Creating a member whose grants cannot be stored leaves them with no access
+  // and nothing to explain why. Say so before creating anything.
+  if (role === "viewer" && !(await canStoreFeatureGrants())) {
+    return { ok: false, error: FEATURE_GRANTS_UNAVAILABLE };
+  }
+
   const admin = createAdminClient();
 
   let authUser: { id: string; email: string | null } | null = null;
@@ -172,7 +184,9 @@ export async function inviteTeamMember(
     .from("church_users")
     .insert(insertRow);
 
-  // Tolerate a database that has not had migration 0041 applied yet.
+  // An admin holds every feature implicitly, so they can still be added on a
+  // database missing the 0041 columns. A member cannot — that case is refused
+  // above, before an account is created.
   if (
     insertError &&
     /feature_permissions|invited_by|invited_at/i.test(insertError.message)
@@ -351,6 +365,12 @@ export async function updateTeamMemberAccess(
     .eq("church_id", churchId);
 
   if (error && /feature_permissions/i.test(error.message)) {
+    // Demoting to member without being able to record what they may open would
+    // silently strip their access, so only the role-only path is taken for an
+    // admin. Anything else is reported.
+    if (role !== "admin") {
+      return { ok: false, error: FEATURE_GRANTS_UNAVAILABLE };
+    }
     ({ error } = await admin
       .from("church_users")
       .update({ role })

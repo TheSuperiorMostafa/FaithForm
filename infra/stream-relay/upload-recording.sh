@@ -15,12 +15,24 @@
 set -euo pipefail
 
 PATH="/home/mostafa/bin:/usr/local/bin:/usr/bin:/bin"
-APP_URL="${FAITHFORM_APP_URL:-https://faithform.io}"
-SECRET="${STREAM_RELAY_WEBHOOK_SECRET:-}"
 RECORD_DIR="${RECORD_DIR:-/home/mostafa/mediamtx/recordings}"
 
+# Run by hand, so there is no systemd EnvironmentFile in scope the way there is
+# for the MediaMTX hooks. Same lookup the cron scripts use.
+ENV_FILE="${HOME}/faithform-stream-relay.env"
+if [[ ! -r "$ENV_FILE" && -r /etc/faithform-stream-relay.env ]]; then
+  ENV_FILE=/etc/faithform-stream-relay.env
+fi
+if [[ -r "$ENV_FILE" ]]; then
+  # shellcheck disable=SC1090
+  set -a && source "$ENV_FILE" && set +a
+fi
+
+APP_URL="${FAITHFORM_APP_URL:-https://faithform.io}"
+SECRET="${STREAM_RELAY_WEBHOOK_SECRET:-}"
+
 if [[ -z "$SECRET" ]]; then
-  echo "STREAM_RELAY_WEBHOOK_SECRET is not set" >&2
+  echo "STREAM_RELAY_WEBHOOK_SECRET is not set (looked in $ENV_FILE)" >&2
   exit 1
 fi
 

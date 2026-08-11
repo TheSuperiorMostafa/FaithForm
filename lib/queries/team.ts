@@ -87,6 +87,31 @@ export async function getChurchTeamMembers(
   });
 }
 
+/**
+ * Whether per-member feature grants can be stored at all.
+ *
+ * `church_users.feature_permissions` comes from migration 0041, which
+ * production only partly received. Silently dropping grants there produced
+ * members with no access and no explanation, so callers use this to say what is
+ * actually wrong instead.
+ */
+export async function canStoreFeatureGrants(): Promise<boolean> {
+  const admin = createAdminClientOrNull();
+  if (!admin) return false;
+
+  const { error } = await admin
+    .from("church_users")
+    .select("feature_permissions", { head: true, count: "exact" })
+    .limit(1);
+
+  return !error;
+}
+
+export const FEATURE_GRANTS_UNAVAILABLE =
+  "Per-member access can't be saved yet — the database is missing " +
+  "church_users.feature_permissions. Run `pnpm db:attendance-follow-up` with " +
+  "DATABASE_URL set, then try again.";
+
 /** How many admins the church has — used to block removing the last one. */
 export async function countChurchAdmins(churchId: string): Promise<number> {
   const admin = createAdminClientOrNull();
