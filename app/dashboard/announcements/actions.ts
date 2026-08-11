@@ -14,6 +14,7 @@ import {
   postAnnouncementToFacebookPage,
   resolveFacebookScheduledPublishTime,
 } from "@/lib/integrations/facebook";
+import { isMissingFacebookScheduleColumn } from "@/lib/queries/announcements";
 import {
   buildFacebookPostMessage,
   formatDateTimeRange,
@@ -345,15 +346,32 @@ export async function publishAnnouncement(
   }
 
   if (facebookPostId || errors.length > 0) {
-    await ctx.supabase
+    const publishState = {
+      facebook_post_id: facebookPostId,
+      last_publish_error: errors.length > 0 ? errors.join(" ") : null,
+    };
+
+    const { error: stateError } = await ctx.supabase
       .from("announcements")
       .update({
-        facebook_post_id: facebookPostId,
+        ...publishState,
         facebook_scheduled_publish_time: facebookScheduledAt ?? null,
-        last_publish_error: errors.length > 0 ? errors.join(" ") : null,
       })
       .eq("id", announcementId)
       .eq("church_id", ctx.churchId);
+
+    // `facebook_scheduled_publish_time` comes from migration 0014, which
+    // production never received. Naming it made PostgREST reject the whole
+    // update, so a post that had gone out to Facebook was never recorded
+    // against the announcement — it looked like publishing had failed. Drop
+    // the schedule time rather than the post id.
+    if (stateError && isMissingFacebookScheduleColumn(stateError.message)) {
+      await ctx.supabase
+        .from("announcements")
+        .update(publishState)
+        .eq("id", announcementId)
+        .eq("church_id", ctx.churchId);
+    }
   }
 
   await logActivity({
@@ -445,25 +463,42 @@ export async function unsubmitAnnouncement(
     return { error: "Only church admins can unsubmit announcements." };
   }
 
-  const { data: row, error: loadError } = await ctx.supabase
-    .from("announcements")
-    .select(
-      "id, title, facebook_post_id, facebook_scheduled_publish_time, status",
-    )
-    .eq("id", id)
-    .eq("church_id", ctx.churchId)
-    .maybeSingle();
+  const loadAnnouncement = (columns: string) =>
+    ctx.supabase
+      .from("announcements")
+      .select(columns)
+      .eq("id", id)
+      .eq("church_id", ctx.churchId)
+      .maybeSingle();
+
+  let { data: row, error: loadError } = await loadAnnouncement(
+    "id, title, facebook_post_id, facebook_scheduled_publish_time, status",
+  );
+
+  // Without 0014 this select fails outright, and unsubmitting reported the
+  // announcement as missing.
+  if (loadError && isMissingFacebookScheduleColumn(loadError.message)) {
+    ({ data: row, error: loadError } = await loadAnnouncement(
+      "id, title, facebook_post_id, status",
+    ));
+  }
 
   if (loadError) return { error: loadError.message };
   if (!row) return { error: "Announcement not found." };
+
+  // The column list is chosen at runtime, so PostgREST cannot infer a shape.
+  const announcement = row as unknown as {
+    facebook_post_id: string | null;
+    facebook_scheduled_publish_time?: string | null;
+  };
 
   const warnings: string[] = [];
   let facebookStillLive = false;
   let facebookUrl: string | undefined;
 
-  const facebookPostId = row.facebook_post_id as string | null;
+  const facebookPostId = announcement.facebook_post_id;
   if (facebookPostId) {
-    const scheduledAt = row.facebook_scheduled_publish_time as string | null;
+    const scheduledAt = announcement.facebook_scheduled_publish_time ?? null;
     const stillScheduled =
       Boolean(scheduledAt) && new Date(scheduledAt!).getTime() > Date.now();
 
@@ -499,8 +534,14 @@ export async function unsubmitAnnouncement(
     unsubmitted_by: ctx.user.id,
   };
 
-  function rowWithoutAuditColumns(data: typeof rewind) {
-    const { unsubmitted_at: _a, unsubmitted_by: _b, ...rest } = data;
+  // Drops whichever of the 0014/0041 columns this database is missing. The
+  // rewind itself — status, flags, the Facebook post id — always applies.
+  function rowWithout(
+    data: typeof rewind,
+    keys: Array<keyof typeof rewind>,
+  ): Partial<typeof rewind> {
+    const rest: Partial<typeof rewind> = { ...data };
+    for (const key of keys) delete rest[key];
     return rest;
   }
 
@@ -510,11 +551,16 @@ export async function unsubmitAnnouncement(
     .eq("id", id)
     .eq("church_id", ctx.churchId);
 
-  // Tolerate a database that has not had migration 0041 applied yet.
-  if (error && /unsubmitted_(at|by)/i.test(error.message)) {
+  if (error && /unsubmitted_(at|by)|facebook_scheduled_publish_time/i.test(error.message)) {
     ({ error } = await ctx.supabase
       .from("announcements")
-      .update(rowWithoutAuditColumns(rewind))
+      .update(
+        rowWithout(rewind, [
+          "unsubmitted_at",
+          "unsubmitted_by",
+          "facebook_scheduled_publish_time",
+        ]),
+      )
       .eq("id", id)
       .eq("church_id", ctx.churchId));
   }

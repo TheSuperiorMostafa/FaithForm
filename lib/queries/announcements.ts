@@ -39,21 +39,68 @@ export type CalendarQueueItem = CalendarEventPreview & {
   published?: boolean;
 };
 
+/**
+ * Column list for a full announcement row, and the same list without
+ * `facebook_scheduled_publish_time`.
+ *
+ * That column arrived in migration 0014, which production never received.
+ * Naming it in a select makes PostgREST reject the whole query, so every one of
+ * these reads was returning nothing at all — the Submitted list simply never
+ * appeared, with no error anywhere. Falling back keeps the announcement
+ * readable; only the Facebook schedule time is unknown, and `mapAnnouncementRow`
+ * already defaults it to null.
+ */
+const ANNOUNCEMENT_COLUMNS =
+  "id, church_id, title, body, start_at, end_at, event_location, is_ready, push_to_app, push_to_facebook, push_to_team, status, google_event_id, google_calendar_id, facebook_post_id, facebook_scheduled_publish_time, gmail_draft_id, published_at, last_publish_error, created_at, updated_at, event_title, event_date, notes";
+
+const ANNOUNCEMENT_COLUMNS_LEGACY = ANNOUNCEMENT_COLUMNS.replace(
+  ", facebook_scheduled_publish_time",
+  "",
+);
+
+export function isMissingFacebookScheduleColumn(message: string): boolean {
+  return /facebook_scheduled_publish_time/i.test(message);
+}
+
+type AnnouncementSelect = {
+  data: unknown;
+  error: { message: string } | null;
+};
+
+/**
+ * Runs a select with the full column list, retrying without the 0014 column.
+ *
+ * The column list is chosen at runtime, so PostgREST cannot infer a row type
+ * here; callers cast to `Record<string, unknown>` and hand it to
+ * `mapAnnouncementRow`, which reads every field defensively anyway.
+ */
+async function selectAnnouncements(
+  build: (columns: string) => PromiseLike<AnnouncementSelect>,
+): Promise<AnnouncementSelect> {
+  const first = await build(ANNOUNCEMENT_COLUMNS);
+  if (!first.error || !isMissingFacebookScheduleColumn(first.error.message)) {
+    return first;
+  }
+  return build(ANNOUNCEMENT_COLUMNS_LEGACY);
+}
+
 export async function getAnnouncements(
   supabase: SupabaseClient,
   churchId: string,
 ): Promise<AnnouncementRow[]> {
-  const { data, error } = await supabase
-    .from("announcements")
-    .select(
-      "id, church_id, title, body, start_at, end_at, event_location, is_ready, push_to_app, push_to_facebook, push_to_team, status, google_event_id, google_calendar_id, facebook_post_id, facebook_scheduled_publish_time, gmail_draft_id, published_at, last_publish_error, created_at, updated_at, event_title, event_date, notes",
-    )
-    .eq("church_id", churchId)
-    .order("start_at", { ascending: false, nullsFirst: false });
+  const { data, error } = await selectAnnouncements((columns) =>
+    supabase
+      .from("announcements")
+      .select(columns)
+      .eq("church_id", churchId)
+      .order("start_at", { ascending: false, nullsFirst: false }),
+  );
 
   if (error || !data) return [];
 
-  return data.map((row) => mapAnnouncementRow(row));
+  return (data as Record<string, unknown>[]).map((row) =>
+    mapAnnouncementRow(row),
+  );
 }
 
 export async function getAnnouncement(
@@ -61,18 +108,18 @@ export async function getAnnouncement(
   churchId: string,
   id: string,
 ): Promise<AnnouncementRow | null> {
-  const { data, error } = await supabase
-    .from("announcements")
-    .select(
-      "id, church_id, title, body, start_at, end_at, event_location, is_ready, push_to_app, push_to_facebook, push_to_team, status, google_event_id, google_calendar_id, facebook_post_id, facebook_scheduled_publish_time, gmail_draft_id, published_at, last_publish_error, created_at, updated_at, event_title, event_date, notes",
-    )
-    .eq("church_id", churchId)
-    .eq("id", id)
-    .maybeSingle();
+  const { data, error } = await selectAnnouncements((columns) =>
+    supabase
+      .from("announcements")
+      .select(columns)
+      .eq("church_id", churchId)
+      .eq("id", id)
+      .maybeSingle(),
+  );
 
   if (error || !data) return null;
 
-  return mapAnnouncementRow(data);
+  return mapAnnouncementRow(data as Record<string, unknown>);
 }
 
 export async function getPublishedGoogleEventIds(
@@ -107,18 +154,20 @@ export async function getPublishedAnnouncements(
   supabase: SupabaseClient,
   churchId: string,
 ): Promise<AnnouncementRow[]> {
-  const { data, error } = await supabase
-    .from("announcements")
-    .select(
-      "id, church_id, title, body, start_at, end_at, event_location, is_ready, push_to_app, push_to_facebook, push_to_team, status, google_event_id, google_calendar_id, facebook_post_id, facebook_scheduled_publish_time, gmail_draft_id, published_at, last_publish_error, created_at, updated_at, event_title, event_date, notes",
-    )
-    .eq("church_id", churchId)
-    .eq("status", "published")
-    .order("published_at", { ascending: false });
+  const { data, error } = await selectAnnouncements((columns) =>
+    supabase
+      .from("announcements")
+      .select(columns)
+      .eq("church_id", churchId)
+      .eq("status", "published")
+      .order("published_at", { ascending: false }),
+  );
 
   if (error || !data) return [];
 
-  return data.map((row) => mapAnnouncementRow(row));
+  return (data as Record<string, unknown>[]).map((row) =>
+    mapAnnouncementRow(row),
+  );
 }
 
 export function buildCalendarQueue(
