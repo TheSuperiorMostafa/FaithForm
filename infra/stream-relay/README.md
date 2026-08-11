@@ -123,10 +123,18 @@ One `ffmpeg` per destination, supervised independently.
 A single `tee` process used to carry all of them, and that was the bug: the
 relay logs show single-destination pushes running for a whole service and every
 two-destination push dying silently after exactly five seconds — the RTSP
-input's `-timeout`, hit because nothing drains the input while tee is still
-opening its second slave. Neither platform got video. Separate processes are the
-configuration already proven to work here, and one platform refusing the stream
-can no longer end the other.
+input's `-timeout` — then again on each retry. Neither platform got video.
+
+Why tee tripped that timeout is inference rather than proof: replaying the old
+tee against two local sinks does not reproduce it, because local sinks accept
+instantly. It needs a real destination across the internet, which cannot be
+tested without going live on a real channel. So both candidate causes are
+removed — separate processes (a slow or refusing platform can no longer delay or
+kill the other) and a much larger input timeout.
+
+Verified end to end on the relay with two local RTMP sinks: both received the
+full 1280x720 stream simultaneously, and the pending → success reports reached
+the app.
 
 Each push reports itself to `/api/stream/syndication/report` — pending when it
 starts, success once it has held for 20s, failed when it drops — which is what

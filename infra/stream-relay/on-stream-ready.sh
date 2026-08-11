@@ -173,18 +173,22 @@ PYREPORT
 
 # One ffmpeg per destination.
 #
-# `tee` was the whole problem. The relay logs show single-destination pushes
-# running for the length of a service, and every two-destination push dying
-# silently after exactly five seconds — no ffmpeg diagnostic at all, just the
-# supervisor noticing it was gone, then the same again on every retry. Five
-# seconds is `-timeout 5000000` on the RTSP input: while tee is still opening
-# its second slave nothing drains the input, so the demuxer times out and takes
-# the process with it. Neither platform ever received video.
+# The relay logs are unambiguous about the symptom: single-destination pushes
+# ran for the length of a service, and every two-destination push — i.e. every
+# `tee` — died silently after exactly five seconds, with no ffmpeg diagnostic at
+# all, then again on each retry. Neither platform ever received video.
 #
-# Separate single-destination processes are the configuration already proven to
-# work here, and they fail independently — one platform refusing the stream can
-# no longer end the other. The input timeout is also raised well clear of a slow
-# TLS handshake.
+# Five seconds was `-timeout 5000000` on the RTSP input, so the most likely
+# mechanism is the input timing out while tee is still opening its second slave.
+# That part is inference: driving the old tee against two local sinks does not
+# reproduce it, because they accept instantly — it needs a real destination
+# across the internet, and a real destination cannot be tested without going
+# live on someone's channel.
+#
+# Both plausible causes are removed rather than one. Separate single-destination
+# processes are the configuration already proven to work here and they fail
+# independently, so a slow or refusing platform can neither delay nor kill the
+# other; and the input timeout is raised well clear of any handshake.
 declare -A PUSH_PID=()
 declare -A PUSH_STARTED_AT=()
 declare -A PUSH_BACKOFF=()
