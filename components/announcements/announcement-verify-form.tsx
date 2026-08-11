@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState, useTransition } from "react";
-import { ArrowRight, Calendar, ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
+import { Calendar, ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
 import { publishAnnouncement } from "@/app/dashboard/announcements/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -282,9 +282,20 @@ export function AnnouncementVerifyForm({
 
       <div className="flex flex-col gap-2">
         <Label>When</Label>
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-start">
-          <div className="min-w-0 flex-1">
+        {/* Two columns only once there is room for both pickers. A
+            `datetime-local` control is intrinsically wide, so side-by-side in a
+            narrow card (this form renders inside a queue row) made the two
+            overlap. `min-w-0` lets each shrink to its share of the grid. */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <div className="flex min-w-0 flex-col gap-1">
+            <label
+              htmlFor={`start-${event.googleEventId}`}
+              className="text-xs font-medium text-muted-foreground"
+            >
+              Start
+            </label>
             <Input
+              id={`start-${event.googleEventId}`}
               type="datetime-local"
               value={startAt}
               onChange={(e) => {
@@ -292,24 +303,26 @@ export function AnnouncementVerifyForm({
                 markPreviewStale();
               }}
               required
-              aria-label="Start"
-              className="w-full min-w-[16rem] text-base tabular-nums"
+              className="w-full min-w-0 tabular-nums"
             />
-            <span className="mt-1 block text-xs text-muted-foreground">Start</span>
           </div>
-          <ArrowRight className="mx-auto hidden size-5 shrink-0 text-muted-foreground xl:mt-3 xl:block" />
-          <div className="min-w-0 flex-1">
+          <div className="flex min-w-0 flex-col gap-1">
+            <label
+              htmlFor={`end-${event.googleEventId}`}
+              className="text-xs font-medium text-muted-foreground"
+            >
+              End
+            </label>
             <Input
+              id={`end-${event.googleEventId}`}
               type="datetime-local"
               value={endAt}
               onChange={(e) => {
                 setEndAt(e.target.value);
                 markPreviewStale();
               }}
-              aria-label="End"
-              className="w-full min-w-[16rem] text-base tabular-nums"
+              className="w-full min-w-0 tabular-nums"
             />
-            <span className="mt-1 block text-xs text-muted-foreground">End</span>
           </div>
         </div>
       </div>

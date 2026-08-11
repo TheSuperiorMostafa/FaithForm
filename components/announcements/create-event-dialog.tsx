@@ -135,8 +135,11 @@ export function CreateEventDialog({
             />
           </div>
 
+          {/* `min-w-0` on each cell: a `datetime-local` control reports a wide
+              intrinsic size, and without it the two columns push past the
+              dialog and sit on top of each other. */}
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
+            <div className="min-w-0 space-y-2">
               <Label htmlFor="event-start">Starts</Label>
               <Input
                 id="event-start"
@@ -144,15 +147,17 @@ export function CreateEventDialog({
                 value={startAt}
                 onChange={(e) => setStartAt(e.target.value)}
                 required
+                className="min-w-0 tabular-nums"
               />
             </div>
-            <div className="space-y-2">
+            <div className="min-w-0 space-y-2">
               <Label htmlFor="event-end">Ends</Label>
               <Input
                 id="event-end"
                 type="datetime-local"
                 value={endAt}
                 onChange={(e) => setEndAt(e.target.value)}
+                className="min-w-0 tabular-nums"
               />
             </div>
           </div>
