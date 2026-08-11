@@ -1,6 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClientOrNull } from "@/lib/supabase/admin";
+import {
+  isMissingFeaturePermissionsColumn,
+  readGrantsFromAppMetadata,
+} from "@/lib/auth/feature-grants";
 import { parseFeatureKeys, type FeatureKey } from "@/lib/features/catalog";
 
 export type ChurchAuth = {
@@ -19,14 +23,12 @@ type ChurchUserLink = {
   church_id: string;
   role: string;
   feature_permissions?: unknown;
+  /** True when the row came from the pre-0041 column set. */
+  __legacy?: boolean;
 };
 
 const LINK_COLUMNS = "church_id, role, feature_permissions";
 const LINK_COLUMNS_LEGACY = "church_id, role";
-
-function isMissingFeaturePermissionsColumn(message: string): boolean {
-  return /feature_permissions/i.test(message);
-}
 
 async function fetchChurchUserLink(
   client: SupabaseClient,
@@ -44,10 +46,12 @@ async function fetchChurchUserLink(
   const { data, error } = await query(LINK_COLUMNS);
 
   // Tolerate the pre-0041 schema so an un-migrated environment still signs in.
+  // The caller then reads grants from app_metadata instead.
   if (error && isMissingFeaturePermissionsColumn(error.message)) {
     const legacy = await query(LINK_COLUMNS_LEGACY);
+    const row = (legacy.data as ChurchUserLink | null) ?? null;
     return {
-      data: (legacy.data as ChurchUserLink | null) ?? null,
+      data: row ? { ...row, __legacy: true } : null,
       error: legacy.error,
     };
   }
@@ -91,12 +95,21 @@ export async function getChurchAuth(
   if (!resolvedLink?.church_id) return null;
 
   const role = resolvedLink.role as string;
+
+  // `user` already carries app_metadata from the session lookup, so the
+  // fallback costs no extra round trip.
+  const featurePermissions = resolvedLink.__legacy
+    ? readGrantsFromAppMetadata(
+        user.app_metadata as Record<string, unknown> | null,
+      )
+    : parseFeatureKeys(resolvedLink.feature_permissions);
+
   return {
     userId: user.id,
     churchId: resolvedLink.church_id as string,
     role,
     isAdmin: role === "admin",
-    featurePermissions: parseFeatureKeys(resolvedLink.feature_permissions),
+    featurePermissions,
   };
 }
 

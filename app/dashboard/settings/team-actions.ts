@@ -12,12 +12,14 @@ import { sendTeamInviteEmail } from "@/lib/email/team-invite";
 import { getChurchFeatureFlags } from "@/lib/features/access";
 import { getFeature, isFeatureKey, type FeatureKey } from "@/lib/features/catalog";
 import {
-  canStoreFeatureGrants,
   countChurchAdmins,
-  FEATURE_GRANTS_UNAVAILABLE,
   toTeamRole,
   type TeamRole,
 } from "@/lib/queries/team";
+import {
+  isMissingFeaturePermissionsColumn,
+  writeGrantsToAppMetadata,
+} from "@/lib/auth/feature-grants";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -108,12 +110,6 @@ export async function inviteTeamMember(
     };
   }
 
-  // Creating a member whose grants cannot be stored leaves them with no access
-  // and nothing to explain why. Say so before creating anything.
-  if (role === "viewer" && !(await canStoreFeatureGrants())) {
-    return { ok: false, error: FEATURE_GRANTS_UNAVAILABLE };
-  }
-
   const admin = createAdminClient();
 
   let authUser: { id: string; email: string | null } | null = null;
@@ -184,9 +180,10 @@ export async function inviteTeamMember(
     .from("church_users")
     .insert(insertRow);
 
-  // An admin holds every feature implicitly, so they can still be added on a
-  // database missing the 0041 columns. A member cannot — that case is refused
-  // above, before an account is created.
+  // Where migration 0041 never landed, the row goes in without the grant
+  // columns and the grants go to app_metadata instead — see lib/auth/
+  // feature-grants.ts. The member gets exactly the access they were given
+  // either way.
   if (
     insertError &&
     /feature_permissions|invited_by|invited_at/i.test(insertError.message)
@@ -196,6 +193,17 @@ export async function inviteTeamMember(
       user_id: authUser.id,
       role,
     }));
+
+    if (!insertError && grants.length > 0) {
+      const stored = await writeGrantsToAppMetadata(authUser.id, grants);
+      if (!stored) {
+        return {
+          ok: false,
+          error:
+            "Could not save this member's feature access. Check that the service role key is configured.",
+        };
+      }
+    }
   }
 
   if (insertError) return { ok: false, error: insertError.message };
@@ -364,18 +372,29 @@ export async function updateTeamMemberAccess(
     .eq("id", memberId)
     .eq("church_id", churchId);
 
-  if (error && /feature_permissions/i.test(error.message)) {
-    // Demoting to member without being able to record what they may open would
-    // silently strip their access, so only the role-only path is taken for an
-    // admin. Anything else is reported.
-    if (role !== "admin") {
-      return { ok: false, error: FEATURE_GRANTS_UNAVAILABLE };
-    }
+  if (error && isMissingFeaturePermissionsColumn(error.message)) {
     ({ error } = await admin
       .from("church_users")
       .update({ role })
       .eq("id", memberId)
       .eq("church_id", churchId));
+
+    // Admins hold everything implicitly, so their grant list is empty by
+    // design; writing it anyway keeps the fallback consistent if they are
+    // later demoted.
+    if (!error) {
+      const stored = await writeGrantsToAppMetadata(
+        member.user_id as string,
+        grants,
+      );
+      if (!stored) {
+        return {
+          ok: false,
+          error:
+            "Could not save this member's feature access. Check that the service role key is configured.",
+        };
+      }
+    }
   }
 
   if (error) return { ok: false, error: error.message };

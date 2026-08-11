@@ -1,4 +1,5 @@
 import { getAuthUsersByIds } from "@/lib/auth/auth-users";
+import { readGrantsFromAppMetadata } from "@/lib/auth/feature-grants";
 import { parseFeatureKeys, type FeatureKey } from "@/lib/features/catalog";
 import { createAdminClientOrNull } from "@/lib/supabase/admin";
 
@@ -56,10 +57,13 @@ export async function getChurchTeamMembers(
       .eq("church_id", churchId)
       .order("created_at", { ascending: true });
 
+  let legacySchema = false;
   let { data, error } = await load(MEMBER_COLUMNS);
 
-  // Tolerate a database that has not had migration 0041 applied yet.
+  // Tolerate a database that has not had migration 0041 applied yet — grants
+  // are read from each member's app_metadata instead.
   if (error && /feature_permissions|invited_at/i.test(error.message)) {
+    legacySchema = true;
     ({ data, error } = await load(MEMBER_COLUMNS_LEGACY));
   }
 
@@ -78,7 +82,9 @@ export async function getChurchTeamMembers(
       userId: row.user_id,
       email: authUser?.email ?? null,
       role: toTeamRole(row.role),
-      featurePermissions: parseFeatureKeys(row.feature_permissions),
+      featurePermissions: legacySchema
+        ? readGrantsFromAppMetadata(authUser?.appMetadata)
+        : parseFeatureKeys(row.feature_permissions),
       joinedAt: row.created_at,
       invitedAt: row.invited_at ?? null,
       lastSignInAt: authUser?.lastSignInAt ?? null,
@@ -88,14 +94,13 @@ export async function getChurchTeamMembers(
 }
 
 /**
- * Whether per-member feature grants can be stored at all.
+ * Whether grants are stored in their proper column.
  *
- * `church_users.feature_permissions` comes from migration 0041, which
- * production only partly received. Silently dropping grants there produced
- * members with no access and no explanation, so callers use this to say what is
- * actually wrong instead.
+ * False means migration 0041 never fully landed and grants are living in each
+ * member's `app_metadata` instead. Everything works either way; this only
+ * drives a note telling the operator the schema is behind.
  */
-export async function canStoreFeatureGrants(): Promise<boolean> {
+export async function usesFeaturePermissionsColumn(): Promise<boolean> {
   const admin = createAdminClientOrNull();
   if (!admin) return false;
 
@@ -106,11 +111,6 @@ export async function canStoreFeatureGrants(): Promise<boolean> {
 
   return !error;
 }
-
-export const FEATURE_GRANTS_UNAVAILABLE =
-  "Per-member access can't be saved yet — the database is missing " +
-  "church_users.feature_permissions. Run `pnpm db:attendance-follow-up` with " +
-  "DATABASE_URL set, then try again.";
 
 /** How many admins the church has — used to block removing the last one. */
 export async function countChurchAdmins(churchId: string): Promise<number> {

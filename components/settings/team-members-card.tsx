@@ -560,8 +560,11 @@ export type TeamMembersCardProps = {
   members: TeamMember[];
   availableFeatures: FeatureKey[];
   currentUserId: string;
-  /** False until migration 0043 adds church_users.feature_permissions. */
-  canGrantFeatures: boolean;
+  /**
+   * False while grants are living in app_metadata because migration 0043 has
+   * not run. Access still works; this only drives an operator note.
+   */
+  grantsInProperColumn: boolean;
 };
 
 export function TeamMembersCard({
@@ -569,7 +572,7 @@ export function TeamMembersCard({
   members,
   availableFeatures,
   currentUserId,
-  canGrantFeatures,
+  grantsInProperColumn,
 }: TeamMembersCardProps) {
   if (!isAdmin) {
     return (
@@ -621,18 +624,14 @@ export function TeamMembersCard({
       </CardHeader>
 
       <CardContent className="flex flex-col gap-2.5">
-        {!canGrantFeatures && (
-          <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200">
-            Per-member access can&apos;t be saved yet — this database is missing{" "}
-            <code className="font-mono text-xs">
-              church_users.feature_permissions
-            </code>
-            . Run{" "}
-            <code className="font-mono text-xs">
-              pnpm db:attendance-follow-up
-            </code>{" "}
-            with <code className="font-mono text-xs">DATABASE_URL</code> set.
-            Admins can still be added; they hold every feature already.
+        {!grantsInProperColumn && (
+          <p className="rounded-xl border border-border bg-muted/40 px-4 py-3 text-xs text-muted-foreground">
+            Heads up: this database is missing{" "}
+            <code className="font-mono">church_users.feature_permissions</code>,
+            so access is being stored on each member&apos;s account instead.
+            Everything below works as normal. Running{" "}
+            <code className="font-mono">pnpm db:attendance-follow-up</code> moves
+            it into the proper column and keeps every grant.
           </p>
         )}
         {members.length === 0 ? (

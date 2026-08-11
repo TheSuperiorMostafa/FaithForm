@@ -11,7 +11,10 @@ import {
 } from "@/lib/features/access";
 import { FEATURE_KEYS } from "@/lib/features/catalog";
 import { getIntegrationStatus } from "@/lib/integrations/tokens";
-import { canStoreFeatureGrants, getChurchTeamMembers } from "@/lib/queries/team";
+import {
+  getChurchTeamMembers,
+  usesFeaturePermissionsColumn,
+} from "@/lib/queries/team";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -40,7 +43,7 @@ export default async function SettingsPage() {
     announcementEmailSettings,
     teamMembers,
     featureFlags,
-    canGrantFeatures,
+    grantsInProperColumn,
   ] =
     await Promise.all([
       getIntegrationStatus(auth.churchId, supabase),
@@ -50,7 +53,7 @@ export default async function SettingsPage() {
       getAnnouncementEmailSettings(auth.churchId, supabase),
       getChurchTeamMembers(auth.churchId),
       getChurchFeatureFlags(auth.churchId, supabase),
-      canStoreFeatureGrants(),
+      usesFeaturePermissionsColumn(),
     ]);
 
   // Grantable features are the ones the account has switched on.
@@ -79,7 +82,7 @@ export default async function SettingsPage() {
           members: teamMembers,
           availableFeatures,
           currentUserId: auth.userId,
-          canGrantFeatures,
+          grantsInProperColumn,
         }}
         allowedFeatures={resolveAllowedFeatures(auth, featureFlags)}
       />

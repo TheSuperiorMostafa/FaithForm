@@ -32,6 +32,34 @@ alter table public.church_users
   add column if not exists invited_by uuid references auth.users (id) on delete set null,
   add column if not exists invited_at timestamptz;
 
+-- Adopt grants the app stored while this column was missing.
+--
+-- Without the column there was nowhere to record "Attendance but not
+-- Follow-up", so the app fell back to the member's `app_metadata` (see
+-- lib/auth/feature-grants.ts). Anyone granted access in that window keeps it:
+-- the column becomes the source of truth from here, and the fallback is never
+-- read again.
+update public.church_users cu
+   set feature_permissions = coalesce(
+         (
+           select array_agg(value)
+             from auth.users u,
+                  lateral jsonb_array_elements_text(
+                    u.raw_app_meta_data -> 'faithform_features'
+                  ) as value
+            where u.id = cu.user_id
+         ),
+         cu.feature_permissions
+       )
+ where cu.feature_permissions = '{}'
+   and exists (
+     select 1
+       from auth.users u
+      where u.id = cu.user_id
+        and jsonb_typeof(u.raw_app_meta_data -> 'faithform_features') = 'array'
+        and jsonb_array_length(u.raw_app_meta_data -> 'faithform_features') > 0
+   );
+
 -- ---------------------------------------------------------------------------
 -- ACCOUNT-LEVEL FEATURE FLAGS (from 0041 — re-applied idempotently)
 -- ---------------------------------------------------------------------------

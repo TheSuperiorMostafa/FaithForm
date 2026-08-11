@@ -5,6 +5,8 @@ export type AuthUserRecord = {
   email: string | null;
   lastSignInAt: string | null;
   createdAt: string | null;
+  /** Service-role-only metadata; carries feature grants pre-0041. */
+  appMetadata: Record<string, unknown> | null;
 };
 
 const PAGE_SIZE = 1000;
@@ -44,6 +46,10 @@ export async function findAuthUserByEmail(
         email: match.email ?? null,
         lastSignInAt: match.last_sign_in_at ?? null,
         createdAt: match.created_at ?? null,
+        appMetadata: (match.app_metadata ?? null) as Record<
+          string,
+          unknown
+        > | null,
       };
     }
 
@@ -76,6 +82,10 @@ export async function getAuthUsersByIds(
           email: data.user.email ?? null,
           lastSignInAt: data.user.last_sign_in_at ?? null,
           createdAt: data.user.created_at ?? null,
+          appMetadata: (data.user.app_metadata ?? null) as Record<
+            string,
+            unknown
+          > | null,
         },
       ] as const;
     }),
