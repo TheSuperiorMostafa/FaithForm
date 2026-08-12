@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 
 import { getChurchAuth } from "@/lib/auth/church";
+import type { FeatureKey } from "@/lib/features/catalog";
+import { featureActionError } from "@/lib/features/guard";
 import type { ChurchMember } from "@/lib/queries/members";
 import { validateMemberInput } from "@/lib/people/validate-member";
 import { createClient } from "@/lib/supabase/server";
@@ -31,14 +33,32 @@ function mapMemberRow(row: {
   };
 }
 
-async function requireAdminMemberAction(): Promise<
+type MemberContext =
   | { ok: false; error: string }
-  | { ok: true; churchId: string; supabase: ReturnType<typeof createClient> }
-> {
+  | { ok: true; churchId: string; supabase: ReturnType<typeof createClient> };
+
+/**
+ * The feature key is a parameter because two different features legitimately
+ * create members: the People directory, and the attendance sheet's "someone
+ * new came today". It is never taken from the caller — each exported action
+ * hard-codes its own, so a client cannot name a feature it happens to hold.
+ */
+async function requireAdminMemberAction(
+  feature: FeatureKey,
+): Promise<MemberContext> {
   const auth = await getChurchAuth();
   if (!auth) {
     return { ok: false, error: "You must be signed in." };
   }
+
+  // Before the role check, not after: a church whose People feature is off has
+  // no admins for it either, and the honest message is "not enabled" rather
+  // than "not an admin".
+  const featureError = await featureActionError(feature);
+  if (featureError) {
+    return { ok: false, error: featureError };
+  }
+
   if (!auth.isAdmin) {
     return { ok: false, error: "Only church admins can edit people." };
   }
@@ -47,17 +67,11 @@ async function requireAdminMemberAction(): Promise<
   return { ok: true, churchId: auth.churchId, supabase };
 }
 
-export async function createMember(input: {
-  firstName: string;
-  lastName: string;
-  phone?: string;
-  email?: string;
-}): Promise<MemberActionResult> {
-  const context = await requireAdminMemberAction();
-  if (!context.ok) {
-    return context;
-  }
-
+/** Shared body. Callers do their own gating before reaching this. */
+async function insertMember(
+  context: Extract<MemberContext, { ok: true }>,
+  input: { firstName: string; lastName: string; phone?: string; email?: string },
+): Promise<MemberActionResult> {
   const validated = validateMemberInput(input);
   if (!validated.ok) {
     return { ok: false, error: validated.error };
@@ -86,6 +100,41 @@ export async function createMember(input: {
   return { ok: true, member: mapMemberRow(data) };
 }
 
+export async function createMember(input: {
+  firstName: string;
+  lastName: string;
+  phone?: string;
+  email?: string;
+}): Promise<MemberActionResult> {
+  const context = await requireAdminMemberAction("people");
+  if (!context.ok) {
+    return context;
+  }
+
+  return insertMember(context, input);
+}
+
+/**
+ * Adding someone from the attendance sheet.
+ *
+ * Gated on Attendance rather than People: a church can run attendance without
+ * the directory turned on, and refusing to record a visitor because a feature
+ * they never asked for is off would be the wrong answer.
+ */
+export async function createMemberDuringAttendance(input: {
+  firstName: string;
+  lastName: string;
+  phone?: string;
+  email?: string;
+}): Promise<MemberActionResult> {
+  const context = await requireAdminMemberAction("attendance");
+  if (!context.ok) {
+    return context;
+  }
+
+  return insertMember(context, input);
+}
+
 export async function updateMember(input: {
   memberId: string;
   firstName: string;
@@ -93,7 +142,7 @@ export async function updateMember(input: {
   phone?: string;
   email?: string;
 }): Promise<MemberActionResult> {
-  const context = await requireAdminMemberAction();
+  const context = await requireAdminMemberAction("people");
   if (!context.ok) {
     return context;
   }
@@ -127,7 +176,7 @@ export async function updateMember(input: {
 }
 
 export async function deactivateMember(memberId: string): Promise<MemberActionResult> {
-  const context = await requireAdminMemberAction();
+  const context = await requireAdminMemberAction("people");
   if (!context.ok) {
     return context;
   }
@@ -149,7 +198,7 @@ export async function deactivateMember(memberId: string): Promise<MemberActionRe
 }
 
 export async function reactivateMember(memberId: string): Promise<MemberActionResult> {
-  const context = await requireAdminMemberAction();
+  const context = await requireAdminMemberAction("people");
   if (!context.ok) {
     return context;
   }

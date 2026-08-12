@@ -2,7 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 import { logAdminAction } from "@/lib/activity/admin-log";
-import { getChurchAuth } from "@/lib/auth/church";
+import { getChurchAuth, type ChurchAuth } from "@/lib/auth/church";
+import { featureActionError } from "@/lib/features/guard";
 import { provisionFacebookLiveForChurch } from "@/lib/integrations/facebook-live";
 import { provisionYouTubeLiveForChurch } from "@/lib/integrations/youtube-live";
 import { createEncoderPairingCode } from "@/lib/stream/encoder";
@@ -34,14 +35,37 @@ function revalidateLiveStreaming() {
   revalidatePath("/dashboard/settings");
 }
 
+/**
+ * Signed in, and Live Stream actually turned on for this church.
+ *
+ * Every action below goes through here rather than calling getChurchAuth()
+ * directly. These actions provision YouTube and Facebook broadcasts, rotate
+ * publish keys and start relays — real spend on our infrastructure — so a
+ * church whose broadcast feature is off must not be able to reach them by
+ * replaying a form post from a page they used to have.
+ *
+ * The admin check stays in each action, because the wording is specific to
+ * what it does and that is worth keeping.
+ */
+async function requireStreamAccess(): Promise<
+  { ok: true; auth: ChurchAuth } | { ok: false; error: string }
+> {
+  const auth = await getChurchAuth();
+  if (!auth) return { ok: false, error: "Not signed in." };
+
+  const featureError = await featureActionError("live_stream");
+  if (featureError) return { ok: false, error: featureError };
+
+  return { ok: true, auth };
+}
+
 export async function updateStreamRelaySettings(
   _prev: StreamRelayActionState,
   formData: FormData,
 ): Promise<StreamRelayActionState> {
-  const auth = await getChurchAuth();
-  if (!auth) {
-    return { ok: false, error: "Not signed in." };
-  }
+  const gate = await requireStreamAccess();
+  if (!gate.ok) return { ok: false, error: gate.error };
+  const auth = gate.auth;
   if (!auth.isAdmin) {
     return { ok: false, error: "Only church admins can change stream settings." };
   }
@@ -82,10 +106,9 @@ export async function updateStreamRelaySettings(
 export async function provisionPlatformLiveStreaming(
   platform: "youtube" | "facebook",
 ): Promise<StreamRelayActionState> {
-  const auth = await getChurchAuth();
-  if (!auth) {
-    return { ok: false, error: "Not signed in." };
-  }
+  const gate = await requireStreamAccess();
+  if (!gate.ok) return { ok: false, error: gate.error };
+  const auth = gate.auth;
   if (!auth.isAdmin) {
     return { ok: false, error: "Only church admins can set up live streaming." };
   }
@@ -122,10 +145,9 @@ export async function createStreamingPcPairingCode(): Promise<
     expiresAt?: string;
   }
 > {
-  const auth = await getChurchAuth();
-  if (!auth) {
-    return { ok: false, error: "Not signed in." };
-  }
+  const gate = await requireStreamAccess();
+  if (!gate.ok) return { ok: false, error: gate.error };
+  const auth = gate.auth;
   if (!auth.isAdmin) {
     return { ok: false, error: "Only church admins can pair encoders." };
   }
@@ -156,10 +178,9 @@ export async function createStreamingPcPairingCode(): Promise<
 export async function goLiveBroadcast(
   title?: string,
 ): Promise<StreamRelayActionState> {
-  const auth = await getChurchAuth();
-  if (!auth) {
-    return { ok: false, error: "Not signed in." };
-  }
+  const gate = await requireStreamAccess();
+  if (!gate.ok) return { ok: false, error: gate.error };
+  const auth = gate.auth;
   if (!auth.isAdmin) {
     return { ok: false, error: "Only church admins can go live." };
   }
@@ -183,10 +204,9 @@ export async function goLiveBroadcast(
 }
 
 export async function endLiveBroadcastAction(): Promise<StreamRelayActionState> {
-  const auth = await getChurchAuth();
-  if (!auth) {
-    return { ok: false, error: "Not signed in." };
-  }
+  const gate = await requireStreamAccess();
+  if (!gate.ok) return { ok: false, error: gate.error };
+  const auth = gate.auth;
   if (!auth.isAdmin) {
     return { ok: false, error: "Only church admins can end broadcasts." };
   }
@@ -212,8 +232,10 @@ export async function endLiveBroadcastAction(): Promise<StreamRelayActionState> 
 export async function createScheduledStream(
   formData: FormData,
 ): Promise<StreamRelayActionState> {
-  const auth = await getChurchAuth();
-  if (!auth?.isAdmin) {
+  const gate = await requireStreamAccess();
+  if (!gate.ok) return { ok: false, error: gate.error };
+  const auth = gate.auth;
+  if (!auth.isAdmin) {
     return { ok: false, error: "Only church admins can schedule streams." };
   }
 
@@ -277,8 +299,10 @@ export async function createScheduledStream(
 export async function cancelScheduledStream(
   eventId: string,
 ): Promise<StreamRelayActionState> {
-  const auth = await getChurchAuth();
-  if (!auth?.isAdmin) {
+  const gate = await requireStreamAccess();
+  if (!gate.ok) return { ok: false, error: gate.error };
+  const auth = gate.auth;
+  if (!auth.isAdmin) {
     return { ok: false, error: "Only church admins can cancel streams." };
   }
 
@@ -296,10 +320,9 @@ export async function cancelScheduledStream(
 }
 
 export async function regenerateStreamRelayKey(): Promise<StreamRelayActionState> {
-  const auth = await getChurchAuth();
-  if (!auth) {
-    return { ok: false, error: "Not signed in." };
-  }
+  const gate = await requireStreamAccess();
+  if (!gate.ok) return { ok: false, error: gate.error };
+  const auth = gate.auth;
   if (!auth.isAdmin) {
     return { ok: false, error: "Only church admins can rotate stream keys." };
   }

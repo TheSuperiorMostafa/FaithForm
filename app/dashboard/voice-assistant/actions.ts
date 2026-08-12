@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireChurchAuth } from "@/lib/auth/church";
+import { featureActionError } from "@/lib/features/guard";
 import { syncRetellAgent } from "@/lib/integrations/retell";
 import {
   provisionRetellPhoneForChurch,
@@ -74,6 +75,10 @@ export async function saveVoiceAssistantSettings(
   input: z.infer<typeof saveSchema>,
 ): Promise<SaveVoiceAssistantResult> {
   const auth = await requireChurchAuth();
+
+  const denied = await featureActionError("voice_assistant");
+  if (denied) return { error: denied };
+
   if (!auth.isAdmin) {
     return { error: "Only church admins can update voice assistant settings." };
   }
@@ -111,6 +116,10 @@ export async function saveVoiceAssistantSettings(
 
 export async function importVoiceAssistantCalls(): Promise<ImportCallsResult> {
   const auth = await requireChurchAuth();
+
+  const denied = await featureActionError("voice_assistant");
+  if (denied) return { error: denied };
+
   if (!auth.isAdmin) {
     return { error: "Only church admins can import calls." };
   }
@@ -137,6 +146,10 @@ export async function rescorePhoneCall(
   callId: string,
 ): Promise<RescoreCallResult> {
   const auth = await requireChurchAuth();
+
+  const denied = await featureActionError("voice_assistant");
+  if (denied) return { error: denied };
+
   if (!auth.isAdmin) {
     return { error: "Only church admins can re-score calls." };
   }
@@ -171,6 +184,10 @@ export async function provisionVoicePhoneNumber(input?: {
   areaCode?: string;
 }): Promise<ProvisionPhoneResult> {
   const auth = await requireChurchAuth();
+
+  const denied = await featureActionError("voice_assistant");
+  if (denied) return { error: denied };
+
   if (!auth.isAdmin) {
     return { error: "Only church admins can set up a phone number." };
   }
@@ -208,6 +225,10 @@ export async function provisionVoicePhoneNumber(input?: {
 
 export async function syncVoicePhoneNumber(): Promise<SyncPhoneResult> {
   const auth = await requireChurchAuth();
+
+  const denied = await featureActionError("voice_assistant");
+  if (denied) return { error: denied };
+
   if (!auth.isAdmin) {
     return { error: "Only church admins can sync phone numbers." };
   }

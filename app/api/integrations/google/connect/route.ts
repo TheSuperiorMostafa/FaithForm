@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getChurchAuth } from "@/lib/auth/church";
+import { featureAccessDenied } from "@/lib/features/guard";
 import { fetchInviteByToken, assertInviteEmail } from "@/lib/onboarding/validate-invite";
 import { redirectToSettings } from "@/lib/integrations/app-redirect";
 import { getGoogleAuthUrl } from "@/lib/integrations/google-oauth";
@@ -41,6 +42,13 @@ export async function GET(request: Request) {
     if (!auth?.isAdmin) {
       return NextResponse.json({ error: "Admin access required" }, { status: 403 });
     }
+
+    // Google is connected for the weekly Gmail draft, which Announcements
+    // owns. The invite branch above stays open — onboarding runs before a
+    // church has anything to gate on.
+    const denied = await featureAccessDenied("announcements");
+    if (denied) return denied;
+
     churchId = auth.churchId;
     userId = auth.userId;
   }

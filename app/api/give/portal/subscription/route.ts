@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { isChurchFeatureEnabled } from "@/lib/features/access";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getDonorPortalSession } from "@/lib/giving/portal-session";
 import {
@@ -32,6 +33,19 @@ export async function POST(request: Request) {
   const session = await getDonorPortalSession(parsed.data.slug);
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Turning Giving off must never trap a donor in a recurring charge, so
+  // pausing and cancelling stay available whatever the flag says. Resuming and
+  // raising an amount restart money moving, so they stop with the feature.
+  const restartsGiving =
+    parsed.data.action === "resume" || parsed.data.action === "update_amount";
+
+  if (
+    restartsGiving &&
+    !(await isChurchFeatureEnabled(session.churchId, "giving"))
+  ) {
+    return NextResponse.json({ error: "Giving not available" }, { status: 404 });
   }
 
   const admin = createAdminClient();

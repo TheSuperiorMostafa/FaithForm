@@ -6,6 +6,7 @@ import { getBooks } from "@/lib/bible/api";
 import { getBooksTranslationId } from "@/lib/bible/translations";
 import type { TranslationBookChapter, TranslationBooks } from "@/lib/bible/types";
 import { requireChurchAuth } from "@/lib/auth/church";
+import { featureActionError } from "@/lib/features/guard";
 import {
   deleteSeries,
   deleteSermon,
@@ -14,9 +15,17 @@ import {
 } from "@/lib/queries/sermons";
 import { createClient } from "@/lib/supabase/server";
 
+/**
+ * A "use server" export is a public POST endpoint, not an internal function.
+ * These two read from an upstream Bible API on our key, so without a gate they
+ * are an open proxy for anyone who can find the action id.
+ */
 export async function fetchBooksAction(
   translation: string,
 ): Promise<TranslationBooks> {
+  const denied = await featureActionError("sermon_builder");
+  if (denied) throw new Error(denied);
+
   return getBooks(getBooksTranslationId(translation));
 }
 
@@ -25,6 +34,9 @@ export async function fetchChapterAction(
   book: string,
   chapter: number,
 ): Promise<TranslationBookChapter> {
+  const denied = await featureActionError("sermon_builder");
+  if (denied) throw new Error(denied);
+
   return getChapterForTranslation(translation, book, chapter);
 }
 
@@ -33,6 +45,10 @@ export async function deleteSermonAction(
 ): Promise<{ error?: string }> {
   try {
     const auth = await requireChurchAuth();
+
+    const denied = await featureActionError("sermon_builder");
+    if (denied) return { error: denied };
+
     const supabase = createClient();
     const sermon = await verifySermonAccess(supabase, sermonId, auth.churchId);
     if (!sermon) {
@@ -57,6 +73,10 @@ export async function deleteSeriesAction(
 ): Promise<{ error?: string }> {
   try {
     const auth = await requireChurchAuth();
+
+    const denied = await featureActionError("sermon_builder");
+    if (denied) return { error: denied };
+
     const supabase = createClient();
     const series = await verifySeriesAccess(supabase, seriesId, auth.churchId);
     if (!series) {

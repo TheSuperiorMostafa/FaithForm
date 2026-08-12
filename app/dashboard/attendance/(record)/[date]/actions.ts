@@ -3,7 +3,8 @@
 import { revalidatePath } from "next/cache";
 
 import { logActivity } from "@/lib/activity/log";
-import { createMember } from "@/app/dashboard/people/actions";
+import { createMemberDuringAttendance } from "@/app/dashboard/people/actions";
+import { featureActionError } from "@/lib/features/guard";
 import { createClient } from "@/lib/supabase/server";
 import { getChurchTimezone } from "@/lib/queries/attendance";
 import { getCurrentChurchId } from "@/lib/queries/dashboard";
@@ -58,6 +59,13 @@ async function resolveChurchContext(): Promise<ChurchContext> {
     return { ok: false, error: "No church linked to your account." };
   }
 
+  // Mirrors the FeatureGate on the (record) layout, so submitting by replaying
+  // the action cannot reach further than opening the page would.
+  const featureError = await featureActionError("attendance", supabase);
+  if (featureError) {
+    return { ok: false, error: featureError };
+  }
+
   const timezone = await getChurchTimezone(supabase, churchId);
 
   return { ok: true, supabase, user, churchId, timezone };
@@ -68,7 +76,7 @@ export async function addMember(input: {
   lastName: string;
   phone?: string;
 }): Promise<AddMemberResult> {
-  const result = await createMember(input);
+  const result = await createMemberDuringAttendance(input);
 
   if (!result.ok) {
     return result;

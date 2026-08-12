@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { GiveForm } from "@/app/give/[slug]/give-form";
+import { isChurchFeatureEnabled } from "@/lib/features/access";
 import { getActiveFundsForChurch } from "@/lib/giving/funds";
 import { getChurchBySlug } from "@/lib/queries/giving";
 
@@ -28,6 +29,14 @@ export default async function GivePage({ params, searchParams }: PageProps) {
   const church = await getChurchBySlug(params.slug);
 
   if (!church) {
+    notFound();
+  }
+
+  // Giving switched off in the control center stops the public page too.
+  // The soft message below is for a church that has not finished Stripe setup;
+  // this is a deliberate switch-off, and a "check back soon" would invite a
+  // donor to keep trying something we turned off on purpose.
+  if (!(await isChurchFeatureEnabled(church.churchId, "giving"))) {
     notFound();
   }
 

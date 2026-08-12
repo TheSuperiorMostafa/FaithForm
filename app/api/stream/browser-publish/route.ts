@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getChurchAuth } from "@/lib/auth/church";
+import { featureAccessDenied } from "@/lib/features/guard";
 import { getBrowserIceServers } from "@/lib/stream/ice-servers";
 import { signIngestToken } from "@/lib/stream/ingest-token";
 import { getStreamRelaySettings } from "@/lib/stream/relay";
@@ -18,6 +19,9 @@ export async function GET() {
   if (!auth?.isAdmin) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  const denied = await featureAccessDenied("live_stream", supabase);
+  if (denied) return denied;
 
   const settings = await getStreamRelaySettings(auth.churchId, {
     includeSecret: true,

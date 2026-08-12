@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Globe } from "lucide-react";
 import { toast } from "sonner";
 
 import { setChurchFeature } from "@/app/admin/feature-actions";
@@ -60,9 +61,10 @@ export function ChurchFeaturesPanel({
         <div>
           <CardTitle>Features</CardTitle>
           <p className="mt-1 text-sm text-muted-foreground">
-            Turn product areas on or off for this account. Disabled features
-            disappear from the church&apos;s navigation and their pages become
-            unreachable — for admins and members alike.
+            Turn product areas on or off for this account. Disabling one removes
+            it from the church&apos;s navigation, blocks its pages and API
+            routes for admins and members alike, and — where the feature has one
+            — takes its public surface down too.
           </p>
         </div>
         <Badge variant={enabledCount === FEATURES.length ? "success" : "info"}>
@@ -109,6 +111,16 @@ export function ChurchFeaturesPanel({
                   <p className="mt-0.5 text-xs leading-snug text-muted-foreground">
                     {feature.description}
                   </p>
+                  {feature.publicImpact ? (
+                    <p className="mt-1.5 flex items-start gap-1.5 text-xs leading-snug text-amber-700 dark:text-amber-300">
+                      <Globe
+                        className="mt-0.5 size-3 shrink-0"
+                        strokeWidth={2}
+                        aria-hidden
+                      />
+                      <span>{feature.publicImpact}</span>
+                    </p>
+                  ) : null}
                   <p className="mt-1 font-mono text-[11px] text-muted-foreground/70">
                     {feature.routes.join(" · ")}
                   </p>

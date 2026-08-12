@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { PageRenderer } from "@/components/sites/PageRenderer";
+import { isChurchFeatureEnabled } from "@/lib/features/access";
 import { getSiteBundle } from "@/lib/sites/queries";
 import { SECTION_REGISTRY } from "@/lib/sites/registry";
 import { resolvePage } from "@/lib/sites/resolve";
@@ -23,6 +24,12 @@ export const revalidate = 300;
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const bundle = await getSiteBundle(params.slug);
   if (!bundle) return { title: "Not found" };
+
+  // Matches the page's own check, so a disabled site does not leak the church's
+  // name and description through the tab title of a 404.
+  if (!(await isChurchFeatureEnabled(bundle.churchId, "website"))) {
+    return { title: "Not found", robots: { index: false, follow: false } };
+  }
 
   const title = bundle.page.title?.trim() || bundle.profile.name;
   const description =
@@ -50,6 +57,15 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 export default async function ChurchSitePage({ params, searchParams }: PageProps) {
   const bundle = await getSiteBundle(params.slug);
   if (!bundle) notFound();
+
+  // Turning Website off in the control center takes the public site down, not
+  // just the church's editor. A feature that is "disabled" while still serving
+  // visitors on a custom domain is not disabled, and the control center says
+  // it is — so this is where that promise is kept. Preview does not bypass it:
+  // an off feature is off for everyone.
+  if (!(await isChurchFeatureEnabled(bundle.churchId, "website"))) {
+    notFound();
+  }
 
   const isPreview = searchParams?.preview === "1";
   if (bundle.page.status !== "published" && !isPreview) {

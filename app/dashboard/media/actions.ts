@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { getChurchAuth } from "@/lib/auth/church";
+import { featureActionError } from "@/lib/features/guard";
 import { hideChatMessage } from "@/lib/stream/chat";
 
 export type MediaActionState = {
@@ -16,6 +17,13 @@ export async function hideStreamChatMessage(
   const auth = await getChurchAuth();
   if (!auth?.isAdmin) {
     return { ok: false, error: "Only church admins can moderate chat." };
+  }
+
+  // Chat belongs to the broadcast, not the media library — this action lives
+  // under /dashboard/media only because that is where the moderation UI sits.
+  const featureError = await featureActionError("live_stream");
+  if (featureError) {
+    return { ok: false, error: featureError };
   }
 
   try {

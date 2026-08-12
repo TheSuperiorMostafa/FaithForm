@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireChurchAuth } from "@/lib/auth/church";
+import { featureAccessDenied } from "@/lib/features/guard";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   createAccountLink,
@@ -26,6 +27,11 @@ export async function POST() {
   if (!auth.isAdmin) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
+
+  // Connecting a Stripe account is the setup half of Giving; a church with
+  // Giving switched off must not be able to start onboarding from a stale tab.
+  const denied = await featureAccessDenied("giving");
+  if (denied) return denied;
 
   const admin = createAdminClient();
   const { data: church, error } = await admin

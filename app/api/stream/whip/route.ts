@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getChurchAuth } from "@/lib/auth/church";
+import { featureAccessDenied } from "@/lib/features/guard";
 import { getStreamRelaySettings } from "@/lib/stream/relay";
 import { createClient } from "@/lib/supabase/server";
 import { isAbortError, startStreamTimer } from "@/lib/stream/telemetry";
@@ -42,6 +43,12 @@ export async function POST(request: Request) {
   if (!auth?.isAdmin) {
     timer.end("error", { category: "auth", status: 403 });
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const denied = await featureAccessDenied("live_stream", supabase);
+  if (denied) {
+    timer.end("error", { category: "auth", status: 403 });
+    return denied;
   }
 
   const settings = await getStreamRelaySettings(auth.churchId, {
@@ -137,6 +144,12 @@ export async function DELETE(request: Request) {
   if (!auth?.isAdmin) {
     timer.end("error", { category: "auth", status: 403 });
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const denied = await featureAccessDenied("live_stream", supabase);
+  if (denied) {
+    timer.end("error", { category: "auth", status: 403 });
+    return denied;
   }
 
   if (!isAllowedResourceUrl(location)) {

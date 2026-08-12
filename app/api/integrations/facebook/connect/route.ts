@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getChurchAuth } from "@/lib/auth/church";
+import { denyUnlessAnyFeature } from "@/lib/features/guard";
 import { fetchInviteByToken, assertInviteEmail } from "@/lib/onboarding/validate-invite";
 import { redirectToSettings } from "@/lib/integrations/app-redirect";
 import { getFacebookAuthUrl } from "@/lib/integrations/facebook";
@@ -41,6 +42,14 @@ export async function GET(request: Request) {
     if (!auth?.isAdmin) {
       return NextResponse.json({ error: "Admin access required" }, { status: 403 });
     }
+
+    // Facebook serves two features — page posts for Announcements and Live
+    // broadcasts — so either one is enough to justify the connection. The
+    // invite branch above is deliberately exempt: onboarding runs before a
+    // church has anything to gate on.
+    const denied = await denyUnlessAnyFeature(["announcements", "live_stream"]);
+    if (denied) return denied;
+
     churchId = auth.churchId;
     userId = auth.userId;
   }

@@ -6,6 +6,7 @@ import {
   isFeatureKey,
   type FeatureKey,
 } from "@/lib/features/catalog";
+import { createAdminClientOrNull } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export type FeatureFlags = Record<FeatureKey, boolean>;
@@ -53,6 +54,43 @@ export async function getChurchFeatureFlags(
   }
 
   return flags;
+}
+
+/**
+ * One flag for one church, with no signed-in user involved.
+ *
+ * This is what the public surfaces use. `getFeatureAccess` answers "can this
+ * member open this?", which is the wrong question for a visitor on
+ * gracechurch.org or a donor on /give — there is no member. The only question
+ * there is whether the church still has the feature at all.
+ *
+ * Reads through the service-role client because `church_features` has no anon
+ * policy, and defaults to enabled so an unmigrated database or a transient
+ * error never takes a church's public site down.
+ */
+export async function isChurchFeatureEnabled(
+  churchId: string,
+  key: FeatureKey,
+): Promise<boolean> {
+  const admin = createAdminClientOrNull();
+  if (!admin) return true;
+
+  const { data, error } = await admin
+    .from("church_features")
+    .select("enabled")
+    .eq("church_id", churchId)
+    .eq("feature_key", key)
+    .maybeSingle();
+
+  if (error) {
+    if (!isMissingFeatureTable(error.message)) {
+      console.error("isChurchFeatureEnabled:", error.message);
+    }
+    return true;
+  }
+
+  // No row means never changed, which means the catalog default: on.
+  return data ? Boolean(data.enabled) : true;
 }
 
 export type FeatureAccess = {

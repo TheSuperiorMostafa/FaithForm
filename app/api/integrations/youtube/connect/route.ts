@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getChurchAuth } from "@/lib/auth/church";
+import { featureAccessDenied } from "@/lib/features/guard";
 import { redirectToSettings } from "@/lib/integrations/app-redirect";
 import { signOAuthState } from "@/lib/integrations/oauth-state";
 import { getYouTubeAuthUrl } from "@/lib/integrations/youtube-live";
@@ -9,6 +10,9 @@ export async function GET(request: Request) {
   if (!auth?.isAdmin) {
     return NextResponse.json({ error: "Admin access required" }, { status: 403 });
   }
+
+  const denied = await featureAccessDenied("live_stream");
+  if (denied) return denied;
 
   // Integrations are managed in Settings, so that is where an unqualified
   // connect returns. The live-streaming page passes its own return_to.

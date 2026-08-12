@@ -53,6 +53,15 @@ export type FeatureDefinition = {
    * without listing them one by one.
    */
   routes: string[];
+  /**
+   * What visitors lose when this is switched off, for the features that reach
+   * past the dashboard. Rendered on the toggle so a platform admin is told the
+   * consequence before flipping it rather than discovering it from a church.
+   *
+   * Absent means the feature is staff-facing only and switching it off is
+   * invisible to the public.
+   */
+  publicImpact?: string;
 };
 
 export const FEATURES: FeatureDefinition[] = [
@@ -121,6 +130,8 @@ export const FEATURES: FeatureDefinition[] = [
     href: "/dashboard/giving",
     icon: Heart,
     routes: ["/dashboard/giving"],
+    publicImpact:
+      "Takes the public giving page offline and stops new gifts. Existing recurring gifts keep running — donors can still pause or cancel them, but not restart or raise one.",
   },
   {
     key: "library",
@@ -138,6 +149,8 @@ export const FEATURES: FeatureDefinition[] = [
     href: "/dashboard/website",
     icon: Globe,
     routes: ["/dashboard/website"],
+    publicImpact:
+      "Takes the church's public site offline on every connected domain, and stops the Visit form accepting messages.",
   },
 ];
 

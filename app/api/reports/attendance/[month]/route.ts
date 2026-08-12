@@ -8,6 +8,7 @@ import {
   buildAttendanceComparisonMetrics,
   formatAttendanceTableDate,
 } from "@/lib/reports/attendance-metrics";
+import { featureAccessDenied } from "@/lib/features/guard";
 import { requireChurchContext } from "@/lib/reports/auth";
 import { createClient } from "@/lib/supabase/server";
 import { parseMonthParam } from "@/lib/utils/reports";
@@ -33,6 +34,9 @@ export async function GET(
   if (!ctx) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const denied = await featureAccessDenied("attendance", supabase);
+  if (denied) return denied;
 
   const { churchId } = ctx;
 

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 
 import { sendSiteContactEmail } from "@/lib/email/site-contact";
+import { isChurchFeatureEnabled } from "@/lib/features/access";
 import {
   assertRateLimit,
   getClientIp,
@@ -79,6 +80,13 @@ export async function POST(request: NextRequest) {
 
   const target = await getContactTargetBySlug(slug);
   if (!target) return badRequest("Could not tell which church this is for.");
+
+  // The site that hosts this form is gone when Website is off, so a POST
+  // arriving here is a stale tab or a direct call. Either way there is no
+  // inbox to deliver to — /dashboard/website/messages is unreachable too.
+  if (!(await isChurchFeatureEnabled(target.churchId, "website"))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
 
   const admin = createAdminClientOrNull();
   if (!admin) {

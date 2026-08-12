@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireChurchAuth } from "@/lib/auth/church";
+import { featureAccessDenied } from "@/lib/features/guard";
 import { fetchPassage } from "@/lib/scripture/esv";
 
 export async function GET(
@@ -8,6 +9,9 @@ export async function GET(
 ) {
   try {
     await requireChurchAuth();
+
+    const denied = await featureAccessDenied("sermon_builder");
+    if (denied) return denied;
     const ref = decodeURIComponent(params.ref);
     const passage = await fetchPassage(ref);
     return NextResponse.json(passage);
