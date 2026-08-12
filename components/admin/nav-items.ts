@@ -1,6 +1,7 @@
 import {
   BarChart3,
   Building2,
+  Globe,
   HelpCircle,
   LayoutDashboard,
   Palette,
@@ -11,6 +12,7 @@ export const adminNavItems = [
   { href: "/admin", label: "Overview", icon: LayoutDashboard },
   { href: "/admin/churches", label: "Churches", icon: Building2 },
   { href: "/admin/users", label: "Users", icon: Users },
+  { href: "/admin/domains", label: "Domains", icon: Globe },
   { href: "/admin/themes", label: "Themes", icon: Palette },
   { href: "/admin/support", label: "Support", icon: HelpCircle },
   { href: "/admin/analytics", label: "Analytics", icon: BarChart3 },

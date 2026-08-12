@@ -20,6 +20,7 @@ import { ActivityPagination } from "@/components/admin/activity-pagination";
 import { ChurchAISettingsPanel } from "@/components/admin/church-ai-settings-panel";
 import { ChurchFeaturesPanel } from "@/components/admin/church-features-panel";
 import { ChurchGivingPanel } from "@/components/admin/church-giving-panel";
+import { ChurchWebsitePanel } from "@/components/admin/church-website-panel";
 import { ChurchProfileForm } from "@/components/church-profile/church-profile-form";
 import type { FeatureFlags } from "@/lib/features/access";
 import { getFeature, type FeatureKey } from "@/lib/features/catalog";
@@ -28,6 +29,10 @@ import type {
   AdminActivityResult,
   AdminChurchDetail,
 } from "@/lib/queries/admin";
+import type {
+  SiteDomainDetail,
+  SiteDomainRequest,
+} from "@/lib/sites/domain-queries";
 import type { ChurchProfileFormState } from "@/types/church-profile";
 
 type ChurchDetailTabsProps = {
@@ -39,6 +44,12 @@ type ChurchDetailTabsProps = {
   featurePermissionsByMemberId: Record<string, FeatureKey[]>;
   /** Church identity, services, staff and AI knowledge — we own this, not the church. */
   profileForm: ChurchProfileFormState;
+  domains: SiteDomainDetail[];
+  domainRequests: SiteDomainRequest[];
+  /** True when hostname registration is automated rather than a manual step. */
+  domainAutomated: boolean;
+  /** Which tab to open on, so a link from an alert email lands on the right one. */
+  defaultTab: string;
 };
 
 function MemberAccessCell({
@@ -77,15 +88,33 @@ export function ChurchDetailTabs({
   featureFlags,
   featurePermissionsByMemberId,
   profileForm,
+  domains,
+  domainRequests,
+  domainAutomated,
+  defaultTab,
 }: ChurchDetailTabsProps) {
+  const openDomainRequests = domainRequests.filter((request) =>
+    ["submitted", "in_review", "awaiting_church", "in_progress"].includes(
+      request.status,
+    ),
+  ).length;
+
   return (
-    <Tabs defaultValue="overview" className="space-y-4">
+    <Tabs defaultValue={defaultTab} className="space-y-4">
       <TabsList className="w-full justify-start overflow-x-auto sm:w-auto">
         <TabsTrigger value="overview">Overview</TabsTrigger>
         <TabsTrigger value="profile">Profile</TabsTrigger>
         <TabsTrigger value="ai">AI</TabsTrigger>
         <TabsTrigger value="features">Features</TabsTrigger>
         <TabsTrigger value="users">Users</TabsTrigger>
+        <TabsTrigger value="website">
+          Website
+          {openDomainRequests > 0 ? (
+            <span className="ml-1.5 rounded-full bg-amber-100 px-1.5 py-0.5 text-[11px] font-bold text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">
+              {openDomainRequests}
+            </span>
+          ) : null}
+        </TabsTrigger>
         <TabsTrigger value="integrations">Integrations</TabsTrigger>
         <TabsTrigger value="giving">Giving</TabsTrigger>
         <TabsTrigger value="activity">Activity</TabsTrigger>
@@ -193,6 +222,16 @@ export function ChurchDetailTabs({
           churchId={detail.church.id}
           churchName={detail.church.name}
           flags={featureFlags}
+        />
+      </TabsContent>
+
+      <TabsContent value="website">
+        <ChurchWebsitePanel
+          churchId={detail.church.id}
+          churchName={detail.church.name}
+          domains={domains}
+          requests={domainRequests}
+          automated={domainAutomated}
         />
       </TabsContent>
 

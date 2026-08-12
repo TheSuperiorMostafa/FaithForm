@@ -1,5 +1,7 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { Button } from "@/components/ui/button";
 import { EmptySite } from "@/components/website-admin/empty-site";
 import { PublishCard } from "@/components/website-admin/publish-card";
 import { SitePreview } from "@/components/website-admin/site-preview";
@@ -54,12 +56,19 @@ export default async function WebsiteOverviewPage() {
       <SitePreview previewUrl={previewUrl} />
 
       <div className="rounded-2xl border border-border bg-card p-5 shadow-card">
-        <h2 className="font-heading text-lg font-bold">Web address</h2>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <h2 className="font-heading text-lg font-bold">Web address</h2>
+          <Link href="/dashboard/website/domain">
+            <Button variant="outline" size="sm">
+              {domains.length === 0 ? "Set up a domain" : "Manage"}
+            </Button>
+          </Link>
+        </div>
         {domains.length === 0 ? (
           <p className="mt-1 text-sm text-muted-foreground">
             No custom domain is connected yet, so your site is reachable at the
-            preview link above. Contact us when you&apos;re ready to point your
-            own domain at it.
+            preview link above. Connect one you already own, or ask us to get
+            one for you.
           </p>
         ) : (
           <ul className="mt-3 flex flex-col gap-2">
@@ -77,9 +86,6 @@ export default async function WebsiteOverviewPage() {
             ))}
           </ul>
         )}
-        <p className="mt-3 text-xs text-muted-foreground">
-          Domains are managed by FaithForm. Ask support to add or change one.
-        </p>
       </div>
     </div>
   );

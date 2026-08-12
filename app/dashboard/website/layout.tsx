@@ -10,6 +10,7 @@ const TABS = [
   { label: "Design", href: "/dashboard/website/design" },
   { label: "Sermons", href: "/dashboard/website/sermons" },
   { label: "Messages", href: "/dashboard/website/messages" },
+  { label: "Domain", href: "/dashboard/website/domain" },
 ];
 
 export default function WebsiteLayout({ children }: { children: ReactNode }) {

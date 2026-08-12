@@ -14,6 +14,11 @@ import {
   profileToFormState,
 } from "@/lib/queries/church-profile";
 import { getChurchTeamMembers } from "@/lib/queries/team";
+import {
+  getChurchDomainRequests,
+  getChurchDomains,
+} from "@/lib/sites/domain-queries";
+import { getDomainProvider } from "@/lib/sites/domains";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -36,6 +41,24 @@ function parsePage(value: string | undefined): number {
   return Number.isFinite(page) && page > 0 ? Math.floor(page) : 1;
 }
 
+/** Allowlisted so `?tab=` can only ever name a tab that exists. */
+const TABS = [
+  "overview",
+  "profile",
+  "ai",
+  "features",
+  "users",
+  "website",
+  "integrations",
+  "giving",
+  "activity",
+  "support",
+];
+
+function parseTab(value: string | undefined): string {
+  return value && TABS.includes(value) ? value : "overview";
+}
+
 export default async function AdminChurchDetailPage({
   params,
   searchParams,
@@ -54,14 +77,23 @@ export default async function AdminChurchDetailPage({
     ),
   };
 
-  const [detail, activity, featureFlags, teamMembers, profile] =
-    await Promise.all([
-      getAdminChurchDetail(params.id),
-      getAdminChurchActivity(params.id, activityFilters),
-      getChurchFeatureFlags(params.id, createAdminClient()),
-      getChurchTeamMembers(params.id),
-      loadChurchProfileForAdmin(params.id),
-    ]);
+  const [
+    detail,
+    activity,
+    featureFlags,
+    teamMembers,
+    profile,
+    domains,
+    domainRequests,
+  ] = await Promise.all([
+    getAdminChurchDetail(params.id),
+    getAdminChurchActivity(params.id, activityFilters),
+    getChurchFeatureFlags(params.id, createAdminClient()),
+    getChurchTeamMembers(params.id),
+    loadChurchProfileForAdmin(params.id),
+    getChurchDomains(params.id),
+    getChurchDomainRequests(params.id),
+  ]);
 
   if (!detail) notFound();
 
@@ -86,6 +118,12 @@ export default async function AdminChurchDetailPage({
         featureFlags={featureFlags}
         featurePermissionsByMemberId={featurePermissionsByMemberId}
         profileForm={profileForm}
+        domains={domains}
+        domainRequests={domainRequests}
+        domainAutomated={getDomainProvider().automated}
+        defaultTab={parseTab(
+          typeof searchParams.tab === "string" ? searchParams.tab : undefined,
+        )}
       />
     </div>
   );
