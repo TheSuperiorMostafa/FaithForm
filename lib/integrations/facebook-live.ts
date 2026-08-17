@@ -9,6 +9,34 @@ import { getIntegration, saveIntegration } from "@/lib/integrations/tokens";
 import type { FacebookIntegrationMetadata } from "@/lib/integrations/types";
 import { setStreamRelayDestination } from "@/lib/stream/relay";
 
+/**
+ * The public URL of a live video, straight from Facebook.
+ *
+ * Guessing at `/{page_id}/videos/{live_video_id}/` does not work: a LiveVideo's
+ * id is not the id in a Page's video permalink, so the guessed link lands on
+ * Facebook's "content isn't available" page even while the broadcast is running
+ * fine. `permalink_url` is the only address that resolves.
+ */
+async function fetchLiveVideoPermalink(
+  liveVideoId: string,
+  pageAccessToken: string,
+): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `${GRAPH}/${liveVideoId}?fields=permalink_url&access_token=${encodeURIComponent(pageAccessToken)}`,
+    );
+    const data = (await res.json()) as { permalink_url?: string };
+    if (!res.ok || !data.permalink_url) return null;
+
+    // Facebook returns a site-relative path.
+    return data.permalink_url.startsWith("http")
+      ? data.permalink_url
+      : `https://www.facebook.com${data.permalink_url}`;
+  } catch {
+    return null;
+  }
+}
+
 export async function provisionFacebookLiveRtmpUrl(
   pageId: string,
   pageAccessToken: string,
@@ -80,6 +108,8 @@ export async function provisionFacebookLiveForChurch(
       metadata: {
         ...metadata,
         live_video_id: liveVideoId,
+        live_video_url:
+          (await fetchLiveVideoPermalink(liveVideoId, pageToken)) ?? undefined,
       },
       connectedBy: integration.connected_by ?? userId ?? undefined,
     },
@@ -160,7 +190,11 @@ export async function endFacebookLiveVideo(
         churchId,
         provider: "facebook",
         accessToken: current.access_token,
-        metadata: { ...currentMeta, live_video_id: undefined },
+        metadata: {
+          ...currentMeta,
+          live_video_id: undefined,
+          live_video_url: undefined,
+        },
         connectedBy: current.connected_by ?? undefined,
       },
       supabase,

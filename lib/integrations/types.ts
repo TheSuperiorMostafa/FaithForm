@@ -36,6 +36,11 @@ export type FacebookIntegrationMetadata = IntegrationHealthMetadata & {
   page_name?: string;
   live_video_id?: string;
   /**
+   * Facebook's own permalink for the current live video. Stored because the
+   * URL cannot be derived from the ids we hold.
+   */
+  live_video_url?: string;
+  /**
    * True when the page token was derived from a long-lived user token (and so
    * does not expire). The user token itself lives in the `refresh_token`
    * column — never in metadata, which the status RPC exposes to all members.

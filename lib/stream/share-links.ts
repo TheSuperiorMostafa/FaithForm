@@ -63,11 +63,14 @@ export async function getStreamShareLinks(
   if (destinations.includes("facebook")) {
     const facebook = await getIntegration(churchId, "facebook", input.supabase);
     const meta = (facebook?.metadata ?? {}) as FacebookIntegrationMetadata;
-    if (meta.live_video_id && meta.page_id) {
+    // Only Facebook's own permalink resolves — see fetchLiveVideoPermalink.
+    // Without it, link to the Page, where the live video is the top post,
+    // rather than to a URL that shows an error.
+    if (meta.live_video_url) {
       links.push({
         id: "facebook",
         label: "Facebook Live",
-        url: `https://www.facebook.com/${meta.page_id}/videos/${meta.live_video_id}/`,
+        url: meta.live_video_url,
       });
     } else if (meta.page_id) {
       links.push({
