@@ -47,6 +47,17 @@ export async function sendFollowUps(input: {
     return { ok: false, error: "No attendance saved for that Sunday yet." };
   }
 
+  // Who the log will show as the sender. Staff accounts carry no profile row,
+  // so the display name comes from the account itself, with email as the
+  // dependable fallback.
+  const { data: authData } = await supabase.auth.getUser();
+  const authUser = authData.user;
+  const senderName =
+    (authUser?.user_metadata?.full_name as string | undefined)?.trim() ||
+    (authUser?.user_metadata?.name as string | undefined)?.trim() ||
+    authUser?.email ||
+    null;
+
   const admin = createAdminClient();
 
   const loadEntries = (columns: string) =>
@@ -124,7 +135,7 @@ export async function sendFollowUps(input: {
     ),
     admin
       .from("members")
-      .select("id, first_name, phone")
+      .select("id, first_name, last_name, phone")
       .eq("church_id", auth.churchId)
       .in("id", eligibleMemberIds),
   ]);
@@ -138,14 +149,23 @@ export async function sendFollowUps(input: {
       auth.churchId,
       eligible.map((entry) => {
         const member = memberById.get(entry.member_id as string);
+        const firstName = (member?.first_name as string | undefined) ?? "Friend";
+        const lastName = (member?.last_name as string | null | undefined) ?? "";
         return {
           entryId: entry.id as string,
-          firstName: (member?.first_name as string | undefined) ?? "Friend",
+          memberId: entry.member_id,
+          firstName,
+          fullName: `${firstName} ${lastName}`.trim(),
           phone: (member?.phone as string | null | undefined) ?? null,
           consecutiveAbsent:
             (priorAbsences.get(entry.member_id as string) ?? 0) + 1,
         };
       }),
+      {
+        serviceDate: input.serviceDate,
+        userId: auth.userId,
+        name: senderName,
+      },
     );
   } catch (err) {
     console.error("sendFollowUps:", err);

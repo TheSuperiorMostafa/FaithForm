@@ -27,6 +27,7 @@
     "db:youtube-live": "node scripts/apply-youtube-live-integration-migration.mjs",
     "db:team-access": "node scripts/apply-team-access-migration.mjs",
     "db:attendance-follow-up": "node scripts/apply-attendance-follow-up-migration.mjs",
+    "db:follow-up-log": "node scripts/apply-follow-up-log-migration.mjs",
     "db:church-sites": "node scripts/apply-church-sites-migration.mjs",
     "db:church-themes": "node scripts/apply-church-slide-themes-migration.mjs",
     "db:domains": "node scripts/apply-domain-requests-migration.mjs",

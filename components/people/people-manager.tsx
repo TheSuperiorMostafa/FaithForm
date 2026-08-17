@@ -151,7 +151,7 @@ export function PeopleManager({ initialMembers, isAdmin }: PeopleManagerProps) {
   return (
     <div
       className={cn(
-        "mx-auto flex w-full flex-col gap-6 pb-28 lg:flex-row lg:items-start",
+        "mx-auto flex w-full flex-col gap-6 pb-28 lg:flex-row lg:items-stretch",
         panelOpen ? "max-w-6xl" : "max-w-2xl",
       )}
     >
@@ -380,21 +380,37 @@ export function PeopleManager({ initialMembers, isAdmin }: PeopleManagerProps) {
             onClick={closePanel}
             className="fixed inset-0 z-40 bg-brand-navy/50 lg:hidden"
           />
+          {/*
+            The outer element stretches to the full height of the row so the
+            inner card has somewhere to stick. With the row's `items-start`
+            alone the panel was only as tall as its own content, which left
+            sticky nothing to travel inside — scroll down the list and the panel
+            went with it, forcing a scroll back to the top to reach it.
+          */}
           <aside
             className={cn(
-              "fixed inset-y-0 right-0 z-50 w-full max-w-md overflow-y-auto border-l border-border bg-card p-6 shadow-card-hover",
-              "lg:sticky lg:top-6 lg:z-auto lg:inset-y-auto lg:w-[380px] lg:max-w-none lg:shrink-0 lg:rounded-2xl lg:border lg:shadow-card lg:dark:shadow-none",
+              "fixed inset-y-0 right-0 z-50 w-full max-w-md overflow-y-auto border-l border-border bg-card shadow-card-hover",
+              "lg:relative lg:inset-y-auto lg:z-auto lg:w-[380px] lg:max-w-none lg:shrink-0",
+              "lg:self-stretch lg:overflow-visible lg:border-l-0 lg:bg-transparent lg:shadow-none",
             )}
           >
-            <MemberFormPanel
-              key={panelMode === "edit" ? selectedMember?.id ?? "edit" : "new"}
-              member={panelMode === "edit" ? selectedMember : null}
-              isAdmin={isAdmin}
-              onClose={closePanel}
-              onSaved={handleSaved}
-              onDeactivated={handleDeactivated}
-              onReactivated={handleReactivated}
-            />
+            <div
+              className={cn(
+                "p-6",
+                "lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto",
+                "lg:rounded-2xl lg:border lg:border-border lg:bg-card lg:shadow-card lg:dark:shadow-none",
+              )}
+            >
+              <MemberFormPanel
+                key={panelMode === "edit" ? selectedMember?.id ?? "edit" : "new"}
+                member={panelMode === "edit" ? selectedMember : null}
+                isAdmin={isAdmin}
+                onClose={closePanel}
+                onSaved={handleSaved}
+                onDeactivated={handleDeactivated}
+                onReactivated={handleReactivated}
+              />
+            </div>
           </aside>
         </>
       ) : null}

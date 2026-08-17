@@ -1,9 +1,10 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Checkbox } from "@base-ui/react/checkbox";
-import { AlertCircle, Check, PhoneOff, Send } from "lucide-react";
+import { AlertCircle, Check, History, PhoneOff, Send } from "lucide-react";
 
 import { sendFollowUps } from "./actions";
 import { Button } from "@/components/ui/button";
@@ -106,14 +107,25 @@ export function FollowUpBoard({
 
   return (
     <div className="flex w-full flex-col gap-5">
-      <header className="flex flex-col gap-2">
-        <h1 className="border-l-4 border-accent pl-3 font-heading text-[26px] font-bold text-foreground">
-          Follow-up
-        </h1>
-        <p className="text-base text-muted-foreground">
-          Pick who should get a check-in text after a service. Attendance is
-          submitted separately — nothing is sent until you choose here.
-        </p>
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-col gap-2">
+          <h1 className="border-l-4 border-accent pl-3 font-heading text-[26px] font-bold text-foreground">
+            Follow-up
+          </h1>
+          <p className="text-base text-muted-foreground">
+            Pick who should get a check-in text after a service. Attendance is
+            submitted separately — nothing is sent until you choose here.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          nativeButton={false}
+          render={<Link href="/dashboard/attendance/follow-up/log" />}
+        >
+          <History className="size-4" strokeWidth={1.75} />
+          Message log
+        </Button>
       </header>
 
       <div className="flex flex-col gap-2">
