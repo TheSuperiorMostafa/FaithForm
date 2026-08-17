@@ -73,6 +73,11 @@ function DialogContent({
     setMounted(true);
   }, []);
 
+  // `mounted` belongs in the dependencies: the portal renders nothing on the
+  // first pass, so on that pass `ref.current` is still null and this bails out.
+  // Without re-running once the <dialog> exists, a dialog that is *mounted
+  // already open* — `{open && <Thing open={open} />}`, the pattern used for
+  // row-level menus — never gets `showModal()` called and simply never appears.
   React.useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -81,7 +86,7 @@ function DialogContent({
     } else if (!open && el.open) {
       el.close();
     }
-  }, [open]);
+  }, [open, mounted]);
 
   // Render into <body> via a portal so the native modal <dialog> escapes any
   // scrollable / transformed ancestor (e.g. the dashboard's overflow-y-auto

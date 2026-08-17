@@ -23,6 +23,7 @@ export const DENOMINATIONS = [
   "Pentecostal",
   "Lutheran",
   "Anglican",
+  "Nazarene",
   "Other",
 ] as const;
 

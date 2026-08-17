@@ -1,3 +1,4 @@
+import { parseFeatureKeys, type FeatureKey } from "@/lib/features/catalog";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getGivePageUrl } from "@/lib/stripe/config";
 import {
@@ -156,6 +157,8 @@ export type AdminPlatformUserRow = {
   churchId: string;
   churchName: string;
   role: AdminRole;
+  /** Grants held by a member. Admins hold everything, so theirs is empty. */
+  featurePermissions: FeatureKey[];
   lastSignInAt: string | null;
   joinedAt: string;
 };
@@ -210,6 +213,7 @@ type ChurchUserRow = {
   user_id: string;
   role: string;
   created_at: string;
+  feature_permissions?: unknown;
   churches?: { id?: string; name?: string } | { id?: string; name?: string }[] | null;
 };
 
@@ -805,10 +809,22 @@ export async function getAdminChurchDetail(
 
 export async function getAdminUsers(): Promise<AdminPlatformUserRow[]> {
   const admin = createAdminClient();
-  const { data, error } = await admin
+  let { data, error } = await admin
     .from("church_users")
-    .select("id, church_id, user_id, role, created_at, churches(id, name)")
+    .select(
+      "id, church_id, user_id, role, created_at, feature_permissions, churches(id, name)",
+    )
     .order("created_at", { ascending: false });
+
+  // Pre-0041 databases keep grants in app_metadata and have no column to read.
+  if (error && /feature_permissions/i.test(error.message)) {
+    const legacy = await admin
+      .from("church_users")
+      .select("id, church_id, user_id, role, created_at, churches(id, name)")
+      .order("created_at", { ascending: false });
+    data = legacy.data as typeof data;
+    error = legacy.error;
+  }
 
   if (error) {
     console.error("getAdminUsers:", error.message);
@@ -825,6 +841,7 @@ export async function getAdminUsers(): Promise<AdminPlatformUserRow[]> {
     churchId: row.church_id,
     churchName: getRelatedChurchName(row.churches) ?? "Unknown church",
     role: toRole(row.role),
+    featurePermissions: parseFeatureKeys(row.feature_permissions),
     lastSignInAt: authUsers.get(row.user_id)?.lastSignInAt ?? null,
     joinedAt: row.created_at,
   }));

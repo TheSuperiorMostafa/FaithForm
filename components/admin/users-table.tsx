@@ -2,17 +2,29 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { MoreHorizontal } from "lucide-react";
+import { ManageUserDialog } from "@/components/admin/manage-user-dialog";
 import { RoleBadge } from "@/components/admin/badges";
+import { Button } from "@/components/ui/button";
 import { formatDate, formatRelativeTime } from "@/components/admin/format";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import type { FeatureKey } from "@/lib/features/catalog";
 import type { AdminPlatformUserRow } from "@/lib/queries/admin";
 
-export function UsersTable({ users }: { users: AdminPlatformUserRow[] }) {
+export function UsersTable({
+  users,
+  featuresByChurch,
+}: {
+  users: AdminPlatformUserRow[];
+  /** Features each church has switched on — the only grantable ones. */
+  featuresByChurch: Record<string, FeatureKey[]>;
+}) {
   const [role, setRole] = useState("all");
   const [church, setChurch] = useState("all");
   const [query, setQuery] = useState("");
+  const [managing, setManaging] = useState<AdminPlatformUserRow | null>(null);
 
   const churches = useMemo(
     () =>
@@ -67,6 +79,9 @@ export function UsersTable({ users }: { users: AdminPlatformUserRow[] }) {
               <th className="px-5 py-4 text-left">Role</th>
               <th className="px-5 py-4 text-left">Last sign-in</th>
               <th className="px-5 py-4 text-left">Joined</th>
+              <th className="w-px px-5 py-4 text-right">
+                <span className="sr-only">Actions</span>
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -92,6 +107,17 @@ export function UsersTable({ users }: { users: AdminPlatformUserRow[] }) {
                 <td className="px-5 py-4 text-muted-foreground">
                   {formatDate(user.joinedAt)}
                 </td>
+                <td className="px-5 py-4 text-right">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`Manage ${user.email ?? "this user"}`}
+                    onClick={() => setManaging(user)}
+                  >
+                    <MoreHorizontal className="size-4" strokeWidth={1.75} />
+                  </Button>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -102,6 +128,18 @@ export function UsersTable({ users }: { users: AdminPlatformUserRow[] }) {
         <div className="p-8 text-center text-sm text-muted-foreground">
           No users match the selected filters.
         </div>
+      )}
+
+      {managing && (
+        <ManageUserDialog
+          key={managing.id}
+          user={managing}
+          availableFeatures={featuresByChurch[managing.churchId] ?? []}
+          open
+          onOpenChange={(next) => {
+            if (!next) setManaging(null);
+          }}
+        />
       )}
     </Card>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Globe } from "lucide-react";
 import { toast } from "sonner";
@@ -9,7 +9,7 @@ import { setChurchFeature } from "@/app/admin/feature-actions";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { FEATURES, type FeatureKey } from "@/lib/features/catalog";
+import { FEATURE_KEYS, FEATURES, type FeatureKey } from "@/lib/features/catalog";
 import type { FeatureFlags } from "@/lib/features/access";
 import { cn } from "@/lib/utils";
 
@@ -28,6 +28,22 @@ export function ChurchFeaturesPanel({
   const [savingKey, setSavingKey] = useState<FeatureKey | null>(null);
   const [, startTransition] = useTransition();
   const router = useRouter();
+
+  // The optimistic switch is a local guess. Once the server re-renders with the
+  // saved flags, adopt them — otherwise a write that silently failed keeps
+  // showing the state the operator wanted rather than the one that stuck.
+  //
+  // Keyed on the values, not the object: the server hands over a fresh object
+  // every render, which would otherwise stomp an in-flight optimistic toggle.
+  const flagsSignature = FEATURE_KEYS.map((key) =>
+    initialFlags[key] ? "1" : "0",
+  ).join("");
+
+  useEffect(() => {
+    setFlags(initialFlags);
+    // initialFlags is re-created per render; flagsSignature is its identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flagsSignature]);
 
   const enabledCount = FEATURES.filter((feature) => flags[feature.key]).length;
 
