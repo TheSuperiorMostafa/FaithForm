@@ -28,6 +28,7 @@
     "db:team-access": "node scripts/apply-team-access-migration.mjs",
     "db:attendance-follow-up": "node scripts/apply-attendance-follow-up-migration.mjs",
     "db:church-sites": "node scripts/apply-church-sites-migration.mjs",
+    "db:church-themes": "node scripts/apply-church-slide-themes-migration.mjs",
     "db:domains": "node scripts/apply-domain-requests-migration.mjs",
     "seed:demo-sites": "node scripts/seed-demo-sites.mjs",
     "storage:buckets": "node scripts/ensure-storage-buckets.mjs",

@@ -58,6 +58,9 @@ const BUCKETS = [
   { name: "church-logos", public: true },
   { name: "church-covers", public: true },
   { name: "social-graphics", public: true },
+  // Church-uploaded sermon slide backgrounds. Public so PPTX export and the
+  // theme picker can read the image without signing every URL.
+  { name: "sermon-themes", public: true },
 ];
 
 let failed = false;

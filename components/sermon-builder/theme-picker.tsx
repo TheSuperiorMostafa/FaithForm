@@ -3,11 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, RefreshCw, Search, Sparkles } from "lucide-react";
 import { ThemePreview } from "@/components/sermon-builder/theme-preview";
+import { ThemeUploadButton } from "@/components/sermon-builder/theme-upload-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   getThemeFilterOptions,
   searchSlideThemes,
+  UPLOADS_CATEGORY,
   type SlideTheme,
 } from "@/lib/sermon-builder/slide-theme-shared";
 import { cn } from "@/lib/utils";
@@ -211,13 +213,23 @@ export function ThemePicker({ selectedId, onSelect, context }: ThemePickerProps)
 
   return (
     <div className="space-y-4">
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search by theme, season, symbol, or style…"
-          className="pl-9"
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search by theme, season, symbol, or style…"
+            className="pl-9"
+          />
+        </div>
+        <ThemeUploadButton
+          onUploaded={(theme) => {
+            // Show it immediately and select it — that's why they uploaded it.
+            setThemes((prev) => [theme, ...prev.filter((t) => t.id !== theme.id)]);
+            setCategory(UPLOADS_CATEGORY);
+            onSelect(theme.id);
+          }}
         />
       </div>
 

@@ -49,6 +49,9 @@ export type SlideTheme = {
 
 const BUCKET = "sermon-themes";
 
+/** The category church uploads land in, so they group together in the picker. */
+export const UPLOADS_CATEGORY = "uploads";
+
 export function slideThemePublicUrl(path: string): string | null {
   const base = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!base) return null;
