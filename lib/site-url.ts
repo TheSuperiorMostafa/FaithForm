@@ -64,6 +64,11 @@ export function getLiveEmbedUrl(slug: string): string {
   return absoluteAppPath(`/live/${slug}/embed`);
 }
 
+/** Public page for watching one past service back. */
+export function getRecordingWatchUrl(slug: string, recordingId: string): string {
+  return absoluteAppPath(`/live/${slug}/watch/${recordingId}`);
+}
+
 /**
  * Public church give page: {site}/give/{slug}
  * Optional dedicated subdomain only when NEXT_PUBLIC_GIVE_USE_DEDICATED_HOST=true.

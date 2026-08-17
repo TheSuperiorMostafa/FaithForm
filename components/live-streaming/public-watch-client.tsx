@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { LiveChat } from "@/components/live-streaming/live-chat";
 import { PublicPlayer } from "@/components/live-streaming/public-player";
+import { useViewTracking } from "@/lib/stream/use-view-tracking";
 
 type PublicStatus = {
   churchName: string;
@@ -32,6 +33,15 @@ function sameStatus(a: PublicStatus, b: PublicStatus): boolean {
 
 export function PublicWatchClient({ slug, embed = false }: PublicWatchClientProps) {
   const [status, setStatus] = useState<PublicStatus | null>(null);
+
+  // Counted once the stream is actually live and playing, not on page open —
+  // someone landing on a countdown has not watched anything yet.
+  useViewTracking({
+    slug,
+    kind: "live",
+    source: embed ? "embed" : "website",
+    enabled: status?.status === "live" && Boolean(status.playbackUrl),
+  });
 
   useEffect(() => {
     const controller = new AbortController();
