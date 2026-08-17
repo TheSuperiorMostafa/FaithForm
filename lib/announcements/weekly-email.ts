@@ -4,6 +4,7 @@ import {
   renderAnnouncementEmail,
   type WeeklyEmailEvent,
 } from "@/lib/email/announcement-template";
+import { listEmailQueue } from "@/lib/announcements/email-queue";
 import { listCalendarEventsInRange } from "@/lib/integrations/google-calendar";
 import { createGmailDraft } from "@/lib/integrations/gmail";
 import { hasIntegration } from "@/lib/integrations/tokens";
@@ -15,6 +16,12 @@ import {
   getMondayWeekWindowInTimeZone,
   getZonedWeekday,
 } from "@/lib/utils/calendar";
+
+/**
+ * How far ahead an event can be and still be added to this week's email.
+ * Comfortably past the "let people know a fortnight early" case.
+ */
+export const QUEUE_HORIZON_DAYS = 56;
 
 export type WeeklyQueueItem = CalendarEventPreview & {
   announcementId?: string;
@@ -32,24 +39,26 @@ function eventStartsInFuture(event: CalendarEventPreview, now: Date): boolean {
   return new Date(event.startAt).getTime() >= now.getTime();
 }
 
+/**
+ * The events a church can put in this week's email.
+ *
+ * Deliberately not limited to the current week: an event a fortnight out is
+ * exactly the sort of thing that needs announcing now, so anything from this
+ * week's Monday onward is offered, and `queuedEventIds` says which have
+ * actually been added.
+ */
 export function buildWeeklyAnnouncementQueue(
   events: CalendarEventPreview[],
   publishedByGoogleId: Record<string, AnnouncementRow>,
   now: Date = new Date(),
   timeZone?: string | null,
+  queuedEventIds: Set<string> = new Set(),
 ): WeeklyQueueItem[] {
-  const { weekStartISO, weekEndISO } = getMondayWeekWindowInTimeZone(
-    now,
-    timeZone,
-  );
+  const { weekStartISO } = getMondayWeekWindowInTimeZone(now, timeZone);
   const weekStartMs = new Date(weekStartISO).getTime();
-  const weekEndMs = new Date(weekEndISO).getTime();
 
   return events
-    .filter((event) => {
-      const startMs = new Date(event.startAt).getTime();
-      return startMs >= weekStartMs && startMs <= weekEndMs;
-    })
+    .filter((event) => new Date(event.startAt).getTime() >= weekStartMs)
     .sort(
       (a, b) =>
         new Date(a.startAt).getTime() - new Date(b.startAt).getTime(),
@@ -59,10 +68,13 @@ export function buildWeeklyAnnouncementQueue(
       const published = Boolean(publishedRow);
       const passed = eventHasPassed(event, now);
 
-      let includeInWeeklyEmail = !passed;
-      if (publishedRow) {
-        includeInWeeklyEmail = publishedRow.push_to_team && !passed;
-      }
+      // Membership of the email is now an explicit choice, not a side effect of
+      // the date. `push_to_team` still counts so events queued the old way — by
+      // verifying them with the team toggle on — are not silently dropped.
+      const includeInWeeklyEmail =
+        !passed &&
+        (queuedEventIds.has(event.googleEventId) ||
+          Boolean(publishedRow?.push_to_team));
 
       return {
         ...event,
@@ -157,12 +169,18 @@ export async function createWeeklyAnnouncementGmailDraft(
     };
   }
 
-  const events = await listCalendarEventsInRange(
-    churchId,
-    week.weekStartISO,
-    week.weekEndISO,
-    supabase,
-  );
+  // Look well past the current week: the queue can hold an event a fortnight
+  // out, and the draft has to be able to find it on the calendar.
+  const horizonEnd = new Date(
+    new Date(week.weekStartISO).getTime() + QUEUE_HORIZON_DAYS * 86_400_000,
+  ).toISOString();
+
+  const [events, queued] = await Promise.all([
+    listCalendarEventsInRange(churchId, week.weekStartISO, horizonEnd, supabase),
+    listEmailQueue(churchId, week.weekStartKey, supabase),
+  ]);
+
+  const queuedEventIds = new Set(queued.map((item) => item.googleEventId));
 
   const { data: publishedRows } = await supabase
     .from("announcements")
@@ -206,7 +224,11 @@ export async function createWeeklyAnnouncementGmailDraft(
     publishedByGoogleId,
     now,
     timeZone,
+    queuedEventIds,
   );
+
+  // An event that has already finished is dropped, however it got queued. Any
+  // other still-to-come event stays in, whatever week it falls in.
   const emailEvents = weeklyQueueToEmailEvents(queue, publishedByGoogleId).filter(
     (event) =>
       eventStartsInFuture(
@@ -226,8 +248,8 @@ export async function createWeeklyAnnouncementGmailDraft(
     return {
       ok: false,
       skipped: true,
-      reason: "no_upcoming_events",
-      error: "No upcoming events remain this week.",
+      reason: "no_queued_events",
+      error: "Nothing has been added to this week's email.",
     };
   }
 

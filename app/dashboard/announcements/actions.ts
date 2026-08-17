@@ -3,6 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { logActivity } from "@/lib/activity/log";
+import {
+  addToEmailQueue,
+  removeFromEmailQueue,
+} from "@/lib/announcements/email-queue";
 import { createWeeklyAnnouncementGmailDraft } from "@/lib/announcements/weekly-email";
 import { getChurchAuth } from "@/lib/auth/church";
 import { featureActionError } from "@/lib/features/guard";
@@ -23,6 +27,7 @@ import { getChurchAnnouncementFacebookSchedule } from "@/lib/queries/church-prof
 import { hasIntegration } from "@/lib/integrations/tokens";
 import { getCurrentChurchId } from "@/lib/queries/dashboard";
 import type { PublishResult } from "@/lib/integrations/types";
+import { getMondayWeekWindowInTimeZone } from "@/lib/utils/calendar";
 
 async function requireChurchAndUser() {
   const supabase = createClient();
@@ -600,3 +605,56 @@ export async function deleteAnnouncement(id: string) {
 
 // Disconnecting moved to app/dashboard/settings/integration-actions.ts, where
 // every provider is handled in one place and admin rights are enforced.
+
+/**
+ * Puts an event in — or takes it out of — this week's Gmail draft.
+ *
+ * Membership is an explicit choice rather than a consequence of the date, so a
+ * church can announce something a fortnight out in this Sunday's email. The
+ * queue is keyed on the church-local Monday, which is how it empties itself
+ * each week.
+ */
+export async function toggleEventInWeeklyEmail(input: {
+  googleEventId: string;
+  calendarId?: string | null;
+  included: boolean;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const denied = await featureActionError("announcements");
+  if (denied) return { ok: false, error: denied };
+
+  const supabase = createClient();
+  const auth = await getChurchAuth(supabase);
+  if (!auth) return { ok: false, error: "You must be signed in." };
+
+  const { data: churchRow } = await supabase
+    .from("churches")
+    .select("timezone")
+    .eq("id", auth.churchId)
+    .maybeSingle();
+
+  const week = getMondayWeekWindowInTimeZone(
+    new Date(),
+    (churchRow?.timezone as string | null) ?? null,
+  );
+
+  const result = input.included
+    ? await addToEmailQueue({
+        churchId: auth.churchId,
+        weekStartKey: week.weekStartKey,
+        googleEventId: input.googleEventId,
+        calendarId: input.calendarId ?? null,
+        addedBy: auth.userId,
+      })
+    : await removeFromEmailQueue({
+        churchId: auth.churchId,
+        weekStartKey: week.weekStartKey,
+        googleEventId: input.googleEventId,
+      });
+
+  if (!result.ok) {
+    return { ok: false, error: result.error ?? "Could not update the email." };
+  }
+
+  revalidatePath("/dashboard/announcements");
+  return { ok: true };
+}

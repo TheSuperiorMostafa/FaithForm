@@ -4,7 +4,11 @@ import { MonthCalendar } from "@/components/announcements/month-calendar";
 import { PublishedAnnouncementsList } from "@/components/announcements/published-announcements-list";
 import { WeeklyAnnouncementQueue } from "@/components/announcements/weekly-announcement-queue";
 import { Button } from "@/components/ui/button";
-import { buildWeeklyAnnouncementQueue } from "@/lib/announcements/weekly-email";
+import { listEmailQueue } from "@/lib/announcements/email-queue";
+import {
+  buildWeeklyAnnouncementQueue,
+  QUEUE_HORIZON_DAYS,
+} from "@/lib/announcements/weekly-email";
 import { getChurchAuth } from "@/lib/auth/church";
 import { listCalendarEventsInRange } from "@/lib/integrations/google-calendar";
 import { getIntegrationStatus } from "@/lib/integrations/tokens";
@@ -75,7 +79,10 @@ export default async function AnnouncementsPage() {
         listCalendarEventsInRange(
           churchId,
           week.weekStartISO,
-          week.weekEndISO,
+          new Date(
+            new Date(week.weekStartISO).getTime() +
+              QUEUE_HORIZON_DAYS * 86_400_000,
+          ).toISOString(),
           supabase,
         ),
         getPublishedAnnouncementsByGoogleId(supabase, churchId),
@@ -97,11 +104,21 @@ export default async function AnnouncementsPage() {
   );
 
   const emailSettings = await getAnnouncementEmailSettings(churchId, supabase);
+
+  // What has actually been added to this week's email. The key rolls over at
+  // Monday midnight local, which is what empties the queue.
+  const queuedEventIds = new Set(
+    (await listEmailQueue(churchId, week.weekStartKey, supabase)).map(
+      (item) => item.googleEventId,
+    ),
+  );
+
   const weeklyQueue = buildWeeklyAnnouncementQueue(
     weekEvents,
     publishedAnnouncementsMap,
     now,
     churchTimeZone,
+    queuedEventIds,
   );
 
   return (

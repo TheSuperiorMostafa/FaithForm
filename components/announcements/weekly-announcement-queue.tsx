@@ -3,8 +3,20 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Calendar, ChevronDown, ExternalLink, Mail, X } from "lucide-react";
-import { createWeeklyAnnouncementDraftAction } from "@/app/dashboard/announcements/actions";
+import {
+  Calendar,
+  Check,
+  ChevronDown,
+  ExternalLink,
+  Mail,
+  Plus,
+  X,
+} from "lucide-react";
+import { toast } from "sonner";
+import {
+  createWeeklyAnnouncementDraftAction,
+  toggleEventInWeeklyEmail,
+} from "@/app/dashboard/announcements/actions";
 import { AnnouncementVerifyForm } from "@/components/announcements/announcement-verify-form";
 import { UnsubmitAnnouncementButton } from "@/components/announcements/unsubmit-announcement-button";
 import { Button } from "@/components/ui/button";
@@ -68,6 +80,28 @@ export function WeeklyAnnouncementQueue({
   };
 
   const pendingCount = upcomingQueue.filter((e) => !e.published).length;
+
+  const handleToggleEmail = (
+    googleEventId: string,
+    calendarId: string | null | undefined,
+    included: boolean,
+  ) => {
+    startTransition(async () => {
+      const result = await toggleEventInWeeklyEmail({
+        googleEventId,
+        calendarId,
+        included,
+      });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success(
+        included ? "Added to this week's email." : "Removed from this week's email.",
+      );
+      router.refresh();
+    });
+  };
 
   const handleCreateDraft = (force = false) => {
     setDraftMessage(null);
@@ -204,7 +238,7 @@ export function WeeklyAnnouncementQueue({
 
           {visibleQueue.length === 0 ? (
             <div className="rounded-xl border border-dashed border-border py-12 text-center text-sm text-muted-foreground">
-              No calendar events this week.
+              No upcoming calendar events.
             </div>
           ) : (
             visibleQueue.map((event) => {
@@ -240,7 +274,7 @@ export function WeeklyAnnouncementQueue({
                           )}
                           {!isPast && event.includeInWeeklyEmail && (
                             <span className="rounded-full bg-accent/15 px-2 py-0.5 text-xs font-semibold text-accent">
-                              Weekly email
+                              In this week&apos;s email
                             </span>
                           )}
                         </div>
@@ -253,7 +287,36 @@ export function WeeklyAnnouncementQueue({
                           </span>
                         </CardDescription>
                       </div>
-                      <div className="flex shrink-0 gap-2">
+                      <div className="flex shrink-0 items-center gap-2">
+                        {!isPast && isAdmin && (
+                          <Button
+                            type="button"
+                            variant={
+                              event.includeInWeeklyEmail ? "secondary" : "outline"
+                            }
+                            size="sm"
+                            disabled={pending}
+                            onClick={() =>
+                              handleToggleEmail(
+                                event.googleEventId,
+                                event.calendarId,
+                                !event.includeInWeeklyEmail,
+                              )
+                            }
+                          >
+                            {event.includeInWeeklyEmail ? (
+                              <>
+                                <Check className="size-4" strokeWidth={1.75} />
+                                In email
+                              </>
+                            ) : (
+                              <>
+                                <Plus className="size-4" strokeWidth={1.75} />
+                                Add to email
+                              </>
+                            )}
+                          </Button>
+                        )}
                         {event.htmlLink && (
                           <a
                             href={event.htmlLink}
