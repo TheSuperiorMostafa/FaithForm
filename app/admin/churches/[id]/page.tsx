@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { loadChurchProfileForAdmin } from "@/app/admin/church-profile-actions";
 import { ChurchDetailTabs } from "@/components/admin/church-detail-tabs";
 import { PageHeader } from "@/components/admin/page-header";
-import { getChurchFeatureFlags } from "@/lib/features/access";
+import { getChurchFeatureState } from "@/lib/features/access";
 import type { FeatureKey } from "@/lib/features/catalog";
 import {
   getAdminChurchActivity,
@@ -80,7 +80,7 @@ export default async function AdminChurchDetailPage({
   const [
     detail,
     activity,
-    featureFlags,
+    featureState,
     teamMembers,
     profile,
     domains,
@@ -88,7 +88,7 @@ export default async function AdminChurchDetailPage({
   ] = await Promise.all([
     getAdminChurchDetail(params.id),
     getAdminChurchActivity(params.id, activityFilters),
-    getChurchFeatureFlags(params.id, createAdminClient()),
+    getChurchFeatureState(params.id, createAdminClient()),
     getChurchTeamMembers(params.id),
     loadChurchProfileForAdmin(params.id),
     getChurchDomains(params.id),
@@ -115,7 +115,8 @@ export default async function AdminChurchDetailPage({
         detail={detail}
         activity={activity}
         activityFilters={activityFilters}
-        featureFlags={featureFlags}
+        featureFlags={featureState.flags}
+        featureNotices={featureState.notices}
         featurePermissionsByMemberId={featurePermissionsByMemberId}
         profileForm={profileForm}
         domains={domains}

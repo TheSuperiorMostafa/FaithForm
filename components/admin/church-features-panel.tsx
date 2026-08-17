@@ -2,27 +2,34 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Globe } from "lucide-react";
+import { Globe, Info } from "lucide-react";
 import { toast } from "sonner";
 
 import { setChurchFeature } from "@/app/admin/feature-actions";
+import { DisableFeatureDialog } from "@/components/admin/disable-feature-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { FEATURE_KEYS, FEATURES, type FeatureKey } from "@/lib/features/catalog";
-import type { FeatureFlags } from "@/lib/features/access";
+import type { FeatureFlags, FeatureNotices } from "@/lib/features/access";
+import {
+  DISABLED_REASON_OPTIONS,
+  type DisabledReason,
+} from "@/lib/features/disabled-reason";
 import { cn } from "@/lib/utils";
 
 type ChurchFeaturesPanelProps = {
   churchId: string;
   churchName: string;
   flags: FeatureFlags;
+  notices?: FeatureNotices;
 };
 
 export function ChurchFeaturesPanel({
   churchId,
   churchName,
   flags: initialFlags,
+  notices = {},
 }: ChurchFeaturesPanelProps) {
   const [flags, setFlags] = useState<FeatureFlags>(initialFlags);
   const [savingKey, setSavingKey] = useState<FeatureKey | null>(null);
@@ -47,14 +54,21 @@ export function ChurchFeaturesPanel({
 
   const enabledCount = FEATURES.filter((feature) => flags[feature.key]).length;
 
-  const handleToggle = (key: FeatureKey, next: boolean) => {
+  // Switching off asks why first; switching on needs no explanation.
+  const [disabling, setDisabling] = useState<FeatureKey | null>(null);
+
+  const handleToggle = (
+    key: FeatureKey,
+    next: boolean,
+    disabled?: { reason: DisabledReason; note: string | null },
+  ) => {
     const previous = flags[key];
     // Optimistic — the switch should feel instant; we roll back on failure.
     setFlags((current) => ({ ...current, [key]: next }));
     setSavingKey(key);
 
     startTransition(async () => {
-      const result = await setChurchFeature(churchId, key, next);
+      const result = await setChurchFeature(churchId, key, next, disabled);
       setSavingKey(null);
 
       if (!result.ok) {
@@ -70,6 +84,10 @@ export function ChurchFeaturesPanel({
       router.refresh();
     });
   };
+
+  const disablingFeature = disabling
+    ? (FEATURES.find((f) => f.key === disabling) ?? null)
+    : null;
 
   return (
     <Card>
@@ -93,6 +111,11 @@ export function ChurchFeaturesPanel({
           const enabled = flags[feature.key];
           const Icon = feature.icon;
           const saving = savingKey === feature.key;
+          const reasonLabel = enabled
+            ? null
+            : (DISABLED_REASON_OPTIONS.find(
+                (option) => option.value === notices[feature.key]?.reason,
+              )?.label ?? null);
 
           return (
             <div
@@ -137,6 +160,12 @@ export function ChurchFeaturesPanel({
                       <span>{feature.publicImpact}</span>
                     </p>
                   ) : null}
+                  {!enabled && reasonLabel ? (
+                    <p className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                      <Info className="size-3 shrink-0" strokeWidth={2} aria-hidden />
+                      {reasonLabel}
+                    </p>
+                  ) : null}
                   <p className="mt-1 font-mono text-[11px] text-muted-foreground/70">
                     {feature.routes.join(" · ")}
                   </p>
@@ -146,13 +175,35 @@ export function ChurchFeaturesPanel({
               <Switch
                 checked={enabled}
                 disabled={saving}
-                onCheckedChange={(next) => handleToggle(feature.key, next)}
+                onCheckedChange={(next) => {
+                  if (next) {
+                    handleToggle(feature.key, true);
+                    return;
+                  }
+                  setDisabling(feature.key);
+                }}
                 aria-label={`${enabled ? "Disable" : "Enable"} ${feature.label} for ${churchName}`}
               />
             </div>
           );
         })}
       </CardContent>
+
+      {disablingFeature && (
+        <DisableFeatureDialog
+          key={disablingFeature.key}
+          featureLabel={disablingFeature.label}
+          churchName={churchName}
+          open
+          onOpenChange={(next) => {
+            if (!next) setDisabling(null);
+          }}
+          onConfirm={(reason, note) => {
+            setDisabling(null);
+            handleToggle(disablingFeature.key, false, { reason, note });
+          }}
+        />
+      )}
     </Card>
   );
 }

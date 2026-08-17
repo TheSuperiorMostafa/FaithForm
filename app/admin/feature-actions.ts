@@ -4,6 +4,10 @@ import { revalidatePath } from "next/cache";
 
 import { requireSuperAdmin } from "@/lib/auth/superadmin";
 import { isFeatureKey } from "@/lib/features/catalog";
+import {
+  isDisabledReason,
+  type DisabledReason,
+} from "@/lib/features/disabled-reason";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type FeatureToggleResult = { ok: true } | { ok: false; error: string };
@@ -19,6 +23,7 @@ export async function setChurchFeature(
   churchId: string,
   featureKey: string,
   enabled: boolean,
+  disabled?: { reason: DisabledReason; note?: string | null },
 ): Promise<FeatureToggleResult> {
   const user = await requireSuperAdmin();
 
@@ -27,17 +32,42 @@ export async function setChurchFeature(
     return { ok: false, error: "Unknown feature." };
   }
 
+  if (!enabled && disabled && !isDisabledReason(disabled.reason)) {
+    return { ok: false, error: "Pick a reason for switching this off." };
+  }
+
+  const note = disabled?.note?.trim() ?? "";
+  if (!enabled && disabled?.reason === "custom" && !note) {
+    return { ok: false, error: "Write the message the church should see." };
+  }
+
   const admin = createAdminClient();
-  const { error } = await admin.from("church_features").upsert(
-    {
-      church_id: churchId,
-      feature_key: featureKey,
-      enabled,
-      updated_at: new Date().toISOString(),
-      updated_by: user.id,
-    },
-    { onConflict: "church_id,feature_key" },
-  );
+
+  const row: Record<string, unknown> = {
+    church_id: churchId,
+    feature_key: featureKey,
+    enabled,
+    updated_at: new Date().toISOString(),
+    updated_by: user.id,
+    // Switching a feature back on clears the reason, so the next time it goes
+    // off it cannot inherit a stale explanation.
+    disabled_reason: enabled ? null : (disabled?.reason ?? null),
+    disabled_note: enabled || disabled?.reason !== "custom" ? null : note,
+  };
+
+  let { error } = await admin
+    .from("church_features")
+    .upsert(row, { onConflict: "church_id,feature_key" });
+
+  // Pre-0049 databases hold the switch but not the reason. Keep the toggle
+  // working there rather than blocking it on an unapplied migration.
+  if (error && /disabled_reason|disabled_note/i.test(error.message)) {
+    delete row.disabled_reason;
+    delete row.disabled_note;
+    ({ error } = await admin
+      .from("church_features")
+      .upsert(row, { onConflict: "church_id,feature_key" }));
+  }
 
   if (error) {
     // Reads tolerate a missing table by treating every feature as on, so the

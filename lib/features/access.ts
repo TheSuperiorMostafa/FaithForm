@@ -6,10 +6,17 @@ import {
   isFeatureKey,
   type FeatureKey,
 } from "@/lib/features/catalog";
+import {
+  isDisabledReason,
+  type FeatureNotice,
+} from "@/lib/features/disabled-reason";
 import { createAdminClientOrNull } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export type FeatureFlags = Record<FeatureKey, boolean>;
+
+/** Why each switched-off feature is off. Only holds entries for disabled ones. */
+export type FeatureNotices = Partial<Record<FeatureKey, FeatureNotice>>;
 
 /** Every feature ships enabled; a platform admin opts an account out. */
 export function defaultFeatureFlags(): FeatureFlags {
@@ -30,30 +37,64 @@ export async function getChurchFeatureFlags(
   churchId: string,
   supabase?: SupabaseClient,
 ): Promise<FeatureFlags> {
+  return (await getChurchFeatureState(churchId, supabase)).flags;
+}
+
+/**
+ * Both halves of the account-level switch: whether each feature is on, and for
+ * the ones that are off, why.
+ */
+export async function getChurchFeatureState(
+  churchId: string,
+  supabase?: SupabaseClient,
+): Promise<{ flags: FeatureFlags; notices: FeatureNotices }> {
   const client = supabase ?? createClient();
   const flags = defaultFeatureFlags();
+  const notices: FeatureNotices = {};
 
-  const { data, error } = await client
-    .from("church_features")
-    .select("feature_key, enabled")
-    .eq("church_id", churchId);
+  const withReason = () =>
+    client
+      .from("church_features")
+      .select("feature_key, enabled, disabled_reason, disabled_note")
+      .eq("church_id", churchId);
+
+  let { data, error } = await withReason();
+
+  // Pre-0049 databases have the switch but not the reason behind it.
+  if (error && /disabled_reason|disabled_note/i.test(error.message)) {
+    const legacy = await client
+      .from("church_features")
+      .select("feature_key, enabled")
+      .eq("church_id", churchId);
+    data = legacy.data as typeof data;
+    error = legacy.error;
+  }
 
   if (error) {
     // Pre-0041 environments simply behave as "everything on".
     if (!isMissingFeatureTable(error.message)) {
       console.error("getChurchFeatureFlags:", error.message);
     }
-    return flags;
+    return { flags, notices };
   }
 
   for (const row of data ?? []) {
     const key = row.feature_key as string;
-    if (isFeatureKey(key)) {
-      flags[key] = Boolean(row.enabled);
+    if (!isFeatureKey(key)) continue;
+
+    flags[key] = Boolean(row.enabled);
+
+    if (!flags[key]) {
+      const reason = (row as { disabled_reason?: unknown }).disabled_reason;
+      const note = (row as { disabled_note?: unknown }).disabled_note;
+      notices[key] = {
+        reason: isDisabledReason(reason) ? reason : null,
+        note: typeof note === "string" && note.trim() ? note.trim() : null,
+      };
     }
   }
 
-  return flags;
+  return { flags, notices };
 }
 
 /**
@@ -97,6 +138,8 @@ export type FeatureAccess = {
   auth: ChurchAuth;
   /** Account-level switches set by platform admins. */
   flags: FeatureFlags;
+  /** Why each switched-off feature is off. */
+  notices: FeatureNotices;
   /** Features this specific user can actually open. */
   allowed: FeatureKey[];
 };
@@ -118,9 +161,14 @@ export async function getFeatureAccess(
   const auth = await getChurchAuth(client);
   if (!auth) return null;
 
-  const flags = await getChurchFeatureFlags(auth.churchId, client);
+  const { flags, notices } = await getChurchFeatureState(auth.churchId, client);
 
-  return { auth, flags, allowed: resolveAllowedFeatures(auth, flags) };
+  return {
+    auth,
+    flags,
+    notices,
+    allowed: resolveAllowedFeatures(auth, flags),
+  };
 }
 
 export function canAccessFeature(

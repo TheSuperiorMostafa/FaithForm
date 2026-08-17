@@ -22,7 +22,7 @@ import { ChurchFeaturesPanel } from "@/components/admin/church-features-panel";
 import { ChurchGivingPanel } from "@/components/admin/church-giving-panel";
 import { ChurchWebsitePanel } from "@/components/admin/church-website-panel";
 import { ChurchProfileForm } from "@/components/church-profile/church-profile-form";
-import type { FeatureFlags } from "@/lib/features/access";
+import type { FeatureFlags, FeatureNotices } from "@/lib/features/access";
 import { getFeature, type FeatureKey } from "@/lib/features/catalog";
 import type {
   AdminActivityFilters,
@@ -40,6 +40,7 @@ type ChurchDetailTabsProps = {
   activity: AdminActivityResult;
   activityFilters: AdminActivityFilters & { range: NonNullable<AdminActivityFilters["range"]> };
   featureFlags: FeatureFlags;
+  featureNotices: FeatureNotices;
   /** church_users.id → granted features, for the Users tab. */
   featurePermissionsByMemberId: Record<string, FeatureKey[]>;
   /** Church identity, services, staff and AI knowledge — we own this, not the church. */
@@ -86,6 +87,7 @@ export function ChurchDetailTabs({
   activity,
   activityFilters,
   featureFlags,
+  featureNotices,
   featurePermissionsByMemberId,
   profileForm,
   domains,
@@ -222,6 +224,7 @@ export function ChurchDetailTabs({
           churchId={detail.church.id}
           churchName={detail.church.name}
           flags={featureFlags}
+          notices={featureNotices}
         />
       </TabsContent>
 

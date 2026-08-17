@@ -81,6 +81,11 @@ const CHECKS = [
     "announcement_email_queue",
     "pnpm db:email-queue",
   ],
+  [
+    "0049_feature_disabled_reason",
+    "church_features.disabled_reason",
+    "pnpm db:feature-reason",
+  ],
 ];
 
 const databaseUrl = process.env.DATABASE_URL ?? process.env.SUPABASE_DB_URL;

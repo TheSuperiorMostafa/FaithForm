@@ -26,6 +26,7 @@
     "db:stream-production": "node scripts/apply-stream-production-migration.mjs",
     "db:stream-scheduling": "node scripts/apply-stream-scheduling-migration.mjs",
     "db:youtube-live": "node scripts/apply-youtube-live-integration-migration.mjs",
+    "db:feature-reason": "node scripts/apply-feature-reason-migration.mjs",
     "db:team-access": "node scripts/apply-team-access-migration.mjs",
     "db:attendance-follow-up": "node scripts/apply-attendance-follow-up-migration.mjs",
     "db:email-queue": "node scripts/apply-announcement-email-queue-migration.mjs",

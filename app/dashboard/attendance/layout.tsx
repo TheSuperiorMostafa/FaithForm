@@ -43,23 +43,34 @@ export default async function AttendanceLayout({
     .map((key) => TAB_FOR_FEATURE[key]);
 
   if (tabs.length === 0) {
+    // Same shape as FeatureGate's locked state — a member who hits one of
+    // these should not be able to tell which layer turned them away.
     return (
-      <div className="mx-auto flex w-full max-w-md flex-col items-center gap-4 rounded-2xl border border-dashed border-border bg-card px-6 py-14 text-center shadow-card">
-        <span className="flex size-14 items-center justify-center rounded-full bg-accent/10 text-accent">
-          <ShieldOff className="size-7" strokeWidth={1.75} aria-hidden />
-        </span>
-        <div className="flex flex-col gap-1.5">
-          <h2 className="font-heading text-xl font-bold text-foreground">
-            You don&apos;t have access to Attendance
-          </h2>
-          <p className="text-sm leading-relaxed text-muted-foreground">
-            A church admin can grant you Attendance or Follow-up access from
-            Settings → Team.
-          </p>
+      <div className="mx-auto flex w-full max-w-lg flex-col items-center px-4 py-10 text-center sm:py-16">
+        <div className="relative mb-6 flex items-center justify-center">
+          <span
+            aria-hidden
+            className="absolute size-32 rounded-full bg-gradient-to-b from-accent/25 to-accent/0 blur-xl"
+          />
+          <span className="relative flex size-16 items-center justify-center rounded-2xl border border-border bg-card shadow-card">
+            <ShieldOff className="size-7 text-accent" strokeWidth={1.5} aria-hidden />
+          </span>
         </div>
-        <Link href="/dashboard">
-          <Button variant="outline">Back to dashboard</Button>
-        </Link>
+        <span className="mb-3 rounded-full bg-muted px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          No access
+        </span>
+        <h2 className="font-heading text-2xl font-bold tracking-tight text-foreground sm:text-[28px]">
+          You don&apos;t have access to Attendance
+        </h2>
+        <p className="mt-2.5 max-w-md text-[15px] leading-relaxed text-muted-foreground">
+          A church admin can grant you Attendance or Follow-up access from
+          Settings → Team.
+        </p>
+        <div className="mt-7">
+          <Link href="/dashboard">
+            <Button>Back to dashboard</Button>
+          </Link>
+        </div>
       </div>
     );
   }
