@@ -17,12 +17,19 @@
     },
     "app/api/announcements/weekly-draft/route.ts": {
       "maxDuration": 60
+    },
+    "app/api/integrations/keep-alive/route.ts": {
+      "maxDuration": 300
     }
   },
   "crons": [
     {
       "path": "/api/announcements/weekly-draft",
       "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/integrations/keep-alive",
+      "schedule": "0 7 * * *"
     }
   ]
 }
