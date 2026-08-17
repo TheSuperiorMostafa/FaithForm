@@ -6,7 +6,8 @@ import { SermonEditor } from "@/components/sermon-builder/sermon-editor";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentChurchId } from "@/lib/queries/dashboard";
 import { getSlideThemeById } from "@/lib/queries/slide-themes";
-import { getSermon } from "@/lib/queries/sermons";
+import { getLatestAsset, getSermon } from "@/lib/queries/sermons";
+import type { DiscussionQuestion } from "@/types/sermon";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,13 @@ export default async function SermonEditorPage({
   const isSimple = (sermon.kind ?? "advanced") === "simple";
   const theme = isSimple ? await getSlideThemeById(sermon.theme_id) : null;
 
+  const questionsAsset = isSimple
+    ? await getLatestAsset(sermon.id, "discussion_questions")
+    : null;
+  const questions =
+    (questionsAsset?.payload as { questions?: DiscussionQuestion[] } | null)
+      ?.questions ?? [];
+
   return (
     <div className="flex flex-col gap-4">
       <Link
@@ -40,7 +48,11 @@ export default async function SermonEditorPage({
         Back to sermons
       </Link>
       {isSimple ? (
-        <SimpleSermonDetail sermon={sermon} theme={theme} />
+        <SimpleSermonDetail
+          sermon={sermon}
+          theme={theme}
+          questions={questions}
+        />
       ) : (
         <SermonEditor sermon={sermon} />
       )}

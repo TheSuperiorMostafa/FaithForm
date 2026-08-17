@@ -1,7 +1,5 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { SimpleSermonBuilder } from "@/components/sermon-builder/simple-sermon-builder";
-import { SermonWizard } from "@/components/sermon-builder/sermon-wizard";
 import {
   getCuratedTranslations,
   getDefaultTranslationId,
@@ -31,44 +29,25 @@ export default async function NewSermonPage({ searchParams }: Props) {
   if (!churchId) redirect("/dashboard");
 
   const settings = await getChurchAISettings(churchId);
-  const mode = settings?.sermon_builder_mode ?? "simple";
 
-  if (mode === "simple") {
-    const translationOptions = await getCuratedTranslations();
-    const defaultTranslation = await getDefaultTranslationId(
-      settings?.default_translation,
-    );
-    return (
-      <div className="flex flex-col gap-4">
-        <h1 className="border-l-4 border-accent pl-3 font-heading text-[26px] font-bold">
-          New slide deck
-        </h1>
-        <SimpleSermonBuilder
-          translationOptions={translationOptions}
-          defaultTranslation={defaultTranslation}
-        />
-      </div>
-    );
-  }
+  // One flow for everyone: build the deck, then "Create lesson" on the deck
+  // page adds the outline and discussion questions.
+  const translationOptions = await getCuratedTranslations();
+  const defaultTranslation = await getDefaultTranslationId(
+    settings?.default_translation,
+  );
 
   return (
     <div className="flex flex-col gap-4">
       <h1 className="border-l-4 border-accent pl-3 font-heading text-[26px] font-bold">
         New sermon
       </h1>
-      <p className="text-sm text-muted-foreground">
-        Using <strong>Advanced</strong> mode —{" "}
-        <Link
-          href="/dashboard/settings"
-          className="text-primary underline-offset-4 hover:text-accent hover:underline"
-        >
-          switch to Simple in Settings
-        </Link>
-      </p>
-      <SermonWizard
-        seriesId={searchParams.series}
-        initialTopic={searchParams.topic ?? ""}
-        initialScripture={searchParams.scripture ?? ""}
+      <SimpleSermonBuilder
+        translationOptions={translationOptions}
+        defaultTranslation={defaultTranslation}
+        initial={{
+          title: searchParams.topic,
+        }}
       />
     </div>
   );

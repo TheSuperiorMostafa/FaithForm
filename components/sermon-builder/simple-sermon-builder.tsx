@@ -74,6 +74,19 @@ function todayLocal(): string {
   return new Date().toLocaleDateString("en-CA");
 }
 
+/** Keeps a typed number inside [min, max]; "" while the field is empty. */
+function clampNumber(
+  raw: string,
+  min: number,
+  max: number | undefined,
+): number | "" {
+  if (raw === "") return "";
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return "";
+  const floored = Math.max(min, Math.floor(n));
+  return max ? Math.min(floored, max) : floored;
+}
+
 function passageKey(p: {
   book: string;
   chapter: number;
@@ -124,7 +137,10 @@ export function SimpleSermonBuilder({
       : [],
   );
   const [maxVerses, setMaxVerses] = useState(0);
-  const [previewVerses, setPreviewVerses] = useState<RenderedVerse[]>([]);
+  // Whole chapter, fetched once per book/chapter. Verse start/end then slice
+  // locally so changing a verse number repaints instantly instead of refetching.
+  const [chapterVerses, setChapterVerses] = useState<RenderedVerse[]>([]);
+  const [chapterBookName, setChapterBookName] = useState("");
   const [previewRef, setPreviewRef] = useState("");
   const [previewTranslation, setPreviewTranslation] = useState("");
   const [chapterLoading, setChapterLoading] = useState(false);
@@ -210,7 +226,8 @@ export function SimpleSermonBuilder({
 
   useEffect(() => {
     if (!translation || !bookId || !chapter) {
-      setPreviewVerses([]);
+      setChapterVerses([]);
+      setChapterBookName("");
       setMaxVerses(0);
       return;
     }
@@ -222,26 +239,17 @@ export function SimpleSermonBuilder({
     fetchChapterAction(translation, bookId, Number(chapter))
       .then((data) => {
         if (cancelled) return;
-        const all = extractVersesFromChapter(data);
+        setChapterVerses(extractVersesFromChapter(data));
         setMaxVerses(data.numberOfVerses);
+        setChapterBookName(data.book.commonName || data.book.name);
         setPreviewTranslation(
           data.translation.shortName ?? data.translation.name,
-        );
-
-        const start = verseStart === "" ? 1 : Number(verseStart);
-        const end =
-          verseEnd === "" ? (verseStart === "" ? all.length : start) : Number(verseEnd);
-        const sliced = sliceVerses(all, start, end);
-        setPreviewVerses(sliced);
-
-        const bookName = data.book.commonName || data.book.name;
-        setPreviewRef(
-          buildScriptureRef(bookName, Number(chapter), start, end || start),
         );
       })
       .catch((e) => {
         if (!cancelled) {
-          setPreviewVerses([]);
+          setChapterVerses([]);
+          setChapterBookName("");
           setMaxVerses(0);
           setChapterError(
             e instanceof Error ? e.message : "Could not load chapter preview",
@@ -255,7 +263,38 @@ export function SimpleSermonBuilder({
     return () => {
       cancelled = true;
     };
-  }, [translation, bookId, chapter, verseStart, verseEnd]);
+  }, [translation, bookId, chapter]);
+
+  // Slicing is local, so typing a verse number updates the preview immediately.
+  const previewVerses = useMemo(() => {
+    if (chapterVerses.length === 0) return [];
+    const start = verseStart === "" ? 1 : Number(verseStart);
+    const end =
+      verseEnd === ""
+        ? verseStart === ""
+          ? chapterVerses.length
+          : start
+        : Number(verseEnd);
+    return sliceVerses(chapterVerses, start, end);
+  }, [chapterVerses, verseStart, verseEnd]);
+
+  // Feeds theme suggestions — they key off what the verses actually say.
+  const previewText = useMemo(
+    () => previewVerses.map((v) => v.plainText).join(" ").trim(),
+    [previewVerses],
+  );
+
+  useEffect(() => {
+    if (!chapterBookName || !chapter) {
+      setPreviewRef("");
+      return;
+    }
+    const start = verseStart === "" ? 1 : Number(verseStart);
+    const end = verseEnd === "" ? start : Number(verseEnd);
+    setPreviewRef(
+      buildScriptureRef(chapterBookName, Number(chapter), start, end || start),
+    );
+  }, [chapterBookName, chapter, verseStart, verseEnd]);
 
   const buildDraftPassage = useCallback((): SimplePassageInput | null => {
     if (!selectedBook || !chapter) return null;
@@ -308,7 +347,7 @@ export function SimpleSermonBuilder({
   );
 
   const missingFields: string[] = [];
-  if (!title.trim()) missingFields.push("a name");
+  if (!title.trim()) missingFields.push("a sermon title");
   if (!sermonDate) missingFields.push("a sermon date");
   if (totalPassageCount < 1) missingFields.push("at least one passage");
 
@@ -424,7 +463,7 @@ export function SimpleSermonBuilder({
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <div className="space-y-2">
-            <Label htmlFor="deck-title">Sermon / deck name</Label>
+            <Label htmlFor="deck-title">Sermon Title</Label>
             <Input
               id="deck-title"
               value={title}
@@ -511,14 +550,24 @@ export function SimpleSermonBuilder({
                 max={selectedBook?.numberOfChapters}
                 value={chapter}
                 onChange={(e) => {
-                  const n = e.target.value === "" ? "" : Number(e.target.value);
-                  setChapter(n);
+                  setChapter(
+                    clampNumber(
+                      e.target.value,
+                      1,
+                      selectedBook?.numberOfChapters,
+                    ),
+                  );
                   setVerseStart("");
                   setVerseEnd("");
                 }}
                 disabled={!bookId}
                 placeholder="—"
               />
+              {selectedBook && (
+                <p className="text-xs text-muted-foreground">
+                  1–{selectedBook.numberOfChapters}
+                </p>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -529,12 +578,19 @@ export function SimpleSermonBuilder({
                 min={1}
                 max={maxVerses || undefined}
                 value={verseStart}
-                onChange={(e) =>
-                  setVerseStart(
-                    e.target.value === "" ? "" : Number(e.target.value),
-                  )
-                }
-                disabled={!chapter}
+                onChange={(e) => {
+                  const next = clampNumber(
+                    e.target.value,
+                    1,
+                    maxVerses || undefined,
+                  );
+                  setVerseStart(next);
+                  // Keep the range coherent rather than silently inverting it.
+                  if (next !== "" && verseEnd !== "" && Number(verseEnd) < next) {
+                    setVerseEnd(next);
+                  }
+                }}
+                disabled={!chapter || maxVerses === 0}
                 placeholder="1"
               />
             </div>
@@ -549,13 +605,30 @@ export function SimpleSermonBuilder({
                 value={verseEnd}
                 onChange={(e) =>
                   setVerseEnd(
-                    e.target.value === "" ? "" : Number(e.target.value),
+                    clampNumber(
+                      e.target.value,
+                      Number(verseStart) || 1,
+                      maxVerses || undefined,
+                    ),
                   )
                 }
-                disabled={!chapter}
+                disabled={!chapter || maxVerses === 0}
                 placeholder="same"
               />
             </div>
+          </div>
+
+          <div className="min-h-[1rem]">
+            {chapterLoading ? (
+              <p className="text-xs text-muted-foreground">
+                Loading chapter…
+              </p>
+            ) : maxVerses > 0 ? (
+              <p className="text-xs text-muted-foreground">
+                This chapter has {maxVerses} verses — pick any verse from 1 to{" "}
+                {maxVerses}.
+              </p>
+            ) : null}
           </div>
 
           {passages.length > 0 && (
@@ -604,7 +677,6 @@ export function SimpleSermonBuilder({
             </p>
             <Button
               type="button"
-              variant="outline"
               size="sm"
               disabled={!canAddPassage}
               onClick={handleAddPassage}
@@ -643,6 +715,7 @@ export function SimpleSermonBuilder({
             context={{
               title: title.trim() || undefined,
               scripture: previewRef || undefined,
+              scriptureText: previewText || undefined,
             }}
           />
         </CardContent>

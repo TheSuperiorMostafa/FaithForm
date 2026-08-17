@@ -225,3 +225,90 @@ export function scoreThemesByTagOverlap(
 
   return scored.slice(0, limit).map((s) => s.id);
 }
+
+/**
+ * Imagery words that show up in scripture, mapped to the theme vocabulary the
+ * catalog is tagged with. Used as the deterministic fallback (and pre-filter)
+ * for scripture-driven theme suggestions when the AI call is unavailable.
+ */
+const SCRIPTURE_IMAGERY: Record<string, string[]> = {
+  water: ["water", "sea", "ocean", "river", "wave", "baptism", "blue"],
+  light: ["light", "dawn", "sunrise", "morning", "bright", "glow"],
+  dark: ["night", "darkness", "evening", "shadow", "midnight"],
+  fire: ["fire", "flame", "burning", "coal", "furnace"],
+  mountain: ["mountain", "hill", "rock", "stone", "cliff"],
+  desert: ["desert", "wilderness", "sand", "dry", "barren"],
+  harvest: ["harvest", "field", "grain", "wheat", "seed", "vineyard", "fruit"],
+  shepherd: ["shepherd", "sheep", "flock", "lamb", "pasture"],
+  storm: ["storm", "wind", "tempest", "thunder", "rain", "flood"],
+  cross: ["cross", "crucified", "calvary", "blood", "sacrifice"],
+  bread: ["bread", "feast", "table", "wine", "cup", "supper"],
+  sky: ["heaven", "sky", "cloud", "star", "moon", "sun"],
+  nature: ["tree", "garden", "forest", "leaf", "branch", "vine", "flower"],
+  royal: ["king", "throne", "crown", "kingdom", "reign", "majesty"],
+  peace: ["peace", "rest", "still", "quiet", "comfort"],
+  celebration: ["joy", "rejoice", "praise", "sing", "glad", "celebration"],
+};
+
+/**
+ * Ranks themes by how well their tags match the imagery actually present in a
+ * passage's text.
+ */
+export function scoreThemesByScriptureText(
+  scriptureText: string,
+  candidates: SlideTheme[],
+  limit = 6,
+): string[] {
+  const words = Array.from(
+    new Set(
+      scriptureText
+        .toLowerCase()
+        .replace(/[^a-z\s]/g, " ")
+        .split(/\s+/)
+        .filter(Boolean),
+    ),
+  );
+  if (words.length === 0) return [];
+
+  // Concept -> how strongly the passage evokes it.
+  const conceptWeight: Array<[string, number]> = [];
+  for (const [concept, triggers] of Object.entries(SCRIPTURE_IMAGERY)) {
+    let hits = 0;
+    for (const trigger of triggers) {
+      // Match stems too, so "waters"/"watered" still count as "water".
+      if (words.some((w) => w === trigger || w.startsWith(trigger))) {
+        hits += 1;
+      }
+    }
+    if (hits > 0) conceptWeight.push([concept, hits]);
+  }
+  if (conceptWeight.length === 0) return [];
+
+  const scored = candidates
+    .map((theme) => {
+      const tags = new Set(
+        [
+          ...theme.tags,
+          ...theme.seasonalTags,
+          ...theme.symbolTags,
+          ...theme.visualStyle,
+          theme.category,
+          theme.name,
+        ].map((t) => t.toLowerCase()),
+      );
+
+      let score = 0;
+      for (const [concept, weight] of conceptWeight) {
+        if (tags.has(concept)) score += weight * 3;
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+        for (const trigger of SCRIPTURE_IMAGERY[concept]!) {
+          if (tags.has(trigger)) score += weight;
+        }
+      }
+      return { id: theme.id, score };
+    })
+    .filter((entry) => entry.score > 0)
+    .sort((a, b) => b.score - a.score);
+
+  return scored.slice(0, limit).map((s) => s.id);
+}

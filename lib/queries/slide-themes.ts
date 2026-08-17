@@ -11,6 +11,7 @@ export {
   searchSlideThemes,
   getThemeFilterOptions,
   scoreThemesByTagOverlap,
+  scoreThemesByScriptureText,
 } from "@/lib/sermon-builder/slide-theme-shared";
 
 let cachedThemes: SlideTheme[] | null = null;

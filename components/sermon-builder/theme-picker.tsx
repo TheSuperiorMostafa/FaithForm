@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, RefreshCw, Search, Sparkles } from "lucide-react";
 import { ThemePreview } from "@/components/sermon-builder/theme-preview";
 import { Button } from "@/components/ui/button";
@@ -18,6 +18,8 @@ type ThemePickerProps = {
   context?: {
     title?: string;
     scripture?: string;
+    /** Literal text of the selected verses — drives the suggestions. */
+    scriptureText?: string;
   };
 };
 
@@ -80,7 +82,10 @@ export function ThemePicker({ selectedId, onSelect, context }: ThemePickerProps)
   const [seasonal, setSeasonal] = useState("all");
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [suggestLoading, setSuggestLoading] = useState(false);
-  const [hasSelectedOnce, setHasSelectedOnce] = useState(false);
+
+  const scriptureText = context?.scriptureText?.trim() ?? "";
+  const contextRef = useRef(context);
+  contextRef.current = context;
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQuery(query), 200);
@@ -155,17 +160,13 @@ export function ThemePicker({ selectedId, onSelect, context }: ThemePickerProps)
     [suggestions, themes],
   );
 
-  async function fetchSuggestions(themeId: string, refresh = false) {
+  const fetchSuggestions = useCallback(async (refresh = false) => {
     setSuggestLoading(true);
     try {
       const res = await fetch("/api/sermon/themes/suggest", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          selectedThemeId: themeId,
-          context,
-          refresh,
-        }),
+        body: JSON.stringify({ context: contextRef.current, refresh }),
       });
       const data = await res.json();
       if (res.ok && Array.isArray(data.suggestions)) {
@@ -176,14 +177,21 @@ export function ThemePicker({ selectedId, onSelect, context }: ThemePickerProps)
     } finally {
       setSuggestLoading(false);
     }
-  }
+  }, []);
+
+  // Re-suggest whenever the chosen passage changes. Debounced so scrolling
+  // through verse numbers doesn't fire a request per keystroke.
+  useEffect(() => {
+    if (!scriptureText) {
+      setSuggestions([]);
+      return;
+    }
+    const timer = setTimeout(() => void fetchSuggestions(), 600);
+    return () => clearTimeout(timer);
+  }, [scriptureText, fetchSuggestions]);
 
   function handleSelect(id: string) {
     onSelect(id);
-    if (!hasSelectedOnce) {
-      setHasSelectedOnce(true);
-    }
-    void fetchSuggestions(id);
   }
 
   if (loading) {
@@ -234,31 +242,39 @@ export function ThemePicker({ selectedId, onSelect, context }: ThemePickerProps)
         />
       </div>
 
-      {hasSelectedOnce && selectedId && (
-        <div className="space-y-2 rounded-xl border border-border bg-muted/30 p-3">
+      {scriptureText && (
+        <div className="space-y-2 rounded-xl border border-accent/40 bg-accent/5 p-3">
           <div className="flex items-center justify-between gap-2">
-            <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              <Sparkles className="size-3.5" />
-              Suggested for you
-            </p>
+            <div>
+              <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                <Sparkles className="size-3.5 text-accent" />
+                Suggested for you
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Matched to the imagery in
+                {context?.scripture ? ` ${context.scripture}` : " your passage"}.
+              </p>
+            </div>
             <Button
               type="button"
               variant="ghost"
               size="sm"
               className="h-7 text-xs"
               disabled={suggestLoading}
-              onClick={() => fetchSuggestions(selectedId, true)}
+              onClick={() => fetchSuggestions(true)}
             >
               {suggestLoading ? (
                 <Loader2 className="size-3 animate-spin" />
               ) : (
                 <RefreshCw className="size-3" />
               )}
-              More like this
+              Refresh
             </Button>
           </div>
           {suggestLoading && suggestedThemes.length === 0 ? (
-            <p className="text-xs text-muted-foreground">Finding similar themes…</p>
+            <p className="text-xs text-muted-foreground">
+              Reading your passage…
+            </p>
           ) : suggestedThemes.length > 0 ? (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
               {suggestedThemes.map((theme) => (
@@ -273,7 +289,8 @@ export function ThemePicker({ selectedId, onSelect, context }: ThemePickerProps)
             </div>
           ) : (
             <p className="text-xs text-muted-foreground">
-              Select a theme to see suggestions.
+              No standout imagery in this passage — browse the full catalog
+              below.
             </p>
           )}
         </div>

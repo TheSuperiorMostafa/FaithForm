@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { logActivity } from "@/lib/activity/log";
 import { requireChurchAuth } from "@/lib/auth/church";
-import { verifySermonAccess } from "@/lib/queries/sermons";
+import { getLatestAsset, verifySermonAccess } from "@/lib/queries/sermons";
 import { renderSermonPdf } from "@/lib/sermon/export-pdf";
 import { fetchPassages } from "@/lib/scripture/esv";
 import { createClient } from "@/lib/supabase/server";
 import { featureAccessDenied } from "@/lib/features/guard";
+import type { DiscussionQuestion } from "@/types/sermon";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -30,7 +31,16 @@ export async function GET(
         ? await fetchPassages(sermon.scripture_refs).catch(() => [])
         : [];
 
-    const buffer = await renderSermonPdf(sermon, passages);
+    // Discussion questions ship in the same PDF so a lesson is one download.
+    const questionsAsset = await getLatestAsset(
+      params.id,
+      "discussion_questions",
+    );
+    const questions =
+      (questionsAsset?.payload as { questions?: DiscussionQuestion[] } | null)
+        ?.questions ?? [];
+
+    const buffer = await renderSermonPdf(sermon, passages, questions);
     const filename = `${sermon.title.replace(/[^a-z0-9]+/gi, "-").toLowerCase() || "sermon"}.pdf`;
 
     await logActivity({

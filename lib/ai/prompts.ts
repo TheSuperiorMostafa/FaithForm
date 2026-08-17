@@ -5,8 +5,6 @@ function contextBlock(ctx: SermonContext): string {
   return [
     `Topic: ${ctx.topic}`,
     `Scripture: ${ctx.scripture_refs.join(", ") || "Not specified"}`,
-    `Audience: ${ctx.audience}`,
-    `Duration: ${ctx.duration_min} minutes`,
     ctx.church_summary ? `Church: ${ctx.church_summary}` : null,
     ctx.preaching_style ? `Preaching style: ${ctx.preaching_style}` : null,
     ctx.denomination ? `Denomination/tradition: ${ctx.denomination}` : null,
@@ -65,7 +63,7 @@ Return a single JSON object with these keys only:
 - application (string, 2 paragraphs)
 - prayer (string, 1 paragraph)
 
-Write in a warm, pastoral voice for spoken delivery (~${ctx.duration_min} minutes preached).
+Write in a warm, pastoral voice for spoken delivery.
 Do NOT wrap JSON in markdown code fences. Output raw JSON only.
 
 ${contextBlock(ctx)}
@@ -153,10 +151,21 @@ ${ctx?.preaching_style ? `Style: ${ctx.preaching_style}` : ""}`;
 }
 
 export function themeSuggestSystemPrompt(): string {
-  return `You recommend visually and thematically similar PowerPoint slide background themes for church sermon decks.
-Given one selected theme and a catalog of available themes (id, name, category, tags), return exactly 6 theme IDs ranked by similarity.
-Prefer matching category, seasonal context, visual style, and symbol tags.
-Do not include the selected theme ID in results.
+  return `You recommend PowerPoint slide background themes for church sermon decks.
+Given a catalog of available themes (id, name, category, tags), return exactly 6 theme IDs ranked best-first.
+Output valid JSON only.`;
+}
+
+/**
+ * Themes are suggested from what the chosen verses actually say — a passage
+ * about water should surface water imagery — not from whichever theme the user
+ * happens to have highlighted.
+ */
+export function themeSuggestFromScripturePrompt(): string {
+  return `You recommend PowerPoint slide background themes for church sermon decks.
+You are given the literal text of the scripture passage the preacher selected, plus a catalog of available themes (id, name, category, tags).
+Identify the concrete imagery, setting, mood, and symbols present in the passage text — water, light, bread, desert, storm, harvest, shepherd, cross, and so on — and return exactly 6 theme IDs whose imagery and tags best match that passage.
+Weight literal imagery in the passage above abstract topical association.
 Output valid JSON only.`;
 }
 

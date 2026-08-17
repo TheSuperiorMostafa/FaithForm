@@ -50,8 +50,6 @@ export default async function SermonBuilderPage({ searchParams }: PageProps) {
 
   const currentPage = Math.min(page, totalPages);
 
-  const isSimpleMode = (settings?.sermon_builder_mode ?? "simple") === "simple";
-
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-5">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -60,9 +58,8 @@ export default async function SermonBuilderPage({ searchParams }: PageProps) {
             Sermon Builder
           </h1>
           <p className="text-sm text-muted-foreground">
-            {isSimpleMode
-              ? "Scripture slide decks with themed PowerPoint exports."
-              : "Outlines, drafts, discussion guides, social copy, and exports."}
+            Scripture slide decks with themed PowerPoint exports — then turn any
+            deck into a lesson.
           </p>
         </div>
         <div className="flex gap-2">
@@ -80,7 +77,7 @@ export default async function SermonBuilderPage({ searchParams }: PageProps) {
             render={<Link href="/dashboard/sermon-builder/new" />}
           >
             <Plus className="size-4" strokeWidth={1.75} />
-            {isSimpleMode ? "New slide deck" : "New sermon"}
+            New sermon
           </Button>
         </div>
       </div>

@@ -36,58 +36,19 @@ export function ChurchAISettingsPanel({
   );
 
   const provider = settings?.aiProvider === "openai" ? "openai" : "anthropic";
-  const mode = settings?.sermonBuilderMode === "advanced" ? "advanced" : "simple";
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>AI provider</CardTitle>
         <p className="mt-1 text-sm text-muted-foreground">
-          Model and Sermon Builder mode for {churchName}. Churches don&apos;t see
-          these — we tune them here.
+          Model settings for {churchName}. Churches don&apos;t see these — we
+          tune them here.
         </p>
       </CardHeader>
       <CardContent>
         <form action={formAction} className="flex flex-col gap-4">
           <input type="hidden" name="church_id" value={churchId} />
-
-          <fieldset className="grid gap-3 sm:grid-cols-2">
-            <legend className="col-span-full text-sm font-semibold">
-              Sermon Builder mode
-            </legend>
-            <label className="flex cursor-pointer items-start gap-3 rounded-[10px] border border-border bg-background/45 p-3 transition-colors has-[:checked]:border-accent has-[:checked]:bg-accent/10">
-              <input
-                type="radio"
-                name="sermon_builder_mode"
-                value="simple"
-                defaultChecked={mode === "simple"}
-                className="size-4"
-              />
-              <div>
-                <p className="font-semibold">Simple (recommended)</p>
-                <p className="text-xs text-muted-foreground">
-                  Pick verses, choose a theme, download a polished slide deck. No
-                  AI.
-                </p>
-              </div>
-            </label>
-            <label className="flex cursor-pointer items-start gap-3 rounded-[10px] border border-border bg-background/45 p-3 transition-colors has-[:checked]:border-accent has-[:checked]:bg-accent/10">
-              <input
-                type="radio"
-                name="sermon_builder_mode"
-                value="advanced"
-                defaultChecked={mode === "advanced"}
-                className="size-4"
-              />
-              <div>
-                <p className="font-semibold">Advanced (AI)</p>
-                <p className="text-xs text-muted-foreground">
-                  Generate outlines, manuscripts, discussion guides and social
-                  copy.
-                </p>
-              </div>
-            </label>
-          </fieldset>
 
           <fieldset className="grid gap-3 sm:grid-cols-2">
             <legend className="col-span-full text-sm font-semibold">

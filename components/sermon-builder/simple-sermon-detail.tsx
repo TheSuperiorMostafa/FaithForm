@@ -2,20 +2,30 @@
 
 import Link from "next/link";
 import { Download, Pencil, Presentation } from "lucide-react";
+import { CreateLessonPanel } from "@/components/sermon-builder/create-lesson-panel";
 import { DeleteDraftButton } from "@/components/sermon-builder/delete-draft-button";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { SlideTheme } from "@/lib/sermon-builder/slide-theme-shared";
 import { getTheme } from "@/lib/sermon-builder/themes";
-import type { Sermon } from "@/types/sermon";
+import type {
+  DiscussionQuestion,
+  Sermon,
+  SermonOutline,
+} from "@/types/sermon";
 
 type SimpleSermonDetailProps = {
   sermon: Sermon;
   theme?: SlideTheme | null;
+  questions?: DiscussionQuestion[];
 };
 
-export function SimpleSermonDetail({ sermon, theme: themeProp }: SimpleSermonDetailProps) {
+export function SimpleSermonDetail({
+  sermon,
+  theme: themeProp,
+  questions = [],
+}: SimpleSermonDetailProps) {
   const theme = themeProp ?? getTheme(sermon.theme_id);
   const refsSummary =
     sermon.scripture_refs.length > 0
@@ -152,19 +162,20 @@ export function SimpleSermonDetail({ sermon, theme: themeProp }: SimpleSermonDet
         </CardContent>
       </Card>
 
+      <CreateLessonPanel
+        sermonId={sermon.id}
+        sermonTitle={sermon.title}
+        scriptureRefs={sermon.scripture_refs}
+        outline={(sermon.outline as SermonOutline | null) ?? null}
+        questions={questions}
+      />
+
       <p className="text-sm text-muted-foreground">
         <Link
           href="/dashboard/sermon-builder/new"
           className="text-primary underline-offset-4 hover:text-accent hover:underline"
         >
           Create another slide deck
-        </Link>
-        {" · "}
-        <Link
-          href="/dashboard/settings"
-          className="text-primary underline-offset-4 hover:text-accent hover:underline"
-        >
-          Switch to Advanced mode in Settings
         </Link>
       </p>
     </div>

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { requireSuperAdmin } from "@/lib/auth/superadmin";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { AIProvider, SermonBuilderMode } from "@/types/sermon";
+import type { AIProvider } from "@/types/sermon";
 
 export type ChurchSettingsFormState = {
   ok: boolean;
@@ -30,19 +30,11 @@ export async function updateChurchAISettings(
     return { ok: false, error: "Invalid provider." };
   }
 
-  const sermon_builder_mode = formData
-    .get("sermon_builder_mode")
-    ?.toString() as SermonBuilderMode;
-  if (sermon_builder_mode !== "simple" && sermon_builder_mode !== "advanced") {
-    return { ok: false, error: "Invalid sermon builder mode." };
-  }
-
   const admin = createAdminClient();
   const { error } = await admin.from("church_settings").upsert(
     {
       church_id: churchId,
       ai_provider,
-      sermon_builder_mode,
       preaching_style: formData.get("preaching_style")?.toString() || null,
       ai_model_override:
         formData.get("ai_model_override")?.toString().trim() || null,

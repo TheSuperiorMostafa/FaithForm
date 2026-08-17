@@ -31,6 +31,7 @@ export async function POST(request: Request) {
       title,
       series_id,
       sermonId,
+      keep_title = false,
     } = body as {
       topic: string;
       scripture_refs?: string[];
@@ -40,6 +41,8 @@ export async function POST(request: Request) {
       title?: string;
       series_id?: string;
       sermonId?: string;
+      /** Lessons built on an existing deck keep the title the pastor typed. */
+      keep_title?: boolean;
     };
 
     const cleanedRefs = scripture_refs.filter(Boolean);
@@ -105,7 +108,7 @@ export async function POST(request: Request) {
     });
 
     sermon = await updateSermon(sermon.id, {
-      title: object.title,
+      title: keep_title ? undefined : object.title,
       outline: object,
       model_used: modelUsed,
     });
