@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "db:check": "node scripts/check-migrations.mjs",
     "check:features": "node scripts/check-feature-guards.mjs",
     "db:sermon": "node scripts/apply-sermon-migration.mjs",
     "db:stripe": "node scripts/apply-stripe-migration.mjs",

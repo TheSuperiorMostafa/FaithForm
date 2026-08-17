@@ -40,6 +40,17 @@ export async function setChurchFeature(
   );
 
   if (error) {
+    // Reads tolerate a missing table by treating every feature as on, so the
+    // absence of migration 0041 stays invisible until someone tries to switch
+    // one off. Say which migration, rather than passing on PostgREST's
+    // "schema cache" wording, which sounds like a caching blip.
+    if (/church_features/i.test(error.message)) {
+      return {
+        ok: false,
+        error:
+          "Feature flags aren't set up in this database yet — migration 0041 hasn't been applied. Run `pnpm db:team-access`.",
+      };
+    }
     return { ok: false, error: error.message };
   }
 
