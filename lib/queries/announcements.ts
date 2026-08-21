@@ -256,6 +256,47 @@ export function formatDateTimeRange(
   return `${startStr} – ${endStr}`;
 }
 
+function withOrdinal(day: number): string {
+  const teens = day % 100;
+  if (teens >= 11 && teens <= 13) return `${day}th`;
+  if (day % 10 === 1) return `${day}st`;
+  if (day % 10 === 2) return `${day}nd`;
+  if (day % 10 === 3) return `${day}rd`;
+  return `${day}th`;
+}
+
+/**
+ * When an event starts, written the way an announcement reads out loud:
+ * "August 4th 4:00PM".
+ *
+ * No end time. A church calendar blocks out an hour because the software
+ * insists on one, not because anybody plans to leave then, so "4:00 PM – 5:00
+ * PM" told the congregation something nobody meant. The locale is pinned
+ * rather than left to the host: this renders on a cron worker, and the ordinal
+ * is the point.
+ */
+export function formatEventStart(
+  startAt: string,
+  timeZone?: string | null,
+): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+    ...(timeZone ? { timeZone } : {}),
+  }).formatToParts(new Date(startAt));
+
+  const value = (type: Intl.DateTimeFormatPartTypes) =>
+    parts.find((part) => part.type === type)?.value ?? "";
+
+  const day = Number(value("day"));
+  const meridiem = value("dayPeriod").replace(/\s| /g, "").toUpperCase();
+
+  return `${value("month")} ${withOrdinal(day)} ${value("hour")}:${value("minute")}${meridiem}`;
+}
+
 /**
  * Separate date and time lines for Facebook announcement graphics.
  * Time is start-only (e.g. "6:00 PM"), not a range — keeps the flyer clean.

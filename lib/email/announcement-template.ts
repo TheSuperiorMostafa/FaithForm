@@ -1,4 +1,4 @@
-import { formatDateTimeRange } from "@/lib/queries/announcements";
+import { formatEventStart } from "@/lib/queries/announcements";
 
 export const ANNOUNCEMENT_EMAIL_SUBJECT_PLACEHOLDER = "[Week]";
 export const ANNOUNCEMENT_EMAIL_BODY_PLACEHOLDERS = {
@@ -89,7 +89,7 @@ export function formatWeeklyEmailEventBlock(
   event: WeeklyEmailEvent,
   timeZone?: string | null,
 ): string {
-  const when = formatDateTimeRange(event.startAt, event.endAt, timeZone);
+  const when = formatEventStart(event.startAt, timeZone);
   const lines = [event.title, when];
   if (event.location.trim()) lines.push(event.location.trim());
   if (event.notes?.trim()) lines.push(event.notes.trim());
@@ -106,7 +106,7 @@ export function formatEventsHtml(
 
   return events
     .map((event) => {
-      const when = formatDateTimeRange(event.startAt, event.endAt, timeZone);
+      const when = formatEventStart(event.startAt, timeZone);
       const parts = [`<p><strong>${escapeHtml(event.title)}</strong></p>`];
       parts.push(`<p><strong>When:</strong> ${escapeHtml(when)}</p>`);
       if (event.location.trim()) {
