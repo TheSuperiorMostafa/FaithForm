@@ -21,6 +21,7 @@ import { ChurchAISettingsPanel } from "@/components/admin/church-ai-settings-pan
 import { ChurchFeaturesPanel } from "@/components/admin/church-features-panel";
 import { ChurchGivingPanel } from "@/components/admin/church-giving-panel";
 import { ChurchWebsitePanel } from "@/components/admin/church-website-panel";
+import { InviteChurchAdminCard } from "@/components/admin/invite-church-admin-card";
 import { ChurchProfileForm } from "@/components/church-profile/church-profile-form";
 import type { FeatureFlags, FeatureNotices } from "@/lib/features/access";
 import { getFeature, type FeatureKey } from "@/lib/features/catalog";
@@ -238,7 +239,13 @@ export function ChurchDetailTabs({
         />
       </TabsContent>
 
-      <TabsContent value="users">
+      <TabsContent value="users" className="space-y-4">
+        {detail.users.length === 0 && (
+          <InviteChurchAdminCard
+            churchId={detail.church.id}
+            pendingInvite={detail.pendingInvite}
+          />
+        )}
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full min-w-[960px] text-sm">

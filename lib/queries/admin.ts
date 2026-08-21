@@ -145,9 +145,19 @@ export type AdminChurchDetail = {
   } | null;
   attendanceTrend: AdminAttendancePoint[];
   users: AdminChurchUserRow[];
+  /** The outstanding first-admin invite, for a church we set up before its own. */
+  pendingInvite: AdminChurchInvite | null;
   integrations: AdminIntegrationDetail[];
   supportTickets: AdminTicketListRow[];
   usageSummary: AdminChurchUsageSummary;
+};
+
+export type AdminChurchInvite = {
+  email: string;
+  adminFirstName: string;
+  adminLastName: string;
+  expiresAt: string;
+  createdAt: string;
 };
 
 export type AdminPlatformUserRow = {
@@ -663,6 +673,7 @@ export async function getAdminChurchDetail(
     usersRes,
     integrationsRes,
     attendanceRes,
+    inviteRes,
     supportTickets,
     usageSummary,
   ] = await Promise.all([
@@ -695,6 +706,14 @@ export async function getAdminChurchDetail(
       .eq("church_id", churchId)
       .order("service_date", { ascending: false })
       .limit(8),
+    admin
+      .from("church_invites")
+      .select("email, admin_first_name, admin_last_name, expires_at, created_at")
+      .eq("church_id", churchId)
+      .is("accepted_at", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
     getSupportTickets({ churchId }),
     getChurchDashboardUsageSummary(churchId),
   ]);
@@ -801,6 +820,15 @@ export async function getAdminChurchDetail(
         lastSeenAt: usage?.lastSeenAt ?? null,
       };
     }),
+    pendingInvite: inviteRes.data
+      ? {
+          email: inviteRes.data.email as string,
+          adminFirstName: (inviteRes.data.admin_first_name as string) ?? "",
+          adminLastName: (inviteRes.data.admin_last_name as string) ?? "",
+          expiresAt: inviteRes.data.expires_at as string,
+          createdAt: inviteRes.data.created_at as string,
+        }
+      : null,
     integrations: integrationDetails,
     supportTickets,
     usageSummary,

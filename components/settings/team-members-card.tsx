@@ -338,6 +338,10 @@ function ManageMemberDialog({
   const [features, setFeatures] = useState<FeatureKey[]>(
     member.featurePermissions,
   );
+  // Removal is one click away from the same dialog people open to tweak a
+  // checkbox, and it cannot be undone from here — the account has to be
+  // invited again. So Remove asks first, and names who it is about to remove.
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
   const [updateState, updateAction] = useFormState(
     updateTeamMemberAccess,
     initialState,
@@ -370,6 +374,15 @@ function ManageMemberDialog({
     setRole(member.role);
     setFeatures(member.featurePermissions);
   }, [member.role, member.featurePermissions]);
+
+  // Reopening on a different member, or after a failed removal, must not land
+  // on a primed confirmation.
+  useEffect(() => {
+    if (!open) setConfirmingRemove(false);
+  }, [open]);
+  useEffect(() => {
+    if (removeState.error) setConfirmingRemove(false);
+  }, [removeState.error]);
 
   const error = updateState.error ?? removeState.error ?? resetState.error;
 
@@ -442,13 +455,52 @@ function ManageMemberDialog({
             )}
           </div>
 
+          {confirmingRemove ? (
+            <div
+              className="flex flex-col gap-3 border-t border-destructive/30 bg-destructive/5 px-6 py-4"
+              role="group"
+              aria-label="Confirm removing this teammate"
+              aria-live="assertive"
+            >
+              <div>
+                <p className="text-sm font-semibold text-foreground">
+                  Remove {member.email ?? "this teammate"}?
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  They lose access right away. Nothing they created is deleted,
+                  and you can invite them back — they would start again with a
+                  new temporary password.
+                </p>
+              </div>
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setConfirmingRemove(false)}
+                >
+                  Keep their access
+                </Button>
+                <Button
+                  type="submit"
+                  form={`remove-member-${member.id}`}
+                  variant="destructive"
+                  size="sm"
+                >
+                  <Trash2 className="size-4" strokeWidth={1.75} />
+                  Yes, remove them
+                </Button>
+              </div>
+            </div>
+          ) : null}
+
           <DialogFooter className="sm:justify-between">
             <Button
-              type="submit"
-              form={`remove-member-${member.id}`}
+              type="button"
               variant="destructive"
-              disabled={isSelf}
+              disabled={isSelf || confirmingRemove}
               className={cn(isSelf && "invisible")}
+              onClick={() => setConfirmingRemove(true)}
             >
               <Trash2 className="size-4" strokeWidth={1.75} />
               Remove

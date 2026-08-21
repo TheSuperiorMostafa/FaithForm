@@ -146,21 +146,31 @@ export function ChurchesTable({ churches }: { churches: AdminChurchListRow[] }) 
                   {formatDate(church.createdAt)}
                 </td>
                 <td className="px-5 py-4">
-                  {!church.onboardingCompletedAt && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger>
-                        <MoreHorizontal className="size-4" />
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent>
-                        <DropdownMenuItem
-                          disabled={resendingId === church.id}
-                          onSelect={() => handleResendInvite(church.id)}
-                        >
-                          {resendingId === church.id ? "Sending…" : "Resend Invite"}
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
+                  {!church.onboardingCompletedAt &&
+                    (church.pendingInviteEmail ? (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger>
+                          <MoreHorizontal className="size-4" />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent>
+                          <DropdownMenuItem
+                            disabled={resendingId === church.id}
+                            onSelect={() => handleResendInvite(church.id)}
+                          >
+                            {resendingId === church.id ? "Sending…" : "Resend Invite"}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    ) : (
+                      // Nothing to resend: this church was created for us to set
+                      // up, and is still waiting on an address to hand over to.
+                      <Link
+                        href={`/admin/churches/${church.id}?tab=users`}
+                        className="text-sm font-medium text-accent hover:underline"
+                      >
+                        Invite admin
+                      </Link>
+                    ))}
                 </td>
               </tr>
             ))}

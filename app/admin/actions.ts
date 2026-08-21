@@ -43,10 +43,20 @@ function generateSlug(name: string): string {
 }
 
 export type CreateChurchResult =
-  | { ok: true; email: string }
+  | { ok: true; churchId: string; email: string | null }
   | { ok: false; error: string };
 
-export async function createChurchAndInvite(
+/**
+ * Stands a church up, with or without its first admin.
+ *
+ * A church usually arrives before its admin does: we agree to onboard them on
+ * a call, build out the profile, features and website ourselves, and only find
+ * out weeks later which address the pastor actually reads. Requiring an email
+ * up front meant inventing one, which then owned the workspace. Leave it out
+ * and the church exists for us to work in; `inviteChurchAdmin` hands it over
+ * whenever the real address turns up.
+ */
+export async function createChurch(
   formData: FormData,
 ): Promise<CreateChurchResult> {
   await requireSuperAdmin();
@@ -60,14 +70,20 @@ export async function createChurchAndInvite(
   if (!name) {
     return { ok: false, error: "Church name is required." };
   }
-  if (!adminFirstName) {
-    return { ok: false, error: "Admin first name is required." };
-  }
-  if (!adminLastName) {
-    return { ok: false, error: "Admin last name is required." };
-  }
-  if (!isValidEmail(adminEmail)) {
-    return { ok: false, error: "A valid admin email is required." };
+
+  // Everything about the admin is optional together: either we know who they
+  // are and invite them now, or we set the church up and invite later.
+  const invitingAdmin = Boolean(adminEmail || adminFirstName || adminLastName);
+  if (invitingAdmin) {
+    if (!adminFirstName) {
+      return { ok: false, error: "Admin first name is required." };
+    }
+    if (!adminLastName) {
+      return { ok: false, error: "Admin last name is required." };
+    }
+    if (!isValidEmail(adminEmail)) {
+      return { ok: false, error: "A valid admin email is required." };
+    }
   }
 
   const admin = createAdminClient();
@@ -81,6 +97,12 @@ export async function createChurchAndInvite(
 
   if (churchError || !church) {
     return { ok: false, error: churchError?.message ?? "Could not create church." };
+  }
+
+  if (!invitingAdmin) {
+    revalidatePath("/admin");
+    revalidatePath("/admin/churches");
+    return { ok: true, churchId: church.id, email: null };
   }
 
   const { data: invite, error: inviteError } = await admin
@@ -120,6 +142,104 @@ export async function createChurchAndInvite(
 
   revalidatePath("/admin");
   revalidatePath("/admin/churches");
+  return { ok: true, churchId: church.id, email: adminEmail };
+}
+
+export type InviteChurchAdminResult =
+  | { ok: true; email: string }
+  | { ok: false; error: string };
+
+/**
+ * Sends the first admin their invite, for a church that has been waiting
+ * without one.
+ *
+ * Any invite still outstanding for this church is replaced rather than left
+ * beside the new one: a corrected address should not leave the typo's link
+ * live.
+ */
+export async function inviteChurchAdmin(
+  formData: FormData,
+): Promise<InviteChurchAdminResult> {
+  await requireSuperAdmin();
+
+  const churchId = readString(formData, "churchId");
+  const adminFirstName = readString(formData, "adminFirstName");
+  const adminLastName = readString(formData, "adminLastName");
+  const adminEmail = readString(formData, "adminEmail").toLowerCase();
+
+  if (!churchId) {
+    return { ok: false, error: "Church is required." };
+  }
+  if (!adminFirstName) {
+    return { ok: false, error: "Admin first name is required." };
+  }
+  if (!adminLastName) {
+    return { ok: false, error: "Admin last name is required." };
+  }
+  if (!isValidEmail(adminEmail)) {
+    return { ok: false, error: "A valid admin email is required." };
+  }
+
+  const admin = createAdminClient();
+  const { data: church } = await admin
+    .from("churches")
+    .select("id, name, onboarding_completed_at")
+    .eq("id", churchId)
+    .maybeSingle();
+
+  if (!church) {
+    return { ok: false, error: "Church not found." };
+  }
+  if (church.onboarding_completed_at) {
+    return {
+      ok: false,
+      error:
+        "This church has already been set up. Add more people from its own Settings › Team.",
+    };
+  }
+
+  await admin
+    .from("church_invites")
+    .delete()
+    .eq("church_id", churchId)
+    .is("accepted_at", null);
+
+  const { data: invite, error: inviteError } = await admin
+    .from("church_invites")
+    .insert({
+      church_id: churchId,
+      email: adminEmail,
+      admin_first_name: adminFirstName,
+      admin_last_name: adminLastName,
+    })
+    .select("token")
+    .single();
+
+  if (inviteError || !invite) {
+    return {
+      ok: false,
+      error: inviteError?.message ?? "Could not create invite.",
+    };
+  }
+
+  try {
+    await sendInviteEmail({
+      email: adminEmail,
+      churchName: church.name as string,
+      token: invite.token,
+      adminFirstName,
+    });
+  } catch (err) {
+    await admin.from("church_invites").delete().eq("church_id", churchId);
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Failed to send invite email.",
+    };
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/churches");
+  revalidatePath(`/admin/churches/${churchId}`);
   return { ok: true, email: adminEmail };
 }
 
