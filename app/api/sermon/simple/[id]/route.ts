@@ -11,14 +11,15 @@ export const dynamic = "force-dynamic";
 
 export async function PATCH(
   request: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const { id } = await params;
     const auth = await requireChurchAuth();
     const denied = await featureAccessDenied("sermon_builder");
     if (denied) return denied;
     const supabase = createClient();
-    const sermon = await verifySermonAccess(supabase, params.id, auth.churchId);
+    const sermon = await verifySermonAccess(supabase, id, auth.churchId);
     if (!sermon) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
@@ -38,7 +39,7 @@ export async function PATCH(
       );
     }
 
-    const updated = await updateSermon(params.id, {
+    const updated = await updateSermon(id, {
       title: validated.title,
       translation: validated.translation,
       theme_id: validated.theme_id,

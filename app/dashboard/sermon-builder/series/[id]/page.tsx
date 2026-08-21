@@ -12,8 +12,9 @@ export const dynamic = "force-dynamic";
 export default async function SeriesDetailPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
+  const { id } = await params;
   const supabase = createClient();
   const {
     data: { user },
@@ -23,7 +24,7 @@ export default async function SeriesDetailPage({
   const churchId = await getCurrentChurchId(supabase, user.id);
   if (!churchId) redirect("/dashboard");
 
-  const series = await getSeries(params.id);
+  const series = await getSeries(id);
   if (!series || series.church_id !== churchId) notFound();
 
   return (

@@ -1,25 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { rewriteM3u8Playlist } from "@/lib/stream/hls-player";
+import { verifyPlaybackToken } from "@/lib/stream/playback";
+import { getStreamRelaySettings } from "@/lib/stream/relay";
 import { isAbortError, startStreamTimer } from "@/lib/stream/telemetry";
+import { createAdminClient } from "@/lib/supabase/admin";
 
-// Media proxying must never be statically optimized or cached at build time.
 export const dynamic = "force-dynamic";
+const NO_STORE = "private, no-cache, no-store, must-revalidate";
 
-const UPSTREAM =
-  process.env.STREAM_HLS_UPSTREAM_URL?.trim() ||
-  "http://stream.faithform.io:8888";
+function upstreamBase(): string {
+  const value = process.env.STREAM_HLS_UPSTREAM_URL?.trim();
+  if (!value) throw new Error("Stream playback is unavailable.");
+  return value.replace(/\/$/, "");
+}
 
-/**
- * Media segments are immutable for as long as a live playlist references them.
- * A short shared TTL lets the CDN collapse many concurrent viewers onto one
- * origin fetch per segment instead of invoking this function once per viewer
- * per segment — without risking long-lived stale media if the relay restarts
- * and reuses segment names.
- */
-const SEGMENT_CACHE_CONTROL = "public, max-age=30, s-maxage=30";
-const NO_STORE = "no-cache, no-store, must-revalidate";
-
-const SEGMENT_EXTENSIONS = [".ts", ".m4s", ".mp4", ".aac", ".vtt"];
+function playbackAuthorization(): string | null {
+  const secret = process.env.STREAM_RELAY_PLAYBACK_SECRET?.trim();
+  if (!secret || secret.length < 32) return null;
+  return `Basic ${Buffer.from(`faithform-playback:${secret}`).toString("base64")}`;
+}
 
 function contentTypeFor(path: string, upstreamType: string | null): string {
   if (upstreamType) return upstreamType;
@@ -30,50 +29,114 @@ function contentTypeFor(path: string, upstreamType: string | null): string {
   return "application/octet-stream";
 }
 
+async function capabilityIsCurrentlyAuthorized(input: {
+  churchId: string;
+  eventId: string;
+  audience: "public" | "staff";
+}): Promise<boolean> {
+  const admin = createAdminClient();
+  const { data: event } = await admin
+    .from("stream_events")
+    .select("id")
+    .eq("id", input.eventId)
+    .eq("church_id", input.churchId)
+    .eq("status", "live")
+    .eq("public_access", input.audience === "public")
+    .maybeSingle();
+
+  if (!event && input.audience === "public") return false;
+
+  // Staff capabilities may view either public or protected events, but the
+  // event and active session still have to belong to the exact church.
+  if (!event && input.audience === "staff") {
+    const { data: staffEvent } = await admin
+      .from("stream_events")
+      .select("id")
+      .eq("id", input.eventId)
+      .eq("church_id", input.churchId)
+      .eq("status", "live")
+      .maybeSingle();
+    if (!staffEvent) return false;
+  }
+
+  const { data: session } = await admin
+    .from("stream_sessions")
+    .select("id")
+    .eq("church_id", input.churchId)
+    .eq("stream_event_id", input.eventId)
+    .in("status", ["preparing", "waiting_for_encoder", "live"])
+    .limit(1)
+    .maybeSingle();
+  return Boolean(session?.id);
+}
+
 export async function GET(
   request: NextRequest,
-  { params }: { params: { path?: string[] } },
+  { params }: { params: Promise<{ path?: string[] }> },
 ) {
-  const segments = params.path ?? [];
+  const { path } = await params;
+  const segments = path ?? [];
   const timer = startStreamTimer({
     route: "stream/hls",
     kind: segments.at(-1)?.endsWith(".m3u8") ? "playlist" : "segment",
-    // Segment traffic is very high volume: sample successes, keep every error.
     sampleRate: 0.01,
   });
 
-  if (segments.length === 0) {
+  if (
+    segments.length < 2 ||
+    segments.some(
+      (segment) =>
+        !segment ||
+        segment === "." ||
+        segment === ".." ||
+        segment.includes("\\") ||
+        segment.includes(":"),
+    )
+  ) {
     timer.end("error", { category: "bad_request", status: 404 });
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  // The joined path is interpolated into an upstream URL, so reject traversal
-  // and absolute-URL smuggling rather than trusting normalization.
-  if (
-    segments.some(
-      (s) => s === "." || s === ".." || s.includes("\\") || s.includes(":"),
-    )
-  ) {
-    timer.end("error", { category: "bad_request", status: 400 });
-    return NextResponse.json({ error: "Invalid path" }, { status: 400 });
+  const churchId = segments[0];
+  const token = request.nextUrl.searchParams.get("cap") ?? "";
+  const capability = verifyPlaybackToken(token, { churchId });
+  if (!capability) {
+    timer.end("error", { category: "auth", status: 401 });
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const upstreamPath = segments.map(encodeURIComponent).join("/");
+  if (!(await capabilityIsCurrentlyAuthorized(capability))) {
+    timer.end("error", { category: "auth", status: 403 });
+    return NextResponse.json({ error: "Unavailable" }, { status: 403 });
+  }
+
+  const settings = await getStreamRelaySettings(churchId, {
+    includeSecret: false,
+    includeInternalPath: true,
+  });
+  if (!settings.streamPath) {
+    timer.end("error", { category: "config", status: 503 });
+    return NextResponse.json({ error: "Unavailable" }, { status: 503 });
+  }
+
+  const mediaPath = segments.slice(1).map(encodeURIComponent).join("/");
+  const upstreamPath = `${settings.streamPath}/${mediaPath}`;
   const isPlaylist = upstreamPath.endsWith(".m3u8");
-  const isSegment = SEGMENT_EXTENSIONS.some((ext) => upstreamPath.endsWith(ext));
-  const upstreamUrl = `${UPSTREAM.replace(/\/$/, "")}/${upstreamPath}${request.nextUrl.search}`;
-
-  const range = request.headers.get("range");
-
+  const authorization = playbackAuthorization();
+  if (!authorization) {
+    timer.end("error", { category: "config", status: 503 });
+    return NextResponse.json({ error: "Unavailable" }, { status: 503 });
+  }
   let upstream: Response;
   try {
-    upstream = await fetch(upstreamUrl, {
+    const range = request.headers.get("range");
+    upstream = await fetch(`${upstreamBase()}/${upstreamPath}`, {
       cache: "no-store",
-      // Propagate viewer disconnects so we stop pulling from the relay as soon
-      // as nobody is waiting for the bytes.
+      redirect: "manual",
       signal: request.signal,
       headers: {
         Accept: request.headers.get("accept") ?? "*/*",
+        Authorization: authorization,
         ...(range ? { Range: range } : {}),
       },
     });
@@ -83,26 +146,34 @@ export async function GET(
       return new NextResponse(null, { status: 499 });
     }
     timer.end("error", { category: "upstream_unreachable", status: 502 });
-    return NextResponse.json(
-      { error: "HLS upstream unreachable" },
-      { status: 502 },
-    );
+    return NextResponse.json({ error: "Playback unavailable" }, { status: 502 });
   }
 
-  timer.mark("upstream_headers");
+  if (!upstream.ok) {
+    timer.end("error", {
+      category: "upstream_status",
+      status: upstream.status,
+    });
+    return NextResponse.json(
+      { error: "Playback unavailable" },
+      {
+        status: upstream.status >= 400 ? upstream.status : 502,
+        headers: { "Cache-Control": NO_STORE },
+      },
+    );
+  }
 
   const contentType = contentTypeFor(
     upstreamPath,
     upstream.headers.get("content-type"),
   );
-
-  // Playlists are small and must be rewritten so segment URLs point back here,
-  // so buffering them is both necessary and cheap.
-  if (isPlaylist && upstream.ok) {
-    const text = await upstream.text();
-    timer.mark("playlist_read");
-    const rewritten = rewriteM3u8Playlist(text, request.nextUrl.pathname);
-
+  if (isPlaylist) {
+    const playlist = await upstream.text();
+    const rewritten = rewriteM3u8Playlist(
+      playlist,
+      request.nextUrl.pathname,
+      `cap=${encodeURIComponent(token)}`,
+    );
     timer.end("ok", { status: upstream.status, bytes: rewritten.length });
     return new NextResponse(rewritten, {
       status: upstream.status,
@@ -117,27 +188,14 @@ export async function GET(
 
   const headers = new Headers({
     "Content-Type": contentType,
+    "Cache-Control": NO_STORE,
     "Access-Control-Allow-Origin": "*",
     "X-Stream-Request-Id": timer.requestId,
-    // Only cache successful immutable media; never cache an upstream error.
-    "Cache-Control":
-      upstream.ok && isSegment ? SEGMENT_CACHE_CONTROL : NO_STORE,
   });
-
   for (const header of ["content-length", "content-range", "accept-ranges"]) {
     const value = upstream.headers.get(header);
     if (value) headers.set(header, value);
   }
-
-  timer.end("ok", {
-    status: upstream.status,
-    bytes: Number(upstream.headers.get("content-length")) || undefined,
-  });
-
-  // Pass the body straight through instead of buffering the whole segment:
-  // lower time-to-first-byte per segment and flat memory use per invocation.
-  return new NextResponse(upstream.body, {
-    status: upstream.status,
-    headers,
-  });
+  timer.end("ok", { status: upstream.status });
+  return new NextResponse(upstream.body, { status: upstream.status, headers });
 }

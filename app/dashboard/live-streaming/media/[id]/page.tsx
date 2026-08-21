@@ -23,20 +23,21 @@ const PLAYBACK_URL_TTL_SECONDS = 60 * 60 * 4;
 export default async function MediaItemPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
+  const { id } = await params;
   const supabase = createClient();
   const auth = await getChurchAuth(supabase);
   if (!auth) redirect("/login");
 
-  const item = await getMediaItem(auth.churchId, params.id);
+  const item = await getMediaItem(auth.churchId, id);
   if (!item) notFound();
 
-  const sessionId = await getMediaSessionId(auth.churchId, params.id);
+  const sessionId = await getMediaSessionId(auth.churchId, id);
 
   const [series, stats, churchRow] = await Promise.all([
     listMediaSeries(auth.churchId),
-    getMediaStats(auth.churchId, params.id, sessionId),
+    getMediaStats(auth.churchId, id, sessionId),
     supabase.from("churches").select("slug").eq("id", auth.churchId).maybeSingle(),
   ]);
 

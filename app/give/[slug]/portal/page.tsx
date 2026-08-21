@@ -17,35 +17,36 @@ function fundNameFromJoin(
 }
 
 type PageProps = {
-  params: { slug: string };
-  searchParams: { error?: string; token?: string };
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ error?: string; token?: string }>;
 };
 
 export default async function PortalPage({ params, searchParams }: PageProps) {
+  const [{ slug }, query] = await Promise.all([params, searchParams]);
   // Legacy magic links pointed here with ?token=. Cookie writes must happen in a
   // Route Handler, so bounce to /api/give/portal/auth instead of setting here.
-  if (searchParams.token) {
+  if (query.token) {
     redirect(
-      `/api/give/portal/auth?slug=${encodeURIComponent(params.slug)}&token=${encodeURIComponent(searchParams.token)}`,
+      `/api/give/portal/auth?slug=${encodeURIComponent(slug)}&token=${encodeURIComponent(query.token)}`,
     );
   }
 
-  const church = await getChurchBySlug(params.slug);
+  const church = await getChurchBySlug(slug);
   if (!church) {
     return <p className="text-sm text-muted-foreground">Church not found.</p>;
   }
 
-  const session = await getDonorPortalSession(params.slug);
+  const session = await getDonorPortalSession(slug);
 
   if (!session) {
     const linkError =
-      searchParams.error === "invalid_link" || searchParams.error === "link_failed"
+      query.error === "invalid_link" || query.error === "link_failed"
         ? "That sign-in link is invalid or has expired. Request a new one below."
         : null;
 
     return (
       <PortalLogin
-        slug={params.slug}
+        slug={slug}
         churchName={church.churchName}
         logoUrl={church.logoUrl}
         initialMessage={linkError}
@@ -59,6 +60,7 @@ export default async function PortalPage({ params, searchParams }: PageProps) {
     .from("giving_donors")
     .select("name, email, stripe_customer_id")
     .eq("id", session.donorId)
+    .eq("church_id", session.churchId)
     .single();
 
   const { data: subscriptions } = await admin
@@ -100,7 +102,7 @@ export default async function PortalPage({ params, searchParams }: PageProps) {
 
   return (
     <PortalDashboard
-      slug={params.slug}
+      slug={slug}
       churchName={church.churchName}
       stripeAccountId={church.stripeAccountId ?? ""}
       logoUrl={church.logoUrl}

@@ -5,9 +5,7 @@ import { setPreviewIngestActive } from "@/lib/stream/preview-ingest";
 import { parseStreamPath } from "@/lib/stream/relay";
 
 export async function POST(request: Request) {
-  const providedSecret =
-    request.headers.get("x-stream-relay-secret") ??
-    new URL(request.url).searchParams.get("secret");
+  const providedSecret = request.headers.get("x-stream-relay-secret");
   const expectedSecret = process.env.STREAM_RELAY_WEBHOOK_SECRET;
 
   if (!compareSecret(providedSecret, expectedSecret)) {
@@ -22,7 +20,7 @@ export async function POST(request: Request) {
   }
 
   const parsedPath = parseStreamPath(body.path ?? "");
-  if (!parsedPath) {
+  if (!parsedPath || parsedPath.legacyCredentialInPath) {
     return NextResponse.json({ error: "Invalid stream path" }, { status: 400 });
   }
 

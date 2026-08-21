@@ -38,13 +38,13 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   const cookieTheme = parseThemeCookie(
-    cookies().get(THEME_COOKIE)?.value,
+    (await cookies()).get(THEME_COOKIE)?.value,
   );
   const htmlClass =
     cookieTheme === "dark"

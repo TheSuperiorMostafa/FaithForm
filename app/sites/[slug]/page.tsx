@@ -8,8 +8,8 @@ import { SECTION_REGISTRY } from "@/lib/sites/registry";
 import { resolvePage } from "@/lib/sites/resolve";
 
 type PageProps = {
-  params: { slug: string };
-  searchParams?: { preview?: string };
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ preview?: string }>;
 };
 
 /**
@@ -22,7 +22,8 @@ type PageProps = {
 export const revalidate = 300;
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const bundle = await getSiteBundle(params.slug);
+  const { slug } = await params;
+  const bundle = await getSiteBundle(slug);
   if (!bundle) return { title: "Not found" };
 
   // Matches the page's own check, so a disabled site does not leak the church's
@@ -55,7 +56,8 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 }
 
 export default async function ChurchSitePage({ params, searchParams }: PageProps) {
-  const bundle = await getSiteBundle(params.slug);
+  const [{ slug }, query] = await Promise.all([params, searchParams]);
+  const bundle = await getSiteBundle(slug);
   if (!bundle) notFound();
 
   // Turning Website off in the control center takes the public site down, not
@@ -67,7 +69,7 @@ export default async function ChurchSitePage({ params, searchParams }: PageProps
     notFound();
   }
 
-  const isPreview = searchParams?.preview === "1";
+  const isPreview = query.preview === "1";
   if (bundle.page.status !== "published" && !isPreview) {
     notFound();
   }

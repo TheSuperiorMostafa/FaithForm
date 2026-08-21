@@ -6,24 +6,37 @@ on:
     branches: [main]
 
 jobs:
-  build:
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v2
+      - uses: pnpm/action-setup@v4
         with:
-          version: 8
+          version: 8.15.9
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm lint
-      - run: pnpm build
+      - run: pnpm ci:verify
+      - run: pnpm audit:prod
     env:
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-      SUPABASE_SECRET_KEY: ${{ secrets.SUPABASE_SECRET_KEY }}
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-      ESV_API_KEY: ${{ secrets.ESV_API_KEY }}
-      N8N_WEBHOOK_SECRET: ${{ secrets.N8N_WEBHOOK_SECRET }}
+      NEXT_PUBLIC_SUPABASE_URL: https://ci-faithform.invalid
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: sb_publishable_ci_only_not_a_real_key
+      SUPABASE_SECRET_KEY: ci-supabase-secret-000000000000001
+      NEXT_PUBLIC_SITE_URL: https://ci-faithform.invalid
+      DONOR_PORTAL_SESSION_SECRET: ci-donor-session-secret-00000000001
+      INTEGRATION_OAUTH_STATE_SECRET: ci-integration-oauth-secret-00000001
+      N8N_WEBHOOK_SECRET: ci-n8n-webhook-secret-0000000000001
+      RATE_LIMIT_KEY_SECRET: ci-rate-limit-secret-0000000000001
+      STREAM_RELAY_WEBHOOK_SECRET: ci-relay-webhook-secret-000000000001
+      STREAM_RELAY_PLAYBACK_SECRET: ci-relay-playback-secret-00000000001
+      STREAM_INGEST_SIGNING_SECRET: ci-ingest-signing-secret-00000000001
+      STREAM_PLAYBACK_SECRET: ci-playback-signing-secret-000000001
+      STREAM_HLS_UPSTREAM_URL: https://ci-hls.faithform.invalid
+      STREAM_WS_INGEST_UPSTREAM_URL: wss://ci-ingest.faithform.invalid
+      CRON_SECRET: ci-cron-auth-secret-000000000000001
+      STRIPE_SECRET_KEY: ci-stripe-secret-not-a-real-provider-key
+      STRIPE_WEBHOOK_SECRET: ci-stripe-webhook-secret-00000000001
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ci-stripe-publishable-not-a-real-key
+      RESEND_API_KEY: ci-resend-secret-not-a-real-provider-key

@@ -5,13 +5,14 @@ import { getChurchBySlug } from "@/lib/queries/giving";
 import { ThankYouPortalCta } from "./thank-you-portal-cta";
 
 type PageProps = {
-  params: { slug: string };
-  searchParams: { email?: string };
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ email?: string }>;
 };
 
 export default async function ThankYouPage({ params, searchParams }: PageProps) {
-  const church = await getChurchBySlug(params.slug);
-  const email = searchParams.email?.trim() || null;
+  const [{ slug }, query] = await Promise.all([params, searchParams]);
+  const church = await getChurchBySlug(slug);
+  const email = query.email?.trim() || null;
 
   return (
     <div className="space-y-6 text-center">

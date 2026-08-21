@@ -6,6 +6,7 @@ set -euo pipefail
 
 PATH="/home/mostafa/bin:/usr/local/bin:/usr/bin:/bin"
 FFMPEG="/home/mostafa/bin/ffmpeg"
+LOG_SANITIZER="/home/mostafa/scripts/sanitize-relay-log.py"
 APP_URL="${FAITHFORM_APP_URL:-https://faithform.io}"
 SECRET="${STREAM_RELAY_WEBHOOK_SECRET:-}"
 RECORD_DIR="/home/mostafa/mediamtx/recordings"
@@ -27,7 +28,8 @@ fi
 
 mkdir -p "$RECORD_DIR" "/home/mostafa/mediamtx/pids" "/home/mostafa/mediamtx/logs"
 
-SAFE_PATH="${MTX_PATH//\//_}"
+PATH_DIGEST="$(printf '%s' "$MTX_PATH" | sha256sum | cut -c1-16)"
+SAFE_PATH="stream_${PATH_DIGEST}"
 RECORD_PID_FILE="/home/mostafa/mediamtx/pids/${SAFE_PATH}.record.pid"
 FANOUT_PID_FILE="/home/mostafa/mediamtx/pids/${SAFE_PATH}.fanout.pid"
 LOG_FILE="/home/mostafa/mediamtx/logs/${SAFE_PATH}.log"
@@ -57,7 +59,7 @@ DESTINATIONS=()
 # has no destinations", and must not be treated as such.
 read_destinations() {
   local payload
-  payload="$(curl -fsSL --max-time 10 -H "x-stream-relay-secret: ${SECRET}" "$CONFIG_URL")" || return 1
+  payload="$(curl -fsS --max-time 10 -H "x-stream-relay-secret: ${SECRET}" "$CONFIG_URL")" || return 1
   printf '%s' "$payload" | python3 -c "$DEST_PARSER"
 }
 
@@ -253,20 +255,21 @@ start_push() {
     -analyzeduration 10000000 -probesize 10000000 \
     -i "$RTSP_URL" \
     -map 0:v:0 -map 0:a:0\? \
-    -c copy "${tls_opts[@]}" -f flv "$target" >>"$LOG_FILE" 2>&1 &
+    -c copy "${tls_opts[@]}" -f flv "$target" \
+    2> >("$LOG_SANITIZER" >>"$LOG_FILE") &
 
   PUSH_PID["$url"]=$!
   PUSH_STARTED_AT["$url"]=$(date +%s)
   PUSH_RETRY_AT["$url"]=0
   PUSH_CONFIRMED["$url"]=0
-  echo "[relay] pushing ${MTX_PATH} to ${platform}" >>"$LOG_FILE"
+  echo "[relay] pushing authorized stream to ${platform}" >>"$LOG_FILE"
 }
 
 start_fanout() {
   stop_fanout
   [[ ${#DESTINATIONS[@]} -eq 0 ]] && return 0
 
-  echo "[relay] forwarding ${MTX_PATH} to ${#DESTINATIONS[@]} destinations" >>"$LOG_FILE"
+  echo "[relay] forwarding to ${#DESTINATIONS[@]} destinations" >>"$LOG_FILE"
 
   local url
   for url in "${DESTINATIONS[@]}"; do
@@ -332,13 +335,14 @@ supervise_pushes() {
 }
 
 RECORD_FILE="${RECORD_DIR}/${SAFE_PATH}-$(date +%s).mp4"
-echo "[relay] recording to ${RECORD_FILE}" >>"$LOG_FILE"
+echo "[relay] recording authorized stream" >>"$LOG_FILE"
 "$FFMPEG" -nostdin -loglevel warning \
   -rtsp_transport tcp -timeout 5000000 \
   -analyzeduration 10000000 -probesize 10000000 \
   -i "$RTSP_URL" \
   -map 0:v:0 -map 0:a:0\? \
-  -c copy -f mp4 -movflags +faststart "$RECORD_FILE" >>"$LOG_FILE" 2>&1 &
+  -c copy -f mp4 -movflags +faststart "$RECORD_FILE" \
+  2> >("$LOG_SANITIZER" >>"$LOG_FILE") &
 echo $! >"$RECORD_PID_FILE"
 echo "$RECORD_FILE" >"${RECORD_DIR}/${SAFE_PATH}.latest"
 
@@ -369,7 +373,7 @@ while true; do
   if load_destinations; then
     NEW_KEY="$(destinations_key)"
     if [[ "$NEW_KEY" != "$CURRENT_KEY" ]]; then
-      echo "[relay] destinations changed for ${MTX_PATH}" >>"$LOG_FILE"
+      echo "[relay] destinations changed" >>"$LOG_FILE"
       CURRENT_KEY="$NEW_KEY"
       destinations_key >"$DEST_CACHE"
       start_fanout

@@ -316,7 +316,7 @@ export async function publishViaWebSocket(
 
   recorder.addEventListener("error", (event) => {
     const err = (event as unknown as { error?: { name?: string; message?: string } }).error;
-    report("recorder_error", { name: err?.name ?? null, message: err?.message ?? null });
+    report("recorder_error", { errorType: err?.name ? "recorder" : "unknown" });
     cleanup();
   });
 

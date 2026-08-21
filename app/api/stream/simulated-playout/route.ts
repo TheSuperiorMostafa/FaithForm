@@ -6,9 +6,7 @@ import {
 } from "@/lib/stream/simulated";
 
 export async function GET(request: Request) {
-  const provided =
-    request.headers.get("x-stream-relay-secret") ??
-    new URL(request.url).searchParams.get("secret");
+  const provided = request.headers.get("x-stream-relay-secret");
   const expected = process.env.STREAM_RELAY_WEBHOOK_SECRET;
 
   if (!compareSecret(provided, expected)) {
@@ -20,9 +18,7 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const provided =
-    request.headers.get("x-stream-relay-secret") ??
-    new URL(request.url).searchParams.get("secret");
+  const provided = request.headers.get("x-stream-relay-secret");
   const expected = process.env.STREAM_RELAY_WEBHOOK_SECRET;
 
   if (!compareSecret(provided, expected)) {

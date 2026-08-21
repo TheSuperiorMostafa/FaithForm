@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 
 type LiveChatProps = {
   streamEventId: string;
-  churchId: string;
+  slug: string;
   enabled: boolean;
 };
 
@@ -20,7 +20,7 @@ type ChatMessage = {
   createdAt: string;
 };
 
-export function LiveChat({ streamEventId, churchId, enabled }: LiveChatProps) {
+export function LiveChat({ streamEventId, slug, enabled }: LiveChatProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [authorName, setAuthorName] = useState("");
   const [body, setBody] = useState("");
@@ -31,7 +31,7 @@ export function LiveChat({ streamEventId, churchId, enabled }: LiveChatProps) {
 
     const poll = async () => {
       const res = await fetch(
-        `/api/stream/chat?eventId=${streamEventId}`,
+        `/api/stream/chat?eventId=${encodeURIComponent(streamEventId)}&slug=${encodeURIComponent(slug)}`,
         { cache: "no-store" },
       );
       if (!res.ok) return;
@@ -42,7 +42,7 @@ export function LiveChat({ streamEventId, churchId, enabled }: LiveChatProps) {
     void poll();
     const id = setInterval(() => void poll(), 4000);
     return () => clearInterval(id);
-  }, [enabled, streamEventId]);
+  }, [enabled, streamEventId, slug]);
 
   if (!enabled) return null;
 
@@ -51,7 +51,7 @@ export function LiveChat({ streamEventId, churchId, enabled }: LiveChatProps) {
     startTransition(async () => {
       const result = await postStreamChatMessage({
         streamEventId,
-        churchId,
+        slug,
         authorName: authorName.trim(),
         body: body.trim(),
       });

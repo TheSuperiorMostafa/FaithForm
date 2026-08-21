@@ -17,9 +17,10 @@ const bodySchema = z.object({
   action: z.enum(["pause", "resume", "cancel"]),
 });
 
-type RouteContext = { params: { id: string } };
+type RouteContext = { params: Promise<{ id: string }> };
 
 export async function POST(request: Request, context: RouteContext) {
+  const { id } = await context.params;
   let auth;
   try {
     auth = await requireChurchAdmin();
@@ -44,7 +45,7 @@ export async function POST(request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 
-  const sub = await getSubscriptionById(auth.churchId, context.params.id);
+  const sub = await getSubscriptionById(auth.churchId, id);
   if (!sub?.stripeAccountId) {
     return NextResponse.json({ error: "Subscription not found" }, { status: 404 });
   }
@@ -60,8 +61,8 @@ export async function POST(request: Request, context: RouteContext) {
 
     await logAdminAction({
       churchId: auth.churchId,
-      taskName: `${parsed.data.action} subscription ${context.params.id}`,
-      triggerSource: `admin:subscription:${parsed.data.action}:${context.params.id}`,
+      taskName: `${parsed.data.action} subscription ${id}`,
+      triggerSource: `admin:subscription:${parsed.data.action}:${id}`,
     });
 
     return NextResponse.json({ ok: true });

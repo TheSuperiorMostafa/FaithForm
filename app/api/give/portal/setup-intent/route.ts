@@ -27,6 +27,7 @@ export async function POST(request: Request) {
     .from("giving_donors")
     .select("stripe_customer_id")
     .eq("id", session.donorId)
+    .eq("church_id", session.churchId)
     .single();
 
   const { data: church } = await admin

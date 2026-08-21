@@ -25,7 +25,10 @@ fi
 : "${STREAM_RELAY_WEBHOOK_SECRET:?STREAM_RELAY_WEBHOOK_SECRET is required}"
 
 export MTX_AUTHMETHOD=http
-export MTX_AUTHHTTPADDRESS="${FAITHFORM_APP_URL%/}/api/stream/publish-auth?secret=${STREAM_RELAY_WEBHOOK_SECRET}"
+export MTX_AUTHHTTPADDRESS="http://127.0.0.1:8091/auth"
+
+pkill -f "auth-proxy.py" 2>/dev/null || true
+nohup python3 "${HOME}/scripts/auth-proxy.py" >>"${LOG_FILE}" 2>&1 &
 
 pkill -x mediamtx 2>/dev/null || true
 sleep 1

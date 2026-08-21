@@ -116,9 +116,7 @@ export async function registerEncoderDevice(
 ): Promise<{
   deviceId: string;
   deviceSecret: string;
-  churchId: string;
   ingestServerUrl: string;
-  streamKey: string;
 }> {
   const client = getClient(supabase);
   const pairingHash = hashStreamSecret(input.pairingCode.trim());
@@ -139,7 +137,7 @@ export async function registerEncoderDevice(
   }
 
   const deviceSecret = generateDeviceSecret();
-  const { error: updateError } = await client
+  const { data: claimed, error: updateError } = await client
     .from("encoder_devices")
     .update({
       label: input.label?.trim() || device.label,
@@ -153,10 +151,14 @@ export async function registerEncoderDevice(
       pairing_expires_at: null,
       paired_at: new Date().toISOString(),
     })
-    .eq("id", device.id);
+    .eq("id", device.id)
+    .eq("pairing_code_hash", pairingHash)
+    .is("device_secret_hash", null)
+    .select("id")
+    .maybeSingle();
 
-  if (updateError) {
-    throw new Error(updateError.message);
+  if (updateError || !claimed?.id) {
+    throw new Error("Invalid or expired pairing code.");
   }
 
   const { getStreamRelaySettings, ensureStreamRelayCredentials } = await import(
@@ -164,11 +166,11 @@ export async function registerEncoderDevice(
   );
 
   let settings = await getStreamRelaySettings(device.church_id, {
-    includeSecret: true,
+    includeSecret: false,
     supabase: client,
   });
 
-  if (!settings.streamName && device.paired_by) {
+  if (!settings.connected && device.paired_by) {
     settings = await ensureStreamRelayCredentials(
       device.church_id,
       device.paired_by,
@@ -176,16 +178,14 @@ export async function registerEncoderDevice(
     );
   }
 
-  if (!settings.streamName) {
+  if (!settings.connected) {
     throw new Error("Stream credentials are not configured for this church.");
   }
 
   return {
     deviceId: device.id,
     deviceSecret,
-    churchId: device.church_id,
     ingestServerUrl: settings.ingestServerUrl,
-    streamKey: settings.streamName,
   };
 }
 
@@ -276,6 +276,8 @@ export async function getPendingStreamCommand(
 
 export async function completeStreamCommand(
   commandId: string,
+  encoderDeviceId: string,
+  churchId: string,
   status: "completed" | "failed",
   errorMessage?: string,
   supabase?: SupabaseClient,
@@ -288,7 +290,10 @@ export async function completeStreamCommand(
       error_message: errorMessage ?? null,
       completed_at: new Date().toISOString(),
     })
-    .eq("id", commandId);
+    .eq("id", commandId)
+    .eq("encoder_device_id", encoderDeviceId)
+    .eq("church_id", churchId)
+    .eq("status", "pending");
 }
 
 export async function getPrimaryEncoderDevice(

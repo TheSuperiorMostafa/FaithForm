@@ -12,15 +12,16 @@ export const dynamic = "force-dynamic";
 const PLAYBACK_URL_TTL_SECONDS = 60 * 60 * 4;
 
 type PageProps = {
-  params: { slug: string; id: string };
+  params: Promise<{ slug: string; id: string }>;
 };
 
 export async function generateMetadata({
   params,
 }: PageProps): Promise<Metadata> {
-  const church = await getChurchBySlug(params.slug);
+  const { slug, id } = await params;
+  const church = await getChurchBySlug(slug);
   if (!church) return {};
-  const item = await getMediaItem(church.churchId, params.id);
+  const item = await getMediaItem(church.churchId, id);
   if (!item) return {};
 
   return {
@@ -38,10 +39,11 @@ export async function generateMetadata({
  * it is only reachable by someone the church sent the link to.
  */
 export default async function PublicRecordingPage({ params }: PageProps) {
-  const church = await getChurchBySlug(params.slug);
+  const { slug, id } = await params;
+  const church = await getChurchBySlug(slug);
   if (!church) notFound();
 
-  const item = await getMediaItem(church.churchId, params.id);
+  const item = await getMediaItem(church.churchId, id);
   if (!item) notFound();
 
   const admin = createAdminClient();

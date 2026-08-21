@@ -11,13 +11,14 @@ export const dynamic = "force-dynamic";
 export default async function VoiceAssistantCallDetailPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
+  const { id } = await params;
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");
 
   const supabase = createClient();
-  const call = await getPhoneCallById(auth.churchId, params.id, supabase);
+  const call = await getPhoneCallById(auth.churchId, id, supabase);
   if (!call) notFound();
 
   return (

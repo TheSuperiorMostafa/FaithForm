@@ -15,9 +15,9 @@ import { getIntegration } from "@/lib/integrations/tokens";
 export async function setPreviewIngestActive(
   churchId: string,
   active: boolean,
-  supabase?: SupabaseClient,
+  _supabase?: SupabaseClient,
 ) {
-  const client = createAdminClientOrNull() ?? supabase;
+  const client = createAdminClientOrNull();
   if (!client) return;
 
   for (let attempt = 0; attempt < 3; attempt += 1) {

@@ -6,12 +6,25 @@ import {
   type MediaViewSource,
 } from "@/lib/stream/media-library";
 import { getActiveStreamSession } from "@/lib/stream/sessions";
+import { z } from "zod";
+import {
+  assertRateLimit,
+  getClientIp,
+  rateLimitResponse,
+} from "@/lib/security/rate-limit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const KINDS: MediaViewKind[] = ["live", "replay"];
 const SOURCES: MediaViewSource[] = ["website", "app", "embed"];
+const bodySchema = z.object({
+  slug: z.string().trim().min(1).max(100),
+  recordingId: z.string().uuid().optional(),
+  kind: z.enum(["live", "replay"]),
+  source: z.enum(["website", "app", "embed"]).optional(),
+  viewerKey: z.string().uuid().nullable().optional(),
+});
 
 /**
  * Counts one play.
@@ -24,27 +37,29 @@ const SOURCES: MediaViewSource[] = ["website", "app", "embed"];
  */
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as {
-      slug?: string;
-      recordingId?: string;
-      kind?: string;
-      source?: string;
-      viewerKey?: string;
-    };
-
-    const slug = body.slug?.trim();
-    if (!slug) {
-      return NextResponse.json({ error: "Missing church" }, { status: 400 });
+    const contentLength = Number(request.headers.get("content-length") ?? 0);
+    if (contentLength > 2048) {
+      return NextResponse.json({ error: "Invalid request" }, { status: 413 });
     }
+    const parsed = bodySchema.safeParse(await request.json());
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+    }
+    const body = parsed.data;
+    const slug = body.slug;
+
+    const rate = await assertRateLimit(
+      `stream-view:${getClientIp(request)}:${slug}:${body.viewerKey ?? "none"}`,
+      { limit: 20, windowMs: 60 * 60 * 1000 },
+    );
+    if (!rate.ok) return rateLimitResponse(rate.retryAfterSeconds);
 
     const church = await getChurchBySlug(slug);
     if (!church) {
       return NextResponse.json({ error: "Unknown church" }, { status: 404 });
     }
 
-    const kind = KINDS.includes(body.kind as MediaViewKind)
-      ? (body.kind as MediaViewKind)
-      : "replay";
+    const kind = KINDS.includes(body.kind) ? body.kind : "replay";
     const source = SOURCES.includes(body.source as MediaViewSource)
       ? (body.source as MediaViewSource)
       : "website";
@@ -54,16 +69,33 @@ export async function POST(request: Request) {
     let streamSessionId: string | null = null;
     if (kind === "live") {
       const session = await getActiveStreamSession(church.churchId).catch(() => null);
-      streamSessionId = session?.id ?? null;
+      if (!session?.id || !session.streamEventId) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
+      const admin = (await import("@/lib/supabase/admin")).createAdminClient();
+      const { data: publicEvent } = await admin
+        .from("stream_events")
+        .select("id")
+        .eq("id", session.streamEventId)
+        .eq("church_id", church.churchId)
+        .eq("status", "live")
+        .eq("public_access", true)
+        .maybeSingle();
+      if (!publicEvent?.id) {
+        return NextResponse.json({ error: "Not found" }, { status: 404 });
+      }
+      streamSessionId = session.id;
+    } else if (!body.recordingId) {
+      return NextResponse.json({ error: "Invalid request" }, { status: 400 });
     }
 
     await recordMediaView({
       churchId: church.churchId,
-      recordingId: kind === "replay" ? (body.recordingId ?? null) : null,
+      recordingId: kind === "replay" ? body.recordingId : null,
       streamSessionId,
       kind,
       source,
-      viewerKey: body.viewerKey?.slice(0, 64) ?? null,
+      viewerKey: body.viewerKey ?? null,
     });
 
     return NextResponse.json({ ok: true });

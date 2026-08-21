@@ -13,8 +13,9 @@ export const dynamic = "force-dynamic";
 export default async function EditSimpleSermonPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
+  const { id } = await params;
   const supabase = createClient();
   const {
     data: { user },
@@ -24,7 +25,7 @@ export default async function EditSimpleSermonPage({
   const churchId = await getCurrentChurchId(supabase, user.id);
   if (!churchId) redirect("/dashboard");
 
-  const sermon = await getSermon(params.id);
+  const sermon = await getSermon(id);
   if (!sermon || sermon.church_id !== churchId) notFound();
   if ((sermon.kind ?? "advanced") !== "simple") notFound();
 

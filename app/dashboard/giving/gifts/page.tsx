@@ -16,10 +16,11 @@ import type { DonationStatus, GiftType, GiftsSearchFilters } from "@/types/givin
 export const dynamic = "force-dynamic";
 
 type PageProps = {
-  searchParams: Record<string, string | string[] | undefined>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
 export default async function GiftsPage({ searchParams }: PageProps) {
+  const query = await searchParams;
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");
 
@@ -33,19 +34,19 @@ export default async function GiftsPage({ searchParams }: PageProps) {
     );
   }
 
-  const page = Number.parseInt(String(searchParams.page ?? "1"), 10) || 1;
+  const page = Number.parseInt(String(query.page ?? "1"), 10) || 1;
   const pageSize = 25;
 
   const filters: GiftsSearchFilters = {
-    search: str(searchParams.search),
-    fundId: str(searchParams.fundId),
-    giftType: str(searchParams.giftType) as GiftType | undefined,
-    status: str(searchParams.status) as DonationStatus | undefined,
-    dateFrom: str(searchParams.dateFrom)
-      ? new Date(str(searchParams.dateFrom)!).toISOString()
+    search: str(query.search),
+    fundId: str(query.fundId),
+    giftType: str(query.giftType) as GiftType | undefined,
+    status: str(query.status) as DonationStatus | undefined,
+    dateFrom: str(query.dateFrom)
+      ? new Date(str(query.dateFrom)!).toISOString()
       : undefined,
-    dateTo: str(searchParams.dateTo)
-      ? new Date(`${str(searchParams.dateTo)}T23:59:59`).toISOString()
+    dateTo: str(query.dateTo)
+      ? new Date(`${str(query.dateTo)}T23:59:59`).toISOString()
       : undefined,
   };
 
@@ -79,7 +80,7 @@ export default async function GiftsPage({ searchParams }: PageProps) {
       {totalPages > 1 && (
         <div className="flex items-center justify-center gap-2">
           {page > 1 && (
-            <PaginationLink searchParams={searchParams} page={page - 1}>
+            <PaginationLink searchParams={query} page={page - 1}>
               Previous
             </PaginationLink>
           )}
@@ -87,7 +88,7 @@ export default async function GiftsPage({ searchParams }: PageProps) {
             Page {page} of {totalPages}
           </span>
           {page < totalPages && (
-            <PaginationLink searchParams={searchParams} page={page + 1}>
+            <PaginationLink searchParams={query} page={page + 1}>
               Next
             </PaginationLink>
           )}

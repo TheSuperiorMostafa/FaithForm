@@ -11,14 +11,15 @@ import { getChurchAISettings } from "@/lib/queries/sermons";
 export const dynamic = "force-dynamic";
 
 type Props = {
-  searchParams: {
+  searchParams: Promise<{
     series?: string;
     topic?: string;
     scripture?: string;
-  };
+  }>;
 };
 
 export default async function NewSermonPage({ searchParams }: Props) {
+  const query = await searchParams;
   const supabase = createClient();
   const {
     data: { user },
@@ -46,7 +47,7 @@ export default async function NewSermonPage({ searchParams }: Props) {
         translationOptions={translationOptions}
         defaultTranslation={defaultTranslation}
         initial={{
-          title: searchParams.topic,
+          title: query.topic,
         }}
       />
     </div>

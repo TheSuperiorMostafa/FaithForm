@@ -32,7 +32,7 @@ ufw --force enable
 setcap 'cap_net_bind_service=+ep' "${BIN_DIR}/mediamtx"
 
 chown -R "${USER_NAME}:${USER_NAME}" "${MEDIAMTX_DIR}" "${HOME_DIR}/scripts"
-chmod +x "${HOME_DIR}/scripts/"*.sh
+chmod +x "${HOME_DIR}/scripts/"*.sh "${HOME_DIR}/scripts/"*.py
 
 if [[ ! -f "${ENV_FILE}" ]]; then
 cat > "${ENV_FILE}" <<EOF
@@ -45,8 +45,9 @@ fi
 cat > /etc/systemd/system/faithform-mediamtx.service <<EOF
 [Unit]
 Description=FaithForm MediaMTX stream relay
-After=network-online.target
+After=network-online.target faithform-stream-auth-proxy.service
 Wants=network-online.target
+Requires=faithform-stream-auth-proxy.service
 
 [Service]
 Type=simple
@@ -55,7 +56,7 @@ Group=${USER_NAME}
 WorkingDirectory=${MEDIAMTX_DIR}
 EnvironmentFile=-${ENV_FILE}
 Environment=PATH=${BIN_DIR}:/usr/local/bin:/usr/bin:/bin
-ExecStart=/bin/bash -lc 'export MTX_AUTHMETHOD=http; export MTX_AUTHHTTPADDRESS="\${FAITHFORM_APP_URL}/api/stream/publish-auth?secret=\${STREAM_RELAY_WEBHOOK_SECRET}"; exec ${BIN_DIR}/mediamtx ${MEDIAMTX_DIR}/mediamtx.yml'
+ExecStart=/bin/bash -lc 'export MTX_AUTHMETHOD=http; export MTX_AUTHHTTPADDRESS="http://127.0.0.1:8091/auth"; exec ${BIN_DIR}/mediamtx ${MEDIAMTX_DIR}/mediamtx.yml'
 Restart=on-failure
 RestartSec=5
 LimitNOFILE=65536
@@ -64,7 +65,29 @@ LimitNOFILE=65536
 WantedBy=multi-user.target
 EOF
 
+cat > /etc/systemd/system/faithform-stream-auth-proxy.service <<EOF
+[Unit]
+Description=FaithForm local MediaMTX auth bridge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=${USER_NAME}
+Group=${USER_NAME}
+EnvironmentFile=-${ENV_FILE}
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+ExecStart=/usr/bin/python3 ${HOME_DIR}/scripts/auth-proxy.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
 systemctl daemon-reload
+systemctl enable faithform-stream-auth-proxy
+systemctl restart faithform-stream-auth-proxy
 systemctl enable faithform-mediamtx
 systemctl restart faithform-mediamtx
 
@@ -74,4 +97,4 @@ systemctl --no-pager status faithform-mediamtx
 echo ""
 echo "Edit ${ENV_FILE} and set STREAM_RELAY_WEBHOOK_SECRET to match Vercel."
 echo "RTMP server URL: rtmp://stream.faithform.io/live"
-echo "Stream key format: {churchId}/{publishKey}"
+echo "Stream auth: paired agents receive a short-lived capability just in time"

@@ -40,7 +40,8 @@ export default async function DashboardLayout({
 
   const featureAccess = await getFeatureAccess(supabase);
 
-  const initialCollapsed = cookies().get("sidebar:collapsed")?.value === "1";
+  const initialCollapsed =
+    (await cookies()).get("sidebar:collapsed")?.value === "1";
 
   return (
     <>

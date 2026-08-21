@@ -37,10 +37,11 @@ function parseFilter(value: string | undefined): DomainRequestFilter {
 export default async function AdminDomainsPage({
   searchParams,
 }: {
-  searchParams: Record<string, string | string[] | undefined>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  const query = await searchParams;
   const filter = parseFilter(
-    typeof searchParams.filter === "string" ? searchParams.filter : undefined,
+    typeof query.filter === "string" ? query.filter : undefined,
   );
 
   const [requests, domains] = await Promise.all([

@@ -6,7 +6,7 @@ RTMP ingest on `stream.faithform.io`, copy-mode fan-out to YouTube/Facebook via 
 
 ```text
 ATEM/OBS → rtmp://stream.faithform.io/live
-             stream key: {churchId}/{publishKey}
+             stream key: {churchId}?token={short-lived capability}
                 ↓ MediaMTX
                 ↓ publish auth → FaithForm
                 ↓ relay-config → FaithForm
@@ -53,16 +53,20 @@ sudo systemctl restart faithform-mediamtx
 
 Per-church destinations now live in FaithForm Settings, not on the relay box.
 
-## HLS preview and public watch
+## Server-side HLS upstream
 
-MediaMTX serves HLS on port `8888`. Set in Vercel:
+MediaMTX serves HLS on port `8888`, but its read auth denies direct browsers.
+Only the FaithForm HLS proxy supplies the separate playback credential. Set in
+Vercel:
 
 ```bash
-NEXT_PUBLIC_STREAM_HLS_BASE_URL=https://stream.faithform.io:8888
 STREAM_HLS_UPSTREAM_URL=https://hls.faithform.io   # or direct :8888 if firewall open
+STREAM_RELAY_PLAYBACK_SECRET=replace-with-a-distinct-secret
 ```
 
-Open firewall/tcp for `8888` on the relay host if browsers cannot load `.m3u8` playlists, **or** proxy HLS through a named Cloudflare Tunnel (see `DEPLOY.md`).
+Expose port `8888` only as required for the application server or a named
+Cloudflare Tunnel. A direct request without proxy credentials must receive an
+authorization failure; viewers use `/api/stream/hls/...` only.
 
 ## Browser studio WebSocket ingest
 
@@ -165,10 +169,15 @@ Replacing ffmpeg with the distro build (`sudo apt install ffmpeg`, 8.0.1 on
 Ubuntu 26.04) would remove the underlying crash. The relay does not depend on
 that — it never hands over a hostname — but it is worth doing.
 
-## ATEM settings
+## Encoder settings
 
 - Server: `rtmp://stream.faithform.io/live`
-- Stream key: `{churchId}/{publishKey}`
+- Stream key: supplied just-in-time by the paired FaithForm encoder agent as
+  `{churchId}?token={short-lived capability}`
+
+Do not store or manually distribute the historical persistent publish key. A
+direct hardware encoder must use an approved capability broker/agent rather
+than a static key.
 
 ## Logs
 

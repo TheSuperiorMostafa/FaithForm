@@ -25,8 +25,8 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 type PageProps = {
-  params: { id: string };
-  searchParams: Record<string, string | string[] | undefined>;
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
 function parseActivityRange(value: string | undefined): AdminActivityRange {
@@ -63,17 +63,18 @@ export default async function AdminChurchDetailPage({
   params,
   searchParams,
 }: PageProps) {
+  const [{ id }, query] = await Promise.all([params, searchParams]);
   const activityFilters = {
     category:
-      typeof searchParams.category === "string"
-        ? searchParams.category
+      typeof query.category === "string"
+        ? query.category
         : undefined,
-    type: typeof searchParams.type === "string" ? searchParams.type : undefined,
+    type: typeof query.type === "string" ? query.type : undefined,
     range: parseActivityRange(
-      typeof searchParams.range === "string" ? searchParams.range : undefined,
+      typeof query.range === "string" ? query.range : undefined,
     ),
     page: parsePage(
-      typeof searchParams.page === "string" ? searchParams.page : undefined,
+      typeof query.page === "string" ? query.page : undefined,
     ),
   };
 
@@ -86,13 +87,13 @@ export default async function AdminChurchDetailPage({
     domains,
     domainRequests,
   ] = await Promise.all([
-    getAdminChurchDetail(params.id),
-    getAdminChurchActivity(params.id, activityFilters),
-    getChurchFeatureState(params.id, createAdminClient()),
-    getChurchTeamMembers(params.id),
-    loadChurchProfileForAdmin(params.id),
-    getChurchDomains(params.id),
-    getChurchDomainRequests(params.id),
+    getAdminChurchDetail(id),
+    getAdminChurchActivity(id, activityFilters),
+    getChurchFeatureState(id, createAdminClient()),
+    getChurchTeamMembers(id),
+    loadChurchProfileForAdmin(id),
+    getChurchDomains(id),
+    getChurchDomainRequests(id),
   ]);
 
   if (!detail) notFound();
@@ -123,7 +124,7 @@ export default async function AdminChurchDetailPage({
         domainRequests={domainRequests}
         domainAutomated={getDomainProvider().automated}
         defaultTab={parseTab(
-          typeof searchParams.tab === "string" ? searchParams.tab : undefined,
+          typeof query.tab === "string" ? query.tab : undefined,
         )}
       />
     </div>

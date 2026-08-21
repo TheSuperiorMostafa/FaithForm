@@ -31,8 +31,8 @@ for arg in "$@"; do
 done
 
 echo "→ syncing scripts to ${RELAY_HOST}:~/scripts"
-rsync -av "$SRC"/*.sh "$SRC"/ws-ingest.py "${RELAY_HOST}:scripts/"
-ssh "$RELAY_HOST" 'chmod +x ~/scripts/*.sh'
+rsync -av "$SRC"/*.sh "$SRC"/*.py "${RELAY_HOST}:scripts/"
+ssh "$RELAY_HOST" 'chmod +x ~/scripts/*.sh ~/scripts/*.py'
 
 if [[ $WITH_CONFIG -eq 1 ]]; then
   echo "→ syncing mediamtx.yml"
@@ -56,4 +56,4 @@ fi
 
 echo
 echo "Deployed. Watch the next broadcast with:"
-echo "  ssh ${RELAY_HOST} 'tail -f ~/mediamtx/logs/live_*.log'"
+echo "  ssh ${RELAY_HOST} 'tail -f ~/mediamtx/logs/stream_*.log'"

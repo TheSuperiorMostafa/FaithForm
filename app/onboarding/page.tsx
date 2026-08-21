@@ -7,12 +7,13 @@ import {
 } from "@/app/onboarding/actions";
 
 type PageProps = {
-  searchParams: { token?: string; step?: string };
+  searchParams: Promise<{ token?: string; step?: string }>;
 };
 
 export default async function OnboardingPage({ searchParams }: PageProps) {
-  const token = searchParams.token ?? "";
-  const stepParam = parseInt(searchParams.step ?? "1", 10);
+  const query = await searchParams;
+  const token = query.token ?? "";
+  const stepParam = parseInt(query.step ?? "1", 10);
   const initialStep = Number.isFinite(stepParam)
     ? Math.min(6, Math.max(1, stepParam))
     : 1;

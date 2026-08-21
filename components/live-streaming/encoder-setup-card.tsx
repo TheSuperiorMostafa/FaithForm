@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, Copy, KeyRound, RotateCcw, Server } from "lucide-react";
+import { Check, Copy, KeyRound, Server } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -14,23 +14,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 type EncoderSetupCardProps = {
-  isAdmin: boolean;
-  streamName: string;
   ingestServerUrl: string;
-  pending: boolean;
-  onRotateKey: () => void;
 };
 
 export function EncoderSetupCard({
-  isAdmin,
-  streamName,
   ingestServerUrl,
-  pending,
-  onRotateKey,
 }: EncoderSetupCardProps) {
-  const [copied, setCopied] = useState<"server" | "key" | null>(null);
+  const [copied, setCopied] = useState<"server" | null>(null);
 
-  const copy = async (field: "server" | "key", value: string) => {
+  const copy = async (field: "server", value: string) => {
     await navigator.clipboard.writeText(value);
     setCopied(field);
     setTimeout(() => setCopied(null), 2000);
@@ -44,7 +36,8 @@ export function EncoderSetupCard({
           Encoder settings
         </CardTitle>
         <CardDescription>
-          Paste these into ATEM Mini Pro, OBS, or any RTMP encoder.
+          Pair the streaming PC below. FaithForm delivers the ingest credential
+          directly to the trusted encoder agent; it is never shown in a browser.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -74,50 +67,11 @@ export function EncoderSetupCard({
           </div>
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="encoder-key" className="flex items-center gap-1.5">
-            <KeyRound className="size-3.5 text-muted-foreground" />
-            Stream key
-          </Label>
-          <div className="flex gap-2">
-            <Input
-              id="encoder-key"
-              value={streamName}
-              readOnly
-              placeholder="Generating…"
-              className="font-mono text-sm"
-            />
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              className="shrink-0"
-              disabled={!streamName}
-              onClick={() => void copy("key", streamName)}
-              aria-label="Copy stream key"
-            >
-              {copied === "key" ? (
-                <Check className="size-4" />
-              ) : (
-                <Copy className="size-4" />
-              )}
-            </Button>
-          </div>
-        </div>
-
-        {isAdmin ? (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="gap-2"
-            disabled={pending || !streamName}
-            onClick={onRotateKey}
-          >
-            <RotateCcw className="size-4" />
-            Regenerate key
-          </Button>
-        ) : null}
+        <p className="flex items-start gap-2 rounded-lg bg-muted p-3 text-sm text-muted-foreground">
+          <KeyRound className="mt-0.5 size-4 shrink-0" />
+          A short-lived ingest capability is delivered only when the paired
+          encoder starts a broadcast, then cleared when it stops.
+        </p>
       </CardContent>
     </Card>
   );

@@ -1,3 +1,4 @@
+import { createHmac } from "crypto";
 import { createAdminClientOrNull } from "@/lib/supabase/admin";
 
 export type RateLimitOptions = {
@@ -9,77 +10,89 @@ export type RateLimitResult =
   | { ok: true }
   | { ok: false; retryAfterSeconds: number };
 
+/**
+ * Forwarded headers are accepted only when the deployment explicitly declares
+ * a trusted proxy (Vercel does this by setting VERCEL=1). Direct deployments
+ * otherwise share an "untrusted" signal until the operator configures the
+ * proxy, which is safer than accepting a spoofable client header.
+ */
 export function getClientIp(request: Request): string {
-  const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) {
-    return forwarded.split(",")[0]?.trim() || "unknown";
-  }
+  const trustProxy =
+    process.env.VERCEL === "1" || process.env.TRUST_PROXY_HEADERS === "true";
+  if (!trustProxy) return "untrusted";
+
+  const vercel = request.headers.get("x-vercel-forwarded-for")?.trim();
+  if (vercel) return vercel.split(",")[0]?.trim() || "unknown";
+  const forwarded = request.headers.get("x-forwarded-for")?.trim();
+  if (forwarded) return forwarded.split(",")[0]?.trim() || "unknown";
   return request.headers.get("x-real-ip")?.trim() || "unknown";
+}
+
+function rateLimitSecret(): string {
+  const secret = process.env.RATE_LIMIT_KEY_SECRET?.trim();
+  if (process.env.NODE_ENV === "production") {
+    if (!secret || secret.length < 32 || secret.startsWith("replace-me")) {
+      throw new Error("Rate limiting is unavailable.");
+    }
+    return secret;
+  }
+  return secret || "dev-only-rate-limit-key-secret";
+}
+
+export function hashRateLimitKey(key: string, secret?: string): string {
+  return createHmac("sha256", secret ?? rateLimitSecret())
+    .update(key)
+    .digest("base64url");
 }
 
 export async function checkRateLimit(
   key: string,
   options: RateLimitOptions,
 ): Promise<RateLimitResult> {
+  if (
+    !Number.isInteger(options.limit) ||
+    options.limit < 1 ||
+    !Number.isInteger(options.windowMs) ||
+    options.windowMs < 1000
+  ) {
+    return { ok: false, retryAfterSeconds: 60 };
+  }
+
   const admin = createAdminClientOrNull();
   if (!admin) {
-    return { ok: true };
+    console.error("[rate-limit] unavailable");
+    return { ok: false, retryAfterSeconds: 60 };
   }
 
-  const now = new Date();
-  const windowStart = new Date(now.getTime() - (now.getTime() % options.windowMs));
-
-  const { data: existing, error: selectError } = await admin
-    .from("api_rate_limits")
-    .select("rate_key, window_start, hit_count")
-    .eq("rate_key", key)
-    .maybeSingle();
-
-  if (selectError) {
-    console.error("[rate-limit] select failed:", selectError.message);
-    return { ok: true };
+  let hashedKey: string;
+  try {
+    hashedKey = hashRateLimitKey(key);
+  } catch {
+    console.error("[rate-limit] configuration unavailable");
+    return { ok: false, retryAfterSeconds: 60 };
   }
 
-  const existingWindow = existing?.window_start
-    ? new Date(existing.window_start as string).getTime()
-    : null;
-  const currentWindow = windowStart.getTime();
+  const windowSeconds = Math.ceil(options.windowMs / 1000);
+  const { data, error } = await admin.rpc("consume_api_rate_limit", {
+    p_rate_key: hashedKey,
+    p_limit: options.limit,
+    p_window_seconds: windowSeconds,
+  });
 
-  if (!existing || existingWindow !== currentWindow) {
-    const { error: upsertError } = await admin.from("api_rate_limits").upsert(
-      {
-        rate_key: key,
-        window_start: windowStart.toISOString(),
-        hit_count: 1,
-      },
-      { onConflict: "rate_key" },
-    );
-
-    if (upsertError) {
-      console.error("[rate-limit] upsert failed:", upsertError.message);
-    }
-    return { ok: true };
+  if (error || !data?.[0]) {
+    console.error("[rate-limit] store unavailable");
+    return { ok: false, retryAfterSeconds: 60 };
   }
 
-  const hitCount = (existing.hit_count as number) + 1;
-
-  if (hitCount > options.limit) {
-    const retryAfterSeconds = Math.ceil(
-      (currentWindow + options.windowMs - now.getTime()) / 1000,
-    );
-    return { ok: false, retryAfterSeconds: Math.max(retryAfterSeconds, 1) };
-  }
-
-  const { error: updateError } = await admin
-    .from("api_rate_limits")
-    .update({ hit_count: hitCount })
-    .eq("rate_key", key);
-
-  if (updateError) {
-    console.error("[rate-limit] update failed:", updateError.message);
-  }
-
-  return { ok: true };
+  const result = data[0] as {
+    allowed: boolean;
+    retry_after_seconds: number;
+  };
+  if (result.allowed) return { ok: true };
+  return {
+    ok: false,
+    retryAfterSeconds: Math.max(1, result.retry_after_seconds || 1),
+  };
 }
 
 export async function assertRateLimit(
@@ -94,6 +107,7 @@ export function rateLimitResponse(retryAfterSeconds: number): Response {
     status: 429,
     headers: {
       "Content-Type": "application/json",
+      "Cache-Control": "no-store",
       "Retry-After": String(retryAfterSeconds),
     },
   });

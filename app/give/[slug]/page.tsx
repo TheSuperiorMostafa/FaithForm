@@ -5,8 +5,8 @@ import { getActiveFundsForChurch } from "@/lib/giving/funds";
 import { getChurchBySlug } from "@/lib/queries/giving";
 
 type PageProps = {
-  params: { slug: string };
-  searchParams?: { amount?: string };
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<{ amount?: string }>;
 };
 
 /**
@@ -26,7 +26,8 @@ function parseAmountCents(raw: string | undefined): number | undefined {
 }
 
 export default async function GivePage({ params, searchParams }: PageProps) {
-  const church = await getChurchBySlug(params.slug);
+  const [{ slug }, query] = await Promise.all([params, searchParams]);
+  const church = await getChurchBySlug(slug);
 
   if (!church) {
     notFound();
@@ -61,7 +62,7 @@ export default async function GivePage({ params, searchParams }: PageProps) {
       logoUrl={church.logoUrl}
       givingPrimaryColor={church.givingPrimaryColor}
       funds={funds}
-      initialAmountCents={parseAmountCents(searchParams?.amount)}
+      initialAmountCents={parseAmountCents(query.amount)}
     />
   );
 }

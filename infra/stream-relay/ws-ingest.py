@@ -4,15 +4,14 @@
 from __future__ import annotations
 
 import asyncio
-import base64
-import hashlib
-import hmac
 import json
 import os
+import re
 import signal
 import time
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, urlparse
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 try:
     import websockets
@@ -26,47 +25,90 @@ HOST = os.environ.get("WS_INGEST_HOST", "127.0.0.1")
 PORT = int(os.environ.get("WS_INGEST_PORT", "8090"))
 RTMP_BASE = os.environ.get("RTMP_BASE", "rtmp://127.0.0.1:1935/live")
 SECRET = os.environ.get("STREAM_RELAY_WEBHOOK_SECRET", "")
+FAITHFORM_APP_URL = os.environ.get("FAITHFORM_APP_URL", "").rstrip("/")
+SAFE_CLIENT_EVENTS = {
+    "recorder_start",
+    "stats",
+    "shed",
+    "fatal_backlog",
+    "oversized_chunk",
+    "recorder_error",
+    "recorder_stopped",
+    "track_ended",
+    "visibility",
+}
+SAFE_CLIENT_METRICS = {
+    "requestedVideoBps",
+    "measuredUplinkBps",
+    "trackWidth",
+    "trackHeight",
+    "trackFps",
+    "buffered",
+    "bytesSent",
+    "chunksSent",
+    "shedLevel",
+    "framesDrawn",
+    "hidden",
+    "shed",
+    "backloggedForMs",
+    "size",
+    "parts",
+}
 
 
-def verify_token(token: str) -> tuple[str, str] | None:
-    if not SECRET or "." not in token:
+class NoRedirect(HTTPRedirectHandler):
+    def redirect_request(self, _req, _fp, _code, _msg, _headers, _newurl):
         return None
 
-    body_b64, sig = token.split(".", 1)
+
+OPENER = build_opener(NoRedirect)
+
+
+def sanitize_subprocess_log(text: str) -> str:
+    text = re.sub(
+        r"((?:rtmps?|rtsp|https?)://[^/\s]+)(?:/[^\s]*)?",
+        r"\1/[redacted]",
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(
+        r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b",
+        "[tenant]",
+        text,
+        flags=re.IGNORECASE,
+    )
+    return re.sub(
+        r"\b(token|key|secret|password)=\S+",
+        r"\1=[redacted]",
+        text,
+        flags=re.IGNORECASE,
+    )
+
+
+def resolve_ingest_capability(token: str) -> str | None:
+    """Resolve an opaque browser capability through the trusted app backend."""
+    if not SECRET or not FAITHFORM_APP_URL or not token or len(token) > 2048:
+        return None
     try:
-        padding = "=" * (-len(body_b64) % 4)
-        body = base64.urlsafe_b64decode(body_b64 + padding).decode("utf-8")
+        request = Request(
+            f"{FAITHFORM_APP_URL}/api/stream/ingest-capability",
+            data=json.dumps({"token": token}).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "X-Stream-Relay-Secret": SECRET,
+            },
+            method="POST",
+        )
+        with OPENER.open(request, timeout=10) as response:
+            payload = json.loads(response.read().decode("utf-8"))
     except Exception:
         return None
-
-    expected = hmac.new(
-        SECRET.encode("utf-8"),
-        body.encode("utf-8"),
-        hashlib.sha256,
-    ).digest()
-    expected_b64 = base64.urlsafe_b64encode(expected).decode("utf-8").rstrip("=")
-
-    sig_norm = sig.rstrip("=")
-    if not hmac.compare_digest(expected_b64, sig_norm):
+    stream_name = payload.get("streamName")
+    if not isinstance(stream_name, str):
         return None
-
-    parts = body.split(":")
-    if len(parts) != 3:
+    if not re.fullmatch(r"[0-9a-fA-F-]{36}", stream_name):
         return None
-
-    church_id, publish_key, exp_str = parts
-    try:
-        exp = int(exp_str)
-    except ValueError:
-        return None
-
-    if exp < int(time.time()):
-        return None
-
-    if not church_id or not publish_key:
-        return None
-
-    return church_id, publish_key
+    return stream_name
 
 
 def clamp(value, low, high, default):
@@ -208,7 +250,10 @@ async def spawn_ffmpeg(rtmp_url: str, settings: StreamSettings):
                 break
             text = line.decode("utf-8", errors="ignore").strip()
             if text:
-                print(f"[ws-ingest] ffmpeg: {text}", flush=True)
+                print(
+                    f"[ws-ingest] ffmpeg: {sanitize_subprocess_log(text)}",
+                    flush=True,
+                )
 
     stderr_task = asyncio.create_task(read_stderr())
     return proc, stderr_task
@@ -278,12 +323,28 @@ async def run_session(ws, rtmp_url: str) -> None:
                     # looks identical from here whether the recorder died, the
                     # uplink stalled, or someone closed the tab; these are the
                     # only signal that tells them apart.
-                    name = payload.pop("name", "?")
-                    payload.pop("event", None)
-                    at = payload.pop("at", None)
-                    detail = " ".join(f"{k}={v}" for k, v in payload.items())
-                    stamp = f"+{at}ms" if at is not None else ""
-                    print(f"[ws-ingest] client {stamp} {name} {detail}".rstrip(), flush=True)
+                    name = payload.get("name")
+                    if name not in SAFE_CLIENT_EVENTS:
+                        continue
+                    at = payload.get("at")
+                    stamp = (
+                        f"+{round(at)}ms"
+                        if isinstance(at, (int, float)) and 0 <= at <= 86_400_000
+                        else ""
+                    )
+                    safe_metrics = []
+                    for key in SAFE_CLIENT_METRICS:
+                        value = payload.get(key)
+                        if isinstance(value, bool) or (
+                            isinstance(value, (int, float))
+                            and -1_000_000_000 <= value <= 1_000_000_000_000
+                        ):
+                            safe_metrics.append(f"{key}={value}")
+                    detail = " ".join(safe_metrics)
+                    print(
+                        f"[ws-ingest] client {stamp} {name} {detail}".rstrip(),
+                        flush=True,
+                    )
                 continue
 
             if not isinstance(message, bytes):
@@ -340,15 +401,17 @@ async def handler(ws) -> None:
     parsed = urlparse(request_path)
     token = parse_qs(parsed.query).get("token", [""])[0]
 
-    parsed = verify_token(token)
-    if not parsed:
+    stream_name = await asyncio.to_thread(resolve_ingest_capability, token)
+    if not stream_name:
         await ws.send(json.dumps({"error": "Unauthorized ingest token."}))
         await ws.close()
         return
 
-    church_id, publish_key = parsed
-    rtmp_url = f"{RTMP_BASE}/{church_id}/{publish_key}"
-    print(f"[ws-ingest] starting ingest for {church_id}", flush=True)
+    # MediaMTX receives a stable, non-secret path and the already verified,
+    # short-lived capability as an auth query parameter. Never resolve or put
+    # the persistent integration credential on a client-visible path.
+    rtmp_url = f"{RTMP_BASE}/{stream_name}?token={quote(token, safe='')}"
+    print("[ws-ingest] starting authorized ingest", flush=True)
 
     await ws.send(json.dumps({"ok": True}))
     await run_session(ws, rtmp_url)
@@ -357,6 +420,8 @@ async def handler(ws) -> None:
 async def main() -> None:
     if not SECRET:
         raise SystemExit("STREAM_RELAY_WEBHOOK_SECRET is required")
+    if not FAITHFORM_APP_URL:
+        raise SystemExit("FAITHFORM_APP_URL is required")
 
     # The browser splits its own output well below this, but a hidden tab can
     # flush minutes of accumulated audio at once and an over-limit frame closes

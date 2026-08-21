@@ -351,6 +351,7 @@ export async function retryPendingSyndication(
     // a service — orphaning the one people are already watching. A destination
     // that exists is the relay's problem to reconnect to, not ours to replace.
     const settings = await getStreamRelaySettings(event.church_id, {
+      includeSecret: true,
       supabase: client,
     });
 

@@ -27,7 +27,7 @@ export async function hideStreamChatMessage(
   }
 
   try {
-    await hideChatMessage(messageId);
+    await hideChatMessage(messageId, auth.churchId);
     revalidatePath("/dashboard/live-streaming");
     return { ok: true, message: "Message hidden." };
   } catch (error) {

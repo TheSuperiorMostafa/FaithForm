@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown, Settings2 } from "lucide-react";
 import { toast } from "sonner";
-import { regenerateStreamRelayKey } from "@/app/dashboard/live-streaming/actions";
 import { BroadcastStudioCard } from "@/components/live-streaming/broadcast-studio-card";
 import { EncoderDocsCard } from "@/components/live-streaming/encoder-docs-card";
 import { EncoderPairingCard } from "@/components/live-streaming/encoder-pairing-card";
@@ -56,8 +55,6 @@ export function LiveStreamingDashboard({
 }: LiveStreamingDashboardProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [pending, startTransition] = useTransition();
-  const [streamName, setStreamName] = useState(settings.streamName ?? "");
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
@@ -72,27 +69,6 @@ export function LiveStreamingDashboard({
       router.replace("/dashboard/live-streaming");
     }
   }, [searchParams, router]);
-
-  const handleRotateKey = () => {
-    if (
-      !confirm(
-        "Regenerate the stream key? Update ATEM, OBS, and the streaming PC agent before your next broadcast.",
-      )
-    ) {
-      return;
-    }
-
-    startTransition(async () => {
-      const result = await regenerateStreamRelayKey();
-      if (!result.ok) {
-        toast.error(result.error ?? "Could not regenerate key.");
-        return;
-      }
-
-      if (result.streamName) setStreamName(result.streamName);
-      toast.success("Stream key regenerated.");
-    });
-  };
 
   return (
     <div className="flex flex-col gap-6">
@@ -153,7 +129,7 @@ export function LiveStreamingDashboard({
                 Live settings
               </span>
               <span className="text-sm text-muted-foreground">
-                Stream key, encoder presets, and the streaming PC.
+                Encoder pairing, presets, and the streaming PC.
               </span>
             </span>
           </span>
@@ -168,11 +144,7 @@ export function LiveStreamingDashboard({
         {settingsOpen && (
           <div className="flex flex-col gap-6 border-t border-border p-5">
             <EncoderSetupCard
-              isAdmin={isAdmin}
-              streamName={streamName}
               ingestServerUrl={settings.ingestServerUrl}
-              pending={pending}
-              onRotateKey={handleRotateKey}
             />
 
             <EncoderPairingCard isAdmin={isAdmin} devices={encoderDevices} />

@@ -1,9 +1,10 @@
-import { ManageRecurringForm } from "@/app/give/[slug]/manage/manage-form";
+import { redirect } from "next/navigation";
 
 type PageProps = {
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 };
 
-export default function ManageRecurringPage({ params }: PageProps) {
-  return <ManageRecurringForm slug={params.slug} />;
+export default async function ManageRecurringPage({ params }: PageProps) {
+  const { slug } = await params;
+  redirect(`/give/${encodeURIComponent(slug)}/portal`);
 }

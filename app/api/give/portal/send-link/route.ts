@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { sendPortalMagicLinkEmail } from "@/lib/email/giving";
-import { upsertGivingDonor } from "@/lib/giving/donors";
 import { createPortalMagicLink } from "@/lib/giving/portal-session";
 import { getChurchBySlug } from "@/lib/queries/giving";
 import {
@@ -38,10 +37,13 @@ export async function POST(request: Request) {
     return rateLimitResponse(rate.retryAfterSeconds);
   }
 
+  const generic = NextResponse.json({
+    ok: true,
+    message: "If that donor account exists, a sign-in link will arrive shortly.",
+  });
+
   const church = await getChurchBySlug(parsed.data.slug);
-  if (!church) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
-  }
+  if (!church) return generic;
 
   const admin = createAdminClient();
   const email = parsed.data.email.trim().toLowerCase();
@@ -53,47 +55,26 @@ export async function POST(request: Request) {
     .eq("email", email)
     .maybeSingle();
 
-  const donorId = existingDonor?.id
-    ? (existingDonor.id as string)
-    : (
-        await upsertGivingDonor({
-          churchId: church.churchId,
-          email,
-          name: "",
-        })
-      ).donorId;
+  if (!existingDonor?.id) return generic;
 
-  const isNewDonor = !existingDonor?.id;
+  try {
+    const magicLink = await createPortalMagicLink({
+      churchId: church.churchId,
+      donorId: existingDonor.id as string,
+      churchSlug: church.slug,
+    });
 
-  const magicLink = await createPortalMagicLink({
-    churchId: church.churchId,
-    donorId,
-    churchSlug: church.slug,
-  });
-
-  const { sent } = await sendPortalMagicLinkEmail({
-    donorEmail: email,
-    churchName: church.churchName,
-    magicLink,
-    isNewDonor,
-    primaryColor: church.givingPrimaryColor,
-    accentColor: church.givingAccentColor,
-  });
-
-  if (!sent) {
-    return NextResponse.json(
-      {
-        error:
-          "We couldn't send the email right now. Please try again in a few minutes.",
-      },
-      { status: 503 },
-    );
+    const { sent } = await sendPortalMagicLinkEmail({
+      donorEmail: email,
+      churchName: church.churchName,
+      magicLink,
+      isNewDonor: false,
+      primaryColor: church.givingPrimaryColor,
+      accentColor: church.givingAccentColor,
+    });
+    if (!sent) console.error("[portal-link] delivery unavailable");
+  } catch {
+    console.error("[portal-link] delivery unavailable");
   }
-
-  return NextResponse.json({
-    ok: true,
-    message: isNewDonor
-      ? "Check your email for a link to create your donor account."
-      : "Check your email for a sign-in link.",
-  });
+  return generic;
 }

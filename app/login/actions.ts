@@ -13,7 +13,7 @@ export type LoginFormState = {
 };
 
 async function enforceLoginRateLimit(action: string): Promise<LoginFormState | null> {
-  const ip = getRequestIpFromHeaders();
+  const ip = await getRequestIpFromHeaders();
   const rate = await assertRateLimit(`login:${action}:${ip}`, {
     limit: 10,
     windowMs: 15 * 60 * 1000,

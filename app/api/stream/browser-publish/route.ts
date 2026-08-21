@@ -23,19 +23,9 @@ export async function GET() {
   const denied = await featureAccessDenied("live_stream", supabase);
   if (denied) return denied;
 
-  const settings = await getStreamRelaySettings(auth.churchId, {
-    includeSecret: true,
-    supabase,
-  });
+  const settings = await getStreamRelaySettings(auth.churchId, { supabase });
 
-  if (!settings.streamPath) {
-    return NextResponse.json(
-      { error: "Stream credentials are not configured." },
-      { status: 400 },
-    );
-  }
-
-  if (!settings.publishKey) {
+  if (!settings.connected) {
     return NextResponse.json(
       { error: "Stream credentials are not configured." },
       { status: 400 },
@@ -43,7 +33,7 @@ export async function GET() {
   }
 
   const wsBase = getWsIngestBaseUrl();
-  const ingestToken = signIngestToken(auth.churchId, settings.publishKey);
+  const ingestToken = signIngestToken(auth.churchId);
   const wsIngestUrl = wsBase
     ? `${wsBase}/?token=${encodeURIComponent(ingestToken)}`
     : null;
@@ -53,6 +43,5 @@ export async function GET() {
     wsIngestUrl,
     whipUrl: "/api/stream/whip",
     iceServers: getBrowserIceServers(),
-    streamPath: settings.streamPath,
   });
 }

@@ -3,9 +3,7 @@ import { compareSecret } from "@/lib/security/compare-secret";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function GET(request: Request) {
-  const provided =
-    request.headers.get("x-stream-relay-secret") ??
-    new URL(request.url).searchParams.get("secret");
+  const provided = request.headers.get("x-stream-relay-secret");
   const expected = process.env.STREAM_RELAY_WEBHOOK_SECRET;
 
   if (!compareSecret(provided, expected)) {

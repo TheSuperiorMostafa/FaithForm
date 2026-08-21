@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getChurchAuth } from "@/lib/auth/church";
 import { featureAccessDenied } from "@/lib/features/guard";
+import { signIngestToken } from "@/lib/stream/ingest-token";
 import { getStreamRelaySettings } from "@/lib/stream/relay";
 import { createClient } from "@/lib/supabase/server";
 import { isAbortError, startStreamTimer } from "@/lib/stream/telemetry";
@@ -52,7 +53,8 @@ export async function POST(request: Request) {
   }
 
   const settings = await getStreamRelaySettings(auth.churchId, {
-    includeSecret: true,
+    includeSecret: false,
+    includeInternalPath: true,
     supabase,
   });
   timer.mark("settings");
@@ -63,17 +65,17 @@ export async function POST(request: Request) {
   }
 
   const sdp = await request.text();
-  const upstream = `${getWhipUpstreamBase()}/${settings.streamPath}/whip`;
-  const basicAuth = Buffer.from(`:${settings.publishKey}`).toString("base64");
+  const capability = signIngestToken(auth.churchId);
+  const upstream = `${getWhipUpstreamBase()}/${settings.streamPath}/whip?token=${encodeURIComponent(capability)}`;
 
   let upstreamResponse: Response;
   try {
     timer.mark("upstream_start");
     upstreamResponse = await fetch(upstream, {
       method: "POST",
+      redirect: "manual",
       headers: {
         "Content-Type": "application/sdp",
-        Authorization: `Basic ${basicAuth}`,
       },
       body: sdp,
       // Stop negotiating the moment the broadcaster gives up on the request.
@@ -99,11 +101,7 @@ export async function POST(request: Request) {
       status: upstreamResponse.status,
     });
     return NextResponse.json(
-      {
-        error:
-          answer.trim() ||
-          `WHIP upstream failed (${upstreamResponse.status}). Check relay webhook secret.`,
-      },
+      { error: "Browser publish negotiation failed." },
       { status: upstreamResponse.status },
     );
   }
@@ -121,7 +119,7 @@ export async function POST(request: Request) {
     headers.set("Access-Control-Expose-Headers", "Location");
   }
 
-  timer.end("ok", { status: upstreamResponse.status, churchId: auth.churchId });
+  timer.end("ok", { status: upstreamResponse.status });
 
   return new NextResponse(answer, {
     status: upstreamResponse.status,
@@ -161,7 +159,20 @@ export async function DELETE(request: Request) {
   }
 
   try {
-    await fetch(new URL(location, getWhipUpstreamBase()), { method: "DELETE" });
+    const response = await fetch(new URL(location, getWhipUpstreamBase()), {
+      method: "DELETE",
+      redirect: "manual",
+    });
+    if (!response.ok) {
+      timer.end("error", {
+        category: "upstream_status",
+        status: response.status,
+      });
+      return NextResponse.json(
+        { error: "Could not stop browser publish." },
+        { status: 502 },
+      );
+    }
   } catch {
     timer.end("error", { category: "upstream_unreachable", status: 502 });
     return NextResponse.json(
@@ -170,6 +181,6 @@ export async function DELETE(request: Request) {
     );
   }
 
-  timer.end("ok", { churchId: auth.churchId });
+  timer.end("ok");
   return NextResponse.json({ ok: true });
 }

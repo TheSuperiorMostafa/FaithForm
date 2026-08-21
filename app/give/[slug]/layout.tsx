@@ -5,11 +5,12 @@ import "./give-branding.css";
 
 type LayoutProps = {
   children: React.ReactNode;
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 };
 
 export async function generateMetadata({ params }: LayoutProps): Promise<Metadata> {
-  const church = await getChurchBySlug(params.slug);
+  const { slug } = await params;
+  const church = await getChurchBySlug(slug);
   return {
     title: church ? `Give to ${church.churchName}` : "Give | FaithForm",
     description: church
@@ -19,7 +20,8 @@ export async function generateMetadata({ params }: LayoutProps): Promise<Metadat
 }
 
 export default async function GiveLayout({ children, params }: LayoutProps) {
-  const church = await getChurchBySlug(params.slug);
+  const { slug } = await params;
+  const church = await getChurchBySlug(slug);
   const branded = church
     ? hasChurchBranding(
         church.logoUrl,

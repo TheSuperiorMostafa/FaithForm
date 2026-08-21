@@ -1,9 +1,10 @@
 import { redirect } from "next/navigation";
 
 type PageProps = {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 };
 
-export default function EditAnnouncementPage({ params }: PageProps) {
-  redirect(`/dashboard/announcements?published=${params.id}`);
+export default async function EditAnnouncementPage({ params }: PageProps) {
+  const { id } = await params;
+  redirect(`/dashboard/announcements?published=${id}`);
 }

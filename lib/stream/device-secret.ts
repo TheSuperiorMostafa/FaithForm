@@ -1,4 +1,4 @@
-import { createHash, randomBytes, timingSafeEqual } from "crypto";
+import { createHash, randomBytes, randomInt, timingSafeEqual } from "crypto";
 
 function getPepper(): string {
   const pepper =
@@ -38,5 +38,5 @@ export function generateDeviceSecret(): string {
 }
 
 export function generatePairingCode(): string {
-  return String(Math.floor(100000 + Math.random() * 900000));
+  return String(randomInt(100000, 1000000));
 }

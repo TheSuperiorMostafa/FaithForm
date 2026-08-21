@@ -1,5 +1,10 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { STREAM_RECORDINGS_BUCKET } from "@/lib/stream/recording-storage";
+import {
+  buildCapabilityStreamName,
+  MAX_INGEST_TTL_SEC,
+  signIngestToken,
+} from "@/lib/stream/ingest-token";
 import { getStreamRelaySettings } from "@/lib/stream/relay";
 
 const SIMULATED_BUCKET = STREAM_RECORDINGS_BUCKET;
@@ -50,11 +55,11 @@ export async function listPendingSimulatedPlayoutJobs(): Promise<
   for (const event of events) {
     const churchId = event.church_id as string;
     const settings = await getStreamRelaySettings(churchId, {
-      includeSecret: true,
+      includeSecret: false,
       supabase: admin,
     });
 
-    if (!settings.streamPath || !settings.ingestServerUrl || !settings.streamName) {
+    if (!settings.connected || !settings.ingestServerUrl) {
       continue;
     }
 
@@ -63,7 +68,10 @@ export async function listPendingSimulatedPlayoutJobs(): Promise<
       churchId,
       sourceUrl: event.artwork_url as string,
       ingestUrl: settings.ingestServerUrl,
-      streamName: settings.streamName,
+      streamName: buildCapabilityStreamName(
+        churchId,
+        signIngestToken(churchId, { ttlSec: MAX_INGEST_TTL_SEC }),
+      ),
     });
   }
 

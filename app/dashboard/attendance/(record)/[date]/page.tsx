@@ -13,11 +13,11 @@ import { createClient } from "@/lib/supabase/server";
 import { isSundayDate, isValidDateParam } from "@/lib/utils/dates";
 
 type PageProps = {
-  params: { date: string };
+  params: Promise<{ date: string }>;
 };
 
 export default async function AttendanceDatePage({ params }: PageProps) {
-  const { date } = params;
+  const { date } = await params;
 
   if (!isValidDateParam(date)) {
     notFound();

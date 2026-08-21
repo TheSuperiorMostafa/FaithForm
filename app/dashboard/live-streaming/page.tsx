@@ -18,14 +18,13 @@ export default async function LiveStreamingPage() {
   const auth = await getChurchAuth(supabase);
   if (!auth) redirect("/login");
 
+  if (auth.isAdmin) {
+    await ensureStreamRelayCredentials(auth.churchId, auth.userId);
+  }
+
   const [settings, broadcastStatus, devices, events, churchRow] =
     await Promise.all([
-      auth.isAdmin
-        ? ensureStreamRelayCredentials(auth.churchId, auth.userId, supabase)
-        : getStreamRelaySettings(auth.churchId, {
-            includeSecret: false,
-            supabase,
-          }),
+      getStreamRelaySettings(auth.churchId, { includeSecret: false }),
       getLiveBroadcastStatus(auth.churchId, supabase),
       auth.isAdmin
         ? listEncoderDevices(auth.churchId, supabase)

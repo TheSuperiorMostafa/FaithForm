@@ -15,7 +15,8 @@ if [[ -z "${MTX_PATH:-}" ]]; then
   exit 1
 fi
 
-SAFE_PATH="${MTX_PATH//\//_}"
+PATH_DIGEST="$(printf '%s' "$MTX_PATH" | sha256sum | cut -c1-16)"
+SAFE_PATH="stream_${PATH_DIGEST}"
 FANOUT_PID_FILE="/home/mostafa/mediamtx/pids/${SAFE_PATH}.fanout.pid"
 RECORD_PID_FILE="/home/mostafa/mediamtx/pids/${SAFE_PATH}.record.pid"
 LOG_FILE="/home/mostafa/mediamtx/logs/${SAFE_PATH}.log"
@@ -78,7 +79,7 @@ upload_recording() {
   storage_path="$(printf '%s' "$response" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("storagePath",""))' 2>/dev/null)"
 
   if [[ -z "$upload_url" || -z "$storage_path" ]]; then
-    echo "[relay] upload URL response was unusable: ${response}" >>"$LOG_FILE"
+    echo "[relay] upload URL response was unusable" >>"$LOG_FILE"
     return 1
   fi
 
@@ -103,14 +104,14 @@ if [[ -f "$LATEST_FILE" && -n "${SECRET}" ]]; then
     DURATION="${DURATION:-0}"
 
     if STORAGE_PATH="$(upload_recording "$RECORD_FILE")" && [[ -n "$STORAGE_PATH" ]]; then
-      echo "[relay] uploaded ${RECORD_FILE} to ${STORAGE_PATH}" >>"$LOG_FILE"
+      echo "[relay] uploaded completed recording" >>"$LOG_FILE"
       curl -fsS --max-time 30 -X POST "${APP_URL%/}/api/stream/recording-complete" \
         -H "x-stream-relay-secret: ${SECRET}" \
         -H "content-type: application/json" \
         -d "{\"path\":\"${MTX_PATH}\",\"storagePath\":\"${STORAGE_PATH}\",\"durationSec\":${DURATION}}" \
         >>"$LOG_FILE" 2>&1 || true
     else
-      echo "[relay] recording kept locally at ${RECORD_FILE}; retry with upload-recording.sh" >>"$LOG_FILE"
+      echo "[relay] recording kept locally; retry with upload-recording.sh" >>"$LOG_FILE"
     fi
   fi
 fi

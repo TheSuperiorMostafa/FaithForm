@@ -3,11 +3,12 @@ import { getChurchBySlug } from "@/lib/queries/giving";
 
 type LayoutProps = {
   children: React.ReactNode;
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 };
 
 export async function generateMetadata({ params }: LayoutProps): Promise<Metadata> {
-  const church = await getChurchBySlug(params.slug);
+  const { slug } = await params;
+  const church = await getChurchBySlug(slug);
   return {
     title: church ? `Live — ${church.churchName}` : "Live | FaithForm",
     description: church

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { createHash } from "crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type MediaVisibility = "public" | "unlisted";
@@ -356,6 +357,28 @@ export async function recordMediaView(
   supabase?: SupabaseClient,
 ): Promise<void> {
   const db = client(supabase);
+  if (input.kind === "replay") {
+    if (!input.recordingId) throw new Error("Invalid media view relationship.");
+    const { data: recording } = await db
+      .from("stream_recordings")
+      .select("id")
+      .eq("id", input.recordingId)
+      .eq("church_id", input.churchId)
+      .in("visibility", ["public", "unlisted"])
+      .maybeSingle();
+    if (!recording?.id) throw new Error("Invalid media view relationship.");
+  } else {
+    if (!input.streamSessionId) throw new Error("Invalid media view relationship.");
+    const { data: session } = await db
+      .from("stream_sessions")
+      .select("id")
+      .eq("id", input.streamSessionId)
+      .eq("church_id", input.churchId)
+      .in("status", ["preparing", "waiting_for_encoder", "live"])
+      .maybeSingle();
+    if (!session?.id) throw new Error("Invalid media view relationship.");
+  }
+
   const { error } = await db.from("media_views").insert({
     church_id: input.churchId,
     recording_id: input.recordingId ?? null,
@@ -363,9 +386,22 @@ export async function recordMediaView(
     kind: input.kind,
     source: input.source,
     viewer_key: input.viewerKey ?? null,
+    idempotency_key: input.viewerKey
+      ? createHash("sha256")
+          .update(
+            [
+              input.churchId,
+              input.kind,
+              input.source,
+              input.recordingId ?? input.streamSessionId,
+              input.viewerKey,
+            ].join(":"),
+          )
+          .digest("hex")
+      : null,
   });
 
-  if (error && !/media_views/i.test(error.message)) {
-    console.error("recordMediaView:", error.message);
+  if (error && error.code !== "23505" && !/media_views/i.test(error.message)) {
+    console.error("[media-view] insert unavailable");
   }
 }

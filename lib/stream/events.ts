@@ -16,6 +16,7 @@ export type StreamEvent = {
   artworkUrl: string | null;
   chatEnabled: boolean;
   countdownEnabled: boolean;
+  publicAccess: boolean;
   simulated: boolean;
   simulatedSourcePath: string | null;
   streamSessionId: string | null;
@@ -38,6 +39,7 @@ type EventRow = {
   artwork_url: string | null;
   chat_enabled: boolean;
   countdown_enabled: boolean;
+  public_access?: boolean;
   simulated: boolean;
   simulated_source_path: string | null;
   stream_session_id: string | null;
@@ -61,6 +63,7 @@ function mapEvent(row: EventRow): StreamEvent {
     artworkUrl: row.artwork_url,
     chatEnabled: row.chat_enabled,
     countdownEnabled: row.countdown_enabled,
+    publicAccess: row.public_access !== false,
     simulated: row.simulated,
     simulatedSourcePath: row.simulated_source_path,
     streamSessionId: row.stream_session_id,
@@ -146,6 +149,7 @@ export async function getPublicStreamEventByChurchId(
     .select("*")
     .eq("church_id", churchId)
     .eq("status", "live")
+    .eq("public_access", true)
     .limit(1)
     .maybeSingle();
 
@@ -156,6 +160,7 @@ export async function getPublicStreamEventByChurchId(
     .select("*")
     .eq("church_id", churchId)
     .eq("status", "scheduled")
+    .eq("public_access", true)
     .order("starts_at", { ascending: true })
     .limit(1)
     .maybeSingle();
@@ -174,6 +179,7 @@ export async function createStreamEvent(
     youtubePrivacy?: "public" | "unlisted" | "private";
     chatEnabled?: boolean;
     countdownEnabled?: boolean;
+    publicAccess?: boolean;
     simulated?: boolean;
     simulatedSourcePath?: string | null;
     createdBy: string | null;
@@ -193,6 +199,7 @@ export async function createStreamEvent(
       youtube_privacy: input.youtubePrivacy ?? "public",
       chat_enabled: input.chatEnabled ?? false,
       countdown_enabled: input.countdownEnabled ?? true,
+      public_access: input.publicAccess ?? true,
       simulated: input.simulated ?? false,
       simulated_source_path: input.simulatedSourcePath ?? null,
       created_by: input.createdBy ?? null,
@@ -209,6 +216,7 @@ export async function createStreamEvent(
 
 export async function updateStreamEvent(
   eventId: string,
+  churchId: string,
   patch: Partial<{
     status: StreamEventStatus;
     streamSessionId: string | null;
@@ -234,6 +242,7 @@ export async function updateStreamEvent(
     .from("stream_events")
     .update(updates)
     .eq("id", eventId)
+    .eq("church_id", churchId)
     .select("*")
     .single();
 
@@ -246,9 +255,10 @@ export async function updateStreamEvent(
 
 export async function cancelStreamEvent(
   eventId: string,
+  churchId: string,
   supabase?: SupabaseClient,
 ): Promise<StreamEvent> {
-  return updateStreamEvent(eventId, { status: "cancelled" }, supabase);
+  return updateStreamEvent(eventId, churchId, { status: "cancelled" }, supabase);
 }
 
 export function nextWeeklyOccurrence(

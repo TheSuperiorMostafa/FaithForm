@@ -35,6 +35,7 @@ export async function GET(request: Request) {
     .from("giving_donors")
     .select("name, email")
     .eq("id", session.donorId)
+    .eq("church_id", session.churchId)
     .single();
 
   const gifts = await getDonorGiftsForYear(session.churchId, session.donorId, year);

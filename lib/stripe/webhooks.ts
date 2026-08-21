@@ -1,37 +1,25 @@
 import type Stripe from "stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { upsertGivingDonor } from "@/lib/giving/donors";
-import { sendDonationReceiptEmail, sendFailedPaymentEmail } from "@/lib/email/giving";
+import { sendFailedPaymentEmail } from "@/lib/email/giving";
 import {
   markChurchDeauthorized,
   syncChurchFromStripeAccount,
 } from "@/lib/stripe/connect";
 import { getStripe } from "@/lib/stripe/client";
 import type { DonationStatus, GiftType, SubscriptionStatus } from "@/types/giving";
-
-async function isEventProcessed(eventId: string): Promise<boolean> {
-  const admin = createAdminClient();
-  const { data } = await admin
-    .from("stripe_webhook_events")
-    .select("event_id")
-    .eq("event_id", eventId)
-    .maybeSingle();
-  return Boolean(data?.event_id);
-}
-
-async function markEventProcessed(eventId: string, eventType: string) {
-  const admin = createAdminClient();
-  await admin.from("stripe_webhook_events").insert({
-    event_id: eventId,
-    event_type: eventType,
-  });
-}
+import { deliverDonationReceipt } from "@/lib/stripe/receipt-delivery";
+import {
+  claimStripeEvent,
+  completeStripeEvent,
+  safeStripeFailure,
+  stripeRetryAt,
+} from "@/lib/stripe/webhook-state";
 
 async function churchIdForStripeAccount(
   stripeAccountId: string | undefined,
   metadataChurchId?: string | null,
 ): Promise<string | null> {
-  if (metadataChurchId) return metadataChurchId;
   if (!stripeAccountId) return null;
   const admin = createAdminClient();
   const { data } = await admin
@@ -39,7 +27,9 @@ async function churchIdForStripeAccount(
     .select("id")
     .eq("stripe_account_id", stripeAccountId)
     .maybeSingle();
-  return data?.id ?? null;
+  if (!data?.id) return null;
+  if (metadataChurchId && metadataChurchId !== data.id) return null;
+  return data.id;
 }
 
 async function resolveDonorId(params: {
@@ -48,7 +38,16 @@ async function resolveDonorId(params: {
   donorName?: string | null;
   metadataDonorId?: string | null;
 }): Promise<string | null> {
-  if (params.metadataDonorId) return params.metadataDonorId;
+  if (params.metadataDonorId) {
+    const admin = createAdminClient();
+    const { data: donor } = await admin
+      .from("giving_donors")
+      .select("id")
+      .eq("id", params.metadataDonorId)
+      .eq("church_id", params.churchId)
+      .maybeSingle();
+    if (donor?.id) return donor.id as string;
+  }
   if (!params.donorEmail) return null;
   const { donorId } = await upsertGivingDonor({
     churchId: params.churchId,
@@ -101,17 +100,30 @@ async function upsertDonation(params: {
   feeCovered?: boolean;
   stripeFeeCents?: number | null;
   netAmountCents?: number | null;
+  stripeEventCreatedAt: string;
 }): Promise<string | null> {
   const admin = createAdminClient();
   const now = new Date().toISOString();
 
-  let donorId = params.donorId ?? null;
-  if (!donorId && params.donorEmail) {
+  let donorId: string | null = null;
+  if (params.donorId || params.donorEmail) {
     donorId = await resolveDonorId({
       churchId: params.churchId,
       donorEmail: params.donorEmail,
       donorName: params.donorName,
+      metadataDonorId: params.donorId,
     });
+  }
+
+  let fundId = params.fundId ?? null;
+  if (fundId) {
+    const { data: fund } = await admin
+      .from("giving_funds")
+      .select("id")
+      .eq("id", fundId)
+      .eq("church_id", params.churchId)
+      .maybeSingle();
+    if (!fund?.id) fundId = null;
   }
 
   const row = {
@@ -127,12 +139,18 @@ async function upsertDonation(params: {
     donor_name: params.donorName ?? null,
     donor_email: params.donorEmail ?? null,
     fund_designation: params.fundDesignation ?? null,
-    fund_id: params.fundId ?? null,
+    fund_id: fundId,
     donor_id: donorId,
     intended_amount_cents: params.intendedAmountCents ?? null,
     fee_covered: params.feeCovered ?? false,
     stripe_fee_cents: params.stripeFeeCents ?? null,
     net_amount_cents: params.netAmountCents ?? null,
+    stripe_event_created_at: params.stripeEventCreatedAt,
+    stripe_object_key: params.stripePaymentIntentId
+      ? `payment_intent:${params.stripePaymentIntentId}`
+      : params.stripeInvoiceId
+        ? `invoice:${params.stripeInvoiceId}`
+        : null,
     updated_at: now,
   };
 
@@ -140,11 +158,18 @@ async function upsertDonation(params: {
     const { data: existing } = await admin
       .from("giving_donations")
       .select("id")
+      .eq("church_id", params.churchId)
       .eq("stripe_payment_intent_id", params.stripePaymentIntentId)
       .maybeSingle();
 
     if (existing?.id) {
-      await admin.from("giving_donations").update(row).eq("id", existing.id);
+      await admin
+        .from("giving_donations")
+        .update(row)
+        .eq("id", existing.id)
+        .or(
+          `stripe_event_created_at.is.null,stripe_event_created_at.lte.${params.stripeEventCreatedAt}`,
+        );
       return existing.id as string;
     }
   }
@@ -153,77 +178,59 @@ async function upsertDonation(params: {
     const { data: existing } = await admin
       .from("giving_donations")
       .select("id")
+      .eq("church_id", params.churchId)
       .eq("stripe_invoice_id", params.stripeInvoiceId)
       .maybeSingle();
 
     if (existing?.id) {
-      await admin.from("giving_donations").update(row).eq("id", existing.id);
+      await admin
+        .from("giving_donations")
+        .update(row)
+        .eq("id", existing.id)
+        .or(
+          `stripe_event_created_at.is.null,stripe_event_created_at.lte.${params.stripeEventCreatedAt}`,
+        );
       return existing.id as string;
     }
   }
 
-  const { data: inserted } = await admin
+  const { data: inserted, error: insertError } = await admin
     .from("giving_donations")
     .insert(row)
     .select("id")
     .maybeSingle();
 
+  if (insertError?.code === "23505" && row.stripe_object_key) {
+    const { data: raced } = await admin
+      .from("giving_donations")
+      .select("id")
+      .eq("church_id", params.churchId)
+      .eq("stripe_object_key", row.stripe_object_key)
+      .maybeSingle();
+    if (raced?.id) {
+      await admin
+        .from("giving_donations")
+        .update(row)
+        .eq("id", raced.id)
+        .eq("church_id", params.churchId)
+        .or(
+          `stripe_event_created_at.is.null,stripe_event_created_at.lte.${params.stripeEventCreatedAt}`,
+        );
+      return raced.id as string;
+    }
+  }
+  if (insertError) throw new Error("donation_reconciliation_failed");
+
   return (inserted?.id as string | undefined) ?? null;
 }
 
-async function maybeSendDonationReceipt(params: {
-  donationId: string | null;
-  churchId: string;
-  status: DonationStatus;
-  donorEmail?: string | null;
-  donorName?: string | null;
-  amountCents: number;
-  intendedAmountCents?: number | null;
-  fundDesignation?: string | null;
-  giftType: GiftType;
-}): Promise<void> {
-  if (params.status !== "succeeded" || !params.donationId || !params.donorEmail) {
-    return;
+async function maybeSendDonationReceipt(
+  donationId: string | null,
+  status: DonationStatus,
+): Promise<void> {
+  if (status === "succeeded" && donationId) {
+    await deliverDonationReceipt(donationId);
   }
-
-  const admin = createAdminClient();
-  const now = new Date().toISOString();
-
-  const { data: claimed } = await admin
-    .from("giving_donations")
-    .update({ receipt_email_sent_at: now, updated_at: now })
-    .eq("id", params.donationId)
-    .is("receipt_email_sent_at", null)
-    .select("id")
-    .maybeSingle();
-
-  if (!claimed?.id) return;
-
-  const { data: church } = await admin
-    .from("churches")
-    .select("name, slug, ein, giving_primary_color, giving_accent_color")
-    .eq("id", params.churchId)
-    .maybeSingle();
-
-  if (!church?.name || !church.slug) return;
-
-  await sendDonationReceiptEmail({
-    donorEmail: params.donorEmail,
-    donorName: params.donorName ?? null,
-    churchName: church.name as string,
-    churchSlug: church.slug as string,
-    ein: (church.ein as string | null) ?? null,
-    amountCents: params.intendedAmountCents ?? params.amountCents,
-    fundName: params.fundDesignation ?? null,
-    giftType: params.giftType,
-    giftDate: new Date().toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    }),
-    primaryColor: (church.giving_primary_color as string | null) ?? null,
-    accentColor: (church.giving_accent_color as string | null) ?? null,
-  });
 }
 
 async function upsertSubscription(params: {
@@ -240,12 +247,13 @@ async function upsertSubscription(params: {
   fundId?: string | null;
   donorId?: string | null;
   pausedAt?: string | null;
+  stripeEventCreatedAt: string;
 }) {
   const admin = createAdminClient();
   const now = new Date().toISOString();
 
-  let donorId = params.donorId ?? null;
-  if (!donorId && params.donorEmail) {
+  let donorId: string | null = null;
+  if (params.donorId || params.donorEmail) {
     donorId = await resolveDonorId({
       churchId: params.churchId,
       donorEmail: params.donorEmail,
@@ -254,9 +262,21 @@ async function upsertSubscription(params: {
     });
   }
 
+  let fundId = params.fundId ?? null;
+  if (fundId) {
+    const { data: fund } = await admin
+      .from("giving_funds")
+      .select("id")
+      .eq("id", fundId)
+      .eq("church_id", params.churchId)
+      .maybeSingle();
+    if (!fund?.id) fundId = null;
+  }
+
   const { data: existing } = await admin
     .from("giving_subscriptions")
     .select("id")
+    .eq("church_id", params.churchId)
     .eq("stripe_subscription_id", params.stripeSubscriptionId)
     .maybeSingle();
 
@@ -271,16 +291,37 @@ async function upsertSubscription(params: {
     donor_name: params.donorName ?? null,
     donor_email: params.donorEmail ?? null,
     fund_designation: params.fundDesignation ?? null,
-    fund_id: params.fundId ?? null,
+    fund_id: fundId,
     donor_id: donorId,
     paused_at: params.pausedAt ?? null,
     updated_at: now,
+    stripe_event_created_at: params.stripeEventCreatedAt,
   };
 
   if (existing?.id) {
-    await admin.from("giving_subscriptions").update(row).eq("id", existing.id);
+    await admin
+      .from("giving_subscriptions")
+      .update(row)
+      .eq("id", existing.id)
+      .or(
+        `stripe_event_created_at.is.null,stripe_event_created_at.lte.${params.stripeEventCreatedAt}`,
+      );
   } else {
-    await admin.from("giving_subscriptions").insert(row);
+    const { error: insertError } = await admin
+      .from("giving_subscriptions")
+      .insert(row);
+    if (insertError?.code === "23505") {
+      await admin
+        .from("giving_subscriptions")
+        .update(row)
+        .eq("church_id", params.churchId)
+        .eq("stripe_subscription_id", params.stripeSubscriptionId)
+        .or(
+          `stripe_event_created_at.is.null,stripe_event_created_at.lte.${params.stripeEventCreatedAt}`,
+        );
+    } else if (insertError) {
+      throw new Error("subscription_reconciliation_failed");
+    }
   }
 }
 
@@ -315,6 +356,7 @@ async function handlePaymentIntent(
   pi: Stripe.PaymentIntent,
   status: DonationStatus,
   connectedAccount?: string,
+  eventCreated = 0,
 ) {
   const churchId = await churchIdForStripeAccount(
     connectedAccount,
@@ -359,24 +401,16 @@ async function handlePaymentIntent(
     feeCovered: pi.metadata?.cover_fees === "true",
     stripeFeeCents,
     netAmountCents,
+    stripeEventCreatedAt: new Date(eventCreated * 1000).toISOString(),
   });
 
-  await maybeSendDonationReceipt({
-    donationId,
-    churchId,
-    status,
-    donorEmail,
-    donorName,
-    amountCents: pi.amount,
-    intendedAmountCents: parseIntendedCents(pi.metadata) ?? pi.amount,
-    fundDesignation: pi.metadata?.fund_name || pi.metadata?.fund_designation || null,
-    giftType,
-  });
+  await maybeSendDonationReceipt(donationId, status);
 }
 
 async function handleSubscription(
   sub: Stripe.Subscription,
   connectedAccount?: string,
+  eventCreated = 0,
 ) {
   const churchId = await churchIdForStripeAccount(
     connectedAccount,
@@ -429,6 +463,7 @@ async function handleSubscription(
     fundId: metaFundId(sub.metadata),
     donorId: sub.metadata?.donor_id || null,
     pausedAt: sub.status === "paused" ? pausedAt : null,
+    stripeEventCreatedAt: new Date(eventCreated * 1000).toISOString(),
   });
 }
 
@@ -436,6 +471,7 @@ async function handleInvoice(
   invoice: Stripe.Invoice,
   succeeded: boolean,
   connectedAccount?: string,
+  eventCreated = 0,
 ) {
   const invoiceExt = invoice as Stripe.Invoice & {
     subscription?: string | Stripe.Subscription | null;
@@ -506,19 +542,10 @@ async function handleInvoice(
     fundDesignation,
     donorId,
     intendedAmountCents,
+    stripeEventCreatedAt: new Date(eventCreated * 1000).toISOString(),
   });
 
-  await maybeSendDonationReceipt({
-    donationId,
-    churchId,
-    status,
-    donorEmail,
-    donorName,
-    amountCents,
-    intendedAmountCents,
-    fundDesignation,
-    giftType,
-  });
+  await maybeSendDonationReceipt(donationId, status);
 
   if (!succeeded && subId && donorEmail && connectedAccount) {
     const admin = createAdminClient();
@@ -531,22 +558,24 @@ async function handleInvoice(
     const { data: subRow } = await admin
       .from("giving_subscriptions")
       .select("id, last_dunning_email_at")
+      .eq("church_id", churchId)
       .eq("stripe_subscription_id", subId)
       .maybeSingle();
 
     const lastSent = subRow?.last_dunning_email_at as string | null;
     const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
     if (!lastSent || new Date(lastSent).getTime() < dayAgo) {
-      await sendFailedPaymentEmail({
+      const delivery = await sendFailedPaymentEmail({
         donorEmail,
         donorName,
         churchName: (church?.name as string) ?? "Your church",
         churchSlug: (church?.slug as string) ?? "",
         primaryColor: (church?.giving_primary_color as string | null) ?? null,
         accentColor: (church?.giving_accent_color as string | null) ?? null,
+        idempotencyKey: `failed-invoice/${invoice.id}`,
       });
 
-      if (subRow?.id) {
+      if (delivery.sent && subRow?.id) {
         await admin
           .from("giving_subscriptions")
           .update({
@@ -559,11 +588,7 @@ async function handleInvoice(
   }
 }
 
-export async function processStripeEvent(event: Stripe.Event): Promise<void> {
-  if (await isEventProcessed(event.id)) {
-    return;
-  }
-
+async function processStripeEventEffects(event: Stripe.Event): Promise<void> {
   const connectedAccount =
     typeof event.account === "string" ? event.account : undefined;
 
@@ -598,6 +623,7 @@ export async function processStripeEvent(event: Stripe.Event): Promise<void> {
         event.data.object as Stripe.PaymentIntent,
         "succeeded",
         connectedAccount,
+        event.created,
       );
       break;
     }
@@ -606,6 +632,7 @@ export async function processStripeEvent(event: Stripe.Event): Promise<void> {
         event.data.object as Stripe.PaymentIntent,
         "failed",
         connectedAccount,
+        event.created,
       );
       break;
     }
@@ -622,19 +649,38 @@ export async function processStripeEvent(event: Stripe.Event): Promise<void> {
           ? charge.payment_intent
           : charge.payment_intent?.id;
       if (piId) {
+        const eventCreatedAt = new Date(event.created * 1000).toISOString();
         await admin
           .from("giving_donations")
-          .update({ status: "refunded", updated_at: new Date().toISOString() })
-          .eq("stripe_payment_intent_id", piId);
+          .update({
+            status: "refunded",
+            updated_at: new Date().toISOString(),
+            stripe_event_created_at: eventCreatedAt,
+          })
+          .eq("church_id", churchId)
+          .eq("stripe_payment_intent_id", piId)
+          .or(
+            `stripe_event_created_at.is.null,stripe_event_created_at.lte.${eventCreatedAt}`,
+          );
       }
       break;
     }
     case "invoice.paid": {
-      await handleInvoice(event.data.object as Stripe.Invoice, true, connectedAccount);
+      await handleInvoice(
+        event.data.object as Stripe.Invoice,
+        true,
+        connectedAccount,
+        event.created,
+      );
       break;
     }
     case "invoice.payment_failed": {
-      await handleInvoice(event.data.object as Stripe.Invoice, false, connectedAccount);
+      await handleInvoice(
+        event.data.object as Stripe.Invoice,
+        false,
+        connectedAccount,
+        event.created,
+      );
       break;
     }
     case "customer.subscription.created":
@@ -643,6 +689,7 @@ export async function processStripeEvent(event: Stripe.Event): Promise<void> {
       await handleSubscription(
         event.data.object as Stripe.Subscription,
         connectedAccount,
+        event.created,
       );
       break;
     }
@@ -651,11 +698,22 @@ export async function processStripeEvent(event: Stripe.Event): Promise<void> {
       const chargeId =
         typeof dispute.charge === "string" ? dispute.charge : dispute.charge?.id;
       if (!chargeId) break;
+      const churchId = await churchIdForStripeAccount(connectedAccount);
+      if (!churchId) break;
       const admin = createAdminClient();
+      const eventCreatedAt = new Date(event.created * 1000).toISOString();
       await admin
         .from("giving_donations")
-        .update({ status: "disputed", updated_at: new Date().toISOString() })
-        .eq("stripe_charge_id", chargeId);
+        .update({
+          status: "disputed",
+          updated_at: new Date().toISOString(),
+          stripe_event_created_at: eventCreatedAt,
+        })
+        .eq("church_id", churchId)
+        .eq("stripe_charge_id", chargeId)
+        .or(
+          `stripe_event_created_at.is.null,stripe_event_created_at.lte.${eventCreatedAt}`,
+        );
       break;
     }
     case "charge.dispute.closed": {
@@ -663,23 +721,65 @@ export async function processStripeEvent(event: Stripe.Event): Promise<void> {
       const chargeId =
         typeof dispute.charge === "string" ? dispute.charge : dispute.charge?.id;
       if (!chargeId) break;
+      const churchId = await churchIdForStripeAccount(connectedAccount);
+      if (!churchId) break;
       const admin = createAdminClient();
       const status = dispute.status === "won" ? "succeeded" : "refunded";
+      const eventCreatedAt = new Date(event.created * 1000).toISOString();
       await admin
         .from("giving_donations")
-        .update({ status, updated_at: new Date().toISOString() })
-        .eq("stripe_charge_id", chargeId);
+        .update({
+          status,
+          updated_at: new Date().toISOString(),
+          stripe_event_created_at: eventCreatedAt,
+        })
+        .eq("church_id", churchId)
+        .eq("stripe_charge_id", chargeId)
+        .or(
+          `stripe_event_created_at.is.null,stripe_event_created_at.lte.${eventCreatedAt}`,
+        );
       break;
     }
     case "payout.failed": {
-      console.warn("[stripe] payout.failed", event.id, connectedAccount);
+      console.warn("[stripe] payout.failed received");
       break;
     }
     default:
       break;
   }
 
-  await markEventProcessed(event.id, event.type);
+}
+
+export async function processStripeEvent(event: Stripe.Event): Promise<void> {
+  const claim = await claimStripeEvent(event.id, event.type);
+  if (!claim.claimed) {
+    if (claim.status === "processing" || claim.status === "retryable") {
+      throw new Error("stripe_event_busy");
+    }
+    return;
+  }
+  if (!claim.claimToken) throw new Error("stripe_event_claim_failed");
+
+  try {
+    await processStripeEventEffects(event);
+    await completeStripeEvent({
+      eventId: event.id,
+      claimToken: claim.claimToken,
+      status: "processed",
+    });
+  } catch (error) {
+    const failure = safeStripeFailure(error);
+    const terminal = claim.attempt >= 12;
+    await completeStripeEvent({
+      eventId: event.id,
+      claimToken: claim.claimToken,
+      status: terminal ? "terminal" : "retryable",
+      failureCategory: failure.category,
+      errorCode: failure.code,
+      nextRetryAt: terminal ? null : stripeRetryAt(claim.attempt),
+    });
+    throw error;
+  }
 }
 
 function getWebhookSigningSecrets(): string[] {

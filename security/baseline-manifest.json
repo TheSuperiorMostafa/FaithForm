@@ -1,0 +1,91 @@
+{
+  "migration": "0050_security_baseline.sql",
+  "functions": [
+    "consume_api_rate_limit",
+    "consume_donor_portal_token",
+    "claim_stripe_webhook_event",
+    "complete_stripe_webhook_event",
+    "claim_donation_receipt",
+    "complete_donation_receipt",
+    "get_church_integration_status"
+  ],
+  "restrictedFunctions": [
+    "consume_api_rate_limit",
+    "consume_donor_portal_token",
+    "get_church_integration_tokens",
+    "claim_stripe_webhook_event",
+    "complete_stripe_webhook_event",
+    "claim_donation_receipt",
+    "complete_donation_receipt"
+  ],
+  "functionGrants": {
+    "consume_api_rate_limit": ["service_role"],
+    "consume_donor_portal_token": ["service_role"],
+    "get_church_integration_tokens": ["service_role"],
+    "claim_stripe_webhook_event": ["service_role"],
+    "complete_stripe_webhook_event": ["service_role"],
+    "claim_donation_receipt": ["service_role"],
+    "complete_donation_receipt": ["service_role"],
+    "get_church_integration_status": ["authenticated", "service_role"]
+  },
+  "tableGrants": {
+    "public.church_integrations": {
+      "anon": [],
+      "authenticated": [],
+      "service_role": ["SELECT", "INSERT", "UPDATE", "DELETE"]
+    }
+  },
+  "buckets": [
+    { "id": "church-logos", "public": true },
+    { "id": "church-covers", "public": true },
+    { "id": "social-graphics", "public": true }
+  ],
+  "storagePolicies": [
+    "Tenant admins can upload church logos",
+    "Tenant admins can update church logos",
+    "Tenant admins can delete church logos",
+    "Tenant admins can upload church covers",
+    "Tenant admins can update church covers",
+    "Tenant admins can delete church covers",
+    "Tenant admins can upload social graphics",
+    "Tenant admins can update social graphics",
+    "Tenant admins can delete social graphics"
+  ],
+  "removedPolicies": [
+    "church_integrations_select",
+    "church_integrations_insert",
+    "church_integrations_update",
+    "church_integrations_delete",
+    "stream_chat_public_insert"
+  ],
+  "cronEndpoints": [
+    "/api/announcements/weekly-draft",
+    "/api/integrations/keep-alive",
+    "/api/give/receipts/retry"
+  ],
+  "externalSchedulerEndpoints": [
+    "/api/stream/scheduled-start",
+    "/api/stream/syndication/retry"
+  ],
+  "productionEnvironment": [
+    "NEXT_PUBLIC_SUPABASE_URL",
+    "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+    "SUPABASE_SECRET_KEY",
+    "NEXT_PUBLIC_SITE_URL",
+    "DONOR_PORTAL_SESSION_SECRET",
+    "INTEGRATION_OAUTH_STATE_SECRET",
+    "N8N_WEBHOOK_SECRET",
+    "RATE_LIMIT_KEY_SECRET",
+    "STREAM_RELAY_WEBHOOK_SECRET",
+    "STREAM_RELAY_PLAYBACK_SECRET",
+    "STREAM_INGEST_SIGNING_SECRET",
+    "STREAM_PLAYBACK_SECRET",
+    "STREAM_HLS_UPSTREAM_URL",
+    "STREAM_WS_INGEST_UPSTREAM_URL",
+    "CRON_SECRET",
+    "STRIPE_SECRET_KEY",
+    "STRIPE_WEBHOOK_SECRET",
+    "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY",
+    "RESEND_API_KEY"
+  ]
+}

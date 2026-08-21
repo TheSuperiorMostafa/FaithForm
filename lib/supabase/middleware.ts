@@ -43,8 +43,12 @@ export async function updateSession(request: NextRequest) {
     try {
       const { assertProductionEnv } = await import("@/lib/env/production");
       assertProductionEnv();
-    } catch (error) {
-      console.error("[security] production env validation failed:", error);
+    } catch {
+      console.error("[security] production environment validation failed");
+      return NextResponse.json(
+        { error: "Service unavailable" },
+        { status: 503, headers: { "Cache-Control": "no-store" } },
+      );
     }
   }
 

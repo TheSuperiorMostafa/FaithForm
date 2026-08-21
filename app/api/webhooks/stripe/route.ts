@@ -22,16 +22,15 @@ export async function POST(request: Request) {
   let event;
   try {
     event = constructStripeEvent(rawBody, signature);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : "Invalid signature";
-    console.error("[stripe webhook]", message);
-    return NextResponse.json({ error: message }, { status: 400 });
+  } catch {
+    console.error("[stripe webhook] signature verification failed");
+    return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
 
   try {
     await processStripeEvent(event);
-  } catch (err) {
-    console.error("[stripe webhook] handler error", err);
+  } catch {
+    console.error("[stripe webhook] processing deferred");
     return NextResponse.json({ error: "Handler failed" }, { status: 500 });
   }
 

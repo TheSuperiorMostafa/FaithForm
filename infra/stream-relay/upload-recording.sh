@@ -7,7 +7,7 @@
 #
 # Usage:
 #   STREAM_RELAY_WEBHOOK_SECRET=… ./upload-recording.sh \
-#     live/<churchId>/<publishKey> /home/mostafa/mediamtx/recordings/<file>.mp4
+#     live/<churchId> /home/mostafa/mediamtx/recordings/<file>.mp4
 #
 # With no arguments it walks every recording it can match to a stream path from
 # the file name, which is how the ones already on disk get backfilled.
@@ -46,7 +46,7 @@ upload_one() {
   fi
 
   filename="$(basename "$record_file")"
-  echo "→ ${filename} (${mtx_path})"
+  echo "→ uploading selected recording"
 
   response="$(curl -fsS --max-time 30 -X POST \
     "${APP_URL%/}/api/stream/recording-upload-url" \
@@ -58,7 +58,7 @@ upload_one() {
   storage_path="$(printf '%s' "$response" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("storagePath",""))')"
 
   if [[ -z "$upload_url" || -z "$storage_path" ]]; then
-    echo "  unusable response: $response" >&2
+    echo "  upload URL response was unusable" >&2
     return 1
   fi
 
@@ -76,7 +76,7 @@ upload_one() {
     -H "content-type: application/json" \
     -d "{\"path\":\"${mtx_path}\",\"storagePath\":\"${storage_path}\",\"durationSec\":${duration}}"
   echo
-  echo "  uploaded to ${storage_path}"
+  echo "  upload complete"
 }
 
 if [[ $# -eq 2 ]]; then
@@ -89,16 +89,18 @@ if [[ $# -ne 0 ]]; then
   exit 1
 fi
 
-# `on-stream-ready.sh` names files `live_{churchId}_{publishKey}-{epoch}.mp4`.
-# Only those two structural underscores become slashes — a publish key is
-# base64url and may contain underscores of its own, so a blanket substitution
-# would mangle it.
+# Automatic discovery is retained only for historical `live_...` files. Current
+# capability-mode files use a one-way path digest and should normally upload in
+# `on-stream-stop.sh`; pass the path and filename explicitly when retrying one.
 shopt -s nullglob
 for file in "$RECORD_DIR"/live_*.mp4; do
   base="$(basename "$file")"
   stem="$(printf '%s' "$base" | sed -E 's/-[0-9]+\.mp4$//')"
-  mtx_path="$(printf '%s' "$stem" | sed -E 's#^live_([0-9a-fA-F-]{36})_#live/\1/#')"
-  if [[ ! "$mtx_path" =~ ^live/[0-9a-fA-F-]{36}/[A-Za-z0-9_-]{16,}$ ]]; then
+  if [[ "$stem" =~ ^live_([0-9a-fA-F-]{36})$ ]]; then
+    mtx_path="live/${BASH_REMATCH[1]}"
+  elif [[ "$stem" =~ ^live_([0-9a-fA-F-]{36})_([A-Za-z0-9_-]{16,})$ ]]; then
+    mtx_path="live/${BASH_REMATCH[1]}/${BASH_REMATCH[2]}"
+  else
     echo "skipping ${base} — cannot read a stream path from the name" >&2
     continue
   fi

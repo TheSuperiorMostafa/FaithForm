@@ -12,9 +12,10 @@ export const runtime = "nodejs";
 
 export async function GET(
   _request: Request,
-  { params }: { params: { month: string } },
+  { params }: { params: Promise<{ month: string }> },
 ) {
-  const parsed = parseMonthParam(params.month);
+  const { month } = await params;
+  const parsed = parseMonthParam(month);
   if (!parsed) {
     return NextResponse.json({ error: "Invalid month" }, { status: 400 });
   }
@@ -37,7 +38,7 @@ export async function GET(
       createElement(MonthlyPdfDocument, data) as ReactElement<DocumentProps>,
     );
 
-    const filename = `monthly-${params.month}.pdf`;
+    const filename = `monthly-${month}.pdf`;
 
     return new NextResponse(new Uint8Array(buffer), {
       status: 200,

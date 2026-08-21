@@ -16,7 +16,7 @@ fi
 
 mkdir -p "$PID_DIR"
 
-JOBS_JSON="$(curl -fsSL -H "x-stream-relay-secret: ${SECRET}" \
+JOBS_JSON="$(curl -fsS -H "x-stream-relay-secret: ${SECRET}" \
   "${APP_URL%/}/api/stream/simulated-playout")"
 
 python3 -c '

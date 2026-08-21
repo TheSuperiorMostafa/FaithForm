@@ -125,7 +125,6 @@ STREAM_HLS_UPSTREAM_URL=https://hls.faithform.io
 STREAM_WS_INGEST_UPSTREAM_URL=wss://ingest.faithform.io
 STREAM_HTTP_INGEST_UPSTREAM_URL=https://ingest.faithform.io
 STREAM_WHIP_UPSTREAM_URL=https://hls.faithform.io
-NEXT_PUBLIC_STREAM_HLS_BASE_URL=https://hls.faithform.io
 EOF
 
 echo ""

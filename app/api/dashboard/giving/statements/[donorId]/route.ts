@@ -8,9 +8,10 @@ import { featureAccessDenied } from "@/lib/features/guard";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type RouteContext = { params: { donorId: string } };
+type RouteContext = { params: Promise<{ donorId: string }> };
 
 export async function GET(request: Request, context: RouteContext) {
+  const { donorId } = await context.params;
   const auth = await getChurchAuth();
   if (!auth) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -32,7 +33,7 @@ export async function GET(request: Request, context: RouteContext) {
   const { data: donor } = await admin
     .from("giving_donors")
     .select("name, email")
-    .eq("id", context.params.donorId)
+    .eq("id", donorId)
     .eq("church_id", auth.churchId)
     .maybeSingle();
 
@@ -40,7 +41,7 @@ export async function GET(request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Donor not found" }, { status: 404 });
   }
 
-  const gifts = await getDonorGiftsForYear(auth.churchId, context.params.donorId, year);
+  const gifts = await getDonorGiftsForYear(auth.churchId, donorId, year);
 
   const buffer = await renderGivingStatementPdf({
     churchName: (church?.name as string) ?? "Church",

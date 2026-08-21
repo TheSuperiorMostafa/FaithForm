@@ -14,7 +14,6 @@ export type StreamRelaySettings = {
   ingestServerUrl: string;
   streamName: string | null;
   streamPath: string | null;
-  publishKey: string | null;
   youtubeUrl: string;
   facebookUrl: string;
   destinationCount: number;
@@ -22,9 +21,11 @@ export type StreamRelaySettings = {
 
 const STREAM_PROVIDER = "stream";
 const STREAM_PATH_PREFIX = "live";
-const STREAM_KEY_PATTERN = /^[A-Za-z0-9_-]{16,}$/;
-const STREAM_PATH_PATTERN =
-  /^live\/([0-9a-fA-F-]{36})\/([A-Za-z0-9_-]{16,})$/;
+const CHURCH_ID_PATTERN = "[0-9a-fA-F-]{36}";
+const STREAM_PATH_PATTERN = new RegExp(`^live\/(${CHURCH_ID_PATTERN})$`);
+const LEGACY_STREAM_PATH_PATTERN = new RegExp(
+  `^live\/(${CHURCH_ID_PATTERN})\/[A-Za-z0-9_-]{16,}$`,
+);
 
 function normalizeRelayHost(value: string | undefined): string {
   return value?.trim() || "stream.faithform.io";
@@ -36,34 +37,38 @@ export function resolveStreamRelayHost(): string {
   );
 }
 
-export function generateStreamPublishKey(): string {
+function generateStreamConfigurationToken(): string {
   return randomBytes(24).toString("base64url");
 }
 
-export function buildStreamPath(churchId: string, publishKey: string): string {
-  return `${STREAM_PATH_PREFIX}/${churchId}/${publishKey}`;
+export function buildStreamPath(churchId: string): string {
+  return `${STREAM_PATH_PREFIX}/${churchId}`;
 }
 
-export function buildStreamName(churchId: string, publishKey: string): string {
-  return `${churchId}/${publishKey}`;
+export function buildStreamName(churchId: string): string {
+  return churchId;
 }
 
 export function parseStreamPath(path: string): {
   churchId: string;
-  publishKey: string;
+  legacyCredentialInPath: boolean;
 } | null {
   const normalized = path.trim().replace(/\/whip$/, "").replace(/^\/+/, "");
   const match = STREAM_PATH_PATTERN.exec(normalized);
-  if (!match) {
-    const bare = /^([0-9a-fA-F-]{36})\/([A-Za-z0-9_-]{16,})$/.exec(normalized);
-    if (!bare) return null;
-    return { churchId: bare[1], publishKey: bare[2] };
+  if (match) {
+    return { churchId: match[1], legacyCredentialInPath: false };
   }
 
-  return {
-    churchId: match[1],
-    publishKey: match[2],
-  };
+  const bare = new RegExp(`^(${CHURCH_ID_PATTERN})$`).exec(normalized);
+  if (bare) return { churchId: bare[1], legacyCredentialInPath: false };
+
+  // Historical recording reconciliation may still present the old path. New
+  // ingest/config/lifecycle callers reject this flag so the credential can
+  // never authorize publishing or be copied into a new response or log.
+  const legacy = LEGACY_STREAM_PATH_PATTERN.exec(normalized);
+  return legacy
+    ? { churchId: legacy[1], legacyCredentialInPath: true }
+    : null;
 }
 
 function parseStreamMetadata(
@@ -109,6 +114,7 @@ export async function getStreamRelaySettings(
   churchId: string,
   options?: {
     includeSecret?: boolean;
+    includeInternalPath?: boolean;
     supabase?: SupabaseClient;
   },
 ): Promise<StreamRelaySettings> {
@@ -121,20 +127,23 @@ export async function getStreamRelaySettings(
   const relayHost = normalizeRelayHost(
     metadata.relay_host ?? resolveStreamRelayHost(),
   );
-  const publishKey = integration?.access_token?.trim() || null;
-  const streamPath = publishKey ? buildStreamPath(churchId, publishKey) : null;
-  const streamName = publishKey ? buildStreamName(churchId, publishKey) : null;
+  const configurationToken = integration?.access_token?.trim() || null;
+  const includeSecret = options?.includeSecret === true;
+  const includeInternalPath = options?.includeInternalPath === true;
+  const streamPath =
+    includeInternalPath && configurationToken ? buildStreamPath(churchId) : null;
+  const streamName =
+    includeInternalPath && configurationToken ? buildStreamName(churchId) : null;
   const destinations = getStreamDestinationsFromMetadata(metadata);
 
   return {
-    connected: Boolean(publishKey),
+    connected: Boolean(configurationToken),
     relayHost,
     ingestServerUrl: `rtmp://${relayHost}/${STREAM_PATH_PREFIX}`,
     streamName,
     streamPath,
-    publishKey: options?.includeSecret ? publishKey : null,
-    youtubeUrl: metadata.youtube_url?.trim() ?? "",
-    facebookUrl: metadata.facebook_url?.trim() ?? "",
+    youtubeUrl: includeSecret ? (metadata.youtube_url?.trim() ?? "") : "",
+    facebookUrl: includeSecret ? (metadata.facebook_url?.trim() ?? "") : "",
     destinationCount: destinations.length,
   };
 }
@@ -152,8 +161,8 @@ export async function saveStreamRelaySettings(
   const existing = await getIntegration(input.churchId, STREAM_PROVIDER, supabase);
   const existingMeta = parseStreamMetadata(existing?.metadata);
   const relayHost = normalizeRelayHost(input.relayHost ?? existingMeta.relay_host);
-  const publishKey =
-    existing?.access_token?.trim() || generateStreamPublishKey();
+  const configurationToken =
+    existing?.access_token?.trim() || generateStreamConfigurationToken();
 
   const metadata: StreamIntegrationMetadata = {
     ...existingMeta,
@@ -166,7 +175,7 @@ export async function saveStreamRelaySettings(
     {
       churchId: input.churchId,
       provider: STREAM_PROVIDER,
-      accessToken: publishKey,
+      accessToken: configurationToken,
       refreshToken: null,
       tokenExpiresAt: null,
       metadata,
@@ -195,13 +204,13 @@ export async function ensureStreamRelayCredentials(
   }
 
   const relayHost = resolveStreamRelayHost();
-  const publishKey = generateStreamPublishKey();
+  const configurationToken = generateStreamConfigurationToken();
 
   await saveIntegration(
     {
       churchId,
       provider: STREAM_PROVIDER,
-      accessToken: publishKey,
+      accessToken: configurationToken,
       refreshToken: null,
       tokenExpiresAt: null,
       metadata: { relay_host: relayHost },
@@ -230,14 +239,14 @@ export async function setStreamRelayDestination(
 
   const existing = await getIntegration(churchId, STREAM_PROVIDER, supabase);
   const metadata = parseStreamMetadata(existing?.metadata);
-  const publishKey =
-    existing?.access_token?.trim() || generateStreamPublishKey();
+  const configurationToken =
+    existing?.access_token?.trim() || generateStreamConfigurationToken();
 
   await saveIntegration(
     {
       churchId,
       provider: STREAM_PROVIDER,
-      accessToken: publishKey,
+      accessToken: configurationToken,
       refreshToken: null,
       tokenExpiresAt: null,
       metadata: {
@@ -283,41 +292,4 @@ export async function clearStreamRelayDestinations(
     },
     supabase,
   );
-}
-
-export async function rotateStreamRelayKey(
-  churchId: string,
-  userId: string,
-  supabase?: SupabaseClient,
-): Promise<StreamRelaySettings> {
-  const existing = await getIntegration(churchId, STREAM_PROVIDER, supabase);
-  const metadata = parseStreamMetadata(existing?.metadata);
-
-  await saveIntegration(
-    {
-      churchId,
-      provider: STREAM_PROVIDER,
-      accessToken: generateStreamPublishKey(),
-      refreshToken: null,
-      tokenExpiresAt: null,
-      metadata: {
-        relay_host: normalizeRelayHost(
-          metadata.relay_host ?? resolveStreamRelayHost(),
-        ),
-        youtube_url: metadata.youtube_url?.trim() || undefined,
-        facebook_url: metadata.facebook_url?.trim() || undefined,
-      },
-      connectedBy: userId,
-    },
-    supabase,
-  );
-
-  return getStreamRelaySettings(churchId, {
-    includeSecret: true,
-    supabase,
-  });
-}
-
-export function isValidStreamPublishKey(value: string): boolean {
-  return STREAM_KEY_PATTERN.test(value.trim());
 }

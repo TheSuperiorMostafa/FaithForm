@@ -168,8 +168,13 @@ export function attachHlsErrorRecovery(
   };
 }
 
-export function rewriteM3u8Playlist(body: string, playlistUrl: string): string {
+export function rewriteM3u8Playlist(
+  body: string,
+  playlistUrl: string,
+  query = "",
+): string {
   const base = playlistUrl.replace(/\/[^/]*$/, "/");
+  const suffix = query ? `?${query}` : "";
 
   // NOTE: #EXT-X-ENDLIST is deliberately stripped. The relay emits it when
   // ingest drops even briefly, which would permanently end playback for every
@@ -187,14 +192,18 @@ export function rewriteM3u8Playlist(body: string, playlistUrl: string): string {
       if (!trimmed || trimmed.startsWith("#")) {
         if (trimmed.includes('URI="') && !trimmed.includes('URI="http')) {
           return trimmed.replace(/URI="([^"]+)"/, (_match, uri: string) => {
-            if (uri.startsWith("http")) return `URI="${uri}"`;
-            return `URI="${base}${uri}"`;
+            const safeUri = uri.startsWith("http")
+              ? new URL(uri).pathname.split("/").filter(Boolean).at(-1)
+              : uri;
+            return `URI="${base}${safeUri ?? ""}${suffix}"`;
           });
         }
         return line;
       }
-      if (trimmed.startsWith("http")) return trimmed;
-      return `${base}${trimmed}`;
+      const safePath = trimmed.startsWith("http")
+        ? new URL(trimmed).pathname.split("/").filter(Boolean).at(-1)
+        : trimmed;
+      return `${base}${safePath ?? ""}${suffix}`;
     })
     .join("\n");
 }

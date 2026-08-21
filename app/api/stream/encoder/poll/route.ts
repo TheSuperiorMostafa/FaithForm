@@ -6,6 +6,11 @@ import {
   touchEncoderDevice,
 } from "@/lib/stream/encoder";
 import { verifyStreamSecret } from "@/lib/stream/device-secret";
+import {
+  buildCapabilityStreamName,
+  MAX_INGEST_TTL_SEC,
+  signIngestToken,
+} from "@/lib/stream/ingest-token";
 import { getStreamRelaySettings } from "@/lib/stream/relay";
 
 function readDeviceSecret(request: Request): string | null {
@@ -35,25 +40,39 @@ export async function GET(request: Request) {
     }
 
     const settings = await getStreamRelaySettings(device.church_id, {
-      includeSecret: true,
+      includeSecret: false,
     });
+    if (!settings.connected) {
+      return NextResponse.json({ error: "Stream unavailable" }, { status: 503 });
+    }
+
+    const safePayload = { ...pending.payload };
+    delete safePayload.streamKey;
+    const streamKey =
+      pending.command === "start_stream"
+        ? buildCapabilityStreamName(
+            device.church_id,
+            signIngestToken(device.church_id, {
+              ttlSec: MAX_INGEST_TTL_SEC,
+            }),
+          )
+        : undefined;
 
     return NextResponse.json({
       command: pending.command,
       commandId: pending.id,
       payload: {
-        ...pending.payload,
+        ...safePayload,
         ingestServerUrl:
           pending.payload.ingestServerUrl ?? settings.ingestServerUrl,
-        streamKey: pending.payload.streamKey ?? settings.streamName,
+        ...(streamKey ? { streamKey } : {}),
         obsWebsocketHost: device.obs_websocket_host,
         obsWebsocketPort: device.obs_websocket_port,
         obsWebsocketPassword: device.obs_websocket_password,
       },
     });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Poll failed";
-    return NextResponse.json({ error: message }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: "Poll failed" }, { status: 500 });
   }
 }
 
@@ -85,11 +104,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    await completeStreamCommand(body.commandId, body.status, body.error);
+    await completeStreamCommand(
+      body.commandId,
+      device.id,
+      device.church_id,
+      body.status,
+      body.error?.slice(0, 500),
+    );
     await touchEncoderDevice(device.id);
     return NextResponse.json({ ok: true });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Ack failed";
-    return NextResponse.json({ error: message }, { status: 500 });
+  } catch {
+    return NextResponse.json({ error: "Ack failed" }, { status: 500 });
   }
 }

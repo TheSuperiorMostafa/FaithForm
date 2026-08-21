@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createAdminClient } from "@/lib/supabase/admin";
-import { getChurchBySlug } from "@/lib/queries/giving";
-import { createBillingPortalSession } from "@/lib/stripe/giving";
-import { getGivePageUrl } from "@/lib/stripe/config";
 import { isStripeConfigured } from "@/lib/stripe/client";
+import { getDonorPortalSession } from "@/lib/giving/portal-session";
+import { createAuthorizedBillingPortal } from "@/lib/giving/portal-billing";
 import {
   assertRateLimit,
   getClientIp,
@@ -13,11 +11,9 @@ import {
 
 const bodySchema = z.object({
   slug: z.string().min(1),
-  email: z.string().email(),
 });
 
-const GENERIC_MESSAGE =
-  "If an active recurring gift exists for this email, use the donor portal sign-in link we emailed you.";
+const GENERIC_ERROR = "The billing portal is unavailable for this session.";
 
 export async function POST(request: Request) {
   if (!isStripeConfigured()) {
@@ -45,31 +41,15 @@ export async function POST(request: Request) {
     return rateLimitResponse(rate.retryAfterSeconds);
   }
 
-  const church = await getChurchBySlug(parsed.data.slug);
-  if (!church?.stripeAccountId) {
-    return NextResponse.json({ ok: true, message: GENERIC_MESSAGE });
+  const session = await getDonorPortalSession(parsed.data.slug);
+  if (!session) {
+    return NextResponse.json({ error: GENERIC_ERROR }, { status: 403 });
   }
 
-  const admin = createAdminClient();
-  const email = parsed.data.email.trim().toLowerCase();
-  const { data: sub } = await admin
-    .from("giving_subscriptions")
-    .select("stripe_customer_id")
-    .eq("church_id", church.churchId)
-    .ilike("donor_email", email)
-    .in("status", ["active", "past_due", "trialing"])
-    .limit(1)
-    .maybeSingle();
-
-  if (!sub?.stripe_customer_id) {
-    return NextResponse.json({ ok: true, message: GENERIC_MESSAGE });
+  const url = await createAuthorizedBillingPortal(parsed.data.slug, session);
+  if (!url) {
+    return NextResponse.json({ error: GENERIC_ERROR }, { status: 403 });
   }
-
-  const url = await createBillingPortalSession(
-    church.stripeAccountId,
-    sub.stripe_customer_id as string,
-    `${getGivePageUrl(parsed.data.slug)}/manage`,
-  );
 
   return NextResponse.json({ ok: true, url });
 }

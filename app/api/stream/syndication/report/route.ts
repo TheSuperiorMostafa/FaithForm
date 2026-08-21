@@ -16,9 +16,7 @@ const STATUSES = new Set(["pending", "success", "failed"]);
  * the promise; this is the delivery.
  */
 export async function POST(request: Request) {
-  const providedSecret =
-    request.headers.get("x-stream-relay-secret") ??
-    new URL(request.url).searchParams.get("secret");
+  const providedSecret = request.headers.get("x-stream-relay-secret");
   const expectedSecret = process.env.STREAM_RELAY_WEBHOOK_SECRET;
 
   if (!compareSecret(providedSecret, expectedSecret)) {
@@ -39,7 +37,7 @@ export async function POST(request: Request) {
   }
 
   const parsed = parseStreamPath(body.path ?? "");
-  if (!parsed) {
+  if (!parsed || parsed.legacyCredentialInPath) {
     return NextResponse.json({ error: "Invalid stream path" }, { status: 400 });
   }
 

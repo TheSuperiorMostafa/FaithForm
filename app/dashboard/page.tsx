@@ -24,10 +24,11 @@ import {
 } from "@/lib/queries/dashboard";
 
 type PageProps = {
-  searchParams: { range?: string };
+  searchParams: Promise<{ range?: string }>;
 };
 
 export default async function DashboardPage({ searchParams }: PageProps) {
+  const query = await searchParams;
   const supabase = createClient();
   const {
     data: { user },
@@ -38,7 +39,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   }
 
   const churchId = await getCurrentChurchId(supabase, user.id);
-  const range = parseDashboardRange(searchParams.range);
+  const range = parseDashboardRange(query.range);
   const featureAccess = await getFeatureAccess(supabase);
   const allowedFeatures = featureAccess?.allowed ?? [];
 

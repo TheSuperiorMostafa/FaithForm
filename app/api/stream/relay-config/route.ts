@@ -5,13 +5,10 @@ import { compareSecret } from "@/lib/security/compare-secret";
 import {
   getStreamDestinationsFromMetadata,
   parseStreamPath,
-  resolveStreamRelayHost,
 } from "@/lib/stream/relay";
 
 export async function GET(request: Request) {
-  const providedSecret =
-    request.headers.get("x-stream-relay-secret") ??
-    new URL(request.url).searchParams.get("secret");
+  const providedSecret = request.headers.get("x-stream-relay-secret");
   const expectedSecret = process.env.STREAM_RELAY_WEBHOOK_SECRET;
 
   if (!compareSecret(providedSecret, expectedSecret)) {
@@ -21,7 +18,7 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const path = url.searchParams.get("path") ?? "";
   const parsedPath = parseStreamPath(path);
-  if (!parsedPath) {
+  if (!parsedPath || parsedPath.legacyCredentialInPath) {
     return NextResponse.json({ error: "Invalid stream path" }, { status: 400 });
   }
 
@@ -34,12 +31,6 @@ export async function GET(request: Request) {
   const destinations = getStreamDestinationsFromMetadata(metadata);
 
   return NextResponse.json({
-    churchId: parsedPath.churchId,
-    relayHost:
-      typeof metadata.relay_host === "string" && metadata.relay_host.trim()
-        ? metadata.relay_host.trim()
-        : resolveStreamRelayHost(),
-    path,
     destinations,
   });
 }

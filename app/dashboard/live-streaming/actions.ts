@@ -15,10 +15,7 @@ import {
   cancelStreamEvent,
   createStreamEvent,
 } from "@/lib/stream/events";
-import {
-  rotateStreamRelayKey,
-  saveStreamRelaySettings,
-} from "@/lib/stream/relay";
+import { saveStreamRelaySettings } from "@/lib/stream/relay";
 import { STREAM_RECORDINGS_BUCKET } from "@/lib/stream/recording-storage";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -26,8 +23,6 @@ export type StreamRelayActionState = {
   ok: boolean;
   error?: string;
   message?: string;
-  publishKey?: string | null;
-  streamName?: string | null;
 };
 
 function revalidateLiveStreaming() {
@@ -39,8 +34,8 @@ function revalidateLiveStreaming() {
  * Signed in, and Live Stream actually turned on for this church.
  *
  * Every action below goes through here rather than calling getChurchAuth()
- * directly. These actions provision YouTube and Facebook broadcasts, rotate
- * publish keys and start relays — real spend on our infrastructure — so a
+ * directly. These actions provision YouTube and Facebook broadcasts and start
+ * relays — real spend on our infrastructure — so a
  * church whose broadcast feature is off must not be able to reach them by
  * replaying a form post from a page they used to have.
  *
@@ -71,7 +66,7 @@ export async function updateStreamRelaySettings(
   }
 
   try {
-    const settings = await saveStreamRelaySettings({
+    await saveStreamRelaySettings({
       churchId: auth.churchId,
       userId: auth.userId,
       youtubeUrl: formData.get("youtube_url")?.toString() ?? "",
@@ -89,8 +84,6 @@ export async function updateStreamRelaySettings(
     return {
       ok: true,
       message: "Live streaming settings saved.",
-      publishKey: settings.publishKey,
-      streamName: settings.streamName,
     };
   } catch (error) {
     return {
@@ -307,7 +300,7 @@ export async function cancelScheduledStream(
   }
 
   try {
-    await cancelStreamEvent(eventId);
+    await cancelStreamEvent(eventId, auth.churchId);
     revalidateLiveStreaming();
     return { ok: true, message: "Scheduled stream cancelled." };
   } catch (error) {
@@ -315,41 +308,6 @@ export async function cancelScheduledStream(
       ok: false,
       error:
         error instanceof Error ? error.message : "Could not cancel stream.",
-    };
-  }
-}
-
-export async function regenerateStreamRelayKey(): Promise<StreamRelayActionState> {
-  const gate = await requireStreamAccess();
-  if (!gate.ok) return { ok: false, error: gate.error };
-  const auth = gate.auth;
-  if (!auth.isAdmin) {
-    return { ok: false, error: "Only church admins can rotate stream keys." };
-  }
-
-  try {
-    const settings = await rotateStreamRelayKey(auth.churchId, auth.userId);
-
-    await logAdminAction({
-      churchId: auth.churchId,
-      taskName: "Regenerated live stream key",
-      triggerSource: "Live Streaming",
-    });
-
-    revalidateLiveStreaming();
-    return {
-      ok: true,
-      message: "Stream key regenerated.",
-      publishKey: settings.publishKey,
-      streamName: settings.streamName,
-    };
-  } catch (error) {
-    return {
-      ok: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Could not regenerate stream key.",
     };
   }
 }

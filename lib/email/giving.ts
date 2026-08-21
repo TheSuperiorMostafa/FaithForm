@@ -79,12 +79,13 @@ async function sendResendEmail(params: {
   subject: string;
   html: string;
   logLabel: string;
+  idempotencyKey?: string;
 }): Promise<{ sent: boolean }> {
   const apiKey = process.env.RESEND_API_KEY?.trim();
   const from = process.env.RESEND_FROM_EMAIL?.trim() || "noreply@faithform.io";
 
   if (!apiKey) {
-    console.log(`[giving-email] ${params.logLabel} (no RESEND_API_KEY)`);
+    console.info(`[giving-email] ${params.logLabel} unavailable`);
     return { sent: false };
   }
 
@@ -93,6 +94,9 @@ async function sendResendEmail(params: {
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
+      ...(params.idempotencyKey
+        ? { "Idempotency-Key": params.idempotencyKey }
+        : {}),
     },
     body: JSON.stringify({
       from: `${params.fromName} <${from}>`,
@@ -103,7 +107,7 @@ async function sendResendEmail(params: {
   });
 
   if (!res.ok) {
-    console.error("[giving-email] Resend error:", await res.text());
+    console.error("[giving-email] provider delivery failed", res.status);
     return { sent: false };
   }
 
@@ -120,6 +124,7 @@ type FailedPaymentEmailParams = ChurchEmailBranding & {
   donorEmail: string;
   donorName: string | null;
   churchSlug: string;
+  idempotencyKey: string;
 };
 
 export async function sendFailedPaymentEmail(
@@ -153,6 +158,7 @@ export async function sendFailedPaymentEmail(
     subject: `Action needed: update your gift to ${params.churchName}`,
     html,
     logLabel: `failed payment → ${portalUrl}`,
+    idempotencyKey: params.idempotencyKey,
   });
 }
 
@@ -201,7 +207,7 @@ export async function sendPortalMagicLinkEmail(
     fromName: params.churchName,
     subject,
     html,
-    logLabel: `portal link → ${params.donorEmail}`,
+    logLabel: "portal-link",
   });
 }
 
@@ -214,6 +220,7 @@ export type DonationReceiptEmailParams = ChurchEmailBranding & {
   fundName: string | null;
   giftType: "one_time" | "recurring";
   giftDate: string;
+  idempotencyKey?: string;
 };
 
 function formatMoney(cents: number): string {
@@ -277,6 +284,7 @@ export async function sendDonationReceiptEmail(
     fromName: params.churchName,
     subject: `Receipt for your gift to ${params.churchName}`,
     html,
-    logLabel: `receipt → ${params.donorEmail}`,
+    logLabel: "donation-receipt",
+    idempotencyKey: params.idempotencyKey,
   });
 }

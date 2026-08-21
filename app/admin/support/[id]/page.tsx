@@ -15,11 +15,12 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 type PageProps = {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 };
 
 export default async function AdminSupportTicketPage({ params }: PageProps) {
-  const ticket = await getAdminSupportTicket(params.id);
+  const { id } = await params;
+  const ticket = await getAdminSupportTicket(id);
   if (!ticket) notFound();
 
   return (

@@ -10,9 +10,7 @@ import { getActiveStreamSession } from "@/lib/stream/sessions";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export async function POST(request: Request) {
-  const providedSecret =
-    request.headers.get("x-stream-relay-secret") ??
-    new URL(request.url).searchParams.get("secret");
+  const providedSecret = request.headers.get("x-stream-relay-secret");
   const expectedSecret = process.env.STREAM_RELAY_WEBHOOK_SECRET;
 
   if (!compareSecret(providedSecret, expectedSecret)) {

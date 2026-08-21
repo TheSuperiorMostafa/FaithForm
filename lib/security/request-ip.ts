@@ -1,10 +1,7 @@
 import { headers } from "next/headers";
+import { getClientIp } from "@/lib/security/rate-limit";
 
-export function getRequestIpFromHeaders(): string {
-  const headersList = headers();
-  const forwarded = headersList.get("x-forwarded-for");
-  if (forwarded) {
-    return forwarded.split(",")[0]?.trim() || "unknown";
-  }
-  return headersList.get("x-real-ip")?.trim() || "unknown";
+export async function getRequestIpFromHeaders(): Promise<string> {
+  const headersList = await headers();
+  return getClientIp(new Request("http://internal", { headers: headersList }));
 }

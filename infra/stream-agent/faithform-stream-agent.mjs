@@ -53,9 +53,7 @@ async function register() {
 
   const config = {
     deviceSecret: data.deviceSecret,
-    churchId: data.churchId,
     ingestServerUrl: data.ingestServerUrl,
-    streamKey: data.streamKey,
     obsWebsocketHost: process.env.OBS_WEBSOCKET_HOST ?? "127.0.0.1",
     obsWebsocketPort: Number(process.env.OBS_WEBSOCKET_PORT ?? "4455"),
     obsWebsocketPassword: process.env.OBS_WEBSOCKET_PASSWORD ?? "",
@@ -85,10 +83,21 @@ async function applyObsStreamSettings(obs, ingestServerUrl, streamKey) {
   });
 }
 
+async function clearObsStreamCapability(obs, ingestServerUrl) {
+  await obs.call("SetStreamServiceSettings", {
+    streamServiceType: "rtmp_custom",
+    streamServiceSettings: {
+      server: ingestServerUrl,
+      key: "",
+      use_auth: false,
+    },
+  });
+}
+
 async function executeCommand(obs, config, message) {
   const payload = message.payload ?? {};
   const ingestServerUrl = payload.ingestServerUrl ?? config.ingestServerUrl;
-  const streamKey = payload.streamKey ?? config.streamKey;
+  const streamKey = payload.streamKey;
 
   if (!ingestServerUrl || !streamKey) {
     throw new Error("Missing ingest server URL or stream key.");
@@ -105,6 +114,7 @@ async function executeCommand(obs, config, message) {
 
   if (message.command === "stop_stream") {
     await obs.call("StopStream");
+    await clearObsStreamCapability(obs, ingestServerUrl);
     console.log("OBS stream stopped.");
     return;
   }

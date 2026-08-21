@@ -30,6 +30,10 @@
     {
       "path": "/api/integrations/keep-alive",
       "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/give/receipts/retry",
+      "schedule": "*/15 * * * *"
     }
   ]
 }

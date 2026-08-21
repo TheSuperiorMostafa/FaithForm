@@ -17,7 +17,6 @@ type PublicStatus = {
   logoUrl: string | null;
   givingColor: string | null;
   streamEventId: string | null;
-  churchId: string;
 };
 
 type PublicWatchClientProps = {
@@ -127,7 +126,7 @@ export function PublicWatchClient({ slug, embed = false }: PublicWatchClientProp
         <div className="mx-auto max-w-4xl px-4 pb-8">
           <LiveChat
             streamEventId={status.streamEventId}
-            churchId={status.churchId}
+            slug={status.slug}
             enabled
           />
         </div>

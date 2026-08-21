@@ -163,7 +163,7 @@ export async function validateImageBuffer(
       return { buffer: normalized, contentType: "image/png", ext: "png" };
     }
 
-    if ((format === "jpeg" || format === "jpg") && allowsJpeg) {
+    if (format === "jpeg" && allowsJpeg) {
       const normalized = await sharp(buffer).rotate().jpeg({ quality: 90 }).toBuffer();
       return { buffer: normalized, contentType: "image/jpeg", ext: "jpg" };
     }

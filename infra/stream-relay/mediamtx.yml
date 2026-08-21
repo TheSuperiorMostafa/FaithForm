@@ -48,8 +48,9 @@ pathDefaults:
 paths:
   # Per-church ingest:
   #   server: rtmp://stream.faithform.io/live
-  #   stream key: {churchId}/{publishKey}
-  ~^live/([0-9a-fA-F-]{36})/([A-Za-z0-9_-]{16,})$:
+  #   stream key: {churchId}?token={short-lived capability}
+  # The query is used only for auth; the media path remains live/{churchId}.
+  ~^live/([0-9a-fA-F-]{36})$:
     source: publisher
     runOnReady: /home/mostafa/scripts/on-stream-ready.sh
     runOnReadyRestart: yes

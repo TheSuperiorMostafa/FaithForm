@@ -22,9 +22,10 @@ type AttendanceRecord = {
 
 export async function GET(
   _request: Request,
-  { params }: { params: { month: string } },
+  { params }: { params: Promise<{ month: string }> },
 ) {
-  const parsed = parseMonthParam(params.month);
+  const { month } = await params;
+  const parsed = parseMonthParam(month);
   if (!parsed) {
     return NextResponse.json({ error: "Invalid month" }, { status: 400 });
   }
@@ -107,7 +108,7 @@ export async function GET(
     }) as ReactElement<DocumentProps>,
   );
 
-  const filename = `attendance-${params.month}.pdf`;
+  const filename = `attendance-${month}.pdf`;
 
   return new NextResponse(new Uint8Array(buffer), {
     status: 200,

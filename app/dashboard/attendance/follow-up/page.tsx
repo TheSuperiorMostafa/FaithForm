@@ -13,12 +13,13 @@ import { isValidDateParam } from "@/lib/utils/dates";
 export const dynamic = "force-dynamic";
 
 type PageProps = {
-  searchParams: { date?: string };
+  searchParams: Promise<{ date?: string }>;
 };
 
 export default async function AttendanceFollowUpPage({
   searchParams,
 }: PageProps) {
+  const query = await searchParams;
   const supabase = createClient();
   const auth = await getChurchAuth(supabase);
   if (!auth) redirect("/login");
@@ -44,7 +45,7 @@ export default async function AttendanceFollowUpPage({
     );
   }
 
-  const requested = searchParams.date;
+  const requested = query.date;
   const selectedDate =
     requested &&
     isValidDateParam(requested) &&

@@ -12,8 +12,9 @@ export const dynamic = "force-dynamic";
 export default async function SocialPage({
   params,
 }: {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }) {
+  const { id } = await params;
   const supabase = createClient();
   const {
     data: { user },
@@ -23,16 +24,16 @@ export default async function SocialPage({
   const churchId = await getCurrentChurchId(supabase, user.id);
   if (!churchId) redirect("/dashboard");
 
-  const sermon = await getSermon(params.id);
+  const sermon = await getSermon(id);
   if (!sermon || sermon.church_id !== churchId) notFound();
 
-  const asset = await getLatestAsset(params.id, "social_snippet");
+  const asset = await getLatestAsset(id, "social_snippet");
   const initial = asset?.payload as SocialSnippets | undefined;
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
       <Link
-        href={`/dashboard/sermon-builder/${params.id}`}
+        href={`/dashboard/sermon-builder/${id}`}
         className="inline-flex w-fit items-center gap-1 text-sm font-semibold text-muted-foreground hover:text-accent"
       >
         <ArrowLeft className="size-4" strokeWidth={1.75} />
@@ -42,7 +43,7 @@ export default async function SocialPage({
         Social snippets
       </h1>
       <p className="text-sm text-muted-foreground">{sermon.title}</p>
-      <SocialSnippetsPanel sermonId={params.id} initial={initial} />
+      <SocialSnippetsPanel sermonId={id} initial={initial} />
     </div>
   );
 }

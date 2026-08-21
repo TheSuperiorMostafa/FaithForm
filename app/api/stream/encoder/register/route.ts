@@ -1,40 +1,51 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { registerEncoderDevice } from "@/lib/stream/encoder";
+import {
+  assertRateLimit,
+  getClientIp,
+  rateLimitResponse,
+} from "@/lib/security/rate-limit";
+
+const bodySchema = z.object({
+  pairingCode: z.string().regex(/^\d{6}$/),
+  label: z.string().trim().min(1).max(80).optional(),
+  encoderType: z.enum(["obs", "atem", "other"]).optional(),
+  obsWebsocketHost: z.string().trim().min(1).max(255).optional(),
+  obsWebsocketPort: z.number().int().min(1).max(65535).optional(),
+  obsWebsocketPassword: z.string().max(512).optional(),
+});
 
 export async function POST(request: Request) {
-  let body: {
-    pairingCode?: string;
-    label?: string;
-    encoderType?: "obs" | "atem" | "other";
-    obsWebsocketHost?: string;
-    obsWebsocketPort?: number;
-    obsWebsocketPassword?: string;
-  };
+  if (Number(request.headers.get("content-length") ?? 0) > 4096) {
+    return NextResponse.json({ error: "Invalid request" }, { status: 413 });
+  }
 
+  const rate = await assertRateLimit(
+    `encoder-register:${getClientIp(request)}`,
+    { limit: 10, windowMs: 15 * 60 * 1000 },
+  );
+  if (!rate.ok) return rateLimitResponse(rate.retryAfterSeconds);
+
+  let parsed: ReturnType<typeof bodySchema.safeParse>;
   try {
-    body = (await request.json()) as typeof body;
+    parsed = bodySchema.safeParse(await request.json());
   } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
-
-  if (!body.pairingCode?.trim()) {
-    return NextResponse.json({ error: "pairingCode is required" }, { status: 400 });
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 
   try {
-    const result = await registerEncoderDevice({
-      pairingCode: body.pairingCode,
-      label: body.label,
-      encoderType: body.encoderType,
-      obsWebsocketHost: body.obsWebsocketHost,
-      obsWebsocketPort: body.obsWebsocketPort,
-      obsWebsocketPassword: body.obsWebsocketPassword,
+    const result = await registerEncoderDevice(parsed.data);
+    return NextResponse.json(result, {
+      headers: { "Cache-Control": "no-store" },
     });
-
-    return NextResponse.json(result);
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Encoder registration failed";
-    return NextResponse.json({ error: message }, { status: 400 });
+  } catch {
+    return NextResponse.json(
+      { error: "Invalid or expired pairing code" },
+      { status: 400 },
+    );
   }
 }

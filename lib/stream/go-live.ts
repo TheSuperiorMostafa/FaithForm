@@ -127,7 +127,7 @@ export async function startLiveBroadcast(
 
   const settings = await ensureStreamRelayCredentials(churchId, userId, client);
 
-  if (!settings.streamName) {
+  if (!settings.connected) {
     throw new Error("Stream credentials are missing.");
   }
 
@@ -148,6 +148,7 @@ export async function startLiveBroadcast(
 
   await updateStreamEvent(
     event.id,
+    churchId,
     {
       status: "live",
       streamSessionId: session.id,
@@ -166,7 +167,6 @@ export async function startLiveBroadcast(
           sessionId: session.id,
           eventId: event.id,
           ingestServerUrl: settings.ingestServerUrl,
-          streamKey: settings.streamName,
         },
       },
       client,
@@ -223,7 +223,7 @@ export async function endLiveBroadcast(
   // lingered for the next service to close by mistake. Fall back to the newest
   // live event only for sessions predating stream_event_id.
   const eventColumns =
-    "id, recurrence_rule, starts_at, title, syndicate_youtube, syndicate_facebook, youtube_privacy, chat_enabled, countdown_enabled, created_by";
+    "id, recurrence_rule, starts_at, title, syndicate_youtube, syndicate_facebook, youtube_privacy, chat_enabled, countdown_enabled, public_access, created_by";
 
   const { data: events } = session.streamEventId
     ? await client
@@ -262,7 +262,7 @@ export async function endLiveBroadcast(
 
   const liveEvent = events?.[0];
   if (liveEvent) {
-    await updateStreamEvent(liveEvent.id, { status: "ended" }, client);
+    await updateStreamEvent(liveEvent.id, churchId, { status: "ended" }, client);
 
     const nextStarts = nextWeeklyOccurrence(
       liveEvent.starts_at,
@@ -280,6 +280,7 @@ export async function endLiveBroadcast(
           youtubePrivacy: liveEvent.youtube_privacy,
           chatEnabled: liveEvent.chat_enabled,
           countdownEnabled: liveEvent.countdown_enabled,
+          publicAccess: liveEvent.public_access !== false,
           createdBy: liveEvent.created_by ?? null,
         },
         client,
@@ -334,7 +335,10 @@ export async function getLiveBroadcastStatus(
   ] = await Promise.all([
     getActiveStreamSession(churchId, client),
     getPrimaryEncoderDevice(churchId, client),
-    getStreamRelaySettings(churchId, { supabase: client }),
+    getStreamRelaySettings(churchId, {
+      includeSecret: true,
+      supabase: client,
+    }),
     getIntegrationStatus(churchId, client),
     import("@/lib/stream/events").then((m) =>
       m.getUpcomingStreamEvent(churchId, client),

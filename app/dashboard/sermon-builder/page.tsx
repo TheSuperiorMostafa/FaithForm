@@ -15,10 +15,11 @@ export const dynamic = "force-dynamic";
 const PAGE_SIZE = 10;
 
 type PageProps = {
-  searchParams: { page?: string };
+  searchParams: Promise<{ page?: string }>;
 };
 
 export default async function SermonBuilderPage({ searchParams }: PageProps) {
+  const query = await searchParams;
   const supabase = createClient();
   const {
     data: { user },
@@ -28,7 +29,7 @@ export default async function SermonBuilderPage({ searchParams }: PageProps) {
   const churchId = await getCurrentChurchId(supabase, user.id);
   if (!churchId) redirect("/dashboard");
 
-  const rawPage = Number(searchParams.page ?? "1");
+  const rawPage = Number(query.page ?? "1");
   const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.floor(rawPage) : 1;
 
   const [sermonsResult, series, settings] = await Promise.all([

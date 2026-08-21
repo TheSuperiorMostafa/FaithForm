@@ -5,14 +5,15 @@ import { fetchPassage } from "@/lib/scripture/esv";
 
 export async function GET(
   _request: Request,
-  { params }: { params: { ref: string } },
+  { params }: { params: Promise<{ ref: string }> },
 ) {
   try {
+    const { ref: encodedRef } = await params;
     await requireChurchAuth();
 
     const denied = await featureAccessDenied("sermon_builder");
     if (denied) return denied;
-    const ref = decodeURIComponent(params.ref);
+    const ref = decodeURIComponent(encodedRef);
     const passage = await fetchPassage(ref);
     return NextResponse.json(passage);
   } catch (e) {

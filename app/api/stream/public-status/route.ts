@@ -48,10 +48,13 @@ export async function GET(request: Request) {
 
   const playbackUrl =
     playerStatus === "live" && hasIngest
-      ? await getHlsPlaybackUrl(church.churchId, {
-          supabase: admin,
-          publicAccess: true,
-        })
+      ? event?.id
+        ? getHlsPlaybackUrl({
+            churchId: church.churchId,
+            eventId: event.id,
+            audience: "public",
+          })
+        : null
       : null;
 
   return NextResponse.json({
@@ -66,6 +69,5 @@ export async function GET(request: Request) {
     logoUrl: church.logoUrl ?? null,
     givingColor: church.givingPrimaryColor ?? null,
     streamEventId: event?.id ?? null,
-    churchId: church.churchId,
-  });
+  }, { headers: { "Cache-Control": "no-store" } });
 }
