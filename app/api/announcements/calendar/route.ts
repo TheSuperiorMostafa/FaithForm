@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { getChurchAuth } from "@/lib/auth/church";
+import { AppleReconnectRequiredError } from "@/lib/integrations/apple-calendar";
 import {
-  insertCalendarEvent,
-  listCalendarEventsInRange,
-} from "@/lib/integrations/google-calendar";
+  hasAnyCalendar,
+  insertChurchCalendarEvent,
+  listChurchCalendarEvents,
+} from "@/lib/integrations/calendar";
 import { GoogleReconnectRequiredError } from "@/lib/integrations/google-oauth";
-import { hasIntegration } from "@/lib/integrations/tokens";
 import {
   getPublishedAnnouncements,
   getPublishedAnnouncementsByGoogleId,
@@ -37,7 +38,7 @@ export async function GET(request: Request) {
   const denied = await featureAccessDenied("announcements", supabase);
   if (denied) return denied;
 
-  const connected = await hasIntegration(auth.churchId, "google", supabase);
+  const connected = await hasAnyCalendar(auth.churchId, supabase);
   if (!connected) {
     return NextResponse.json({
       connected: false,
@@ -66,8 +67,8 @@ export async function GET(request: Request) {
   }
 
   try {
-    const [events, publishedByGoogleId, publishedList] = await Promise.all([
-      listCalendarEventsInRange(auth.churchId, startISO, endISO, supabase),
+    const [calendar, publishedByGoogleId, publishedList] = await Promise.all([
+      listChurchCalendarEvents(auth.churchId, startISO, endISO, supabase),
       getPublishedAnnouncementsByGoogleId(supabase, auth.churchId),
       getPublishedAnnouncements(supabase, auth.churchId),
     ]);
@@ -82,9 +83,12 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       connected: true,
-      events,
+      events: calendar.events,
       publishedByGoogleId,
       publishedAnnouncements,
+      // One calendar failing still returns the other's events; the client
+      // shows this beside them rather than instead of them.
+      calendarError: calendar.errors.join(" ") || null,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Calendar sync failed";
@@ -107,10 +111,10 @@ export async function POST(request: Request) {
     );
   }
 
-  const connected = await hasIntegration(auth.churchId, "google", supabase);
+  const connected = await hasAnyCalendar(auth.churchId, supabase);
   if (!connected) {
     return NextResponse.json(
-      { error: "Google Calendar is not connected.", reconnect: true },
+      { error: "No calendar is connected.", reconnect: true },
       { status: 409 },
     );
   }
@@ -154,7 +158,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const event = await insertCalendarEvent(
+    const event = await insertChurchCalendarEvent(
       auth.churchId,
       { title, location, startAt, endAt, description },
       supabase,
@@ -167,6 +171,12 @@ export async function POST(request: Request) {
           error: "Google needs to be reconnected in Settings.",
           reconnect: true,
         },
+        { status: 409 },
+      );
+    }
+    if (err instanceof AppleReconnectRequiredError) {
+      return NextResponse.json(
+        { error: "iCloud needs to be reconnected in Settings.", reconnect: true },
         { status: 409 },
       );
     }

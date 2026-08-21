@@ -12,6 +12,7 @@ import {
   Share2,
 } from "lucide-react";
 import { disconnectIntegrationAction } from "@/app/dashboard/settings/integration-actions";
+import { AppleCalendarConnect } from "@/components/settings/apple-calendar-connect";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,12 +29,13 @@ export type IntegrationsCardProps = {
   status: IntegrationStatus;
 };
 
-type Provider = "google" | "facebook" | "youtube";
+type Provider = "google" | "facebook" | "youtube" | "apple";
 
 const CONNECT_SUCCESS: Record<string, string> = {
   google_connected: "Google Calendar and Gmail connected.",
   facebook_connected: "Facebook Page connected.",
   youtube_connected: "YouTube channel connected.",
+  apple_connected: "iCloud Calendar connected.",
 };
 
 export function IntegrationsCard({ isAdmin, status }: IntegrationsCardProps) {
@@ -78,8 +80,8 @@ export function IntegrationsCard({ isAdmin, status }: IntegrationsCardProps) {
         <CardHeader>
           <CardTitle>Integrations</CardTitle>
           <CardDescription>
-            Only church admins can connect Google Calendar, Gmail, Facebook, and
-            YouTube.
+            Only church admins can connect Google Calendar, iCloud Calendar,
+            Gmail, Facebook, and YouTube.
           </CardDescription>
         </CardHeader>
       </Card>
@@ -108,8 +110,9 @@ export function IntegrationsCard({ isAdmin, status }: IntegrationsCardProps) {
         <CardHeader>
           <CardTitle>Calendar & email</CardTitle>
           <CardDescription>
-            Prefill announcements from Google Calendar and draft weekly emails
-            in Gmail. One Google connection covers both.
+            Prefill announcements from the calendar your church already keeps —
+            Google, iCloud, or both — and draft the weekly email in Gmail. One
+            Google connection covers Calendar and Gmail together.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
@@ -144,6 +147,12 @@ export function IntegrationsCard({ isAdmin, status }: IntegrationsCardProps) {
             onDisconnect={() => handleDisconnect("google", "Google")}
             disconnectDisabled={pending}
             sharesConnectionWith="Google Calendar"
+          />
+
+          <AppleCalendarConnect
+            status={status.apple}
+            onDisconnect={() => handleDisconnect("apple", "iCloud Calendar")}
+            disconnectDisabled={pending}
           />
         </CardContent>
       </Card>

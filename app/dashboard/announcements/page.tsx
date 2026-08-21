@@ -10,7 +10,7 @@ import {
   QUEUE_HORIZON_DAYS,
 } from "@/lib/announcements/weekly-email";
 import { getChurchAuth } from "@/lib/auth/church";
-import { listCalendarEventsInRange } from "@/lib/integrations/google-calendar";
+import { listChurchCalendarEvents } from "@/lib/integrations/calendar";
 import { getIntegrationStatus } from "@/lib/integrations/tokens";
 import { getAnnouncementEmailSettings } from "@/lib/queries/announcement-email-settings";
 import {
@@ -51,6 +51,8 @@ export default async function AnnouncementsPage() {
   const auth = await getChurchAuth(supabase);
   const integrationStatus = await getIntegrationStatus(churchId, supabase);
   const googleConnected = integrationStatus.google.connected;
+  const appleConnected = integrationStatus.apple.connected;
+  const calendarConnected = googleConnected || appleConnected;
   const facebookConnected = integrationStatus.facebook.connected;
 
   // The queue window follows the church's timezone, not the server's — this
@@ -66,34 +68,36 @@ export default async function AnnouncementsPage() {
   const { year, monthIndex, startISO, endISO } = getMonthWindowForDate(now);
   const week = getMondayWeekWindowInTimeZone(now, churchTimeZone);
 
-  let initialEvents: Awaited<ReturnType<typeof listCalendarEventsInRange>> = [];
-  let weekEvents: Awaited<ReturnType<typeof listCalendarEventsInRange>> = [];
+  type CalendarEvents = Awaited<
+    ReturnType<typeof listChurchCalendarEvents>
+  >["events"];
+  let initialEvents: CalendarEvents = [];
+  let weekEvents: CalendarEvents = [];
   let publishedByGoogleId: Record<string, string> = {};
   let publishedAnnouncementsMap: Record<string, AnnouncementRow> = {};
   let calendarError: string | null = null;
 
-  if (googleConnected) {
-    try {
-      const [events, weekCalendarEvents, publishedMap] = await Promise.all([
-        listCalendarEventsInRange(churchId, startISO, endISO, supabase),
-        listCalendarEventsInRange(
-          churchId,
-          week.weekStartISO,
-          new Date(
-            new Date(week.weekStartISO).getTime() +
-              QUEUE_HORIZON_DAYS * 86_400_000,
-          ).toISOString(),
-          supabase,
-        ),
-        getPublishedAnnouncementsByGoogleId(supabase, churchId),
-      ]);
-      initialEvents = events;
-      weekEvents = weekCalendarEvents;
-      publishedByGoogleId = publishedMap;
-    } catch (err) {
-      calendarError =
-        err instanceof Error ? err.message : "Could not load Google Calendar";
-    }
+  if (calendarConnected) {
+    const [month, weekWindow, publishedMap] = await Promise.all([
+      listChurchCalendarEvents(churchId, startISO, endISO, supabase),
+      listChurchCalendarEvents(
+        churchId,
+        week.weekStartISO,
+        new Date(
+          new Date(week.weekStartISO).getTime() +
+            QUEUE_HORIZON_DAYS * 86_400_000,
+        ).toISOString(),
+        supabase,
+      ),
+      getPublishedAnnouncementsByGoogleId(supabase, churchId),
+    ]);
+    initialEvents = month.events;
+    weekEvents = weekWindow.events;
+    publishedByGoogleId = publishedMap;
+    // A church on two calendars keeps the working one's events on screen and
+    // is told which one needs attention.
+    calendarError =
+      [...new Set([...month.errors, ...weekWindow.errors])].join(" ") || null;
   }
 
   const published = await getPublishedAnnouncements(supabase, churchId);
@@ -137,9 +141,9 @@ export default async function AnnouncementsPage() {
           <Link href="/dashboard/settings?tab=communications">
             <Button variant="outline">Email template</Button>
           </Link>
-          {!googleConnected && (
+          {!calendarConnected && (
             <Link href="/dashboard/settings?tab=integrations">
-              <Button variant="outline">Connect Google</Button>
+              <Button variant="outline">Connect a calendar</Button>
             </Link>
           )}
         </div>
@@ -147,7 +151,7 @@ export default async function AnnouncementsPage() {
 
       {calendarError && (
         <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-          {calendarError}. Try reconnecting Google in Settings.
+          {calendarError} Try reconnecting the calendar in Settings.
         </p>
       )}
 
@@ -155,6 +159,7 @@ export default async function AnnouncementsPage() {
         churchId={churchId}
         queue={weeklyQueue}
         published={published}
+        calendarConnected={calendarConnected}
         googleConnected={googleConnected}
         facebookConnected={facebookConnected}
         weekLabel={week.weekLabel}
@@ -171,6 +176,7 @@ export default async function AnnouncementsPage() {
         initialEvents={initialEvents}
         initialPublishedByGoogleId={publishedByGoogleId}
         initialPublishedAnnouncements={publishedAnnouncementsMap}
+        calendarConnected={calendarConnected}
         googleConnected={googleConnected}
         facebookConnected={facebookConnected}
       />

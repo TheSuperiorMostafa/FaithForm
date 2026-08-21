@@ -5,7 +5,7 @@ import {
   type WeeklyEmailEvent,
 } from "@/lib/email/announcement-template";
 import { listEmailQueue } from "@/lib/announcements/email-queue";
-import { listCalendarEventsInRange } from "@/lib/integrations/google-calendar";
+import { listChurchCalendarEvents } from "@/lib/integrations/calendar";
 import { createGmailDraft } from "@/lib/integrations/gmail";
 import { hasIntegration } from "@/lib/integrations/tokens";
 import type { CalendarEventPreview } from "@/lib/integrations/types";
@@ -175,10 +175,13 @@ export async function createWeeklyAnnouncementGmailDraft(
     new Date(week.weekStartISO).getTime() + QUEUE_HORIZON_DAYS * 86_400_000,
   ).toISOString();
 
-  const [events, queued] = await Promise.all([
-    listCalendarEventsInRange(churchId, week.weekStartISO, horizonEnd, supabase),
+  // The draft is a Gmail draft, so Google has to be connected — but the events
+  // in it come from every calendar the church has linked.
+  const [calendar, queued] = await Promise.all([
+    listChurchCalendarEvents(churchId, week.weekStartISO, horizonEnd, supabase),
     listEmailQueue(churchId, week.weekStartKey, supabase),
   ]);
+  const events = calendar.events;
 
   const queuedEventIds = new Set(queued.map((item) => item.googleEventId));
 

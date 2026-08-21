@@ -117,7 +117,7 @@ export function CreateEventDialog({
         <DialogHeader>
           <DialogTitle>New calendar event</DialogTitle>
           <DialogDescription>
-            Add an event to your Google Calendar. It appears here instantly,
+            Add an event to your church calendar. It appears here instantly,
             ready to verify and announce.
           </DialogDescription>
         </DialogHeader>
@@ -192,7 +192,7 @@ export function CreateEventDialog({
                     href="/dashboard/settings?tab=integrations"
                     className="font-semibold underline underline-offset-2"
                   >
-                    Reconnect Google
+                    Reconnect it in Settings
                   </Link>
                 </>
               )}

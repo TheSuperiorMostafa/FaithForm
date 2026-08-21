@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { listUpcomingCalendarEvents } from "@/lib/integrations/google-calendar";
+import { listChurchCalendarEvents } from "@/lib/integrations/calendar";
 import {
   replaceAssistantNameInText,
   withRecordingDisclosure,
@@ -245,12 +245,14 @@ export async function getVoiceAssistantContext(
 ): Promise<VoiceAssistantContext> {
   const client = supabase ?? db();
 
-  let calendarEvents: Awaited<ReturnType<typeof listUpcomingCalendarEvents>> = [];
-  try {
-    calendarEvents = await listUpcomingCalendarEvents(churchId, 30, client);
-  } catch {
-    calendarEvents = [];
-  }
+  const now30 = new Date();
+  const calendar = await listChurchCalendarEvents(
+    churchId,
+    now30.toISOString(),
+    new Date(now30.getTime() + 30 * 86_400_000).toISOString(),
+    client,
+  ).catch(() => null);
+  const calendarEvents = calendar?.events ?? [];
 
   const [announcements, profile] = await Promise.all([
     getPublishedAnnouncements(client, churchId),

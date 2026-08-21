@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createAdminClientOrNull } from "@/lib/supabase/admin";
 import type {
+  AppleIntegrationMetadata,
   ChurchIntegrationRow,
   FacebookIntegrationMetadata,
   GoogleIntegrationMetadata,
@@ -34,8 +35,6 @@ const EMPTY_STATUS = {
   stream: {
     connected: false,
     relayHost: null as string | null,
-    youtubeUrl: null as string | null,
-    facebookUrl: null as string | null,
   },
   youtube: {
     connected: false,
@@ -44,17 +43,19 @@ const EMPTY_STATUS = {
     needsReconnect: false,
     reconnectReason: null as string | null,
   },
+  apple: {
+    connected: false,
+    appleId: null as string | null,
+    calendarName: null as string | null,
+    needsReconnect: false,
+    reconnectReason: null as string | null,
+  },
 };
 
 /**
- * Reads integration rows for a church.
- *
- * The RPC is `security definer` but filters on `public.user_church_ids()`,
- * which resolves through `auth.uid()`. A service-role client has no user
- * session, so `auth.uid()` is null and the RPC matches nothing — background
- * work (cron jobs, go-live, scheduled streams) would otherwise see every
- * integration as disconnected. Fall back to a direct read in that case, the
- * same way `getIntegration` already does.
+ * Reads only the status fields safe to serialize to a browser. User clients go
+ * through a projection RPC; workers use the service role and construct that
+ * same projection server-side.
  */
 async function loadIntegrationStatusRows(
   churchId: string,
@@ -83,8 +84,59 @@ async function loadIntegrationStatusRows(
   return data.map((row) => ({
     provider: row.provider as string,
     connected: Boolean((row.access_token as string | null)?.trim()),
-    metadata: (row.metadata ?? {}) as Record<string, unknown>,
+    metadata: projectSafeMetadata(
+      row.provider as IntegrationProvider,
+      (row.metadata ?? {}) as Record<string, unknown>,
+    ),
   }));
+}
+
+function projectSafeMetadata(
+  provider: IntegrationProvider,
+  metadata: Record<string, unknown>,
+): Record<string, unknown> {
+  const common = {
+    needs_reconnect: metadata.needs_reconnect,
+    last_sync_at: metadata.last_sync_at,
+  };
+
+  if (provider === "google") {
+    return {
+      ...common,
+      email: metadata.email,
+      calendar_id: metadata.calendar_id,
+    };
+  }
+  if (provider === "facebook") {
+    return {
+      ...common,
+      page_name: metadata.page_name,
+      page_id: metadata.page_id,
+    };
+  }
+  if (provider === "youtube") {
+    return {
+      ...common,
+      channel_id: metadata.channel_id,
+      channel_title: metadata.channel_title,
+    };
+  }
+  if (provider === "stream") {
+    return {
+      relay_host: metadata.relay_host,
+      last_sync_at: metadata.last_sync_at,
+    };
+  }
+  if (provider === "apple") {
+    // Never the calendar URL's credentials, and never the app-specific
+    // password — which lives in access_token and is not read here at all.
+    return {
+      ...common,
+      apple_id: metadata.apple_id,
+      calendar_name: metadata.calendar_name,
+    };
+  }
+  return {};
 }
 
 export async function getIntegrationStatus(
@@ -101,11 +153,13 @@ export async function getIntegrationStatus(
   const facebook = rows.find((r) => r.provider === "facebook");
   const stream = rows.find((r) => r.provider === "stream");
   const youtube = rows.find((r) => r.provider === "youtube");
+  const apple = rows.find((r) => r.provider === "apple");
 
   const googleMeta = (google?.metadata ?? {}) as GoogleIntegrationMetadata;
   const facebookMeta = (facebook?.metadata ?? {}) as FacebookIntegrationMetadata;
   const streamMeta = (stream?.metadata ?? {}) as StreamIntegrationMetadata;
   const youtubeMeta = (youtube?.metadata ?? {}) as YouTubeIntegrationMetadata;
+  const appleMeta = (apple?.metadata ?? {}) as AppleIntegrationMetadata;
 
   return {
     google: {
@@ -113,7 +167,10 @@ export async function getIntegrationStatus(
       email: googleMeta.email ?? null,
       calendarId: googleMeta.calendar_id ?? "primary",
       needsReconnect: Boolean(!google?.connected && googleMeta.needs_reconnect),
-      reconnectReason: googleMeta.reconnect_reason ?? null,
+      reconnectReason:
+        !google?.connected && googleMeta.needs_reconnect
+          ? "Reconnect required."
+          : null,
     },
     facebook: {
       connected: Boolean(facebook?.connected),
@@ -122,13 +179,14 @@ export async function getIntegrationStatus(
       needsReconnect: Boolean(
         !facebook?.connected && facebookMeta.needs_reconnect,
       ),
-      reconnectReason: facebookMeta.reconnect_reason ?? null,
+      reconnectReason:
+        !facebook?.connected && facebookMeta.needs_reconnect
+          ? "Reconnect required."
+          : null,
     },
     stream: {
       connected: Boolean(stream?.connected),
       relayHost: streamMeta.relay_host ?? null,
-      youtubeUrl: streamMeta.youtube_url ?? null,
-      facebookUrl: streamMeta.facebook_url ?? null,
     },
     youtube: {
       connected: Boolean(youtube?.connected),
@@ -137,7 +195,20 @@ export async function getIntegrationStatus(
       needsReconnect: Boolean(
         !youtube?.connected && youtubeMeta.needs_reconnect,
       ),
-      reconnectReason: youtubeMeta.reconnect_reason ?? null,
+      reconnectReason:
+        !youtube?.connected && youtubeMeta.needs_reconnect
+          ? "Reconnect required."
+          : null,
+    },
+    apple: {
+      connected: Boolean(apple?.connected),
+      appleId: appleMeta.apple_id ?? null,
+      calendarName: appleMeta.calendar_name ?? null,
+      needsReconnect: Boolean(!apple?.connected && appleMeta.needs_reconnect),
+      reconnectReason:
+        !apple?.connected && appleMeta.needs_reconnect
+          ? "Reconnect required."
+          : null,
     },
   };
 }
@@ -153,42 +224,15 @@ export async function hasIntegration(
   if (provider === "google") return status.google.connected;
   if (provider === "facebook") return status.facebook.connected;
   if (provider === "youtube") return status.youtube.connected;
+  if (provider === "apple") return status.apple.connected;
   return status.stream.connected;
 }
 
 export async function getIntegration(
   churchId: string,
   provider: IntegrationProvider,
-  supabase?: SupabaseClient,
+  _supabase?: SupabaseClient,
 ): Promise<ChurchIntegrationRow | null> {
-  if (supabase) {
-    const { data, error } = await supabase.rpc("get_church_integration_tokens", {
-      p_church_id: churchId,
-      p_provider: provider,
-    });
-
-    if (!error && data?.length) {
-      const row = data[0] as {
-        access_token: string;
-        refresh_token: string | null;
-        token_expires_at: string | null;
-        metadata: Record<string, unknown>;
-      };
-
-      return {
-        id: "",
-        church_id: churchId,
-        provider,
-        access_token: row.access_token,
-        refresh_token: row.refresh_token,
-        token_expires_at: row.token_expires_at,
-        metadata: row.metadata ?? {},
-        connected_by: null,
-      };
-    }
-    // Service-role clients have no user session, so the RPC admin check fails.
-  }
-
   const admin = createAdminClientOrNull();
   if (!admin) return null;
 
@@ -231,13 +275,13 @@ export type SaveIntegrationInput = {
 
 export async function saveIntegration(
   input: SaveIntegrationInput,
-  supabase?: SupabaseClient,
+  _supabase?: SupabaseClient,
 ) {
   // Only pay for a read when the caller left a token field unspecified.
   const mustPreserve =
     input.refreshToken === undefined || input.tokenExpiresAt === undefined;
   const existing = mustPreserve
-    ? await getIntegration(input.churchId, input.provider, supabase)
+    ? await getIntegration(input.churchId, input.provider)
     : null;
 
   const refreshToken =
@@ -260,18 +304,10 @@ export async function saveIntegration(
     connected_by: input.connectedBy ?? null,
   };
 
-  if (supabase) {
-    const { error } = await supabase
-      .from("church_integrations")
-      .upsert(row, { onConflict: "church_id,provider" });
-
-    if (!error) return;
-  }
-
   const admin = createAdminClientOrNull();
   if (!admin) {
     throw new Error(
-      "Could not save integration. Set SUPABASE_SECRET_KEY on the server, or connect while signed in as a church admin.",
+      "Could not save integration because server credentials are unavailable.",
     );
   }
 
@@ -279,7 +315,7 @@ export async function saveIntegration(
     .from("church_integrations")
     .upsert(row, { onConflict: "church_id,provider" });
 
-  if (error) throw new Error(error.message);
+  if (error) throw new Error("Could not save integration.");
 }
 
 /**
@@ -295,9 +331,9 @@ export async function markIntegrationNeedsReconnect(
   churchId: string,
   provider: IntegrationProvider,
   reason: string,
-  supabase?: SupabaseClient,
+  _supabase?: SupabaseClient,
 ) {
-  const existing = await getIntegration(churchId, provider, supabase);
+  const existing = await getIntegration(churchId, provider);
   if (!existing) return;
 
   const metadata: Record<string, unknown> = {
@@ -312,15 +348,6 @@ export async function markIntegrationNeedsReconnect(
   // it. The refresh token is deliberately left in place — it is what lets the
   // connection heal itself if the failure turns out to have been transient.
   const patch = { access_token: "", metadata };
-
-  if (supabase) {
-    const { error } = await supabase
-      .from("church_integrations")
-      .update(patch)
-      .eq("church_id", churchId)
-      .eq("provider", provider);
-    if (!error) return;
-  }
 
   const admin = createAdminClientOrNull();
   if (!admin) return;
@@ -348,18 +375,8 @@ export function clearReconnectFlags(
 export async function deleteIntegration(
   churchId: string,
   provider: IntegrationProvider,
-  supabase?: SupabaseClient,
+  _supabase?: SupabaseClient,
 ) {
-  if (supabase) {
-    const { error } = await supabase
-      .from("church_integrations")
-      .delete()
-      .eq("church_id", churchId)
-      .eq("provider", provider);
-
-    if (!error) return;
-  }
-
   const admin = createAdminClientOrNull();
   if (!admin) return;
 

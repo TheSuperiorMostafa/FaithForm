@@ -7,7 +7,12 @@ import { createClient } from "@/lib/supabase/server";
 import type { IntegrationProvider } from "@/lib/integrations/types";
 
 /** Providers an admin can connect and disconnect from Settings. */
-const DISCONNECTABLE: IntegrationProvider[] = ["google", "facebook", "youtube"];
+const DISCONNECTABLE: IntegrationProvider[] = [
+  "google",
+  "facebook",
+  "youtube",
+  "apple",
+];
 
 /**
  * Removes a connection at the admin's explicit request.
@@ -36,5 +41,6 @@ export async function disconnectIntegrationAction(provider: string) {
 
   revalidatePath("/dashboard/settings");
   revalidatePath("/dashboard/live-streaming");
+  revalidatePath("/dashboard/announcements");
   return { success: true };
 }

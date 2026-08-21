@@ -38,6 +38,9 @@ type WeeklyAnnouncementQueueProps = {
   churchId: string;
   queue: WeeklyQueueItem[];
   published: AnnouncementRow[];
+  /** Any calendar at all — Google, iCloud, or both. */
+  calendarConnected: boolean;
+  /** Google specifically: the weekly draft is a Gmail draft. */
   googleConnected: boolean;
   facebookConnected: boolean;
   weekLabel: string;
@@ -49,6 +52,7 @@ export function WeeklyAnnouncementQueue({
   churchId,
   queue,
   published,
+  calendarConnected,
   googleConnected,
   facebookConnected,
   weekLabel,
@@ -120,17 +124,17 @@ export function WeeklyAnnouncementQueue({
     });
   };
 
-  if (!googleConnected) {
+  if (!calendarConnected) {
     return (
       <Card className="border-dashed">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Calendar className="size-6 text-accent" strokeWidth={1.75} />
-            Connect Google Calendar
+            Connect a calendar
           </CardTitle>
           <CardDescription>
-            Link Google in Settings to pull this week&apos;s events and create
-            Monday Gmail drafts.
+            Link Google Calendar or iCloud Calendar in Settings to pull this
+            week&apos;s events. Google also creates the Monday Gmail draft.
           </CardDescription>
         </CardHeader>
         <CardContent>

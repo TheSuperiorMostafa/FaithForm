@@ -250,7 +250,7 @@ export function AnnouncementVerifyForm({
       {!compact && (
         <div className="flex items-center gap-2 rounded-lg border border-accent/25 bg-accent/10 px-3 py-2 text-sm font-medium text-muted-foreground">
           <Calendar className="size-4 shrink-0 text-accent" strokeWidth={1.75} />
-          Prefilled from Google Calendar
+          Prefilled from your calendar
         </div>
       )}
 

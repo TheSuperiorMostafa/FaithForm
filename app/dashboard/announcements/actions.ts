@@ -11,7 +11,8 @@ import { createWeeklyAnnouncementGmailDraft } from "@/lib/announcements/weekly-e
 import { getChurchAuth } from "@/lib/auth/church";
 import { featureActionError } from "@/lib/features/guard";
 import { createClient } from "@/lib/supabase/server";
-import { patchCalendarEvent } from "@/lib/integrations/google-calendar";
+import { isAppleEventId } from "@/lib/integrations/apple-calendar";
+import { patchChurchCalendarEvent } from "@/lib/integrations/calendar";
 import { generateEmergencySocialGraphic, downloadSocialGraphic } from "@/lib/social/generate-graphic";
 import {
   deleteFacebookPost,
@@ -312,19 +313,24 @@ export async function publishAnnouncement(
   }
 
   if (payload.googleEventId && payload.calendarChanged) {
-    const googleConnected = await hasIntegration(
+    // The event id says which calendar it came from, so an iCloud event is
+    // written back to iCloud rather than looked for in Google.
+    const onApple = isAppleEventId(payload.googleEventId);
+    const provider = onApple ? "apple" : "google";
+    const label = onApple ? "iCloud Calendar" : "Google Calendar";
+    const calendarConnected = await hasIntegration(
       ctx.churchId,
-      "google",
+      provider,
       ctx.supabase,
     );
-    if (!googleConnected) {
-      errors.push("Google Calendar is not connected — skipped calendar update.");
+    if (!calendarConnected) {
+      errors.push(`${label} is not connected — skipped calendar update.`);
     } else {
       try {
-        await patchCalendarEvent(
+        await patchChurchCalendarEvent(
           ctx.churchId,
           {
-            googleEventId: payload.googleEventId,
+            eventId: payload.googleEventId,
             calendarId: payload.googleCalendarId,
             title: payload.title,
             location: payload.location,
@@ -335,7 +341,7 @@ export async function publishAnnouncement(
         );
       } catch (err) {
         errors.push(
-          err instanceof Error ? err.message : "Google Calendar update failed",
+          err instanceof Error ? err.message : `${label} update failed`,
         );
       }
     }

@@ -42,6 +42,9 @@ type MonthCalendarProps = {
   initialEvents: CalendarEventPreview[];
   initialPublishedByGoogleId: Record<string, string>;
   initialPublishedAnnouncements: Record<string, AnnouncementRow>;
+  /** Any calendar at all — Google, iCloud, or both. */
+  calendarConnected: boolean;
+  /** Google specifically: the weekly draft is a Gmail draft. */
   googleConnected: boolean;
   facebookConnected: boolean;
 };
@@ -70,6 +73,7 @@ export function MonthCalendar({
   initialEvents,
   initialPublishedByGoogleId,
   initialPublishedAnnouncements,
+  calendarConnected,
   googleConnected,
   facebookConnected,
 }: MonthCalendarProps) {
@@ -264,17 +268,17 @@ export function MonthCalendar({
     ? publishedAnnouncements[selectedEvent.googleEventId]
     : null;
 
-  if (!googleConnected) {
+  if (!calendarConnected) {
     return (
       <Card className="border-dashed">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Calendar className="size-6 text-accent" strokeWidth={1.75} />
-            Connect Google Calendar
+            Connect a calendar
           </CardTitle>
           <CardDescription>
-            Link Google in Settings to see your church calendar here and prefill
-            announcements.
+            Link Google Calendar or iCloud Calendar in Settings to see your
+            church calendar here and prefill announcements.
           </CardDescription>
         </CardHeader>
         <CardContent>
