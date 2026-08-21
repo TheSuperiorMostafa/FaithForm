@@ -84,6 +84,20 @@
       "fontHead": "Georgia",
       "fontBody": "Georgia",
       "italicRef": true
+    },
+    {
+      "id": "black",
+      "name": "Black",
+      "description": "Pure black with white type — maximum contrast on any screen",
+      "category": "minimal",
+      "tags": ["black", "white", "high-contrast", "plain", "projector", "sans-serif"],
+      "bg": "000000",
+      "bgCss": "#000000",
+      "text": "FFFFFF",
+      "accent": "FFFFFF",
+      "fontHead": "Calibri",
+      "fontBody": "Calibri",
+      "featured": true
     }
   ]
 }

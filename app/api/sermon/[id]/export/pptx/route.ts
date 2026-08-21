@@ -1,18 +1,12 @@
 import { NextResponse } from "next/server";
 import { logActivity } from "@/lib/activity/log";
-import { getChapterForTranslation } from "@/lib/bible/chapter";
-import {
-  extractVersesFromChapter,
-  sliceVerses,
-} from "@/lib/bible/render";
-import { getTranslationShortName, isCuratedTranslationId, normalizeTranslationId } from "@/lib/bible/translations";
-import { parseScriptureRef } from "@/lib/sermon-builder/parse-ref";
+import { normalizeTranslationId } from "@/lib/bible/translations";
 import {
   renderSimplePptx,
   type SimplePassageBlock,
 } from "@/lib/sermon-builder/pptx";
-import { resolveBookId } from "@/lib/sermon-builder/resolve-book";
 import { renderSermonPptx } from "@/lib/sermon/export-pptx";
+import { resolveNumberedPassage } from "@/lib/sermon/passages";
 import { fetchPassages } from "@/lib/scripture/esv";
 import { requireChurchAuth } from "@/lib/auth/church";
 import { verifySermonAccess } from "@/lib/queries/sermons";
@@ -25,14 +19,15 @@ export const dynamic = "force-dynamic";
 
 export async function GET(
   _request: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   try {
+    const { id } = await params;
     const auth = await requireChurchAuth();
     const denied = await featureAccessDenied("sermon_builder");
     if (denied) return denied;
     const supabase = createClient();
-    const sermon = await verifySermonAccess(supabase, params.id, auth.churchId);
+    const sermon = await verifySermonAccess(supabase, id, auth.churchId);
     if (!sermon) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
@@ -54,49 +49,18 @@ export async function GET(
       let translationLabel = translation;
 
       for (const ref of refs) {
-        const parsed = parseScriptureRef(ref);
-        if (!parsed) {
-          return NextResponse.json(
-            { error: `Could not parse scripture reference: ${ref}` },
-            { status: 400 },
-          );
+        // A deck refuses to export a passage it could not resolve — half a
+        // reading on the wall is worse than a message saying which one broke.
+        const resolved = await resolveNumberedPassage(ref, translation);
+        if (!resolved.ok) {
+          return NextResponse.json({ error: resolved.error }, { status: 400 });
         }
 
-        const book = await resolveBookId(translation, parsed.bookName);
-        if (!book) {
-          return NextResponse.json(
-            { error: `Book "${parsed.bookName}" not found` },
-            { status: 400 },
-          );
-        }
-
-        const chapterData = await getChapterForTranslation(
-          translation,
-          book.id,
-          parsed.chapter,
-        );
-        const allVerses = extractVersesFromChapter(chapterData);
-        const verses = sliceVerses(
-          allVerses,
-          parsed.verseStart,
-          parsed.verseEnd,
-        );
-
-        if (verses.length === 0) {
-          return NextResponse.json(
-            { error: `No verses found for export: ${ref}` },
-            { status: 400 },
-          );
-        }
-
-        translationLabel =
-          chapterData.translation.shortName ??
-          getTranslationShortName(translation);
-
+        translationLabel = resolved.passage.translation;
         blocks.push({
-          verses,
-          bookName: book.commonName || book.name,
-          chapter: parsed.chapter,
+          verses: resolved.passage.verses,
+          bookName: resolved.passage.bookName,
+          chapter: resolved.passage.chapter,
         });
       }
 
@@ -122,7 +86,7 @@ export async function GET(
       churchId: auth.churchId,
       automationType: "Sermon PPTX Exported",
       taskName: sermon.title,
-      triggerSource: `sermon_module:export:pptx:${params.id}`,
+      triggerSource: `sermon_module:export:pptx:${id}`,
     });
 
     return new NextResponse(new Uint8Array(buffer), {

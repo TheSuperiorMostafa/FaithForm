@@ -7,12 +7,11 @@ import {
   pdf,
 } from "@react-pdf/renderer";
 import type {
-  DiscussionQuestion,
   Sermon,
   SermonContent,
   SermonOutline,
 } from "@/types/sermon";
-import type { ScripturePassage } from "@/lib/sermon/export-pptx";
+import type { ExportPassage } from "@/lib/sermon/passages";
 
 const styles = StyleSheet.create({
   page: { padding: 40, fontSize: 11, fontFamily: "Helvetica" },
@@ -21,33 +20,42 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 14, marginTop: 16, marginBottom: 6, fontWeight: "bold" },
   body: { lineHeight: 1.5, marginBottom: 8 },
   scriptureRef: { fontSize: 12, fontWeight: "bold", marginTop: 10, marginBottom: 4 },
-  scriptureText: { lineHeight: 1.5, marginBottom: 6 },
+  scriptureText: { lineHeight: 1.6, marginBottom: 6 },
+  // Small and bold, the way a printed Bible sets them: readable enough to find
+  // a verse mid-discussion, quiet enough not to break up the reading.
+  verseNumber: { fontSize: 7.5, fontWeight: "bold", color: "#475569" },
   translation: { fontSize: 9, color: "#94a3b8", marginBottom: 8 },
   pointSummary: { lineHeight: 1.5, marginBottom: 4 },
   pointScripture: { fontSize: 10, color: "#64748b", marginBottom: 8 },
-  questionCategory: {
-    fontSize: 9,
-    color: "#94a3b8",
-    textTransform: "uppercase",
-    marginTop: 6,
-  },
 });
 
-const QUESTION_CATEGORY_LABEL: Record<DiscussionQuestion["category"], string> = {
-  warmup: "Warm-up",
-  observation: "Observation",
-  interpretation: "Interpretation",
-  application: "Application",
-};
+function PassageBlock({ passage }: { passage: ExportPassage }) {
+  return (
+    <View>
+      <Text style={styles.scriptureRef}>{passage.ref}</Text>
+      <Text style={styles.scriptureText}>
+        {passage.verses.map((verse, i) => (
+          <Text key={i}>
+            {verse.number > 0 ? (
+              <Text style={styles.verseNumber}>{`${verse.number} `}</Text>
+            ) : null}
+            {`${verse.plainText}${i < passage.verses.length - 1 ? " " : ""}`}
+          </Text>
+        ))}
+      </Text>
+      {passage.translation ? (
+        <Text style={styles.translation}>{passage.translation}</Text>
+      ) : null}
+    </View>
+  );
+}
 
 function SermonPdfDoc({
   sermon,
   passages,
-  questions,
 }: {
   sermon: Sermon;
-  passages: ScripturePassage[];
-  questions: DiscussionQuestion[];
+  passages: ExportPassage[];
 }) {
   const content = sermon.content as SermonContent | null;
   const outline = sermon.outline as SermonOutline | null;
@@ -72,14 +80,8 @@ function SermonPdfDoc({
         {passages.length > 0 && (
           <>
             <Text style={styles.sectionTitle}>Scripture</Text>
-            {passages.map((p, i) => (
-              <View key={i}>
-                <Text style={styles.scriptureRef}>{p.ref}</Text>
-                <Text style={styles.scriptureText}>{p.text}</Text>
-                {p.translation ? (
-                  <Text style={styles.translation}>{p.translation}</Text>
-                ) : null}
-              </View>
+            {passages.map((passage, i) => (
+              <PassageBlock key={i} passage={passage} />
             ))}
           </>
         )}
@@ -129,35 +131,24 @@ function SermonPdfDoc({
         ) : (
           <Text style={styles.body}>No lesson content yet.</Text>
         )}
-
-        {questions.length > 0 && (
-          <>
-            <Text style={styles.sectionTitle}>Discussion Questions</Text>
-            {questions.map((q, i) => (
-              <View key={i}>
-                <Text style={styles.questionCategory}>
-                  {QUESTION_CATEGORY_LABEL[q.category] ?? q.category}
-                </Text>
-                <Text style={styles.body}>
-                  {i + 1}. {q.question}
-                </Text>
-              </View>
-            ))}
-          </>
-        )}
       </Page>
     </Document>
   );
 }
 
+/**
+ * The lesson as a handout.
+ *
+ * Deliberately not everything the builder holds: the discussion questions stay
+ * on screen, where their warm-up / observation / interpretation / application
+ * labels help whoever is leading. Printed, that scaffolding read as filler
+ * between the lesson and the passage it was teaching.
+ */
 export async function renderSermonPdf(
   sermon: Sermon,
-  passages: ScripturePassage[] = [],
-  questions: DiscussionQuestion[] = [],
+  passages: ExportPassage[] = [],
 ): Promise<Buffer> {
-  const doc = (
-    <SermonPdfDoc sermon={sermon} passages={passages} questions={questions} />
-  );
+  const doc = <SermonPdfDoc sermon={sermon} passages={passages} />;
   const blob = await pdf(doc).toBlob();
   const arrayBuffer = await blob.arrayBuffer();
   return Buffer.from(arrayBuffer);
