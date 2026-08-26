@@ -300,18 +300,24 @@ export function formatEventStart(
 /**
  * Separate date and time lines for Facebook announcement graphics.
  * Time is start-only (e.g. "6:00 PM"), not a range — keeps the flyer clean.
+ *
+ * `timeZone` is required for correctness on the server: flyers render on
+ * Vercel in UTC, and without it an evening event prints the next day's date.
  */
 export function formatEventGraphicDetails(
   startAt: string,
   _endAt?: string | null,
+  timeZone?: string | null,
 ): { dateLine: string; timeLine: string } {
   const start = new Date(startAt);
+  const zone = timeZone ? { timeZone } : {};
 
   const dateLine = start
     .toLocaleDateString(undefined, {
       weekday: "short",
       month: "long",
       day: "numeric",
+      ...zone,
     })
     .toUpperCase();
 
@@ -319,6 +325,7 @@ export function formatEventGraphicDetails(
     .toLocaleTimeString(undefined, {
       hour: "numeric",
       minute: "2-digit",
+      ...zone,
     })
     .toUpperCase();
 
@@ -331,8 +338,10 @@ export function buildFacebookPostMessage(input: {
   startAt: string;
   endAt: string | null;
   notes?: string;
+  /** Church IANA timezone — required on the server, where local time is UTC. */
+  timeZone?: string | null;
 }): string {
-  const when = formatDateTimeRange(input.startAt, input.endAt);
+  const when = formatDateTimeRange(input.startAt, input.endAt, input.timeZone);
   const lines = [input.title, when];
   if (input.location) lines.push(`📍 ${input.location}`);
   if (input.notes?.trim()) lines.push("", input.notes.trim());

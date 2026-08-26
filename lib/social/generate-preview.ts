@@ -46,7 +46,9 @@ export async function generateSocialPreview(
   input: GenerateSocialPreviewInput,
 ): Promise<SocialPreviewResult> {
   const branding = await loadChurchBranding(supabase, input.churchId);
-  const when = formatDateTimeRange(input.startAt, input.endAt);
+  // The church's zone, not the server's: this runs on Vercel in UTC, where an
+  // 8pm Eastern event would otherwise read as the next day in the caption.
+  const when = formatDateTimeRange(input.startAt, input.endAt, branding.timezone);
 
   const { object, modelUsed } = await aiGenerateObject({
     churchId: input.churchId,
@@ -77,6 +79,7 @@ export async function generateSocialPreview(
     draftKey,
     startAt: input.startAt,
     endAt: input.endAt,
+    timeZone: branding.timezone,
   });
 
   return {

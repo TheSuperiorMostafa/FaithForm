@@ -29,6 +29,7 @@ import {
   formatDateTimeRange,
 } from "@/lib/queries/announcements";
 import { getChurchAnnouncementFacebookSchedule } from "@/lib/queries/church-profile";
+import { getChurchTimezone } from "@/lib/queries/attendance";
 import { hasIntegration } from "@/lib/integrations/tokens";
 import { getCurrentChurchId } from "@/lib/queries/dashboard";
 import type { PublishResult } from "@/lib/integrations/types";
@@ -306,6 +307,9 @@ export async function publishAnnouncement(
           imagePng = await downloadSocialGraphic(payload.socialGraphicPath);
         }
 
+        // Server actions run in UTC — dates must render in the church's zone.
+        const timeZone = await getChurchTimezone(ctx.supabase, ctx.churchId);
+
         if (!message) {
           message = buildFacebookPostMessage({
             title: payload.title,
@@ -313,13 +317,14 @@ export async function publishAnnouncement(
             startAt: payload.startAt,
             endAt: payload.endAt,
             notes: payload.notes,
+            timeZone,
           });
         }
 
         if (!imagePng) {
           imagePng = await generateEmergencySocialGraphic(ctx.supabase, ctx.churchId, {
             title: payload.title,
-            when: formatDateTimeRange(payload.startAt, payload.endAt),
+            when: formatDateTimeRange(payload.startAt, payload.endAt, timeZone),
             location: payload.location,
             startAt: payload.startAt,
             endAt: payload.endAt,

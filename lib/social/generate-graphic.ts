@@ -20,6 +20,8 @@ export type ChurchBranding = {
   logoUrl: string | null;
   primaryColor: string;
   accentColor: string;
+  /** IANA timezone — flyers render on a UTC server, so dates need the church's zone. */
+  timezone: string;
 };
 
 export type SocialPreviewInput = {
@@ -33,6 +35,7 @@ export type SocialPreviewInput = {
   draftKey: string;
   startAt?: string;
   endAt?: string | null;
+  timeZone?: string | null;
 };
 
 export type SocialPreviewGraphic = {
@@ -49,7 +52,7 @@ export async function loadChurchBranding(
 ): Promise<ChurchBranding> {
   const { data } = await supabase
     .from("churches")
-    .select("name, logo_url, giving_primary_color, giving_accent_color")
+    .select("name, logo_url, giving_primary_color, giving_accent_color, timezone")
     .eq("id", churchId)
     .maybeSingle();
 
@@ -58,6 +61,7 @@ export async function loadChurchBranding(
     logoUrl: (data?.logo_url as string | null) ?? null,
     primaryColor: (data?.giving_primary_color as string) || "#1e3a5f",
     accentColor: (data?.giving_accent_color as string) || "#c9a227",
+    timezone: (data?.timezone as string) || "America/New_York",
   };
 }
 
@@ -100,7 +104,7 @@ async function generateAiFlyer(
   if (!isAiImageConfigured()) return null;
 
   const { dateLine, timeLine } = input.startAt
-    ? formatEventGraphicDetails(input.startAt, input.endAt ?? null)
+    ? formatEventGraphicDetails(input.startAt, input.endAt ?? null, input.timeZone)
     : { dateLine: input.when, timeLine: "" };
 
   const logo = await fetchLogoForModel(branding.logoUrl);
@@ -251,6 +255,7 @@ export async function generateEmergencySocialGraphic(
     draftKey: `emergency-${Date.now()}`,
     startAt: input.startAt,
     endAt: input.endAt,
+    timeZone: branding.timezone,
   };
 
   const flyer = await generateAiFlyer(branding, previewInput);
