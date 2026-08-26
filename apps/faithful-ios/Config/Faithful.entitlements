@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+        Push Notifications capability. `development` here; the release
+        configuration overrides it to `production`.
+
+        The App ID this attaches to does not exist yet — registering it is
+        outstanding external work in P4_EXTERNAL_SETUP_RUNBOOK.md. The
+        entitlement is declared so the capability is part of the project rather
+        than something remembered at submission time.
+
+        Deliberately absent: `aps-environment` is the only capability here. No
+        location entitlement, no background modes — Prompt 5 takes a single
+        foreground fix and nothing more.
+    -->
+    <key>aps-environment</key>
+    <string>development</string>
+</dict>
+</plist>

@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDisplayName</key>
+    <string>Faithful</string>
+    <key>CFBundleShortVersionString</key>
+    <string>$(MARKETING_VERSION)</string>
+    <key>CFBundleVersion</key>
+    <string>$(CURRENT_PROJECT_VERSION)</string>
+
+    <!--
+        Custom-scheme deep links. Every link is parsed and authorized before any
+        state changes. Universal Links over https need an apple-app-site-
+        association file on a domain and a Team ID this repository does not yet
+        establish, so the associated-domains entitlement is deliberately absent
+        — see docs/faithful/P4_EXTERNAL_SETUP_RUNBOOK.md.
+    -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>io.faithform.faithful.deeplink</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>faithful</string>
+            </array>
+        </dict>
+    </array>
+
+    <!--
+        No ATS exception of any kind. TLS validation stays at its defaults, and
+        the development origin is reached over https like every other.
+    -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsArbitraryLoads</key>
+        <false/>
+    </dict>
+
+    <!--
+        The camera, and nothing else.
+
+        Requested only after an explicit tap on "Scan the code" — never at
+        launch, during onboarding, while browsing, or when enabling automatic
+        check-in. `tests/security/checkin-privacy.test.ts` proves only
+        `AVFoundationScanner` can reach a permission request.
+
+        Deliberately absent: NSPhotoLibraryUsageDescription,
+        NSPhotoLibraryAddUsageDescription and NSMicrophoneUsageDescription.
+        Faithful reads a string off a screen; it never saves a frame, never
+        opens the photo library, and the capture interface has no member that
+        could return an image.
+
+        The purpose string names the benefit to the person, not the company —
+        Apple rejects the latter, and it is also simply the right thing to say.
+
+        The *location* usage descriptions and UIBackgroundModes are still absent
+        for the reason P7 recorded: they belong to an app target this SwiftPM
+        package does not contain. This key is here because the check-in scanner
+        cannot function without it and its wording is a decision, not a
+        deployment detail.
+    -->
+    <key>NSCameraUsageDescription</key>
+    <string>Faithful uses your camera to read the check-in code your church shows on screen. It never saves a photo.</string>
+
+    <key>UILaunchScreen</key>
+    <dict/>
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+    </array>
+</dict>
+</plist>

@@ -10,6 +10,10 @@ import {
 import { createWeeklyAnnouncementGmailDraft } from "@/lib/announcements/weekly-email";
 import { getChurchAuth } from "@/lib/auth/church";
 import { featureActionError } from "@/lib/features/guard";
+import {
+  applyMobilePublication,
+  withdrawMobilePublication,
+} from "@/lib/faithful/push/publish-hook";
 import { createClient } from "@/lib/supabase/server";
 import { isAppleEventId } from "@/lib/integrations/apple-calendar";
 import { patchChurchCalendarEvent } from "@/lib/integrations/calendar";
@@ -62,6 +66,18 @@ function parsePublishForm(formData: FormData) {
   const socialGraphicPath = String(formData.get("social_graphic_path") ?? "").trim();
   const socialGraphicUrl = String(formData.get("social_graphic_url") ?? "").trim();
 
+  // Faithful publication. Absent means "not in the app" — a publish that does
+  // not mention the app must not start appearing in it.
+  const mobileVisibilityRaw = String(formData.get("mobile_visibility") ?? "none").trim();
+  const mobileVisibility = (
+    ["none", "public", "followers", "members"] as const
+  ).includes(mobileVisibilityRaw as never)
+    ? (mobileVisibilityRaw as "none" | "public" | "followers" | "members")
+    : "none";
+  const isPinned = formData.get("is_pinned") === "true";
+  const pinnedUntil = String(formData.get("pinned_until") ?? "").trim() || null;
+  const posterAltText = String(formData.get("poster_alt_text") ?? "").trim() || null;
+
   const originalTitle = String(formData.get("original_title") ?? "").trim();
   const originalLocation = String(formData.get("original_location") ?? "").trim();
   const originalStartAt = String(formData.get("original_start_at") ?? "").trim();
@@ -97,6 +113,10 @@ function parsePublishForm(formData: FormData) {
       facebookCaption,
       socialGraphicPath,
       socialGraphicUrl,
+      mobileVisibility,
+      isPinned,
+      pinnedUntil,
+      posterAltText,
     },
   };
 }
@@ -241,6 +261,30 @@ export async function publishAnnouncement(
   }
 
   announcementId = saved.id;
+
+  // The app projection and its notification are applied here — after the
+  // canonical row is saved and *before* any external provider is contacted, so
+  // a Facebook or calendar failure below can never leave the app half-published
+  // or send a notification for something that did not save.
+  const mobileResult = await applyMobilePublication({
+    churchId: ctx.churchId,
+    announcementId,
+    title: payload.title,
+    body: payload.notes || null,
+    visibility: payload.mobileVisibility,
+    isPinned: payload.isPinned,
+    pinnedUntil: payload.pinnedUntil,
+    posterAltText: payload.posterAltText,
+    hasEndDate: Boolean(payload.endAt),
+  });
+
+  if (!mobileResult.applied && payload.mobileVisibility !== "none") {
+    errors.push(
+      mobileResult.unavailableReason === "migration_0054_missing"
+        ? "Saved, but the app feed is unavailable — run `pnpm db:faithful-push`."
+        : "Saved, but could not publish to the app.",
+    );
+  }
 
   if (payload.pushToFacebook) {
     const fbConnected = await hasIntegration(
@@ -530,6 +574,11 @@ export async function unsubmitAnnouncement(
     }
   }
 
+  // Taking it back from the web takes it out of the app as well, and cancels
+  // anything not yet delivered. Leaving it visible in Faithful after an
+  // unsubmit would be the worst kind of stale.
+  await withdrawMobilePublication(ctx.churchId, id).catch(() => undefined);
+
   const rewind = {
     status: "pending" as const,
     is_ready: false,
@@ -595,6 +644,11 @@ export async function deleteAnnouncement(id: string) {
 
   const featureError = await featureActionError("announcements", ctx.supabase);
   if (featureError) return { error: featureError };
+
+  // Cancel any undelivered notification first: once the row is gone the
+  // worker's own re-check would cancel it anyway, but a notification racing a
+  // delete should not depend on that ordering.
+  await withdrawMobilePublication(ctx.churchId, id).catch(() => undefined);
 
   const { error } = await ctx.supabase
     .from("announcements")

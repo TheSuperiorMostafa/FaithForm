@@ -6,7 +6,7 @@ on:
     branches: [main]
 
 jobs:
-  verify:
+  web:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -40,3 +40,116 @@ jobs:
       STRIPE_WEBHOOK_SECRET: ci-stripe-webhook-secret-00000000001
       NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: ci-stripe-publishable-not-a-real-key
       RESEND_API_KEY: ci-resend-secret-not-a-real-provider-key
+
+  contract-and-native:
+    # Runs on macOS because Swift needs it. The Android and contract gates would
+    # run anywhere; keeping them on one runner means the three languages decode
+    # the same fixture files in the same checkout, which is the whole point.
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 8.15.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+
+      - run: pnpm install --frozen-lockfile
+
+      # Generated output must already be committed and current. A contract or
+      # token change that skipped regeneration fails here rather than shipping
+      # three definitions that disagree.
+      - name: Verify generated contract and design tokens are current
+        run: pnpm verify:generated
+
+      - name: TypeScript contract tests
+        run: pnpm test:contract
+
+      # Deterministic resolution: the wrapper pins Gradle, the version catalog
+      # pins every dependency, and --no-daemon keeps the runner reproducible.
+      - name: Android unit tests
+        run: pnpm android:test
+
+      - name: Android debug build
+        run: pnpm android:build
+
+      # The pilot artefact. Unsigned, and it must still assemble.
+      - name: Android staging build
+        run: pnpm android:staging
+
+      - name: iOS build
+        run: pnpm ios:build
+
+      # `swift build` above compiles for the host, so every `#if os(iOS)` block
+      # is invisible to it — the camera scanner, the player adapter, the resource
+      # loader. This compiles for the platform the app actually ships on, and
+      # treats warnings as failures, because nothing else here ever sees them.
+      - name: iOS device build
+        run: pnpm ios:build:device
+
+      - name: iOS tests
+        run: pnpm ios:test
+
+      # The application, not the library. `swift build` compiles neither the
+      # app target nor anything behind `#if os(iOS)`.
+      - name: iOS app build (unsigned, device target)
+        run: pnpm ios:app:build
+
+      - name: iOS app tests
+        run: pnpm ios:app:test
+
+      # Native configuration is scanned for secrets alongside the web tree.
+      - name: Secret scan
+        run: pnpm scan:secrets
+    env:
+      GRADLE_OPTS: -Dorg.gradle.daemon=false
+
+  # The attendance and check-in invariants, executed rather than inspected.
+  #
+  # Source inspection can prove `on conflict do nothing` is written; only two
+  # real connections racing each other prove it holds. This job stands up a
+  # throwaway Postgres, applies the bootstrap fixture and migrations 0055-0059,
+  # and runs both connections against them.
+  #
+  # It keeps earning its place. It found a genuine TOCTOU race in
+  # `record_attendance` that no amount of reading the file would have surfaced,
+  # and in Prompt 8 it caught an ambiguous column reference that made kiosk
+  # pairing fail at run time — the function created cleanly, the migration
+  # applied cleanly, and every pairing would have failed in production.
+  attendance-concurrency:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: faithful_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 8.15.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Attendance and check-in races (two real connections)
+        run: pnpm test:concurrency
+        env:
+          FAITHFUL_TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/faithful_test

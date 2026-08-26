@@ -1,6 +1,8 @@
 import { redirect } from "next/navigation";
 
+import { PeopleClaimsPanel } from "@/components/people/people-claims-panel";
 import { PeopleManager } from "@/components/people/people-manager";
+import { getPendingClaims } from "@/app/dashboard/people/claim-actions";
 import { getChurchAuth } from "@/lib/auth/church";
 import { getMembersForChurch } from "@/lib/queries/members";
 import { createClient } from "@/lib/supabase/server";
@@ -26,9 +28,15 @@ export default async function PeoplePage() {
   }
 
   const supabase = createClient();
-  const members = await getMembersForChurch(supabase, auth.churchId, {
-    includeInactive: true,
-  });
+  const [members, pendingClaims] = await Promise.all([
+    getMembersForChurch(supabase, auth.churchId, { includeInactive: true }),
+    getPendingClaims(),
+  ]);
 
-  return <PeopleManager initialMembers={members} isAdmin={auth.isAdmin} />;
+  return (
+    <div className="flex w-full flex-col gap-5">
+      <PeopleClaimsPanel claims={pendingClaims} />
+      <PeopleManager initialMembers={members} isAdmin={auth.isAdmin} />
+    </div>
+  );
 }

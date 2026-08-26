@@ -1,5 +1,7 @@
 # FaithForm / Faithful implementation sequence
 
+> **Revalidated 2026-08-24 at `9bdbbaf`.** Sequence re-checked against the repository: ownership is still single-owner per domain, all eight required product capabilities are still covered, and no phase silently replaces a production system. Prompt 2 is complete in source (see `P2_*` reports); Prompt 3 is the next entry point. See `01_REPOSITORY_AUDIT.md` § Revalidation addendum.
+
 Audit date: 2026-08-19
 
 Applies to: Prompts 2–12
@@ -62,7 +64,7 @@ Each schema family and cross-cutting concern has one owning prompt. A later prom
 7. Version mobile DTOs/errors and maintain compatibility fixtures before updating either native consumer.
 8. Define offline freshness, retry, cache partition, revocation, and logout purge for every native read/write.
 9. Never log tokens, payment details, message bodies, precise location trails, or congregation personal data.
-10. Run lint/build plus relevant unit, integration, RLS, contract, UI, native, webhook, and migration tests. The current CI has only lint/build (`.github/workflows/ci.yml:8-29`), so each phase must add its own gates.
+10. Run lint/build plus relevant unit, integration, RLS, contract, UI, native, webhook, and migration tests. CI now enforces `pnpm ci:verify` — lint, typecheck, unit/security/policy tests, migration baseline, secret scan, build — plus `pnpm audit:prod` (`.github/workflows/ci.yml:20-22`). Each phase must still add gates for what that baseline cannot cover: live-database RLS, contract fixtures, browser, and native tests.
 
 ## Prompt 2 — Security remediation and reproducible production baseline
 

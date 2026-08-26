@@ -1,0 +1,122 @@
+# The iOS application target.
+#
+# Generated from this file rather than committed as a `.pbxproj`, so what the
+# app is remains readable and reviewable: a project file is 2,000 lines of
+# machine-ordered UUIDs that nobody can diff, and merge conflicts in one are
+# resolved by guessing.
+#
+# Run `pnpm ios:app:generate` before opening Xcode. `pnpm ios:app:build` does it
+# for you.
+name: Faithful
+options:
+  bundleIdPrefix: $(FAITHFUL_BUNDLE_ID_PREFIX)
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+  # Every target's warnings are failures. A warning in a target nobody compiles
+  # daily is a warning nobody will ever see again — the lesson from the
+  # AVFoundation concurrency break that sixteen green gates missed.
+  defaultConfig: Debug
+
+configs:
+  Debug: debug
+  Staging: release
+  Release: release
+
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
+    GCC_TREAT_WARNINGS_AS_ERRORS: YES
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    # No team, no profile, no identity in source. Xcode's automatic signing is
+    # switched on by the person installing it, with their own account.
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_IDENTITY: ""
+    CODE_SIGNING_REQUIRED: NO
+    CODE_SIGNING_ALLOWED: NO
+
+packages:
+  FaithfulKit:
+    path: .
+
+targets:
+  Faithful:
+    type: application
+    platform: iOS
+    sources:
+      - path: App
+    dependencies:
+      - package: FaithfulKit
+        product: FaithfulKit
+    configFiles:
+      Debug: App/Configuration/Debug.xcconfig
+      Staging: App/Configuration/Staging.xcconfig
+      Release: App/Configuration/Release.xcconfig
+    settings:
+      base:
+        INFOPLIST_FILE: App/Resources/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        TARGETED_DEVICE_FAMILY: "1"
+        # Notifications are the one entitlement an implemented feature needs.
+        # Apple Pay and associated domains are deliberately absent — see
+        # P12_IOS_APP_TARGET_AND_SIGNING.md.
+        CODE_SIGN_ENTITLEMENTS: App/Resources/Faithful.entitlements
+    preBuildScripts:
+      - name: Placeholder assets must be replaced
+        script: '"$SRCROOT/App/Scripts/check-assets.sh"'
+        basedOnDependencyAnalysis: false
+        # Declared so the user-script sandbox permits reading them. Without
+        # these the sandbox denies the script its own file, which reads as a
+        # permissions error rather than as a missing declaration.
+        inputFiles:
+          - $(SRCROOT)/App/Scripts/check-assets.sh
+          - $(SRCROOT)/App/Resources/Assets.xcassets/AppIcon.appiconset/Contents.json
+        outputFiles:
+          - $(DERIVED_FILE_DIR)/asset-check.stamp
+
+  FaithfulAppTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: AppTests
+    dependencies:
+      - target: Faithful
+      - package: FaithfulKit
+        product: FaithfulKit
+    settings:
+      base:
+        # A host application is required: these tests assert what the *app*
+        # composes, which does not exist without one.
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Faithful.app/Faithful
+        BUNDLE_LOADER: $(TEST_HOST)
+
+schemes:
+  Faithful:
+    build:
+      targets:
+        Faithful: all
+        FaithfulAppTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - FaithfulAppTests
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
+
+  Faithful-Staging:
+    build:
+      targets:
+        Faithful: all
+    run:
+      config: Staging
+    archive:
+      config: Staging

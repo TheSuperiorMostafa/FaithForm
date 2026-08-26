@@ -20,6 +20,15 @@
     },
     "app/api/integrations/keep-alive/route.ts": {
       "maxDuration": 300
+    },
+    "app/api/webhooks/notifications/dispatch/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/webhooks/attendance/generate/route.ts": {
+      "maxDuration": 120
+    },
+    "app/api/webhooks/attendance/cleanup/route.ts": {
+      "maxDuration": 60
     }
   },
   "crons": [
@@ -34,6 +43,18 @@
     {
       "path": "/api/give/receipts/retry",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/webhooks/notifications/dispatch",
+      "schedule": "*/2 * * * *"
+    },
+    {
+      "path": "/api/webhooks/attendance/generate",
+      "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/webhooks/attendance/cleanup",
+      "schedule": "0 4 * * *"
     }
   ]
 }

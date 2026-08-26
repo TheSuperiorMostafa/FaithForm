@@ -1,0 +1,25 @@
+// Production configuration.
+//
+// The bundle identifier and team below are placeholders that must be replaced
+// with the real values before any store submission — they are listed as
+// outstanding external work in P4_EXTERNAL_SETUP_RUNBOOK.md. No key, token, or
+// certificate belongs in this file.
+
+PRODUCT_NAME = Faithful
+PRODUCT_BUNDLE_IDENTIFIER = io.faithform.faithful
+MARKETING_VERSION = 0.1.0
+CURRENT_PROJECT_VERSION = 1
+
+IPHONEOS_DEPLOYMENT_TARGET = 17.0
+SWIFT_VERSION = 6.0
+SWIFT_STRICT_CONCURRENCY = complete
+
+FAITHFUL_API_ORIGIN = https://faithform.io
+FAITHFUL_ENVIRONMENT_KEY = production
+// Debug affordances are compiled out of release rather than hidden.
+FAITHFUL_ALLOW_DEBUG_CONTROLS = NO
+
+// Push Notifications. The entitlement file is shared; the environment differs,
+// because a development token is not valid against the production APNs host.
+CODE_SIGN_ENTITLEMENTS = Config/Faithful.entitlements
+FAITHFUL_APS_ENVIRONMENT = production

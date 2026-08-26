@@ -1,5 +1,7 @@
 # FaithForm / Faithful architecture decisions
 
+> **Revalidated 2026-08-24 at `9bdbbaf`.** All eighteen decisions re-checked against the repository and none is invalidated. Confirmations worth noting: AD-004's premise still holds exactly — `attendance_records` still has **no** `(church_id, service_date)` uniqueness (`supabase/migrations/0003_indexes.sql:7-18` defines plain indexes only), the check-then-insert race is unchanged, and the unused aggregate `public.attendance` table still has zero callers. AD-006 is now **satisfied in source**: the persistent publish key was removed from playback URLs in Prompt 2 and viewer playback is a separate expiring HMAC capability (`lib/stream/playback.ts:55-108`). AD-009's premise is reinforced — `push_to_app` is still written `false` at every production call site and no APNs/FCM infrastructure exists. AD-005 gains one input: as of `68363cb`, Apple/iCloud is a connectable calendar provider via CalDAV (`supabase/migrations/0052_apple_calendar_integration.sql:11-15`), which is outbound calendar publication and does **not** constitute a Faithful feed. See `01_REPOSITORY_AUDIT.md` § Revalidation addendum.
+
 Audit date: 2026-08-19
 
 Scope: invariants for Prompts 2–12; a later change requires new evidence and an explicit superseding decision
@@ -68,7 +70,26 @@ Scope: invariants for Prompts 2–12; a later change requires new evidence and a
 
 ## AD-003 — Visitor onboarding uses a separate relationship lifecycle
 
-**Status:** Provisional
+**Status:** **Locked — implemented in Prompt 3** (`supabase/migrations/0053_visitor_identity.sql`)
+
+Option 2 was chosen and built. `visitor_church_relationships` is unique per
+`(account_id, church_id)` with states `following`, `pending`, `joined`, `left`,
+`blocked`, an append-only transition log, and a pure state machine at
+`lib/faithful/relationship-state.ts`. The questions this decision listed under
+"verify before implementation" were answered as follows:
+
+- **Follow is immediate; join follows the church's policy** (`open`,
+  `approval_required`, `invite_only`), read from the church row at decision time.
+- **Discoverability is opt-in and defaults to false.** The migration lists nobody.
+- **Invitations** are hashed, purpose-bound, expiring, revocable, and consumed
+  atomically; `blocked` is checked inside that same statement.
+- **Blocked is terminal for visitors** and survives account deletion.
+- **Age/minor rules remain undecided** and fail closed — see
+  `P3_IDENTITY_AND_TENANCY_REPORT.md`.
+- **Whether `joined` carries ecclesial or legal meaning is still a product
+  question**; it is currently a product relationship only.
+
+See `P3_IDENTITY_CONTRACT.md` for the full transition table.
 
 **Evidence**
 

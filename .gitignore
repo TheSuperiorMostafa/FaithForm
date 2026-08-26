@@ -48,3 +48,12 @@ next-env.d.ts
 
 # Python bytecode from relay script checks
 __pycache__/
+
+# Native build outputs
+apps/faithful-android/.gradle/
+apps/faithful-android/build/
+apps/faithful-android/**/build/
+apps/faithful-android/local.properties
+apps/faithful-ios/.build/
+apps/faithful-ios/.swiftpm/
+apps/faithful-ios/*.xcodeproj/xcuserdata/

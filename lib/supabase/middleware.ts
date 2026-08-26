@@ -40,11 +40,19 @@ function rewriteGiveSubdomain(request: NextRequest): NextResponse | null {
 
 export async function updateSession(request: NextRequest) {
   if (process.env.NODE_ENV === "production") {
+    const { assertProductionEnv, ProductionEnvError } = await import(
+      "@/lib/env/production"
+    );
     try {
-      const { assertProductionEnv } = await import("@/lib/env/production");
       assertProductionEnv();
-    } catch {
-      console.error("[security] production environment validation failed");
+    } catch (error) {
+      const failedChecks =
+        error instanceof ProductionEnvError
+          ? error.failedChecks.join(", ")
+          : "unknown";
+      console.error(
+        `[security] production environment validation failed: ${failedChecks}`,
+      );
       return NextResponse.json(
         { error: "Service unavailable" },
         { status: 503, headers: { "Cache-Control": "no-store" } },

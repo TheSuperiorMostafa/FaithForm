@@ -1,0 +1,16 @@
+#include "Base.xcconfig"
+
+FAITHFUL_BUNDLE_ID_SUFFIX = .debug
+FAITHFUL_ENVIRONMENT_KEY = development
+
+// A simulator reaches the host machine on localhost. A device does not, and a
+// developer pointing a device at a laptop sets this to that laptop's LAN
+// address for the duration.
+FAITHFUL_API_ORIGIN = http:/$()/localhost:3000
+
+// Debug affordances are compiled in here and nowhere else.
+FAITHFUL_ALLOW_DEBUG_CONTROLS = YES
+
+// Point at a local Supabase, or a project you own. Never a church's.
+FAITHFUL_SUPABASE_URL =
+FAITHFUL_SUPABASE_ANON_KEY =

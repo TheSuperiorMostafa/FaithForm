@@ -1,5 +1,7 @@
 # FaithForm / Faithful source-of-truth map
 
+> **Revalidated 2026-08-24 at `9bdbbaf`.** Every owner, state, and evidence path below was re-verified in source. Two rows changed: the stream publish key row (resolved in Prompt 2) and the Churches row (church creation is now decoupled from admin invitation). All other authorities, the identity key lock, the attendance convergence model, and the no-duplication constraints are unchanged. See `01_REPOSITORY_AUDIT.md` § Revalidation addendum.
+
 Audit date: 2026-08-19
 
 ## Authority rules
@@ -12,12 +14,12 @@ The core rule is: **FaithForm administers one shared backend; Faithful reads pub
 
 | Domain | Current authority | State | Locked target and write boundary | Evidence |
 |---|---|---|---|---|
-| Churches | `public.churches` in Supabase/Postgres | Ready for single-church staff context; Partial for discovery/campuses | Same church row remains tenant root. FaithForm/platform onboarding writes configuration. Faithful may discover only explicitly public fields. Add campuses as children; do not duplicate churches. | `supabase/migrations/0001_schema.sql:10-15`; onboarding updates at `app/onboarding/actions.ts:150-159` |
+| Churches | `public.churches` in Supabase/Postgres | Ready for single-church staff context; Partial for discovery/campuses | Same church row remains tenant root. FaithForm/platform onboarding writes configuration — as of `9bdbbaf` a church row may exist before any admin is invited, so Faithful discovery must tolerate a church with zero `church_users` rows. Faithful may discover only explicitly public fields. Add campuses as children; do not duplicate churches. | `supabase/migrations/0001_schema.sql:10-15`; onboarding updates at `app/onboarding/actions.ts:150-159` |
 | Accounts | Supabase Auth `auth.users.id` | Partial | Supabase Auth remains credential authority. Add an app-owned profile for user preferences/privacy state. Faithful users write only their own profile through constrained APIs/RLS. | `lib/supabase/middleware.ts:62-93`; `lib/auth/church.ts:62-72` |
 | Staff memberships | `public.church_users` | Ready for current dashboard model; not a visitor model | Keep exclusively for FaithForm staff tenant access/roles. Do not place visitors here. | `supabase/migrations/0001_schema.sql:21-28`; `app/dashboard/settings/team-actions.ts:150-181` |
-| Visitor follows/memberships | None | Missing | New account-to-church relationship in shared Postgres with follow/join/pending/left semantics and tenant-safe uniqueness. Faithful initiates allowed transitions; FaithForm approves only when policy requires it. | No visitor relationship exists; current auth takes one staff link at `lib/auth/church.ts:33-44` |
+| Visitor follows/memberships | `public.visitor_church_relationships` | **Implemented (Prompt 3)** | New account-to-church relationship in shared Postgres with follow/join/pending/left semantics and tenant-safe uniqueness. Faithful initiates allowed transitions; FaithForm approves only when policy requires it. | `supabase/migrations/0053_visitor_identity.sql`; state machine at `lib/faithful/relationship-state.ts` |
 | People | `public.members` | Partial | `members.id` remains the church-owned operational person. FaithForm owns create/edit/merge/deactivate. Faithful can claim/link through a verified workflow, never by automatic email match. | `supabase/migrations/0001_schema.sql:34-44`; `app/dashboard/people/actions.ts:1-220` |
-| Account ↔ People linkage | None | Missing | New tenant-scoped link from `auth.users.id` to existing `members.id`, server-created after verified claim/admin resolution; uniqueness prevents multiple active claims. | `members` has no auth ID at `supabase/migrations/0001_schema.sql:34-44` |
+| Account ↔ People linkage | `public.visitor_people_claims` + `public.visitor_people_links` | **Implemented (Prompt 3)** | New tenant-scoped link from `auth.users.id` to existing `members.id`, server-created after verified claim/admin resolution; uniqueness prevents multiple active claims. | `supabase/migrations/0053_visitor_identity.sql`; one active link per `member_id` and per `(account_id, church_id)` |
 | Households/dependents | None | Missing | If product-approved, add relationships around existing `members`; never replace People. Guardian/dependent permissions require separate privacy rules. | No household/dependent model found |
 | Service schedules | `public.church_service_times` | Partial | FaithForm owns recurring definitions. Add campus, timezone/exception/window data and materialized `service_occurrence` authority for check-ins. | `supabase/migrations/0038_church_profile.sql:64-83` |
 | Attendance | `attendance_records` + `attendance_entries` | Partial | Evolve into one canonical occurrence-level counted fact per `(service_occurrence_id, member_id)`. FaithForm owns schedules/corrections; manual, geofence, QR, kiosk, and admin commands all use one server idempotency path. Preserve People linkage. | `supabase/migrations/0001_schema.sql:50-68`; current two-step save at `app/dashboard/attendance/(record)/[date]/actions.ts:136-190` |
@@ -51,7 +53,7 @@ These identifiers have distinct authority and must not be collapsed:
 | visitor church relationship ID | Follow/join state | Yes, for the owning account | New record; separate from staff access and People. |
 | `giving_donors.id` | Church-specific donor/reporting identity | Only through verified donor/account access | Email match is a candidate, not authentication. |
 | Stripe customer/payment/subscription IDs | Provider references | Server only unless provider SDK requires a short-lived client secret | Never authorize with a raw ID or email. |
-| stream publish key | Persistent ingest credential | Never | Must be removed from public HLS URLs (`lib/stream/playback.ts:57-73`). |
+| stream ingest capability | Scoped, expiring ingest credential | Never | **Resolved in Prompt 2:** the persistent publish key no longer appears in playback URLs. Viewer playback is a separate short-lived HMAC capability bound to church, event, audience, and expiry (`lib/stream/playback.ts:55-108`). Faithful receives a viewer capability only — never ingest material. |
 
 ## Attendance convergence model
 

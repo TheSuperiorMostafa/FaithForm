@@ -1,0 +1,19 @@
+#include "Base.xcconfig"
+
+FAITHFUL_BUNDLE_ID_SUFFIX = .staging
+FAITHFUL_ENVIRONMENT_KEY = staging
+
+// **Deliberately empty.** There is no staging origin in this repository, and a
+// default would be a guess about somebody's infrastructure.
+//
+// A build with this unset does not fall back to production. It fails closed:
+// the app shows a "not configured" state and the developer sees exactly which
+// key is missing. That inversion is the point — a staging build silently
+// talking to production is worse than one that refuses to start.
+FAITHFUL_API_ORIGIN =
+
+FAITHFUL_ALLOW_DEBUG_CONTROLS = NO
+
+// Deliberately empty, like the origin above.
+FAITHFUL_SUPABASE_URL =
+FAITHFUL_SUPABASE_ANON_KEY =

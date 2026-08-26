@@ -405,6 +405,112 @@ async function handlePaymentIntent(
   });
 
   await maybeSendDonationReceipt(donationId, status);
+  await projectFaithfulAttempt(pi, status, donationId, eventCreated, churchId);
+}
+
+/**
+ * Copies this webhook's conclusion onto a Faithful donation attempt.
+ *
+ * **This is the only thing that makes a phone show a receipt.** The native
+ * payment sheet's own success callback writes nothing anywhere: it reports that
+ * an SDK finished, which is not the same as money having moved, and treating it
+ * as authoritative is the mistake this whole path exists to avoid.
+ *
+ * Deliberately last, and deliberately non-fatal. The donation projection and the
+ * church's receipt email are the church's financial record; a failure to update
+ * an app's view of an attempt must not fail the webhook and cause Stripe to
+ * redeliver an event that already reconciled correctly. The app's next status
+ * poll re-reads the donation anyway.
+ */
+async function projectFaithfulAttempt(
+  pi: Stripe.PaymentIntent,
+  status: DonationStatus,
+  donationId: string | null,
+  eventCreated: number,
+  churchId: string,
+): Promise<void> {
+  const attemptId = pi.metadata?.faithful_attempt_id;
+  if (!attemptId) return;
+
+  const admin = createAdminClient();
+  const attemptStatus =
+    status === "succeeded" ? "succeeded" : status === "failed" ? "failed" : "processing";
+
+  try {
+    await admin.rpc("project_giving_attempt_state", {
+      p_payment_intent_id: pi.id,
+      p_status: attemptStatus,
+      p_donation_id: donationId,
+      p_event_at: new Date(eventCreated * 1000).toISOString(),
+    });
+  } catch {
+    return;
+  }
+
+  // Bind the account to the church's donor, on a *succeeded* gift only.
+  //
+  // Never by matching an email: `giving_donors` is keyed `(church_id, email)`,
+  // and two people who share an inbox would otherwise see each other's giving
+  // history the moment one of them signed in. The link is written because this
+  // account demonstrably gave, and `link_giving_donor` keeps the first one.
+  const accountId = pi.metadata?.faithful_account_id;
+  if (status !== "succeeded" || !accountId || !donationId) return;
+
+  try {
+    const { data: donation } = await admin
+      .from("giving_donations")
+      .select("donor_id")
+      .eq("id", donationId)
+      .eq("church_id", churchId)
+      .maybeSingle();
+
+    const donorId = (donation?.donor_id as string | null) ?? null;
+    if (!donorId) return;
+
+    await admin.rpc("link_giving_donor", {
+      p_account_id: accountId,
+      p_church_id: churchId,
+      p_donor_id: donorId,
+    });
+  } catch {
+    /* the link is a convenience; a gift is recorded either way */
+  }
+}
+
+/**
+ * Projects an attempt state that is only known by charge id.
+ *
+ * Disputes name a charge, not a payment intent, so the donation row is the
+ * bridge. The church predicate is on the read, so a charge id from another
+ * church resolves to nothing.
+ */
+async function projectAttemptFromCharge(
+  chargeId: string,
+  churchId: string,
+  status: string,
+  eventAt: string,
+): Promise<void> {
+  try {
+    const admin = createAdminClient();
+    const { data } = await admin
+      .from("giving_donations")
+      .select("stripe_payment_intent_id")
+      .eq("church_id", churchId)
+      .eq("stripe_charge_id", chargeId)
+      .maybeSingle();
+
+    const intentId = (data?.stripe_payment_intent_id as string | null) ?? null;
+    if (!intentId) return;
+
+    await admin.rpc("project_giving_attempt_state", {
+      p_payment_intent_id: intentId,
+      p_status: status,
+      p_donation_id: null,
+      p_event_at: eventAt,
+    });
+  } catch {
+    /* non-fatal, as with every Faithful projection off this path */
+  }
 }
 
 async function handleSubscription(
@@ -662,6 +768,15 @@ async function processStripeEventEffects(event: Stripe.Event): Promise<void> {
           .or(
             `stripe_event_created_at.is.null,stripe_event_created_at.lte.${eventCreatedAt}`,
           );
+        // A refund is a state a donor must see. Only the webhook may write it —
+        // there is no client path to `refunded`, which is what stops an app from
+        // claiming a gift was returned when it was not.
+        await admin.rpc("project_giving_attempt_state", {
+          p_payment_intent_id: piId,
+          p_status: "refunded",
+          p_donation_id: null,
+          p_event_at: eventCreatedAt,
+        });
       }
       break;
     }
@@ -714,6 +829,10 @@ async function processStripeEventEffects(event: Stripe.Event): Promise<void> {
         .or(
           `stripe_event_created_at.is.null,stripe_event_created_at.lte.${eventCreatedAt}`,
         );
+      // Same reasoning as a refund: a dispute is a real state and only this path
+      // may write it. The charge is the key here, so the attempt is reached
+      // through the donation that carries both.
+      await projectAttemptFromCharge(chargeId, churchId, "disputed", eventCreatedAt);
       break;
     }
     case "charge.dispute.closed": {

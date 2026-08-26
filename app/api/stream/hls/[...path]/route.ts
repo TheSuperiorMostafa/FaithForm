@@ -1,33 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
 import { rewriteM3u8Playlist } from "@/lib/stream/hls-player";
 import { verifyPlaybackToken } from "@/lib/stream/playback";
-import { getStreamRelaySettings } from "@/lib/stream/relay";
-import { isAbortError, startStreamTimer } from "@/lib/stream/telemetry";
+import {
+  contentTypeFor,
+  fetchFromRelay,
+  relayCacheHeader,
+  segmentsAreSafe,
+} from "@/lib/stream/relay-upstream";
+import { startStreamTimer } from "@/lib/stream/telemetry";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+/**
+ * The website's HLS front door. Unchanged in behaviour.
+ *
+ * Prompt 9 moved the *upstream* half — the relay base, the server-side Basic
+ * credential, the path derivation and the segment validation — into
+ * `lib/stream/relay-upstream`, so this route and Faithful's header-authenticated
+ * `/api/media/v1/live` reach the relay through one contract rather than two
+ * copies that could drift apart.
+ *
+ * What did not move, and must not: this route's own authentication. A browser
+ * player carries its capability in the query string because it cannot attach a
+ * header to the segment requests it issues; a native player can, and does.
+ */
+
 export const dynamic = "force-dynamic";
-const NO_STORE = "private, no-cache, no-store, must-revalidate";
-
-function upstreamBase(): string {
-  const value = process.env.STREAM_HLS_UPSTREAM_URL?.trim();
-  if (!value) throw new Error("Stream playback is unavailable.");
-  return value.replace(/\/$/, "");
-}
-
-function playbackAuthorization(): string | null {
-  const secret = process.env.STREAM_RELAY_PLAYBACK_SECRET?.trim();
-  if (!secret || secret.length < 32) return null;
-  return `Basic ${Buffer.from(`faithform-playback:${secret}`).toString("base64")}`;
-}
-
-function contentTypeFor(path: string, upstreamType: string | null): string {
-  if (upstreamType) return upstreamType;
-  if (path.endsWith(".m3u8")) return "application/vnd.apple.mpegurl";
-  if (path.endsWith(".ts")) return "video/mp2t";
-  if (path.endsWith(".m4s") || path.endsWith(".mp4")) return "video/mp4";
-  if (path.endsWith(".vtt")) return "text/vtt";
-  return "application/octet-stream";
-}
+const NO_STORE = relayCacheHeader();
 
 async function capabilityIsCurrentlyAuthorized(input: {
   churchId: string;
@@ -82,17 +80,7 @@ export async function GET(
     sampleRate: 0.01,
   });
 
-  if (
-    segments.length < 2 ||
-    segments.some(
-      (segment) =>
-        !segment ||
-        segment === "." ||
-        segment === ".." ||
-        segment.includes("\\") ||
-        segment.includes(":"),
-    )
-  ) {
+  if (segments.length < 2 || !segmentsAreSafe(segments)) {
     timer.end("error", { category: "bad_request", status: 404 });
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
@@ -110,44 +98,30 @@ export async function GET(
     return NextResponse.json({ error: "Unavailable" }, { status: 403 });
   }
 
-  const settings = await getStreamRelaySettings(churchId, {
-    includeSecret: false,
-    includeInternalPath: true,
+  const relay = await fetchFromRelay({
+    churchId,
+    mediaSegments: segments.slice(1),
+    accept: request.headers.get("accept"),
+    range: request.headers.get("range"),
+    signal: request.signal,
   });
-  if (!settings.streamPath) {
+
+  if (!relay.ok) {
+    if (relay.reason === "aborted") {
+      timer.end("aborted", { category: "client_abort" });
+      return new NextResponse(null, { status: 499 });
+    }
+    if (relay.reason === "unreachable") {
+      timer.end("error", { category: "upstream_unreachable", status: 502 });
+      return NextResponse.json({ error: "Playback unavailable" }, { status: 502 });
+    }
     timer.end("error", { category: "config", status: 503 });
     return NextResponse.json({ error: "Unavailable" }, { status: 503 });
   }
 
-  const mediaPath = segments.slice(1).map(encodeURIComponent).join("/");
-  const upstreamPath = `${settings.streamPath}/${mediaPath}`;
+  const upstream = relay.response;
+  const upstreamPath = relay.upstreamPath;
   const isPlaylist = upstreamPath.endsWith(".m3u8");
-  const authorization = playbackAuthorization();
-  if (!authorization) {
-    timer.end("error", { category: "config", status: 503 });
-    return NextResponse.json({ error: "Unavailable" }, { status: 503 });
-  }
-  let upstream: Response;
-  try {
-    const range = request.headers.get("range");
-    upstream = await fetch(`${upstreamBase()}/${upstreamPath}`, {
-      cache: "no-store",
-      redirect: "manual",
-      signal: request.signal,
-      headers: {
-        Accept: request.headers.get("accept") ?? "*/*",
-        Authorization: authorization,
-        ...(range ? { Range: range } : {}),
-      },
-    });
-  } catch (error) {
-    if (isAbortError(error) || request.signal.aborted) {
-      timer.end("aborted", { category: "client_abort" });
-      return new NextResponse(null, { status: 499 });
-    }
-    timer.end("error", { category: "upstream_unreachable", status: 502 });
-    return NextResponse.json({ error: "Playback unavailable" }, { status: 502 });
-  }
 
   if (!upstream.ok) {
     timer.end("error", {

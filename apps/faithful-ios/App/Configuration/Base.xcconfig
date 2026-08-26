@@ -1,0 +1,20 @@
+// Values every configuration shares.
+//
+// **Public values only.** An origin, an environment key and a build number.
+// Nothing here is a secret, and nothing secret may ever be added: an app bundle
+// is readable by anyone who installs it.
+
+// The bundle identifier is a *placeholder* and is meant to be overridden.
+// Set FAITHFUL_BUNDLE_ID_PREFIX in your own environment or in a local
+// xcconfig; the default is deliberately obvious rather than someone's real
+// reverse-DNS name.
+FAITHFUL_BUNDLE_ID_PREFIX = io.faithform.placeholder
+PRODUCT_BUNDLE_IDENTIFIER = $(FAITHFUL_BUNDLE_ID_PREFIX).faithful$(FAITHFUL_BUNDLE_ID_SUFFIX)
+
+PRODUCT_NAME = Faithful
+MARKETING_VERSION = 0.1.0
+CURRENT_PROJECT_VERSION = 1
+
+// The minimum server-supported client build. The server refuses anything older,
+// so this is a fact about compatibility rather than a display string.
+FAITHFUL_CLIENT_BUILD = 1

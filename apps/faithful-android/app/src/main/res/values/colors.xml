@@ -1,0 +1,4 @@
+<resources>
+    <!-- Brand navy, matching design/faithful/tokens.json brandPrimary. -->
+    <color name="ic_launcher_background">#002D5F</color>
+</resources>

@@ -6,6 +6,8 @@ Repository: `/Users/mostafamahdi/Desktop/Dev Projects/FaithForm`
 
 Git baseline: `main` at `0ac6667` (`origin/main`), clean before this audit
 
+> **Revalidated 2026-08-24 at `9bdbbaf`.** This body is the Prompt 1 baseline record and is preserved as written. The repository has since advanced by five commits, including the Prompt 2 security remediation. Read **[Revalidation addendum — 2026-08-24](#revalidation-addendum--2026-08-24-at-9bdbbaf)** at the end of this document for corrected counts and versions, verified closure status of every baseline security finding, and re-verified negative findings. Two baseline findings remain open and are load-bearing for Faithful: attendance concurrency (High 6) and visitor identity (High 8).
+
 ## Executive summary
 
 FaithForm is a substantial, single-package Next.js administrative product backed by Supabase/Postgres. People, weekly attendance, announcements, live production, recorded media, Sermon Builder, church websites, and Stripe giving all have working web paths. It is not a monorepo, it has no versioned public/mobile API contract, and no native iOS or Android application exists. The requested Faithful app is therefore **not ready for native feature implementation**.
@@ -52,7 +54,7 @@ Current domain verdicts:
 | Automation | Vercel cron for weekly announcement drafts and integration keep-alive | `vercel.json:25-34`; stream scheduled-start/retry relies on externally configured calls (`DEPLOY.md:146-151`) |
 | Legacy workflow | n8n attendance follow-up documentation | Explicitly deprecated in favor of direct SMS (`n8n/README.md:1-62`) |
 | Native apps | None | No `.swift`, `.kt`, `.java`, Xcode/Gradle project, manifest, or native directory was found |
-| Tests/CI | GitHub Actions installs, lints, and builds | CI has no tests (`.github/workflows/ci.yml:8-29`); `package.json:5-42` has no test script |
+| Tests/CI | GitHub Actions installs, lints, and builds | CI had no tests at this baseline (`.github/workflows/ci.yml:8-29`); `package.json:5-42` had no test script. **Superseded — see addendum:** CI now runs `pnpm ci:verify` and `pnpm audit:prod` |
 | Observability | Console logging; streaming-only sampled structured telemetry | `lib/stream/telemetry.ts:1-100`; no repository-owned Sentry/APM/OpenTelemetry setup |
 | Deployment | Vercel web app plus separate relay host | `vercel.json:1-35`; relay lifecycle is outside Vercel |
 
@@ -284,3 +286,76 @@ This is not yet a platform-neutral design contract. Later work should add one ca
 ## Readiness conclusion
 
 Prompt 2 may begin only as a security, deployment-drift, identity/tenancy, and contract-foundation phase. It must not ship visitor screens or create parallel People/attendance/content/giving stores. A genuine external blocker remains: live Supabase/provider state cannot be certified from source alone, so migration status, storage policies/buckets, external cron, and provider credentials must be inventoried in an authorized non-production/production read-only review before schema rollout.
+
+## Revalidation addendum — 2026-08-24 at `9bdbbaf`
+
+This audit was written on 2026-08-19 against `0ac6667`. It is retained as the **Prompt 1 baseline record**. The repository has since advanced by five commits (`02a155c`, `428415c`, `68363cb`, `a9b7576`, `9bdbbaf`), which include the Prompt 2 security remediation. Everything below was re-verified in source at `9bdbbaf`; where a baseline statement no longer describes the repository, the correction is stated explicitly rather than edited silently into the body above.
+
+### Corrected repository facts
+
+| Baseline statement | Verified at `9bdbbaf` | Evidence |
+|---|---|---|
+| `main` at `0ac6667` | `main` at `9bdbbaf` | `git rev-parse --short HEAD` |
+| 53 SQL migration files | **56** (`0050_security_baseline`, `0051_black_slide_theme`, `0052_apple_calendar_integration` added) | `git ls-files 'supabase/migrations/*.sql'` |
+| 752 tracked files, 201 components, 195 lib files | **801** tracked, **203** component files, **203** lib files | `git ls-files` |
+| 76 API route handlers, 78 across `app/` | **78** under `app/api/`, **80** across `app/` | `git ls-files 'app/**/route.ts'` |
+| Next.js 14.2.35 | **Next.js 15.5.21** (Maintenance LTS), React/React DOM 18.3.1, TypeScript 5.9.3, Tailwind 3.4.19 | `package.json:73`, `package.json:76`, `package.json:97-100`; `pnpm-lock.yaml:66-68` importer resolution |
+| CI installs, lints, and builds; no test script | CI runs `pnpm ci:verify` (lint → typecheck → test → migration baseline → secret scan → build) and `pnpm audit:prod` | `.github/workflows/ci.yml:20-22`; `package.json:11-17` |
+| `pnpm audit --prod` reported 60 advisories (27 high, 28 moderate, 5 low) | **0 unresolved high/critical.** Two `image-size` advisories (`GHSA-w3rx-r6r6-pgpr`, `GHSA-5p2g-fcmc-qvqq`) are locally patched and explicitly accepted | `pnpm audit:prod` output; `patches/image-size@1.2.1.patch`; `package.json:108-109` |
+
+### Baseline security findings — verified closure status
+
+Closure was re-derived from source at `9bdbbaf`, not taken from the Prompt 2 report.
+
+| Baseline finding | Status | Evidence at `9bdbbaf` |
+|---|---|---|
+| High 2 — publish credential in public playback URL | **Closed** | Viewer playback is a separate short-lived HMAC capability keyed by `STREAM_PLAYBACK_SECRET` (`lib/stream/playback.ts:18-59`) |
+| High 3 — cross-tenant stream administration IDORs | **Closed** | Tenant predicates required at the write (`lib/stream/chat.ts:50-65`) |
+| High 4 — OAuth/stream tokens client-readable | **Closed** | Table and raw-token RPC revoked from `anon`/`authenticated`; status RPC allowlists non-secret fields (`supabase/migrations/0050_security_baseline.sql:54-125`) |
+| High 5 — cross-tenant storage writes | **Closed** | Write policies require admin membership and bind the first path segment to that church (`supabase/migrations/0050_security_baseline.sql:132-285`) |
+| **High 6 — attendance integrity is not concurrency-safe** | **STILL OPEN** | No unique constraint or occurrence key exists on `attendance_records`; only plain indexes (`supabase/migrations/0003_indexes.sql:7-18`). The check-then-insert race remains (`app/dashboard/attendance/(record)/[date]/actions.ts:136-190`) |
+| High 7 — public live writes lack abuse controls | **Closed** | Anonymous chat writes revoked; atomic limiter added (`supabase/migrations/0050_security_baseline.sql:296-368`) |
+| **High 8 — visitor identity/privacy lifecycle absent** | **STILL OPEN** | No visitor profile, account↔People claim, consent, or deletion path exists. Owned by Prompt 3 |
+| Medium 1 — non-atomic, fail-open rate limiting | **Closed** | `consume_api_rate_limit` is atomic and service-role only (`supabase/migrations/0050_security_baseline.sql:312-368`); limiter fails closed (`tests/security/configuration-and-webhooks.test.ts`) |
+| Medium 2 — non-atomic Stripe claiming, mark-before-send receipts | **Closed** | Leased claims and durable receipt state (`supabase/migrations/0050_security_baseline.sql:417-650`) |
+| Medium 5 — production env validation logged and continued | **Closed** | Middleware now returns a generic `503` and fails closed (`lib/supabase/middleware.ts:41-59`) |
+| Low 2 — hard-coded bootstrap super-admin email | **Still present** | `lib/auth/superadmin-emails.ts` |
+
+`High 6` and `High 8` are the two baseline findings that remain open, and both are load-bearing for Faithful. They are already owned by Prompt 6 and Prompt 3 respectively in `04_IMPLEMENTATION_SEQUENCE.md`; no resequencing is required.
+
+### Product-surface changes since the baseline
+
+None of these alter a domain verdict, but each changes a traced path a later prompt will touch:
+
+- **Church creation is now decoupled from admin invitation** (`9bdbbaf`). A church can exist before its admin does; inviting the admin is a separate action (`app/admin/actions.ts:59-244`, `components/admin/invite-church-admin-card.tsx`). The `churches` → `church_invites` → `church_users` authority chain in `02_SOURCE_OF_TRUTH_MAP.md` is unchanged; only its sequencing is now two-step. Team-member removal now requires confirmation (`components/settings/team-members-card.tsx`).
+- **Apple/iCloud is now a connectable calendar provider** via CalDAV with an app-specific password (`68363cb`). `church_integrations.provider` accepts `'apple'` (`supabase/migrations/0052_apple_calendar_integration.sql:11-15`), with `lib/integrations/apple-calendar.ts`, `caldav.ts`, `calendar.ts`, and a 667-line `ics.ts`. Announcements remain **Partial** for Faithful: this is outbound calendar publication, not an in-app feed or push.
+- **Announcements render start time only, not a range** (`a9b7576`, `lib/queries/announcements.ts:259-297`). Any Faithful announcement DTO should carry `start_at`/`end_at` and let the client format, rather than shipping this server-rendered string.
+- **Sermon exports honour the church's configured translation** (`428415c`, `lib/sermon/passages.ts`). Relevant to Prompt 10: a published presentation rendition must record which translation it was rendered with.
+- **New slide theme** (`0051_black_slide_theme.sql`), and a feature-disable reason surfaced to users (`0049`, `lib/features/disabled-reason.ts`).
+
+### Re-verified negative findings
+
+These were re-checked exhaustively at `9bdbbaf` and remain **Missing** — no implementation exists:
+
+- **Native mobile**: no `.swift`, `.kt`, `.java`, `.xcodeproj`, `.pbxproj`, `Package.swift`, `build.gradle*`, `settings.gradle*`, `AndroidManifest.xml`, or `Info.plist` anywhere in the tree.
+- **Push notifications**: no APNs, FCM, Firebase, `device_token`, or `push_token` reference in any `.ts`, `.tsx`, `.sql`, or `.json` source. `announcements.push_to_app` exists as a column but is written `false` at every production call site (`app/dashboard/announcements/actions.ts:148`, `lib/announcements/weekly-email.ts:210`, `components/announcements/announcement-verify-form.tsx:228`); it is a vestigial flag, not a delivery path.
+- **Geofencing / location**: no latitude, longitude, radius, geofence, or check-in column or code path. The only matches for these terms are an EXIF-stripping comment (`lib/security/validate-image.ts:52`) and the English word "checking" (`components/website-admin/domain-workspace.tsx:621`).
+- **QR / kiosk check-in**: `qrcode` is used only to render giving links (`app/api/dashboard/giving/qr/route.ts:6`).
+- **Monorepo/workspace**: no `pnpm-workspace.yaml`, `turbo.json`, `nx.json`, or secondary `package.json`.
+
+### Dead code identified
+
+- `lib/sermon-builder/books.ts`, `claude.ts`, and `esv.ts` are 1-byte empty files.
+- `getPlaceholderAnnouncements()` (`lib/utils/announcement-placeholders.ts:28`) is exported but has no caller; only `toDatetimeLocalValue`/`fromDatetimeLocalValue` from that module are used. No mock data path reaches production.
+- `public.attendance` (`supabase/migrations/0003_weekly_inputs.sql:12-19`) remains unreferenced by application code. Re-confirmed: no `.from("attendance")` call exists. Faithful must not adopt it.
+
+### Validation run for this revalidation
+
+| Command | Result |
+|---|---|
+| `pnpm test` | **67/67 pass**, 0 fail |
+| `pnpm typecheck` | **Pass**, exit 0 |
+| `pnpm audit:prod` | **Pass** — 0 unresolved high/critical; 2 accepted patched advisories |
+| `git diff --stat` | Only the three pre-existing uncommitted files, untouched by this audit |
+
+Not run, and why: no migration, `EXPLAIN ANALYZE`, live RLS, storage, Stripe, or relay command was executed — this session had no authorized database or provider environment, and the audit is forbidden from mutating production state. Every claim that depends on deployed state remains **Unknown**.

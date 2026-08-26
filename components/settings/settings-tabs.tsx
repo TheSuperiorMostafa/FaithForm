@@ -5,6 +5,8 @@ import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { AnnouncementEmailForm } from "@/components/settings/announcement-email-form";
 import { FollowUpMessagesForm } from "@/components/settings/follow-up-messages-form";
+import { FaithfulVisibilityCard } from "@/components/settings/faithful-visibility-card";
+import type { FaithfulVisibilityCardProps } from "@/components/settings/faithful-visibility-card";
 import { GivingCard } from "@/components/settings/giving-card";
 import { IntegrationsCard } from "@/components/settings/integrations-card";
 import type { IntegrationsCardProps } from "@/components/settings/integrations-card";
@@ -33,6 +35,7 @@ type SettingsTabsProps = {
   team: Omit<TeamMembersCardProps, "isAdmin">;
   /** Feature-gated tabs are hidden when the viewer can't use them. */
   allowedFeatures: FeatureKey[];
+  faithful: Omit<FaithfulVisibilityCardProps, "isAdmin">;
 };
 
 /** Params an OAuth callback appends when it returns to Settings. */
@@ -77,6 +80,7 @@ function SettingsTabsInner({
   announcementEmailTemplate,
   team,
   allowedFeatures,
+  faithful,
 }: SettingsTabsProps) {
   const searchParams = useSearchParams();
 
@@ -88,6 +92,7 @@ function SettingsTabsInner({
     "general",
     "integrations",
     "team",
+    "faithful",
     ...(showCommunications ? ["communications"] : []),
     ...(showAttendance ? ["attendance"] : []),
     ...(showGiving ? ["giving"] : []),
@@ -101,6 +106,7 @@ function SettingsTabsInner({
         <TabsTrigger value="general">General</TabsTrigger>
         <TabsTrigger value="integrations">Integrations</TabsTrigger>
         <TabsTrigger value="team">Team</TabsTrigger>
+        <TabsTrigger value="faithful">Visitor app</TabsTrigger>
         {showCommunications && (
           <TabsTrigger value="communications">Communications</TabsTrigger>
         )}
@@ -112,6 +118,10 @@ function SettingsTabsInner({
 
       <TabsContent value="integrations" className="mt-0">
         <IntegrationsCard isAdmin={isAdmin} status={integrationStatus} />
+      </TabsContent>
+
+      <TabsContent value="faithful" className="mt-0">
+        <FaithfulVisibilityCard isAdmin={isAdmin} {...faithful} />
       </TabsContent>
 
       <TabsContent value="general" className="mt-0">

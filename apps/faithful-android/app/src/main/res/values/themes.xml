@@ -1,0 +1,8 @@
+<resources>
+    <!-- A bare bridge theme. Colour, type and shape come from the canonical
+         tokens through Compose, so nothing is defined twice. -->
+    <style name="Theme.Faithful" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
+</resources>

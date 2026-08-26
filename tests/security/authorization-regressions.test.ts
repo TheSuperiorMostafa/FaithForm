@@ -77,7 +77,31 @@ test("browser and native stream surfaces cannot serialize the persistent publish
   assert.doesNotMatch(publishAuth, /integration\.access_token\s*!==/);
   assert.match(publishAuth, /STREAM_RELAY_PLAYBACK_SECRET/);
   assert.match(publishAuth, /body\.action === "read"/);
-  assert.match(read("app/api/stream/hls/[...path]/route.ts"), /Authorization: authorization/);
+  // The relay's Basic credential is attached to the *upstream* request and
+  // never returned. Prompt 9 moved that half into `lib/stream/relay-upstream`
+  // so the website route and Faithful's header-authenticated live route reach
+  // the relay through one contract instead of two copies that could drift.
+  //
+  // The property is therefore asserted in its new home — and, more strongly
+  // than before, that neither route builds a credential of its own.
+  const relayUpstream = read("lib/stream/relay-upstream.ts");
+  assert.match(relayUpstream, /Authorization: authorization/);
+  assert.match(relayUpstream, /STREAM_RELAY_PLAYBACK_SECRET/);
+  // Nothing returns it. It is assembled, attached, and forgotten.
+  assert.doesNotMatch(relayUpstream, /return .*playbackAuthorization\(\)/);
+
+  for (const route of [
+    "app/api/stream/hls/[...path]/route.ts",
+    "app/api/media/v1/live/[...path]/route.ts",
+  ]) {
+    const source = read(route);
+    assert.match(source, /fetchFromRelay\(\{/, `${route} does not use the shared relay module`);
+    assert.doesNotMatch(
+      source,
+      /STREAM_RELAY_PLAYBACK_SECRET|faithform-playback:/,
+      `${route} builds its own relay credential`,
+    );
+  }
 });
 
 test("integration raw token reads and writes require the server client", () => {

@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>en</string>
+    <key>CFBundleDisplayName</key>
+    <string>Faithful</string>
+    <key>CFBundleExecutable</key>
+    <string>$(EXECUTABLE_NAME)</string>
+    <key>CFBundleIdentifier</key>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    <key>CFBundleName</key>
+    <string>$(PRODUCT_NAME)</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>$(MARKETING_VERSION)</string>
+    <key>CFBundleVersion</key>
+    <string>$(CURRENT_PROJECT_VERSION)</string>
+
+    <!--
+        Where this build points, and which environment it is.
+
+        Both come from the .xcconfig for the configuration being built, so a
+        release build cannot be pointed somewhere by a runtime setting, and a
+        staging build cannot silently fall back to production: the origin is
+        empty in Staging and Release until someone supplies one, and the app
+        fails closed when it is missing.
+    -->
+    <key>FaithfulAPIOrigin</key>
+    <string>$(FAITHFUL_API_ORIGIN)</string>
+    <key>FaithfulEnvironmentKey</key>
+    <string>$(FAITHFUL_ENVIRONMENT_KEY)</string>
+    <key>FaithfulClientBuild</key>
+    <string>$(FAITHFUL_CLIENT_BUILD)</string>
+    <key>FaithfulAllowDebugControls</key>
+    <string>$(FAITHFUL_ALLOW_DEBUG_CONTROLS)</string>
+
+    <!--
+        The identity provider, for refreshing a session.
+
+        Both values are **public**: Supabase publishes them for exactly this
+        purpose, and neither authorises anything on its own — row-level security
+        decides what a token can reach. A service-role key must never appear
+        here, and `pnpm scan:secrets` asserts it does not.
+
+        Empty by default. A build with no provider configured cannot refresh a
+        session and says so, rather than leaving someone on a spinner.
+    -->
+    <key>FaithfulSupabaseURL</key>
+    <string>$(FAITHFUL_SUPABASE_URL)</string>
+    <key>FaithfulSupabaseAnonKey</key>
+    <string>$(FAITHFUL_SUPABASE_ANON_KEY)</string>
+
+    <!--
+        Deep links.
+
+        A custom scheme only. `https` App Links need a verified
+        apple-app-site-association file on a domain this repository does not
+        establish, so the associated-domains entitlement is deliberately absent
+        rather than declared and broken.
+    -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+            <key>CFBundleURLName</key>
+            <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>faithful</string>
+            </array>
+        </dict>
+    </array>
+
+    <!--
+        ====================================================================
+        USAGE DESCRIPTIONS
+
+        Exactly two, and each names a feature that exists and a reason a
+        person can check against what the app does. Nothing is declared
+        "in case we need it later": an undeclared permission is one nobody
+        can be asked for by accident, and a declared one is a promise.
+        ====================================================================
+    -->
+
+    <!--
+        Automatic attendance (Prompt 7). Region monitoring only — the app
+        never starts continuous location updates, and a sweep asserts
+        `startUpdatingLocation` and `allowsBackgroundLocationUpdates` appear
+        nowhere.
+    -->
+    <key>NSLocationWhenInUseUsageDescription</key>
+    <string>Faithful checks you in when you arrive at your church. It only ever looks at whether you are near a place your church set up.</string>
+    <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+    <string>Faithful checks you in when you arrive at your church, even if the app is closed. It only ever looks at whether you are near a place your church set up, and never where else you go.</string>
+
+    <!--
+        QR check-in (Prompt 8). Asked only after an explicit tap on "Scan the
+        code" — never at launch, never during onboarding. There is no photo
+        library access and no way to save a frame.
+    -->
+    <key>NSCameraUsageDescription</key>
+    <string>Faithful reads the check-in code your church puts on the screen. It never takes or saves a photo.</string>
+
+    <!--
+        Deliberately absent:
+
+          * NSPhotoLibraryUsageDescription — nothing reads or writes photos.
+          * NSMicrophoneUsageDescription — nothing records audio.
+          * NSContactsUsageDescription — nothing reads contacts.
+          * NSUserTrackingUsageDescription — there is no tracking to ask about.
+          * NSFaceIDUsageDescription — nothing uses biometrics.
+          * UIBackgroundModes — region monitoring wakes the app without one,
+            and declaring `location` would enable continuous updates this app
+            does not do.
+    -->
+
+    <key>UILaunchScreen</key>
+    <dict>
+        <key>UIColorName</key>
+        <string>AccentColor</string>
+    </dict>
+    <key>UIApplicationSceneManifest</key>
+    <dict>
+        <key>UIApplicationSupportsMultipleScenes</key>
+        <false/>
+    </dict>
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+        <string>UIInterfaceOrientationLandscapeLeft</string>
+        <string>UIInterfaceOrientationLandscapeRight</string>
+    </array>
+    <key>ITSAppUsesNonExemptEncryption</key>
+    <false/>
+</dict>
+</plist>

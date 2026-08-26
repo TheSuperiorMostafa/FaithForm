@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Placeholder mark in the brand gold. Final artwork is an external
+     deliverable listed in P4_EXTERNAL_SETUP_RUNBOOK.md. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <path
+        android:fillColor="#C5A059"
+        android:pathData="M54,30 L58,30 L58,50 L74,50 L74,54 L58,54 L58,80 L54,80 L54,54 L38,54 L38,50 L54,50 Z" />
+</vector>

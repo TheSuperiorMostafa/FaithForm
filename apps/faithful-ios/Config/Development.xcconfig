@@ -1,0 +1,29 @@
+// Development configuration.
+//
+// Contains an origin and a display name — never a key, token, team, or
+// certificate. The production bundle identifier, signing team, and associated
+// domain are external decisions recorded in
+// docs/faithful/P4_EXTERNAL_SETUP_RUNBOOK.md and are deliberately not invented
+// here.
+
+PRODUCT_NAME = Faithful
+PRODUCT_BUNDLE_IDENTIFIER = io.faithform.faithful.dev
+MARKETING_VERSION = 0.1.0
+CURRENT_PROJECT_VERSION = 1
+
+IPHONEOS_DEPLOYMENT_TARGET = 17.0
+SWIFT_VERSION = 6.0
+SWIFT_STRICT_CONCURRENCY = complete
+
+FAITHFUL_API_ORIGIN = https://localhost:3000
+FAITHFUL_ENVIRONMENT_KEY = development
+FAITHFUL_ALLOW_DEBUG_CONTROLS = YES
+
+// Signing is left unset on purpose: a local build uses automatic signing with
+// the developer's own team, and CI builds without signing.
+CODE_SIGN_STYLE = Automatic
+
+// Push Notifications. The entitlement file is shared; the environment differs,
+// because a development token is not valid against the production APNs host.
+CODE_SIGN_ENTITLEMENTS = Config/Faithful.entitlements
+FAITHFUL_APS_ENVIRONMENT = development

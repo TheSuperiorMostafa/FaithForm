@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { FaithfulPublishingPanel } from "@/components/live-streaming/faithful-publishing-panel";
 import { MediaList } from "@/components/live-streaming/media-list";
 import { getChurchAuth } from "@/lib/auth/church";
 import { listMediaItems } from "@/lib/stream/media-library";
@@ -24,6 +25,8 @@ export default async function LiveStreamingMediaPage() {
           see how many people did.
         </p>
       </div>
+
+      <FaithfulPublishingPanel />
 
       <MediaList items={items} />
     </div>

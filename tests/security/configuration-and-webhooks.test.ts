@@ -20,8 +20,11 @@ test("production security configuration is mandatory and middleware fails closed
     assert.match(env, new RegExp(name));
   }
   assert.match(env, /uniqueSecretValues\.size !== secrets\.size/);
+  assert.match(env, /ProductionEnvError/);
   assert.match(middleware, /status:\s*503/);
+  assert.match(middleware, /failedChecks\.join/);
   assert.doesNotMatch(middleware, /configurationError\.message/);
+  assert.doesNotMatch(middleware, /error\.message/);
 });
 
 test("public mutation routes have bounded payloads and atomic abuse controls", () => {

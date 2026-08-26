@@ -1,0 +1,135 @@
+{
+  "version": "1.0.0",
+  "description": "Platform-neutral behaviour specifications for Faithful primitives. These describe intent and required states; SwiftUI and Compose each implement them natively. No UI code is shared between platforms.",
+
+  "principles": [
+    "Every interactive element declares all of: rest, pressed, focused, disabled, loading.",
+    "Every control meets the touch-target minimum even when its visual box is smaller.",
+    "Every control carries an accessibility label that reads as a sentence, not a token name.",
+    "Colour never carries meaning alone; pair it with text, icon, or shape.",
+    "A control that triggers a network call shows progress in place and stays measurable."
+  ],
+
+  "components": {
+    "buttonPrimary": {
+      "role": "The one action a screen most wants",
+      "surface": "brandPrimary", "content": "contentInverse",
+      "radius": "md", "minHeight": 48, "paddingX": "lg", "typography": "titleMedium",
+      "states": { "pressed": "opacity 0.88 + scale 0.985", "disabled": "opacity 0.4", "loading": "inline spinner replaces label, width held constant" },
+      "accessibility": "Label states the outcome ('Save changes'), never the mechanism ('Submit')."
+    },
+    "buttonSecondary": {
+      "role": "A real alternative, not a lesser primary",
+      "surface": "surface", "content": "contentPrimary", "border": "standard/borderStrong",
+      "radius": "md", "minHeight": 48, "typography": "titleMedium"
+    },
+    "buttonQuiet": {
+      "role": "Tertiary, inline, low commitment",
+      "surface": "transparent", "content": "brandPrimary", "minHeight": 44,
+      "states": { "pressed": "surfaceSunken background" }
+    },
+    "buttonDestructive": {
+      "role": "Irreversible or data-losing",
+      "surface": "destructive", "content": "destructiveContent", "radius": "md", "minHeight": 48,
+      "requiresConfirmation": true,
+      "accessibility": "Confirmation names the consequence explicitly."
+    },
+    "buttonIcon": {
+      "role": "Compact affordance in a dense bar",
+      "iconSize": "sizeMedium", "hitTarget": 48, "requiresAccessibilityLabel": true,
+      "note": "Visual box may be 32; the tappable area is still 48."
+    },
+
+    "navigationBar": {
+      "title": "titleLarge, truncates at one line",
+      "largeTitle": "displayMedium on scroll-to-top where the platform supports it",
+      "surface": "background", "dividerOnScroll": true,
+      "platformNote": "iOS uses a native NavigationStack bar with back-swipe; Android uses a TopAppBar with the system back handler. These differ on purpose and are not a parity defect."
+    },
+    "tabBar": {
+      "status": "specified, not populated in Prompt 4",
+      "itemCount": { "min": 2, "max": 5 },
+      "selected": "brandAccent indicator + filled icon", "unselected": "contentMuted + outline icon",
+      "requiresLabel": true,
+      "note": "Destinations register themselves; a tab appears only when its feature is both implemented and authorized."
+    },
+
+    "textField": {
+      "surface": "surface", "border": "standard/border", "radius": "md", "minHeight": 48,
+      "typography": "body", "labelTypography": "label",
+      "states": { "focused": "focusRing ring, 2pt, 2pt offset", "error": "destructive border + message below", "disabled": "opacity 0.4" },
+      "accessibility": "Error text is associated with the field, not merely adjacent to it."
+    },
+    "searchField": {
+      "surface": "surfaceSunken", "radius": "pill", "minHeight": 44, "leadingIcon": "search",
+      "clearAffordance": true, "debounceMs": 250,
+      "note": "Debounce is a network courtesy, never a delay on what the person typed appearing."
+    },
+
+    "card": {
+      "surface": "surface", "radius": "lg", "padding": "base", "elevation": "card", "border": "hairline/border",
+      "note": "One idea per card. A card that needs a scrollbar is the wrong container."
+    },
+    "mediaCard": {
+      "surface": "surface", "radius": "lg", "imageAspect": "aspectWide", "imageRadius": "media.cornerRadius",
+      "elevation": "card", "overlayScrimForText": true,
+      "note": "Artwork arrives with later features. Until then this primitive is unused rather than filled with stock imagery."
+    },
+
+    "statusChip": {
+      "radius": "pill", "paddingX": "sm", "minHeight": 24, "typography": "label",
+      "variants": { "neutral": "surfaceSunken/contentSecondary", "live": "live/liveContent", "success": "success/successContent", "warning": "warning/warningContent", "danger": "destructive/destructiveContent" },
+      "accessibility": "Chip text is read as part of its row, not as a standalone control."
+    },
+
+    "listRow": {
+      "minHeight": 56, "padding": "base", "divider": "divider",
+      "states": { "pressed": "surfaceSunken" },
+      "accessibility": "The whole row is one element with one combined label and one action."
+    },
+    "sectionHeader": { "typography": "label", "content": "contentMuted", "paddingTop": "lg", "paddingBottom": "sm", "uppercase": false },
+
+    "sheet": {
+      "radius": "xl", "surface": "surface", "elevation": "sheet", "scrim": "overlayScrim",
+      "dragAffordance": true,
+      "platformNote": "iOS presents a sheet with detents; Android uses a Material bottom sheet with predictive-back. Both dismiss on scrim tap and on the system back gesture."
+    },
+    "dialog": { "radius": "lg", "surface": "surfaceRaised", "elevation": "sheet", "maxWidth": 400, "requiresFocusTrap": true },
+
+    "banner": {
+      "radius": "md", "padding": "md", "variants": ["info", "warning", "error", "offline"],
+      "dismissible": "only when non-blocking",
+      "note": "An offline banner never hides the cached content beneath it."
+    },
+    "toast": { "radius": "pill", "durationMs": 3200, "maxLines": 2, "announcesToScreenReader": true, "note": "Never the only place a result is communicated." },
+
+    "skeleton": {
+      "baseToken": "skeletonBase", "sheenToken": "skeletonSheen", "radius": "md",
+      "shimmerDurationMs": 1200, "respectsReducedMotion": true,
+      "note": "Skeletons mirror the real layout's shape. A skeleton that does not match what loads is a worse lie than a spinner."
+    },
+
+    "emptyState": {
+      "structure": ["title (titleMedium)", "explanation (bodySmall, contentSecondary)", "optional single action"],
+      "note": "States why it is empty and what would fill it. Never invented sample rows."
+    },
+    "offlineState": { "structure": ["banner", "cached content, labelled with its age"], "note": "Never a fabricated result." },
+    "errorState": { "structure": ["what failed in plain words", "what to try", "retry action"], "note": "Never a code, never a stack trace, never a raw server message." },
+
+    "permissionEducation": {
+      "status": "specified, not shown in Prompt 4",
+      "structure": ["what is being asked", "what it enables", "what happens if declined", "explicit continue"],
+      "rule": "The OS prompt is only ever raised after this screen and an explicit tap. Declining is a first-class outcome, not a dead end."
+    },
+
+    "authScreen": {
+      "structure": ["wordmark", "one-line purpose", "email field", "primary action", "legal links"],
+      "note": "No social proof, no marketing copy, no fake testimonials."
+    },
+    "churchSwitcher": {
+      "status": "foundation only in Prompt 4",
+      "presentation": "sheet",
+      "note": "Lists only churches with a real relationship. Selecting one sets a preference; it grants nothing, and every destination re-checks authorization."
+    }
+  }
+}

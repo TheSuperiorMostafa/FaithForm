@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+        Push notifications (Prompt 5).
+
+        `development` here so a debug build registers against the APNs sandbox.
+        Xcode rewrites it to `production` for an App Store or TestFlight
+        distribution build, which is why it is safe to commit this value.
+    -->
+    <key>aps-environment</key>
+    <string>development</string>
+
+    <!--
+        ====================================================================
+        DELIBERATELY ABSENT
+        ====================================================================
+
+        `com.apple.developer.in-app-payments` (Apple Pay)
+            Giving implements an Apple Pay path and it is switched off: no
+            merchant identifier exists, and `applePayAvailable` returns false
+            without one. Declaring the entitlement without a registered
+            merchant ID makes signing fail with an error that reads as a
+            provisioning problem rather than as a missing setup step. Added in
+            one line when the merchant ID exists — see
+            P12_STORE_AND_PROVIDER_SETUP.md.
+
+        `com.apple.developer.associated-domains`
+            App Links need a verified apple-app-site-association file served
+            from a domain this repository does not establish. The custom
+            `faithful://` scheme works today; https links do not, and declaring
+            the entitlement would not change that.
+
+        Nothing else. A capability is added when a feature needs it, not
+        because it might be useful later.
+    -->
+</dict>
+</plist>
