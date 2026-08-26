@@ -23,6 +23,15 @@ export const discussionQuestionsSchema = z.object({
   questions: z.array(discussionQuestionSchema).min(6).max(8),
 });
 
+/**
+ * Outline and discussion questions in one generation. The lesson flow used to
+ * make two sequential model calls; one round trip roughly halves the wait.
+ */
+export const lessonBundleSchema = z.object({
+  outline: sermonOutlineSchema,
+  questions: z.array(discussionQuestionSchema).min(6).max(8),
+});
+
 export const socialSnippetsSchema = z.object({
   instagram: z.string().optional(),
   facebook: z.string().optional(),

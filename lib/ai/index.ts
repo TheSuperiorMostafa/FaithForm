@@ -14,11 +14,14 @@ import type { AIProvider } from "@/types/sermon";
 
 export type AIMessage = { role: "user" | "assistant" | "system"; content: string };
 
-export async function resolveModelForChurch(churchId: string) {
+export async function resolveModelForChurch(
+  churchId: string,
+  opts?: { fast?: boolean },
+) {
   const settings = await getChurchAISettings(churchId);
   const provider = (settings?.ai_provider ?? "anthropic") as AIProvider;
-  const model = getModel(provider, settings?.ai_model_override);
-  const label = modelLabel(provider, settings?.ai_model_override);
+  const model = getModel(provider, settings?.ai_model_override, opts);
+  const label = modelLabel(provider, settings?.ai_model_override, opts);
   return { model, provider, label, settings };
 }
 
@@ -44,8 +47,12 @@ export async function aiGenerateObject<T extends z.ZodType>(opts: {
   prompt: string;
   schema: T;
   maxOutputTokens?: number;
+  /** Prefer the fast model when the church has no explicit model override. */
+  fast?: boolean;
 }) {
-  const { model, label } = await resolveModelForChurch(opts.churchId);
+  const { model, label } = await resolveModelForChurch(opts.churchId, {
+    fast: opts.fast,
+  });
   const result = await generateObject({
     model,
     system: opts.system,

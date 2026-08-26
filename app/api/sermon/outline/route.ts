@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { requireChurchAuth } from "@/lib/auth/church";
 import { aiGenerateObject } from "@/lib/ai";
-import { sermonOutlineSchema } from "@/lib/ai/schemas";
-import { outlineSystemPrompt } from "@/lib/ai/prompts";
+import { lessonBundleSchema, sermonOutlineSchema } from "@/lib/ai/schemas";
+import { lessonSystemPrompt, outlineSystemPrompt } from "@/lib/ai/prompts";
 import {
   createSermon,
   getChurchAISettings,
+  saveAsset,
   updateSermon,
   verifySermonAccess,
 } from "@/lib/queries/sermons";
@@ -32,6 +33,7 @@ export async function POST(request: Request) {
       series_id,
       sermonId,
       keep_title = false,
+      include_questions = false,
     } = body as {
       topic: string;
       scripture_refs?: string[];
@@ -43,6 +45,8 @@ export async function POST(request: Request) {
       sermonId?: string;
       /** Lessons built on an existing deck keep the title the pastor typed. */
       keep_title?: boolean;
+      /** Generate discussion questions in the same model call — one round trip instead of two. */
+      include_questions?: boolean;
     };
 
     const cleanedRefs = scripture_refs.filter(Boolean);
@@ -96,6 +100,36 @@ export async function POST(request: Request) {
         style_notes: ctx.style_notes,
         title,
         series_id: series_id ?? null,
+      });
+    }
+
+    if (include_questions) {
+      const { object, modelUsed } = await aiGenerateObject({
+        churchId: auth.churchId,
+        system: lessonSystemPrompt(ctx),
+        prompt:
+          "Create the lesson: a sermon outline (title, intro, 3-5 main points each with title, summary, optional scripture, application, closing) plus 6-8 small-group discussion questions tied to it.",
+        schema: lessonBundleSchema,
+        fast: true,
+      });
+
+      sermon = await updateSermon(sermon.id, {
+        title: keep_title ? undefined : object.outline.title,
+        outline: object.outline,
+        model_used: modelUsed,
+      });
+
+      await saveAsset({
+        sermonId: sermon.id,
+        kind: "discussion_questions",
+        payload: { questions: object.questions, modelUsed },
+      });
+
+      return NextResponse.json({
+        sermon,
+        outline: object.outline,
+        questions: object.questions,
+        modelUsed,
       });
     }
 

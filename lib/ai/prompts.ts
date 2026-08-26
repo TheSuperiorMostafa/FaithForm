@@ -73,6 +73,20 @@ ${outlineJson}
 ${scriptureText ? `\nScripture text:\n${scriptureText}` : ""}`;
 }
 
+/**
+ * One call for the whole lesson: outline plus small-group questions. Written
+ * as a single prompt so the questions come from the outline the model just
+ * wrote, the same way the two-step flow fed the saved outline back in.
+ */
+export function lessonSystemPrompt(ctx: SermonContext): string {
+  return `You are an expert sermon architect helping pastors prepare biblical, Christ-centered lessons.
+Return valid JSON matching the schema provided, with two parts:
+1. "outline" — a clear sermon outline (title, intro, 3-5 main points each with title, summary, optional scripture, application, closing). Use expository principles: anchor each point in Scripture, keep application practical, and honor the congregation's context.
+2. "questions" — 6-8 small-group discussion questions across categories warmup, observation, interpretation, application. Open-ended, tied directly to the outline above.
+
+${contextBlock(ctx)}`;
+}
+
 export function discussionSystemPrompt(
   ctx: SermonContext,
   sermonSummary: string,

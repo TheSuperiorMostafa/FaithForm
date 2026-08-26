@@ -31,7 +31,6 @@ export function CreateLessonPanel({
 }: CreateLessonPanelProps) {
   const router = useRouter();
   const [generating, setGenerating] = useState(false);
-  const [step, setStep] = useState<"outline" | "questions" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const hasLesson = Boolean(outline);
@@ -40,8 +39,9 @@ export function CreateLessonPanel({
     setGenerating(true);
     setError(null);
     try {
-      setStep("outline");
-      const outlineRes = await fetch("/api/sermon/outline", {
+      // Outline and discussion questions come from one model call — a second
+      // sequential request roughly doubled how long the pastor waited here.
+      const res = await fetch("/api/sermon/outline", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -49,28 +49,13 @@ export function CreateLessonPanel({
           topic: sermonTitle,
           scripture_refs: scriptureRefs,
           keep_title: true,
+          include_questions: true,
         }),
       });
-      if (!outlineRes.ok) {
-        const data = await outlineRes.json().catch(() => null);
+      if (!res.ok) {
+        const data = await res.json().catch(() => null);
         throw new Error(
-          data?.error ?? "Could not build the lesson outline. Please try again.",
-        );
-      }
-
-      setStep("questions");
-      const questionsRes = await fetch("/api/sermon/discussion", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sermonId }),
-      });
-      if (!questionsRes.ok) {
-        // The outline is already saved — surface the partial result rather
-        // than losing it.
-        const data = await questionsRes.json().catch(() => null);
-        setError(
-          data?.error ??
-            "The outline is ready, but discussion questions failed. Try regenerating.",
+          data?.error ?? "Could not build the lesson. Please try again.",
         );
       }
 
@@ -79,7 +64,6 @@ export function CreateLessonPanel({
       setError(e instanceof Error ? e.message : "Something went wrong");
     } finally {
       setGenerating(false);
-      setStep(null);
     }
   }
 
@@ -101,9 +85,7 @@ export function CreateLessonPanel({
             {generating ? (
               <>
                 <Loader2 className="size-4 animate-spin" />
-                {step === "questions"
-                  ? "Writing discussion questions…"
-                  : "Building your outline…"}
+                Building your lesson…
               </>
             ) : (
               <>
@@ -114,7 +96,7 @@ export function CreateLessonPanel({
           </Button>
           {generating && (
             <p className="text-xs text-muted-foreground">
-              This usually takes 20–40 seconds.
+              This usually takes 15–30 seconds.
             </p>
           )}
           {error && (
