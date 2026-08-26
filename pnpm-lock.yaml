@@ -23,16 +23,16 @@ dependencies:
     version: 3.0.65(zod@4.4.3)
   '@base-ui/react':
     specifier: ^1.5.0
-    version: 1.5.0(@types/react@18.3.29)(react-dom@18.3.1)(react@18.3.1)
+    version: 1.5.0(@types/react@19.2.18)(react-dom@19.2.8)(react@19.2.8)
   '@google/genai':
     specifier: ^2.10.0
     version: 2.10.0
   '@react-pdf/renderer':
     specifier: ^4.3.0
-    version: 4.5.1(react@18.3.1)
+    version: 4.5.1(react@19.2.8)
   '@stripe/react-stripe-js':
     specifier: ^6.4.0
-    version: 6.4.0(@stripe/stripe-js@9.7.0)(react-dom@18.3.1)(react@18.3.1)
+    version: 6.4.0(@stripe/stripe-js@9.7.0)(react-dom@19.2.8)(react@19.2.8)
   '@stripe/stripe-js':
     specifier: ^9.7.0
     version: 9.7.0
@@ -62,10 +62,10 @@ dependencies:
     version: 3.10.1
   lucide-react:
     specifier: ^1.16.0
-    version: 1.16.0(react@18.3.1)
+    version: 1.16.0(react@19.2.8)
   next:
     specifier: 15.5.21
-    version: 15.5.21(@types/node@20.19.41)(react-dom@18.3.1)(react@18.3.1)
+    version: 15.5.21(@types/node@20.19.41)(react-dom@19.2.8)(react@19.2.8)
   pptxgenjs:
     specifier: ^3.12.0
     version: 3.12.0
@@ -73,17 +73,17 @@ dependencies:
     specifier: ^1.5.4
     version: 1.5.4
   react:
-    specifier: ^18
-    version: 18.3.1
+    specifier: ^19.2.8
+    version: 19.2.8
   react-dom:
-    specifier: ^18
-    version: 18.3.1(react@18.3.1)
+    specifier: ^19.2.8
+    version: 19.2.8(react@19.2.8)
   react-easy-crop:
     specifier: ^6.2.3
-    version: 6.2.3(react-dom@18.3.1)(react@18.3.1)
+    version: 6.2.3(react-dom@19.2.8)(react@19.2.8)
   recharts:
     specifier: ^3.8.1
-    version: 3.8.1(@types/react@18.3.29)(react-dom@18.3.1)(react-is@19.2.6)(react@18.3.1)(redux@5.0.1)
+    version: 3.8.1(@types/react@19.2.18)(react-dom@19.2.8)(react-is@19.2.6)(react@19.2.8)(redux@5.0.1)
   resend:
     specifier: ^6.12.4
     version: 6.12.4
@@ -92,7 +92,7 @@ dependencies:
     version: 0.35.3(@types/node@20.19.41)
   sonner:
     specifier: ^2.0.7
-    version: 2.0.7(react-dom@18.3.1)(react@18.3.1)
+    version: 2.0.7(react-dom@19.2.8)(react@19.2.8)
   stripe:
     specifier: ^22.2.0
     version: 22.2.0(@types/node@20.19.41)
@@ -117,11 +117,11 @@ devDependencies:
     specifier: ^1.5.6
     version: 1.5.6
   '@types/react':
-    specifier: ^18
-    version: 18.3.29
+    specifier: ^19.2.18
+    version: 19.2.18
   '@types/react-dom':
-    specifier: ^18
-    version: 18.3.7(@types/react@18.3.29)
+    specifier: ^19.2.5
+    version: 19.2.5(@types/react@19.2.18)
   eslint:
     specifier: ^8
     version: 8.57.1
@@ -212,7 +212,7 @@ packages:
     engines: {node: '>=6.9.0'}
     dev: false
 
-  /@base-ui/react@1.5.0(@types/react@18.3.29)(react-dom@18.3.1)(react@18.3.1):
+  /@base-ui/react@1.5.0(@types/react@19.2.18)(react-dom@19.2.8)(react@19.2.8):
     resolution: {integrity: sha512-z1gSAlced1yY+iM+mHDEtIkD8UI3Ebs52MuBPxvV6f5hRutk+xvCH/wuB7hDqDzK9JG5FoMz5nhrqtSs1wjt1A==}
     engines: {node: '>=14.0.0'}
     peerDependencies:
@@ -230,16 +230,16 @@ packages:
         optional: true
     dependencies:
       '@babel/runtime': 7.29.2
-      '@base-ui/utils': 0.2.9(@types/react@18.3.29)(react-dom@18.3.1)(react@18.3.1)
-      '@floating-ui/react-dom': 2.1.8(react-dom@18.3.1)(react@18.3.1)
+      '@base-ui/utils': 0.2.9(@types/react@19.2.18)(react-dom@19.2.8)(react@19.2.8)
+      '@floating-ui/react-dom': 2.1.8(react-dom@19.2.8)(react@19.2.8)
       '@floating-ui/utils': 0.2.11
-      '@types/react': 18.3.29
-      react: 18.3.1
-      react-dom: 18.3.1(react@18.3.1)
-      use-sync-external-store: 1.6.0(react@18.3.1)
+      '@types/react': 19.2.18
+      react: 19.2.8
+      react-dom: 19.2.8(react@19.2.8)
+      use-sync-external-store: 1.6.0(react@19.2.8)
     dev: false
 
-  /@base-ui/utils@0.2.9(@types/react@18.3.29)(react-dom@18.3.1)(react@18.3.1):
+  /@base-ui/utils@0.2.9(@types/react@19.2.18)(react-dom@19.2.8)(react@19.2.8):
     resolution: {integrity: sha512-x/PDDCYzoqPpjrdyb3VcyylTI2IjUXEtYDGi5foh7KsnmNJIIaVwA2GLgDH1dps1GgXiJbA60hM+AyuTfQzIvw==}
     peerDependencies:
       '@types/react': ^17 || ^18 || ^19
@@ -251,11 +251,11 @@ packages:
     dependencies:
       '@babel/runtime': 7.29.2
       '@floating-ui/utils': 0.2.11
-      '@types/react': 18.3.29
-      react: 18.3.1
-      react-dom: 18.3.1(react@18.3.1)
+      '@types/react': 19.2.18
+      react: 19.2.8
+      react-dom: 19.2.8(react@19.2.8)
       reselect: 5.1.1
-      use-sync-external-store: 1.6.0(react@18.3.1)
+      use-sync-external-store: 1.6.0(react@19.2.8)
     dev: false
 
   /@emnapi/core@1.10.0:
@@ -575,15 +575,15 @@ packages:
       '@floating-ui/utils': 0.2.11
     dev: false
 
-  /@floating-ui/react-dom@2.1.8(react-dom@18.3.1)(react@18.3.1):
+  /@floating-ui/react-dom@2.1.8(react-dom@19.2.8)(react@19.2.8):
     resolution: {integrity: sha512-cC52bHwM/n/CxS87FH0yWdngEZrjdtLW/qVruo68qg+prK7ZQ4YGdut2GyDVpoGeAYe/h899rVeOVm6Oi40k2A==}
     peerDependencies:
       react: '>=16.8.0'
       react-dom: '>=16.8.0'
     dependencies:
       '@floating-ui/dom': 1.7.6
-      react: 18.3.1
-      react-dom: 18.3.1(react@18.3.1)
+      react: 19.2.8
+      react-dom: 19.2.8(react@19.2.8)
     dev: false
 
   /@floating-ui/utils@0.2.11:
@@ -1134,13 +1134,13 @@ packages:
     resolution: {integrity: sha512-nYXoZ36pvwNzbc54+DbL8RCn15jU7woJ9D/svnh5tpUXekJ+CbI4mZLo6boSv24CvJgychOu6h7gxX03B4ps0A==}
     dev: false
 
-  /@react-pdf/reconciler@2.0.0(react@18.3.1):
+  /@react-pdf/reconciler@2.0.0(react@19.2.8):
     resolution: {integrity: sha512-7zaPRujpbHSmCpIrZ+b9HSTJHthcVZzX0Wx7RzvQGsGBUbHP4p6s5itXrAIOuQuPvDepoHGNOvf6xUuMVvdoyw==}
     peerDependencies:
       react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
     dependencies:
       object-assign: 4.1.1
-      react: 18.3.1
+      react: 19.2.8
       scheduler: 0.25.0-rc-603e6108-20241029
     dev: false
 
@@ -1159,7 +1159,7 @@ packages:
       svg-arc-to-cubic-bezier: 3.2.0
     dev: false
 
-  /@react-pdf/renderer@4.5.1(react@18.3.1):
+  /@react-pdf/renderer@4.5.1(react@19.2.8):
     resolution: {integrity: sha512-5r1VQrE6FRLXX5wWUxwZzM24E2BJMo6g8AQWuS8WyPs9ugu5yMnb2g8/RpPYka/Z6J+RUEWc32wty2NoUJF42Q==}
     peerDependencies:
       react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
@@ -1170,14 +1170,14 @@ packages:
       '@react-pdf/layout': 4.6.1
       '@react-pdf/pdfkit': 5.1.1
       '@react-pdf/primitives': 4.3.0
-      '@react-pdf/reconciler': 2.0.0(react@18.3.1)
+      '@react-pdf/reconciler': 2.0.0(react@19.2.8)
       '@react-pdf/render': 4.5.1
       '@react-pdf/types': 2.11.1
       events: 3.3.0
       object-assign: 4.1.1
       prop-types: 15.8.1
       queue: 6.0.2
-      react: 18.3.1
+      react: 19.2.8
     dev: false
 
   /@react-pdf/stylesheet@6.2.1:
@@ -1214,7 +1214,7 @@ packages:
       '@react-pdf/stylesheet': 6.2.1
     dev: false
 
-  /@reduxjs/toolkit@2.12.0(react-redux@9.3.0)(react@18.3.1):
+  /@reduxjs/toolkit@2.12.0(react-redux@9.3.0)(react@19.2.8):
     resolution: {integrity: sha512-KiT+RzZbp6mQET+Mg+h2c97+9j1sNflUxQkIHI7Yuzf6Peu+OYpmkn6nbHWmLLWj+1ZODUJFwGZ7gx3L9R9EOw==}
     peerDependencies:
       react: ^16.9.0 || ^17.0.0 || ^18 || ^19
@@ -1228,8 +1228,8 @@ packages:
       '@standard-schema/spec': 1.1.0
       '@standard-schema/utils': 0.3.0
       immer: 11.1.8
-      react: 18.3.1
-      react-redux: 9.3.0(@types/react@18.3.29)(react@18.3.1)(redux@5.0.1)
+      react: 19.2.8
+      react-redux: 9.3.0(@types/react@19.2.18)(react@19.2.8)(redux@5.0.1)
       redux: 5.0.1
       redux-thunk: 3.1.0(redux@5.0.1)
       reselect: 5.1.1
@@ -1255,7 +1255,7 @@ packages:
     resolution: {integrity: sha512-e7Mew686owMaPJVNNLs55PUvgz371nKgwsc4vxE49zsODpJEnxgxRo2y/OKrqueavXgZNMDVj3DdHFlaSAeU8g==}
     dev: false
 
-  /@stripe/react-stripe-js@6.4.0(@stripe/stripe-js@9.7.0)(react-dom@18.3.1)(react@18.3.1):
+  /@stripe/react-stripe-js@6.4.0(@stripe/stripe-js@9.7.0)(react-dom@19.2.8)(react@19.2.8):
     resolution: {integrity: sha512-5cAf7GAqf8VHPoPLVnJQ2MHtDWLdiEPs5GW/loU7iDEue3xf620v11skrk5HICUraDOhODPYpttgFC5N579NxA==}
     peerDependencies:
       '@stripe/stripe-js': '>=9.5.0 <10.0.0'
@@ -1264,8 +1264,8 @@ packages:
     dependencies:
       '@stripe/stripe-js': 9.7.0
       prop-types: 15.8.1
-      react: 18.3.1
-      react-dom: 18.3.1(react@18.3.1)
+      react: 19.2.8
+      react-dom: 19.2.8(react@19.2.8)
     dev: false
 
   /@stripe/stripe-js@9.7.0:
@@ -1419,27 +1419,23 @@ packages:
       pg-types: 2.2.0
     dev: true
 
-  /@types/prop-types@15.7.15:
-    resolution: {integrity: sha512-F6bEyamV9jKGAFBEmlQnesRPGOQqS2+Uwi0Em15xenOxHaf2hv6L8YCVn3rPdPJOiJfPiCnLIRyvwVaqMY3MIw==}
-
   /@types/qrcode@1.5.6:
     resolution: {integrity: sha512-te7NQcV2BOvdj2b1hCAHzAoMNuj65kNBMz0KBaxM6c3VGBOhU0dURQKOtH8CFNI/dsKkwlv32p26qYQTWoB5bw==}
     dependencies:
       '@types/node': 20.19.41
     dev: true
 
-  /@types/react-dom@18.3.7(@types/react@18.3.29):
-    resolution: {integrity: sha512-MEe3UeoENYVFXzoXEWsvcpg6ZvlrFNlOQ7EOsvhI3CfAXwzPfO8Qwuxd40nepsYKqyyVQnTdEfv68q91yLcKrQ==}
+  /@types/react-dom@19.2.5(@types/react@19.2.18):
+    resolution: {integrity: sha512-fMPwH9v7r/pp43yUd2/Mbiex5KouJwwR3dzHkhLREUC6764VyDsqxhAxv6OFEYR1RhjOyD1naqba8ECDBe7ZQg==}
     peerDependencies:
-      '@types/react': ^18.0.0
+      '@types/react': ^19.2.0
     dependencies:
-      '@types/react': 18.3.29
+      '@types/react': 19.2.18
     dev: true
 
-  /@types/react@18.3.29:
-    resolution: {integrity: sha512-ch0qJdr2JY0r04NXSprbK6TXOgnaJ1Tz23fm5W+z0/CBah6BSBc3n96h7K9GOtwh0HrilNWHIBzE1Ko4Dcw/Wg==}
+  /@types/react@19.2.18:
+    resolution: {integrity: sha512-AnzbBERsrLKtk2XSfTbYRLjQPdy116Sty4q+T+Bp3IC4l6jNBvreVPAHmpq9qhXQM7CXZPjLVmGMw9sy+hxQ3w==}
     dependencies:
-      '@types/prop-types': 15.7.15
       csstype: 3.2.3
 
   /@types/retry@0.12.0:
@@ -3762,12 +3758,12 @@ packages:
     dependencies:
       js-tokens: 4.0.0
 
-  /lucide-react@1.16.0(react@18.3.1):
+  /lucide-react@1.16.0(react@19.2.8):
     resolution: {integrity: sha512-dYwyPzb4MEKpGUmNYk3WKWPnMrHs3FKM+q94kAnJrcDIqqn1hq2xY8scaS2ovsOCM5D51ey2gaRG3PBb1vgoYQ==}
     peerDependencies:
       react: ^16.5.1 || ^17.0.0 || ^18.0.0 || ^19.0.0
     dependencies:
-      react: 18.3.1
+      react: 19.2.8
     dev: false
 
   /math-intrinsics@1.1.0:
@@ -3834,7 +3830,7 @@ packages:
     resolution: {integrity: sha512-OWND8ei3VtNC9h7V60qff3SVobHr996CTwgxubgyQYEpg290h9J0buyECNNJexkFm5sOajh5G116RYA1c8ZMSw==}
     dev: true
 
-  /next@15.5.21(@types/node@20.19.41)(react-dom@18.3.1)(react@18.3.1):
+  /next@15.5.21(@types/node@20.19.41)(react-dom@19.2.8)(react@19.2.8):
     resolution: {integrity: sha512-/TsdBtkWLhkl+NVL3Uqws2UphNd6IPzOtzSk1fHaf+0P7GQKLZDUytyhns/Ykbzdy9+YRjwG7ONvrHaaTDdFqQ==}
     engines: {node: ^18.18.0 || ^19.8.0 || >= 20.0.0}
     hasBin: true
@@ -3859,9 +3855,9 @@ packages:
       '@swc/helpers': 0.5.15
       caniuse-lite: 1.0.30001793
       postcss: 8.5.26
-      react: 18.3.1
-      react-dom: 18.3.1(react@18.3.1)
-      styled-jsx: 5.1.6(react@18.3.1)
+      react: 19.2.8
+      react-dom: 19.2.8(react@19.2.8)
+      styled-jsx: 5.1.6(react@19.2.8)
     optionalDependencies:
       '@next/swc-darwin-arm64': 15.5.21
       '@next/swc-darwin-x64': 15.5.21
@@ -4369,25 +4365,24 @@ packages:
       inherits: 2.0.4
     dev: false
 
-  /react-dom@18.3.1(react@18.3.1):
-    resolution: {integrity: sha512-5m4nQKp+rZRb09LNH59GM4BxTh9251/ylbKIbpe7TpGxfJ+9kv6BLkLBXIjjspbgbnIBNqlI23tRnTWT0snUIw==}
+  /react-dom@19.2.8(react@19.2.8):
+    resolution: {integrity: sha512-rVprimfGBG3DR+Tq0IQG2DT5PxKth1WIGDmj5yPmlzr4YBe7uyE+Du4oVqTDXZSHGGGXRtTJEGSSePyQCMBglQ==}
     peerDependencies:
-      react: ^18.3.1
+      react: ^19.2.8
     dependencies:
-      loose-envify: 1.4.0
-      react: 18.3.1
-      scheduler: 0.23.2
+      react: 19.2.8
+      scheduler: 0.27.0
     dev: false
 
-  /react-easy-crop@6.2.3(react-dom@18.3.1)(react@18.3.1):
+  /react-easy-crop@6.2.3(react-dom@19.2.8)(react@19.2.8):
     resolution: {integrity: sha512-ebimG3OGlzizjxEZ77Cj9CVLcg5vDZ6QVz8ud1rx4WmsCDWHIROEhgMi0GpJ/jKAuwHrH0M+QZUK4hyvxbYhOA==}
     peerDependencies:
       react: '>=16.4.0'
       react-dom: '>=16.4.0'
     dependencies:
       normalize-wheel: 1.0.1
-      react: 18.3.1
-      react-dom: 18.3.1(react@18.3.1)
+      react: 19.2.8
+      react-dom: 19.2.8(react@19.2.8)
     dev: false
 
   /react-is@16.13.1:
@@ -4397,7 +4392,7 @@ packages:
     resolution: {integrity: sha512-XjBR15BhXuylgWGuslhDKqlSayuqvqBX91BP8pauG8kd1zY8kotkNWbXksTCNRarse4kuGbe2kIY05ARtwNIvw==}
     dev: false
 
-  /react-redux@9.3.0(@types/react@18.3.29)(react@18.3.1)(redux@5.0.1):
+  /react-redux@9.3.0(@types/react@19.2.18)(react@19.2.8)(redux@5.0.1):
     resolution: {integrity: sha512-KQopgqFo/p/fgmAs5qz6p5RWaNAzq40WAu7fJIXnQpYxFPbJYtsJPWvGeF2rOBaY/kEuV77AVsX8TsQzKm+A/g==}
     peerDependencies:
       '@types/react': ^18.2.25 || ^19
@@ -4409,18 +4404,16 @@ packages:
       redux:
         optional: true
     dependencies:
-      '@types/react': 18.3.29
+      '@types/react': 19.2.18
       '@types/use-sync-external-store': 0.0.6
-      react: 18.3.1
+      react: 19.2.8
       redux: 5.0.1
-      use-sync-external-store: 1.6.0(react@18.3.1)
+      use-sync-external-store: 1.6.0(react@19.2.8)
     dev: false
 
-  /react@18.3.1:
-    resolution: {integrity: sha512-wS+hAgJShR0KhEvPJArfuPVN1+Hz1t0Y6n5jLrGQbkb4urgPE/0Rve+1kMB1v/oWgHgm4WIcV+i7F2pTVj+2iQ==}
+  /react@19.2.8:
+    resolution: {integrity: sha512-PWaYA1L/q9u2u7xYQi+Y3L3Yfnie7XyLeaJICV1MGD6LprsBxcAqGjYyr0eY3p+QdsA+x/Irkt4Qif8D63+Sbw==}
     engines: {node: '>=0.10.0'}
-    dependencies:
-      loose-envify: 1.4.0
     dev: false
 
   /read-cache@1.0.0:
@@ -4448,7 +4441,7 @@ packages:
       picomatch: 2.3.2
     dev: true
 
-  /recharts@3.8.1(@types/react@18.3.29)(react-dom@18.3.1)(react-is@19.2.6)(react@18.3.1)(redux@5.0.1):
+  /recharts@3.8.1(@types/react@19.2.18)(react-dom@19.2.8)(react-is@19.2.6)(react@19.2.8)(redux@5.0.1):
     resolution: {integrity: sha512-mwzmO1s9sFL0TduUpwndxCUNoXsBw3u3E/0+A+cLcrSfQitSG62L32N69GhqUrrT5qKcAE3pCGVINC6pqkBBQg==}
     engines: {node: '>=18'}
     peerDependencies:
@@ -4456,19 +4449,19 @@ packages:
       react-dom: ^16.0.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
       react-is: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
     dependencies:
-      '@reduxjs/toolkit': 2.12.0(react-redux@9.3.0)(react@18.3.1)
+      '@reduxjs/toolkit': 2.12.0(react-redux@9.3.0)(react@19.2.8)
       clsx: 2.1.1
       decimal.js-light: 2.5.1
       es-toolkit: 1.46.1
       eventemitter3: 5.0.4
       immer: 10.2.0
-      react: 18.3.1
-      react-dom: 18.3.1(react@18.3.1)
+      react: 19.2.8
+      react-dom: 19.2.8(react@19.2.8)
       react-is: 19.2.6
-      react-redux: 9.3.0(@types/react@18.3.29)(react@18.3.1)(redux@5.0.1)
+      react-redux: 9.3.0(@types/react@19.2.18)(react@19.2.8)(redux@5.0.1)
       reselect: 5.1.1
       tiny-invariant: 1.3.3
-      use-sync-external-store: 1.6.0(react@18.3.1)
+      use-sync-external-store: 1.6.0(react@19.2.8)
       victory-vendor: 37.3.6
     transitivePeerDependencies:
       - '@types/react'
@@ -4637,14 +4630,12 @@ packages:
       is-regex: 1.2.1
     dev: true
 
-  /scheduler@0.23.2:
-    resolution: {integrity: sha512-UOShsPwz7NrMUqhR6t0hWjFduvOzbtv7toDH1/hIrfRNIDBnnBWd0CwJTGvTpngVlmwGCdP9/Zl/tVrDqcuYzQ==}
-    dependencies:
-      loose-envify: 1.4.0
-    dev: false
-
   /scheduler@0.25.0-rc-603e6108-20241029:
     resolution: {integrity: sha512-pFwF6H1XrSdYYNLfOcGlM28/j8CGLu8IvdrxqhjWULe2bPcKiKW4CV+OWqR/9fT52mywx65l7ysNkjLKBda7eA==}
+    dev: false
+
+  /scheduler@0.27.0:
+    resolution: {integrity: sha512-eNv+WrVbKu1f3vbYJT/xtiF5syA5HPIMtf9IgY/nKg0sWqzAUEvqY/xm7OcZc/qafLx/iO9FgOmeSAp4v5ti/Q==}
     dev: false
 
   /semver@6.3.1:
@@ -4785,14 +4776,14 @@ packages:
       side-channel-map: 1.0.1
       side-channel-weakmap: 1.0.2
 
-  /sonner@2.0.7(react-dom@18.3.1)(react@18.3.1):
+  /sonner@2.0.7(react-dom@19.2.8)(react@19.2.8):
     resolution: {integrity: sha512-W6ZN4p58k8aDKA4XPcx2hpIQXBRAgyiWVkYhT7CvK6D3iAu7xjvVyhQHg2/iaKJZ1XVJ4r7XuwGL+WGEK37i9w==}
     peerDependencies:
       react: ^18.0.0 || ^19.0.0 || ^19.0.0-rc
       react-dom: ^18.0.0 || ^19.0.0 || ^19.0.0-rc
     dependencies:
-      react: 18.3.1
-      react-dom: 18.3.1(react@18.3.1)
+      react: 19.2.8
+      react-dom: 19.2.8(react@19.2.8)
     dev: false
 
   /source-map-js@1.2.1:
@@ -4933,7 +4924,7 @@ packages:
       '@types/node': 20.19.41
     dev: false
 
-  /styled-jsx@5.1.6(react@18.3.1):
+  /styled-jsx@5.1.6(react@19.2.8):
     resolution: {integrity: sha512-qSVyDTeMotdvQYoHWLNGwRFJHC+i+ZvdBRYosOFgC+Wg1vx4frN2/RG/NA7SYqqvKNLf39P2LSRA2pu6n0XYZA==}
     engines: {node: '>= 12.0.0'}
     peerDependencies:
@@ -4947,7 +4938,7 @@ packages:
         optional: true
     dependencies:
       client-only: 0.0.1
-      react: 18.3.1
+      react: 19.2.8
     dev: false
 
   /sucrase@3.35.1:
@@ -5238,12 +5229,12 @@ packages:
     resolution: {integrity: sha512-XdVKMF4SJ0nP/O7XIPB0JwAEuT9lDIYnNsK8yGVe43y0AWoKeJNdv3ZNWh7ksJ6KqQFjOO6ox/VEitLnaVNufw==}
     dev: false
 
-  /use-sync-external-store@1.6.0(react@18.3.1):
+  /use-sync-external-store@1.6.0(react@19.2.8):
     resolution: {integrity: sha512-Pp6GSwGP/NrPIrxVFAIkOQeyw8lFenOHijQWkUTrDvrF4ALqylP2C/KCkeS9dpUM3KvYRQhna5vt7IL95+ZQ9w==}
     peerDependencies:
       react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
     dependencies:
-      react: 18.3.1
+      react: 19.2.8
     dev: false
 
   /util-deprecate@1.0.2:

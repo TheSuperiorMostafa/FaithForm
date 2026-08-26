@@ -14,7 +14,7 @@ type IdentitySectionProps = {
   readOnly?: boolean;
   errors?: VoiceAssistantFieldErrors;
   showErrors?: boolean;
-  assistantNameRef?: React.RefObject<HTMLInputElement>;
+  assistantNameRef?: React.RefObject<HTMLInputElement | null>;
   onChange: (patch: {
     assistantName?: string;
     emergencyPhone?: string;
