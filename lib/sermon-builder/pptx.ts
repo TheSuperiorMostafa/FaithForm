@@ -2,6 +2,11 @@ import PptxGenJS from "pptxgenjs";
 import { chunkVerses, formatReference } from "@/lib/bible/render";
 import type { RenderedVerse } from "@/lib/bible/types";
 import type { SlideTheme } from "@/lib/sermon-builder/slide-theme-shared";
+import {
+  imageTextShadow,
+  toThemeBackgroundImage,
+  type ThemeBackgroundImage,
+} from "@/lib/sermon-builder/pptx-media";
 import { getThemeAsync } from "@/lib/queries/slide-themes";
 
 const SLIDE_W = 13.33;
@@ -38,41 +43,30 @@ export function pickBodyFontSize(text: string): number {
 function applySlideBackground(
   slide: { background: PptxGenJS.BackgroundProps },
   theme: SlideTheme,
-  imageData?: string | null,
+  image?: ThemeBackgroundImage | null,
 ): void {
-  if (theme.backgroundType === "image" && imageData) {
-    slide.background = { data: imageData };
+  if (theme.backgroundType === "image" && image) {
+    // `path` is never read from disk — pptxgenjs only takes the media part's
+    // extension from it, which must match the bytes or PowerPoint flags the
+    // deck as damaged.
+    slide.background = { data: image.data, path: image.path };
     return;
   }
   // Fall back to solid color if remote image fetch failed.
   slide.background = { color: theme.bg ?? "0E1428" };
 }
 
-async function resolveThemeImageData(
+async function resolveThemeImage(
   theme: SlideTheme,
-): Promise<string | null> {
+): Promise<ThemeBackgroundImage | null> {
   if (theme.backgroundType !== "image" || !theme.imageUrl) return null;
   try {
     const res = await fetch(theme.imageUrl);
     if (!res.ok) return null;
-    const buffer = Buffer.from(await res.arrayBuffer());
-    const contentType = res.headers.get("content-type") || "image/jpeg";
-    return `data:${contentType};base64,${buffer.toString("base64")}`;
+    return await toThemeBackgroundImage(Buffer.from(await res.arrayBuffer()));
   } catch {
     return null;
   }
-}
-
-function imageTextShadow(theme: SlideTheme): PptxGenJS.ShadowProps | undefined {
-  if (theme.backgroundType !== "image" || !theme.textShadow) return undefined;
-  return {
-    type: "outer",
-    color: "000000",
-    opacity: 0.65,
-    blur: 4,
-    offset: 2,
-    angle: 135,
-  };
 }
 
 export type SimplePassageBlock = {
@@ -91,7 +85,7 @@ export type SimplePptxInput = {
 
 export async function renderSimplePptx(input: SimplePptxInput): Promise<Buffer> {
   const theme = await getThemeAsync(input.themeId);
-  const imageData = await resolveThemeImageData(theme);
+  const image = await resolveThemeImage(theme);
   const pptx = new PptxGenJS();
   pptx.author = "FaithForm";
   pptx.title = input.title;
@@ -107,10 +101,8 @@ export async function renderSimplePptx(input: SimplePptxInput): Promise<Buffer> 
       })
       .join(" · ");
 
-  const shadow = imageTextShadow(theme);
-
   const titleSlide = pptx.addSlide();
-  applySlideBackground(titleSlide, theme, imageData);
+  applySlideBackground(titleSlide, theme, image);
   titleSlide.addText(input.title, {
     x: MARGIN_X,
     y: 2.2,
@@ -122,7 +114,7 @@ export async function renderSimplePptx(input: SimplePptxInput): Promise<Buffer> 
     fontFace: theme.fontHead,
     align: "center",
     valign: "middle",
-    shadow,
+    shadow: imageTextShadow(theme),
   });
   titleSlide.addText(refsSummary, {
     x: MARGIN_X,
@@ -134,7 +126,7 @@ export async function renderSimplePptx(input: SimplePptxInput): Promise<Buffer> 
     fontFace: theme.fontHead,
     align: "center",
     italic: theme.italicRef ?? false,
-    shadow,
+    shadow: imageTextShadow(theme),
   });
 
   for (const passage of input.passages) {
@@ -144,7 +136,7 @@ export async function renderSimplePptx(input: SimplePptxInput): Promise<Buffer> 
       const bodyText = verseChunkToText(chunk);
 
       const slide = pptx.addSlide();
-      applySlideBackground(slide, theme, imageData);
+      applySlideBackground(slide, theme, image);
 
       slide.addText(bodyText, {
         x: MARGIN_X,
@@ -159,7 +151,7 @@ export async function renderSimplePptx(input: SimplePptxInput): Promise<Buffer> 
         fit: "shrink",
         paraSpaceAfter: 6,
         lineSpacingMultiple: 1.15,
-        shadow,
+        shadow: imageTextShadow(theme),
       });
 
       slide.addText(input.translation, {
@@ -172,7 +164,7 @@ export async function renderSimplePptx(input: SimplePptxInput): Promise<Buffer> 
         fontFace: theme.fontHead,
         align: "right",
         italic: true,
-        shadow,
+        shadow: imageTextShadow(theme),
       });
     }
   }
