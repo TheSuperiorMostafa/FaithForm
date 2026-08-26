@@ -28,7 +28,7 @@ PostgreSQL 17.9, Xcode with an iPhone 16 Pro simulator.
 | Production web build | `pnpm build` | compiled successfully |
 | iOS library build (host) | `pnpm ios:build` | build complete |
 | iOS library tests | `pnpm ios:test` | **323 tests in 38 suites passed** |
-| iOS library build (device) | `pnpm ios:build:device` | **clean: no errors, no warnings** |
+| iOS library build (device) | `pnpm ios:build:device` | **clean** — now delegates to the app build, which compiles FaithfulKit for iOS as a dependency (§4.6) |
 | **iOS app build (device, unsigned)** | `pnpm ios:app:build` | **clean: no errors, no warnings** |
 | **iOS app tests** | `pnpm ios:app:test` | **16 tests in 3 suites passed** on a simulator |
 | Android tests | `gradlew test` | **BUILD SUCCESSFUL** |
@@ -162,7 +162,38 @@ transaction block, so the first working version of the plan checks was disabling
 nothing and asserting against ordinary plans. Session-level `SET` fixed it; each
 test has its own connection, so it cannot leak.
 
-### 6. The Xcode user-script sandbox denied a script its own file
+### 6. The project disabled signing, so Xcode could not sign it either
+
+`project.yml` set `CODE_SIGNING_ALLOWED = NO` in the base settings so the CI
+build would work on a machine with no Apple account. It worked — and made a
+device install impossible: every run from Xcode failed with *"The executable is
+not codesigned"*, with no fix short of editing the project.
+
+Found by someone trying to run it on a phone, which is the only way it could
+have been found: every automated gate builds unsigned on purpose.
+
+The script already passed the same flags on the command line, so the
+project-level settings were redundant for CI and load-bearing only for the
+breakage. Removed. A second, quieter version of the same problem went with it:
+`aps-environment` was attached to every configuration, and a **free personal
+Apple team cannot provision it** — so even after enabling signing, a Debug device
+build would have failed with an error naming provisioning rather than the
+capability. Entitlements now apply to Staging and Release only.
+
+A third and fourth fell out while verifying the fix. `pnpm ios:build:device`
+compiled the package with `xcodebuild -scheme Faithful`, and with signing enabled
+that command now resolves to the *project* — which shadows the package in the
+same directory — and failed asking for a development team. It delegates to the
+app build instead; the app depends on FaithfulKit, so the check it exists for is
+still performed.
+
+And: with signing enabled, the app-packaging
+pipeline prints `warning: Metadata extraction skipped. No AppIntents.framework
+dependency found` — true, harmless, and enough to fail a gate that grepped for
+`warning:`. The filter now matches only compiler diagnostics
+(`path:line:col: warning:`) from this repository's own sources.
+
+### 7. The Xcode user-script sandbox denied a script its own file
 
 The asset-placeholder check failed with a sandbox denial reading
 `check-assets.sh` — because a build phase script must **declare its inputs** to be

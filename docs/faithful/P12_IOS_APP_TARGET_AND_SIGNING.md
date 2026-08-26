@@ -60,9 +60,15 @@ pnpm ios:app:test    # + the app-target tests on a simulator
 ```
 
 Both are deterministic and need no Apple ID, no Team ID and no provisioning
-profile — signing is switched off, so the build **cannot** accidentally use
-somebody's identity. What it produces is a `Faithful.app` that cannot be
-installed, which is the correct output for a machine with no signing identity.
+profile: the *script* passes `CODE_SIGNING_ALLOWED=NO` on the command line. What
+it produces is a `Faithful.app` that cannot be installed, which is the correct
+output for a machine with no signing identity.
+
+**Signing is not disabled in the project.** It was, briefly, and the cost was
+that Xcode could not sign it either — every device run failed with *"The
+executable is not codesigned"* and no way out short of editing the project.
+Turning it off for the one build that needs it off, rather than everywhere, is
+what lets the same project serve CI and a phone.
 
 **Warnings are failures**, filtered to this repository's own sources. A warning
 inside a package dependency is not something this build can fix; failing on one
@@ -78,10 +84,19 @@ would make the gate unusable the first time Stripe's SDK updates.
 | `pnpm ios:app:build` | the **app**, for iOS | — |
 | `pnpm ios:app:test` | the app, for a simulator | 16 app tests |
 
-The middle one exists because `swift build` compiles for the host: every
+The third exists because `swift build` compiles for the host: every
 `#if os(iOS)` block — the camera scanner, the player adapter, the Stripe sheet —
 is invisible to it. That gap hid a real Swift 6 concurrency break behind sixteen
 green gates once already.
+
+Since the app target arrived, the third and fourth are the **same build**.
+`build-ios-device.sh` used to compile the package directly with
+`xcodebuild -scheme Faithful`; a `Faithful.xcodeproj` now sits beside the package
+and that command resolves to the project instead, asking for a development team.
+It delegates to `build-ios-app.sh` rather than fighting the ambiguity — the app
+depends on FaithfulKit, so FaithfulKit is compiled for iOS either way, under the
+same warnings-as-errors rule. Both names are kept because CI refers to them and
+because the two things they *mean* are worth stating separately.
 
 ---
 
@@ -180,21 +195,44 @@ A capability is added when a feature needs it, not because it might be useful.
 repository, and none was requested.** These are the steps for the person who has
 an Apple Developer account.
 
-### To run on your own iPhone (free account is enough)
+### To run on your own iPhone (a free account is enough)
 
-1. `brew install xcodegen && pnpm ios:app:generate`
-2. Open `apps/faithful-ios/Faithful.xcodeproj`.
-3. Select the **Faithful** target → **Signing & Capabilities**.
-4. Tick **Automatically manage signing**.
-5. Choose your **Team**. A personal team works; a paid account is only needed for
-   TestFlight and the store.
-6. Change the bundle identifier to something unique to you —
-   `com.yourname.faithful` — because the placeholder is not registerable.
-7. Set an origin the phone can actually reach. `localhost` is the *phone's* own
-   loopback, not your laptop: use the laptop's LAN address, or a staging URL.
-8. Connect the iPhone, select it as the destination, press Run.
-9. On the phone: **Settings → General → VPN & Device Management** → trust your
-   developer certificate. A free-account build expires after seven days.
+The quickest route is a local config file, so nothing personal is ever staged:
+
+```bash
+cd apps/faithful-ios/App/Configuration
+cp Local.xcconfig.example Local.xcconfig
+# edit it: DEVELOPMENT_TEAM and FAITHFUL_BUNDLE_ID_PREFIX
+cd - && pnpm ios:app:generate
+```
+
+`Local.xcconfig` is **gitignored**, and `Base.xcconfig` includes it with
+`#include?` — the optional form, so its absence is not an error. Your Team ID is
+not a secret, and it is still not something to put in a shared repository.
+
+Find it in Xcode: **Settings → Accounts → your account → Manage Certificates**,
+or at developer.apple.com under Membership.
+
+Then:
+
+1. Open `apps/faithful-ios/Faithful.xcodeproj`.
+2. **Faithful** target → **Signing & Capabilities**. It should already show your
+   team, with **Automatically manage signing** ticked. If not, set them here —
+   the project bakes in neither.
+3. Point the build somewhere the phone can reach. `localhost` in
+   `Debug.xcconfig` is the **phone's own** loopback, not your laptop: use the
+   laptop's LAN address (`http://192.168.x.x:3000`) or a staging URL.
+4. Connect the iPhone, choose it as the destination, press Run.
+5. On the phone: **Settings → General → VPN & Device Management** → trust your
+   developer certificate. A free-account build stops working after seven days.
+
+**Debug carries no entitlements**, deliberately. A free personal team cannot
+provision `aps-environment`, and requiring it would fail automatic signing in
+exactly the configuration somebody uses to run the app on their own phone — with
+an error naming provisioning rather than the capability, which reads as a broken
+project. Push is not testable on a personal team or a simulator anyway.
+
+Staging and Release do carry it, and need a paid account.
 
 ### Before TestFlight
 

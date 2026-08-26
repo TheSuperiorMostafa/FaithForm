@@ -1,0 +1,11 @@
+// Copy to `Local.xcconfig` — which is gitignored — and fill in your own.
+//
+// Both values are yours and neither is a secret. They are kept out of the
+// repository because a Team ID identifies an Apple account, and a bundle
+// identifier somebody else registered cannot be used by anyone else anyway.
+//
+// Find your Team ID at https://developer.apple.com/account under Membership,
+// or in Xcode: Settings → Accounts → your account → Manage Certificates.
+
+DEVELOPMENT_TEAM = YOUR_TEAM_ID
+FAITHFUL_BUNDLE_ID_PREFIX = com.yourname

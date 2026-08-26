@@ -4,11 +4,25 @@
 // Nothing here is a secret, and nothing secret may ever be added: an app bundle
 // is readable by anyone who installs it.
 
+// Your own settings, if you have any.
+//
+// `#include?` is the optional form: the file does not have to exist, and this
+// one is gitignored. It is where a Team ID and a bundle prefix belong — both are
+// yours, neither is a secret, and neither belongs in a shared repository.
+//
+//     apps/faithful-ios/App/Configuration/Local.xcconfig
+//     DEVELOPMENT_TEAM = ABCDE12345
+//     FAITHFUL_BUNDLE_ID_PREFIX = com.yourname
+//
+// Included first so everything below can be overridden by it.
+#include? "Local.xcconfig"
+
 // The bundle identifier is a *placeholder* and is meant to be overridden.
 // Set FAITHFUL_BUNDLE_ID_PREFIX in your own environment or in a local
 // xcconfig; the default is deliberately obvious rather than someone's real
 // reverse-DNS name.
-FAITHFUL_BUNDLE_ID_PREFIX = io.faithform.placeholder
+// Only used when Local.xcconfig did not set one.
+FAITHFUL_BUNDLE_ID_PREFIX = $(FAITHFUL_BUNDLE_ID_PREFIX:default=io.faithform.placeholder)
 PRODUCT_BUNDLE_IDENTIFIER = $(FAITHFUL_BUNDLE_ID_PREFIX).faithful$(FAITHFUL_BUNDLE_ID_SUFFIX)
 
 PRODUCT_NAME = Faithful

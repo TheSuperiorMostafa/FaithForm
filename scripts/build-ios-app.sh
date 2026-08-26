@@ -76,12 +76,19 @@ else
   xcodebuild "${COMMON[@]}" -destination 'generic/platform=iOS' -quiet build 2>&1 | tee "$LOG"
 fi
 
-# Warnings are failures. Filtered to this repository's own sources: a warning
-# inside a third-party package is not something this build can fix, and failing
-# on one would make the gate unusable the first time a dependency updates.
-if grep -E "warning:" "$LOG" 2>/dev/null \
-  | grep -v "note:" \
-  | grep -vE "(DerivedData|SourcePackages|\.build)/" \
+# Warnings are failures — but only *compiler* warnings about *this repository's*
+# sources.
+#
+# A compiler diagnostic starts `path:line:col: warning:`. Xcode's toolchain also
+# prints `timestamp tool[pid:tid] warning: …` for things like the app-intents
+# metadata processor noting there is no AppIntents framework, which is true and
+# is not a defect. Failing on those makes the gate fail for reasons nobody can
+# fix, and a gate like that is one people start skipping.
+#
+# A warning inside a package dependency is excluded for the same reason: this
+# build cannot fix Stripe's SDK.
+if grep -E "^/.*:[0-9]+:[0-9]+: warning:" "$LOG" 2>/dev/null \
+  | grep -vE "(DerivedData|SourcePackages|\.build|Faithful\.xcodeproj)/" \
   | sort -u | grep . >&2; then
   echo "iOS app build produced warnings in this repository's sources." >&2
   exit 1

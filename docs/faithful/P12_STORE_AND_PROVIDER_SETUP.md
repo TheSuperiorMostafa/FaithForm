@@ -13,7 +13,7 @@ been submitted, and no provider state was changed.*
 | --- | --- |
 | Membership | Apple Developer Program, paid. A free personal team is enough to run on your own phone and not for TestFlight |
 | Bundle identifier | replace `io.faithform.placeholder.faithful`. Set `FAITHFUL_BUNDLE_ID_PREFIX` |
-| Capabilities to enable | **Push Notifications** only |
+| Capabilities to enable | **Push Notifications** only — attached to Staging/Release only, so a free personal team can still sign a Debug build |
 | Capabilities to leave off | Apple Pay (no merchant ID yet), Associated Domains (no verified domain), everything else |
 
 ### APNs

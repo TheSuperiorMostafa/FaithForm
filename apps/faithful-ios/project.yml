@@ -29,13 +29,18 @@ settings:
     SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
     GCC_TREAT_WARNINGS_AS_ERRORS: YES
     ENABLE_USER_SCRIPT_SANDBOXING: YES
-    # No team, no profile, no identity in source. Xcode's automatic signing is
-    # switched on by the person installing it, with their own account.
+    # Automatic signing, with **no team in source** — Xcode fills that in from
+    # whoever opens it.
+    #
+    # Signing is *not* disabled here. It used to be, so the CI build would work
+    # on a machine with no Apple account, and the cost was that Xcode could not
+    # sign it either: "The executable is not codesigned" on every device run,
+    # with no way out short of editing the project.
+    #
+    # `scripts/build-ios-app.sh` passes `CODE_SIGNING_ALLOWED=NO` on the command
+    # line instead. That turns signing off for exactly the build that needs it
+    # off, and leaves the IDE alone.
     CODE_SIGN_STYLE: Automatic
-    DEVELOPMENT_TEAM: ""
-    CODE_SIGN_IDENTITY: ""
-    CODE_SIGNING_REQUIRED: NO
-    CODE_SIGNING_ALLOWED: NO
 
 packages:
   FaithfulKit:
@@ -60,10 +65,22 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         TARGETED_DEVICE_FAMILY: "1"
-        # Notifications are the one entitlement an implemented feature needs.
-        # Apple Pay and associated domains are deliberately absent — see
-        # P12_IOS_APP_TARGET_AND_SIGNING.md.
-        CODE_SIGN_ENTITLEMENTS: App/Resources/Faithful.entitlements
+      # Notifications are the one entitlement an implemented feature needs, and
+      # they are attached to Staging and Release **only**.
+      #
+      # A free personal Apple team cannot provision `aps-environment`. Requiring
+      # it in Debug would fail automatic signing in exactly the configuration
+      # somebody uses to run the app on their own phone — and the error names
+      # provisioning rather than the capability, so it reads as a broken project.
+      #
+      # Push is not testable on a personal team or a simulator anyway, so nothing
+      # is lost by scoping it. Apple Pay and associated domains are absent
+      # entirely — see P12_IOS_APP_TARGET_AND_SIGNING.md.
+      configs:
+        Staging:
+          CODE_SIGN_ENTITLEMENTS: App/Resources/Faithful.entitlements
+        Release:
+          CODE_SIGN_ENTITLEMENTS: App/Resources/Faithful.entitlements
     preBuildScripts:
       - name: Placeholder assets must be replaced
         script: '"$SRCROOT/App/Scripts/check-assets.sh"'
