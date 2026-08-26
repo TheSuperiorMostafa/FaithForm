@@ -508,13 +508,12 @@ export function AttendanceWizard({
               </div>
               <div className="flex flex-col gap-2">
                 <label htmlFor="new-last-name" className="text-base font-semibold">
-                  Last name
+                  Last name (optional)
                 </label>
                 <input
                   id="new-last-name"
                   value={newLastName}
                   onChange={(e) => setNewLastName(e.target.value)}
-                  required
                   className="min-h-12 rounded-[10px] border-[1.5px] border-border bg-background px-4 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 />
               </div>

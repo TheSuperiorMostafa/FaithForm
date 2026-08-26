@@ -154,13 +154,12 @@ export function MemberFormPanel({
 
         <div className="flex flex-col gap-2">
           <label htmlFor="member-last-name" className="text-base font-semibold">
-            Last name
+            Last name (optional)
           </label>
           <input
             id="member-last-name"
             value={lastName}
             onChange={(event) => setLastName(event.target.value)}
-            required
             readOnly={readOnly}
             className={inputClassName}
           />
