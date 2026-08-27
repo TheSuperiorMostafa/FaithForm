@@ -1,11 +1,6 @@
 import { redirect } from "next/navigation";
 import { SettingsTabs } from "@/components/settings/settings-tabs";
 import { getGivingFundsForSettings } from "@/app/dashboard/settings/giving-actions";
-import {
-  getCampusesForSettings,
-  getInvitationsForSettings,
-} from "@/app/dashboard/settings/faithful-actions";
-import { getChurchDiscoverySettings } from "@/lib/queries/faithful-settings";
 import { getChurchGivingProfile } from "@/lib/queries/giving";
 import { getFollowUpMessageTemplates } from "@/lib/queries/follow-up-settings";
 import { getAnnouncementEmailSettings } from "@/lib/queries/announcement-email-settings";
@@ -49,9 +44,6 @@ export default async function SettingsPage() {
     teamMembers,
     featureFlags,
     grantsInProperColumn,
-    campuses,
-    discovery,
-    invitationPage,
   ] =
     await Promise.all([
       getIntegrationStatus(auth.churchId, supabase),
@@ -62,9 +54,6 @@ export default async function SettingsPage() {
       getChurchTeamMembers(auth.churchId),
       getChurchFeatureFlags(auth.churchId, supabase),
       usesFeaturePermissionsColumn(),
-      getCampusesForSettings(),
-      getChurchDiscoverySettings(auth.churchId),
-      getInvitationsForSettings(),
     ]);
 
   // Grantable features are the ones the account has switched on.
@@ -96,14 +85,6 @@ export default async function SettingsPage() {
           grantsInProperColumn,
         }}
         allowedFeatures={resolveAllowedFeatures(auth, featureFlags)}
-        faithful={{
-          isDiscoverable: discovery.isDiscoverable,
-          publicSummary: discovery.publicSummary,
-          joinPolicy: discovery.joinPolicy,
-          slug: discovery.slug,
-          campuses,
-        }}
-        invitations={invitationPage.items}
       />
     </div>
   );

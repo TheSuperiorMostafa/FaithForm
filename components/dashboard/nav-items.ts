@@ -9,6 +9,7 @@ import {
   Phone,
   RadioTower,
   Settings,
+  Smartphone,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -104,6 +105,14 @@ export const navItems: NavItem[] = [
     href: "/dashboard/website",
     icon: Globe,
     features: ["website"],
+  },
+  // Ungated like Home: the member app is part of every church's account, and
+  // hiding its controls behind Settings meant nobody found them.
+  {
+    label: "Member App",
+    shortLabel: "App",
+    href: "/dashboard/app",
+    icon: Smartphone,
   },
 ];
 

@@ -41,6 +41,8 @@ async function requirePeopleAdmin(): Promise<StaffContext> {
 
 function revalidatePeople() {
   revalidatePath("/dashboard/people");
+  // Join requests also render on the Member App page.
+  revalidatePath("/dashboard/app");
 }
 
 export async function getPendingClaims(): Promise<StaffClaimRow[]> {

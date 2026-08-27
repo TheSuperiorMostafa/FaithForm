@@ -5,15 +5,11 @@ import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { AnnouncementEmailForm } from "@/components/settings/announcement-email-form";
 import { FollowUpMessagesForm } from "@/components/settings/follow-up-messages-form";
-import { FaithfulVisibilityCard } from "@/components/settings/faithful-visibility-card";
-import type { FaithfulVisibilityCardProps } from "@/components/settings/faithful-visibility-card";
 import { GivingCard } from "@/components/settings/giving-card";
 import { IntegrationsCard } from "@/components/settings/integrations-card";
 import type { IntegrationsCardProps } from "@/components/settings/integrations-card";
 import { TeamMembersCard } from "@/components/settings/team-members-card";
 import type { TeamMembersCardProps } from "@/components/settings/team-members-card";
-import { VisitorInvitationsCard } from "@/components/settings/visitor-invitations-card";
-import type { InvitationSummary } from "@/lib/faithful/invitations";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
   Card,
@@ -37,8 +33,6 @@ type SettingsTabsProps = {
   team: Omit<TeamMembersCardProps, "isAdmin">;
   /** Feature-gated tabs are hidden when the viewer can't use them. */
   allowedFeatures: FeatureKey[];
-  faithful: Omit<FaithfulVisibilityCardProps, "isAdmin">;
-  invitations: InvitationSummary[];
 };
 
 /** Params an OAuth callback appends when it returns to Settings. */
@@ -83,8 +77,6 @@ function SettingsTabsInner({
   announcementEmailTemplate,
   team,
   allowedFeatures,
-  faithful,
-  invitations,
 }: SettingsTabsProps) {
   const searchParams = useSearchParams();
 
@@ -96,7 +88,6 @@ function SettingsTabsInner({
     "general",
     "integrations",
     "team",
-    "faithful",
     ...(showCommunications ? ["communications"] : []),
     ...(showAttendance ? ["attendance"] : []),
     ...(showGiving ? ["giving"] : []),
@@ -110,7 +101,6 @@ function SettingsTabsInner({
         <TabsTrigger value="general">General</TabsTrigger>
         <TabsTrigger value="integrations">Integrations</TabsTrigger>
         <TabsTrigger value="team">Team</TabsTrigger>
-        <TabsTrigger value="faithful">Visitor app</TabsTrigger>
         {showCommunications && (
           <TabsTrigger value="communications">Communications</TabsTrigger>
         )}
@@ -122,13 +112,6 @@ function SettingsTabsInner({
 
       <TabsContent value="integrations" className="mt-0">
         <IntegrationsCard isAdmin={isAdmin} status={integrationStatus} />
-      </TabsContent>
-
-      <TabsContent value="faithful" className="mt-0">
-        <div className="flex flex-col gap-4">
-          <FaithfulVisibilityCard isAdmin={isAdmin} {...faithful} />
-          <VisitorInvitationsCard isAdmin={isAdmin} invitations={invitations} />
-        </div>
       </TabsContent>
 
       <TabsContent value="general" className="mt-0">

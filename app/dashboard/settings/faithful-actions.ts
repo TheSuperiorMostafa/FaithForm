@@ -38,7 +38,9 @@ async function requireChurchAdmin(): Promise<AdminContext> {
 }
 
 function revalidateSettings() {
-  revalidatePath("/dashboard/settings");
+  // These cards render on the Member App page; Settings kept the name only
+  // because every action in this module already calls it.
+  revalidatePath("/dashboard/app");
 }
 
 export async function saveDiscoverySettings(input: {

@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const settingsTabs = readFileSync("components/settings/settings-tabs.tsx", "utf8");
+const appPage = readFileSync("app/dashboard/app/page.tsx", "utf8");
+const navItems = readFileSync("components/dashboard/nav-items.ts", "utf8");
 const invitationsCard = readFileSync(
   "components/settings/visitor-invitations-card.tsx",
   "utf8",
@@ -18,8 +19,11 @@ const joinPanel = readFileSync("components/people/join-requests-panel.tsx", "utf
 // rendered them; "where do I manage invitations?" had no answer. These pin the
 // wiring so the actions can never go consumer-less again.
 
-test("the Visitor app settings tab renders invitation management", () => {
-  assert.match(settingsTabs, /<VisitorInvitationsCard/);
+test("the Member App page is in the sidebar and renders the app controls", () => {
+  assert.match(navItems, /href: "\/dashboard\/app"/);
+  assert.match(appPage, /<FaithfulVisibilityCard/);
+  assert.match(appPage, /<VisitorInvitationsCard/);
+  assert.match(appPage, /<JoinRequestsPanel/);
   assert.match(invitationsCard, /createVisitorInvitation/);
   assert.match(invitationsCard, /withdrawVisitorInvitation/);
 });
