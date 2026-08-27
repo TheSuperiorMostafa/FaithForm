@@ -18,13 +18,11 @@ import FaithfulKit
 /// row-level security decides what a token can reach. A service-role key must
 /// never appear here, and a scan asserts it does not.
 ///
-/// ## What does not exist yet
+/// ## The other half
 ///
-/// **There is no sign-in flow on either platform.** This refreshes a session that
-/// already exists; nothing creates one. That is the single blocker to a church
-/// pilot, it predates Prompt 12, and it is recorded in
-/// `P12_DEVICE_PILOT_RUNBOOK.md` rather than papered over with a placeholder
-/// screen that pretends to sign someone in.
+/// Sessions are *created* by `SupabaseAuthClient` in FaithfulKit, behind the
+/// sign-in flow. This stays separate and refresh-only: renewal runs inside
+/// `SessionManager`'s single-flight path with no UI anywhere near it.
 struct SupabaseSessionRefresher: SessionRefreshing {
     private let environment: APIEnvironment
     private let supabaseURL: URL?

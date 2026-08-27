@@ -104,7 +104,7 @@ function assertSupportedClient(request: Request): void {
   if (build !== null && build < MINIMUM_SUPPORTED_CLIENT_BUILD) {
     throw new MobileError(
       "client_version_unsupported",
-      "Update Faithful to continue.",
+      "Update FaithForm to continue.",
     );
   }
 }

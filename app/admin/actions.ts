@@ -10,6 +10,7 @@ import type {
   SupportTicketStatus,
 } from "@/lib/queries/admin";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { generateChurchSlug } from "@/lib/churches/slug";
 
 function readString(formData: FormData, key: string): string {
   return formData.get(key)?.toString().trim() ?? "";
@@ -29,17 +30,6 @@ function isStatus(value: string): value is SupportTicketStatus {
 
 function isValidEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-}
-
-function generateSlug(name: string): string {
-  const tempId = crypto.randomUUID();
-  const baseSlug = name
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 60);
-  return `${baseSlug || "church"}-${tempId.replace(/-/g, "").slice(0, 8)}`;
 }
 
 export type CreateChurchResult =
@@ -87,7 +77,7 @@ export async function createChurch(
   }
 
   const admin = createAdminClient();
-  const slug = generateSlug(name);
+  const slug = generateChurchSlug(name);
 
   const { data: church, error: churchError } = await admin
     .from("churches")

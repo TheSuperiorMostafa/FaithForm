@@ -12,5 +12,10 @@ FAITHFUL_API_ORIGIN = http:/$()/localhost:3000
 FAITHFUL_ALLOW_DEBUG_CONTROLS = YES
 
 // Point at a local Supabase, or a project you own. Never a church's.
-FAITHFUL_SUPABASE_URL =
-FAITHFUL_SUPABASE_ANON_KEY =
+//
+// Filled from Local.xcconfig (gitignored) via the FAITHFUL_DEV_* names, so a
+// developer's own project never lands in the repository and a build without
+// one still fails closed: the sign-in screen renders, and submitting explains
+// that no identity provider is configured.
+FAITHFUL_SUPABASE_URL = $(FAITHFUL_DEV_SUPABASE_URL)
+FAITHFUL_SUPABASE_ANON_KEY = $(FAITHFUL_DEV_SUPABASE_ANON_KEY)

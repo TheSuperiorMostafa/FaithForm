@@ -56,7 +56,7 @@ data class ApiException(
 
         fun transport() = ApiException(
             code = MobileErrorCode.UNAVAILABLE,
-            displayMessage = "Faithful could not reach the server.",
+            displayMessage = "FaithForm could not reach the server.",
             retryable = true
         )
 

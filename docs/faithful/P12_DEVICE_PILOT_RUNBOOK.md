@@ -22,29 +22,36 @@ pretend otherwise.
 
 ---
 
-## 1. Before anything else: sign-in does not exist
+## 1. Sign-in exists on both platforms
 
-**BLOCKED — and it blocks every row in §§3–14.**
+**RESOLVED.** The gap this section used to record — no sign-in flow anywhere —
+has been closed, and each of the four items it demanded now exists:
 
-Neither platform has a sign-in flow. `SessionManager` / `AndroidSessionStore`
-own the token lifecycle, and `SupabaseSessionRefresher` can refresh a session
-that already exists. **Nothing creates one.** Android's refresher is still
-`error("no refresher configured")`.
+1. A first-run screen on each platform: **Create Account** (email + password),
+   **Sign In**, and **Forgot password**, against Supabase's GoTrue endpoints
+   directly (`SupabaseAuthClient` in FaithfulKit / `SupabaseAuthClient.kt` in
+   `core:network`), with typed error mapping — no provider wording ever
+   reaches a screen.
+2. Configuration on both platforms, empty by default and failing closed:
+   `FAITHFUL_SUPABASE_URL` / `FAITHFUL_SUPABASE_ANON_KEY` on iOS (fed from the
+   gitignored `Local.xcconfig` in Debug), `faithful.supabaseUrl` /
+   `faithful.supabaseAnonKey` Gradle properties or `local.properties` on
+   Android.
+3. An Android refresher wired into `AndroidSessionStore` through the same
+   client — an expired session renews instead of dying at its first hour.
+4. First-run policy acceptance: the account screens carry the agreement
+   sentence, and the first bootstrap with no recorded versions posts
+   `account/consent` with the required ones.
 
-This predates Prompt 12 — no prompt built it — and it is the single reason a
-pilot cannot start. What it needs:
+Past sign-in, the server's `GET /onboarding` decides the first screen: no
+active church → the welcome flow (find a church, or redeem an invitation —
+including one held across sign-in from a `faithful://invite/<token>` link);
+otherwise home. The signed-out, offline, and failed states all carry an
+action; none is a dead end. Automated coverage: `AuthAndOnboardingTests.swift`
+(iOS), `FirstRunTest.kt` / `SupabaseAuthClientTest.kt` (Android).
 
-1. A sign-in screen on each platform (email + one-time code is the least
-   surface; Supabase supports it natively).
-2. The Supabase URL and anon key in the app configuration — both public, both
-   already wired as `FaithfulSupabaseURL` / `FaithfulSupabaseAnonKey` on iOS.
-3. An Android refresher matching `SupabaseSessionRefresher.swift`.
-4. First-run terms and privacy acceptance, which `Bootstrap` already reports as
-   `requiredTermsVersion` / `requiredPrivacyVersion` and nothing yet asks for.
-
-Until then, both apps launch, resolve their environment, attempt a bootstrap, and
-show the signed-out state. **That much is real and works.** Everything past it is
-unreachable.
+**DEVICE rows below remain unverified on hardware** — that labelling still
+stands.
 
 ---
 
@@ -60,7 +67,7 @@ unreachable.
 | 6 | A cleartext origin is refused outside development | **AUTO** — both platforms |
 | 7 | Install on an iPhone | **BLOCKED** — no signing identity; see `P12_IOS_APP_TARGET_AND_SIGNING.md` §6 |
 | 8 | Install on an Android phone | **DEVICE** — a debug APK exists and has not been installed |
-| 9 | Sign in | **BLOCKED** — §1 |
+| 9 | Sign in | **SIM** — flow exists (§1); model paths **AUTO**; hardware run still **DEVICE** |
 
 ---
 
@@ -68,7 +75,7 @@ unreachable.
 
 | # | Step | Status |
 | --- | --- | --- |
-| 10 | Search for a church by name | **BLOCKED** — needs sign-in |
+| 10 | Search for a church by name | **AUTO** for the model paths; wired into first-run on both platforms; **DEVICE** run outstanding |
 | 11 | Nearby churches, with location permission asked at the right moment | **BLOCKED** |
 | 12 | Join a church with an open policy | **BLOCKED** |
 | 13 | Request to join an approval-required church, and be approved from the dashboard | **BLOCKED** |

@@ -13,16 +13,70 @@ final class RootModel {
     private(set) var state = AppState(environmentKey: "")
     var selectedTab: RootTab = .home
     private(set) var selectedChurch: ChurchRelationship?
+    /// The server's answer to "is this person onboarded yet". Computed there,
+    /// never inferred here from an empty list, so both platforms agree.
+    private(set) var onboardingState: OnboardingState?
+
+    let onboarding: OnboardingModel
+    private(set) var authModel: AuthModel!
 
     private let dependencies: AppDependencies
 
     init(dependencies: AppDependencies) {
         self.dependencies = dependencies
         self.state = AppState(environmentKey: dependencies.environment.key)
+        self.onboarding = OnboardingModel(api: dependencies.api)
+        self.authModel = AuthModel(auth: dependencies.auth) { [weak self] session, displayName in
+            await self?.completeAuth(session, displayName: displayName)
+        }
     }
 
-    func load() async {
-        state.apply(.loading)
+    /// True exactly when the first-run flow should stand in front of the tabs.
+    var needsOnboarding: Bool {
+        guard case .ready = state.phase else { return false }
+        return onboardingState?.needsOnboarding == true
+    }
+
+    /// A fresh sign-in or account. Adopting the session is what flips every
+    /// subsequent request from anonymous to authenticated; everything after is
+    /// ordinary loading.
+    func completeAuth(_ session: StoredSession, displayName: String?) async {
+        do {
+            try await dependencies.session.adopt(session)
+        } catch {
+            state.apply(.signedOut)
+            return
+        }
+
+        if let displayName {
+            struct ProfileUpdate: Encodable, Sendable { let displayName: String }
+            struct ProfileReply: Decodable, Sendable { let displayName: String? }
+            // Best-effort: the name can be set again from the account screen,
+            // and failing sign-in over it would be absurd.
+            _ = try? await dependencies.api.send(
+                "api/mobile/v1/account/profile",
+                method: .patch,
+                body: ProfileUpdate(displayName: displayName),
+                as: ProfileReply.self
+            )
+        }
+
+        // A deep-linked invitation held across sign-in is redeemed the moment
+        // it can be — before the first bootstrap, so the church it grants is
+        // already there when the app first renders.
+        if let token = onboarding.pendingInvitationToken {
+            _ = await onboarding.acceptInvitation(token)
+        }
+
+        await load()
+    }
+
+    func load() async { await load(quiet: false) }
+
+    /// `quiet` refreshes in place after something changed — a join, an accepted
+    /// invitation — without collapsing the UI back to a spinner first.
+    func load(quiet: Bool) async {
+        if !quiet { state.apply(.loading) }
         do {
             let response = try await dependencies.api.send(
                 "api/mobile/v1/account/bootstrap",
@@ -32,6 +86,17 @@ final class RootModel {
                 state.apply(.offlineNoCache)
                 return
             }
+
+            // First authenticated use with no recorded policy versions: the
+            // person accepted them a moment ago, on the account screen that
+            // said so. Recording is stating a fact, not deciding one.
+            await onboarding.recordInitialConsent(for: bootstrap)
+
+            // The server decides whether first-run stands in front of home. A
+            // failure here falls back to nil — showing home to someone who
+            // could be onboarding beats a dead app over a routing hint.
+            onboardingState = await onboarding.refresh()
+
             state.apply(.ready(bootstrap, isStale: false))
             adoptSelection(bootstrap)
         } catch let error as APIError {
@@ -45,6 +110,11 @@ final class RootModel {
         } catch {
             state.apply(.offlineNoCache)
         }
+    }
+
+    /// The caller's current relationship with a church, as bootstrap knows it.
+    func relationshipState(for slug: String) -> RelationshipState? {
+        state.bootstrap?.relationships.first(where: { $0.churchSlug == slug })?.state
     }
 
     /// The tabs available *right now*.
@@ -107,6 +177,20 @@ final class RootModel {
     /// account has no relationship with all do **nothing at all** — no error
     /// screen, no partial navigation, no prompt.
     func open(_ url: URL) {
+        // An invitation is a credential, not a destination. Signed out it is
+        // held for after sign-in; signed in it is redeemed on the spot.
+        if let token = InvitationLink.token(from: url) {
+            onboarding.hold(invitationToken: token)
+            if state.bootstrap != nil {
+                Task {
+                    if await onboarding.acceptInvitation(token) {
+                        await load(quiet: true)
+                    }
+                }
+            }
+            return
+        }
+
         guard let destination = DeepLinkParser.parse(url),
               let bootstrap = state.bootstrap else { return }
 
@@ -136,17 +220,38 @@ final class RootModel {
     }
 
     func signOut() async {
-        // Everything, across every church and every partition. A sign-out that
-        // left one church's cache behind would show the next person who signs in
-        // on this device somebody else's church.
+        // The server side first, best-effort: it bumps the authorization
+        // version so anything cached against the old one is unreadable
+        // everywhere, not just on this device. Then everything local, across
+        // every church and every partition — a sign-out that left one church's
+        // cache behind would show the next person who signs in on this device
+        // somebody else's church.
+        struct SignOutReply: Decodable, Sendable { let signedOut: Bool }
+        _ = try? await dependencies.api.send(
+            "api/mobile/v1/account/sign-out",
+            method: .post,
+            idempotencyKey: UUID().uuidString,
+            as: SignOutReply.self
+        )
+
         await dependencies.cache.purgeAll()
         await dependencies.session.purgeEverything()
         selectedChurch = nil
         selectedTab = .home
+        onboardingState = nil
+        onboarding.clearPendingInvitation()
         state.apply(.signedOut)
     }
 
     private func adoptSelection(_ bootstrap: Bootstrap) {
+        // The server's stored preference wins when it still names a readable
+        // church — it is the choice the person actually made, on any device.
+        if let preferred = onboardingState?.selectedChurchSlug,
+           let match = bootstrap.relationships.first(where: { $0.churchSlug == preferred }),
+           match.canReadPublishedContent {
+            selectedChurch = match
+            return
+        }
         if let current = selectedChurch,
            let refreshed = bootstrap.relationships.first(where: { $0.churchSlug == current.churchSlug }),
            refreshed.canReadPublishedContent {

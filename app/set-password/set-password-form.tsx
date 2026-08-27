@@ -29,7 +29,13 @@ function SubmitButton() {
   );
 }
 
-export function SetPasswordForm({ email }: { email: string }) {
+export function SetPasswordForm({
+  email,
+  reason = "first_run",
+}: {
+  email: string;
+  reason?: "first_run" | "recovery";
+}) {
   const router = useRouter();
   const [state, formAction] = useFormState(
     async (prev: SetPasswordState, formData: FormData) => {
@@ -48,11 +54,20 @@ export function SetPasswordForm({ email }: { email: string }) {
       <div className="mb-6 flex flex-col items-center text-center">
         <Logo size={64} priority className="mb-3" />
         <h1 className="font-heading text-[26px] font-bold text-foreground">
-          Choose your password
+          {reason === "recovery" ? "Set a new password" : "Choose your password"}
         </h1>
         <p className="mt-2 text-base text-muted-foreground">
-          You&apos;re signed in as <strong>{email}</strong>. Pick a password of
-          your own — the temporary one stops working once you save.
+          {reason === "recovery" ? (
+            <>
+              You&apos;re signed in as <strong>{email}</strong>. Choose a new
+              password to finish resetting it.
+            </>
+          ) : (
+            <>
+              You&apos;re signed in as <strong>{email}</strong>. Pick a password
+              of your own — the temporary one stops working once you save.
+            </>
+          )}
         </p>
       </div>
 

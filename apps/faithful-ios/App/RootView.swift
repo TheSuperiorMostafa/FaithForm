@@ -24,10 +24,17 @@ struct RootView: View {
     @Environment(\.faithfulTheme) private var theme
     private let dependencies: AppDependencies
     @State private var model: RootModel
+    @State private var churchTabDiscovery: DiscoveryModel
 
     init(dependencies: AppDependencies) {
         self.dependencies = dependencies
         _model = State(initialValue: RootModel(dependencies: dependencies))
+        _churchTabDiscovery = State(
+            initialValue: DiscoveryModel(
+                api: dependencies.api,
+                location: DiscoveryLocationProvider()
+            )
+        )
     }
 
     var body: some View {
@@ -40,22 +47,38 @@ struct RootView: View {
                     .accessibilityLabel(Text(L.loadingAccount))
 
             case .signedOut:
-                // Honest: there is no sign-in flow yet on either platform. This
-                // says what is true rather than showing a form that cannot work.
-                EmptyStateView(title: L.signInTitle, explanation: L.signInBody)
+                // The front door: create an account, sign in, or recover a
+                // password. Every path out of it ends in a stored session and
+                // a reload of this view.
+                AuthFlowView(
+                    model: model.authModel,
+                    hasPendingInvitation: model.onboarding.pendingInvitationToken != nil
+                )
 
             case .offlineNoCache:
-                EmptyStateView(title: L.offlineTitle, explanation: L.offlineBody)
+                VStack(spacing: FaithfulTokens.Spacing.md) {
+                    EmptyStateView(title: L.offlineTitle, explanation: L.offlineBody)
+                    Button(L.retry) { Task { await model.load() } }
+                        .buttonStyle(FaithfulButtonStyle(kind: .secondary, theme: theme))
+                        .padding(.horizontal, FaithfulTokens.Layout.screenPaddingHorizontal)
+                }
 
             case .failed:
                 VStack(spacing: FaithfulTokens.Spacing.md) {
                     EmptyStateView(title: L.errorTitle, explanation: L.offlineBody)
                     Button(L.retry) { Task { await model.load() } }
                         .buttonStyle(FaithfulButtonStyle(kind: .secondary, theme: theme))
+                        .padding(.horizontal, FaithfulTokens.Layout.screenPaddingHorizontal)
                 }
 
             case let .ready(bootstrap, isStale):
-                tabs(bootstrap: bootstrap, isStale: isStale)
+                if model.needsOnboarding {
+                    // No church yet: the welcome flow stands in front of the
+                    // tabs until a relationship exists, and not a launch longer.
+                    OnboardingFlowView(dependencies: dependencies, root: model)
+                } else {
+                    tabs(bootstrap: bootstrap, isStale: isStale)
+                }
             }
         }
         .background(theme.palette.background)
@@ -102,12 +125,30 @@ struct RootView: View {
 
         case .church:
             ScrollView {
-                ChurchSwitcherView(
-                    relationships: bootstrap.relationships,
-                    selectedSlug: model.selectedChurch?.churchSlug,
-                    onSelect: { model.selectChurch($0) }
-                )
+                VStack(spacing: FaithfulTokens.Spacing.lg) {
+                    ChurchSwitcherView(
+                        relationships: bootstrap.relationships,
+                        selectedSlug: model.selectedChurch?.churchSlug,
+                        onSelect: { model.selectChurch($0) }
+                    )
+                    // Multi-church by design: an account is never bound to one
+                    // congregation, so finding the next one starts here.
+                    NavigationLink(value: ChurchTabRoute.search) {
+                        Text(L.addAnotherChurch)
+                    }
+                    .buttonStyle(FaithfulButtonStyle(kind: .secondary, theme: theme))
+                }
                 .padding(FaithfulTokens.Spacing.lg)
+            }
+            .navigationDestination(for: ChurchTabRoute.self) { route in
+                switch route {
+                case .search:
+                    DiscoverySearchView(
+                        dependencies: dependencies,
+                        root: model,
+                        discovery: churchTabDiscovery
+                    )
+                }
             }
 
         case .checkIn, .watch, .give:
@@ -154,6 +195,12 @@ struct RootView: View {
             EmptyView()
         }
     }
+}
+
+/// Where the church tab can go beyond its root: finding another church. The
+/// profile push below it belongs to `DiscoverySearchView`.
+enum ChurchTabRoute: Hashable {
+    case search
 }
 
 /// The tabs the visitor journey can contain.

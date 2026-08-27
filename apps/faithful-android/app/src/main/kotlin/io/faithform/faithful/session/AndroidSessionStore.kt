@@ -20,6 +20,16 @@ data class StoredSession(
 }
 
 /**
+ * The slice of the session store the app shell depends on — narrow so the
+ * first-run logic runs under a plain JVM test with no keystore in sight.
+ */
+interface SessionGateway {
+    fun current(): StoredSession?
+    fun adopt(session: StoredSession)
+    fun purgeEverything()
+}
+
+/**
  * Owns the token lifecycle, backed by EncryptedSharedPreferences.
  *
  * Refresh is single-flight: concurrent callers await the same in-flight
@@ -31,7 +41,7 @@ class AndroidSessionStore(
     private val environmentKey: String,
     private val now: () -> Long = System::currentTimeMillis,
     private val refresh: suspend (String) -> StoredSession = { error("no refresher configured") }
-) : TokenProvider {
+) : TokenProvider, SessionGateway {
 
     private val json = Json { ignoreUnknownKeys = true }
     private val key = "session"
@@ -41,7 +51,7 @@ class AndroidSessionStore(
         refresh(current.refreshToken).also { adopt(it) }
     }
 
-    fun current(): StoredSession? {
+    override fun current(): StoredSession? {
         val raw = preferences.getString(key, null) ?: return null
         val session = runCatching { json.decodeFromString(StoredSession.serializer(), raw) }.getOrNull()
             ?: return null
@@ -49,7 +59,7 @@ class AndroidSessionStore(
         return session.takeIf { it.environmentKey == environmentKey }
     }
 
-    fun adopt(session: StoredSession) {
+    override fun adopt(session: StoredSession) {
         require(session.environmentKey == environmentKey) {
             "session belongs to a different environment"
         }
@@ -67,7 +77,7 @@ class AndroidSessionStore(
     }
 
     /** Sign-out and account removal: clears everything this store holds. */
-    fun purgeEverything() {
+    override fun purgeEverything() {
         preferences.edit().clear().apply()
     }
 }

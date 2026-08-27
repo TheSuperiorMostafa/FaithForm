@@ -53,7 +53,7 @@ public struct APIError: Error, Sendable {
     public static func transport(_ underlying: Error) -> APIError {
         APIError(
             code: .unavailable,
-            message: "Faithful could not reach the server.",
+            message: "FaithForm could not reach the server.",
             retryable: true
         )
     }

@@ -152,7 +152,7 @@ public actor APIClient {
         do {
             return try JSONDecoder.faithful.decode(MobileSuccess<T>.self, from: data).data
         } catch {
-            throw APIError(code: .internalError, message: "Faithful could not read the response.")
+            throw APIError(code: .internalError, message: "FaithForm could not read the response.")
         }
     }
 

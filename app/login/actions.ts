@@ -72,6 +72,56 @@ export type PasswordLoginState = {
   error?: string;
 };
 
+export type PasswordResetState = {
+  ok: boolean;
+  error?: string;
+};
+
+/**
+ * Emails a password-recovery link.
+ *
+ * The link signs the person in through `/auth/callback` and lands them on
+ * `/set-password?reason=recovery`, the same screen teammates use for their
+ * first password — one place in the product knows how to set one. The response
+ * is deliberately identical whether or not the address has an account, so this
+ * form cannot be used to enumerate who uses FaithForm.
+ */
+export async function sendPasswordReset(
+  _prevState: PasswordResetState,
+  formData: FormData,
+): Promise<PasswordResetState> {
+  const rateLimited = await enforceLoginRateLimit("password-reset");
+  if (rateLimited) return rateLimited;
+
+  const email = formData.get("email")?.toString().trim();
+
+  if (!email) {
+    return { ok: false, error: "Please enter your email address." };
+  }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(email)) {
+    return { ok: false, error: "Please enter a valid email address." };
+  }
+
+  const redirectTo = absoluteAppPath(
+    `/auth/callback?next=${encodeURIComponent("/set-password?reason=recovery")}`,
+  );
+
+  const supabase = createClient();
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo,
+  });
+
+  // "Sent" either way: a distinguishable failure would confirm whether the
+  // address exists. Genuine provider outages surface in server logs, not here.
+  if (error && !/user|email/i.test(error.message)) {
+    return { ok: false, error: "Could not send the email. Try again shortly." };
+  }
+
+  return { ok: true };
+}
+
 export async function signInWithPassword(
   _prevState: PasswordLoginState,
   formData: FormData,

@@ -157,7 +157,16 @@ export async function updateVisitorProfile(
     throw new VisitorError("invalid_input", "Check the values you entered.");
   }
 
-  const account = await requireActiveAccount(userId);
+  // Ensured, not merely required: setting a display name right after account
+  // creation *is* the first authenticated use, which Prompt 3 defines as the
+  // moment the visitor row materializes. Requiring the row to already exist
+  // made that first write silently race the first bootstrap. The lifecycle
+  // guard stays: a deactivated or deletion-requested account still may not
+  // mutate anything.
+  const account = await ensureVisitorAccount(userId);
+  if (account.status !== "active") {
+    throw new VisitorError("account_inactive", "This account is not active.");
+  }
   const admin = createAdminClient();
 
   const update: Record<string, unknown> = { updated_at: new Date().toISOString() };

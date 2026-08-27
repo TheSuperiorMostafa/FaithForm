@@ -147,10 +147,19 @@ public struct DiscoveryView: View {
     @Environment(\.faithfulTheme) private var theme
     @Bindable private var model: DiscoveryModel
     private let onOpenChurch: @MainActor (String) -> Void
+    /// The host decides what "near me" does next — usually showing the
+    /// education screen before any OS prompt. Without a host handler the tap
+    /// still records that education is due, and nothing prompts.
+    private let onNearby: (@MainActor () -> Void)?
 
-    public init(model: DiscoveryModel, onOpenChurch: @escaping @MainActor (String) -> Void) {
+    public init(
+        model: DiscoveryModel,
+        onOpenChurch: @escaping @MainActor (String) -> Void,
+        onNearby: (@MainActor () -> Void)? = nil
+    ) {
         self.model = model
         self.onOpenChurch = onOpenChurch
+        self.onNearby = onNearby
     }
 
     public var body: some View {
@@ -158,7 +167,11 @@ public struct DiscoveryView: View {
             searchBar
 
             Button(L.churchesNearMe) {
-                Task { await model.beginNearbyFlow() }
+                if let onNearby {
+                    onNearby()
+                } else {
+                    Task { await model.beginNearbyFlow() }
+                }
             }
             .buttonStyle(FaithfulButtonStyle(kind: .secondary, theme: theme))
 

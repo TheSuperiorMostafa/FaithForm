@@ -39,7 +39,9 @@ class FaithfulApplication : Application() {
             apiOrigin = configured.apiOrigin,
             environmentKey = configured.environmentKey,
             clientBuild = configured.clientBuild,
-            allowDebugControls = configured.allowsDebugControls
+            allowDebugControls = configured.allowsDebugControls,
+            supabaseUrl = BuildConfig.SUPABASE_URL,
+            supabaseAnonKey = BuildConfig.SUPABASE_ANON_KEY
         )
 
         // Channels must exist before the first notification arrives or Android

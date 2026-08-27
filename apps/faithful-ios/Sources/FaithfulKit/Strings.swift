@@ -25,7 +25,7 @@ public enum L {
     }
 
     // MARK: - App
-    public static var appName: String { t("app_name", "Faithful") }
+    public static var appName: String { t("app_name", "FaithForm") }
 
     // MARK: - Onboarding
     public static var welcomeTitle: String { t("welcome_title", "Find your church") }
@@ -55,7 +55,7 @@ public enum L {
         t("location_education_title", "Find churches near you")
     }
     public static var locationEducationBody: String {
-        t("location_education_body", "Faithful uses your location once, right now, to sort nearby churches. It is not stored and not tracked.")
+        t("location_education_body", "FaithForm uses your location once, right now, to sort nearby churches. It is not stored and not tracked.")
     }
     public static var locationContinue: String { t("location_continue", "Use my location") }
     public static var locationSkip: String { t("location_skip", "Search by name instead") }
@@ -134,11 +134,11 @@ public enum L {
     public static var signOut: String { t("sign_out", "Sign out") }
     public static var deleteAccount: String { t("delete_account", "Delete my account") }
     public static var deleteAccountHint: String {
-        t("delete_account_hint", "Removes your Faithful profile. Your church keeps its own records.")
+        t("delete_account_hint", "Removes your FaithForm profile. Your church keeps its own records.")
     }
     public static var signInTitle: String { t("sign_in_title", "Sign in to continue") }
     public static var signInBody: String {
-        t("sign_in_body", "Faithful keeps your churches, your giving and your check-ins in one place.")
+        t("sign_in_body", "FaithForm keeps your churches, your giving and your check-ins in one place.")
     }
 
     // MARK: - Church profile
@@ -170,16 +170,16 @@ public enum L {
         t("auto_attendance_intro_title", "Let your church know you were there")
     }
     public static var autoAttendanceIntroBody: String {
-        t("auto_attendance_intro_body", "When you arrive for a service, Faithful can check you in without you doing anything. Your church sees that you attended — nothing about where else you go.")
+        t("auto_attendance_intro_body", "When you arrive for a service, FaithForm can check you in without you doing anything. Your church sees that you attended — nothing about where else you go.")
     }
     public static var autoAttendancePrivacyTitle: String {
-        t("auto_attendance_privacy_title", "What Faithful does with your location")
+        t("auto_attendance_privacy_title", "What FaithForm does with your location")
     }
     public static var autoAttendancePrivacyPointOne: String {
-        t("auto_attendance_privacy_point_one", "Your phone watches for your church, and tells Faithful only when you arrive.")
+        t("auto_attendance_privacy_point_one", "Your phone watches for your church, and tells FaithForm only when you arrive.")
     }
     public static var autoAttendancePrivacyPointTwo: String {
-        t("auto_attendance_privacy_point_two", "Faithful never keeps a record of where you have been.")
+        t("auto_attendance_privacy_point_two", "FaithForm never keeps a record of where you have been.")
     }
     public static var autoAttendancePrivacyPointThree: String {
         t("auto_attendance_privacy_point_three", "Your church sees that you attended a service. It never sees your location.")
@@ -188,16 +188,16 @@ public enum L {
         t("auto_attendance_privacy_point_four", "You can turn this off at any time, and everything stops.")
     }
     public static var autoAttendanceForegroundTitle: String {
-        t("auto_attendance_foreground_title", "Faithful needs to see your location")
+        t("auto_attendance_foreground_title", "FaithForm needs to see your location")
     }
     public static var autoAttendanceForegroundBody: String {
-        t("auto_attendance_foreground_body", "To know when you have arrived, Faithful needs permission to read your location. Your phone will ask you next.")
+        t("auto_attendance_foreground_body", "To know when you have arrived, FaithForm needs permission to read your location. Your phone will ask you next.")
     }
     public static var autoAttendanceBackgroundTitle: String {
         t("auto_attendance_background_title", "And to notice while the app is closed")
     }
     public static var autoAttendanceBackgroundBody: String {
-        t("auto_attendance_background_body", "Check-in happens while you are settling into a seat, not staring at your phone. For that, your phone needs to allow location all the time. Faithful only ever looks at whether you have arrived at your church.")
+        t("auto_attendance_background_body", "Check-in happens while you are settling into a seat, not staring at your phone. For that, your phone needs to allow location all the time. FaithForm only ever looks at whether you have arrived at your church.")
     }
     public static var autoAttendanceContinue: String {
         t("auto_attendance_continue", "Continue")
@@ -213,7 +213,7 @@ public enum L {
         t("auto_attendance_ready_title", "Automatic check-in is on")
     }
     public static var autoAttendanceReadyBody: String {
-        t("auto_attendance_ready_body", "You are all set. Faithful will check you in when you arrive for a service.")
+        t("auto_attendance_ready_body", "You are all set. FaithForm will check you in when you arrive for a service.")
     }
     public static var autoAttendanceWatching: String {
         t("auto_attendance_watching", "Watching %d location")
@@ -225,10 +225,10 @@ public enum L {
         t("auto_attendance_off_title", "Automatic check-in is off")
     }
     public static var autoAttendanceOffBody: String {
-        t("auto_attendance_off_body", "Turn it on and Faithful will check you in when you arrive.")
+        t("auto_attendance_off_body", "Turn it on and FaithForm will check you in when you arrive.")
     }
     public static var autoAttendanceDeniedTitle: String {
-        t("auto_attendance_denied_title", "Location is turned off for Faithful")
+        t("auto_attendance_denied_title", "Location is turned off for FaithForm")
     }
     public static var autoAttendanceDeniedBody: String {
         t("auto_attendance_denied_body", "Automatic check-in needs location. You can turn it back on in Settings.")
@@ -246,16 +246,16 @@ public enum L {
         t("auto_attendance_services_off_body", "Location is switched off for every app on this device. You can turn it on in Settings.")
     }
     public static var autoAttendanceAlwaysTitle: String {
-        t("auto_attendance_always_title", "Faithful needs location all the time")
+        t("auto_attendance_always_title", "FaithForm needs location all the time")
     }
     public static var autoAttendanceAlwaysBody: String {
-        t("auto_attendance_always_body", "Right now Faithful can only see your location while it is open, so it cannot notice you arriving. You can change this in Settings.")
+        t("auto_attendance_always_body", "Right now FaithForm can only see your location while it is open, so it cannot notice you arriving. You can change this in Settings.")
     }
     public static var autoAttendanceAccuracyTitle: String {
         t("auto_attendance_accuracy_title", "Precise location is off")
     }
     public static var autoAttendanceAccuracyBody: String {
-        t("auto_attendance_accuracy_body", "Faithful is only getting a rough idea of where you are, which is not close enough to tell that you are at your church. You can turn on precise location in Settings.")
+        t("auto_attendance_accuracy_body", "FaithForm is only getting a rough idea of where you are, which is not close enough to tell that you are at your church. You can turn on precise location in Settings.")
     }
     public static var autoAttendanceUnavailableTitle: String {
         t("auto_attendance_unavailable_title", "This device cannot do automatic check-in")
@@ -288,10 +288,10 @@ public enum L {
         t("auto_attendance_consent_missing_body", "Turn it on to be checked in when you arrive.")
     }
     public static var autoAttendanceOfflineTitle: String {
-        t("auto_attendance_offline_title", "Faithful could not check")
+        t("auto_attendance_offline_title", "FaithForm could not check")
     }
     public static var autoAttendanceOfflineBody: String {
-        t("auto_attendance_offline_body", "Faithful will try again when you are back on a network.")
+        t("auto_attendance_offline_body", "FaithForm will try again when you are back on a network.")
     }
     public static var autoAttendanceOpenSettings: String {
         t("auto_attendance_open_settings", "Open Settings")
@@ -319,7 +319,7 @@ public enum L {
     }
     public static var offlineTitle: String { t("offline_title", "You're offline") }
     public static var offlineBody: String {
-        t("offline_body", "Faithful will load your account as soon as you're back on a network.")
+        t("offline_body", "FaithForm will load your account as soon as you're back on a network.")
     }
     public static var errorTitle: String { t("error_title", "Something went wrong") }
     public static var tryAgain: String { t("try_again", "Try again") }
@@ -338,10 +338,10 @@ public enum L {
         t("checkin_scan_intro_title", "Scan the code on screen")
     }
     public static var checkinScanIntroBody: String {
-        t("checkin_scan_intro_body", "Point your camera at the code your church is showing. Faithful uses the camera only while this screen is open, and never keeps a picture.")
+        t("checkin_scan_intro_body", "Point your camera at the code your church is showing. FaithForm uses the camera only while this screen is open, and never keeps a picture.")
     }
     public static var checkinScanPrivacyNote: String {
-        t("checkin_scan_privacy_note", "Faithful never saves a photo and never asks for your photo library.")
+        t("checkin_scan_privacy_note", "FaithForm never saves a photo and never asks for your photo library.")
     }
     public static var checkinScanButton: String {
         t("checkin_scan_button", "Scan the code")
@@ -368,7 +368,7 @@ public enum L {
         t("checkin_scan_submitting", "Checking you in…")
     }
     public static var checkinScanCameraDeniedTitle: String {
-        t("checkin_scan_camera_denied_title", "Faithful cannot use the camera")
+        t("checkin_scan_camera_denied_title", "FaithForm cannot use the camera")
     }
     public static var checkinScanCameraDeniedBody: String {
         t("checkin_scan_camera_denied_body", "Allow camera access in Settings, or enter the code shown beside the QR.")
@@ -386,7 +386,7 @@ public enum L {
         t("checkin_scan_camera_unavailable_body", "Enter the code shown beside the QR instead.")
     }
     public static var checkinScanOfflineTitle: String {
-        t("checkin_scan_offline_title", "Faithful could not check you in")
+        t("checkin_scan_offline_title", "FaithForm could not check you in")
     }
     public static var checkinScanOfflineBody: String {
         t("checkin_scan_offline_body", "Nothing was recorded. Try again when you are back on a network.")
@@ -439,7 +439,7 @@ public enum L {
         t("media_retry", "Try again")
     }
     public static var mediaOfflineTitle: String {
-        t("media_offline_title", "Faithful could not reach the server")
+        t("media_offline_title", "FaithForm could not reach the server")
     }
     public static var mediaOfflineBody: String {
         t("media_offline_body", "Check your connection and try again.")
@@ -517,7 +517,7 @@ public enum L {
         t("giving_blocked_title", "This church is not available to you")
     }
     public static var givingOfflineTitle: String {
-        t("giving_offline_title", "Faithful could not reach the server")
+        t("giving_offline_title", "FaithForm could not reach the server")
     }
     public static var givingOfflineBody: String {
         t("giving_offline_body", "Check your connection and try again.")
@@ -667,9 +667,105 @@ public enum L {
         t("media_entry_body", "Watch live, or catch up on a service you missed.")
     }
     public static var notConfiguredTitle: String {
-        t("not_configured_title", "Faithful isn't set up")
+        t("not_configured_title", "FaithForm isn't set up")
     }
     public static var notConfiguredBody: String {
         t("not_configured_body", "This copy of the app hasn't been pointed at a server yet. Nothing you did caused this.")
+    }
+
+    // MARK: - Authentication
+
+    public static var createAccount: String { t("create_account", "Create Account") }
+    public static var signIn: String { t("sign_in", "Sign In") }
+    public static var authCreateTitle: String {
+        t("auth_create_title", "Create your account")
+    }
+    public static var authSignInTitle: String { t("auth_sign_in_title", "Sign in") }
+    public static var authNameLabel: String { t("auth_name_label", "Your name") }
+    public static var authNameHint: String {
+        t("auth_name_hint", "Shown to your church when you join.")
+    }
+    public static var authEmailLabel: String { t("auth_email_label", "Email") }
+    public static var authPasswordLabel: String { t("auth_password_label", "Password") }
+    public static var authPasswordHint: String {
+        t("auth_password_hint", "At least 8 characters")
+    }
+    public static var authTermsNotice: String {
+        t("auth_terms_notice", "By continuing, you agree to FaithForm's Terms of Service and Privacy Policy.")
+    }
+    public static var authForgotPassword: String {
+        t("auth_forgot_password", "Forgot password?")
+    }
+    public static var authResetTitle: String {
+        t("auth_reset_title", "Reset your password")
+    }
+    public static var authResetBody: String {
+        t("auth_reset_body", "Enter your email and we'll send you a link to set a new one.")
+    }
+    public static var authResetSend: String {
+        t("auth_reset_send", "Email me a reset link")
+    }
+    public static var authResetSent: String {
+        t("auth_reset_sent", "If that email has an account, a reset link is on its way.")
+    }
+    public static var authCheckEmailTitle: String {
+        t("auth_check_email_title", "Check your email")
+    }
+    public static var authCheckEmailBody: String {
+        t("auth_check_email_body", "Confirm your address using the link we sent, then sign in here.")
+    }
+    public static var authErrorEmailInvalid: String {
+        t("auth_error_email_invalid", "Enter a valid email address.")
+    }
+    public static var authErrorPasswordMissing: String {
+        t("auth_error_password_missing", "Enter your password.")
+    }
+    public static var authErrorInvalidCredentials: String {
+        t("auth_error_invalid_credentials", "Email or password is incorrect.")
+    }
+    public static var authErrorAccountExists: String {
+        t("auth_error_account_exists", "That email already has an account. Sign in instead.")
+    }
+    public static var authErrorWeakPassword: String {
+        t("auth_error_weak_password", "Choose a longer password — at least 8 characters.")
+    }
+    public static var authErrorEmailUnconfirmed: String {
+        t("auth_error_email_unconfirmed", "Confirm your email first — check your inbox for the link.")
+    }
+    public static var authErrorRateLimited: String {
+        t("auth_error_rate_limited", "Too many attempts. Wait a moment and try again.")
+    }
+    public static var authErrorOffline: String {
+        t("auth_error_offline", "Could not reach FaithForm. Check your connection and try again.")
+    }
+    public static var authErrorUnconfigured: String {
+        t("auth_error_unconfigured", "Sign-in isn't configured for this build.")
+    }
+    public static var authErrorGeneric: String {
+        t("auth_error_generic", "Something went wrong. Try again.")
+    }
+
+    // MARK: - Invitations
+
+    public static var invitationTitle: String {
+        t("invitation_title", "Join by invitation")
+    }
+    public static var invitationBody: String {
+        t("invitation_body", "Paste the invitation link or code your church sent you.")
+    }
+    public static var invitationFieldLabel: String {
+        t("invitation_field_label", "Invitation link or code")
+    }
+    public static var invitationJoining: String {
+        t("invitation_joining", "Joining…")
+    }
+    public static var invitationPendingBanner: String {
+        t("invitation_pending_banner", "You have an invitation waiting. Create an account or sign in to use it.")
+    }
+    public static var invitationErrorInvalid: String {
+        t("invitation_error_invalid", "That invitation isn't valid. Check the link and try again.")
+    }
+    public static var invitationErrorExpired: String {
+        t("invitation_error_expired", "This invitation has expired. Ask your church for a new one.")
     }
 }

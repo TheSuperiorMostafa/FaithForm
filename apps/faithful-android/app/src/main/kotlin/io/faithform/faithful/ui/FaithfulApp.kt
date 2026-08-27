@@ -21,6 +21,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -28,6 +32,9 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
+import io.faithform.faithful.AppViewModel
 import io.faithform.faithful.LaunchPhase
 import io.faithform.faithful.R
 import io.faithform.faithful.contract.Bootstrap
@@ -35,30 +42,46 @@ import io.faithform.faithful.contract.RelationshipState
 import io.faithform.faithful.design.FaithfulTokens
 import io.faithform.faithful.design.LocalFaithfulTheme
 import io.faithform.faithful.navigation.RouteRegistry
+import io.faithform.faithful.session.AppContainer
+import io.faithform.faithful.ui.auth.AuthFlow
+import io.faithform.faithful.ui.auth.AuthViewModel
+import io.faithform.faithful.ui.discovery.LocationProvider
+import io.faithform.faithful.ui.onboarding.FindChurchFlow
 
 /**
- * The authenticated shell.
+ * The shell: every launch phase, each a real state with a real way forward.
  *
- * Shows exactly what the contract returns: who you are, which churches you have
- * a relationship with, and the account controls. No tab for a feature that does
- * not exist yet, and no placeholder row standing in for later content.
+ * Signed out shows the front door — create an account, sign in, recover a
+ * password. Signed in with no church shows the first-run flow, decided by the
+ * server. Ready shows exactly what the contract returns: who you are, which
+ * churches you have a relationship with, and the account controls. No state
+ * leaves a person with instructions and nothing to tap.
  */
 @Composable
 fun FaithfulApp(
-    state: LaunchPhase,
-    registry: RouteRegistry,
-    onSignOut: () -> Unit,
-    onRequestDeletion: () -> Unit,
-    onRetry: () -> Unit
+    viewModel: AppViewModel,
+    container: AppContainer,
+    locationProvider: LocationProvider,
+    registry: RouteRegistry
 ) {
     val theme = LocalFaithfulTheme.current
+    val state by viewModel.state.collectAsStateWithLifecycle()
+    val pendingInvitation by viewModel.pendingInvitationToken.collectAsStateWithLifecycle()
+
+    val authViewModel: AuthViewModel = viewModel(key = "auth") {
+        AuthViewModel(container.authClient) { session, displayName ->
+            viewModel.completeAuth(session, displayName)
+        }
+    }
+
+    var findChurchOpen by rememberSaveable { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(theme.palette.background)
     ) {
-        when (state) {
+        when (val current = state) {
             is LaunchPhase.Loading -> Centered {
                 CircularProgressIndicator(
                     modifier = Modifier.semantics {
@@ -67,38 +90,63 @@ fun FaithfulApp(
                 )
             }
 
-            is LaunchPhase.SignedOut -> Centered {
-                EmptyState(
-                    title = stringResource(R.string.sign_in_title),
-                    body = stringResource(R.string.sign_in_body)
-                )
-            }
+            is LaunchPhase.SignedOut -> AuthFlow(
+                viewModel = authViewModel,
+                hasPendingInvitation = pendingInvitation != null
+            )
+
+            is LaunchPhase.Onboarding -> FindChurchFlow(
+                appViewModel = viewModel,
+                container = container,
+                locationProvider = locationProvider,
+                showWelcome = true,
+                onSignOut = viewModel::signOut
+            )
 
             is LaunchPhase.OfflineNoCache -> Centered {
-                EmptyState(
-                    title = stringResource(R.string.offline_title),
-                    body = stringResource(R.string.offline_body)
-                )
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    EmptyState(
+                        title = stringResource(R.string.offline_title),
+                        body = stringResource(R.string.offline_body)
+                    )
+                    OutlinedButton(onClick = viewModel::load) {
+                        Text(stringResource(R.string.try_again))
+                    }
+                }
             }
 
             is LaunchPhase.Failed -> Centered {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     EmptyState(
                         title = stringResource(R.string.error_title),
-                        body = state.message
+                        body = current.message
                     )
-                    OutlinedButton(onClick = onRetry) {
+                    OutlinedButton(onClick = viewModel::load) {
                         Text(stringResource(R.string.try_again))
                     }
                 }
             }
 
-            is LaunchPhase.Ready -> ReadyContent(
-                bootstrap = state.bootstrap,
-                isStale = state.isStale,
-                onSignOut = onSignOut,
-                onRequestDeletion = onRequestDeletion
-            )
+            is LaunchPhase.Ready ->
+                if (findChurchOpen) {
+                    // "Add another church" reuses the exact first-run flow,
+                    // minus the welcome screen; system back returns here.
+                    FindChurchFlow(
+                        appViewModel = viewModel,
+                        container = container,
+                        locationProvider = locationProvider,
+                        showWelcome = false,
+                        onExit = { findChurchOpen = false }
+                    )
+                } else {
+                    ReadyContent(
+                        bootstrap = current.bootstrap,
+                        isStale = current.isStale,
+                        onFindChurch = { findChurchOpen = true },
+                        onSignOut = viewModel::signOut,
+                        onRequestDeletion = viewModel::requestDeletion
+                    )
+                }
         }
     }
 }
@@ -107,6 +155,7 @@ fun FaithfulApp(
 private fun ReadyContent(
     bootstrap: Bootstrap,
     isStale: Boolean,
+    onFindChurch: () -> Unit,
     onSignOut: () -> Unit,
     onRequestDeletion: () -> Unit
 ) {
@@ -162,6 +211,15 @@ private fun ReadyContent(
                     }
                 }
             }
+
+            // Multi-church by design: an account is never bound to one
+            // congregation, so finding the next one starts here.
+            OutlinedButton(
+                onClick = onFindChurch,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = FaithfulTokens.TouchTarget.recommended)
+            ) { Text(stringResource(R.string.add_another_church)) }
         }
 
         Column(verticalArrangement = Arrangement.spacedBy(FaithfulTokens.Spacing.md)) {

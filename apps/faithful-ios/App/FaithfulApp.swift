@@ -64,7 +64,8 @@ enum LaunchOutcome {
                     environment: environment,
                     clientBuild: clientBuild,
                     allowsDebugControls: allowsDebugControls,
-                    session: session
+                    session: session,
+                    auth: SupabaseAuthLoader.load(environment: environment)
                 )
             )
         case let .unconfigured(reason):

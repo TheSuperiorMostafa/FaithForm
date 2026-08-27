@@ -2,20 +2,20 @@
     <!-- Localization foundation: every user-facing string is a resource from
          the start, so adding a locale is a translation task rather than a
          refactor. -->
-    <string name="app_name">Faithful</string>
+    <string name="app_name">FaithForm</string>
     <string name="loading_account">Loading your account</string>
     <string name="sign_in_title">Sign in to continue</string>
-    <string name="sign_in_body">Faithful keeps your churches, your giving and your check-ins in one place.</string>
+    <string name="sign_in_body">FaithForm keeps your churches, your giving and your check-ins in one place.</string>
     <string name="your_churches">Your churches</string>
     <string name="no_churches_title">No churches yet</string>
     <string name="no_churches_body">When you follow or join a church, it will appear here.</string>
     <string name="account">Account</string>
     <string name="sign_out">Sign out</string>
     <string name="delete_account">Delete my account</string>
-    <string name="delete_account_hint">Removes your Faithful profile. Your church keeps its own records.</string>
+    <string name="delete_account_hint">Removes your FaithForm profile. Your church keeps its own records.</string>
     <string name="offline_cached">Showing what was saved on this device.</string>
     <string name="offline_title">You\'re offline</string>
-    <string name="offline_body">Faithful will load your account as soon as you\'re back on a network.</string>
+    <string name="offline_body">FaithForm will load your account as soon as you\'re back on a network.</string>
     <string name="error_title">Something went wrong</string>
     <string name="try_again">Try again</string>
     <string name="state_following">Following</string>
@@ -39,7 +39,7 @@
     <string name="no_results_body">Try a different name, city, or postal code.</string>
     <string name="distance_away">%1$s km away</string>
     <string name="location_education_title">Find churches near you</string>
-    <string name="location_education_body">Faithful uses your location once, right now, to sort nearby churches. It is not stored and not tracked.</string>
+    <string name="location_education_body">FaithForm uses your location once, right now, to sort nearby churches. It is not stored and not tracked.</string>
     <string name="location_continue">Use my location</string>
     <string name="location_skip">Search by name instead</string>
     <string name="location_denied_title">Location is off</string>
@@ -95,36 +95,36 @@
     <!-- Automatic attendance (Prompt 7) -->
     <string name="auto_attendance_title">Automatic check-in</string>
     <string name="auto_attendance_intro_title">Let your church know you were there</string>
-    <string name="auto_attendance_intro_body">When you arrive for a service, Faithful can check you in without you doing anything. Your church sees that you attended — nothing about where else you go.</string>
-    <string name="auto_attendance_privacy_title">What Faithful does with your location</string>
-    <string name="auto_attendance_privacy_point_one">Your phone watches for your church, and tells Faithful only when you arrive.</string>
-    <string name="auto_attendance_privacy_point_two">Faithful never keeps a record of where you have been.</string>
+    <string name="auto_attendance_intro_body">When you arrive for a service, FaithForm can check you in without you doing anything. Your church sees that you attended — nothing about where else you go.</string>
+    <string name="auto_attendance_privacy_title">What FaithForm does with your location</string>
+    <string name="auto_attendance_privacy_point_one">Your phone watches for your church, and tells FaithForm only when you arrive.</string>
+    <string name="auto_attendance_privacy_point_two">FaithForm never keeps a record of where you have been.</string>
     <string name="auto_attendance_privacy_point_three">Your church sees that you attended a service. It never sees your location.</string>
     <string name="auto_attendance_privacy_point_four">You can turn this off at any time, and everything stops.</string>
-    <string name="auto_attendance_foreground_title">Faithful needs to see your location</string>
-    <string name="auto_attendance_foreground_body">To know when you have arrived, Faithful needs permission to read your location. Your phone will ask you next.</string>
+    <string name="auto_attendance_foreground_title">FaithForm needs to see your location</string>
+    <string name="auto_attendance_foreground_body">To know when you have arrived, FaithForm needs permission to read your location. Your phone will ask you next.</string>
     <string name="auto_attendance_background_title">And to notice while the app is closed</string>
-    <string name="auto_attendance_background_body">Check-in happens while you are settling into a seat, not staring at your phone. For that, your phone needs to allow location all the time. Faithful only ever looks at whether you have arrived at your church.</string>
+    <string name="auto_attendance_background_body">Check-in happens while you are settling into a seat, not staring at your phone. For that, your phone needs to allow location all the time. FaithForm only ever looks at whether you have arrived at your church.</string>
     <string name="auto_attendance_continue">Continue</string>
     <string name="auto_attendance_enable">Turn on automatic check-in</string>
     <string name="auto_attendance_not_now">Not now</string>
     <string name="auto_attendance_disable">Turn off automatic check-in</string>
     <string name="auto_attendance_ready_title">Automatic check-in is on</string>
-    <string name="auto_attendance_ready_body">You are all set. Faithful will check you in when you arrive for a service.</string>
+    <string name="auto_attendance_ready_body">You are all set. FaithForm will check you in when you arrive for a service.</string>
     <string name="auto_attendance_watching">Watching %1$d location</string>
     <string name="auto_attendance_watching_plural">Watching %1$d locations</string>
     <string name="auto_attendance_off_title">Automatic check-in is off</string>
-    <string name="auto_attendance_off_body">Turn it on and Faithful will check you in when you arrive.</string>
-    <string name="auto_attendance_denied_title">Location is turned off for Faithful</string>
+    <string name="auto_attendance_off_body">Turn it on and FaithForm will check you in when you arrive.</string>
+    <string name="auto_attendance_denied_title">Location is turned off for FaithForm</string>
     <string name="auto_attendance_denied_body">Automatic check-in needs location. You can turn it back on in Settings.</string>
     <string name="auto_attendance_restricted_title">Location is not available</string>
     <string name="auto_attendance_restricted_body">Location is restricted on this device, so automatic check-in cannot run. You can still be checked in at the service.</string>
     <string name="auto_attendance_services_off_title">Location services are off</string>
     <string name="auto_attendance_services_off_body">Location is switched off for every app on this device. You can turn it on in Settings.</string>
-    <string name="auto_attendance_always_title">Faithful needs location all the time</string>
-    <string name="auto_attendance_always_body">Right now Faithful can only see your location while it is open, so it cannot notice you arriving. You can change this in Settings.</string>
+    <string name="auto_attendance_always_title">FaithForm needs location all the time</string>
+    <string name="auto_attendance_always_body">Right now FaithForm can only see your location while it is open, so it cannot notice you arriving. You can change this in Settings.</string>
     <string name="auto_attendance_accuracy_title">Precise location is off</string>
-    <string name="auto_attendance_accuracy_body">Faithful is only getting a rough idea of where you are, which is not close enough to tell that you are at your church. You can turn on precise location in Settings.</string>
+    <string name="auto_attendance_accuracy_body">FaithForm is only getting a rough idea of where you are, which is not close enough to tell that you are at your church. You can turn on precise location in Settings.</string>
     <string name="auto_attendance_unavailable_title">This device cannot do automatic check-in</string>
     <string name="auto_attendance_unavailable_body">Automatic check-in is not available on this device. You can still be checked in at the service.</string>
     <string name="auto_attendance_no_link_title">Your church needs to confirm who you are</string>
@@ -135,8 +135,8 @@
     <string name="auto_attendance_no_campus_body">Automatic check-in needs your church to add where it meets.</string>
     <string name="auto_attendance_consent_missing_title">Automatic check-in is not turned on</string>
     <string name="auto_attendance_consent_missing_body">Turn it on to be checked in when you arrive.</string>
-    <string name="auto_attendance_offline_title">Faithful could not check</string>
-    <string name="auto_attendance_offline_body">Faithful will try again when you are back on a network.</string>
+    <string name="auto_attendance_offline_title">FaithForm could not check</string>
+    <string name="auto_attendance_offline_body">FaithForm will try again when you are back on a network.</string>
     <string name="auto_attendance_open_settings">Open Settings</string>
     <string name="auto_attendance_recent_title">Last check-in</string>
     <string name="auto_attendance_recent_counted">Checked in at %1$s</string>
@@ -147,8 +147,8 @@
     <!-- Check-in scanner (Prompt 8) -->
     <string name="checkin_scan_title">Check in</string>
     <string name="checkin_scan_intro_title">Scan the code on screen</string>
-    <string name="checkin_scan_intro_body">Point your camera at the code your church is showing. Faithful uses the camera only while this screen is open, and never keeps a picture.</string>
-    <string name="checkin_scan_privacy_note">Faithful never saves a photo and never asks for your photo library.</string>
+    <string name="checkin_scan_intro_body">Point your camera at the code your church is showing. FaithForm uses the camera only while this screen is open, and never keeps a picture.</string>
+    <string name="checkin_scan_privacy_note">FaithForm never saves a photo and never asks for your photo library.</string>
     <string name="checkin_scan_button">Scan the code</string>
     <string name="checkin_scan_enter_code">Enter the code instead</string>
     <string name="checkin_scan_code_title">Enter the code on screen</string>
@@ -157,13 +157,13 @@
     <string name="checkin_scan_code_submit">Check me in</string>
     <string name="checkin_scan_searching">Looking for a code…</string>
     <string name="checkin_scan_submitting">Checking you in…</string>
-    <string name="checkin_scan_camera_denied_title">Faithful cannot use the camera</string>
+    <string name="checkin_scan_camera_denied_title">FaithForm cannot use the camera</string>
     <string name="checkin_scan_camera_denied_body">Allow camera access in Settings, or enter the code shown beside the QR.</string>
     <string name="checkin_scan_camera_restricted_title">The camera is not available</string>
     <string name="checkin_scan_camera_restricted_body">This device does not allow camera access. Enter the code shown beside the QR instead.</string>
     <string name="checkin_scan_camera_unavailable_title">No camera on this device</string>
     <string name="checkin_scan_camera_unavailable_body">Enter the code shown beside the QR instead.</string>
-    <string name="checkin_scan_offline_title">Faithful could not check you in</string>
+    <string name="checkin_scan_offline_title">FaithForm could not check you in</string>
     <string name="checkin_scan_offline_body">Nothing was recorded. Try again when you are back on a network.</string>
     <string name="checkin_scan_open_settings">Open Settings</string>
     <string name="checkin_scan_try_again">Try again</string>
@@ -182,7 +182,7 @@
     <string name="media_search_label">Search past services</string>
     <string name="media_loading">Loading…</string>
     <string name="media_retry">Try again</string>
-    <string name="media_offline_title">Faithful could not reach the server</string>
+    <string name="media_offline_title">FaithForm could not reach the server</string>
     <string name="media_offline_body">Check your connection and try again.</string>
     <string name="media_unavailable_title">This is no longer available</string>
     <string name="media_unavailable_body">The church removed it. Nothing you did caused this.</string>
@@ -216,7 +216,7 @@
     <string name="giving_not_accepting_title">Giving is not set up yet</string>
     <string name="giving_not_accepting_body">This church can\'t take gifts in the app right now.</string>
     <string name="giving_blocked_title">This church is not available to you</string>
-    <string name="giving_offline_title">Faithful could not reach the server</string>
+    <string name="giving_offline_title">FaithForm could not reach the server</string>
     <string name="giving_offline_body">Check your connection and try again.</string>
     <string name="giving_unavailable_body">Giving is unavailable right now. Try again in a few minutes.</string>
     <string name="giving_retry">Try again</string>
@@ -267,6 +267,44 @@
     <string name="church_no_access">You can\'t see this church\'s posts right now.</string>
     <string name="check_in_entry_body">Scan the code your church puts on the screen, or type the short code.</string>
     <string name="media_entry_body">Watch live, or catch up on a service you missed.</string>
-    <string name="not_configured_title">Faithful isn\'t set up</string>
+    <string name="not_configured_title">FaithForm isn\'t set up</string>
     <string name="not_configured_body">This copy of the app hasn\'t been pointed at a server yet. Nothing you did caused this.</string>
+
+    <!-- Authentication -->
+    <string name="create_account">Create Account</string>
+    <string name="sign_in">Sign In</string>
+    <string name="auth_create_title">Create your account</string>
+    <string name="auth_sign_in_title">Sign in</string>
+    <string name="auth_name_label">Your name</string>
+    <string name="auth_name_hint">Shown to your church when you join.</string>
+    <string name="auth_email_label">Email</string>
+    <string name="auth_password_label">Password</string>
+    <string name="auth_password_hint">At least 8 characters</string>
+    <string name="auth_terms_notice">By continuing, you agree to FaithForm\'s Terms of Service and Privacy Policy.</string>
+    <string name="auth_forgot_password">Forgot password?</string>
+    <string name="auth_reset_title">Reset your password</string>
+    <string name="auth_reset_body">Enter your email and we\'ll send you a link to set a new one.</string>
+    <string name="auth_reset_send">Email me a reset link</string>
+    <string name="auth_reset_sent">If that email has an account, a reset link is on its way.</string>
+    <string name="auth_check_email_title">Check your email</string>
+    <string name="auth_check_email_body">Confirm your address using the link we sent, then sign in here.</string>
+    <string name="auth_error_email_invalid">Enter a valid email address.</string>
+    <string name="auth_error_password_missing">Enter your password.</string>
+    <string name="auth_error_invalid_credentials">Email or password is incorrect.</string>
+    <string name="auth_error_account_exists">That email already has an account. Sign in instead.</string>
+    <string name="auth_error_weak_password">Choose a longer password — at least 8 characters.</string>
+    <string name="auth_error_email_unconfirmed">Confirm your email first — check your inbox for the link.</string>
+    <string name="auth_error_rate_limited">Too many attempts. Wait a moment and try again.</string>
+    <string name="auth_error_offline">Could not reach FaithForm. Check your connection and try again.</string>
+    <string name="auth_error_unconfigured">Sign-in isn\'t configured for this build.</string>
+    <string name="auth_error_generic">Something went wrong. Try again.</string>
+
+    <!-- Invitations -->
+    <string name="invitation_title">Join by invitation</string>
+    <string name="invitation_body">Paste the invitation link or code your church sent you.</string>
+    <string name="invitation_field_label">Invitation link or code</string>
+    <string name="invitation_joining">Joining…</string>
+    <string name="invitation_pending_banner">You have an invitation waiting. Create an account or sign in to use it.</string>
+    <string name="invitation_error_invalid">That invitation isn\'t valid. Check the link and try again.</string>
+    <string name="invitation_error_expired">This invitation has expired. Ask your church for a new one.</string>
 </resources>

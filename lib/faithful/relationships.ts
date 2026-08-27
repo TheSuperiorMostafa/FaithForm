@@ -2,7 +2,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { VisitorError } from "@/lib/faithful/errors";
-import { bumpAuthorizationVersion, requireActiveAccount } from "@/lib/faithful/account";
+import {
+  bumpAuthorizationVersion,
+  ensureVisitorAccount,
+  requireActiveAccount,
+} from "@/lib/faithful/account";
 import { hashInvitationToken } from "@/lib/faithful/invitation-token";
 import { churchSlugSchema, pageSchema } from "@/lib/faithful/schemas";
 import {
@@ -296,12 +300,22 @@ export async function leaveChurch(
  * Redeems a join invitation. The token is hashed before it is used to look
  * anything up, and consumption is one atomic database call that also refuses a
  * blocked account — so replaying an old link cannot restore access.
+ *
+ * The account is ensured rather than required: by design the app posts a held
+ * token immediately after authentication — before any bootstrap has run — and
+ * for a brand-new signup that *is* the first authenticated use, the moment
+ * Prompt 3 says the visitor row materializes. The lifecycle guard stays: a
+ * deactivated or deletion-requested account may not redeem anything, and the
+ * atomic consumer independently refuses a blocked one.
  */
 export async function acceptJoinInvitation(
   userId: string,
   rawToken: string,
 ): Promise<Relationship> {
-  const account = await requireActiveAccount(userId);
+  const account = await ensureVisitorAccount(userId);
+  if (account.status !== "active") {
+    throw new VisitorError("account_inactive", "This account is not active.");
+  }
   const admin = createAdminClient();
 
   const { data, error } = await admin.rpc("consume_visitor_invitation", {

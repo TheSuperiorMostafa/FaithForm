@@ -7,6 +7,8 @@ import io.faithform.faithful.network.ApiClient
 import io.faithform.faithful.network.ApiEnvironment
 import io.faithform.faithful.network.HttpTransport
 import io.faithform.faithful.network.OkHttpTransport
+import io.faithform.faithful.network.SupabaseAuthClient
+import io.faithform.faithful.network.SupabaseAuthConfig
 import io.faithform.faithful.FaithfulApplication
 import io.faithform.faithful.attendance.AutomaticAttendanceCoordinator
 import io.faithform.faithful.storage.PartitionedCache
@@ -24,7 +26,9 @@ class AppContainer(
     apiOrigin: String,
     val environmentKey: String,
     clientBuild: Int,
-    val allowDebugControls: Boolean
+    val allowDebugControls: Boolean,
+    supabaseUrl: String = "",
+    supabaseAnonKey: String = ""
 ) {
     /**
      * Keystore-backed. The master key is hardware-protected where the device
@@ -42,9 +46,43 @@ class AppContainer(
         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
     )
 
-    val sessionStore = AndroidSessionStore(secureStore, environmentKey)
-
     val transport: HttpTransport = OkHttpTransport()
+
+    /**
+     * Null when this build has no identity provider configured. The sign-in
+     * screen still renders; submitting explains what is missing. Both values
+     * are public by design — see `app/build.gradle.kts`.
+     */
+    val authClient: SupabaseAuthClient? =
+        if (supabaseUrl.isBlank() || supabaseAnonKey.isBlank()) null
+        else SupabaseAuthClient(
+            SupabaseAuthConfig(
+                url = supabaseUrl,
+                anonKey = supabaseAnonKey,
+                // Password-reset emails land on this build's own web origin,
+                // so a staging build cannot mail someone a production link.
+                resetRedirectOrigin = apiOrigin
+            ),
+            transport
+        )
+
+    val sessionStore = AndroidSessionStore(
+        preferences = secureStore,
+        environmentKey = environmentKey,
+        refresh = { refreshToken ->
+            // The refresher was a stub until sign-in existed; a session that
+            // expired now renews instead of dying at its first hour.
+            val client = authClient ?: error("no identity provider configured")
+            val renewed = client.refresh(refreshToken)
+            StoredSession(
+                accessToken = renewed.accessToken,
+                refreshToken = renewed.refreshToken,
+                expiresAtMillis = System.currentTimeMillis() + renewed.expiresInSeconds * 1000,
+                accountId = renewed.accountId,
+                environmentKey = environmentKey
+            )
+        }
+    )
 
     val apiClient = ApiClient(
         environment = ApiEnvironment(environmentKey, apiOrigin),

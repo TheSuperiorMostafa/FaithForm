@@ -50,9 +50,16 @@ export default async function DashboardPage({ searchParams }: PageProps) {
           No church linked yet
         </h2>
         <p className="max-w-md text-sm text-muted-foreground">
-          Your account is not linked to a church yet. Contact support to connect
-          your church before using the dashboard.
+          Starting a new church on FaithForm? Set it up now — it takes a
+          minute. Joining an existing one? Ask its admin to invite you from
+          Settings &rsaquo; Team.
         </p>
+        <a
+          href="/setup"
+          className="mt-2 inline-flex h-11 items-center rounded-[10px] bg-primary px-6 text-sm font-semibold text-primary-foreground hover:opacity-90"
+        >
+          Set up your church
+        </a>
       </div>
     );
   }

@@ -16,16 +16,22 @@ final class AppDependencies {
     let media: MediaClient
     let giving: GivingClient
     let allowsDebugControls: Bool
+    /// Creates sessions. Nil when this build has no identity provider
+    /// configured — the sign-in screen still renders, and submitting explains
+    /// what is missing instead of spinning.
+    let auth: SessionAuthenticating?
 
     init(
         environment: APIEnvironment,
         clientBuild: Int,
         allowsDebugControls: Bool,
-        session: SessionManager
+        session: SessionManager,
+        auth: SessionAuthenticating?
     ) {
         self.environment = environment
         self.allowsDebugControls = allowsDebugControls
         self.session = session
+        self.auth = auth
 
         self.api = APIClient(
             configuration: APIClient.Configuration(

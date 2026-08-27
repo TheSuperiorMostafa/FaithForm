@@ -353,4 +353,102 @@ public actor CoreLocationAdapter: NSObject, LocationAuthorizing, LocationSamplin
         }
     }
 }
+
+// MARK: - Discovery's one-shot provider
+
+/// One foreground fix, for one nearby-churches query.
+///
+/// Lives here because this is the only file permitted to touch Core Location —
+/// a rule a sweep enforces. It implements Prompt 5's `LocationProviding`, whose
+/// interface cannot express a background or always-on request, so no caller
+/// can accidentally make one. Nothing here shares state with the attendance
+/// adapter above: discovery's manager asks When In Use at most, takes one fix,
+/// and retains nothing.
+@MainActor
+public final class DiscoveryLocationProvider: NSObject, CLLocationManagerDelegate, LocationProviding {
+    private let manager = CLLocationManager()
+    private var authorizationContinuation: CheckedContinuation<LocationAuthorization, Never>?
+    private var fixContinuation: CheckedContinuation<(latitude: Double, longitude: Double), Error>?
+
+    override public init() {
+        super.init()
+        manager.delegate = self
+        manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
+    }
+
+    public nonisolated func authorizationStatus() async -> LocationAuthorization {
+        await MainActor.run { Self.normalize(manager.authorizationStatus) }
+    }
+
+    public nonisolated func requestWhenInUseAuthorization() async -> LocationAuthorization {
+        await withCheckedContinuation { continuation in
+            Task { @MainActor in
+                let current = Self.normalize(manager.authorizationStatus)
+                guard current == .notDetermined else {
+                    continuation.resume(returning: current)
+                    return
+                }
+                authorizationContinuation = continuation
+                manager.requestWhenInUseAuthorization()
+            }
+        }
+    }
+
+    public nonisolated func currentCoordinate() async throws -> (latitude: Double, longitude: Double) {
+        try await withCheckedThrowingContinuation { continuation in
+            Task { @MainActor in
+                fixContinuation = continuation
+                manager.requestLocation()
+            }
+        }
+    }
+
+    public nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        let status = manager.authorizationStatus
+        Task { @MainActor in
+            guard let continuation = authorizationContinuation else { return }
+            let normalized = Self.normalize(status)
+            // The change that fires on delegate assignment reports
+            // notDetermined; the one worth resuming for is the answer.
+            guard normalized != .notDetermined else { return }
+            authorizationContinuation = nil
+            continuation.resume(returning: normalized)
+        }
+    }
+
+    public nonisolated func locationManager(
+        _ manager: CLLocationManager,
+        didUpdateLocations locations: [CLLocation]
+    ) {
+        let coordinate = locations.last?.coordinate
+        Task { @MainActor in
+            guard let continuation = fixContinuation else { return }
+            fixContinuation = nil
+            if let coordinate {
+                continuation.resume(returning: (coordinate.latitude, coordinate.longitude))
+            } else {
+                continuation.resume(throwing: CLError(.locationUnknown))
+            }
+        }
+    }
+
+    public nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        Task { @MainActor in
+            guard let continuation = fixContinuation else { return }
+            fixContinuation = nil
+            continuation.resume(throwing: error)
+        }
+    }
+
+    private static func normalize(_ status: CLAuthorizationStatus) -> LocationAuthorization {
+        switch status {
+        case .notDetermined: return .notDetermined
+        case .authorizedWhenInUse: return .authorizedWhenInUse
+        case .authorizedAlways: return .authorizedAlways
+        case .denied: return .denied
+        case .restricted: return .restricted
+        @unknown default: return .unavailable
+        }
+    }
+}
 #endif

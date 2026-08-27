@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -15,6 +17,27 @@ plugins {
  */
 val stagingOrigin = (project.findProperty("faithful.stagingOrigin") as String?).orEmpty()
 val releaseOrigin = (project.findProperty("faithful.releaseOrigin") as String?).orEmpty()
+
+/**
+ * The identity provider. Both values are public by design — Supabase publishes
+ * them for clients, and neither authorises anything on its own — but they name
+ * a particular project, so they stay out of the repository: supplied with
+ * `-Pfaithful.supabaseUrl=… -Pfaithful.supabaseAnonKey=…`, or for local work
+ * from `local.properties` (gitignored), mirroring iOS's `Local.xcconfig`.
+ * Empty fails closed: the sign-in screen renders, and submitting says what is
+ * missing rather than spinning.
+ */
+val localProperties = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use { stream -> load(stream) }
+}
+
+fun configValue(name: String): String =
+    (project.findProperty(name) as String?)
+        ?: localProperties.getProperty(name).orEmpty()
+
+val supabaseUrl = configValue("faithful.supabaseUrl")
+val supabaseAnonKey = configValue("faithful.supabaseAnonKey")
 
 android {
     namespace = "io.faithform.faithful"
@@ -40,6 +63,8 @@ android {
             buildConfigField("String", "API_ORIGIN", "\"http://10.0.2.2:3000\"")
             buildConfigField("String", "ENVIRONMENT_KEY", "\"development\"")
             buildConfigField("boolean", "ALLOW_DEBUG_CONTROLS", "true")
+            buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
+            buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
         }
         // Parallel to the iOS `Staging` configuration. A pilot build points at
         // a staging deployment and is installable alongside a release build,
@@ -59,6 +84,8 @@ android {
             buildConfigField("String", "API_ORIGIN", "\"$stagingOrigin\"")
             buildConfigField("String", "ENVIRONMENT_KEY", "\"staging\"")
             buildConfigField("boolean", "ALLOW_DEBUG_CONTROLS", "false")
+            buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
+            buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
         }
         release {
             isMinifyEnabled = true
@@ -77,6 +104,8 @@ android {
             // wrong.
             buildConfigField("String", "API_ORIGIN", "\"$releaseOrigin\"")
             buildConfigField("String", "ENVIRONMENT_KEY", "\"production\"")
+            buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
+            buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
             // Debug affordances are compiled out of release rather than hidden.
             buildConfigField("boolean", "ALLOW_DEBUG_CONTROLS", "false")
             // No signingConfig here: release signing comes from the environment

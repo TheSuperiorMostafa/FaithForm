@@ -9,3 +9,11 @@
 
 DEVELOPMENT_TEAM = YOUR_TEAM_ID
 FAITHFUL_BUNDLE_ID_PREFIX = com.yourname
+
+// The identity provider a Debug build signs in against. Both values are
+// public by design (Supabase publishes them for clients); they live here only
+// so the repository never names one particular project. Use your own project
+// — the same values as NEXT_PUBLIC_SUPABASE_URL / the publishable key in the
+// web app's .env.local.
+FAITHFUL_DEV_SUPABASE_URL = https:/$()/your-project-ref.supabase.co
+FAITHFUL_DEV_SUPABASE_ANON_KEY = your-publishable-key

@@ -1,15 +1,19 @@
 package io.faithform.faithful
 
+import android.Manifest
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.runtime.getValue
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.activity.result.contract.ActivityResultContracts
 import io.faithform.faithful.design.FaithfulTheme
 import io.faithform.faithful.navigation.RouteRegistry
 import io.faithform.faithful.ui.FaithfulApp
 import io.faithform.faithful.ui.UnconfiguredScreen
+import io.faithform.faithful.ui.discovery.AndroidLocationProvider
+import kotlin.coroutines.resume
+import kotlinx.coroutines.suspendCancellableCoroutine
 
 /**
  * The single activity.
@@ -44,6 +48,36 @@ class MainActivity : ComponentActivity() {
         )
     )
 
+    private var appViewModel: AppViewModel? = null
+
+    /**
+     * The one runtime dialog discovery can raise, owned by the Activity
+     * because launchers must be registered before START. The provider awaits
+     * the person's answer through [pendingPermissionReply].
+     */
+    private var pendingPermissionReply: ((Map<String, Boolean>) -> Unit)? = null
+
+    private val locationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { grants ->
+        pendingPermissionReply?.invoke(grants)
+        pendingPermissionReply = null
+    }
+
+    private suspend fun requestLocationPermissions(): Map<String, Boolean> =
+        suspendCancellableCoroutine { continuation ->
+            pendingPermissionReply = { grants ->
+                if (continuation.isActive) continuation.resume(grants)
+            }
+            continuation.invokeOnCancellation { pendingPermissionReply = null }
+            locationPermissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
+        }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -68,25 +102,43 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        val viewModel = AppViewModel(container)
+        val viewModel = AppViewModel(
+            api = container.apiClient,
+            sessions = container.sessionStore,
+            cache = container.cache,
+            environmentKey = container.environmentKey
+        )
+        appViewModel = viewModel
+        val locationProvider = AndroidLocationProvider(
+            context = applicationContext,
+            requestPermissions = ::requestLocationPermissions
+        )
 
         // A link that arrives with a cold start is handled the same way as one
         // that arrives later: parsed, authorized, then acted on.
         intent?.dataString?.let(viewModel::handleDeepLink)
 
         setContent {
-            val state by viewModel.state.collectAsStateWithLifecycle()
             FaithfulTheme {
                 FaithfulApp(
-                    state = state,
-                    registry = registry,
-                    onSignOut = viewModel::signOut,
-                    onRequestDeletion = viewModel::requestDeletion,
-                    onRetry = viewModel::load
+                    viewModel = viewModel,
+                    container = container,
+                    locationProvider = locationProvider,
+                    registry = registry
                 )
             }
         }
 
         viewModel.load()
+    }
+
+    /**
+     * The `singleTask` half of deep linking: a link into a running app arrives
+     * here rather than through a fresh `onCreate`, and is handled identically
+     * — parsed, authorized, then acted on.
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        intent.dataString?.let { appViewModel?.handleDeepLink(it) }
     }
 }

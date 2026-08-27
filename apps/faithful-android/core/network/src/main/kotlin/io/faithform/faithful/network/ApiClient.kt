@@ -109,7 +109,7 @@ class ApiClient(
             }.getOrElse {
                 throw ApiException(
                     MobileErrorCode.INTERNAL_ERROR,
-                    "Faithful could not read the response."
+                    "FaithForm could not read the response."
                 )
             }
             return ApiResult(decoded.data, etag, notModified = false, requestId = requestId)
