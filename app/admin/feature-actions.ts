@@ -1,9 +1,10 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 
 import { requireSuperAdmin } from "@/lib/auth/superadmin";
 import { isFeatureKey } from "@/lib/features/catalog";
+import { churchFeatureCacheTag } from "@/lib/features/access";
 import {
   isDisabledReason,
   type DisabledReason,
@@ -85,6 +86,7 @@ export async function setChurchFeature(
   }
 
   revalidatePath(`/admin/churches/${churchId}`);
+  revalidateTag(churchFeatureCacheTag(churchId));
   // The church's own dashboard reads these flags for nav and route guards.
   revalidatePath("/dashboard", "layout");
 

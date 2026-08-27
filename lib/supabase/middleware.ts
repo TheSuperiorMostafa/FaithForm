@@ -1,4 +1,4 @@
-import { createServerClient } from "@supabase/ssr";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isBootstrapSuperAdminEmail } from "@/lib/auth/superadmin-emails";
 import { mustChangePassword } from "@/lib/auth/temp-password";
@@ -69,6 +69,23 @@ export async function updateSession(request: NextRequest) {
   const siteRewrite = await rewriteChurchSite(request);
   if (siteRewrite) return siteRewrite;
 
+  let pendingCookies: {
+    name: string;
+    value: string;
+    options: CookieOptions;
+  }[] = [];
+  let pendingHeaders: Record<string, string> = {};
+
+  const withSessionState = (nextResponse: NextResponse) => {
+    pendingCookies.forEach(({ name, value, options }) =>
+      nextResponse.cookies.set(name, value, options),
+    );
+    Object.entries(pendingHeaders).forEach(([name, value]) =>
+      nextResponse.headers.set(name, value),
+    );
+    return nextResponse;
+  };
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -78,31 +95,35 @@ export async function updateSession(request: NextRequest) {
     {
       cookies: {
         getAll: () => request.cookies.getAll(),
-        setAll: (cookiesToSet) => {
+        setAll: (cookiesToSet, headers) => {
+          pendingCookies = cookiesToSet;
+          pendingHeaders = headers;
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value),
           );
-          response = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            response.cookies.set(name, value, options),
-          );
+          response = withSessionState(NextResponse.next({ request }));
         },
       },
     },
   );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { data, error: claimsError } = await supabase.auth.getClaims();
+  const claims = claimsError ? null : data?.claims;
+  const userId = typeof claims?.sub === "string" ? claims.sub : null;
+  const userEmail = typeof claims?.email === "string" ? claims.email : null;
+  const userMetadata = claims?.user_metadata as
+    | Record<string, unknown>
+    | null
+    | undefined;
 
   if (request.nextUrl.pathname.startsWith("/onboarding")) {
     return response;
   }
 
-  if (!user && request.nextUrl.pathname.startsWith("/dashboard")) {
+  if (!userId && request.nextUrl.pathname.startsWith("/dashboard")) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
-    return NextResponse.redirect(url);
+    return withSessionState(NextResponse.redirect(url));
   }
 
   // Someone signed in with the temporary password an admin handed them gets no
@@ -113,41 +134,41 @@ export async function updateSession(request: NextRequest) {
     request.nextUrl.pathname.startsWith("/admin");
 
   if (
-    user &&
+    userId &&
     isSignedInArea &&
-    mustChangePassword(user.user_metadata as Record<string, unknown> | null)
+    mustChangePassword(userMetadata ?? null)
   ) {
     const url = request.nextUrl.clone();
     url.pathname = "/set-password";
     url.search = "";
-    return NextResponse.redirect(url);
+    return withSessionState(NextResponse.redirect(url));
   }
 
   if (request.nextUrl.pathname.startsWith("/admin")) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
 
-    if (!user) {
-      return NextResponse.redirect(url);
+    if (!userId) {
+      return withSessionState(NextResponse.redirect(url));
     }
 
-    if (isBootstrapSuperAdminEmail(user.email)) {
+    if (isBootstrapSuperAdminEmail(userEmail)) {
       return response;
     }
 
     const admin = createAdminClientOrNull();
     if (!admin) {
-      return NextResponse.redirect(url);
+      return withSessionState(NextResponse.redirect(url));
     }
 
     const { data, error } = await admin
       .from("platform_admins")
       .select("user_id")
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .maybeSingle();
 
     if (error || !data?.user_id) {
-      return NextResponse.redirect(url);
+      return withSessionState(NextResponse.redirect(url));
     }
   }
 

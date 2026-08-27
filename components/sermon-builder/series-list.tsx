@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { formatDistanceToNow } from "@/lib/format-date";
 import { Card, CardContent } from "@/components/ui/card";
-import type { SermonSeries } from "@/types/sermon";
+import type { SermonSeriesListItem } from "@/lib/queries/sermons";
 
-export function SeriesList({ series }: { series: SermonSeries[] }) {
+export function SeriesList({ series }: { series: SermonSeriesListItem[] }) {
   if (series.length === 0) {
     return (
       <p className="rounded-xl border border-dashed border-border bg-card/60 p-8 text-center text-sm text-muted-foreground">

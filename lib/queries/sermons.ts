@@ -70,8 +70,20 @@ export type ListSermonsOptions = {
   pageSize?: number;
 };
 
+export type SermonListItem = Pick<
+  Sermon,
+  | "id"
+  | "title"
+  | "sermon_date"
+  | "topic"
+  | "scripture_refs"
+  | "kind"
+  | "status"
+  | "updated_at"
+>;
+
 export type ListSermonsResult = {
-  rows: Sermon[];
+  rows: SermonListItem[];
   total: number;
 };
 
@@ -87,14 +99,17 @@ export async function listSermons(
   const supabase = db();
   const { data, error, count } = await supabase
     .from("sermons")
-    .select("*", { count: "exact" })
+    .select(
+      "id, title, sermon_date, topic, scripture_refs, kind, status, updated_at",
+      { count: "exact" },
+    )
     .eq("church_id", churchId)
     .order("updated_at", { ascending: false })
     .range(from, to);
 
   if (error) throw error;
   return {
-    rows: (data ?? []) as Sermon[],
+    rows: (data ?? []) as SermonListItem[],
     total: count ?? 0,
   };
 }
@@ -324,16 +339,24 @@ export async function getLatestAsset(
   return data;
 }
 
-export async function listSeries(churchId: string): Promise<SermonSeries[]> {
+export type SermonSeriesListItem = Pick<
+  SermonSeries,
+  "id" | "title" | "theme" | "weeks_planned" | "updated_at"
+>;
+
+export async function listSeries(
+  churchId: string,
+): Promise<SermonSeriesListItem[]> {
   const supabase = db();
   const { data, error } = await supabase
     .from("sermon_series")
-    .select("*")
+    .select("id, title, theme, weeks_planned, updated_at")
     .eq("church_id", churchId)
-    .order("updated_at", { ascending: false });
+    .order("updated_at", { ascending: false })
+    .limit(100);
 
   if (error) throw error;
-  return (data ?? []) as SermonSeries[];
+  return (data ?? []) as SermonSeriesListItem[];
 }
 
 export async function getSeries(id: string): Promise<SermonSeries | null> {

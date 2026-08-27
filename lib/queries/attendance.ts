@@ -77,7 +77,9 @@ export async function getRecentSundayRecords(
 
   const { data: records, error: recordsError } = await supabase
     .from("attendance_records")
-    .select("id, service_date, total_present, total_absent")
+    .select(
+      "id, service_date, total_present, total_absent, attendance_entries(follow_up_requested)",
+    )
     .eq("church_id", churchId)
     .in("service_date", dates);
 
@@ -90,23 +92,11 @@ export async function getRecentSundayRecords(
     return result;
   }
 
-  const recordIds = records.map((r) => r.id);
-
-  const { data: entries, error: entriesError } = await supabase
-    .from("attendance_entries")
-    .select("record_id, follow_up_requested")
-    .in("record_id", recordIds);
-
-  if (entriesError) {
-    console.error("getRecentSundayRecords entries:", entriesError.message);
-    return result;
-  }
-
   for (const record of records) {
-    const followedUp =
-      entries?.filter(
-        (e) => e.record_id === record.id && e.follow_up_requested,
-      ).length ?? 0;
+    const entries = (record.attendance_entries ?? []) as {
+      follow_up_requested: boolean;
+    }[];
+    const followedUp = entries.filter((entry) => entry.follow_up_requested).length;
 
     result.set(record.service_date, {
       totalPresent: record.total_present ?? 0,
@@ -271,9 +261,12 @@ export async function getActiveMembers(
 ): Promise<AttendanceMember[]> {
   const { data, error } = await supabase
     .from("members")
-    .select("id, first_name, last_name, phone, photo_url")
+    .select(
+      "id, first_name, last_name, phone, photo_url, attendance_entries(count)",
+    )
     .eq("church_id", churchId)
     .eq("is_active", true)
+    .eq("attendance_entries.status", "present")
     .order("first_name", { ascending: true });
 
   if (error) {
@@ -281,32 +274,19 @@ export async function getActiveMembers(
     return [];
   }
 
-  const members = (data ?? []) as Omit<AttendanceMember, "attendance_count">[];
-
-  const { data: presentEntries, error: countsError } = await supabase
-    .from("attendance_entries")
-    .select("member_id")
-    .eq("church_id", churchId)
-    .eq("status", "present")
-    .not("member_id", "is", null);
-
-  if (countsError) {
-    console.error("getActiveMembers counts:", countsError.message);
-  }
-
-  const countByMember = new Map<string, number>();
-  for (const entry of presentEntries ?? []) {
-    if (!entry.member_id) continue;
-    countByMember.set(
-      entry.member_id,
-      (countByMember.get(entry.member_id) ?? 0) + 1,
-    );
-  }
-
-  return members.map((m) => ({
-    ...m,
-    attendance_count: countByMember.get(m.id) ?? 0,
-  }));
+  return (data ?? []).map((member) => {
+    const counts = member.attendance_entries as
+      | { count: number }[]
+      | null;
+    return {
+      id: member.id,
+      first_name: member.first_name,
+      last_name: member.last_name,
+      phone: member.phone,
+      photo_url: member.photo_url,
+      attendance_count: counts?.[0]?.count ?? 0,
+    } as AttendanceMember;
+  });
 }
 
 export async function getMissedStreaks(

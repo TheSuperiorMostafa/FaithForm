@@ -3,25 +3,20 @@ import { redirect } from "next/navigation";
 import { Check } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import {
-  getChurchTimezone,
-  getRecentSundayRecords,
-} from "@/lib/queries/attendance";
-import { getCurrentChurchId } from "@/lib/queries/dashboard";
+import { getChurchAuth } from "@/lib/auth/church";
+import { getRecentSundayRecords } from "@/lib/queries/attendance";
 import { createClient } from "@/lib/supabase/server";
 import { formatServiceDate, getLast8Sundays } from "@/lib/utils/dates";
 
 export default async function AttendancePage() {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const auth = await getChurchAuth();
 
-  if (!user) {
+  if (!auth) {
     redirect("/login");
   }
 
-  const churchId = await getCurrentChurchId(supabase, user.id);
+  const churchId = auth.churchId;
 
   if (!churchId) {
     return (
@@ -37,8 +32,7 @@ export default async function AttendancePage() {
     );
   }
 
-  const timezone = await getChurchTimezone(supabase, churchId);
-  const sundays = getLast8Sundays(new Date(), timezone);
+  const sundays = getLast8Sundays(new Date(), auth.churchTimezone);
   const recordsByDate = await getRecentSundayRecords(
     supabase,
     churchId,

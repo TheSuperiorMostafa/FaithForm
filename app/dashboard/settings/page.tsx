@@ -1,4 +1,3 @@
-import { redirect } from "next/navigation";
 import { SettingsTabs } from "@/components/settings/settings-tabs";
 import { getGivingFundsForSettings } from "@/app/dashboard/settings/giving-actions";
 import { getChurchGivingProfile } from "@/lib/queries/giving";
@@ -6,7 +5,8 @@ import { getFollowUpMessageTemplates } from "@/lib/queries/follow-up-settings";
 import { getAnnouncementEmailSettings } from "@/lib/queries/announcement-email-settings";
 import { getChurchAuth } from "@/lib/auth/church";
 import {
-  getChurchFeatureFlags,
+  defaultFeatureFlags,
+  getFeatureAccess,
   resolveAllowedFeatures,
 } from "@/lib/features/access";
 import { FEATURE_KEYS } from "@/lib/features/catalog";
@@ -21,12 +21,10 @@ export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
   const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
-
-  const auth = await getChurchAuth(supabase);
+  const [auth, featureAccess] = await Promise.all([
+    getChurchAuth(),
+    getFeatureAccess(),
+  ]);
   if (!auth) {
     return (
       <div className="mx-auto max-w-lg py-16 text-center text-sm text-muted-foreground">
@@ -42,7 +40,6 @@ export default async function SettingsPage() {
     followUpTemplates,
     announcementEmailSettings,
     teamMembers,
-    featureFlags,
     grantsInProperColumn,
   ] =
     await Promise.all([
@@ -52,9 +49,10 @@ export default async function SettingsPage() {
       getFollowUpMessageTemplates(auth.churchId, supabase),
       getAnnouncementEmailSettings(auth.churchId, supabase),
       getChurchTeamMembers(auth.churchId),
-      getChurchFeatureFlags(auth.churchId, supabase),
       usesFeaturePermissionsColumn(),
     ]);
+
+  const featureFlags = featureAccess?.flags ?? defaultFeatureFlags();
 
   // Grantable features are the ones the account has switched on.
   const availableFeatures = FEATURE_KEYS.filter((key) => featureFlags[key]);

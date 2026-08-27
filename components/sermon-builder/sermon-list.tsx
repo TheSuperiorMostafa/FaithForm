@@ -5,9 +5,9 @@ import { formatDistanceToNow } from "@/lib/format-date";
 import { DeleteDraftButton } from "@/components/sermon-builder/delete-draft-button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import type { Sermon } from "@/types/sermon";
+import type { SermonListItem } from "@/lib/queries/sermons";
 
-export function SermonList({ sermons }: { sermons: Sermon[] }) {
+export function SermonList({ sermons }: { sermons: SermonListItem[] }) {
   if (sermons.length === 0) {
     return (
       <p className="rounded-xl border border-dashed border-border bg-card/60 p-8 text-center text-sm text-muted-foreground">

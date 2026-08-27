@@ -21,6 +21,7 @@
     "pilot:plans": "node --import tsx --test tests/database/query-plans.test.ts",
     "pilot:seed": "node scripts/seed-pilot-fixtures.mjs",
     "audit:prod": "node scripts/audit-production.mjs",
+    "benchmark:dashboard": "node scripts/benchmark-dashboard-performance.mjs",
     "scan:secrets": "node scripts/scan-secrets.mjs",
     "security:drift": "node scripts/security-drift-report.mjs",
     "db:rehearse": "node scripts/apply-versioned-migrations.mjs",

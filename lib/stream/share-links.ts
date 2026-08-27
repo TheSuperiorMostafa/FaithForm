@@ -48,8 +48,16 @@ export async function getStreamShareLinks(
 
   const destinations = getDestinationPlatforms(input.session?.destinationsSnapshot);
 
-  if (destinations.includes("youtube")) {
-    const youtube = await getIntegration(churchId, "youtube", input.supabase);
+  const [youtube, facebook] = await Promise.all([
+    destinations.includes("youtube")
+      ? getIntegration(churchId, "youtube", input.supabase)
+      : Promise.resolve(null),
+    destinations.includes("facebook")
+      ? getIntegration(churchId, "facebook", input.supabase)
+      : Promise.resolve(null),
+  ]);
+
+  if (youtube) {
     const meta = (youtube?.metadata ?? {}) as YouTubeIntegrationMetadata;
     if (meta.channel_id) {
       links.push({
@@ -60,8 +68,7 @@ export async function getStreamShareLinks(
     }
   }
 
-  if (destinations.includes("facebook")) {
-    const facebook = await getIntegration(churchId, "facebook", input.supabase);
+  if (facebook) {
     const meta = (facebook?.metadata ?? {}) as FacebookIntegrationMetadata;
     // Only Facebook's own permalink resolves — see fetchLiveVideoPermalink.
     // Without it, link to the Page, where the live video is the top post,

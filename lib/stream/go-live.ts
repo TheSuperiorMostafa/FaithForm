@@ -30,7 +30,7 @@ import {
   transitionYouTubeBroadcastLive,
 } from "@/lib/stream/syndication";
 import { isPreviewIngestActive } from "@/lib/stream/preview-ingest";
-import { getStreamShareLinks, type StreamShareLinks } from "@/lib/stream/share-links";
+import { getStreamShareLinks } from "@/lib/stream/share-links";
 
 function getClient(supabase?: SupabaseClient) {
   return supabase ?? createAdminClient();
@@ -326,7 +326,7 @@ export async function getLiveBroadcastStatus(
   const [
     session,
     encoder,
-    settings,
+    privateSettings,
     integrationStatus,
     upcomingEvent,
     previewIngestActive,
@@ -358,7 +358,13 @@ export async function getLiveBroadcastStatus(
   return {
     session,
     encoder,
-    settings,
+    settings: {
+      ...privateSettings,
+      // Status is serialized to the browser. Destination URLs contain stream
+      // keys, so expose readiness below without exposing either URL.
+      youtubeUrl: "",
+      facebookUrl: "",
+    },
     upcomingEvent,
     previewIngestActive,
     shareLinks,
@@ -369,7 +375,7 @@ export async function getLiveBroadcastStatus(
         ready: integrationStatus.youtube.connected,
         channelTitle: integrationStatus.youtube.channelTitle,
         // Destination the relay will actually push to this service.
-        destinationReady: Boolean(settings.youtubeUrl),
+        destinationReady: Boolean(privateSettings.youtubeUrl),
         lastPush: syndication.youtube ?? null,
         needsReconnect: integrationStatus.youtube.needsReconnect,
         reconnectReason: integrationStatus.youtube.reconnectReason,
@@ -378,7 +384,7 @@ export async function getLiveBroadcastStatus(
         connected: integrationStatus.facebook.connected,
         ready: integrationStatus.facebook.connected,
         pageName: integrationStatus.facebook.pageName,
-        destinationReady: Boolean(settings.facebookUrl),
+        destinationReady: Boolean(privateSettings.facebookUrl),
         lastPush: syndication.facebook ?? null,
         needsReconnect: integrationStatus.facebook.needsReconnect,
         reconnectReason: integrationStatus.facebook.reconnectReason,

@@ -66,8 +66,8 @@ async function loadIntegrationStatusRows(
       p_church_id: churchId,
     });
 
-    if (!error && data?.length) {
-      return data as IntegrationStatusRow[];
+    if (!error) {
+      return (data ?? []) as IntegrationStatusRow[];
     }
   }
 

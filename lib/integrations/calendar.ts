@@ -35,12 +35,17 @@ export async function listChurchCalendarEvents(
   startISO: string,
   endISO: string,
   supabase?: SupabaseClient,
+  knownConnected?: { google: boolean; apple: boolean },
 ): Promise<ChurchCalendarResult> {
-  const status = await getIntegrationStatus(churchId, supabase);
-  const connected = {
-    google: status.google.connected,
-    apple: status.apple.connected,
-  };
+  const status = knownConnected
+    ? null
+    : await getIntegrationStatus(churchId, supabase);
+  const connected =
+    knownConnected ??
+    ({
+      google: Boolean(status?.google.connected),
+      apple: Boolean(status?.apple.connected),
+    } as const);
 
   const [google, apple] = await Promise.all([
     settle(

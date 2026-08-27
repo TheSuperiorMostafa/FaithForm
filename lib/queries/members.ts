@@ -22,8 +22,11 @@ export async function getMembersForChurch(
 ): Promise<ChurchMember[]> {
   let query = supabase
     .from("members")
-    .select("id, first_name, last_name, phone, email, photo_url, is_active")
+    .select(
+      "id, first_name, last_name, phone, email, photo_url, is_active, attendance_entries(count)",
+    )
     .eq("church_id", churchId)
+    .eq("attendance_entries.status", "present")
     .order("last_name", { ascending: true })
     .order("first_name", { ascending: true });
 
@@ -38,30 +41,19 @@ export async function getMembersForChurch(
     return [];
   }
 
-  const members = data ?? [];
-
-  const { data: presentEntries, error: countsError } = await supabase
-    .from("attendance_entries")
-    .select("member_id")
-    .eq("church_id", churchId)
-    .eq("status", "present")
-    .not("member_id", "is", null);
-
-  if (countsError) {
-    console.error("getMembersForChurch counts:", countsError.message);
-  }
-
-  const countByMember = new Map<string, number>();
-  for (const entry of presentEntries ?? []) {
-    if (!entry.member_id) continue;
-    countByMember.set(
-      entry.member_id,
-      (countByMember.get(entry.member_id) ?? 0) + 1,
-    );
-  }
-
-  return members.map((member) => ({
-    ...member,
-    attendance_count: countByMember.get(member.id) ?? 0,
-  }));
+  return (data ?? []).map((member) => {
+    const counts = member.attendance_entries as
+      | { count: number }[]
+      | null;
+    return {
+      id: member.id,
+      first_name: member.first_name,
+      last_name: member.last_name,
+      phone: member.phone,
+      email: member.email,
+      photo_url: member.photo_url,
+      is_active: member.is_active,
+      attendance_count: counts?.[0]?.count ?? 0,
+    };
+  });
 }

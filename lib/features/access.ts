@@ -1,4 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { unstable_cache } from "next/cache";
+import { cache } from "react";
 
 import { getChurchAuth, type ChurchAuth } from "@/lib/auth/church";
 import {
@@ -17,6 +19,10 @@ export type FeatureFlags = Record<FeatureKey, boolean>;
 
 /** Why each switched-off feature is off. Only holds entries for disabled ones. */
 export type FeatureNotices = Partial<Record<FeatureKey, FeatureNotice>>;
+
+export function churchFeatureCacheTag(churchId: string): string {
+  return `church-features:${churchId}`;
+}
 
 /** Every feature ships enabled; a platform admin opts an account out. */
 export function defaultFeatureFlags(): FeatureFlags {
@@ -44,11 +50,10 @@ export async function getChurchFeatureFlags(
  * Both halves of the account-level switch: whether each feature is on, and for
  * the ones that are off, why.
  */
-export async function getChurchFeatureState(
+async function readChurchFeatureState(
   churchId: string,
-  supabase?: SupabaseClient,
+  client: SupabaseClient,
 ): Promise<{ flags: FeatureFlags; notices: FeatureNotices }> {
-  const client = supabase ?? createClient();
   const flags = defaultFeatureFlags();
   const notices: FeatureNotices = {};
 
@@ -95,6 +100,29 @@ export async function getChurchFeatureState(
   }
 
   return { flags, notices };
+}
+
+export async function getChurchFeatureState(
+  churchId: string,
+  supabase?: SupabaseClient,
+): Promise<{ flags: FeatureFlags; notices: FeatureNotices }> {
+  return readChurchFeatureState(churchId, supabase ?? createClient());
+}
+
+async function getCachedChurchFeatureState(churchId: string) {
+  const admin = createAdminClientOrNull();
+  if (!admin) {
+    return readChurchFeatureState(churchId, createClient());
+  }
+
+  // Only tenant-level product switches are persisted here. The church id is
+  // part of both the cache key and invalidation tag; user permissions and auth
+  // claims remain request-local and can never cross users or churches.
+  return unstable_cache(
+    () => readChurchFeatureState(churchId, admin),
+    ["church-feature-state", churchId],
+    { revalidate: 300, tags: [churchFeatureCacheTag(churchId)] },
+  )();
 }
 
 /**
@@ -154,14 +182,15 @@ export function resolveAllowedFeatures(
   });
 }
 
-export async function getFeatureAccess(
-  supabase?: SupabaseClient,
+async function getFeatureAccessForClient(
+  client?: SupabaseClient,
 ): Promise<FeatureAccess | null> {
-  const client = supabase ?? createClient();
   const auth = await getChurchAuth(client);
   if (!auth) return null;
 
-  const { flags, notices } = await getChurchFeatureState(auth.churchId, client);
+  const { flags, notices } = client
+    ? await getChurchFeatureState(auth.churchId, client)
+    : await getCachedChurchFeatureState(auth.churchId);
 
   return {
     auth,
@@ -169,6 +198,18 @@ export async function getFeatureAccess(
     notices,
     allowed: resolveAllowedFeatures(auth, flags),
   };
+}
+
+const getFeatureAccessForRequest = cache(async () =>
+  getFeatureAccessForClient(),
+);
+
+export function getFeatureAccess(
+  supabase?: SupabaseClient,
+): Promise<FeatureAccess | null> {
+  return supabase
+    ? getFeatureAccessForClient(supabase)
+    : getFeatureAccessForRequest();
 }
 
 export function canAccessFeature(

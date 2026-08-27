@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClientOrNull } from "@/lib/supabase/admin";
 import {
@@ -9,7 +10,10 @@ import { parseFeatureKeys, type FeatureKey } from "@/lib/features/catalog";
 
 export type ChurchAuth = {
   userId: string;
+  userEmail: string;
   churchId: string;
+  churchName: string | null;
+  churchTimezone: string;
   role: string;
   isAdmin: boolean;
   /**
@@ -23,12 +27,17 @@ type ChurchUserLink = {
   church_id: string;
   role: string;
   feature_permissions?: unknown;
+  churches?:
+    | { name: string | null; timezone: string | null }
+    | { name: string | null; timezone: string | null }[]
+    | null;
   /** True when the row came from the pre-0041 column set. */
   __legacy?: boolean;
 };
 
-const LINK_COLUMNS = "church_id, role, feature_permissions";
-const LINK_COLUMNS_LEGACY = "church_id, role";
+const CHURCH_COLUMNS = "churches(name, timezone)";
+const LINK_COLUMNS = `church_id, role, feature_permissions, ${CHURCH_COLUMNS}`;
+const LINK_COLUMNS_LEGACY = `church_id, role, ${CHURCH_COLUMNS}`;
 
 async function fetchChurchUserLink(
   client: SupabaseClient,
@@ -59,17 +68,19 @@ async function fetchChurchUserLink(
   return { data: (data as ChurchUserLink | null) ?? null, error };
 }
 
-export async function getChurchAuth(
-  supabase?: SupabaseClient,
+async function getChurchAuthWithClient(
+  client: SupabaseClient,
 ): Promise<ChurchAuth | null> {
-  const client = supabase ?? createClient();
-  const {
-    data: { user },
-  } = await client.auth.getUser();
+  // `getClaims` verifies the signed access token and, with Supabase's current
+  // asymmetric signing keys, avoids putting the Auth server in every dashboard
+  // render's critical path. Database RLS remains the final authorization layer.
+  const { data, error: claimsError } = await client.auth.getClaims();
+  const claims = data?.claims;
+  const userId = typeof claims?.sub === "string" ? claims.sub : null;
 
-  if (!user) return null;
+  if (claimsError || !claims || !userId) return null;
 
-  const { data: link, error } = await fetchChurchUserLink(client, user.id);
+  const { data: link, error } = await fetchChurchUserLink(client, userId);
 
   if (error) {
     console.error("getChurchAuth church_users:", error.message);
@@ -81,7 +92,7 @@ export async function getChurchAuth(
     if (admin) {
       const { data: adminLink, error: adminError } = await fetchChurchUserLink(
         admin,
-        user.id,
+        userId,
       );
 
       if (adminError) {
@@ -96,21 +107,43 @@ export async function getChurchAuth(
 
   const role = resolvedLink.role as string;
 
-  // `user` already carries app_metadata from the session lookup, so the
-  // fallback costs no extra round trip.
+  const church = Array.isArray(resolvedLink.churches)
+    ? (resolvedLink.churches[0] ?? null)
+    : (resolvedLink.churches ?? null);
+
+  // The verified claims already carry app_metadata, so the legacy fallback
+  // costs no extra round trip.
   const featurePermissions = resolvedLink.__legacy
     ? readGrantsFromAppMetadata(
-        user.app_metadata as Record<string, unknown> | null,
+        claims.app_metadata as Record<string, unknown> | null,
       )
     : parseFeatureKeys(resolvedLink.feature_permissions);
 
   return {
-    userId: user.id,
+    userId,
+    userEmail: typeof claims.email === "string" ? claims.email : "",
     churchId: resolvedLink.church_id as string,
+    churchName: church?.name ?? null,
+    churchTimezone: church?.timezone ?? "America/New_York",
     role,
     isAdmin: role === "admin",
     featurePermissions,
   };
+}
+
+// Supabase database calls are not automatically memoized by React. Keeping the
+// zero-argument path in React's request cache means the dashboard layout,
+// feature gates, and page share one verified identity + church membership read.
+const getChurchAuthForRequest = cache(async () =>
+  getChurchAuthWithClient(createClient()),
+);
+
+export function getChurchAuth(
+  supabase?: SupabaseClient,
+): Promise<ChurchAuth | null> {
+  return supabase
+    ? getChurchAuthWithClient(supabase)
+    : getChurchAuthForRequest();
 }
 
 export async function requireChurchAuth(): Promise<ChurchAuth> {

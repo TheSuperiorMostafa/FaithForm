@@ -16,31 +16,27 @@ import {
   StatRowSkeleton,
 } from "@/components/dashboard/skeletons";
 import { StatRow } from "@/components/dashboard/stat-row";
+import { getChurchAuth } from "@/lib/auth/church";
 import { getFeatureAccess } from "@/lib/features/access";
-import { createClient } from "@/lib/supabase/server";
-import {
-  getCurrentChurchId,
-  parseDashboardRange,
-} from "@/lib/queries/dashboard";
+import { parseDashboardRange } from "@/lib/queries/dashboard";
 
 type PageProps = {
   searchParams: Promise<{ range?: string }>;
 };
 
 export default async function DashboardPage({ searchParams }: PageProps) {
-  const query = await searchParams;
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const [query, auth, featureAccess] = await Promise.all([
+    searchParams,
+    getChurchAuth(),
+    getFeatureAccess(),
+  ]);
 
-  if (!user) {
+  if (!auth) {
     redirect("/login");
   }
 
-  const churchId = await getCurrentChurchId(supabase, user.id);
+  const churchId = auth.churchId;
   const range = parseDashboardRange(query.range);
-  const featureAccess = await getFeatureAccess(supabase);
   const allowedFeatures = featureAccess?.allowed ?? [];
 
   if (!churchId) {

@@ -6,9 +6,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SermonList } from "@/components/sermon-builder/sermon-list";
 import { SermonsPagination } from "@/components/sermon-builder/sermons-pagination";
 import { SeriesList } from "@/components/sermon-builder/series-list";
-import { createClient } from "@/lib/supabase/server";
-import { getCurrentChurchId } from "@/lib/queries/dashboard";
-import { getChurchAISettings, listSermons, listSeries } from "@/lib/queries/sermons";
+import { getChurchAuth } from "@/lib/auth/church";
+import { listSermons, listSeries } from "@/lib/queries/sermons";
 
 export const dynamic = "force-dynamic";
 
@@ -19,23 +18,17 @@ type PageProps = {
 };
 
 export default async function SermonBuilderPage({ searchParams }: PageProps) {
-  const query = await searchParams;
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) redirect("/login");
+  const [query, auth] = await Promise.all([searchParams, getChurchAuth()]);
+  if (!auth) redirect("/login");
 
-  const churchId = await getCurrentChurchId(supabase, user.id);
-  if (!churchId) redirect("/dashboard");
+  const churchId = auth.churchId;
 
   const rawPage = Number(query.page ?? "1");
   const page = Number.isFinite(rawPage) && rawPage > 0 ? Math.floor(rawPage) : 1;
 
-  const [sermonsResult, series, settings] = await Promise.all([
+  const [sermonsResult, series] = await Promise.all([
     listSermons(churchId, { page, pageSize: PAGE_SIZE }),
     listSeries(churchId),
-    getChurchAISettings(churchId),
   ]);
 
   const { rows: sermons, total: sermonTotal } = sermonsResult;

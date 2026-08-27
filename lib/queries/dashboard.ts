@@ -282,17 +282,41 @@ export async function getStatRow(
   range: DashboardRange,
 ): Promise<StatRowResult> {
   const window = getDateWindow(range);
+  const earliest = window.priorStart ?? window.currentStart;
+  const earliestIso = earliest?.toISOString();
+
+  const phoneQuery = earliestIso
+    ? supabase
+        .from("phone_calls")
+        .select("called_at")
+        .eq("church_id", churchId)
+        .gte("called_at", earliestIso)
+    : supabase.from("phone_calls").select("called_at").eq("church_id", churchId);
+  const announcementsQuery = earliestIso
+    ? supabase
+        .from("announcements")
+        .select("created_at, push_to_facebook")
+        .eq("church_id", churchId)
+        .gte("created_at", earliestIso)
+    : supabase
+        .from("announcements")
+        .select("created_at, push_to_facebook")
+        .eq("church_id", churchId);
+  const assetsQuery = earliestIso
+    ? supabase
+        .from("sermon_assets")
+        .select("kind, created_at, sermons!inner(church_id)")
+        .eq("sermons.church_id", churchId)
+        .gte("created_at", earliestIso)
+    : supabase
+        .from("sermon_assets")
+        .select("kind, created_at, sermons!inner(church_id)")
+        .eq("sermons.church_id", churchId);
 
   const [phoneRes, annRes, assetsRes] = await Promise.all([
-    supabase.from("phone_calls").select("called_at").eq("church_id", churchId),
-    supabase
-      .from("announcements")
-      .select("created_at, push_to_facebook")
-      .eq("church_id", churchId),
-    supabase
-      .from("sermon_assets")
-      .select("kind, created_at, sermons!inner(church_id)")
-      .eq("sermons.church_id", churchId),
+    phoneQuery,
+    announcementsQuery,
+    assetsQuery,
   ]);
 
   const phoneRows = (phoneRes.data ?? []).map((r) => ({

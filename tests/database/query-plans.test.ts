@@ -347,3 +347,47 @@ test("church-by-slug has a unique index", options,
       ["grace"],
     );
   }));
+
+// ---------------------------------------------------------------------------
+// Web dashboard
+// ---------------------------------------------------------------------------
+
+test("dashboard church membership resolution has an ordered index", options,
+  run(async (client) => {
+    await assertIndexAnswers(
+      client,
+      "dashboard church membership resolution",
+      "church_users_user_created_idx",
+      `select church_id, role from public.church_users
+        where user_id = $1
+        order by created_at
+        limit 1`,
+      [randomUUID()],
+    );
+  }));
+
+test("the active people roster has an ordered tenant index", options,
+  run(async (client) => {
+    await assertIndexAnswers(
+      client,
+      "active people roster",
+      "members_church_active_name_idx",
+      `select id, first_name, last_name from public.members
+        where church_id = $1 and is_active = true
+        order by last_name, first_name`,
+      [randomUUID()],
+    );
+  }));
+
+test("bounded succeeded-gift summaries have a composite index", options,
+  run(async (client) => {
+    await assertIndexAnswers(
+      client,
+      "bounded succeeded-gift summaries",
+      "giving_donations_church_status_created_idx",
+      `select amount_cents, donor_id, donor_email, created_at
+         from public.giving_donations
+        where church_id = $1 and status = 'succeeded' and created_at >= $2`,
+      [randomUUID(), new Date("2026-01-01T00:00:00Z")],
+    );
+  }));

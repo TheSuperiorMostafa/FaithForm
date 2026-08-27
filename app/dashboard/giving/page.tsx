@@ -10,7 +10,7 @@ import { FaithfulGivingPanel } from "@/components/giving/faithful-giving-panel";
 import { getChurchAuth } from "@/lib/auth/church";
 import {
   getChurchGivingProfile,
-  getGivingByFund,
+  getGivingByFundPeriods,
   getGivingSummary,
 } from "@/lib/queries/giving";
 import { formatCents } from "@/lib/utils/currency";
@@ -43,9 +43,12 @@ export default async function GivingPage() {
     );
   }
 
-  const summary = await getGivingSummary(auth.churchId);
-  const fundMonth = await getGivingByFund(auth.churchId, "month");
-  const fundYtd = await getGivingByFund(auth.churchId, "ytd");
+  const [summary, fundPeriods] = await Promise.all([
+    getGivingSummary(auth.churchId),
+    getGivingByFundPeriods(auth.churchId),
+  ]);
+  const fundMonth = fundPeriods.month;
+  const fundYtd = fundPeriods.ytd;
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">

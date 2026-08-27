@@ -269,7 +269,8 @@ export async function getGivingKpis(churchId: string): Promise<GivingKpis> {
     .from("giving_donations")
     .select("amount_cents, donor_id, donor_email, created_at")
     .eq("church_id", churchId)
-    .eq("status", "succeeded");
+    .eq("status", "succeeded")
+    .gte("created_at", yearStart);
 
   const rows = donations ?? [];
   const sumSince = (iso: string) =>
@@ -298,27 +299,78 @@ export async function getGivingKpis(churchId: string): Promise<GivingKpis> {
 
 export async function getGivingSummary(churchId: string): Promise<GivingSummary> {
   const supabase = createClient();
-  const kpis = await getGivingKpis(churchId);
-
-  const { data: recent } = await supabase
-    .from("giving_donations")
-    .select(DONATION_SELECT)
-    .eq("church_id", churchId)
-    .order("created_at", { ascending: false })
-    .limit(10);
-
-  const { count: failedCount } = await supabase
-    .from("giving_subscriptions")
-    .select("id", { count: "exact", head: true })
-    .eq("church_id", churchId)
-    .in("status", ["past_due", "unpaid"]);
+  const [kpis, recentResult, failedResult] = await Promise.all([
+    getGivingKpis(churchId),
+    supabase
+      .from("giving_donations")
+      .select(DONATION_SELECT)
+      .eq("church_id", churchId)
+      .order("created_at", { ascending: false })
+      .limit(10),
+    supabase
+      .from("giving_subscriptions")
+      .select("id", { count: "exact", head: true })
+      .eq("church_id", churchId)
+      .in("status", ["past_due", "unpaid"]),
+  ]);
 
   return {
     ...kpis,
-    recentDonations: (recent ?? []).map((r) =>
+    recentDonations: (recentResult.data ?? []).map((r) =>
       mapDonation(r as Record<string, unknown>),
     ),
-    failedSubscriptionCount: failedCount ?? 0,
+    failedSubscriptionCount: failedResult.count ?? 0,
+  };
+}
+
+function aggregateGivingByFund(
+  rows: Record<string, unknown>[],
+  since: string,
+): FundGivingBreakdown[] {
+  const map = new Map<string, FundGivingBreakdown>();
+
+  for (const row of rows) {
+    if ((row.created_at as string) < since) continue;
+    const fundRaw = row.giving_funds as
+      | { id: string; name: string }
+      | { id: string; name: string }[]
+      | null;
+    const fund = Array.isArray(fundRaw) ? fundRaw[0] : fundRaw;
+    const fundId = (row.fund_id as string) ?? fund?.id ?? "unknown";
+    const existing = map.get(fundId) ?? {
+      fundId,
+      fundName: fund?.name ?? "Unassigned",
+      totalCents: 0,
+      giftCount: 0,
+    };
+    existing.totalCents += row.amount_cents as number;
+    existing.giftCount += 1;
+    map.set(fundId, existing);
+  }
+
+  return Array.from(map.values()).sort((a, b) => b.totalCents - a.totalCents);
+}
+
+/** Month and YTD share the same bounded donation set, so read it once. */
+export async function getGivingByFundPeriods(churchId: string): Promise<{
+  month: FundGivingBreakdown[];
+  ytd: FundGivingBreakdown[];
+}> {
+  const supabase = createClient();
+  const now = new Date();
+  const monthStart = startOfMonthIso(now);
+  const yearStart = startOfYearIso(now);
+  const { data } = await supabase
+    .from("giving_donations")
+    .select("amount_cents, fund_id, created_at, giving_funds ( id, name )")
+    .eq("church_id", churchId)
+    .eq("status", "succeeded")
+    .gte("created_at", yearStart);
+
+  const rows = (data ?? []) as Record<string, unknown>[];
+  return {
+    month: aggregateGivingByFund(rows, monthStart),
+    ytd: aggregateGivingByFund(rows, yearStart),
   };
 }
 

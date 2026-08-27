@@ -37,6 +37,7 @@ const files = [
   "supabase/migrations/0061_faithful_media_eligibility.sql",
   "supabase/migrations/0062_faithful_media_object_identity.sql",
   "supabase/migrations/0063_faithful_giving.sql",
+  "supabase/migrations/0064_dashboard_hot_path_indexes.sql",
 ];
 
 try {

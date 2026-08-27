@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useState, type MouseEvent } from "react";
 import { ChevronLeft, ChevronRight, LogOut } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import type { FeatureKey } from "@/lib/features/catalog";
@@ -32,21 +33,32 @@ function SidebarLink({
   item,
   pathname,
   collapsed,
+  pending,
+  onNavigate,
 }: {
   item: (typeof navItems)[number];
   pathname: string;
   collapsed: boolean;
+  pending: boolean;
+  onNavigate: (href: string) => void;
 }) {
   const active = isActive(pathname, item.href);
+  const selected = active || pending;
   const Icon = item.icon;
 
   return (
     <Link
       href={item.href}
       title={collapsed ? item.label : undefined}
+      aria-current={active ? "page" : undefined}
+      aria-busy={pending || undefined}
+      onClick={(event) => {
+        if (isModifiedClick(event) || active) return;
+        onNavigate(item.href);
+      }}
       className={cn(
         "group relative flex h-11 w-full min-w-0 items-center overflow-hidden rounded-lg text-sm font-semibold",
-        active
+        selected
           ? "bg-sidebar-accent/15 text-sidebar-accent"
           : "text-white/82 hover:bg-brand-lightGold/15 hover:text-white",
       )}
@@ -54,14 +66,17 @@ function SidebarLink({
       <span
         className={cn(
           "absolute left-0 top-1/2 h-7 w-1 -translate-y-1/2 rounded-r-full bg-sidebar-accent",
-          active ? "opacity-100" : "opacity-0",
+          selected ? "opacity-100" : "opacity-0",
         )}
         aria-hidden
       />
 
       <span className="flex size-11 shrink-0 items-center justify-center">
         <Icon
-          className={cn("size-[22px] shrink-0", active && "text-sidebar-accent")}
+          className={cn(
+            "size-[22px] shrink-0",
+            selected && "text-sidebar-accent",
+          )}
           strokeWidth={1.75}
           aria-hidden
         />
@@ -75,7 +90,24 @@ function SidebarLink({
       >
         {item.label}
       </span>
+      {pending && (
+        <span
+          className="mr-3 size-1.5 shrink-0 animate-pulse rounded-full bg-sidebar-accent"
+          aria-hidden
+        />
+      )}
     </Link>
+  );
+}
+
+function isModifiedClick(event: MouseEvent<HTMLAnchorElement>) {
+  return (
+    event.defaultPrevented ||
+    event.button !== 0 ||
+    event.metaKey ||
+    event.ctrlKey ||
+    event.shiftKey ||
+    event.altKey
   );
 }
 
@@ -88,6 +120,11 @@ export function Sidebar({
   allowedFeatures,
 }: SidebarProps) {
   const pathname = usePathname();
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
+
+  useEffect(() => {
+    setPendingHref(null);
+  }, [pathname]);
 
   const initial = (userEmail ?? "F").charAt(0).toUpperCase();
   const navItemsForSidebar = filterNavByFeatures(navItems, allowedFeatures);
@@ -170,6 +207,8 @@ export function Sidebar({
               item={item}
               pathname={pathname}
               collapsed={collapsed}
+              pending={pendingHref === item.href}
+              onNavigate={setPendingHref}
             />
           ))}
         </div>
@@ -185,22 +224,35 @@ export function Sidebar({
         >
           {footerUtilityNavItems.map((item) => {
             const active = isActive(pathname, item.href);
+            const pending = pendingHref === item.href;
             const Icon = item.icon;
             return (
               <Link
                 key={item.href}
                 href={item.href}
                 title={item.label}
+                aria-current={active ? "page" : undefined}
+                aria-busy={pending || undefined}
+                onClick={(event) => {
+                  if (isModifiedClick(event) || active) return;
+                  setPendingHref(item.href);
+                }}
                 className={cn(
                   "inline-flex min-w-0 items-center justify-center gap-1.5 rounded-lg border text-xs font-semibold transition-colors",
                   collapsed ? "size-9" : "h-8 flex-1 px-2",
-                  active
+                  active || pending
                     ? "border-sidebar-accent/40 bg-sidebar-accent/15 text-sidebar-accent"
                     : "border-white/10 bg-white/5 text-white/75 hover:border-white/20 hover:bg-brand-lightGold/15 hover:text-white",
                 )}
               >
                 <Icon className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
                 <span className={cn(collapsed && "sr-only")}>{item.label}</span>
+                {pending && (
+                  <span
+                    className="size-1.5 animate-pulse rounded-full bg-sidebar-accent"
+                    aria-hidden
+                  />
+                )}
               </Link>
             );
           })}

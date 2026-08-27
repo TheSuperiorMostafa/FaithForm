@@ -153,35 +153,53 @@ export async function computeHoursSaved(
   const byCategory = emptyBreakdown();
   let minutes = 0;
   let tasks = 0;
+  const startIso = start?.toISOString();
+  const endIso = end.toISOString();
+
+  const phoneQuery = supabase
+    .from("phone_calls")
+    .select("called_at, duration_seconds, call_type")
+    .eq("church_id", churchId)
+    .lte("called_at", endIso);
+  const announcementQuery = supabase
+    .from("announcements")
+    .select("created_at, push_to_facebook, push_to_team")
+    .eq("church_id", churchId)
+    .lte("created_at", endIso);
+  const assetQuery = supabase
+    .from("sermon_assets")
+    .select("kind, created_at, sermons!inner(church_id)")
+    .eq("sermons.church_id", churchId)
+    .lte("created_at", endIso);
+  const activityQuery = supabase
+    .from("activity_log")
+    .select("automation_type, category, time_saved_minutes, executed_at")
+    .eq("church_id", churchId)
+    .lte("executed_at", endIso);
+
+  if (startIso) {
+    phoneQuery.gte("called_at", startIso);
+    announcementQuery.gte("created_at", startIso);
+    assetQuery.gte("created_at", startIso);
+    activityQuery.gte("executed_at", startIso);
+  }
 
   const [phoneRes, annRes, attRes, assetsRes, sermonsRes, activityRes] =
     await Promise.all([
-      supabase
-        .from("phone_calls")
-        .select("called_at, duration_seconds, call_type")
-        .eq("church_id", churchId),
-      supabase
-        .from("announcements")
-        .select("created_at, push_to_facebook, push_to_team")
-        .eq("church_id", churchId),
+      phoneQuery,
+      announcementQuery,
       supabase
         .from("attendance_records")
         .select("service_date, submitted_at")
         .eq("church_id", churchId),
-      supabase
-        .from("sermon_assets")
-        .select("kind, created_at, sermons!inner(church_id)")
-        .eq("sermons.church_id", churchId),
+      assetQuery,
       supabase
         .from("sermons")
         .select(
           "created_at, outline_generated_at, content_generated_at, published_at, status",
         )
         .eq("church_id", churchId),
-      supabase
-        .from("activity_log")
-        .select("automation_type, category, time_saved_minutes, executed_at")
-        .eq("church_id", churchId),
+      activityQuery,
     ]);
 
   const phoneCalls = (phoneRes.data ?? []) as PhoneCallRow[];
