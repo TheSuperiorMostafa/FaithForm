@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { sessionCameFromRecovery } from "@/lib/auth/recovery";
 import { createClient } from "@/lib/supabase/server";
 import { safeRedirectPath } from "@/lib/security/safe-redirect";
 
@@ -9,9 +10,17 @@ export async function GET(request: Request) {
 
   if (code) {
     const supabase = createClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
+      // A reset link must land on the reset screen even when the `next`
+      // instruction was stripped — Supabase falls back to the bare Site URL
+      // for any redirect not on its allow-list. The session's own `amr`
+      // claim says how it was minted, so the token is the source of truth
+      // rather than a query parameter that may not have survived.
+      if (sessionCameFromRecovery(data.session?.access_token)) {
+        return NextResponse.redirect(`${origin}/set-password?reason=recovery`);
+      }
       return NextResponse.redirect(`${origin}${next}`);
     }
   }

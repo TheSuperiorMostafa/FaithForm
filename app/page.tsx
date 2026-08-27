@@ -2,16 +2,19 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
 type PageProps = {
-  searchParams: Promise<{ code?: string; next?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
 export default async function Page({ searchParams }: PageProps) {
   const query = await searchParams;
-  // Supabase sometimes sends magic links to Site URL root (?code=...) instead of /auth/callback.
-  if (query.code) {
-    const params = new URLSearchParams({ code: query.code });
-    if (query.next) {
-      params.set("next", query.next);
+  // Supabase sometimes sends auth links to Site URL root (?code=...) instead
+  // of /auth/callback — notably whenever a redirect isn't on its allow-list.
+  // Forward the whole query, not just the code: `next` and any flow hints
+  // must survive the hop or a reset link degrades into a plain sign-in.
+  if (typeof query.code === "string") {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(query)) {
+      if (typeof value === "string") params.set(key, value);
     }
     redirect(`/auth/callback?${params.toString()}`);
   }
