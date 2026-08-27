@@ -54,8 +54,11 @@ enum LaunchOutcome {
     static func resolve() -> LaunchOutcome {
         switch AppEnvironmentLoader.load(from: Bundle.main.infoDictionary ?? [:]) {
         case let .configured(environment, clientBuild, allowsDebugControls):
+            // One keychain service for all credential material — the session
+            // and the PKCE verifier — so sign-out's deleteAll sweeps both.
+            let keychain = KeychainStore(service: Bundle.main.bundleIdentifier ?? "faithful")
             let session = SessionManager(
-                store: KeychainStore(service: Bundle.main.bundleIdentifier ?? "faithful"),
+                store: keychain,
                 refresher: SupabaseSessionRefresher(environment: environment),
                 environmentKey: environment.key
             )
@@ -65,7 +68,13 @@ enum LaunchOutcome {
                     clientBuild: clientBuild,
                     allowsDebugControls: allowsDebugControls,
                     session: session,
-                    auth: SupabaseAuthLoader.load(environment: environment)
+                    auth: SupabaseAuthLoader.load(
+                        environment: environment,
+                        flowState: SecureAuthFlowStore(
+                            store: keychain,
+                            environmentKey: environment.key
+                        )
+                    )
                 )
             )
         case let .unconfigured(reason):

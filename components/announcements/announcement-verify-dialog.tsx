@@ -41,7 +41,7 @@ export function AnnouncementVerifyDialog({
         <DialogHeader>
           <DialogTitle>Verify & submit</DialogTitle>
           <DialogDescription>
-            {formatDateTimeRange(event.startAt, event.endAt)}
+            {formatDateTimeRange(event.startAt, event.endAt, null, event.allDay)}
             {event.location ? ` · ${event.location}` : ""}
           </DialogDescription>
         </DialogHeader>

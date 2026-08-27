@@ -287,7 +287,7 @@ export function WeeklyAnnouncementQueue({
                             <span className="block">{event.location}</span>
                           )}
                           <span>
-                            {formatDateTimeRange(event.startAt, event.endAt)}
+                            {formatDateTimeRange(event.startAt, event.endAt, null, event.allDay)}
                           </span>
                         </CardDescription>
                       </div>
@@ -421,7 +421,7 @@ export function WeeklyAnnouncementQueue({
                   <div>
                     <p className="font-medium">{item.title}</p>
                     <p className="text-sm text-muted-foreground">
-                      {formatDateTimeRange(item.start_at, item.end_at)}
+                      {formatDateTimeRange(item.start_at, item.end_at, null, item.all_day)}
                     </p>
                     {item.last_publish_error && (
                       <p className="mt-1 text-xs font-semibold text-amber-700 dark:text-amber-300">

@@ -1,4 +1,4 @@
-import { formatEventStart } from "@/lib/queries/announcements";
+import { formatEventWhen } from "@/lib/queries/announcements";
 
 export const ANNOUNCEMENT_EMAIL_SUBJECT_PLACEHOLDER = "[Week]";
 export const ANNOUNCEMENT_EMAIL_BODY_PLACEHOLDERS = {
@@ -23,6 +23,8 @@ export type WeeklyEmailEvent = {
   location: string;
   startAt: string;
   endAt: string | null;
+  /** A date-only calendar entry: printed as a date, with no time. */
+  allDay?: boolean;
   notes?: string;
 };
 
@@ -89,7 +91,12 @@ export function formatWeeklyEmailEventBlock(
   event: WeeklyEmailEvent,
   timeZone?: string | null,
 ): string {
-  const when = formatEventStart(event.startAt, timeZone);
+  const when = formatEventWhen(
+    event.startAt,
+    event.endAt,
+    timeZone,
+    event.allDay,
+  );
   const lines = [event.title, when];
   if (event.location.trim()) lines.push(event.location.trim());
   if (event.notes?.trim()) lines.push(event.notes.trim());
@@ -106,7 +113,12 @@ export function formatEventsHtml(
 
   return events
     .map((event) => {
-      const when = formatEventStart(event.startAt, timeZone);
+      const when = formatEventWhen(
+        event.startAt,
+        event.endAt,
+        timeZone,
+        event.allDay,
+      );
       const parts = [`<p><strong>${escapeHtml(event.title)}</strong></p>`];
       parts.push(`<p><strong>When:</strong> ${escapeHtml(when)}</p>`);
       if (event.location.trim()) {
@@ -115,7 +127,10 @@ export function formatEventsHtml(
         );
       }
       if (event.notes?.trim()) {
-        parts.push(`<p>${escapeHtml(event.notes.trim())}</p>`);
+        // Event notes are where a signup or directions link usually goes.
+        parts.push(
+          `<p>${linkifyEscaped(escapeHtml(event.notes.trim()))}</p>`,
+        );
       }
       return parts.join("");
     })
@@ -132,11 +147,74 @@ export function formatEventsPlain(
     .join("\n\n");
 }
 
+/**
+ * Only these schemes become links. A template is authored by a church admin and
+ * lands in a Gmail draft, so `javascript:` and `data:` have no business here
+ * even from a trusted author — and anything unrecognized is simply left as the
+ * text it was written as.
+ */
+function isSafeLinkUrl(url: string): boolean {
+  return /^(https?:\/\/|mailto:)/i.test(url);
+}
+
+/**
+ * `[text](url)` and bare URLs become links; everything else stays text.
+ *
+ * The template is still plain text at heart — the settings editor is a textarea
+ * and angle brackets in ordinary prose ("RSVP by <date>") must survive as
+ * written. So escaping happens first, on everything, and links are woven into
+ * the already-escaped result rather than the template being trusted as markup.
+ */
+function linkifyEscaped(escaped: string): string {
+  const markdownLink = /\[([^\]\n]+)\]\((\S+?)\)/g;
+  const bareUrl = /(^|[\s(])((?:https?:\/\/|www\.)[^\s<>"')]+)/gi;
+
+  // `&` was escaped to `&amp;` a moment ago; an href has to carry the real
+  // character back, or a query string arrives at the wrong page.
+  const hrefFromEscaped = (value: string) => value.replace(/&amp;/g, "&");
+
+  const withMarkdownLinks = escaped.replace(
+    markdownLink,
+    (whole, label: string, rawUrl: string) => {
+      const href = hrefFromEscaped(rawUrl);
+      if (!isSafeLinkUrl(href)) return whole;
+      return `<a href="${escapeHtml(href)}">${label}</a>`;
+    },
+  );
+
+  // Split on the anchors just written so a bare-URL sweep cannot rewrite the
+  // inside of an href it already produced.
+  return withMarkdownLinks
+    .split(/(<a href="[^"]*">.*?<\/a>)/g)
+    .map((segment) => {
+      if (segment.startsWith("<a href=")) return segment;
+      return segment.replace(
+        bareUrl,
+        (whole, lead: string, rawUrl: string) => {
+          // Trailing sentence punctuation belongs to the prose, not the link.
+          const trimmed = rawUrl.replace(/[.,;:!?]+$/, "");
+          const tail = rawUrl.slice(trimmed.length);
+          const href = hrefFromEscaped(
+            trimmed.toLowerCase().startsWith("www.")
+              ? `https://${trimmed}`
+              : trimmed,
+          );
+          if (!isSafeLinkUrl(href)) return whole;
+          return `${lead}<a href="${escapeHtml(href)}">${trimmed}</a>${tail}`;
+        },
+      );
+    })
+    .join("");
+}
+
 function plainTextToHtml(text: string): string {
   return text
     .split(/\n{2,}/)
     .filter((paragraph) => paragraph.trim().length > 0)
-    .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, "<br>")}</p>`)
+    .map(
+      (paragraph) =>
+        `<p>${linkifyEscaped(escapeHtml(paragraph)).replace(/\n/g, "<br>")}</p>`,
+    )
     .join("");
 }
 

@@ -13,4 +13,12 @@ dependencies {
     testImplementation(libs.junit)
 }
 
-tasks.test { useJUnit() }
+tasks.test {
+    useJUnit()
+    // These tests decode the golden fixtures from the repository rather than a
+    // copied resource, so Gradle cannot see them as inputs on its own — and
+    // would report a stale PASS after a fixture changed.
+    inputs.dir(rootProject.file("../../contracts/faithful/v1/fixtures"))
+        .withPathSensitivity(PathSensitivity.RELATIVE)
+        .withPropertyName("faithfulContractFixtures")
+}

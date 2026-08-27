@@ -17,6 +17,7 @@
     <string name="offline_title">You\'re offline</string>
     <string name="offline_body">FaithForm will load your account as soon as you\'re back on a network.</string>
     <string name="error_title">Something went wrong</string>
+    <string name="error_load_failed_body">You\'re signed in, but your account couldn\'t be loaded. This is usually temporary — try again in a moment.</string>
     <string name="try_again">Try again</string>
     <string name="state_following">Following</string>
     <string name="state_pending">Request pending</string>
@@ -298,6 +299,9 @@
     <string name="auth_error_offline">Could not reach FaithForm. Check your connection and try again.</string>
     <string name="auth_error_unconfigured">Sign-in isn\'t configured for this build.</string>
     <string name="auth_error_generic">Something went wrong. Try again.</string>
+    <string name="auth_confirming_email">Confirming your email…</string>
+    <string name="auth_error_link_expired">That confirmation link has expired or was already used. Sign in with your email and password.</string>
+    <string name="auth_error_link_invalid">That confirmation link isn\'t valid. Sign in with your email and password, or create your account again for a fresh link.</string>
 
     <!-- Invitations -->
     <string name="invitation_title">Join by invitation</string>

@@ -106,7 +106,8 @@ class MainActivity : ComponentActivity() {
             api = container.apiClient,
             sessions = container.sessionStore,
             cache = container.cache,
-            environmentKey = container.environmentKey
+            environmentKey = container.environmentKey,
+            auth = container.authClient
         )
         appViewModel = viewModel
         val locationProvider = AndroidLocationProvider(

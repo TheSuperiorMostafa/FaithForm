@@ -35,6 +35,8 @@ export type SocialPreviewInput = {
   draftKey: string;
   startAt?: string;
   endAt?: string | null;
+  /** A date-only calendar entry: the flyer prints the date and "ALL DAY". */
+  allDay?: boolean;
   timeZone?: string | null;
 };
 
@@ -104,7 +106,12 @@ async function generateAiFlyer(
   if (!isAiImageConfigured()) return null;
 
   const { dateLine, timeLine } = input.startAt
-    ? formatEventGraphicDetails(input.startAt, input.endAt ?? null, input.timeZone)
+    ? formatEventGraphicDetails(
+        input.startAt,
+        input.endAt ?? null,
+        input.timeZone,
+        input.allDay,
+      )
     : { dateLine: input.when, timeLine: "" };
 
   const logo = await fetchLogoForModel(branding.logoUrl);
@@ -240,6 +247,7 @@ export async function generateEmergencySocialGraphic(
     location: string;
     startAt?: string;
     endAt?: string | null;
+    allDay?: boolean;
     backgroundTag?: string;
   },
 ): Promise<ArrayBuffer> {
@@ -255,6 +263,7 @@ export async function generateEmergencySocialGraphic(
     draftKey: `emergency-${Date.now()}`,
     startAt: input.startAt,
     endAt: input.endAt,
+    allDay: input.allDay,
     timeZone: branding.timezone,
   };
 

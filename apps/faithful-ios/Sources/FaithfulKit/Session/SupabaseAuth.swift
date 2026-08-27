@@ -23,17 +23,26 @@ public struct SupabaseAuthConfiguration: Sendable {
     /// the product's own reset screen. Optional: without it the reset email
     /// falls back to the identity provider's configured site URL.
     public let resetRedirectOrigin: URL?
+    /// Where the confirmation email returns to: this app's own callback,
+    /// `AuthCallbackLink.canonical`, allow-listed in the identity provider.
+    ///
+    /// Without it the provider falls back to its Site URL — the church
+    /// dashboard — which is precisely the misroute this field exists to end.
+    /// Never taken from a request or a link; it is build configuration.
+    public let signUpRedirectURL: URL?
 
     public init(
         url: URL,
         anonKey: String,
         environmentKey: String,
-        resetRedirectOrigin: URL? = nil
+        resetRedirectOrigin: URL? = nil,
+        signUpRedirectURL: URL? = nil
     ) {
         self.url = url
         self.anonKey = anonKey
         self.environmentKey = environmentKey
         self.resetRedirectOrigin = resetRedirectOrigin
+        self.signUpRedirectURL = signUpRedirectURL
     }
 }
 
@@ -61,6 +70,10 @@ public struct AuthFailure: Error, Sendable, Equatable {
         case rateLimited
         case offline
         case notConfigured
+        /// A confirmation link that was already spent, timed out, or belongs to
+        /// a flow this device no longer holds the verifier for. The way out is
+        /// always the same — sign in — and the message says so.
+        case linkExpired
         case other
     }
 
@@ -79,29 +92,59 @@ public protocol SessionAuthenticating: Sendable {
     func signUp(email: String, password: String) async throws -> SignUpOutcome
     func signIn(email: String, password: String) async throws -> StoredSession
     func sendPasswordReset(email: String) async throws
+    /// Exchanges the code a confirmation link carried for a session, using the
+    /// verifier this device stored at signup. Consumes the flow: on success
+    /// the verifier is cleared and the code is spent server-side.
+    func completeEmailConfirmation(code: String) async throws -> StoredSession
 }
 
 public struct SupabaseAuthClient: SessionAuthenticating {
     private let configuration: SupabaseAuthConfiguration
     private let transport: HTTPTransport
+    private let flowState: AuthFlowStateStoring?
     private let now: @Sendable () -> Date
+    private let makeVerifier: @Sendable () -> String
 
     public init(
         configuration: SupabaseAuthConfiguration,
         transport: HTTPTransport,
-        now: @escaping @Sendable () -> Date = { Date() }
+        flowState: AuthFlowStateStoring? = nil,
+        now: @escaping @Sendable () -> Date = { Date() },
+        makeVerifier: @escaping @Sendable () -> String = { PKCE.makeVerifier() }
     ) {
         self.configuration = configuration
         self.transport = transport
+        self.flowState = flowState
         self.now = now
+        self.makeVerifier = makeVerifier
     }
 
     // MARK: - Calls
 
     public func signUp(email: String, password: String) async throws -> SignUpOutcome {
+        var body = ["email": email, "password": password]
+        var query: String?
+
+        // PKCE: the confirmation email returns to this app's own callback with
+        // a code only this device can spend. Configured together — a redirect
+        // without a verifier store would mint links nothing could complete.
+        if let redirect = configuration.signUpRedirectURL, let flowState {
+            let verifier = makeVerifier()
+            // Stored before the request leaves: the person is about to switch
+            // to their mail client, and the app may not survive the trip.
+            flowState.saveVerifier(verifier)
+            body["code_challenge"] = PKCE.challenge(for: verifier)
+            body["code_challenge_method"] = "s256"
+            let encoded = redirect.absoluteString.addingPercentEncoding(
+                withAllowedCharacters: .alphanumerics
+            ) ?? redirect.absoluteString
+            query = "redirect_to=\(encoded)"
+        }
+
         let (data, http) = try await post(
             path: "auth/v1/signup",
-            body: ["email": email, "password": password]
+            query: query,
+            body: body
         )
 
         guard (200..<300).contains(http.statusCode) else {
@@ -110,11 +153,43 @@ public struct SupabaseAuthClient: SessionAuthenticating {
 
         // With autoconfirm on, signup answers with a full session. With email
         // confirmation on, it answers with the user alone — the session comes
-        // later, after they sign in with a confirmed address.
+        // later, through the confirmation callback or a password sign-in.
         if let session = try? decodeSession(from: data) {
             return .session(session)
         }
         return .confirmationRequired
+    }
+
+    public func completeEmailConfirmation(code: String) async throws -> StoredSession {
+        // No verifier means the flow was started elsewhere or the app was
+        // reinstalled. The verify step already confirmed the address before
+        // redirecting, so the honest way forward is an ordinary sign-in.
+        guard let flowState, let verifier = flowState.loadVerifier() else {
+            throw AuthFailure(kind: .linkExpired, message: L.authErrorLinkExpired)
+        }
+
+        let (data, http) = try await post(
+            path: "auth/v1/token",
+            query: "grant_type=pkce",
+            body: ["auth_code": code, "code_verifier": verifier]
+        )
+
+        guard (200..<300).contains(http.statusCode) else {
+            let failure = Self.failure(from: data, status: http.statusCode)
+            // Rate limits and outages keep their own sentences — the link may
+            // still be good. Everything else is a spent or foreign code, and
+            // "email or password is incorrect" would be nonsense here.
+            if failure.kind == .rateLimited || failure.kind == .offline { throw failure }
+            throw AuthFailure(kind: .linkExpired, message: L.authErrorLinkExpired)
+        }
+
+        do {
+            let session = try decodeSession(from: data)
+            flowState.clearVerifier()
+            return session
+        } catch {
+            throw AuthFailure(kind: .other, message: L.authErrorGeneric)
+        }
     }
 
     public func signIn(email: String, password: String) async throws -> StoredSession {

@@ -1,0 +1,137 @@
+{
+  "$comment": "The auth-callback contract: which redirect destinations exist, per surface, and how a mobile confirmation callback is parsed. TypeScript (tests/unit/auth-redirect-contract.test.ts), Swift (AuthCallbackTests) and Kotlin (AuthCallbackLinkTest) all read this file directly, so the three platforms cannot drift apart on what they accept. Redirects are never taken from a client request: each surface uses only its own destination below, and each Supabase project's allow-list carries exactly its own environment's rows.",
+  "version": 1,
+  "faithful": {
+    "scheme": "faithful",
+    "host": "auth",
+    "path": "/callback",
+    "canonical": "faithful://auth/callback",
+    "codePattern": "^[A-Za-z0-9._~-]{8,512}$",
+    "$comment": "One custom scheme for every build, by construction: iOS and Android both register `faithful` and neither declares Universal/App Links (a deliberate decision recorded in Info.plist and AndroidManifest.xml). Environment separation happens at the identity provider, not in the URL: each environment talks to its own Supabase project, the PKCE verifier is stored per environment, and a code minted by one project is meaningless to another."
+  },
+  "dashboard": {
+    "callbackPath": "/auth/callback",
+    "environments": {
+      "development": "http://localhost:3000/auth/callback",
+      "production": "https://faithform.io/auth/callback"
+    },
+    "$comment": "The staging origin is a deployment decision this repository deliberately does not invent; its callback is <staging origin>/auth/callback."
+  },
+  "vectors": {
+    "$comment": "accepted: exactly the mobile callback, carrying a code. failures: the mobile callback carrying a provider failure (or nothing) — parsed, shown as a typed state, never exchanged. rejected: not a mobile auth callback at all — including the dashboard callback, which must never be treated as one, and lookalikes a hostile link could carry. The parser returns nothing for these and the app does nothing.",
+    "accepted": [
+      {
+        "url": "faithful://auth/callback?code=9c1e02f3-4d69-4b8c-a44f-3a9bb75d0a01",
+        "code": "9c1e02f3-4d69-4b8c-a44f-3a9bb75d0a01"
+      },
+      {
+        "url": "FAITHFUL://AUTH/callback?code=1e54ce6a-0a2e-4a86-8bd0-2f2c4c31a9dd",
+        "code": "1e54ce6a-0a2e-4a86-8bd0-2f2c4c31a9dd",
+        "why": "scheme and host compare case-insensitively, as URLs do"
+      },
+      {
+        "url": "faithful://auth/callback?code=Zm9vYmFyLWJhemJhcg&type=signup",
+        "code": "Zm9vYmFyLWJhemJhcg",
+        "why": "extra parameters the provider appends are ignored, not fatal"
+      }
+    ],
+    "failures": [
+      {
+        "url": "faithful://auth/callback#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired",
+        "reason": "expired",
+        "why": "the provider reports failures in the fragment"
+      },
+      {
+        "url": "faithful://auth/callback?error=access_denied&error_code=otp_expired",
+        "reason": "expired",
+        "why": "and some versions report them in the query"
+      },
+      {
+        "url": "faithful://auth/callback?error=server_error&error_description=Unable+to+process+request",
+        "reason": "invalid"
+      },
+      {
+        "url": "faithful://auth/callback#error=server_error&error_description=Unable%20to%20process%20request",
+        "reason": "invalid",
+        "why": "a percent-encoded description must be parsed, not crash the parser: decoding it yields a space, which some URL APIs refuse as query input"
+      },
+      {
+        "url": "faithful://auth/callback#error=access_denied&error_code=otp_expired&error_description=Email%20link%20is%20invalid%20or%20has%20expired%2E",
+        "reason": "expired",
+        "why": "the same shape a real provider sends, fully percent-encoded"
+      },
+      {
+        "url": "faithful://auth/callback#error_code=otp_expired&error_description=100%%20broken%20escape",
+        "reason": "expired",
+        "why": "a malformed percent escape is tolerated: the reason still reads, and nothing throws"
+      },
+      {
+        "url": "faithful://auth/callback",
+        "reason": "invalid",
+        "why": "our callback shape carrying neither a code nor an error is a broken link, shown as one"
+      },
+      {
+        "url": "faithful://auth/callback?code=short",
+        "reason": "invalid",
+        "why": "a code outside the contract bounds is refused before any network call"
+      },
+      {
+        "url": "faithful://auth/callback?code=9c1e02f3%204d69%20whitespace",
+        "reason": "invalid",
+        "why": "off-alphabet codes are refused before any network call"
+      }
+    ],
+    "rejected": [
+      {
+        "url": "https://auth/callback?code=9c1e02f3-4d69-4b8c-a44f-3a9bb75d0a01",
+        "why": "wrong scheme"
+      },
+      {
+        "url": "faithful://invite/aaaaaaaaaaaaaaaaaaaaaaaa",
+        "why": "a different faithful deep link is not an auth callback"
+      },
+      {
+        "url": "faithful://home",
+        "why": "a destination link is not an auth callback"
+      },
+      {
+        "url": "faithful://authx/callback?code=9c1e02f3-4d69-4b8c-a44f-3a9bb75d0a01",
+        "why": "wrong host"
+      },
+      {
+        "url": "faithful://auth/callback/extra?code=9c1e02f3-4d69-4b8c-a44f-3a9bb75d0a01",
+        "why": "extra path segments fail closed"
+      },
+      {
+        "url": "faithful://auth/callbackx?code=9c1e02f3-4d69-4b8c-a44f-3a9bb75d0a01",
+        "why": "path prefix lookalike"
+      },
+      {
+        "url": "https://faithform.io/auth/callback?code=9c1e02f3-4d69-4b8c-a44f-3a9bb75d0a01",
+        "why": "the dashboard callback must never be consumed by the mobile app"
+      },
+      {
+        "url": "http://localhost:3000/auth/callback?code=9c1e02f3-4d69-4b8c-a44f-3a9bb75d0a01",
+        "why": "the development dashboard callback must never be consumed by the mobile app"
+      }
+    ],
+    "dashboardRejected": [
+      {
+        "next": "faithful://auth/callback",
+        "why": "the mobile callback must never be accepted as a dashboard post-auth destination"
+      },
+      {
+        "next": "https://faithform.io.evil.example/dashboard",
+        "why": "absolute URLs are never accepted as a dashboard destination"
+      },
+      {
+        "next": "//evil.example/dashboard",
+        "why": "protocol-relative URLs are never accepted"
+      },
+      {
+        "next": "/\\evil.example",
+        "why": "backslash tricks are never accepted"
+      }
+    ]
+  }
+}

@@ -20,6 +20,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -67,6 +68,7 @@ fun FaithfulApp(
     val theme = LocalFaithfulTheme.current
     val state by viewModel.state.collectAsStateWithLifecycle()
     val pendingInvitation by viewModel.pendingInvitationToken.collectAsStateWithLifecycle()
+    val confirmationPhase by viewModel.confirmationPhase.collectAsStateWithLifecycle()
 
     val authViewModel: AuthViewModel = viewModel(key = "auth") {
         AuthViewModel(container.authClient) { session, displayName ->
@@ -92,7 +94,8 @@ fun FaithfulApp(
 
             is LaunchPhase.SignedOut -> AuthFlow(
                 viewModel = authViewModel,
-                hasPendingInvitation = pendingInvitation != null
+                hasPendingInvitation = pendingInvitation != null,
+                confirmationPhase = confirmationPhase
             )
 
             is LaunchPhase.Onboarding -> FindChurchFlow(
@@ -116,13 +119,22 @@ fun FaithfulApp(
             }
 
             is LaunchPhase.Failed -> Centered {
+                // A real failure with a session on the device. The sentence is
+                // the server envelope's own, already redacted server-side, and
+                // both ways forward are here: try again, or leave cleanly —
+                // never a dead end.
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     EmptyState(
                         title = stringResource(R.string.error_title),
-                        body = current.message
+                        body = current.message.ifBlank {
+                            stringResource(R.string.error_load_failed_body)
+                        }
                     )
                     OutlinedButton(onClick = viewModel::load) {
                         Text(stringResource(R.string.try_again))
+                    }
+                    TextButton(onClick = viewModel::signOut) {
+                        Text(stringResource(R.string.sign_out))
                     }
                 }
             }

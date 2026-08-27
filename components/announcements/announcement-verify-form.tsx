@@ -10,7 +10,9 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import type { CalendarQueueItem, AnnouncementRow } from "@/lib/queries/announcements";
 import {
+  fromDateInputValue,
   fromDatetimeLocalValue,
+  toDateInputValue,
   toDatetimeLocalValue,
 } from "@/lib/utils/announcement-placeholders";
 
@@ -49,11 +51,21 @@ export function AnnouncementVerifyForm({
   const [success, setSuccess] = useState<string | null>(null);
   const [showNotes, setShowNotes] = useState(false);
 
+  // An all-day event has no time anyone chose — it is a date, and it is edited
+  // as one. Feeding its midnight-UTC instant to a datetime-local picker showed
+  // the evening before in any western zone, and saving that shifted the event a
+  // day earlier.
+  const allDay = Boolean(event.allDay);
+
   const [title, setTitle] = useState(event.title);
   const [location, setLocation] = useState(event.location);
-  const [startAt, setStartAt] = useState(toDatetimeLocalValue(event.startAt));
+  const [startAt, setStartAt] = useState(
+    allDay
+      ? toDateInputValue(event.startAt)
+      : toDatetimeLocalValue(event.startAt),
+  );
   const [endAt, setEndAt] = useState(
-    event.endAt ? toDatetimeLocalValue(event.endAt) : "",
+    !allDay && event.endAt ? toDatetimeLocalValue(event.endAt) : "",
   );
   const [notes, setNotes] = useState("");
   const [pushToFacebook, setPushToFacebook] = useState(false);
@@ -68,13 +80,15 @@ export function AnnouncementVerifyForm({
   const [previewStale, setPreviewStale] = useState(false);
 
   const fetchSocialPreview = useCallback(async () => {
-    const startIso = fromDatetimeLocalValue(startAt);
+    const startIso = allDay
+      ? fromDateInputValue(startAt)
+      : fromDatetimeLocalValue(startAt);
     if (!startIso || !title.trim()) {
       setPreviewError("Add a title and start time to generate a Facebook preview.");
       return;
     }
 
-    const endIso = endAt ? fromDatetimeLocalValue(endAt) : null;
+    const endIso = !allDay && endAt ? fromDatetimeLocalValue(endAt) : null;
 
     setPreviewLoading(true);
     setPreviewError(null);
@@ -89,6 +103,7 @@ export function AnnouncementVerifyForm({
           location: location.trim(),
           startAt: startIso,
           endAt: endIso,
+          allDay,
           notes: notes.trim() || undefined,
           googleEventId: event.googleEventId,
           announcementId: publishedAnnouncementId ?? undefined,
@@ -117,6 +132,7 @@ export function AnnouncementVerifyForm({
       setPreviewLoading(false);
     }
   }, [
+    allDay,
     startAt,
     endAt,
     title,
@@ -149,12 +165,14 @@ export function AnnouncementVerifyForm({
     setError(null);
     setSuccess(null);
 
-    const startIso = fromDatetimeLocalValue(startAt);
+    const startIso = allDay
+      ? fromDateInputValue(startAt)
+      : fromDatetimeLocalValue(startAt);
     if (!startIso) {
-      setError("Start time is required");
+      setError(allDay ? "Event date is required" : "Start time is required");
       return;
     }
-    const endIso = endAt ? fromDatetimeLocalValue(endAt) : null;
+    const endIso = !allDay && endAt ? fromDatetimeLocalValue(endAt) : null;
 
     if (pushToFacebook && !facebookCaption.trim()) {
       setError("Generate or enter a Facebook caption before publishing.");
@@ -166,12 +184,22 @@ export function AnnouncementVerifyForm({
       return;
     }
 
+    // The graphic has the date and time baked into the image by the model, so
+    // publishing after an edit would post a flyer announcing the old ones.
+    if (pushToFacebook && previewStale) {
+      setError(
+        "The event changed after this graphic was made — regenerate it before publishing.",
+      );
+      return;
+    }
+
     const formData = new FormData();
     formData.set("church_id", churchId);
     formData.set("title", title.trim());
     formData.set("location", location.trim());
     formData.set("start_at", startIso);
     if (endIso) formData.set("end_at", endIso);
+    formData.set("all_day", allDay ? "true" : "false");
     formData.set("notes", notes);
     formData.set("google_event_id", event.googleEventId);
     formData.set("google_calendar_id", event.calendarId);
@@ -223,6 +251,7 @@ export function AnnouncementVerifyForm({
         body: notes,
         start_at: startIso,
         end_at: endIso,
+        all_day: allDay,
         event_location: location.trim() || null,
         is_ready: true,
         push_to_app: false,
@@ -281,22 +310,14 @@ export function AnnouncementVerifyForm({
       </div>
 
       <div className="flex flex-col gap-2">
-        <Label>When</Label>
-        {/* Two columns only once there is room for both pickers. A
-            `datetime-local` control is intrinsically wide, so side-by-side in a
-            narrow card (this form renders inside a queue row) made the two
-            overlap. `min-w-0` lets each shrink to its share of the grid. */}
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="flex min-w-0 flex-col gap-1">
-            <label
-              htmlFor={`start-${event.googleEventId}`}
-              className="text-xs font-medium text-muted-foreground"
-            >
-              Start
-            </label>
+        <Label htmlFor={allDay ? `date-${event.googleEventId}` : undefined}>
+          When
+        </Label>
+        {allDay ? (
+          <div className="flex flex-col gap-1">
             <Input
-              id={`start-${event.googleEventId}`}
-              type="datetime-local"
+              id={`date-${event.googleEventId}`}
+              type="date"
               value={startAt}
               onChange={(e) => {
                 setStartAt(e.target.value);
@@ -305,26 +326,55 @@ export function AnnouncementVerifyForm({
               required
               className="w-full min-w-0 tabular-nums"
             />
+            <p className="text-xs text-muted-foreground">
+              All-day event — no start or end time.
+            </p>
           </div>
-          <div className="flex min-w-0 flex-col gap-1">
-            <label
-              htmlFor={`end-${event.googleEventId}`}
-              className="text-xs font-medium text-muted-foreground"
-            >
-              End
-            </label>
-            <Input
-              id={`end-${event.googleEventId}`}
-              type="datetime-local"
-              value={endAt}
-              onChange={(e) => {
-                setEndAt(e.target.value);
-                markPreviewStale();
-              }}
-              className="w-full min-w-0 tabular-nums"
-            />
+        ) : (
+          /* Two columns only once there is room for both pickers. A
+              `datetime-local` control is intrinsically wide, so side-by-side in a
+              narrow card (this form renders inside a queue row) made the two
+              overlap. `min-w-0` lets each shrink to its share of the grid. */
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="flex min-w-0 flex-col gap-1">
+              <label
+                htmlFor={`start-${event.googleEventId}`}
+                className="text-xs font-medium text-muted-foreground"
+              >
+                Start
+              </label>
+              <Input
+                id={`start-${event.googleEventId}`}
+                type="datetime-local"
+                value={startAt}
+                onChange={(e) => {
+                  setStartAt(e.target.value);
+                  markPreviewStale();
+                }}
+                required
+                className="w-full min-w-0 tabular-nums"
+              />
+            </div>
+            <div className="flex min-w-0 flex-col gap-1">
+              <label
+                htmlFor={`end-${event.googleEventId}`}
+                className="text-xs font-medium text-muted-foreground"
+              >
+                End
+              </label>
+              <Input
+                id={`end-${event.googleEventId}`}
+                type="datetime-local"
+                value={endAt}
+                onChange={(e) => {
+                  setEndAt(e.target.value);
+                  markPreviewStale();
+                }}
+                className="w-full min-w-0 tabular-nums"
+              />
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       <ul className="flex flex-col gap-3">

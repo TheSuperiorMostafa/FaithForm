@@ -101,6 +101,14 @@ export type CalendarEventPreview = {
   location: string;
   startAt: string;
   endAt: string | null;
+  /**
+   * A date-only event ("all day" on the calendar). Both Google and iCloud send
+   * these as a bare `YYYY-MM-DD`, which becomes midnight UTC in `startAt` — so
+   * the instant is a placeholder, not a time anyone chose. Anything that prints
+   * this event has to read the date in UTC and omit the time, or an evening
+   * timezone turns "Saturday, all day" into Friday at 8pm.
+   */
+  allDay?: boolean;
   htmlLink?: string;
   source?: CalendarSource;
 };

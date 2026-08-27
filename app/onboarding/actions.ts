@@ -18,7 +18,7 @@ import { requireOnboardingInvitee } from "@/lib/onboarding/require-invitee";
 import { validateImageBuffer } from "@/lib/security/validate-image";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { absoluteAppPath } from "@/lib/site-url";
+import { dashboardEmailRedirect } from "@/lib/auth/auth-redirects";
 
 export type ActionResult =
   | { ok: true }
@@ -68,11 +68,11 @@ export async function createOnboardingAccount(
   }
 
   const supabase = createClient();
-  const onboardingReturn = absoluteAppPath(
+  // `next` is a **path**, not an absolute URL: the callback runs it through
+  // `safeRedirectPath`, which refuses anything absolute. Passing a full URL
+  // here silently degraded to `/dashboard` and stranded the invitee mid-flow.
+  const emailRedirectTo = dashboardEmailRedirect(
     `/onboarding?token=${encodeURIComponent(token)}&step=2`,
-  );
-  const emailRedirectTo = absoluteAppPath(
-    `/auth/callback?next=${encodeURIComponent(onboardingReturn)}`,
   );
 
   const { error: signUpError } = await supabase.auth.signUp({

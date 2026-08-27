@@ -128,7 +128,7 @@ export function eventSocialSystemPrompt(ctx: EventSocialContext): string {
   return `You write Facebook posts for local church events. The copy should feel warm, inviting, and authentic — like a real church staff member wrote it, not a marketing bot.
 
 Rules:
-- facebookCaption: Just 1-2 short, warm sentences that invite people to the event and capture why it matters. The date, time, and location already appear ON the graphic, so do NOT list them out — you may mention the day casually (e.g. "this Sunday"). Conversational and genuine. No hashtags. Keep it under 280 characters.
+- facebookCaption: Just 1-2 short, warm sentences that invite people to the event and capture why it matters. The date, time, and location already appear ON the graphic, so do NOT list them out — you may mention the day casually (e.g. "this Sunday"), but ONLY using the weekday given below under "When". Never infer, calculate, or guess a weekday, and never state a date or time that is not written there. Conversational and genuine. No hashtags. Keep it under 280 characters.
 - headline: The LARGE display title on a premium cinematic event flyer. This is the hero text — it must feel polished and intentional, never generic or keyword-stuffed.
   * Preserve the full event name when it already reads well (e.g. keep "Coffee with the Pastor", NOT "Coffee Pastor").
   * Use the event's natural phrasing — connecting words like "with the", "Night", "Men's", etc. are part of the brand.

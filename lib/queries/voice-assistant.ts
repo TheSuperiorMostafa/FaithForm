@@ -12,6 +12,7 @@ import {
 } from "@/lib/queries/church-profile";
 import { createClient } from "@/lib/supabase/server";
 import type {
+  AgentMode,
   DayKey,
   OfficeHours,
   PhoneCallRow,
@@ -79,6 +80,7 @@ function mapSettings(row: Record<string, unknown>): VoiceAssistantSettings {
     retail_ai_agent_id: (row.retail_ai_agent_id as string | null) ?? null,
     retail_ai_phone_number: (row.retail_ai_phone_number as string | null) ?? null,
     agent_synced_at: (row.agent_synced_at as string | null) ?? null,
+    agent_mode: (row.agent_mode as AgentMode) === "linked" ? "linked" : "managed",
     created_at: row.created_at as string,
     updated_at: row.updated_at as string,
   };
@@ -391,5 +393,6 @@ export async function getVoiceAgentSyncStatus(
     phoneNumber: settings?.retail_ai_phone_number ?? null,
     syncedAt: settings?.agent_synced_at ?? null,
     isConfigured: Boolean(settings?.assistant_name?.trim()),
+    agentMode: settings?.agent_mode ?? "managed",
   };
 }

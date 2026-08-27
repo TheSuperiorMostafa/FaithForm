@@ -69,6 +69,10 @@ export function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const setupComplete = searchParams.get("notice") === "setup_complete";
+  // /auth/callback lands here with ?error=auth when a link could not be
+  // exchanged — expired, already used, or truncated. Saying so beats the
+  // previous behaviour, which was a bare sign-in form with no explanation.
+  const linkFailed = searchParams.get("error") === "auth";
   // Password first: teammates are set up with a temporary password, so that is
   // the path most people arrive on. Magic link stays for anyone who prefers it.
   const [mode, setMode] = useState<"magic" | "password" | "reset">("password");
@@ -172,6 +176,15 @@ export function LoginForm() {
         {setupComplete && (
           <p className="mt-3 rounded-lg border border-accent/30 bg-accent/10 px-4 py-2 text-sm text-foreground">
             Setup already complete. Sign in to continue.
+          </p>
+        )}
+        {linkFailed && (
+          <p
+            className="mt-3 rounded-lg border border-destructive/30 bg-destructive/10 px-4 py-2 text-sm text-foreground"
+            role="alert"
+          >
+            That sign-in link is invalid or has expired. Sign in below, or
+            request a fresh link.
           </p>
         )}
         <p className="mt-2 text-base text-muted-foreground">

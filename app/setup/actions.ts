@@ -4,7 +4,7 @@ import { MIN_PASSWORD_LENGTH } from "@/lib/auth/temp-password";
 import { generateChurchSlug } from "@/lib/churches/slug";
 import { assertRateLimit } from "@/lib/security/rate-limit";
 import { getRequestIpFromHeaders } from "@/lib/security/request-ip";
-import { absoluteAppPath } from "@/lib/site-url";
+import { dashboardEmailRedirect } from "@/lib/auth/auth-redirects";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -87,9 +87,7 @@ export async function createSetupAccount(
   }
 
   const supabase = createClient();
-  const emailRedirectTo = absoluteAppPath(
-    `/auth/callback?next=${encodeURIComponent("/setup")}`,
-  );
+  const emailRedirectTo = dashboardEmailRedirect("/setup");
 
   const { data, error: signUpError } = await supabase.auth.signUp({
     email,

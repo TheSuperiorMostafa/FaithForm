@@ -3,7 +3,10 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { aiGenerateObject } from "@/lib/ai";
 import { eventSocialSystemPrompt } from "@/lib/ai/prompts";
 import { eventSocialPreviewSchema } from "@/lib/ai/schemas";
-import { formatDateTimeRange } from "@/lib/queries/announcements";
+import {
+  formatDateTimeRange,
+  formatEventWhenForPrompt,
+} from "@/lib/queries/announcements";
 import { resolveFlyerHeadline } from "@/lib/social/headline-display";
 import {
   generateSocialGraphic,
@@ -16,6 +19,7 @@ export type GenerateSocialPreviewInput = {
   location: string;
   startAt: string;
   endAt: string | null;
+  allDay?: boolean;
   notes?: string;
   googleEventId?: string | null;
   announcementId?: string | null;
@@ -48,14 +52,28 @@ export async function generateSocialPreview(
   const branding = await loadChurchBranding(supabase, input.churchId);
   // The church's zone, not the server's: this runs on Vercel in UTC, where an
   // 8pm Eastern event would otherwise read as the next day in the caption.
-  const when = formatDateTimeRange(input.startAt, input.endAt, branding.timezone);
+  const when = formatDateTimeRange(
+    input.startAt,
+    input.endAt,
+    branding.timezone,
+    input.allDay,
+  );
+  // The model is told the weekday outright rather than left to work it out
+  // from a bare "Aug 4", which it gets wrong whenever its calendar and the
+  // church's disagree.
+  const whenForPrompt = formatEventWhenForPrompt(
+    input.startAt,
+    input.endAt,
+    branding.timezone,
+    input.allDay,
+  );
 
   const { object, modelUsed } = await aiGenerateObject({
     churchId: input.churchId,
     system: eventSocialSystemPrompt({
       churchName: branding.name,
       title: input.title,
-      when,
+      when: whenForPrompt,
       location: input.location,
       notes: input.notes,
     }),
@@ -79,6 +97,7 @@ export async function generateSocialPreview(
     draftKey,
     startAt: input.startAt,
     endAt: input.endAt,
+    allDay: input.allDay,
     timeZone: branding.timezone,
   });
 

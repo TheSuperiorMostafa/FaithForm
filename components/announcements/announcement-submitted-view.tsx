@@ -51,7 +51,12 @@ export function AnnouncementSubmittedView({
             When
           </dt>
           <dd className="mt-1 text-base">
-            {formatDateTimeRange(announcement.start_at, announcement.end_at)}
+            {formatDateTimeRange(
+              announcement.start_at,
+              announcement.end_at,
+              null,
+              announcement.all_day,
+            )}
           </dd>
         </div>
         {announcement.body?.trim() && (

@@ -63,11 +63,21 @@ struct RootView: View {
                         .padding(.horizontal, FaithfulTokens.Layout.screenPaddingHorizontal)
                 }
 
-            case .failed:
+            case let .failed(message):
+                // A real failure with a session on the device. The sentence is
+                // the server envelope's own, already redacted server-side, and
+                // both ways forward are here: try again, or leave cleanly —
+                // never a dead end that reads like the offline screen.
                 VStack(spacing: FaithfulTokens.Spacing.md) {
-                    EmptyStateView(title: L.errorTitle, explanation: L.offlineBody)
+                    EmptyStateView(
+                        title: L.errorTitle,
+                        explanation: message.isEmpty ? L.errorLoadFailedBody : message
+                    )
                     Button(L.retry) { Task { await model.load() } }
                         .buttonStyle(FaithfulButtonStyle(kind: .secondary, theme: theme))
+                        .padding(.horizontal, FaithfulTokens.Layout.screenPaddingHorizontal)
+                    Button(L.signOut) { Task { await model.signOut() } }
+                        .buttonStyle(FaithfulButtonStyle(kind: .quiet, theme: theme))
                         .padding(.horizontal, FaithfulTokens.Layout.screenPaddingHorizontal)
                 }
 

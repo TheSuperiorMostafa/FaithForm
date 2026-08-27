@@ -61,6 +61,9 @@ const BUCKETS = [
   // Church-uploaded sermon slide backgrounds. Public so PPTX export and the
   // theme picker can read the image without signing every URL.
   { name: "sermon-themes", public: true },
+  // Files attached to the weekly announcement email. Private: the bytes are
+  // read server-side when the Gmail draft is built and never linked to.
+  { name: "communication-attachments", public: false },
 ];
 
 let failed = false;

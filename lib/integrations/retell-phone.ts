@@ -1,14 +1,26 @@
 import {
   isRetellConfigured,
   publishCurrentAgentDraft,
+  RetellLinkedAgentError,
   syncRetellAgent,
 } from "@/lib/integrations/retell";
 import {
   RetellApiError,
   retellRequest,
 } from "@/lib/integrations/retell-client";
+import { hasChurchRetellKey } from "@/lib/integrations/retell-key";
 import { getVoiceAssistantSettings } from "@/lib/queries/voice-assistant";
 import { createAdminClient } from "@/lib/supabase/admin";
+
+/**
+ * A linked church may only have its own Retell key, never FaithForm's shared
+ * `RETELL_API_KEY` — so "Retell isn't set up" has to check both before
+ * refusing.
+ */
+async function isRetellUsableForChurch(churchId: string): Promise<boolean> {
+  if (isRetellConfigured()) return true;
+  return hasChurchRetellKey(churchId);
+}
 
 export type RetellPhoneNumber = {
   phone_number: string;
@@ -27,10 +39,13 @@ function formatDisplayNumber(phone: RetellPhoneNumber): string {
   return phone.phone_number_pretty?.trim() || phone.phone_number;
 }
 
-async function listRetellPhoneNumbers(): Promise<RetellPhoneNumber[]> {
+async function listRetellPhoneNumbers(
+  churchId?: string | null,
+): Promise<RetellPhoneNumber[]> {
   const response = await retellRequest<ListPhoneNumbersResponse>({
     method: "GET",
     path: "/v2/list-phone-numbers",
+    churchId,
   });
 
   if (Array.isArray(response)) return response;
@@ -77,13 +92,19 @@ export async function provisionRetellPhoneForChurch(
   churchId: string,
   options: { areaCode?: number } = {},
 ): Promise<ProvisionPhoneResult> {
-  if (!isRetellConfigured()) {
+  if (!(await isRetellUsableForChurch(churchId))) {
     throw new Error("Retell is not configured. Set RETELL_API_KEY first.");
   }
 
   let settings = await getVoiceAssistantSettings(churchId);
   if (!settings) {
     throw new Error("Save your voice assistant settings before getting a number.");
+  }
+
+  if (settings.agent_mode === "linked") {
+    throw new RetellLinkedAgentError(
+      "This church's agent is linked from their own Retell account, so it already has its own phone setup. Manage numbers directly in Retell.",
+    );
   }
 
   if (!settings.retail_ai_agent_id) {
@@ -108,7 +129,10 @@ export async function provisionRetellPhoneForChurch(
     };
   }
 
-  const existing = findNumberForAgent(await listRetellPhoneNumbers(), agentId);
+  const existing = findNumberForAgent(
+    await listRetellPhoneNumbers(churchId),
+    agentId,
+  );
   if (existing) {
     const display = formatDisplayNumber(existing);
     await saveChurchPhoneNumber(churchId, display);
@@ -140,12 +164,13 @@ export async function provisionRetellPhoneForChurch(
 
   try {
     // Make sure the latest draft is published before inbound calls can use it.
-    await publishCurrentAgentDraft(agentId);
+    await publishCurrentAgentDraft(agentId, undefined, churchId);
 
     const created = await retellRequest<RetellPhoneNumber>({
       method: "POST",
       path: "/create-phone-number",
       body,
+      churchId,
     });
 
     const display = formatDisplayNumber(created);
@@ -164,6 +189,7 @@ export async function provisionRetellPhoneForChurch(
           },
         ],
       },
+      churchId,
     });
 
     return { phoneNumber: display, created: true };
@@ -191,7 +217,7 @@ export async function provisionRetellPhoneForChurch(
 export async function syncRetellPhoneForChurch(
   churchId: string,
 ): Promise<string | null> {
-  if (!isRetellConfigured()) {
+  if (!(await isRetellUsableForChurch(churchId))) {
     throw new Error("Retell is not configured. Set RETELL_API_KEY first.");
   }
 
@@ -201,7 +227,10 @@ export async function syncRetellPhoneForChurch(
     throw new Error("No Retell agent is linked yet. Save settings first.");
   }
 
-  const match = findNumberForAgent(await listRetellPhoneNumbers(), agentId);
+  const match = findNumberForAgent(
+    await listRetellPhoneNumbers(churchId),
+    agentId,
+  );
   if (!match) {
     await saveChurchPhoneNumber(churchId, null);
     return null;

@@ -69,6 +69,25 @@ public struct AuthFlowView: View {
                 }
             }
 
+            // A confirmation link lands here, on the front door, before any
+            // screen was chosen. Both of its states are visible in place: the
+            // exchange in progress, and the sentence when it could not finish.
+            if model.phase == .confirmingEmail {
+                FaithfulCard {
+                    HStack(spacing: FaithfulTokens.Spacing.sm) {
+                        ProgressView()
+                        Text(L.authConfirmingEmail)
+                            .font(theme.font(FaithfulTokens.Text.bodySmall))
+                            .foregroundStyle(theme.palette.contentSecondary)
+                    }
+                }
+            }
+            if case let .failed(message) = model.phase {
+                FaithfulCard {
+                    AuthErrorText(message: message)
+                }
+            }
+
             Spacer()
 
             VStack(spacing: FaithfulTokens.Spacing.md) {

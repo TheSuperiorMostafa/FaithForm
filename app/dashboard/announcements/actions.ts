@@ -55,6 +55,7 @@ function parsePublishForm(formData: FormData) {
   const startAt = String(formData.get("start_at") ?? "");
   const endAtRaw = formData.get("end_at");
   const endAt = endAtRaw ? String(endAtRaw) : null;
+  const allDay = formData.get("all_day") === "true";
   const notes = String(formData.get("notes") ?? "").trim();
   const googleEventId = String(formData.get("google_event_id") ?? "").trim() || null;
   const googleCalendarId =
@@ -104,6 +105,7 @@ function parsePublishForm(formData: FormData) {
       location,
       startAt,
       endAt,
+      allDay,
       notes,
       googleEventId,
       googleCalendarId,
@@ -163,6 +165,7 @@ export async function publishAnnouncement(
     notes: payload.notes || null,
     start_at: payload.startAt,
     end_at: payload.endAt,
+    all_day: payload.allDay,
     event_date: payload.startAt,
     event_location: payload.location || null,
     push_to_facebook: payload.pushToFacebook,
@@ -178,21 +181,31 @@ export async function publishAnnouncement(
     ...socialFields,
   };
 
-  function isMissingSocialColumnError(message: string): boolean {
-    return /facebook_caption|social_graphic_|social_preview_generated_at/i.test(
+  // Both groups belong to migrations a database may not have yet — the social
+  // preview columns to 0023, `all_day` to 0066. Naming an absent column makes
+  // PostgREST reject the whole write, so whichever group the error names is
+  // dropped and the write retried. Losing the flyer metadata or the all-day
+  // flag beats losing the announcement.
+  function isMissingOptionalColumnError(message: string): boolean {
+    return /facebook_caption|social_graphic_|social_preview_generated_at|all_day/i.test(
       message,
     );
   }
 
-  function rowWithoutSocialFields(data: typeof row) {
-    const {
-      facebook_caption: _c,
-      social_graphic_path: _p,
-      social_graphic_url: _u,
-      social_preview_generated_at: _t,
-      ...baseRow
-    } = data;
-    return baseRow;
+  function rowWithoutMissingColumns(data: typeof row, message: string) {
+    const rest: Record<string, unknown> = { ...data };
+
+    if (/facebook_caption|social_graphic_|social_preview_generated_at/i.test(message)) {
+      delete rest.facebook_caption;
+      delete rest.social_graphic_path;
+      delete rest.social_graphic_url;
+      delete rest.social_preview_generated_at;
+    }
+    if (/all_day/i.test(message)) {
+      delete rest.all_day;
+    }
+
+    return rest;
   }
 
   async function persistAnnouncement(
@@ -206,10 +219,10 @@ export async function publishAnnouncement(
         .eq("id", id)
         .eq("church_id", ctx.churchId);
 
-      if (error && isMissingSocialColumnError(error.message)) {
+      if (error && isMissingOptionalColumnError(error.message)) {
         ({ error } = await ctx.supabase
           .from("announcements")
-          .update(rowWithoutSocialFields(data))
+          .update(rowWithoutMissingColumns(data, error.message))
           .eq("id", id)
           .eq("church_id", ctx.churchId));
       }
@@ -223,10 +236,13 @@ export async function publishAnnouncement(
       .select("id")
       .single();
 
-    if (error && isMissingSocialColumnError(error.message)) {
+    if (error && isMissingOptionalColumnError(error.message)) {
       ({ data: inserted, error } = await ctx.supabase
         .from("announcements")
-        .insert({ ...rowWithoutSocialFields(data), created_by: ctx.user!.id })
+        .insert({
+          ...rowWithoutMissingColumns(data, error.message),
+          created_by: ctx.user!.id,
+        })
         .select("id")
         .single());
     }
@@ -318,16 +334,23 @@ export async function publishAnnouncement(
             endAt: payload.endAt,
             notes: payload.notes,
             timeZone,
+            allDay: payload.allDay,
           });
         }
 
         if (!imagePng) {
           imagePng = await generateEmergencySocialGraphic(ctx.supabase, ctx.churchId, {
             title: payload.title,
-            when: formatDateTimeRange(payload.startAt, payload.endAt, timeZone),
+            when: formatDateTimeRange(
+              payload.startAt,
+              payload.endAt,
+              timeZone,
+              payload.allDay,
+            ),
             location: payload.location,
             startAt: payload.startAt,
             endAt: payload.endAt,
+            allDay: payload.allDay,
           });
         }
 

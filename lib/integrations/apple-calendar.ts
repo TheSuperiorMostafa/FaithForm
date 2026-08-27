@@ -322,6 +322,7 @@ export async function listAppleCalendarEventsInRange(
         location: occurrence.location,
         startAt: occurrence.startAt,
         endAt: occurrence.endAt,
+        allDay: occurrence.allDay,
         source: "apple",
       });
     }

@@ -22,6 +22,16 @@ enum Fixtures {
         try Data(contentsOf: directory.appendingPathComponent("\(name).json"))
     }
 
+    /// A contract document beside the fixtures — `auth-callback.json` and its
+    /// kin — shared byte-for-byte with the Kotlin and TypeScript suites.
+    static func contract(_ name: String) throws -> Data {
+        try Data(
+            contentsOf: directory
+                .deletingLastPathComponent()
+                .appendingPathComponent("\(name).json")
+        )
+    }
+
     static func allNames() throws -> [String] {
         try FileManager.default
             .contentsOfDirectory(atPath: directory.path)

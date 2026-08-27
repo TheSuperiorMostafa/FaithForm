@@ -14,6 +14,7 @@ type SocialPreviewRequest = {
   location?: string;
   startAt?: string;
   endAt?: string | null;
+  allDay?: boolean;
   notes?: string;
   googleEventId?: string | null;
   announcementId?: string | null;
@@ -43,6 +44,7 @@ export async function POST(request: Request) {
       location: body.location?.trim() ?? "",
       startAt,
       endAt: body.endAt ?? null,
+      allDay: Boolean(body.allDay),
       notes: body.notes?.trim(),
       googleEventId: body.googleEventId ?? null,
       announcementId: body.announcementId ?? null,

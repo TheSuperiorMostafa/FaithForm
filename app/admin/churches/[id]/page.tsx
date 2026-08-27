@@ -4,6 +4,7 @@ import { ChurchDetailTabs } from "@/components/admin/church-detail-tabs";
 import { PageHeader } from "@/components/admin/page-header";
 import { getChurchFeatureState } from "@/lib/features/access";
 import type { FeatureKey } from "@/lib/features/catalog";
+import { hasChurchRetellKey } from "@/lib/integrations/retell-key";
 import {
   getAdminChurchActivity,
   getAdminChurchDetail,
@@ -14,6 +15,7 @@ import {
   profileToFormState,
 } from "@/lib/queries/church-profile";
 import { getChurchTeamMembers } from "@/lib/queries/team";
+import { getVoiceAssistantSettings } from "@/lib/queries/voice-assistant";
 import {
   getChurchDomainRequests,
   getChurchDomains,
@@ -86,6 +88,8 @@ export default async function AdminChurchDetailPage({
     profile,
     domains,
     domainRequests,
+    voiceAgentSettings,
+    hasRetellKey,
   ] = await Promise.all([
     getAdminChurchDetail(id),
     getAdminChurchActivity(id, activityFilters),
@@ -94,6 +98,8 @@ export default async function AdminChurchDetailPage({
     loadChurchProfileForAdmin(id),
     getChurchDomains(id),
     getChurchDomainRequests(id),
+    getVoiceAssistantSettings(id, createAdminClient()),
+    hasChurchRetellKey(id),
   ]);
 
   if (!detail) notFound();
@@ -126,6 +132,8 @@ export default async function AdminChurchDetailPage({
         defaultTab={parseTab(
           typeof query.tab === "string" ? query.tab : undefined,
         )}
+        voiceAgentSettings={voiceAgentSettings}
+        hasRetellKey={hasRetellKey}
       />
     </div>
   );

@@ -56,6 +56,20 @@ const CURATED: CuratedTranslation[] = [
     source: "local",
     fileCode: "NKJV",
   },
+  {
+    id: "NASB",
+    label: "New American Standard Bible",
+    shortName: "NASB",
+    source: "local",
+    fileCode: "NASB",
+  },
+  {
+    id: "NRSV",
+    label: "New Revised Standard Version",
+    shortName: "NRSV",
+    source: "local",
+    fileCode: "NRSV",
+  },
 ];
 
 export type CuratedTranslationOption = CuratedTranslation & {
@@ -109,7 +123,7 @@ export async function getDefaultTranslationId(
     if (match) return match.id;
   }
 
-  const preferred = ["ESV", "NIV", "KJV", "NLT", "CSB", "NKJV"];
+  const preferred = ["ESV", "NIV", "KJV", "NLT", "CSB", "NKJV", "NASB", "NRSV"];
   for (const id of preferred) {
     const match = curated.find((t) => t.id === id && t.enabled);
     if (match) return match.id;

@@ -1,5 +1,6 @@
 import { SettingsTabs } from "@/components/settings/settings-tabs";
 import { getGivingFundsForSettings } from "@/app/dashboard/settings/giving-actions";
+import { listCommunicationAttachments } from "@/lib/announcements/attachments";
 import { getChurchGivingProfile } from "@/lib/queries/giving";
 import { getFollowUpMessageTemplates } from "@/lib/queries/follow-up-settings";
 import { getAnnouncementEmailSettings } from "@/lib/queries/announcement-email-settings";
@@ -39,6 +40,7 @@ export default async function SettingsPage() {
     givingFunds,
     followUpTemplates,
     announcementEmailSettings,
+    communicationAttachments,
     teamMembers,
     grantsInProperColumn,
   ] =
@@ -48,6 +50,7 @@ export default async function SettingsPage() {
       getGivingFundsForSettings(auth.churchId),
       getFollowUpMessageTemplates(auth.churchId, supabase),
       getAnnouncementEmailSettings(auth.churchId, supabase),
+      listCommunicationAttachments(auth.churchId),
       getChurchTeamMembers(auth.churchId),
       usesFeaturePermissionsColumn(),
     ]);
@@ -76,6 +79,7 @@ export default async function SettingsPage() {
         givingFunds={givingFunds}
         followUpTemplates={followUpTemplates}
         announcementEmailTemplate={announcementEmailSettings}
+        communicationAttachments={communicationAttachments}
         team={{
           members: teamMembers,
           availableFeatures,

@@ -31,6 +31,13 @@ export async function autoSyncVoiceAgent(): Promise<AutoSyncVoiceAgentResult> {
 
   try {
     const settings = await getVoiceAssistantSettings(auth.churchId);
+
+    // Linked churches manage their own agent directly in Retell — never
+    // push a prompt/config update to it, even a routine background one.
+    if (settings?.agent_mode === "linked") {
+      return { ok: true, synced: false, reason: "linked_agent" };
+    }
+
     if (!settings?.retail_ai_agent_id || !settings.assistant_name?.trim()) {
       return { ok: true, synced: false, reason: "agent_not_provisioned" };
     }

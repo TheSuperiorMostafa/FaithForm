@@ -22,6 +22,8 @@ const LABELS = {
   NLT: "New Living Translation",
   CSB: "Christian Standard Bible",
   NKJV: "New King James Version",
+  NASB: "New American Standard Bible",
+  NRSV: "New Revised Standard Version",
 };
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;

@@ -31,15 +31,19 @@ private func goTrueError(_ code: String, status: Int = 400) -> StubTransport.Exc
 private final class ScriptedAuth: SessionAuthenticating, @unchecked Sendable {
     var signUpResult: Result<SignUpOutcome, Error>
     var signInResult: Result<StoredSession, Error>
+    var confirmationResult: Result<StoredSession, Error>
     var resetError: Error?
     private(set) var resetRequests: [String] = []
+    private(set) var confirmationCodes: [String] = []
 
     init(
         signUp: Result<SignUpOutcome, Error> = .failure(AuthFailure(kind: .other, message: "unused")),
-        signIn: Result<StoredSession, Error> = .failure(AuthFailure(kind: .other, message: "unused"))
+        signIn: Result<StoredSession, Error> = .failure(AuthFailure(kind: .other, message: "unused")),
+        confirmation: Result<StoredSession, Error> = .failure(AuthFailure(kind: .other, message: "unused"))
     ) {
         signUpResult = signUp
         signInResult = signIn
+        confirmationResult = confirmation
     }
 
     func signUp(email: String, password: String) async throws -> SignUpOutcome {
@@ -53,6 +57,11 @@ private final class ScriptedAuth: SessionAuthenticating, @unchecked Sendable {
     func sendPasswordReset(email: String) async throws {
         resetRequests.append(email)
         if let resetError { throw resetError }
+    }
+
+    func completeEmailConfirmation(code: String) async throws -> StoredSession {
+        confirmationCodes.append(code)
+        return try confirmationResult.get()
     }
 }
 

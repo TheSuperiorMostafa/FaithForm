@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireSuperAdmin } from "@/lib/auth/superadmin";
 import { sendInviteEmail } from "@/lib/email/invite";
+import { sendSupportTicketNotification } from "@/lib/email/support-ticket";
+import { absoluteAppPath } from "@/lib/site-url";
 import type {
   AdminRole,
   SupportTicketPriority,
@@ -287,6 +289,32 @@ export async function createSupportTicket(formData: FormData) {
 
   if (error) {
     throw new Error(error.message);
+  }
+
+  // A ticket raised here is still a ticket: the team is several people, and the
+  // one who logs a call is rarely the one who works it. Same doorbell as the
+  // church-side path, and just as silent when it fails — the ticket is saved.
+  try {
+    let churchName = "FaithForm";
+    if (data.church_id) {
+      const { data: churchRow } = await admin
+        .from("churches")
+        .select("name")
+        .eq("id", data.church_id as string)
+        .maybeSingle();
+      churchName = (churchRow?.name as string | undefined) ?? "A church";
+    }
+
+    await sendSupportTicketNotification({
+      churchName,
+      subject,
+      body,
+      submittedByEmail: user.email ?? null,
+      priority,
+      reviewUrl: absoluteAppPath(`/admin/support/${data.id}`),
+    });
+  } catch (notifyError) {
+    console.error("createSupportTicket notify:", notifyError);
   }
 
   revalidatePath("/admin");

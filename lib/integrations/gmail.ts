@@ -60,33 +60,94 @@ function toBase64Url(value: string): string {
     .replace(/=+$/, "");
 }
 
+export type GmailAttachment = {
+  fileName: string;
+  mimeType: string;
+  content: Buffer;
+};
+
+/** Base64 bodies are wrapped at 76 columns per RFC 2045. */
+function base64Body(content: Buffer): string {
+  return content.toString("base64").match(/.{1,76}/g)?.join("\r\n") ?? "";
+}
+
+/**
+ * A filename is quoted inside the Content-Disposition header, so a quote or a
+ * newline in it would end the parameter early and let the rest be read as
+ * header syntax. Non-ASCII names are RFC 2047 encoded like any other value.
+ */
+function encodeFileName(name: string): string {
+  return encodeHeaderValue(name.replace(/"/g, "'"));
+}
+
 /** Exported for testing — `createGmailDraft` is the supported entry point. */
 export function buildMimeMessage(input: {
   to?: string;
   subject: string;
   bodyHtml: string;
+  attachments?: GmailAttachment[];
 }) {
-  const headers = [
-    "MIME-Version: 1.0",
-    'Content-Type: text/html; charset="UTF-8"',
-    "Content-Transfer-Encoding: base64",
-  ];
+  const attachments = input.attachments ?? [];
 
+  const headers = ["MIME-Version: 1.0"];
   const to = input.to?.trim();
+
+  // The body is base64 so 8-bit UTF-8 (dashes, accents, emoji) survives intact.
+  const htmlBody = base64Body(Buffer.from(input.bodyHtml, "utf8"));
+
+  if (attachments.length === 0) {
+    headers.push(
+      'Content-Type: text/html; charset="UTF-8"',
+      "Content-Transfer-Encoding: base64",
+    );
+    if (to) headers.push(`To: ${encodeHeaderValue(to)}`);
+    headers.push(`Subject: ${encodeHeaderValue(input.subject)}`);
+
+    // The blank line between headers and body is mandatory — without it the
+    // body is parsed as another header and the draft arrives empty.
+    return toBase64Url(`${headers.join("\r\n")}\r\n\r\n${htmlBody}`);
+  }
+
+  // A boundary must not appear anywhere in the parts it separates. This one is
+  // built from the content itself, so it cannot collide with a file that
+  // happens to contain a boundary-looking string.
+  const digest = attachments
+    .reduce(
+      (hash, attachment) => hash + attachment.content.length + attachment.fileName.length,
+      input.bodyHtml.length,
+    )
+    .toString(36);
+  const boundary = `faithform-${digest}-${attachments.length}-boundary`;
+
+  headers.push(`Content-Type: multipart/mixed; boundary="${boundary}"`);
   if (to) headers.push(`To: ${encodeHeaderValue(to)}`);
   headers.push(`Subject: ${encodeHeaderValue(input.subject)}`);
 
-  // The body is base64 so 8-bit UTF-8 (dashes, accents, emoji) survives intact,
-  // wrapped at 76 columns per RFC 2045.
-  const body =
-    Buffer.from(input.bodyHtml, "utf8")
-      .toString("base64")
-      .match(/.{1,76}/g)
-      ?.join("\r\n") ?? "";
+  const parts = [
+    [
+      `--${boundary}`,
+      'Content-Type: text/html; charset="UTF-8"',
+      "Content-Transfer-Encoding: base64",
+      "",
+      htmlBody,
+    ].join("\r\n"),
+  ];
 
-  // The blank line between headers and body is mandatory — without it the body
-  // is parsed as another header and the draft arrives empty.
-  const message = `${headers.join("\r\n")}\r\n\r\n${body}`;
+  for (const attachment of attachments) {
+    const name = encodeFileName(attachment.fileName);
+    parts.push(
+      [
+        `--${boundary}`,
+        `Content-Type: ${attachment.mimeType}; name="${name}"`,
+        "Content-Transfer-Encoding: base64",
+        `Content-Disposition: attachment; filename="${name}"`,
+        "",
+        base64Body(attachment.content),
+      ].join("\r\n"),
+    );
+  }
+
+  const message = `${headers.join("\r\n")}\r\n\r\n${parts.join("\r\n")}\r\n--${boundary}--`;
 
   return toBase64Url(message);
 }
@@ -97,6 +158,7 @@ export async function createGmailDraft(
     to?: string;
     subject: string;
     bodyHtml: string;
+    attachments?: GmailAttachment[];
   },
   supabase?: SupabaseClient,
 ): Promise<{ draftId: string; draftUrl: string }> {

@@ -10,7 +10,8 @@ import FaithfulKit
 enum SupabaseAuthLoader {
     static func load(
         environment: APIEnvironment,
-        info: [String: Any] = Bundle.main.infoDictionary ?? [:]
+        info: [String: Any] = Bundle.main.infoDictionary ?? [:],
+        flowState: AuthFlowStateStoring? = nil
     ) -> SessionAuthenticating? {
         let rawURL = (info["FaithfulSupabaseURL"] as? String)?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
@@ -28,9 +29,15 @@ enum SupabaseAuthLoader {
                 environmentKey: environment.key,
                 // Password-reset emails land on this build's own web origin,
                 // so a staging build cannot mail someone a production link.
-                resetRedirectOrigin: environment.baseURL
+                resetRedirectOrigin: environment.baseURL,
+                // Confirmation emails return to this app's own callback — the
+                // contract constant, never a value a request or link supplied.
+                // Without it the identity provider falls back to its Site URL,
+                // which is the church dashboard, not this app.
+                signUpRedirectURL: AuthCallbackLink.canonicalURL
             ),
-            transport: URLSessionTransport()
+            transport: URLSessionTransport(),
+            flowState: flowState
         )
     }
 }

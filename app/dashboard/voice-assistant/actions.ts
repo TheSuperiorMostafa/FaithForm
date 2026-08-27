@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireChurchAuth } from "@/lib/auth/church";
 import { featureActionError } from "@/lib/features/guard";
-import { syncRetellAgent } from "@/lib/integrations/retell";
+import { RetellLinkedAgentError, syncRetellAgent } from "@/lib/integrations/retell";
 import {
   provisionRetellPhoneForChurch,
   syncRetellPhoneForChurch,
@@ -99,6 +99,14 @@ export async function saveVoiceAssistantSettings(
       const sync = await syncRetellAgent(auth.churchId);
       agentId = sync?.agentId;
     } catch (err) {
+      if (err instanceof RetellLinkedAgentError) {
+        // Linked churches manage their agent directly in Retell — the save
+        // above already updated FaithForm's own records, so this is not a
+        // failure, just a routine no-op.
+        revalidatePath("/dashboard/voice-assistant");
+        revalidatePath("/dashboard");
+        return { ok: true };
+      }
       console.error("[voice-assistant] Retell sync error", err);
       return {
         error:

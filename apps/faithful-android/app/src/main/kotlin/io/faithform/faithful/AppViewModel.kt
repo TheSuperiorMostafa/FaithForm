@@ -5,16 +5,21 @@ import androidx.lifecycle.viewModelScope
 import io.faithform.faithful.contract.Bootstrap
 import io.faithform.faithful.contract.MobileErrorCode
 import io.faithform.faithful.contract.OnboardingState
+import io.faithform.faithful.navigation.AuthCallbackLink
 import io.faithform.faithful.navigation.DeepLinkParser
 import io.faithform.faithful.navigation.Destination
 import io.faithform.faithful.navigation.InvitationLink
 import io.faithform.faithful.network.ApiClient
 import io.faithform.faithful.network.ApiException
+import io.faithform.faithful.network.AuthException
 import io.faithform.faithful.network.MobileSuccess
+import io.faithform.faithful.network.SupabaseAuthClient
 import io.faithform.faithful.network.SupabaseSession
 import io.faithform.faithful.session.SessionGateway
 import io.faithform.faithful.session.StoredSession
 import io.faithform.faithful.storage.PartitionedCache
+import io.faithform.faithful.ui.auth.AuthUiError
+import io.faithform.faithful.ui.auth.authUiError
 import java.util.UUID
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -53,15 +58,31 @@ sealed interface InvitationPhase {
     data class Failed(val code: MobileErrorCode?) : InvitationPhase
 }
 
+/** Where an email-confirmation callback currently stands, for the front door. */
+sealed interface ConfirmationPhase {
+    data object Idle : ConfirmationPhase
+    data object Working : ConfirmationPhase
+    data class Failed(val error: AuthUiError) : ConfirmationPhase
+}
+
 class AppViewModel(
     private val api: ApiClient,
     private val sessions: SessionGateway,
     private val cache: PartitionedCache,
-    private val environmentKey: String
+    private val environmentKey: String,
+    private val auth: SupabaseAuthClient? = null
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<LaunchPhase>(LaunchPhase.Loading)
     val state: StateFlow<LaunchPhase> = _state.asStateFlow()
+
+    private val _confirmationPhase = MutableStateFlow<ConfirmationPhase>(ConfirmationPhase.Idle)
+    val confirmationPhase: StateFlow<ConfirmationPhase> = _confirmationPhase.asStateFlow()
+
+    /** Codes already exchanged (or refused as spent) this launch. The OS can
+     * deliver the same intent more than once; a consumed code must be a
+     * no-op, never a second exchange. */
+    private val consumedCodes = mutableSetOf<String>()
 
     private val _invitationPhase = MutableStateFlow<InvitationPhase>(InvitationPhase.Idle)
     val invitationPhase: StateFlow<InvitationPhase> = _invitationPhase.asStateFlow()
@@ -225,6 +246,15 @@ class AppViewModel(
      * a destination, and an unknown is dropped rather than half-navigated.
      */
     fun handleDeepLink(raw: String) {
+        // The email-confirmation callback. Exchanged exactly once; with a
+        // session already on the device it degrades to a quiet refresh, so a
+        // replayed or duplicate link cannot corrupt state.
+        val callback = AuthCallbackLink.parse(raw)
+        if (callback != null) {
+            handleAuthCallback(callback)
+            return
+        }
+
         val token = InvitationLink.token(raw)
         if (token != null) {
             _pendingInvitationToken.value = token
@@ -236,6 +266,70 @@ class AppViewModel(
             return
         }
         pendingDestination = DeepLinkParser.parse(raw)
+    }
+
+    /**
+     * One confirmation link, whatever its state.
+     *
+     * Signed in already — because the exchange succeeded moments ago, or the
+     * person signed in with their password while the email sat unread — the
+     * link is spent goodwill, not an error: refresh quietly and move on.
+     * Signed out, the code is exchanged for a session through the ordinary
+     * completion path. Only failures the provider might still honour —
+     * offline, rate-limited — leave the code unconsumed, so the person can
+     * simply tap the link again.
+     */
+    private fun handleAuthCallback(outcome: AuthCallbackLink.Outcome) {
+        if (sessions.current() != null) {
+            viewModelScope.launch { loadNow(quiet = _state.value is LaunchPhase.Ready) }
+            return
+        }
+
+        when (outcome) {
+            is AuthCallbackLink.Outcome.Failure -> {
+                _confirmationPhase.value = ConfirmationPhase.Failed(
+                    when (outcome.reason) {
+                        AuthCallbackLink.FailureReason.EXPIRED -> AuthUiError.LINK_EXPIRED
+                        AuthCallbackLink.FailureReason.INVALID -> AuthUiError.LINK_INVALID
+                    }
+                )
+            }
+
+            is AuthCallbackLink.Outcome.Code -> {
+                val client = auth ?: run {
+                    _confirmationPhase.value =
+                        ConfirmationPhase.Failed(AuthUiError.NOT_CONFIGURED)
+                    return
+                }
+                if (_confirmationPhase.value is ConfirmationPhase.Working) return
+                if (outcome.value in consumedCodes) return
+
+                _confirmationPhase.value = ConfirmationPhase.Working
+                viewModelScope.launch {
+                    try {
+                        val session = client.completeEmailConfirmation(outcome.value)
+                        consumedCodes.add(outcome.value)
+                        _confirmationPhase.value = ConfirmationPhase.Idle
+                        completeAuth(session, displayName = null)
+                    } catch (error: AuthException) {
+                        if (error.kind != AuthException.Kind.OFFLINE &&
+                            error.kind != AuthException.Kind.RATE_LIMITED
+                        ) {
+                            consumedCodes.add(outcome.value)
+                        }
+                        _confirmationPhase.value = ConfirmationPhase.Failed(authUiError(error.kind))
+                    } catch (error: Exception) {
+                        _confirmationPhase.value = ConfirmationPhase.Failed(AuthUiError.GENERIC)
+                    }
+                }
+            }
+        }
+    }
+
+    fun clearConfirmationError() {
+        if (_confirmationPhase.value is ConfirmationPhase.Failed) {
+            _confirmationPhase.value = ConfirmationPhase.Idle
+        }
     }
 
     fun consumePendingDestination(): Destination? =

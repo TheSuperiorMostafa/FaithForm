@@ -5,7 +5,7 @@ import {
   assertRateLimit,
 } from "@/lib/security/rate-limit";
 import { getRequestIpFromHeaders } from "@/lib/security/request-ip";
-import { absoluteAppPath } from "@/lib/site-url";
+import { dashboardEmailRedirect } from "@/lib/auth/auth-redirects";
 
 export type LoginFormState = {
   ok: boolean;
@@ -47,10 +47,9 @@ export async function sendMagicLink(
 
   // Must resolve to an absolute URL whose origin is registered in
   // Supabase → Authentication → URL Configuration (Site URL + Redirect URLs).
-  // absoluteAppPath treats an empty NEXT_PUBLIC_SITE_URL as unset and falls
-  // back to the canonical production origin, so magic links never point at a
-  // relative path (which silently breaks the redirect back to /auth/callback).
-  const redirectTo = absoluteAppPath("/auth/callback");
+  // Derived from this build's configured origin — never from the request — so
+  // a dashboard link can only ever land on the dashboard's own callback.
+  const redirectTo = dashboardEmailRedirect();
 
   const supabase = createClient();
   const { error } = await supabase.auth.signInWithOtp({
@@ -104,9 +103,7 @@ export async function sendPasswordReset(
     return { ok: false, error: "Please enter a valid email address." };
   }
 
-  const redirectTo = absoluteAppPath(
-    `/auth/callback?next=${encodeURIComponent("/set-password?reason=recovery")}`,
-  );
+  const redirectTo = dashboardEmailRedirect("/set-password?reason=recovery");
 
   const supabase = createClient();
   const { error } = await supabase.auth.resetPasswordForEmail(email, {

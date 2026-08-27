@@ -100,12 +100,15 @@ final class RootModel {
             state.apply(.ready(bootstrap, isStale: false))
             adoptSelection(bootstrap)
         } catch let error as APIError {
+            // Typed code and correlation id only — never the message, a token,
+            // or anything else a person or provider wrote.
+            Self.log.failure(error.code, requestId: error.requestId)
             // An expired session is signed-out, not an error: the person needs
             // to sign in, and a retry button would do nothing for them.
             state.apply(
                 error.code == .unauthenticated || error.code == .sessionExpired
                     ? .signedOut
-                    : .failed(message: error.message)
+                    : .failed(message: error.displayMessage)
             )
         } catch {
             state.apply(.offlineNoCache)
@@ -177,6 +180,14 @@ final class RootModel {
     /// account has no relationship with all do **nothing at all** — no error
     /// screen, no partial navigation, no prompt.
     func open(_ url: URL) {
+        // The email-confirmation callback. Exchanged exactly once by
+        // `AuthModel`; with a session already on the device it degrades to a
+        // quiet refresh, so a replayed or duplicate link cannot corrupt state.
+        if let outcome = AuthCallbackLink.parse(url) {
+            Task { await handleAuthCallback(outcome) }
+            return
+        }
+
         // An invitation is a credential, not a destination. Signed out it is
         // held for after sign-in; signed in it is redeemed on the spot.
         if let token = InvitationLink.token(from: url) {
@@ -218,6 +229,24 @@ final class RootModel {
 
         if let tab = Self.tab(for: destination) { selectedTab = tab }
     }
+
+    /// One confirmation link, whatever its state.
+    ///
+    /// Signed in already — because the exchange succeeded moments ago, or the
+    /// person signed in with their password while the email sat unread — the
+    /// link is spent goodwill, not an error: refresh quietly and move on.
+    /// Signed out, it goes to `AuthModel`, which owns the exchange and every
+    /// sentence it can end in.
+    private func handleAuthCallback(_ outcome: AuthCallbackLink.Outcome) async {
+        if await dependencies.session.currentSession() != nil {
+            Self.log.event("auth_callback_ignored_signed_in")
+            await load(quiet: state.bootstrap != nil)
+            return
+        }
+        await authModel.handleConfirmationCallback(outcome)
+    }
+
+    private static let log = FaithfulLog(category: "auth")
 
     func signOut() async {
         // The server side first, best-effort: it bumps the authorization

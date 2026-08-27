@@ -252,11 +252,16 @@ function buildAgentPayload(
   };
 }
 
-async function publishAgentVersion(agentId: string, version: number): Promise<void> {
+async function publishAgentVersion(
+  agentId: string,
+  version: number,
+  churchId?: string | null,
+): Promise<void> {
   await retellRequest({
     method: "POST",
     path: `/publish-agent-version/${agentId}`,
     body: { version },
+    churchId,
   });
 }
 
@@ -264,12 +269,14 @@ async function publishAgentVersion(agentId: string, version: number): Promise<vo
 export async function publishCurrentAgentDraft(
   agentId: string,
   version?: number | null,
+  churchId?: string | null,
 ): Promise<void> {
   let resolvedVersion = version;
   if (typeof resolvedVersion !== "number") {
     const agent = await retellRequest<RetellAgentResponse>({
       method: "GET",
       path: `/get-agent/${agentId}`,
+      churchId,
     });
     resolvedVersion = agent.version;
   }
@@ -278,7 +285,7 @@ export async function publishCurrentAgentDraft(
     throw new Error("Retell agent is missing a version number.");
   }
 
-  await publishAgentVersion(agentId, resolvedVersion);
+  await publishAgentVersion(agentId, resolvedVersion, churchId);
 }
 
 /**
@@ -287,10 +294,12 @@ export async function publishCurrentAgentDraft(
  */
 async function ensureDraftAgent(
   agentId: string,
+  churchId?: string | null,
 ): Promise<{ agentVersion: number; llmVersion: number | null }> {
   const agent = await retellRequest<RetellAgentResponse>({
     method: "GET",
     path: `/get-agent/${agentId}`,
+    churchId,
   });
 
   const currentVersion = typeof agent.version === "number" ? agent.version : null;
@@ -305,6 +314,7 @@ async function ensureDraftAgent(
           method: "POST",
           path: `/create-agent-version/${agentId}`,
           body: { base_version: currentVersion },
+          churchId,
         });
 
   const agentVersion = typeof draft.version === "number" ? draft.version : currentVersion;
@@ -323,6 +333,7 @@ async function syncLlm(
   llmVersion?: number | null,
 ): Promise<string> {
   const payload = buildLlmPayload(settings, context, church);
+  const churchId = settings.church_id;
 
   if (settings.retell_llm_id) {
     const versionQuery =
@@ -331,6 +342,7 @@ async function syncLlm(
       method: "PATCH",
       path: `/update-retell-llm/${settings.retell_llm_id}${versionQuery}`,
       body: payload,
+      churchId,
     });
     return settings.retell_llm_id;
   }
@@ -339,6 +351,7 @@ async function syncLlm(
     method: "POST",
     path: "/create-retell-llm",
     body: payload,
+    churchId,
   });
 
   return created.llm_id;
@@ -351,6 +364,7 @@ async function syncAgent(
   agentVersion?: number | null,
 ): Promise<string> {
   const payload = buildAgentPayload(llmId, settings, churchName);
+  const churchId = settings.church_id;
 
   if (settings.retail_ai_agent_id) {
     const versionQuery =
@@ -359,6 +373,7 @@ async function syncAgent(
       method: "PATCH",
       path: `/update-agent/${settings.retail_ai_agent_id}${versionQuery}`,
       body: payload,
+      churchId,
     });
     return updated.agent_id ?? settings.retail_ai_agent_id;
   }
@@ -367,6 +382,7 @@ async function syncAgent(
     method: "POST",
     path: "/create-agent",
     body: payload,
+    churchId,
   });
 
   return created.agent_id;
@@ -377,11 +393,31 @@ export type RetellSyncResult = {
   llmId: string;
 };
 
+/**
+ * Thrown by every outbound Retell write when a church's agent is `linked`
+ * rather than `managed` — i.e. it was hand-built directly in Retell and
+ * FaithForm must never overwrite it. Callers that treat this as routine
+ * (auto-sync, the settings save action) catch it and no-op instead of
+ * surfacing it as a failure.
+ */
+export class RetellLinkedAgentError extends Error {
+  constructor(
+    message = "This church's Retell agent is linked, not managed by FaithForm. FaithForm will not modify it.",
+  ) {
+    super(message);
+    this.name = "RetellLinkedAgentError";
+  }
+}
+
 export async function syncRetellAgent(churchId: string): Promise<RetellSyncResult | null> {
   if (!isRetellConfigured()) return null;
 
   const settings = await getVoiceAssistantSettings(churchId);
   if (!settings) return null;
+
+  if (settings.agent_mode === "linked") {
+    throw new RetellLinkedAgentError();
+  }
 
   const [context, church] = await Promise.all([
     getVoiceAssistantContext(churchId),
@@ -397,7 +433,7 @@ export async function syncRetellAgent(churchId: string): Promise<RetellSyncResul
 
   // Existing published agents cannot be patched in place — open a draft first.
   if (settings.retail_ai_agent_id && settings.retell_llm_id) {
-    const draft = await ensureDraftAgent(settings.retail_ai_agent_id);
+    const draft = await ensureDraftAgent(settings.retail_ai_agent_id, churchId);
     agentVersion = draft.agentVersion;
     llmVersion = draft.llmVersion;
   }
@@ -405,7 +441,7 @@ export async function syncRetellAgent(churchId: string): Promise<RetellSyncResul
   const llmId = await syncLlm(settings, context, church, llmVersion);
   const agentId = await syncAgent(settings, llmId, church.name, agentVersion);
 
-  await publishCurrentAgentDraft(agentId, agentVersion);
+  await publishCurrentAgentDraft(agentId, agentVersion, churchId);
 
   const admin = createAdminClient();
   const { error } = await admin

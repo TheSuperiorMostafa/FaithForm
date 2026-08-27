@@ -4,6 +4,7 @@ import {
   renderAnnouncementEmail,
   type WeeklyEmailEvent,
 } from "@/lib/email/announcement-template";
+import { loadAttachmentsForSend } from "@/lib/announcements/attachments";
 import { listEmailQueue } from "@/lib/announcements/email-queue";
 import { listChurchCalendarEvents } from "@/lib/integrations/calendar";
 import { createGmailDraft } from "@/lib/integrations/gmail";
@@ -99,6 +100,9 @@ export function weeklyQueueToEmailEvents(
         location: published?.event_location ?? item.location,
         startAt: published?.start_at ?? item.startAt,
         endAt: published?.end_at ?? item.endAt,
+        // Whether it is an all-day entry is the calendar's to say, not the
+        // announcement row's: the row stores only the instants.
+        allDay: item.allDay,
         notes: published?.body?.trim() || undefined,
       };
     });
@@ -242,6 +246,7 @@ export async function createWeeklyAnnouncementGmailDraft(
           location: event.location,
           startAt: event.startAt,
           endAt: event.endAt,
+          allDay: event.allDay,
         },
         now,
       ),
@@ -265,12 +270,15 @@ export async function createWeeklyAnnouncementGmailDraft(
     timeZone,
   });
 
+  const attachments = await loadAttachmentsForSend(churchId, supabase);
+
   const draft = await createGmailDraft(
     churchId,
     {
       to: settings.to ?? undefined,
       subject: rendered.subject,
       bodyHtml: rendered.bodyHtml,
+      attachments,
     },
     supabase,
   );

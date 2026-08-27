@@ -13,6 +13,8 @@ export type AnnouncementRow = {
   body: string;
   start_at: string;
   end_at: string | null;
+  /** Date-only event: `start_at` is midnight UTC and carries no real time. */
+  all_day?: boolean;
   event_location: string | null;
   is_ready: boolean;
   push_to_app: boolean;
@@ -40,23 +42,22 @@ export type CalendarQueueItem = CalendarEventPreview & {
 };
 
 /**
- * Column list for a full announcement row, and the same list without
- * `facebook_scheduled_publish_time`.
+ * Column list for a full announcement row.
  *
- * That column arrived in migration 0014, which production never received.
- * Naming it in a select makes PostgREST reject the whole query, so every one of
- * these reads was returning nothing at all — the Submitted list simply never
- * appeared, with no error anywhere. Falling back keeps the announcement
- * readable; only the Facebook schedule time is unknown, and `mapAnnouncementRow`
- * already defaults it to null.
+ * `facebook_scheduled_publish_time` arrived in migration 0014 and `all_day` in
+ * 0066, and a database can be missing either. Naming an absent column makes
+ * PostgREST reject the whole query, so every one of these reads returned
+ * nothing at all — the Submitted list simply never appeared, with no error
+ * anywhere. Each optional column is therefore dropped and the read retried;
+ * `mapAnnouncementRow` already defaults every one of them.
  */
 const ANNOUNCEMENT_COLUMNS =
-  "id, church_id, title, body, start_at, end_at, event_location, is_ready, push_to_app, push_to_facebook, push_to_team, status, google_event_id, google_calendar_id, facebook_post_id, facebook_scheduled_publish_time, gmail_draft_id, published_at, last_publish_error, created_at, updated_at, event_title, event_date, notes";
+  "id, church_id, title, body, start_at, end_at, all_day, event_location, is_ready, push_to_app, push_to_facebook, push_to_team, status, google_event_id, google_calendar_id, facebook_post_id, facebook_scheduled_publish_time, gmail_draft_id, published_at, last_publish_error, created_at, updated_at, event_title, event_date, notes";
 
-const ANNOUNCEMENT_COLUMNS_LEGACY = ANNOUNCEMENT_COLUMNS.replace(
-  ", facebook_scheduled_publish_time",
-  "",
-);
+const OPTIONAL_ANNOUNCEMENT_COLUMNS = [
+  "facebook_scheduled_publish_time",
+  "all_day",
+] as const;
 
 export function isMissingFacebookScheduleColumn(message: string): boolean {
   return /facebook_scheduled_publish_time/i.test(message);
@@ -67,8 +68,16 @@ type AnnouncementSelect = {
   error: { message: string } | null;
 };
 
+function withoutColumn(columns: string, column: string): string {
+  return columns
+    .split(", ")
+    .filter((name) => name !== column)
+    .join(", ");
+}
+
 /**
- * Runs a select with the full column list, retrying without the 0014 column.
+ * Runs a select with the full column list, retrying without whichever optional
+ * columns this database turns out not to have.
  *
  * The column list is chosen at runtime, so PostgREST cannot infer a row type
  * here; callers cast to `Record<string, unknown>` and hand it to
@@ -77,11 +86,25 @@ type AnnouncementSelect = {
 async function selectAnnouncements(
   build: (columns: string) => PromiseLike<AnnouncementSelect>,
 ): Promise<AnnouncementSelect> {
-  const first = await build(ANNOUNCEMENT_COLUMNS);
-  if (!first.error || !isMissingFacebookScheduleColumn(first.error.message)) {
-    return first;
+  let columns = ANNOUNCEMENT_COLUMNS;
+  let result = await build(columns);
+
+  for (let attempt = 0; attempt < OPTIONAL_ANNOUNCEMENT_COLUMNS.length; attempt++) {
+    const message = result.error?.message;
+    if (!message) return result;
+
+    const missing = OPTIONAL_ANNOUNCEMENT_COLUMNS.find(
+      (column) =>
+        columns.includes(column) &&
+        new RegExp(column, "i").test(message),
+    );
+    if (!missing) return result;
+
+    columns = withoutColumn(columns, missing);
+    result = await build(columns);
   }
-  return build(ANNOUNCEMENT_COLUMNS_LEGACY);
+
+  return result;
 }
 
 export async function getAnnouncements(
@@ -192,6 +215,7 @@ function mapAnnouncementRow(row: Record<string, unknown>): AnnouncementRow {
     body,
     start_at: startAt,
     end_at: (row.end_at as string | null) ?? null,
+    all_day: Boolean(row.all_day),
     event_location: (row.event_location as string | null) ?? null,
     is_ready: Boolean(row.is_ready),
     push_to_app: Boolean(row.push_to_app),
@@ -228,15 +252,39 @@ export function groupAnnouncementsByStatus(
 }
 
 /**
+ * The zone a date-only event must be read in.
+ *
+ * Google and iCloud both send an all-day event as a bare `YYYY-MM-DD`, which
+ * becomes midnight UTC once it is an instant. Rendering that in a church's own
+ * zone walks it backwards — a Saturday all-day event prints as Friday evening
+ * anywhere west of Greenwich — so all-day dates are always read back in UTC,
+ * exactly where the calendar put them.
+ */
+const ALL_DAY_ZONE = "UTC";
+
+/**
  * `timeZone` matters on the server: scheduled jobs run in UTC, so a weekly
  * email rendered without it would show every event in the wrong zone. Omit it
  * in the browser to use the viewer's own locale/timezone.
+ *
+ * `allDay` prints the date alone: a date-only event has no time anyone chose,
+ * and the midnight-UTC instant standing in for one is not worth showing.
  */
 export function formatDateTimeRange(
   startAt: string,
   endAt: string | null,
   timeZone?: string | null,
+  allDay?: boolean,
 ): string {
+  if (allDay) {
+    const dateStr = new Date(startAt).toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      timeZone: ALL_DAY_ZONE,
+    });
+    return `${dateStr} · all day`;
+  }
+
   const options: Intl.DateTimeFormatOptions = {
     month: "short",
     day: "numeric",
@@ -265,20 +313,23 @@ function withOrdinal(day: number): string {
   return `${day}th`;
 }
 
+type EventTimeParts = {
+  month: string;
+  day: number;
+  hour: string;
+  minute: string;
+  meridiem: string;
+};
+
 /**
- * When an event starts, written the way an announcement reads out loud:
- * "August 4th 4:00PM".
- *
- * No end time. A church calendar blocks out an hour because the software
- * insists on one, not because anybody plans to leave then, so "4:00 PM – 5:00
- * PM" told the congregation something nobody meant. The locale is pinned
- * rather than left to the host: this renders on a cron worker, and the ordinal
- * is the point.
+ * One instant broken into the pieces an announcement says out loud. The locale
+ * is pinned rather than left to the host: this renders on a cron worker, and
+ * the ordinal is the point.
  */
-export function formatEventStart(
-  startAt: string,
+function eventTimeParts(
+  at: string,
   timeZone?: string | null,
-): string {
+): EventTimeParts {
   const parts = new Intl.DateTimeFormat("en-US", {
     month: "long",
     day: "numeric",
@@ -286,7 +337,7 @@ export function formatEventStart(
     minute: "2-digit",
     hour12: true,
     ...(timeZone ? { timeZone } : {}),
-  }).formatToParts(new Date(startAt));
+  }).formatToParts(new Date(at));
 
   const value = (type: Intl.DateTimeFormatPartTypes) =>
     parts.find((part) => part.type === type)?.value ?? "";
@@ -294,7 +345,60 @@ export function formatEventStart(
   const day = Number(value("day"));
   const meridiem = value("dayPeriod").replace(/\s| /g, "").toUpperCase();
 
-  return `${value("month")} ${withOrdinal(day)} ${value("hour")}:${value("minute")}${meridiem}`;
+  return {
+    month: value("month"),
+    day,
+    hour: value("hour"),
+    minute: value("minute"),
+    meridiem,
+  };
+}
+
+/**
+ * When an event happens, written the way an announcement reads out loud:
+ * "August 4th 4:00–5:00PM".
+ *
+ * The end time is here because a congregation planning an evening around a
+ * supper wants to know when it lets out. It is left off only where the
+ * calendar never gave one, and the opening meridiem is dropped when both ends
+ * share it, so the ordinary case reads as one span rather than two clock
+ * times.
+ *
+ * An all-day event prints as a bare date. `startAt` is then midnight UTC
+ * standing in for a time nobody chose, so it is read back in UTC — see
+ * `ALL_DAY_ZONE` — and no time is shown at all.
+ */
+export function formatEventWhen(
+  startAt: string,
+  endAt?: string | null,
+  timeZone?: string | null,
+  allDay?: boolean,
+): string {
+  if (allDay) {
+    const date = eventTimeParts(startAt, ALL_DAY_ZONE);
+    return `${date.month} ${withOrdinal(date.day)} (all day)`;
+  }
+
+  const start = eventTimeParts(startAt, timeZone);
+  const startDate = `${start.month} ${withOrdinal(start.day)}`;
+  const startClock = `${start.hour}:${start.minute}`;
+
+  if (!endAt) return `${startDate} ${startClock}${start.meridiem}`;
+
+  const end = eventTimeParts(endAt, timeZone);
+  const endClock = `${end.hour}:${end.minute}`;
+
+  // An event running past midnight needs both dates spelled out; anything
+  // inside a single day repeats neither the month nor the day.
+  if (end.month !== start.month || end.day !== start.day) {
+    return `${startDate} ${startClock}${start.meridiem} – ${end.month} ${withOrdinal(end.day)} ${endClock}${end.meridiem}`;
+  }
+
+  if (end.meridiem === start.meridiem) {
+    return `${startDate} ${startClock}–${endClock}${end.meridiem}`;
+  }
+
+  return `${startDate} ${startClock}${start.meridiem}–${endClock}${end.meridiem}`;
 }
 
 /**
@@ -303,14 +407,19 @@ export function formatEventStart(
  *
  * `timeZone` is required for correctness on the server: flyers render on
  * Vercel in UTC, and without it an evening event prints the next day's date.
+ *
+ * An all-day event has no time to print, and its date is read in UTC where the
+ * calendar wrote it — rendering that midnight in the church's own zone put the
+ * previous day on the flyer.
  */
 export function formatEventGraphicDetails(
   startAt: string,
   _endAt?: string | null,
   timeZone?: string | null,
+  allDay?: boolean,
 ): { dateLine: string; timeLine: string } {
   const start = new Date(startAt);
-  const zone = timeZone ? { timeZone } : {};
+  const zone = allDay ? { timeZone: ALL_DAY_ZONE } : timeZone ? { timeZone } : {};
 
   const dateLine = start
     .toLocaleDateString(undefined, {
@@ -320,6 +429,8 @@ export function formatEventGraphicDetails(
       ...zone,
     })
     .toUpperCase();
+
+  if (allDay) return { dateLine, timeLine: "ALL DAY" };
 
   const timeLine = start
     .toLocaleTimeString(undefined, {
@@ -332,6 +443,46 @@ export function formatEventGraphicDetails(
   return { dateLine, timeLine };
 }
 
+/**
+ * The date as an AI writer needs to be told it: weekday and year spelled out.
+ *
+ * A caption may name the day ("this Saturday"), and a model handed "Aug 4"
+ * with no weekday and no year works one out from whatever calendar its
+ * training left it with — August 4th is a Tuesday in 2026 and a Monday in
+ * 2025. Nothing downstream can catch that, so the weekday is stated rather
+ * than inferred.
+ */
+export function formatEventWhenForPrompt(
+  startAt: string,
+  endAt: string | null,
+  timeZone?: string | null,
+  allDay?: boolean,
+): string {
+  const dateOptions: Intl.DateTimeFormatOptions = {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    timeZone: allDay ? ALL_DAY_ZONE : timeZone ?? undefined,
+  };
+  const start = new Date(startAt);
+  const dateStr = start.toLocaleDateString("en-US", dateOptions);
+
+  if (allDay) return `${dateStr} (all day — no set time)`;
+
+  const timeOptions: Intl.DateTimeFormatOptions = {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: timeZone ?? undefined,
+  };
+  const startTime = start.toLocaleTimeString("en-US", timeOptions);
+
+  if (!endAt) return `${dateStr} at ${startTime}`;
+
+  const endTime = new Date(endAt).toLocaleTimeString("en-US", timeOptions);
+  return `${dateStr} from ${startTime} to ${endTime}`;
+}
+
 export function buildFacebookPostMessage(input: {
   title: string;
   location: string;
@@ -340,8 +491,14 @@ export function buildFacebookPostMessage(input: {
   notes?: string;
   /** Church IANA timezone — required on the server, where local time is UTC. */
   timeZone?: string | null;
+  allDay?: boolean;
 }): string {
-  const when = formatDateTimeRange(input.startAt, input.endAt, input.timeZone);
+  const when = formatDateTimeRange(
+    input.startAt,
+    input.endAt,
+    input.timeZone,
+    input.allDay,
+  );
   const lines = [input.title, when];
   if (input.location) lines.push(`📍 ${input.location}`);
   if (input.notes?.trim()) lines.push("", input.notes.trim());

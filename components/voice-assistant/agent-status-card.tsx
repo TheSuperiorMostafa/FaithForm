@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { CheckCircle2, CircleDashed, Phone, RefreshCw } from "lucide-react";
+import { CheckCircle2, CircleDashed, Link2, Phone, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import {
   provisionVoicePhoneNumber,
@@ -29,6 +29,7 @@ export function AgentStatusCard({
 }: AgentStatusCardProps) {
   const [areaCode, setAreaCode] = useState("");
   const [pending, startTransition] = useTransition();
+  const isLinked = status.agentMode === "linked";
   const isLive = Boolean(status.agentId && status.syncedAt);
   const hasNumber = Boolean(status.phoneNumber?.trim());
 
@@ -80,7 +81,12 @@ export function AgentStatusCard({
       </CardHeader>
       <CardContent className="space-y-4 text-sm">
         <div className="flex items-start gap-2">
-          {isLive ? (
+          {isLinked ? (
+            <Link2
+              className="mt-0.5 size-4 shrink-0 text-accent"
+              aria-hidden
+            />
+          ) : isLive ? (
             <CheckCircle2
               className="mt-0.5 size-4 shrink-0 text-green-600 dark:text-green-400"
               aria-hidden
@@ -93,14 +99,18 @@ export function AgentStatusCard({
           )}
           <div>
             <p className="font-medium">
-              {isLive
-                ? "Agent created and connected to FaithForm"
-                : "Not connected yet"}
+              {isLinked
+                ? "Linked to your existing Retell agent"
+                : isLive
+                  ? "Agent created and connected to FaithForm"
+                  : "Not connected yet"}
             </p>
             <p className="text-xs text-muted-foreground">
-              {isLive
-                ? "Save settings to keep the agent up to date, then get a number to start receiving calls."
-                : "Complete required settings and save to create your church’s voice agent."}
+              {isLinked
+                ? "FaithForm won’t modify this agent — call logs, transcripts, and scoring still flow in automatically."
+                : isLive
+                  ? "Save settings to keep the agent up to date, then get a number to start receiving calls."
+                  : "Complete required settings and save to create your church’s voice agent."}
             </p>
           </div>
         </div>
@@ -124,8 +134,9 @@ export function AgentStatusCard({
           <div className="rounded-xl border border-dashed border-border px-4 py-4">
             <p className="font-medium">No dial-in number yet</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Each church gets its own Retell number bound to this agent. Save
-              settings first if you haven’t created the agent.
+              {isLinked
+                ? "Bind a phone number to this agent in Retell, then use Refresh from Retell to pull it in here."
+                : "Each church gets its own Retell number bound to this agent. Save settings first if you haven’t created the agent."}
             </p>
           </div>
         )}
@@ -154,32 +165,8 @@ export function AgentStatusCard({
 
         {isAdmin && (
           <div className="space-y-3 border-t border-border pt-3">
-            {!hasNumber && (
-              <div className="space-y-2">
-                <Label htmlFor="area-code">Preferred area code (optional)</Label>
-                <Input
-                  id="area-code"
-                  inputMode="numeric"
-                  maxLength={3}
-                  placeholder="e.g. 615"
-                  value={areaCode}
-                  disabled={pending}
-                  onChange={(e) =>
-                    setAreaCode(e.target.value.replace(/\D/g, "").slice(0, 3))
-                  }
-                />
-              </div>
-            )}
-            <div className="flex flex-wrap gap-2">
-              {!hasNumber ? (
-                <Button
-                  type="button"
-                  disabled={pending}
-                  onClick={handleProvision}
-                >
-                  {pending ? "Setting up…" : "Get a phone number"}
-                </Button>
-              ) : (
+            {isLinked ? (
+              <div className="flex flex-wrap gap-2">
                 <Button
                   type="button"
                   variant="outline"
@@ -193,13 +180,57 @@ export function AgentStatusCard({
                   />
                   Refresh from Retell
                 </Button>
-              )}
-            </div>
-            {!hasNumber && (
-              <p className="text-xs text-muted-foreground">
-                Buys a US number from Retell and binds it to this church’s
-                agent. Save settings first if the agent isn’t created yet.
-              </p>
+              </div>
+            ) : (
+              <>
+                {!hasNumber && (
+                  <div className="space-y-2">
+                    <Label htmlFor="area-code">Preferred area code (optional)</Label>
+                    <Input
+                      id="area-code"
+                      inputMode="numeric"
+                      maxLength={3}
+                      placeholder="e.g. 615"
+                      value={areaCode}
+                      disabled={pending}
+                      onChange={(e) =>
+                        setAreaCode(e.target.value.replace(/\D/g, "").slice(0, 3))
+                      }
+                    />
+                  </div>
+                )}
+                <div className="flex flex-wrap gap-2">
+                  {!hasNumber ? (
+                    <Button
+                      type="button"
+                      disabled={pending}
+                      onClick={handleProvision}
+                    >
+                      {pending ? "Setting up…" : "Get a phone number"}
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={pending}
+                      onClick={handleSync}
+                    >
+                      <RefreshCw
+                        className={`mr-1.5 size-3.5 ${pending ? "animate-spin" : ""}`}
+                        aria-hidden
+                      />
+                      Refresh from Retell
+                    </Button>
+                  )}
+                </div>
+                {!hasNumber && (
+                  <p className="text-xs text-muted-foreground">
+                    Buys a US number from Retell and binds it to this church’s
+                    agent. Save settings first if the agent isn’t created yet.
+                  </p>
+                )}
+              </>
             )}
           </div>
         )}

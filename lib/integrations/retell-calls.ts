@@ -177,6 +177,10 @@ export async function importRetellCallsForChurch(
       sort_order: "descending",
       limit,
     },
+    // A linked church's agent may live in their own Retell account, so calls
+    // are listed with their key when one is saved, falling back to
+    // FaithForm's shared key.
+    churchId,
   });
 
   let imported = 0;

@@ -26,7 +26,23 @@ enum class AuthUiError {
     RATE_LIMITED,
     OFFLINE,
     NOT_CONFIGURED,
+    LINK_EXPIRED,
+    LINK_INVALID,
     GENERIC
+}
+
+/** The one mapping from a provider failure class to a UI sentence key, shared
+ * by the sign-in form and the confirmation-callback path. */
+fun authUiError(kind: AuthException.Kind): AuthUiError = when (kind) {
+    AuthException.Kind.INVALID_CREDENTIALS -> AuthUiError.INVALID_CREDENTIALS
+    AuthException.Kind.ACCOUNT_EXISTS -> AuthUiError.ACCOUNT_EXISTS
+    AuthException.Kind.WEAK_PASSWORD -> AuthUiError.WEAK_PASSWORD
+    AuthException.Kind.EMAIL_NOT_CONFIRMED -> AuthUiError.EMAIL_NOT_CONFIRMED
+    AuthException.Kind.RATE_LIMITED -> AuthUiError.RATE_LIMITED
+    AuthException.Kind.OFFLINE -> AuthUiError.OFFLINE
+    AuthException.Kind.NOT_CONFIGURED -> AuthUiError.NOT_CONFIGURED
+    AuthException.Kind.LINK_EXPIRED -> AuthUiError.LINK_EXPIRED
+    AuthException.Kind.OTHER -> AuthUiError.GENERIC
 }
 
 /** Every case is a real state: working disables the form, checkEmail is
@@ -171,14 +187,5 @@ class AuthViewModel(
         _resetNoticeVisible.value = false
     }
 
-    private fun map(error: AuthException): AuthUiError = when (error.kind) {
-        AuthException.Kind.INVALID_CREDENTIALS -> AuthUiError.INVALID_CREDENTIALS
-        AuthException.Kind.ACCOUNT_EXISTS -> AuthUiError.ACCOUNT_EXISTS
-        AuthException.Kind.WEAK_PASSWORD -> AuthUiError.WEAK_PASSWORD
-        AuthException.Kind.EMAIL_NOT_CONFIRMED -> AuthUiError.EMAIL_NOT_CONFIRMED
-        AuthException.Kind.RATE_LIMITED -> AuthUiError.RATE_LIMITED
-        AuthException.Kind.OFFLINE -> AuthUiError.OFFLINE
-        AuthException.Kind.NOT_CONFIGURED -> AuthUiError.NOT_CONFIGURED
-        AuthException.Kind.OTHER -> AuthUiError.GENERIC
-    }
+    private fun map(error: AuthException): AuthUiError = authUiError(error.kind)
 }

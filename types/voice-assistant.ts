@@ -14,6 +14,19 @@ export const VOICE_GENDERS = ["male", "female"] as const;
 
 export type VoiceGender = (typeof VOICE_GENDERS)[number];
 
+/**
+ * 'managed' — FaithForm creates the Retell agent and pushes prompt/config
+ * updates on every save (the default, and everything before this field
+ * existed).
+ * 'linked' — the agent was hand-built directly in Retell, before FaithForm
+ * existed, or otherwise lives outside FaithForm's control. Call logs,
+ * transcripts and scoring still flow in, but FaithForm never writes to the
+ * agent or its LLM.
+ */
+export const AGENT_MODES = ["managed", "linked"] as const;
+
+export type AgentMode = (typeof AGENT_MODES)[number];
+
 export const DENOMINATIONS = [
   "Baptist",
   "Catholic",
@@ -78,6 +91,7 @@ export type VoiceAssistantSettings = {
   retail_ai_agent_id: string | null;
   retail_ai_phone_number: string | null;
   agent_synced_at: string | null;
+  agent_mode: AgentMode;
   created_at: string;
   updated_at: string;
 };
@@ -117,6 +131,7 @@ export type VoiceAgentSyncStatus = {
   phoneNumber: string | null;
   syncedAt: string | null;
   isConfigured: boolean;
+  agentMode: AgentMode;
 };
 
 export type VoiceAssistantFormState = {

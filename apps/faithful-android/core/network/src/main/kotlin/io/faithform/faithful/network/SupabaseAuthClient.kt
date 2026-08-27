@@ -23,8 +23,57 @@ data class SupabaseAuthConfig(
      * product's own reset screen. Null falls back to the identity provider's
      * configured site URL.
      */
-    val resetRedirectOrigin: String? = null
+    val resetRedirectOrigin: String? = null,
+    /**
+     * Where the confirmation email returns to: this app's own callback,
+     * `AuthCallbackLink.CANONICAL`, allow-listed in the identity provider.
+     *
+     * Without it the provider falls back to its Site URL — the church
+     * dashboard — which is precisely the misroute this field exists to end.
+     * Never taken from a request or a link; it is build configuration.
+     */
+    val signUpRedirect: String? = null
 )
+
+/**
+ * Holds the PKCE verifier between signup and the confirmation link's return —
+ * across a process death, because the person is in their mail client in
+ * between. One instance per environment; the verifier is credential material
+ * and lives wherever sessions live, never in an ordinary preference.
+ */
+interface CodeVerifierStore {
+    fun save(verifier: String)
+    fun load(): String?
+    fun clear()
+}
+
+/**
+ * Proof-of-possession for the email-confirmation exchange (RFC 7636).
+ *
+ * The verifier never leaves the device; the challenge travels with signup, and
+ * the code the confirmation link carries is worthless without the verifier —
+ * which is what makes a custom-scheme callback safe to use: another app that
+ * hijacked the scheme would hold a code it cannot spend.
+ */
+object Pkce {
+    private const val ALPHABET =
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
+
+    /** 64 characters from the RFC's unreserved set, from [java.security.SecureRandom]. */
+    fun makeVerifier(): String {
+        val random = java.security.SecureRandom()
+        return buildString(64) {
+            repeat(64) { append(ALPHABET[random.nextInt(ALPHABET.length)]) }
+        }
+    }
+
+    /** base64url(SHA-256(verifier)), no padding — the `s256` method. */
+    fun challenge(verifier: String): String {
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(verifier.toByteArray(Charsets.US_ASCII))
+        return java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(digest)
+    }
+}
 
 /** A session as the identity provider minted it. The app maps it to storage. */
 data class SupabaseSession(
@@ -58,18 +107,36 @@ class AuthException(val kind: Kind) : Exception(kind.name) {
         RATE_LIMITED,
         OFFLINE,
         NOT_CONFIGURED,
+
+        /** A confirmation link that was already spent, timed out, or belongs
+         * to a flow this device no longer holds the verifier for. The way out
+         * is always the same — sign in — and the UI sentence says so. */
+        LINK_EXPIRED,
         OTHER
     }
 }
 
 class SupabaseAuthClient(
     private val config: SupabaseAuthConfig,
-    private val transport: HttpTransport
+    private val transport: HttpTransport,
+    private val verifierStore: CodeVerifierStore? = null,
+    private val makeVerifier: () -> String = Pkce::makeVerifier
 ) {
     private val json = Json { ignoreUnknownKeys = true }
 
     @Serializable
     private data class Credentials(val email: String, val password: String)
+
+    @Serializable
+    private data class PkceCredentials(
+        val email: String,
+        val password: String,
+        val code_challenge: String,
+        val code_challenge_method: String
+    )
+
+    @Serializable
+    private data class PkceExchange(val auth_code: String, val code_verifier: String)
 
     @Serializable
     private data class EmailOnly(val email: String)
@@ -97,15 +164,78 @@ class SupabaseAuthClient(
     )
 
     suspend fun signUp(email: String, password: String): SignUpOutcome {
-        val response = post(
-            "auth/v1/signup",
-            body = json.encodeToString(Credentials.serializer(), Credentials(email, password))
-        )
+        val redirect = config.signUpRedirect
+        val store = verifierStore
+
+        // PKCE: the confirmation email returns to this app's own callback with
+        // a code only this device can spend. Configured together — a redirect
+        // without a verifier store would mint links nothing could complete.
+        val response = if (redirect != null && store != null) {
+            val verifier = makeVerifier()
+            // Stored before the request leaves: the person is about to switch
+            // to their mail client, and the process may not survive the trip.
+            store.save(verifier)
+            post(
+                "auth/v1/signup",
+                query = "redirect_to=" + urlEncode(redirect),
+                body = json.encodeToString(
+                    PkceCredentials.serializer(),
+                    PkceCredentials(
+                        email = email,
+                        password = password,
+                        code_challenge = Pkce.challenge(verifier),
+                        code_challenge_method = "s256"
+                    )
+                )
+            )
+        } else {
+            post(
+                "auth/v1/signup",
+                body = json.encodeToString(Credentials.serializer(), Credentials(email, password))
+            )
+        }
         if (response.status !in 200..299) throw failure(response)
 
         val session = decodeSession(response.body)
         return if (session != null) SignUpOutcome.Session(session)
         else SignUpOutcome.ConfirmationRequired
+    }
+
+    /**
+     * Exchanges the code a confirmation link carried for a session, using the
+     * verifier this device stored at signup. Consumes the flow: on success the
+     * verifier is cleared and the code is spent server-side.
+     */
+    suspend fun completeEmailConfirmation(code: String): SupabaseSession {
+        // No verifier means the flow was started elsewhere or the app was
+        // reinstalled. The verify step already confirmed the address before
+        // redirecting, so the honest way forward is an ordinary sign-in.
+        val store = verifierStore ?: throw AuthException(AuthException.Kind.LINK_EXPIRED)
+        val verifier = store.load() ?: throw AuthException(AuthException.Kind.LINK_EXPIRED)
+
+        val response = post(
+            "auth/v1/token",
+            query = "grant_type=pkce",
+            body = json.encodeToString(PkceExchange.serializer(), PkceExchange(code, verifier))
+        )
+
+        if (response.status !in 200..299) {
+            val thrown = failure(response)
+            // Rate limits and outages keep their own kinds — the link may
+            // still be good. Everything else is a spent or foreign code, and
+            // "email or password is incorrect" would be nonsense here.
+            if (thrown.kind == AuthException.Kind.RATE_LIMITED ||
+                thrown.kind == AuthException.Kind.OFFLINE
+            ) {
+                throw thrown
+            }
+            throw AuthException(AuthException.Kind.LINK_EXPIRED)
+        }
+
+        val session = decodeSession(response.body)
+            ?: throw AuthException(AuthException.Kind.OTHER)
+        store.clear()
+        return session
     }
 
     suspend fun signIn(email: String, password: String): SupabaseSession {

@@ -49,6 +49,10 @@ export async function listCalendarEventsInRange(
     .map((event) => {
       const start = event.start?.dateTime ?? event.start?.date;
       const end = event.end?.dateTime ?? event.end?.date;
+      // An all-day event arrives as `date` rather than `dateTime`. The ISO
+      // instant below is midnight UTC, which is a placeholder rather than a
+      // time the church picked, so the flag travels with it.
+      const allDay = Boolean(!event.start?.dateTime && event.start?.date);
 
       return {
         googleEventId: event.id!,
@@ -57,6 +61,7 @@ export async function listCalendarEventsInRange(
         location: event.location ?? "",
         startAt: start ? new Date(start).toISOString() : new Date().toISOString(),
         endAt: end ? new Date(end).toISOString() : null,
+        allDay,
         htmlLink: event.htmlLink ?? undefined,
       };
     });

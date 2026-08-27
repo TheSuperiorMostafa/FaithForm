@@ -91,7 +91,12 @@ export function AnnouncementEmailForm({
           <code className="rounded bg-muted px-1 py-0.5 text-xs">
             {ANNOUNCEMENT_EMAIL_BODY_PLACEHOLDERS.events}
           </code>{" "}
-          appears.
+          appears. Web addresses become links on their own; to give a link your
+          own wording, write{" "}
+          <code className="rounded bg-muted px-1 py-0.5 text-xs">
+            [Register here](https://example.org/signup)
+          </code>
+          .
         </p>
       </CardHeader>
       <CardContent>

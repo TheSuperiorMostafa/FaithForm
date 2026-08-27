@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { AnnouncementEmailForm } from "@/components/settings/announcement-email-form";
+import { CommunicationAttachmentsForm } from "@/components/settings/communication-attachments-form";
 import { FollowUpMessagesForm } from "@/components/settings/follow-up-messages-form";
 import { GivingCard } from "@/components/settings/giving-card";
 import { IntegrationsCard } from "@/components/settings/integrations-card";
@@ -20,6 +21,7 @@ import {
 } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ChurchGivingProfile, GivingFundRow } from "@/types/giving";
+import type { CommunicationAttachment } from "@/lib/announcements/attachments";
 import type { AnnouncementEmailTemplate } from "@/lib/email/announcement-template";
 import type { FeatureKey } from "@/lib/features/catalog";
 
@@ -30,6 +32,7 @@ type SettingsTabsProps = {
   givingFunds: GivingFundRow[];
   followUpTemplates: string[];
   announcementEmailTemplate: AnnouncementEmailTemplate;
+  communicationAttachments: CommunicationAttachment[];
   team: Omit<TeamMembersCardProps, "isAdmin">;
   /** Feature-gated tabs are hidden when the viewer can't use them. */
   allowedFeatures: FeatureKey[];
@@ -75,6 +78,7 @@ function SettingsTabsInner({
   givingFunds,
   followUpTemplates,
   announcementEmailTemplate,
+  communicationAttachments,
   team,
   allowedFeatures,
 }: SettingsTabsProps) {
@@ -156,10 +160,16 @@ function SettingsTabsInner({
       </TabsContent>
 
       <TabsContent value="communications" className="mt-0">
-        <AnnouncementEmailForm
-          isAdmin={isAdmin}
-          template={announcementEmailTemplate}
-        />
+        <div className="flex flex-col gap-4">
+          <AnnouncementEmailForm
+            isAdmin={isAdmin}
+            template={announcementEmailTemplate}
+          />
+          <CommunicationAttachmentsForm
+            isAdmin={isAdmin}
+            attachments={communicationAttachments}
+          />
+        </div>
       </TabsContent>
 
       <TabsContent value="attendance" className="mt-0">

@@ -2,12 +2,14 @@ import Foundation
 import Observation
 
 /// Where the sign-in flow currently is. Every case is a real state: working
-/// disables the form, checkEmail is signup's "confirm first" outcome, and
-/// failed carries the sentence to show — never a provider string.
+/// disables the form, checkEmail is signup's "confirm first" outcome,
+/// confirmingEmail is a confirmation link being exchanged, and failed carries
+/// the sentence to show — never a provider string.
 public enum AuthPhase: Equatable, Sendable {
     case idle
     case working
     case checkEmail
+    case confirmingEmail
     case failed(String)
 }
 
@@ -106,6 +108,48 @@ public final class AuthModel {
             phase = .failed(failure.message)
         } catch {
             phase = .failed(L.authErrorGeneric)
+        }
+    }
+
+    /// Codes already exchanged (or refused as spent) this launch. Mail apps
+    /// and OS link-resolution can deliver the same URL more than once; a
+    /// consumed code must be a no-op, never a second exchange.
+    private var consumedCodes: Set<String> = []
+
+    /// One confirmation link, arriving from the composition root.
+    ///
+    /// Idempotent by construction: a duplicate delivery, a replay after
+    /// success, or a tap during an exchange all change nothing. Only failures
+    /// the provider might still honour — offline, rate-limited — leave the
+    /// code unconsumed so the person can simply tap the link again.
+    public func handleConfirmationCallback(_ outcome: AuthCallbackLink.Outcome) async {
+        switch outcome {
+        case let .code(code):
+            guard let auth else {
+                phase = .failed(L.authErrorUnconfigured)
+                return
+            }
+            guard phase != .confirmingEmail, !consumedCodes.contains(code) else { return }
+
+            phase = .confirmingEmail
+            do {
+                let session = try await auth.completeEmailConfirmation(code: code)
+                consumedCodes.insert(code)
+                await onAuthenticated(session, nil)
+                phase = .idle
+            } catch let failure as AuthFailure {
+                if failure.kind != .offline && failure.kind != .rateLimited {
+                    consumedCodes.insert(code)
+                }
+                phase = .failed(failure.message)
+            } catch {
+                phase = .failed(L.authErrorGeneric)
+            }
+
+        case let .failure(reason):
+            phase = .failed(
+                reason == .expired ? L.authErrorLinkExpired : L.authErrorLinkInvalid
+            )
         }
     }
 

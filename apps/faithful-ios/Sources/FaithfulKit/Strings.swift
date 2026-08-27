@@ -322,6 +322,9 @@ public enum L {
         t("offline_body", "FaithForm will load your account as soon as you're back on a network.")
     }
     public static var errorTitle: String { t("error_title", "Something went wrong") }
+    public static var errorLoadFailedBody: String {
+        t("error_load_failed_body", "You're signed in, but your account couldn't be loaded. This is usually temporary — try again in a moment.")
+    }
     public static var tryAgain: String { t("try_again", "Try again") }
     public static var retry: String { t("retry", "Retry") }
     public static var refresh: String { t("refresh", "Refresh") }
@@ -743,6 +746,15 @@ public enum L {
     }
     public static var authErrorGeneric: String {
         t("auth_error_generic", "Something went wrong. Try again.")
+    }
+    public static var authConfirmingEmail: String {
+        t("auth_confirming_email", "Confirming your email…")
+    }
+    public static var authErrorLinkExpired: String {
+        t("auth_error_link_expired", "That confirmation link has expired or was already used. Sign in with your email and password.")
+    }
+    public static var authErrorLinkInvalid: String {
+        t("auth_error_link_invalid", "That confirmation link isn't valid. Sign in with your email and password, or create your account again for a fresh link.")
     }
 
     // MARK: - Invitations

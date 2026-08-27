@@ -20,6 +20,7 @@ import { ActivityPagination } from "@/components/admin/activity-pagination";
 import { ChurchAISettingsPanel } from "@/components/admin/church-ai-settings-panel";
 import { ChurchFeaturesPanel } from "@/components/admin/church-features-panel";
 import { ChurchGivingPanel } from "@/components/admin/church-giving-panel";
+import { ChurchVoiceAgentPanel } from "@/components/admin/church-voice-agent-panel";
 import { ChurchWebsitePanel } from "@/components/admin/church-website-panel";
 import { InviteChurchAdminCard } from "@/components/admin/invite-church-admin-card";
 import { ChurchProfileForm } from "@/components/church-profile/church-profile-form";
@@ -35,6 +36,7 @@ import type {
   SiteDomainRequest,
 } from "@/lib/sites/domain-queries";
 import type { ChurchProfileFormState } from "@/types/church-profile";
+import type { VoiceAssistantSettings } from "@/types/voice-assistant";
 
 type ChurchDetailTabsProps = {
   detail: AdminChurchDetail;
@@ -52,6 +54,10 @@ type ChurchDetailTabsProps = {
   domainAutomated: boolean;
   /** Which tab to open on, so a link from an alert email lands on the right one. */
   defaultTab: string;
+  /** Voice assistant settings, for the "linked Retell agent" control on the AI tab. */
+  voiceAgentSettings: VoiceAssistantSettings | null;
+  /** Whether this church has its own saved Retell API key (never the key itself). */
+  hasRetellKey: boolean;
 };
 
 function MemberAccessCell({
@@ -95,6 +101,8 @@ export function ChurchDetailTabs({
   domainRequests,
   domainAutomated,
   defaultTab,
+  voiceAgentSettings,
+  hasRetellKey,
 }: ChurchDetailTabsProps) {
   const openDomainRequests = domainRequests.filter((request) =>
     ["submitted", "in_review", "awaiting_church", "in_progress"].includes(
@@ -212,11 +220,16 @@ export function ChurchDetailTabs({
         />
       </TabsContent>
 
-      <TabsContent value="ai">
+      <TabsContent value="ai" className="space-y-4">
         <ChurchAISettingsPanel
           churchId={detail.church.id}
           churchName={detail.church.name}
           settings={detail.settings}
+        />
+        <ChurchVoiceAgentPanel
+          churchId={detail.church.id}
+          settings={voiceAgentSettings}
+          hasRetellKey={hasRetellKey}
         />
       </TabsContent>
 

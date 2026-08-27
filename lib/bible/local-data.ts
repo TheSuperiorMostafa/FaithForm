@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import path from "node:path";
+import { CURATED_TRANSLATION_FILE_CODES } from "@/lib/bible/curated-codes";
 import { createAdminClientOrNull } from "@/lib/supabase/admin";
 
 /** Book → Chapter → Verse → text */
@@ -61,8 +62,7 @@ export async function listLocalTranslationCodes(): Promise<Set<string>> {
 
   const codes = new Set<string>();
 
-  const curated = ["KJV", "ESV", "NIV", "NLT", "CSB", "NKJV"];
-  for (const code of curated) {
+  for (const code of CURATED_TRANSLATION_FILE_CODES) {
     if (existsSync(localDevPath(code))) {
       codes.add(code);
     }

@@ -32,6 +32,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.faithform.faithful.ConfirmationPhase
 import io.faithform.faithful.R
 import io.faithform.faithful.design.FaithfulTokens
 import io.faithform.faithful.design.LocalFaithfulTheme
@@ -48,7 +49,11 @@ import io.faithform.faithful.design.LocalFaithfulTheme
 private enum class AuthScreen { LANDING, CREATE_ACCOUNT, SIGN_IN, RESET }
 
 @Composable
-fun AuthFlow(viewModel: AuthViewModel, hasPendingInvitation: Boolean) {
+fun AuthFlow(
+    viewModel: AuthViewModel,
+    hasPendingInvitation: Boolean,
+    confirmationPhase: ConfirmationPhase = ConfirmationPhase.Idle
+) {
     var screen by rememberSaveable { mutableStateOf(AuthScreen.LANDING) }
 
     fun move(to: AuthScreen) {
@@ -63,6 +68,7 @@ fun AuthFlow(viewModel: AuthViewModel, hasPendingInvitation: Boolean) {
     when (screen) {
         AuthScreen.LANDING -> LandingScreen(
             hasPendingInvitation = hasPendingInvitation,
+            confirmationPhase = confirmationPhase,
             onCreateAccount = { move(AuthScreen.CREATE_ACCOUNT) },
             onSignIn = { move(AuthScreen.SIGN_IN) }
         )
@@ -81,6 +87,7 @@ fun AuthFlow(viewModel: AuthViewModel, hasPendingInvitation: Boolean) {
 @Composable
 private fun LandingScreen(
     hasPendingInvitation: Boolean,
+    confirmationPhase: ConfirmationPhase,
     onCreateAccount: () -> Unit,
     onSignIn: () -> Unit
 ) {
@@ -116,6 +123,31 @@ private fun LandingScreen(
                     .background(theme.palette.surface, RoundedCornerShape(FaithfulTokens.Radius.lg))
                     .padding(FaithfulTokens.Spacing.base)
             )
+        }
+
+        // A confirmation link lands here, on the front door, before any
+        // screen was chosen. Both of its states are visible in place: the
+        // exchange in progress, and the sentence when it could not finish.
+        when (confirmationPhase) {
+            is ConfirmationPhase.Working -> Text(
+                stringResource(R.string.auth_confirming_email),
+                style = MaterialTheme.typography.bodyMedium,
+                color = theme.palette.contentSecondary,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(theme.palette.surface, RoundedCornerShape(FaithfulTokens.Radius.lg))
+                    .padding(FaithfulTokens.Spacing.base)
+            )
+            is ConfirmationPhase.Failed -> Text(
+                stringResource(confirmationPhase.error.messageRes()),
+                style = MaterialTheme.typography.bodyMedium,
+                color = theme.palette.destructive,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(theme.palette.surface, RoundedCornerShape(FaithfulTokens.Radius.lg))
+                    .padding(FaithfulTokens.Spacing.base)
+            )
+            is ConfirmationPhase.Idle -> Unit
         }
 
         Spacer(Modifier.weight(1f))
@@ -371,7 +403,7 @@ private fun AuthErrorText(error: AuthUiError) {
     )
 }
 
-private fun AuthUiError.messageRes(): Int = when (this) {
+internal fun AuthUiError.messageRes(): Int = when (this) {
     AuthUiError.EMAIL_INVALID -> R.string.auth_error_email_invalid
     AuthUiError.PASSWORD_MISSING -> R.string.auth_error_password_missing
     AuthUiError.WEAK_PASSWORD -> R.string.auth_error_weak_password
@@ -381,5 +413,7 @@ private fun AuthUiError.messageRes(): Int = when (this) {
     AuthUiError.RATE_LIMITED -> R.string.auth_error_rate_limited
     AuthUiError.OFFLINE -> R.string.auth_error_offline
     AuthUiError.NOT_CONFIGURED -> R.string.auth_error_unconfigured
+    AuthUiError.LINK_EXPIRED -> R.string.auth_error_link_expired
+    AuthUiError.LINK_INVALID -> R.string.auth_error_link_invalid
     AuthUiError.GENERIC -> R.string.auth_error_generic
 }

@@ -43,7 +43,7 @@ export function PublishedAnnouncementsList({
               <div>
                   <p className="font-semibold">{item.title}</p>
                 <p className="text-sm text-muted-foreground">
-                  {formatDateTimeRange(item.start_at, item.end_at)}
+                  {formatDateTimeRange(item.start_at, item.end_at, null, item.all_day)}
                 </p>
                 {item.last_publish_error && (
                   <p className="mt-1 text-xs font-semibold text-amber-700 dark:text-amber-300">

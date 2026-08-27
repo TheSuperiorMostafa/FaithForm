@@ -3,8 +3,10 @@ package io.faithform.faithful.session
 import android.content.Context
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import io.faithform.faithful.navigation.AuthCallbackLink
 import io.faithform.faithful.network.ApiClient
 import io.faithform.faithful.network.ApiEnvironment
+import io.faithform.faithful.network.CodeVerifierStore
 import io.faithform.faithful.network.HttpTransport
 import io.faithform.faithful.network.OkHttpTransport
 import io.faithform.faithful.network.SupabaseAuthClient
@@ -49,6 +51,22 @@ class AppContainer(
     val transport: HttpTransport = OkHttpTransport()
 
     /**
+     * The PKCE verifier between signup and the confirmation link's return.
+     * Credential material, so it lives in the same encrypted store as the
+     * session — and `purgeEverything`'s clear() sweeps it with everything else.
+     */
+    private val verifierStore = object : CodeVerifierStore {
+        private val key = "authflow.$environmentKey"
+        override fun save(verifier: String) {
+            secureStore.edit().putString(key, verifier).apply()
+        }
+        override fun load(): String? = secureStore.getString(key, null)
+        override fun clear() {
+            secureStore.edit().remove(key).apply()
+        }
+    }
+
+    /**
      * Null when this build has no identity provider configured. The sign-in
      * screen still renders; submitting explains what is missing. Both values
      * are public by design — see `app/build.gradle.kts`.
@@ -61,9 +79,15 @@ class AppContainer(
                 anonKey = supabaseAnonKey,
                 // Password-reset emails land on this build's own web origin,
                 // so a staging build cannot mail someone a production link.
-                resetRedirectOrigin = apiOrigin
+                resetRedirectOrigin = apiOrigin,
+                // Confirmation emails return to this app's own callback — the
+                // contract constant, never a value a request or link supplied.
+                // Without it the identity provider falls back to its Site URL,
+                // which is the church dashboard, not this app.
+                signUpRedirect = AuthCallbackLink.CANONICAL
             ),
-            transport
+            transport,
+            verifierStore = verifierStore
         )
 
     val sessionStore = AndroidSessionStore(

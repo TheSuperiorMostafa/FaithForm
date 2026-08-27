@@ -89,3 +89,26 @@ export function fromDatetimeLocalValue(value: string): string | null {
   if (Number.isNaN(d.getTime())) return null;
   return d.toISOString();
 }
+
+/**
+ * ISO timestamptz → value for `<input type="date" />`, read in UTC.
+ *
+ * All-day events are stored as midnight UTC on the date the calendar gave.
+ * Reading that back in the browser's own zone shows the day before for anyone
+ * west of Greenwich, and editing the event would then save that wrong day.
+ */
+export function toDateInputValue(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toISOString().slice(0, 10);
+}
+
+/** `<input type="date" />` value → midnight UTC ISO string, or null. */
+export function fromDateInputValue(value: string): string | null {
+  const trimmed = value.trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return null;
+  const d = new Date(`${trimmed}T00:00:00.000Z`);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
