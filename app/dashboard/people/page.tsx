@@ -1,8 +1,12 @@
 import { redirect } from "next/navigation";
 
+import { JoinRequestsPanel } from "@/components/people/join-requests-panel";
 import { PeopleClaimsPanel } from "@/components/people/people-claims-panel";
 import { PeopleManager } from "@/components/people/people-manager";
-import { getPendingClaims } from "@/app/dashboard/people/claim-actions";
+import {
+  getPendingClaims,
+  getVisitorRelationships,
+} from "@/app/dashboard/people/claim-actions";
 import { getChurchAuth } from "@/lib/auth/church";
 import { getMembersForChurch } from "@/lib/queries/members";
 import { createClient } from "@/lib/supabase/server";
@@ -28,13 +32,19 @@ export default async function PeoplePage() {
   }
 
   const supabase = createClient();
-  const [members, pendingClaims] = await Promise.all([
+  const [members, pendingClaims, relationships] = await Promise.all([
     getMembersForChurch(supabase, auth.churchId, { includeInactive: true }),
     getPendingClaims(),
+    getVisitorRelationships(),
   ]);
+
+  const joinRequests = relationships.items.filter(
+    (relationship) => relationship.state === "pending",
+  );
 
   return (
     <div className="flex w-full flex-col gap-5">
+      <JoinRequestsPanel requests={joinRequests} />
       <PeopleClaimsPanel claims={pendingClaims} />
       <PeopleManager initialMembers={members} isAdmin={auth.isAdmin} />
     </div>

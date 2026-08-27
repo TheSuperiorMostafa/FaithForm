@@ -12,6 +12,8 @@ import { IntegrationsCard } from "@/components/settings/integrations-card";
 import type { IntegrationsCardProps } from "@/components/settings/integrations-card";
 import { TeamMembersCard } from "@/components/settings/team-members-card";
 import type { TeamMembersCardProps } from "@/components/settings/team-members-card";
+import { VisitorInvitationsCard } from "@/components/settings/visitor-invitations-card";
+import type { InvitationSummary } from "@/lib/faithful/invitations";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
   Card,
@@ -36,6 +38,7 @@ type SettingsTabsProps = {
   /** Feature-gated tabs are hidden when the viewer can't use them. */
   allowedFeatures: FeatureKey[];
   faithful: Omit<FaithfulVisibilityCardProps, "isAdmin">;
+  invitations: InvitationSummary[];
 };
 
 /** Params an OAuth callback appends when it returns to Settings. */
@@ -81,6 +84,7 @@ function SettingsTabsInner({
   team,
   allowedFeatures,
   faithful,
+  invitations,
 }: SettingsTabsProps) {
   const searchParams = useSearchParams();
 
@@ -121,7 +125,10 @@ function SettingsTabsInner({
       </TabsContent>
 
       <TabsContent value="faithful" className="mt-0">
-        <FaithfulVisibilityCard isAdmin={isAdmin} {...faithful} />
+        <div className="flex flex-col gap-4">
+          <FaithfulVisibilityCard isAdmin={isAdmin} {...faithful} />
+          <VisitorInvitationsCard isAdmin={isAdmin} invitations={invitations} />
+        </div>
       </TabsContent>
 
       <TabsContent value="general" className="mt-0">
