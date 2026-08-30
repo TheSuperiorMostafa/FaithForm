@@ -1,4 +1,3 @@
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { Toaster } from "sonner";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
@@ -12,10 +11,9 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const [auth, featureAccess, cookieStore] = await Promise.all([
+  const [auth, featureAccess] = await Promise.all([
     getChurchAuth(),
     getFeatureAccess(),
-    cookies(),
   ]);
 
   // No staff membership, no dashboard — including for a signed-in Faithful
@@ -27,7 +25,6 @@ export default async function DashboardLayout({
   if (!auth) {
     redirect("/login");
   }
-  const initialCollapsed = cookieStore.get("sidebar:collapsed")?.value === "1";
 
   return (
     <>
@@ -35,7 +32,6 @@ export default async function DashboardLayout({
         userEmail={auth.userEmail}
         churchName={auth.churchName}
         role={auth.role}
-        initialCollapsed={initialCollapsed}
         allowedFeatures={featureAccess?.allowed ?? []}
       >
         {children}

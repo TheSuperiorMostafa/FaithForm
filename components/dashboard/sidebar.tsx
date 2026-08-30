@@ -3,22 +3,22 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type MouseEvent } from "react";
-import { ChevronLeft, ChevronRight, LogOut } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
 import type { FeatureKey } from "@/lib/features/catalog";
+import { resolveSidebarLayout } from "@/lib/dashboard/sidebar-layout";
 import { cn } from "@/lib/utils";
 import {
   navItems,
   filterNavByFeatures,
   footerUtilityNavItems,
 } from "./nav-items";
+import { useSidebarHoverIntent } from "./use-sidebar-hover-intent";
 
 type SidebarProps = {
   userEmail: string;
   churchName: string | null;
   role: string | null;
-  collapsed: boolean;
-  onCollapsedChange: (collapsed: boolean) => void;
   allowedFeatures: FeatureKey[];
 };
 
@@ -115,29 +115,52 @@ export function Sidebar({
   userEmail,
   churchName,
   role,
-  collapsed,
-  onCollapsedChange,
   allowedFeatures,
 }: SidebarProps) {
   const pathname = usePathname();
   const [pendingHref, setPendingHref] = useState<string | null>(null);
 
+  const hoverIntent = useSidebarHoverIntent();
+  const { expanded, panelWidth, overlaying } = resolveSidebarLayout({
+    hovering: hoverIntent.hovering,
+    keyboardFocusWithin: hoverIntent.keyboardFocusWithin,
+    touchOpen: hoverIntent.touchOpen,
+  });
+  const collapsed = !expanded;
+  const closeSidebar = hoverIntent.close;
+
   useEffect(() => {
     setPendingHref(null);
   }, [pathname]);
 
+  // Navigating away is "done here" — retract the overlay instead of leaving it
+  // floating over the page the user just landed on.
+  useEffect(() => {
+    closeSidebar();
+  }, [pathname, closeSidebar]);
+
+  // Escape is the expected way out of anything floating over the page.
+  useEffect(() => {
+    if (!overlaying) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") closeSidebar();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [overlaying, closeSidebar]);
+
   const initial = (userEmail ?? "F").charAt(0).toUpperCase();
   const navItemsForSidebar = filterNavByFeatures(navItems, allowedFeatures);
 
-  const toggle = () => onCollapsedChange(!collapsed);
-
   return (
     <aside
+      ref={hoverIntent.sidebarRef}
+      {...hoverIntent.handlers}
       data-collapsed={collapsed}
+      style={{ width: panelWidth }}
       className={cn(
-        "group/sidebar fixed inset-y-0 left-0 z-30 hidden flex-col overflow-x-hidden overflow-y-hidden border-r border-sidebar bg-sidebar text-sidebar shadow-2xl md:flex",
+        "fixed inset-y-0 left-0 z-30 hidden flex-col overflow-x-hidden overflow-y-hidden border-r border-sidebar bg-sidebar text-sidebar shadow-2xl md:flex",
         "transition-[width] duration-200 ease-out motion-reduce:transition-none",
-        collapsed ? "w-[72px]" : "w-64",
       )}
     >
       {/* Brand header */}
@@ -168,24 +191,6 @@ export function Sidebar({
           </div>
         </div>
       </div>
-
-      <button
-        type="button"
-        onClick={toggle}
-        className={cn(
-          "absolute top-1/2 z-20 flex size-7 -translate-y-1/2 items-center justify-center rounded-full border border-sidebar bg-sidebar text-white/70 shadow-sm",
-          "hover:bg-sidebar-accent hover:text-white hover:shadow-md",
-          "opacity-0 group-hover/sidebar:opacity-100 focus-visible:opacity-100",
-          collapsed ? "left-1/2 -translate-x-1/2" : "-right-3",
-        )}
-        aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-      >
-        {collapsed ? (
-          <ChevronRight className="size-3.5" />
-        ) : (
-          <ChevronLeft className="size-3.5" />
-        )}
-      </button>
 
       {/* Nav items */}
       <nav className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain p-3">
