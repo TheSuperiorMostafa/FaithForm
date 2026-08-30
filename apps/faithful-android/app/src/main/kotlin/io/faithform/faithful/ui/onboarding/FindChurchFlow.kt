@@ -85,11 +85,24 @@ fun FindChurchFlow(
         DiscoveryViewModel(container.apiClient, locationProvider)
     }
 
-    // A deep-linked invitation goes straight to entry — nobody should search
-    // for a church they were already invited to.
     val pendingToken by appViewModel.pendingInvitationToken.collectAsStateWithLifecycle()
+    val churchContext by appViewModel.churchContext.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) {
-        if (showWelcome && pendingToken != null) route = FindChurchRoute.Invitation
+        if (!showWelcome) return@LaunchedEffect
+
+        // A church link named where this person was heading. Open that church,
+        // not a search box — but stop at its profile rather than joining for
+        // them. A link is an address, not consent, and the join button is right
+        // there on the screen it opens.
+        val context = churchContext
+        if (context != null && !context.isInvitation) {
+            route = FindChurchRoute.Church(context.churchSlug)
+            return@LaunchedEffect
+        }
+
+        // A deep-linked invitation goes straight to entry — nobody should
+        // search for a church they were already invited to.
+        if (pendingToken != null) route = FindChurchRoute.Invitation
     }
 
     fun back() {

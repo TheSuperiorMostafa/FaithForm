@@ -136,6 +136,9 @@ struct OnboardingFlowView: View {
     enum Route: Hashable {
         case search
         case invitation
+        /// One church, opened directly — the destination a `faithful://church/`
+        /// link resolved to before the person had an account.
+        case church(String)
     }
 
     @Environment(\.faithfulTheme) private var theme
@@ -180,13 +183,26 @@ struct OnboardingFlowView: View {
                     InvitationEntryView(model: root.onboarding) {
                         Task { await root.load(quiet: true) }
                     }
+                case let .church(slug):
+                    ChurchProfileHostView(slug: slug, dependencies: dependencies, root: root)
                 }
             }
         }
         .task {
+            guard path.isEmpty else { return }
+
+            // A church link named where this person was heading. Open that
+            // church, not a search box — but stop at its profile rather than
+            // joining for them. A link is an address, not consent, and the join
+            // button is right there on the screen it opens.
+            if let context = root.onboarding.churchContext, !context.isInvitation {
+                path = [.church(context.churchSlug)]
+                return
+            }
+
             // An invitation that arrived by deep link goes straight to entry —
             // nobody should search for a church they were already invited to.
-            if root.onboarding.pendingInvitationToken != nil, path.isEmpty {
+            if root.onboarding.pendingInvitationToken != nil {
                 path = [.invitation]
             }
         }

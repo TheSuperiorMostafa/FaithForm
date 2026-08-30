@@ -142,6 +142,14 @@ class SupabaseAuthClient(
     private data class EmailOnly(val email: String)
 
     @Serializable
+    private data class ResendRequest(
+        val type: String,
+        val email: String,
+        val code_challenge: String? = null,
+        val code_challenge_method: String? = null
+    )
+
+    @Serializable
     private data class RefreshBody(val refresh_token: String)
 
     @Serializable
@@ -283,6 +291,45 @@ class SupabaseAuthClient(
                 throw thrown
             }
         }
+    }
+
+    /**
+     * Re-sends the signup confirmation.
+     *
+     * Carries the same PKCE challenge and the same redirect as the original
+     * signup, so the new link is completable by this device exactly like the
+     * first one. Without the challenge the fresh link would return a code
+     * nothing on this device could spend — a worse outcome than not resending.
+     *
+     * The stored verifier is reused rather than reminted: a new one would
+     * orphan the link already sitting in the person's inbox, and both should
+     * work.
+     */
+    suspend fun resendConfirmation(email: String) {
+        val redirect = config.signUpRedirect
+        val store = verifierStore
+
+        val body = if (redirect != null && store != null) {
+            val verifier = store.load() ?: makeVerifier().also { store.save(it) }
+            ResendRequest(
+                type = "signup",
+                email = email,
+                code_challenge = Pkce.challenge(verifier),
+                code_challenge_method = "s256"
+            )
+        } else {
+            ResendRequest(type = "signup", email = email)
+        }
+
+        val response = post(
+            "auth/v1/resend",
+            query = redirect?.let { "redirect_to=" + urlEncode(it) },
+            body = json.encodeToString(ResendRequest.serializer(), body)
+        )
+        // Rate limiting is the one failure worth surfacing: it is exactly what
+        // someone hits when they tap "send it again" twice, and silence would
+        // read as a second email that never comes.
+        if (response.status !in 200..299) throw failure(response)
     }
 
     private suspend fun post(path: String, query: String? = null, body: String): HttpResponse {

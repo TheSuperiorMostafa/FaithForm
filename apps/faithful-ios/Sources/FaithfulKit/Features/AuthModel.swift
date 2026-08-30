@@ -32,6 +32,24 @@ public final class AuthModel {
     /// the address has an account, so the form cannot test addresses.
     public private(set) var resetNoticeVisible = false
 
+    /// The address "check your email" is about.
+    ///
+    /// Captured when signup succeeded rather than read from `email`, which stays
+    /// editable: a screen that says where a link was sent must keep saying the
+    /// address it was actually sent to.
+    public private(set) var confirmationEmail = ""
+    /// Set after a confirmation email was sent again, so the screen can
+    /// acknowledge the tap rather than looking inert.
+    public private(set) var resendNoticeVisible = false
+    /// Resending has its **own** in-flight flag rather than borrowing `phase`.
+    /// `phase` is what decides whether the check-your-email screen is showing
+    /// at all, so moving it to `.working` for a resend would replace that
+    /// screen with the signup form mid-tap.
+    public private(set) var isResending = false
+    /// Likewise its own error: a rate-limited resend is a note on this screen,
+    /// not a failed signup.
+    public private(set) var resendError: String?
+
     private let auth: SessionAuthenticating?
     private let onAuthenticated: @MainActor (StoredSession, _ displayName: String?) async -> Void
 
@@ -80,6 +98,7 @@ public final class AuthModel {
                 await onAuthenticated(session, trimmedName)
                 phase = .idle
             case .confirmationRequired:
+                confirmationEmail = trimmedEmail
                 phase = .checkEmail
             }
         } catch let failure as AuthFailure {
@@ -109,6 +128,47 @@ public final class AuthModel {
         } catch {
             phase = .failed(L.authErrorGeneric)
         }
+    }
+
+    /// Sends the confirmation email again.
+    ///
+    /// The overwhelmingly common reason someone is stuck on this screen is that
+    /// the first email never arrived, so this is the one action worth putting in
+    /// front of them. A rate limit is surfaced — tapping twice and being told
+    /// nothing would read as a second email that never came — and every other
+    /// failure resolves to the notice, because from here the person can only
+    /// wait or try a different address either way.
+    public func resendConfirmation() async {
+        guard let auth, !confirmationEmail.isEmpty, !isResending else { return }
+
+        isResending = true
+        resendError = nil
+        resendNoticeVisible = false
+        defer { isResending = false }
+
+        do {
+            try await auth.resendConfirmation(email: confirmationEmail)
+            resendNoticeVisible = true
+        } catch let failure as AuthFailure where failure.kind == .rateLimited {
+            resendError = failure.message
+        } catch {
+            // Anything else resolves to the notice. From here the person can
+            // only wait or use a different address either way, and an error
+            // about a send they cannot retry differently is just noise.
+            resendNoticeVisible = true
+        }
+    }
+
+    /// "Use a different address" — back to an empty form, with the address that
+    /// did not work cleared rather than left to be corrected character by
+    /// character.
+    public func startOver() {
+        email = ""
+        password = ""
+        confirmationEmail = ""
+        resendNoticeVisible = false
+        resendError = nil
+        phase = .idle
     }
 
     /// Codes already exchanged (or refused as spent) this launch. Mail apps
@@ -181,5 +241,7 @@ public final class AuthModel {
         password = ""
         phase = .idle
         resetNoticeVisible = false
+        resendNoticeVisible = false
+        resendError = nil
     }
 }

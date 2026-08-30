@@ -51,6 +51,7 @@ __pycache__/
 
 # Native build outputs
 apps/faithful-android/.gradle/
+apps/faithful-android/.kotlin/
 apps/faithful-android/build/
 apps/faithful-android/**/build/
 apps/faithful-android/local.properties

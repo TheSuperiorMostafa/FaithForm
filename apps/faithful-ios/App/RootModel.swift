@@ -198,12 +198,29 @@ final class RootModel {
                         await load(quiet: true)
                     }
                 }
+            } else {
+                // Signed out. The token cannot be spent yet, but the church it
+                // belongs to can be *named* — which is what turns the front
+                // door from "FaithForm" into "Join Grace Community" for someone
+                // who never asked for a product, only for their church.
+                Task { await onboarding.resolveChurchContext(invitationToken: token) }
             }
             return
         }
 
-        guard let destination = DeepLinkParser.parse(url),
-              let bootstrap = state.bootstrap else { return }
+        guard let destination = DeepLinkParser.parse(url) else { return }
+
+        guard let bootstrap = state.bootstrap else {
+            // Signed out, so there is no relationship to authorize against and
+            // nothing to navigate. A church link still carries meaning here —
+            // it says where the person is heading — and carrying that name
+            // through sign-in is the whole difference between arriving at a
+            // church and arriving at a search box.
+            if case let .church(slug) = destination {
+                Task { await onboarding.resolveChurchContext(churchSlug: slug) }
+            }
+            return
+        }
 
         if let slug = destination.churchSlug {
             guard let match = bootstrap.relationships.first(where: { $0.churchSlug == slug }),
@@ -269,6 +286,7 @@ final class RootModel {
         selectedTab = .home
         onboardingState = nil
         onboarding.clearPendingInvitation()
+        onboarding.clearChurchContext()
         state.apply(.signedOut)
     }
 

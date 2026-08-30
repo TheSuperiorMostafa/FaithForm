@@ -199,8 +199,31 @@ test("invitation tokens are hashed before any lookup and never stored raw", () =
 });
 
 test("invitation listings never return the hash", () => {
-  const list = invitations.slice(invitations.indexOf("export async function listInvitations"));
+  // Bounded to the listing itself. Slicing to end-of-file made this a tripwire
+  // on any function added below it, including ones that legitimately look an
+  // invitation *up* by hash — which is how every read of the table works.
+  const list = invitations.slice(
+    invitations.indexOf("export async function listInvitations"),
+    invitations.indexOf("export async function revokeInvitation"),
+  );
   assert.ok(!list.includes("token_hash"));
+});
+
+test("previewing an invitation reads by hash and never spends or returns it", () => {
+  const preview = invitations.slice(invitations.indexOf("export async function previewInvitation"));
+  // Looked up by hash like every other read, and the hash never comes back out.
+  assert.match(preview, /\.eq\("token_hash", hashInvitationToken\(rawToken\)\)/);
+  assert.ok(!/return\s*\{[\s\S]{0,200}token/.test(preview));
+  // Read-only: no update, no rpc, nothing that could burn a single-use link on
+  // a screen the person has not finished yet.
+  assert.ok(!preview.includes(".update("));
+  // The *call*, not the mention: the doc comment names the consumer it mirrors.
+  assert.ok(!/rpc\("consume_visitor_invitation"/.test(preview));
+  // The same gates redemption applies, so an expired or revoked link cannot be
+  // previewed into a church name.
+  for (const gate of ["revoked_at", "expires_at", "used_count", "max_uses"]) {
+    assert.ok(preview.includes(gate), `preview must check ${gate}`);
+  }
 });
 
 test("only a people_claim invitation may name a member, and it is tenant-checked", () => {

@@ -374,6 +374,20 @@ export const deviceInstallationSchema = z
   })
   .meta({ id: "DeviceInstallation" });
 
+/**
+ * The church behind an invitation, resolved *before* sign-in so the account
+ * screens can name it. Deliberately three fields: enough to say "Join Grace
+ * Community" over the right logo, and nothing a stranger holding a stolen link
+ * could mine — no address, no contact details, no join policy.
+ */
+export const invitationPreviewSchema = z
+  .object({
+    churchSlug,
+    churchName: z.string(),
+    logoUrl: z.string().nullable(),
+  })
+  .meta({ id: "InvitationPreview" });
+
 // --- requests ---
 
 export const followRequestSchema = z
@@ -383,6 +397,10 @@ export const followRequestSchema = z
 export const acceptInvitationRequestSchema = z
   .object({ token: z.string().min(16).max(512) })
   .meta({ id: "AcceptInvitationRequest" });
+
+export const invitationPreviewRequestSchema = z
+  .object({ token: z.string().min(16).max(512) })
+  .meta({ id: "InvitationPreviewRequest" });
 
 export const registerDeviceRequestSchema = z
   .object({
@@ -1162,6 +1180,8 @@ export const CONTRACT_SCHEMAS = {
   DeviceInstallation: deviceInstallationSchema,
   FollowRequest: followRequestSchema,
   AcceptInvitationRequest: acceptInvitationRequestSchema,
+  InvitationPreview: invitationPreviewSchema,
+  InvitationPreviewRequest: invitationPreviewRequestSchema,
   RegisterDeviceRequest: registerDeviceRequestSchema,
   SetPreferenceRequest: setPreferenceRequestSchema,
   EligibleOccurrence: eligibleOccurrenceSchema,

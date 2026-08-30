@@ -1470,6 +1470,36 @@ public struct AcceptInvitationRequest: Codable, Hashable, Sendable {
 
 /// Unknown additive fields are ignored by Codable, which is what lets a
 /// released client keep working when the server adds one.
+public struct InvitationPreview: Codable, Hashable, Sendable {
+    public let churchSlug: String
+    public let churchName: String
+    public let logoUrl: String?
+
+    public init(
+        churchSlug: String,
+        churchName: String,
+        logoUrl: String? = nil
+    ) {
+        self.churchSlug = churchSlug
+        self.churchName = churchName
+        self.logoUrl = logoUrl
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct InvitationPreviewRequest: Codable, Hashable, Sendable {
+    public let token: String
+
+    public init(
+        token: String
+    ) {
+        self.token = token
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
 public struct RegisterDeviceRequest: Codable, Hashable, Sendable {
     public let installId: String
     public let platform: DevicePlatform

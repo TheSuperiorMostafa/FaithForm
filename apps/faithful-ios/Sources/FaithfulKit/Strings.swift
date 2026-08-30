@@ -762,6 +762,24 @@ public enum L {
     public static var authCheckEmailBody: String {
         t("auth_check_email_body", "Confirm your address using the link we sent, then sign in here.")
     }
+    public static var authCheckEmailSentTo: String {
+        t("auth_check_email_sent_to", "We sent a confirmation link to %@")
+    }
+    public static var authCheckEmailHint: String {
+        t("auth_check_email_hint", "It can take a minute to arrive. Check your spam folder if you don't see it.")
+    }
+    public static var authCheckEmailOpenMail: String {
+        t("auth_check_email_open_mail", "Open Mail")
+    }
+    public static var authCheckEmailResend: String {
+        t("auth_check_email_resend", "Send it again")
+    }
+    public static var authCheckEmailResent: String {
+        t("auth_check_email_resent", "Sent. Check your inbox again.")
+    }
+    public static var authCheckEmailChangeAddress: String {
+        t("auth_check_email_change_address", "Use a different address")
+    }
     public static var authErrorEmailInvalid: String {
         t("auth_error_email_invalid", "Enter a valid email address.")
     }
@@ -826,4 +844,24 @@ public enum L {
         t("invitation_error_expired", "This invitation has expired. Ask your church for a new one.")
     }
 
+    // MARK: - Church context
+
+    public static var churchContextInvited: String {
+        t("church_context_invited", "You've been invited to join")
+    }
+    public static var churchContextContinue: String {
+        t("church_context_continue", "Continue to")
+    }
+    public static var churchContextInvitedBody: String {
+        t("church_context_invited_body", "Create your account and you'll be in. Already have one? Sign in and the invitation still applies.")
+    }
+    public static var churchContextContinueBody: String {
+        t("church_context_continue_body", "Create your account or sign in, and we'll take you straight there.")
+    }
+    public static var churchContextJoinTitle: String {
+        t("church_context_join_title", "Join %@")
+    }
+    public static var churchContextNotYours: String {
+        t("church_context_not_yours", "Not your church?")
+    }
 }

@@ -3,6 +3,8 @@ package io.faithform.faithful
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.faithform.faithful.contract.Bootstrap
+import io.faithform.faithful.contract.ChurchProfile
+import io.faithform.faithful.contract.InvitationPreview
 import io.faithform.faithful.contract.MobileErrorCode
 import io.faithform.faithful.contract.OnboardingState
 import io.faithform.faithful.navigation.AuthCallbackLink
@@ -65,6 +67,31 @@ sealed interface ConfirmationPhase {
     data class Failed(val error: AuthUiError) : ConfirmationPhase
 }
 
+/**
+ * A church identified *before* sign-in.
+ *
+ * This is what makes the signed-out screens say "Join Grace Community" over the
+ * right logo instead of naming the product to someone who came for their
+ * church. It arrives from a link — an invitation, or a plain church link — and
+ * is resolved against the server, never taken from the URL itself: a link may
+ * say which church, and may not say what that church is called.
+ *
+ * [invitationToken] is present only when the context came from an invitation,
+ * and the distinction decides what happens after sign-in. A token is consent
+ * already given — the person was invited and tapped the link — so it is
+ * redeemed and the relationship exists. A slug carries no authority at all: it
+ * opens the church's own screen and lets the person choose, which is the
+ * difference between arriving somewhere and being enrolled in it.
+ */
+data class PendingChurchContext(
+    val churchSlug: String,
+    val churchName: String,
+    val logoUrl: String?,
+    val invitationToken: String?
+) {
+    val isInvitation: Boolean get() = invitationToken != null
+}
+
 class AppViewModel(
     private val api: ApiClient,
     private val sessions: SessionGateway,
@@ -94,6 +121,14 @@ class AppViewModel(
      */
     private val _pendingInvitationToken = MutableStateFlow<String?>(null)
     val pendingInvitationToken: StateFlow<String?> = _pendingInvitationToken.asStateFlow()
+
+    /**
+     * The church this launch is *about*, when a link named one. Held beside the
+     * token rather than inside it because a church link carries a context with
+     * no token at all.
+     */
+    private val _churchContext = MutableStateFlow<PendingChurchContext?>(null)
+    val churchContext: StateFlow<PendingChurchContext?> = _churchContext.asStateFlow()
 
     private var onboardingState: OnboardingState? = null
     private var pendingDestination: Destination? = null
@@ -262,10 +297,25 @@ class AppViewModel(
                 viewModelScope.launch {
                     if (acceptInvitationNow(token)) loadNow(quiet = true)
                 }
+            } else {
+                // Signed out. The token cannot be spent yet, but the church it
+                // belongs to can be *named* — which is what turns the front
+                // door from "FaithForm" into "Join Grace Community" for someone
+                // who never asked for a product, only for their church.
+                viewModelScope.launch { resolveChurchContextFromInvitation(token) }
             }
             return
         }
-        pendingDestination = DeepLinkParser.parse(raw)
+
+        val destination = DeepLinkParser.parse(raw)
+        pendingDestination = destination
+
+        // Signed out, a church link still carries meaning: it says where the
+        // person is heading, and carrying that name through sign-in is the
+        // difference between arriving at a church and arriving at a search box.
+        if (destination is Destination.Church && sessions.current() == null) {
+            viewModelScope.launch { resolveChurchContextFromSlug(destination.slug) }
+        }
     }
 
     /**
@@ -386,6 +436,77 @@ class AppViewModel(
         }
     }
 
+    /**
+     * Names the church behind a held invitation, without spending it.
+     *
+     * Unauthenticated by design: the whole point is to brand the screens a
+     * person sees *before* they have a session. Failure is silent and leaves
+     * the context null — an expired link should still lead to a working sign-up
+     * screen with the ordinary wording, not a dead end.
+     */
+    private suspend fun resolveChurchContextFromInvitation(invitationToken: String) {
+        val token = normalizeInvitation(invitationToken)
+        if (token.length < 16 || token.length > 512) return
+
+        val preview = runCatching {
+            api.send(
+                path = "api/mobile/v1/invitations/preview",
+                serializer = MobileSuccess.serializer(InvitationPreview.serializer()),
+                method = "POST",
+                body = json.encodeToString(
+                    kotlinx.serialization.json.JsonObject.serializer(),
+                    buildJsonObject { put("token", token) }
+                ),
+                authenticated = false
+            ).value
+        }.getOrNull() ?: return
+
+        _churchContext.value = PendingChurchContext(
+            churchSlug = preview.churchSlug,
+            churchName = preview.churchName,
+            logoUrl = preview.logoUrl,
+            invitationToken = token
+        )
+    }
+
+    /**
+     * Names the church behind a plain `faithful://church/<slug>` link.
+     *
+     * Only a discoverable church resolves here — the public profile endpoint
+     * refuses to confirm that an unlisted one exists, and that refusal is the
+     * point. An unlisted church reaches this screen through an invitation,
+     * where the token is the authority.
+     */
+    private suspend fun resolveChurchContextFromSlug(churchSlug: String) {
+        val profile = runCatching {
+            api.send(
+                path = "api/mobile/v1/churches/$churchSlug/profile",
+                serializer = MobileSuccess.serializer(ChurchProfile.serializer()),
+                authenticated = false
+            ).value
+        }.getOrNull() ?: return
+
+        _churchContext.value = PendingChurchContext(
+            churchSlug = profile.slug,
+            churchName = profile.name,
+            logoUrl = profile.logoUrl,
+            invitationToken = null
+        )
+    }
+
+    /**
+     * "Not your church?" — and everything the link brought with it goes, the
+     * held token included. A context the person has disowned must not quietly
+     * redeem itself the moment they finish signing up.
+     */
+    fun clearChurchContext() {
+        val token = _churchContext.value?.invitationToken
+        if (token != null && _pendingInvitationToken.value == token) {
+            _pendingInvitationToken.value = null
+        }
+        _churchContext.value = null
+    }
+
     fun clearInvitationError() {
         if (_invitationPhase.value is InvitationPhase.Failed) {
             _invitationPhase.value = InvitationPhase.Idle
@@ -411,6 +532,7 @@ class AppViewModel(
             cache.purgeAllPrivate()
             onboardingState = null
             _pendingInvitationToken.value = null
+            _churchContext.value = null
             _invitationPhase.value = InvitationPhase.Idle
             _state.value = LaunchPhase.SignedOut
         }

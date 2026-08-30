@@ -420,6 +420,77 @@ struct OnboardingModelTests {
         #expect(key?.isEmpty == false)
     }
 
+    @Test("an invitation is named without being spent")
+    func previewNamesChurchWithoutRedeeming() async {
+        let token = String(repeating: "d", count: 32)
+        let (api, transport) = client([
+            .init(status: 200, body: envelope(
+                "{\"churchSlug\":\"grace\",\"churchName\":\"Grace\",\"logoUrl\":null}"
+            ))
+        ])
+        let model = OnboardingModel(api: api)
+
+        await model.resolveChurchContext(invitationToken: token)
+
+        #expect(model.churchContext?.churchName == "Grace")
+        #expect(model.churchContext?.isInvitation == true)
+        // Preview, never accept: a single-use invitation read on the sign-in
+        // screen must still work when the person finishes signing up.
+        let url = await transport.received.first?.url?.absoluteString ?? ""
+        #expect(url.contains("invitations/preview"))
+        let calls = await transport.received.count
+        #expect(calls == 1)
+    }
+
+    @Test("an unusable invitation leaves an ordinary sign-up screen behind")
+    func previewFailureIsSilent() async {
+        let (api, _) = client([failureEnvelope(code: "not_found", status: 404)])
+        let model = OnboardingModel(api: api)
+
+        await model.resolveChurchContext(invitationToken: String(repeating: "e", count: 32))
+
+        // No context, no error state, no dead end — just the generic front door.
+        #expect(model.churchContext == nil)
+    }
+
+    @Test("a church link names the church and carries no authority")
+    func slugContextCarriesNoToken() async {
+        let (api, _) = client([.init(status: 200, body: envelope("""
+        {"slug":"grace","name":"Grace","logoUrl":null,"coverImageUrl":null,"publicSummary":null,
+         "tagline":null,"denomination":null,"address":null,"city":null,"state":null,
+         "postalCode":null,"website":null,"phone":null,"email":null,"joinPolicy":"open",
+         "timezone":"UTC","publicProfileVersion":1,"campuses":[],"serviceTimes":[],
+         "relationshipState":null}
+        """))])
+        let model = OnboardingModel(api: api)
+
+        await model.resolveChurchContext(churchSlug: "grace")
+
+        #expect(model.churchContext?.churchSlug == "grace")
+        #expect(model.churchContext?.invitationToken == nil)
+        #expect(model.churchContext?.isInvitation == false)
+    }
+
+    @Test("disowning the church drops the invitation it arrived with")
+    func clearingContextDropsHeldToken() async {
+        let token = String(repeating: "f", count: 32)
+        let (api, _) = client([
+            .init(status: 200, body: envelope(
+                "{\"churchSlug\":\"grace\",\"churchName\":\"Grace\",\"logoUrl\":null}"
+            ))
+        ])
+        let model = OnboardingModel(api: api)
+        model.hold(invitationToken: token)
+        await model.resolveChurchContext(invitationToken: token)
+
+        model.clearChurchContext()
+
+        // "Not your church?" has to mean it. A context the person disowned must
+        // not quietly redeem itself once they finish signing up.
+        #expect(model.churchContext == nil)
+        #expect(model.pendingInvitationToken == nil)
+    }
+
     @Test("a retry of the same token reuses the same idempotency key")
     func retryReusesKey() async {
         let token = String(repeating: "c", count: 32)

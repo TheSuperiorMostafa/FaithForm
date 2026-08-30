@@ -84,6 +84,35 @@ class AuthViewModel(
     private val _resetNoticeVisible = MutableStateFlow(false)
     val resetNoticeVisible: StateFlow<Boolean> = _resetNoticeVisible.asStateFlow()
 
+    /**
+     * The address "check your email" is about.
+     *
+     * Captured when signup succeeded rather than read from [email], which stays
+     * editable: a screen that says where a link was sent must keep saying the
+     * address it was actually sent to.
+     */
+    private val _confirmationEmail = MutableStateFlow("")
+    val confirmationEmail: StateFlow<String> = _confirmationEmail.asStateFlow()
+
+    /** Set after a confirmation email was sent again, so the screen can
+     * acknowledge the tap rather than looking inert. */
+    private val _resendNoticeVisible = MutableStateFlow(false)
+    val resendNoticeVisible: StateFlow<Boolean> = _resendNoticeVisible.asStateFlow()
+
+    /**
+     * Resending has its **own** in-flight flag rather than borrowing [phase].
+     * [phase] is what decides whether the check-your-email screen is showing at
+     * all, so moving it to Working for a resend would replace that screen with
+     * the signup form mid-tap.
+     */
+    private val _isResending = MutableStateFlow(false)
+    val isResending: StateFlow<Boolean> = _isResending.asStateFlow()
+
+    /** Likewise its own error: a rate-limited resend is a note on this screen,
+     * not a failed signup. */
+    private val _resendError = MutableStateFlow<AuthUiError?>(null)
+    val resendError: StateFlow<AuthUiError?> = _resendError.asStateFlow()
+
     fun updateName(value: String) { _name.value = value }
     fun updateEmail(value: String) { _email.value = value }
     fun updatePassword(value: String) { _password.value = value }
@@ -119,6 +148,7 @@ class AuthViewModel(
                         _phase.value = AuthUiPhase.Idle
                     }
                     is SignUpOutcome.ConfirmationRequired -> {
+                        _confirmationEmail.value = trimmedEmail()
                         _phase.value = AuthUiPhase.CheckEmail
                     }
                 }
@@ -179,12 +209,65 @@ class AuthViewModel(
         }
     }
 
+    /**
+     * Sends the confirmation email again.
+     *
+     * The overwhelmingly common reason someone is stuck on this screen is that
+     * the first email never arrived, so this is the one action worth putting in
+     * front of them. A rate limit is surfaced — tapping twice and being told
+     * nothing would read as a second email that never came — and every other
+     * failure resolves to the notice, because from here the person can only
+     * wait or try a different address either way.
+     */
+    fun resendConfirmation() {
+        val client = auth ?: return
+        val address = _confirmationEmail.value
+        if (address.isEmpty() || _isResending.value) return
+
+        _isResending.value = true
+        _resendError.value = null
+        _resendNoticeVisible.value = false
+        viewModelScope.launch {
+            try {
+                client.resendConfirmation(address)
+                _resendNoticeVisible.value = true
+            } catch (error: AuthException) {
+                if (error.kind == AuthException.Kind.RATE_LIMITED) {
+                    _resendError.value = AuthUiError.RATE_LIMITED
+                } else {
+                    // Anything else resolves to the notice. From here the person
+                    // can only wait or use a different address either way, and an
+                    // error about a send they cannot retry differently is noise.
+                    _resendNoticeVisible.value = true
+                }
+            } catch (error: Exception) {
+                _resendNoticeVisible.value = true
+            } finally {
+                _isResending.value = false
+            }
+        }
+    }
+
+    /** "Use a different address" — back to an empty form, with the address that
+     * did not work cleared rather than left to be corrected character by
+     * character. */
+    fun startOver() {
+        _email.value = ""
+        _password.value = ""
+        _confirmationEmail.value = ""
+        _resendNoticeVisible.value = false
+        _resendError.value = null
+        _phase.value = AuthUiPhase.Idle
+    }
+
     /** Moving between screens clears what no longer applies. The email is kept
      * — retyping it is pure friction — and the password never survives. */
     fun resetForNewScreen() {
         _password.value = ""
         _phase.value = AuthUiPhase.Idle
         _resetNoticeVisible.value = false
+        _resendNoticeVisible.value = false
+        _resendError.value = null
     }
 
     private fun map(error: AuthException): AuthUiError = authUiError(error.kind)

@@ -52,7 +52,9 @@ struct RootView: View {
                 // a reload of this view.
                 AuthFlowView(
                     model: model.authModel,
-                    hasPendingInvitation: model.onboarding.pendingInvitationToken != nil
+                    hasPendingInvitation: model.onboarding.pendingInvitationToken != nil,
+                    churchContext: model.onboarding.churchContext,
+                    onClearChurchContext: { model.onboarding.clearChurchContext() }
                 )
 
             case .offlineNoCache:

@@ -8,6 +8,41 @@ import Observation
 /// so both platforms agree on the rule. This model fetches that answer and
 /// carries the one credential-ish thing the flow holds: an unredeemed
 /// invitation token, kept across sign-in and posted only afterwards.
+/// A church identified *before* sign-in.
+///
+/// This is what makes the signed-out screens say "Join Grace Community" over
+/// the right logo instead of naming the product to someone who came for their
+/// church. It arrives from a link — an invitation, or a plain church link — and
+/// is resolved against the server, never taken from the URL itself: a link may
+/// say which church, and may not say what that church is called.
+public struct PendingChurchContext: Equatable, Sendable {
+    public let churchSlug: String
+    public let churchName: String
+    public let logoUrl: String?
+    /// Present only when the context came from an invitation.
+    ///
+    /// The distinction decides what happens after sign-in. A token is consent
+    /// already given — the person was invited and tapped the link — so it is
+    /// redeemed and the relationship exists. A slug carries no authority at
+    /// all: it opens the church's own screen and lets the person choose, which
+    /// is the difference between arriving somewhere and being enrolled in it.
+    public let invitationToken: String?
+
+    public var isInvitation: Bool { invitationToken != nil }
+
+    public init(
+        churchSlug: String,
+        churchName: String,
+        logoUrl: String?,
+        invitationToken: String?
+    ) {
+        self.churchSlug = churchSlug
+        self.churchName = churchName
+        self.logoUrl = logoUrl
+        self.invitationToken = invitationToken
+    }
+}
+
 @Observable
 @MainActor
 public final class OnboardingModel {
@@ -24,6 +59,11 @@ public final class OnboardingModel {
     /// Held in memory only: an invitation is not worth persisting past the
     /// launch that received it.
     public private(set) var pendingInvitationToken: String?
+
+    /// The church this launch is *about*, when a link named one. Held beside
+    /// the token rather than inside it because a church link carries a context
+    /// with no token at all.
+    public private(set) var churchContext: PendingChurchContext?
 
     private let api: APIClient
     /// One idempotency key per token, stable across retries of the same
@@ -60,6 +100,64 @@ public final class OnboardingModel {
 
     public func clearPendingInvitation() {
         pendingInvitationToken = nil
+    }
+
+    /// Names the church behind a held invitation, without spending it.
+    ///
+    /// Unauthenticated by design: the whole point is to brand the screens a
+    /// person sees *before* they have a session. Failure is silent and leaves
+    /// the context nil — an expired link should still lead to a working sign-up
+    /// screen with the ordinary wording, not a dead end.
+    public func resolveChurchContext(invitationToken token: String) async {
+        let normalized = normalize(token)
+        guard normalized.count >= 16, normalized.count <= 512 else { return }
+
+        struct PreviewRequest: Encodable, Sendable { let token: String }
+        guard let preview = try? await api.send(
+            "api/mobile/v1/invitations/preview",
+            method: .post,
+            body: PreviewRequest(token: normalized),
+            authenticated: false,
+            as: InvitationPreview.self
+        ).value else { return }
+
+        churchContext = PendingChurchContext(
+            churchSlug: preview.churchSlug,
+            churchName: preview.churchName,
+            logoUrl: preview.logoUrl,
+            invitationToken: normalized
+        )
+    }
+
+    /// Names the church behind a plain `faithful://church/<slug>` link.
+    ///
+    /// Only a discoverable church resolves here — the public profile endpoint
+    /// refuses to confirm that an unlisted one exists, and that refusal is the
+    /// point. An unlisted church reaches this screen through an invitation,
+    /// where the token is the authority.
+    public func resolveChurchContext(churchSlug slug: String) async {
+        guard let profile = try? await api.send(
+            "api/mobile/v1/churches/\(slug)/profile",
+            authenticated: false,
+            as: ChurchProfile.self
+        ).value else { return }
+
+        churchContext = PendingChurchContext(
+            churchSlug: profile.slug,
+            churchName: profile.name,
+            logoUrl: profile.logoUrl,
+            invitationToken: nil
+        )
+    }
+
+    /// "Not your church?" — and everything the link brought with it goes, the
+    /// held token included. A context the person has disowned must not quietly
+    /// redeem itself the moment they finish signing up.
+    public func clearChurchContext() {
+        if let token = churchContext?.invitationToken, pendingInvitationToken == token {
+            pendingInvitationToken = nil
+        }
+        churchContext = nil
     }
 
     /// Accepts what a person pasted: a bare token, or the full invitation link

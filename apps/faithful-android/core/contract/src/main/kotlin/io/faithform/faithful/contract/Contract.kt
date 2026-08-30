@@ -892,6 +892,26 @@ data class AcceptInvitationRequest(
  * which is what lets a released client keep working when the server adds one.
  */
 @Serializable
+data class InvitationPreview(
+    val churchSlug: String,
+    val churchName: String,
+    val logoUrl: String? = null
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class InvitationPreviewRequest(
+    val token: String
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
 data class RegisterDeviceRequest(
     val installId: String,
     val platform: DevicePlatform,

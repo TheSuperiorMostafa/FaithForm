@@ -96,6 +96,17 @@ public protocol SessionAuthenticating: Sendable {
     /// verifier this device stored at signup. Consumes the flow: on success
     /// the verifier is cleared and the code is spent server-side.
     func completeEmailConfirmation(code: String) async throws -> StoredSession
+    /// Sends the confirmation email again for an account that exists but has
+    /// not confirmed. The far more common reason a person is stuck on "check
+    /// your email" is that the first one never arrived — not that they need a
+    /// different account.
+    func resendConfirmation(email: String) async throws
+}
+
+public extension SessionAuthenticating {
+    /// Defaulted so a test double that only scripts sign-in does not have to
+    /// implement a call it never makes.
+    func resendConfirmation(email: String) async throws {}
 }
 
 public struct SupabaseAuthClient: SessionAuthenticating {
@@ -237,6 +248,44 @@ public struct SupabaseAuthClient: SessionAuthenticating {
             // becomes a way to test addresses. Only a real obstacle surfaces.
             if failure.kind == .rateLimited || failure.kind == .offline { throw failure }
             return
+        }
+    }
+
+    /// Re-sends the signup confirmation.
+    ///
+    /// Carries the same PKCE challenge and the same redirect as the original
+    /// signup, so the new link is completable by this device exactly like the
+    /// first one. Without the challenge the fresh link would return a code
+    /// nothing on this device could spend — a worse outcome than not resending.
+    public func resendConfirmation(email: String) async throws {
+        var body = ["type": "signup", "email": email]
+        var query: String?
+
+        if let redirect = configuration.signUpRedirectURL, let flowState {
+            // The verifier the pending signup stored, reused rather than
+            // reminted: a new verifier would orphan the link already in the
+            // person's inbox, and both links should work.
+            let verifier = flowState.loadVerifier() ?? {
+                let fresh = makeVerifier()
+                flowState.saveVerifier(fresh)
+                return fresh
+            }()
+            body["code_challenge"] = PKCE.challenge(for: verifier)
+            body["code_challenge_method"] = "s256"
+
+            let encoded = redirect.absoluteString.addingPercentEncoding(
+                withAllowedCharacters: .urlQueryAllowed.subtracting(CharacterSet(charactersIn: "&=?"))
+            ) ?? redirect.absoluteString
+            query = "redirect_to=\(encoded)"
+        }
+
+        let (data, http) = try await post(path: "auth/v1/resend", query: query, body: body)
+
+        guard (200..<300).contains(http.statusCode) else {
+            // Rate limiting is the one failure worth showing: it is the exact
+            // situation a person hits when they tap "send it again" twice, and
+            // silence would read as a second email that never comes.
+            throw Self.failure(from: data, status: http.statusCode)
         }
     }
 

@@ -69,6 +69,7 @@ fun FaithfulApp(
     val state by viewModel.state.collectAsStateWithLifecycle()
     val pendingInvitation by viewModel.pendingInvitationToken.collectAsStateWithLifecycle()
     val confirmationPhase by viewModel.confirmationPhase.collectAsStateWithLifecycle()
+    val churchContext by viewModel.churchContext.collectAsStateWithLifecycle()
 
     val authViewModel: AuthViewModel = viewModel(key = "auth") {
         AuthViewModel(container.authClient) { session, displayName ->
@@ -95,7 +96,9 @@ fun FaithfulApp(
             is LaunchPhase.SignedOut -> AuthFlow(
                 viewModel = authViewModel,
                 hasPendingInvitation = pendingInvitation != null,
-                confirmationPhase = confirmationPhase
+                confirmationPhase = confirmationPhase,
+                churchContext = churchContext,
+                onClearChurchContext = viewModel::clearChurchContext
             )
 
             is LaunchPhase.Onboarding -> FindChurchFlow(

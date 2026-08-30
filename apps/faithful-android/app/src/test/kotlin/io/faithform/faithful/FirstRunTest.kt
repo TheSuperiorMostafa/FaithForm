@@ -212,12 +212,68 @@ class FirstRunTest {
     }
 
     @Test
-    fun `an invitation deep link signed out is held, silently`() = runTest {
+    fun `an invitation deep link signed out is held, never redeemed`() = runTest {
+        transport.queue.add(
+            HttpResponse(
+                200,
+                envelope("""{"churchSlug":"grace","churchName":"Grace","logoUrl":null}"""),
+                emptyMap()
+            )
+        )
+
         val model = viewModel()
         model.handleDeepLink("faithful://invite/$TOKEN_32")
 
         assertEquals(TOKEN_32, model.pendingInvitationToken.value)
-        assertTrue(transport.received.isEmpty())
+        // The token is *named*, never spent: the only call is the preview that
+        // lets the signed-out screens say which church this is for.
+        assertTrue(transport.requests("invitations/accept").isEmpty())
+        assertEquals(1, transport.requests("invitations/preview").size)
+        assertEquals("Grace", model.churchContext.value?.churchName)
+        assertTrue(model.churchContext.value!!.isInvitation)
+    }
+
+    @Test
+    fun `a church deep link signed out names the church without joining it`() = runTest {
+        transport.queue.add(
+            HttpResponse(
+                200,
+                envelope("""{"slug":"grace","name":"Grace","logoUrl":null,"coverImageUrl":null,"publicSummary":null,"tagline":null,"denomination":null,"address":null,"city":null,"state":null,"postalCode":null,"website":null,"phone":null,"email":null,"joinPolicy":"open","timezone":"UTC","publicProfileVersion":1,"campuses":[],"serviceTimes":[],"relationshipState":null}"""),
+                emptyMap()
+            )
+        )
+
+        val model = viewModel()
+        model.handleDeepLink("faithful://church/grace")
+
+        val context = model.churchContext.value
+        assertEquals("grace", context?.churchSlug)
+        assertEquals("Grace", context?.churchName)
+        // A link is an address, not consent. Nothing was joined and no token
+        // was invented to stand in for one.
+        assertNull(context?.invitationToken)
+        assertTrue(transport.requests("/join").isEmpty())
+        assertTrue(transport.requests("invitations/accept").isEmpty())
+    }
+
+    @Test
+    fun `disowning the church drops the invitation it arrived with`() = runTest {
+        transport.queue.add(
+            HttpResponse(
+                200,
+                envelope("""{"churchSlug":"grace","churchName":"Grace","logoUrl":null}"""),
+                emptyMap()
+            )
+        )
+
+        val model = viewModel()
+        model.handleDeepLink("faithful://invite/$TOKEN_32")
+        model.clearChurchContext()
+
+        // "Not your church?" has to mean it. A context the person disowned must
+        // not quietly redeem itself once they finish signing up.
+        assertNull(model.churchContext.value)
+        assertNull(model.pendingInvitationToken.value)
     }
 
     @Test

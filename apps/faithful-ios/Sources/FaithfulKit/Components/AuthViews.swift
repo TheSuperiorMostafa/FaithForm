@@ -17,10 +17,19 @@ public struct AuthFlowView: View {
     @Bindable private var model: AuthModel
     @State private var path: [Route] = []
     private let hasPendingInvitation: Bool
+    private let churchContext: PendingChurchContext?
+    private let onClearChurchContext: (@MainActor () -> Void)?
 
-    public init(model: AuthModel, hasPendingInvitation: Bool = false) {
+    public init(
+        model: AuthModel,
+        hasPendingInvitation: Bool = false,
+        churchContext: PendingChurchContext? = nil,
+        onClearChurchContext: (@MainActor () -> Void)? = nil
+    ) {
         self.model = model
         self.hasPendingInvitation = hasPendingInvitation
+        self.churchContext = churchContext
+        self.onClearChurchContext = onClearChurchContext
     }
 
     public var body: some View {
@@ -29,9 +38,11 @@ public struct AuthFlowView: View {
                 .navigationDestination(for: Route.self) { route in
                     switch route {
                     case .createAccount:
-                        SignUpView(model: model, onSwitchToSignIn: {
-                            path = [.signIn]
-                        })
+                        SignUpView(
+                            model: model,
+                            churchContext: churchContext,
+                            onSwitchToSignIn: { path = [.signIn] }
+                        )
                     case .signIn:
                         SignInView(model: model, onForgotPassword: {
                             path.append(.resetPassword)
@@ -50,17 +61,26 @@ public struct AuthFlowView: View {
         VStack(alignment: .leading, spacing: FaithfulTokens.Spacing.lg) {
             Spacer(minLength: FaithfulTokens.Spacing.xxl)
 
-            VStack(alignment: .leading, spacing: FaithfulTokens.Spacing.md) {
-                Text(L.appName)
-                    .font(theme.font(FaithfulTokens.Text.displayLarge))
-                    .foregroundStyle(theme.palette.contentPrimary)
-                Text(L.signInBody)
-                    .font(theme.font(FaithfulTokens.Text.body))
-                    .foregroundStyle(theme.palette.contentSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
+            // A link that named a church replaces the product's own name with
+            // it. Someone who scanned a bulletin QR code came for their church,
+            // not for FaithForm, and the front door should say so.
+            if let churchContext {
+                ChurchContextHeader(context: churchContext)
+            } else {
+                VStack(alignment: .leading, spacing: FaithfulTokens.Spacing.md) {
+                    Text(L.appName)
+                        .font(theme.font(FaithfulTokens.Text.displayLarge))
+                        .foregroundStyle(theme.palette.contentPrimary)
+                    Text(L.signInBody)
+                        .font(theme.font(FaithfulTokens.Text.body))
+                        .foregroundStyle(theme.palette.contentSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
             }
 
-            if hasPendingInvitation {
+            // The generic "you have an invitation" banner is redundant once the
+            // header names the church the invitation is *for*.
+            if hasPendingInvitation, churchContext == nil {
                 FaithfulCard {
                     Text(L.invitationPendingBanner)
                         .font(theme.font(FaithfulTokens.Text.bodySmall))
@@ -95,6 +115,13 @@ public struct AuthFlowView: View {
                     .buttonStyle(FaithfulButtonStyle(kind: .primary, theme: theme))
                 Button(L.signIn) { path.append(.signIn) }
                     .buttonStyle(FaithfulButtonStyle(kind: .secondary, theme: theme))
+                // A link can be forwarded, mistyped, or simply not meant for
+                // the person holding it. Disowning the church has to be one tap
+                // away, or the branding becomes a trap.
+                if churchContext != nil, let onClearChurchContext {
+                    Button(L.churchContextNotYours, action: onClearChurchContext)
+                        .buttonStyle(FaithfulButtonStyle(kind: .quiet, theme: theme))
+                }
             }
         }
         .padding(.horizontal, FaithfulTokens.Layout.screenPaddingHorizontal)
@@ -110,13 +137,21 @@ public struct AuthFlowView: View {
 struct SignUpView: View {
     @Environment(\.faithfulTheme) private var theme
     @Bindable var model: AuthModel
+    var churchContext: PendingChurchContext?
     let onSwitchToSignIn: @MainActor () -> Void
+
+    /// "Join Grace Community" rather than "Create your account", when a link
+    /// said which church this is for.
+    private var title: String {
+        guard let churchContext else { return L.authCreateTitle }
+        return String(format: L.churchContextJoinTitle, churchContext.churchName)
+    }
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: FaithfulTokens.Spacing.lg) {
                 if model.phase == .checkEmail {
-                    checkEmail
+                    CheckEmailView(model: model, onSignIn: onSwitchToSignIn)
                 } else {
                     form
                 }
@@ -126,7 +161,7 @@ struct SignUpView: View {
             .frame(maxWidth: FaithfulTokens.Layout.contentMaxWidth)
         }
         .background(theme.palette.background.ignoresSafeArea())
-        .navigationTitle(L.authCreateTitle)
+        .navigationTitle(model.phase == .checkEmail ? L.authCheckEmailTitle : title)
     }
 
     @ViewBuilder
@@ -164,14 +199,6 @@ struct SignUpView: View {
 
         Button(L.authSignInTitle, action: onSwitchToSignIn)
             .buttonStyle(FaithfulButtonStyle(kind: .quiet, theme: theme))
-    }
-
-    private var checkEmail: some View {
-        VStack(spacing: FaithfulTokens.Spacing.lg) {
-            EmptyStateView(title: L.authCheckEmailTitle, explanation: L.authCheckEmailBody)
-            Button(L.authSignInTitle, action: onSwitchToSignIn)
-                .buttonStyle(FaithfulButtonStyle(kind: .primary, theme: theme))
-        }
     }
 
     @ViewBuilder
@@ -424,5 +451,181 @@ public struct InvitationEntryView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(theme.palette.background.ignoresSafeArea())
         .navigationTitle(L.invitationTitle)
+    }
+}
+
+/// The church a link named, at the top of the signed-out screens.
+///
+/// Logo when the church has one, a building glyph when it does not — never an
+/// empty box and never a stretched placeholder, because a church without a
+/// logo is the common case, not a broken one.
+struct ChurchContextHeader: View {
+    @Environment(\.faithfulTheme) private var theme
+    let context: PendingChurchContext
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: FaithfulTokens.Spacing.md) {
+            HStack(spacing: FaithfulTokens.Spacing.base) {
+                logo
+                VStack(alignment: .leading, spacing: FaithfulTokens.Spacing.xs) {
+                    Text(context.isInvitation ? L.churchContextInvited : L.churchContextContinue)
+                        .font(theme.font(FaithfulTokens.Text.label))
+                        .foregroundStyle(theme.mutedContent)
+                    Text(context.churchName)
+                        .font(theme.font(FaithfulTokens.Text.titleLarge))
+                        .foregroundStyle(theme.palette.contentPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            Text(
+                context.isInvitation
+                    ? L.churchContextInvitedBody
+                    : L.churchContextContinueBody
+            )
+            .font(theme.font(FaithfulTokens.Text.body))
+            .foregroundStyle(theme.palette.contentSecondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder
+    private var logo: some View {
+        let side = FaithfulTokens.TouchTarget.recommended + FaithfulTokens.Spacing.base
+        RoundedRectangle(cornerRadius: FaithfulTokens.Radius.lg, style: .continuous)
+            .fill(theme.palette.surface)
+            .frame(width: side, height: side)
+            .overlay {
+                if let logoUrl = context.logoUrl, let url = URL(string: logoUrl) {
+                    AsyncImage(url: url) { image in
+                        image.resizable().scaledToFit()
+                    } placeholder: {
+                        buildingGlyph
+                    }
+                    .padding(FaithfulTokens.Spacing.xs)
+                } else {
+                    buildingGlyph
+                }
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: FaithfulTokens.Radius.lg, style: .continuous)
+                    .strokeBorder(theme.palette.border, lineWidth: 1)
+            }
+            .accessibilityHidden(true)
+    }
+
+    private var buildingGlyph: some View {
+        Image(systemName: "building.2")
+            .font(.system(size: FaithfulTokens.IconSize.sizeLarge))
+            .foregroundStyle(theme.palette.brandPrimary)
+    }
+}
+
+/// What stands between creating an account and using it.
+///
+/// A confirmation wall is the highest-abandonment screen in any signup, and the
+/// reason is nearly always the same: the email has not arrived and the screen
+/// offers nothing to do about it. So this one names the exact address, says how
+/// long to wait, and puts the three real ways forward on it — open the mail app,
+/// send it again, or use a different address — instead of a single button back
+/// to a sign-in that cannot work yet.
+struct CheckEmailView: View {
+    @Environment(\.faithfulTheme) private var theme
+    @Bindable var model: AuthModel
+    let onSignIn: @MainActor () -> Void
+
+    var body: some View {
+        VStack(spacing: FaithfulTokens.Spacing.lg) {
+            icon
+
+            VStack(spacing: FaithfulTokens.Spacing.sm) {
+                Text(L.authCheckEmailTitle)
+                    .font(theme.font(FaithfulTokens.Text.titleLarge))
+                    .foregroundStyle(theme.palette.contentPrimary)
+
+                Text(String(format: L.authCheckEmailSentTo, model.confirmationEmail))
+                    .font(theme.font(FaithfulTokens.Text.body))
+                    .foregroundStyle(theme.palette.contentSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Text(L.authCheckEmailBody)
+                    .font(theme.font(FaithfulTokens.Text.bodySmall))
+                    .foregroundStyle(theme.palette.contentSecondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .accessibilityElement(children: .combine)
+
+            Text(L.authCheckEmailHint)
+                .font(theme.font(FaithfulTokens.Text.caption))
+                .foregroundStyle(theme.mutedContent)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if model.resendNoticeVisible {
+                Label(L.authCheckEmailResent, systemImage: "checkmark.circle.fill")
+                    .font(theme.font(FaithfulTokens.Text.bodySmall))
+                    .foregroundStyle(theme.palette.successContent)
+            }
+
+            if let resendError = model.resendError {
+                AuthErrorText(message: resendError)
+            }
+
+            actions
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, FaithfulTokens.Spacing.lg)
+    }
+
+    private var icon: some View {
+        ZStack {
+            // Composed from tokens rather than a magic 96: the hero glyph plus
+            // two steps of padding on each side.
+            let side = FaithfulTokens.IconSize.sizeHero + FaithfulTokens.Spacing.xl * 2
+            Circle()
+                .fill(theme.palette.surface)
+                .frame(width: side, height: side)
+            Image(systemName: "envelope.badge")
+                .font(.system(size: FaithfulTokens.IconSize.sizeHero))
+                .foregroundStyle(theme.palette.brandPrimary)
+        }
+        .accessibilityHidden(true)
+    }
+
+    @ViewBuilder
+    private var actions: some View {
+        VStack(spacing: FaithfulTokens.Spacing.md) {
+            #if os(iOS)
+            // Straight to the inbox. `message://` is the documented way to open
+            // Mail; a device without it simply does not offer the button rather
+            // than presenting one that does nothing.
+            if let mail = URL(string: "message://"), UIApplication.shared.canOpenURL(mail) {
+                Button(L.authCheckEmailOpenMail) { UIApplication.shared.open(mail) }
+                    .buttonStyle(FaithfulButtonStyle(kind: .primary, theme: theme))
+            }
+            #endif
+
+            Button {
+                Task { await model.resendConfirmation() }
+            } label: {
+                if model.isResending {
+                    ProgressView()
+                } else {
+                    Text(L.authCheckEmailResend)
+                }
+            }
+            .buttonStyle(FaithfulButtonStyle(kind: .secondary, theme: theme))
+            .disabled(model.isResending)
+
+            Button(L.authSignInTitle, action: onSignIn)
+                .buttonStyle(FaithfulButtonStyle(kind: .quiet, theme: theme))
+
+            Button(L.authCheckEmailChangeAddress) { model.startOver() }
+                .buttonStyle(FaithfulButtonStyle(kind: .quiet, theme: theme))
+        }
     }
 }

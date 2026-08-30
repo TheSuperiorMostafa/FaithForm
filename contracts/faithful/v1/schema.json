@@ -2238,6 +2238,51 @@
       ],
       "additionalProperties": false
     },
+    "InvitationPreview": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "churchSlug": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "churchName": {
+          "type": "string"
+        },
+        "logoUrl": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "churchSlug",
+        "churchName",
+        "logoUrl"
+      ],
+      "additionalProperties": false
+    },
+    "InvitationPreviewRequest": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "token": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 512
+        }
+      },
+      "required": [
+        "token"
+      ],
+      "additionalProperties": false
+    },
     "RegisterDeviceRequest": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "object",

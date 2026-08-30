@@ -164,3 +164,68 @@ export async function revokeInvitation(input: {
 
   if (error) throw new VisitorError("unavailable", "Could not withdraw that invitation.");
 }
+
+export type InvitationPreview = {
+  churchSlug: string;
+  churchName: string;
+  logoUrl: string | null;
+};
+
+/**
+ * The church behind an invitation, without spending it.
+ *
+ * Exists so the signed-out account screens can say "Join Grace Community" over
+ * the right logo instead of a generic welcome. That is the whole reason this is
+ * readable without a session: the person has not signed in yet, which is
+ * precisely the moment the church needs naming.
+ *
+ * ## Why this is safe to expose
+ *
+ * The token is 256 bits of CSPRNG output, so possession is the authorization
+ * and there is nothing to enumerate. Only three fields come back — slug, name,
+ * logo — the same three a discoverable church already publishes. Address,
+ * contact details and join policy stay behind redemption.
+ *
+ * ## Why every failure is the same `null`
+ *
+ * Expired, revoked, exhausted, wrong-purpose and never-existed are one answer
+ * here. Redemption distinguishes them because the caller has proven who they
+ * are; an unauthenticated preview that distinguished them would report on the
+ * lifecycle of a church's invitations to whoever held a spent link.
+ *
+ * Nothing is written. `used_count` is untouched, so previewing a single-use
+ * invitation on the sign-in screen cannot burn it before the person arrives.
+ */
+export async function previewInvitation(
+  rawToken: string,
+): Promise<InvitationPreview | null> {
+  if (rawToken.length < 16 || rawToken.length > 512) return null;
+
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("visitor_invitations")
+    .select("purpose, max_uses, used_count, expires_at, revoked_at, churches(slug, name, logo_url)")
+    .eq("token_hash", hashInvitationToken(rawToken))
+    .maybeSingle();
+
+  if (!data) return null;
+  // The same gates `consume_visitor_invitation` applies, read-only. The blocked
+  // check is deliberately absent: it needs an account, and there is none yet.
+  if (data.purpose !== "join") return null;
+  if (data.revoked_at) return null;
+  if (new Date(data.expires_at as string).getTime() <= Date.now()) return null;
+  if ((data.used_count as number) >= (data.max_uses as number)) return null;
+
+  const church = data.churches as unknown as {
+    slug: string;
+    name: string;
+    logo_url: string | null;
+  } | null;
+  if (!church) return null;
+
+  return {
+    churchSlug: church.slug,
+    churchName: church.name,
+    logoUrl: church.logo_url ?? null,
+  };
+}
