@@ -27,10 +27,12 @@ class MainActivity : ComponentActivity() {
     /**
      * Every destination with a real screen behind it on Android.
      *
-     * `sermons` is **absent**: Prompt 10 was never built. The destination exists
-     * in the enum, the capability key exists, and there is no screen — so the
-     * registry resolves it to `NotImplemented` and nothing offers it. Listing it
-     * here to "finish the set" would produce a tab that opens a blank page.
+     * The rule this list enforces: a destination is listed only once a screen
+     * actually opens behind it. `sermonArchive` was the long-standing exception
+     * — declared since Prompt 4 with nothing behind it — and is listed now
+     * because `SermonScreens` exists and the server publishes the `sermons`
+     * capability. Anything still unbuilt stays out, so the registry resolves it
+     * to `NotImplemented` and nothing offers it.
      *
      * Mirrors `AppDependencies.implementedDestinations` on iOS, entry for entry.
      */
@@ -45,6 +47,7 @@ class MainActivity : ComponentActivity() {
             "watch",
             "give",
             "checkIn",
+            "sermons",
         )
     )
 

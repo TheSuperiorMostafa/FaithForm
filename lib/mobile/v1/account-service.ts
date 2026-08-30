@@ -56,10 +56,12 @@ export const ENABLED_CAPABILITIES = [
   "attendance",
   // Prompt 11.
   "giving",
-  // **`sermons` is deliberately absent.** Prompt 10 was never built: there is
-  // no route, no service and no screen on either platform. The destination and
-  // the capability key have existed since Prompt 4, and turning this on would
-  // produce a tab that opens nothing.
+  // Sermon notes. The archive and detail projections are migration 0068, the
+  // service is `lib/sermons/v1/sermon-service.ts`, and both platforms register
+  // the destination — so unlike every earlier revision of this list, turning
+  // this on opens a screen rather than a blank page. A church still sees
+  // nothing until it publishes a sermon: visibility defaults to 'none'.
+  "sermons",
 ] as const;
 
 function projectProfile(

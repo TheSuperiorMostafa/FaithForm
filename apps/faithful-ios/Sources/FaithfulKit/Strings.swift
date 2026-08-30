@@ -456,6 +456,51 @@ public enum L {
     public static var mediaBlockedTitle: String {
         t("media_blocked_title", "This church is not available to you")
     }
+
+    // MARK: - Sermon notes
+
+    public static var sermonsTitle: String {
+        t("sermons_title", "Sermon notes")
+    }
+    public static var sermonsEmpty: String {
+        t("sermons_empty", "No sermon notes have been shared yet.")
+    }
+    public static var sermonsEmptySearch: String {
+        t("sermons_empty_search", "Nothing matches that.")
+    }
+    public static var sermonsSearchLabel: String {
+        t("sermons_search_label", "Search sermon notes")
+    }
+    public static var sermonsOfflineTitle: String {
+        t("sermons_offline_title", "FaithForm could not reach the server")
+    }
+    public static var sermonsOfflineBody: String {
+        t("sermons_offline_body", "Check your connection and try again.")
+    }
+    public static var sermonsUnavailableTitle: String {
+        t("sermons_unavailable_title", "This is no longer available")
+    }
+    public static var sermonsUnavailableBody: String {
+        t("sermons_unavailable_body", "The church removed it. Nothing you did caused this.")
+    }
+    public static var sermonsScriptureLabel: String {
+        t("sermons_scripture_label", "Scripture")
+    }
+    public static var sermonsOutlineLabel: String {
+        t("sermons_outline_label", "Outline")
+    }
+    public static var sermonsQuestionsLabel: String {
+        t("sermons_questions_label", "Questions for discussion")
+    }
+    public static var sermonsApplicationLabel: String {
+        t("sermons_application_label", "Taking it home")
+    }
+    public static var sermonsNotesOnly: String {
+        t("sermons_notes_only", "This sermon was shared without an outline.")
+    }
+    public static var sermonsRetry: String {
+        t("sermons_retry", "Try again")
+    }
     public static var mediaPlay: String {
         t("media_play", "Play")
     }
@@ -780,4 +825,5 @@ public enum L {
     public static var invitationErrorExpired: String {
         t("invitation_error_expired", "This invitation has expired. Ask your church for a new one.")
     }
+
 }

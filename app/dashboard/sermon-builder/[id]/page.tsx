@@ -3,6 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { SimpleSermonDetail } from "@/components/sermon-builder/simple-sermon-detail";
 import { SermonEditor } from "@/components/sermon-builder/sermon-editor";
+import { ShareInAppCard } from "@/components/sermon-builder/share-in-app-card";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentChurchId } from "@/lib/queries/dashboard";
 import { getSlideThemeById } from "@/lib/queries/slide-themes";
@@ -57,6 +58,7 @@ export default async function SermonEditorPage({
       ) : (
         <SermonEditor sermon={sermon} />
       )}
+      <ShareInAppCard sermon={sermon} />
     </div>
   );
 }

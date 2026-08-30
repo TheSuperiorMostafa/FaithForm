@@ -94,6 +94,16 @@ export type Sermon = {
   outline_generated_at?: string | null;
   content_generated_at?: string | null;
   published_at?: string | null;
+  /**
+   * Sharing in the member app (migration 0068). Optional because a database
+   * that has not run 0068 yet simply does not return them, and the sermon is
+   * still perfectly readable in the dashboard without them.
+   */
+  mobile_visibility?: "none" | "public" | "followers" | "members" | null;
+  mobile_published_at?: string | null;
+  mobile_unpublished_at?: string | null;
+  mobile_summary?: string | null;
+  mobile_preached_on?: string | null;
 };
 
 export type SermonSeries = {

@@ -36,13 +36,26 @@ const GROUPS = [
       ["STRIPE_WEBHOOK_SECRET", /^whsec_[A-Za-z0-9]{10,}$/, "a Stripe webhook secret"],
     ],
   },
+  // Two groups, not one. Reported together they hid a real failure mode: a
+  // deployment with the three FCM values set and no APNs key passed the check
+  // while every iPhone silently received nothing.
   {
-    name: "Push (APNs / FCM)",
+    name: "Push — Android (FCM)",
     required: false,
     checks: [
       ["FCM_PROJECT_ID", /^.{3,}$/, "the Firebase project id"],
       ["FCM_CLIENT_EMAIL", /@/, "the Firebase service account"],
       ["FCM_PRIVATE_KEY", /BEGIN PRIVATE KEY/, "the Firebase private key"],
+    ],
+  },
+  {
+    name: "Push — iOS (APNs)",
+    required: false,
+    checks: [
+      ["APNS_KEY_ID", /^[A-Za-z0-9]{8,}$/, "the APNs key id"],
+      ["APNS_TEAM_ID", /^[A-Za-z0-9]{8,}$/, "the Apple team id"],
+      ["APNS_PRIVATE_KEY", /BEGIN PRIVATE KEY/, "the APNs .p8 key"],
+      ["APNS_TOPIC", /^[A-Za-z0-9.-]+$/, "the app bundle id"],
     ],
   },
   {

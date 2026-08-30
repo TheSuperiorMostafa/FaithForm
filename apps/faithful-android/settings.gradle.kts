@@ -42,6 +42,12 @@ include(":core:media")
 // would not be tested at all.
 include(":core:giving")
 
+// Which empty state the sermon-notes screen shows, what a failure means, and
+// when another page may be requested. Pure JVM for the same reason as the
+// three above: an archive that could only be tested by scrolling a real list
+// would not be tested at all.
+include(":core:sermons")
+
 // Android modules.
 include(":core:design")
 include(":app")

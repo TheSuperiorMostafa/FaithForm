@@ -458,21 +458,28 @@ test("a capability is enabled only when both platforms have a screen for it", ()
     "apps/faithful-android/app/src/main/kotlin/io/faithform/faithful/MainActivity.kt",
   );
 
-  // capability key → the destination identity each platform registers
-  const screens: Record<string, string> = {
-    attendance: "checkIn",
-    giving: "give",
-    watch: "watch",
-    announcements: "announcements",
-    discovery: "churchDiscovery",
-    sermons: "sermonArchive",
+  // capability key → how each platform names the same destination.
+  //
+  // The two names are listed separately rather than derived from one another:
+  // iOS registers Swift enum *cases* and Android registers the *identity
+  // string* its own `identity()` returns, and for two destinations those differ
+  // (`churchDiscovery`/`discover`, `sermonArchive`/`sermons`). Deriving one
+  // from the other read as correct for years because most names happen to
+  // coincide, and quietly asserted nothing for the two that do not.
+  const screens: Record<string, { ios: string; android: string }> = {
+    attendance: { ios: "checkIn", android: "checkIn" },
+    giving: { ios: "give", android: "give" },
+    watch: { ios: "watch", android: "watch" },
+    announcements: { ios: "announcements", android: "announcements" },
+    discovery: { ios: "churchDiscovery", android: "discover" },
+    sermons: { ios: "sermonArchive", android: "sermons" },
   };
 
-  for (const [capability, destination] of Object.entries(screens)) {
+  for (const [capability, names] of Object.entries(screens)) {
     const enabled = capabilities.includes(`"${capability}"`);
     // iOS registers by enum case; Android by identity string.
-    const iosHas = ios.includes(`.${destination}(`) || ios.includes(`.${destination},`);
-    const androidHas = android.includes(`"${destination === "churchDiscovery" ? "discover" : destination}"`);
+    const iosHas = ios.includes(`.${names.ios}(`) || ios.includes(`.${names.ios},`);
+    const androidHas = android.includes(`"${names.android}"`);
 
     if (enabled) {
       assert.ok(iosHas, `${capability} is enabled and iOS registers no screen`);
@@ -492,9 +499,12 @@ test("a capability is enabled only when both platforms have a screen for it", ()
     capabilities.includes('"attendance"'),
     "attendance is built on both platforms and must be enabled",
   );
-  // And the specific case that is still genuinely absent.
+  // `sermons` was the standing example of the honest inverse: a capability
+  // deliberately off because Prompt 10 was never built. It has screens on both
+  // platforms now, so the assertion becomes the same shape as attendance's
+  // above — off would now be the accident.
   assert.ok(
-    !capabilities.includes('"sermons"'),
-    "sermons has no screen on either platform and must stay off",
+    capabilities.includes('"sermons"'),
+    "sermons is built on both platforms and must be enabled",
   );
 });

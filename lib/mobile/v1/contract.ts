@@ -862,6 +862,88 @@ export const mediaDetailSchema = z
   .meta({ id: "MediaDetail" });
 
 /**
+ * One sermon in the archive list.
+ *
+ * A deliberately narrow projection of a much larger row. The Sermon Builder
+ * stores a manuscript, the preacher's style notes, the audience they aimed at
+ * and the model that drafted it — none of which appears here or in the detail
+ * below, because none of it is written for a congregation to read.
+ */
+export const sermonListItemSchema = z
+  .object({
+    sermonId: z.string(),
+    title: z.string(),
+    summary: z.string().nullable(),
+    publishedAt: instant,
+    /** The day it was preached (YYYY-MM-DD), when the church recorded one. */
+    preachedOn: z.string().nullable(),
+    scriptureRefs: z.array(z.string()),
+    seriesName: z.string().nullable(),
+    publicationVersion: z.number().int(),
+    churchSlug,
+    churchName: z.string(),
+    churchTimezone: z.string(),
+  })
+  .meta({ id: "SermonListItem" });
+
+export const sermonPageSchema = z
+  .object({
+    items: z.array(sermonListItemSchema),
+    nextCursor: z.string().nullable(),
+    sermonVersion: z.number().int(),
+  })
+  .meta({ id: "SermonPage" });
+
+/** One main point of a sermon: a heading, what it said, where it came from. */
+export const sermonPointSchema = z
+  .object({
+    title: z.string(),
+    summary: z.string(),
+    scripture: z.string().nullable(),
+  })
+  .meta({ id: "SermonPoint" });
+
+export const sermonOutlineSchema = z
+  .object({
+    intro: z.string().nullable(),
+    points: z.array(sermonPointSchema),
+    application: z.string().nullable(),
+    closing: z.string().nullable(),
+  })
+  .meta({ id: "SermonOutline" });
+
+/**
+ * A discussion question. `category` is free text rather than an enum: an older
+ * asset may carry a category this build has never heard of, and a small group
+ * losing its questions because a label was unrecognised would be absurd.
+ */
+export const sermonQuestionSchema = z
+  .object({
+    category: z.string(),
+    question: z.string(),
+  })
+  .meta({ id: "SermonQuestion" });
+
+export const sermonDetailSchema = z
+  .object({
+    sermonId: z.string(),
+    title: z.string(),
+    summary: z.string().nullable(),
+    publishedAt: instant,
+    preachedOn: z.string().nullable(),
+    scriptureRefs: z.array(z.string()),
+    seriesName: z.string().nullable(),
+    publicationVersion: z.number().int(),
+    churchSlug,
+    churchName: z.string(),
+    churchTimezone: z.string(),
+    /** Null when a sermon was published with no outline worth showing. */
+    outline: sermonOutlineSchema.nullable(),
+    discussionQuestions: z.array(sermonQuestionSchema),
+  })
+  .meta({ id: "SermonDetail" });
+
+/**
  * Permission to watch one thing, for a few minutes.
  *
  * `deliveryUrl` carries **no** credential. The capability travels in an
@@ -1101,6 +1183,12 @@ export const CONTRACT_SCHEMAS = {
   ArchiveItem: archiveItemSchema,
   MediaPage: mediaPageSchema,
   MediaDetail: mediaDetailSchema,
+  SermonListItem: sermonListItemSchema,
+  SermonPage: sermonPageSchema,
+  SermonPoint: sermonPointSchema,
+  SermonOutline: sermonOutlineSchema,
+  SermonQuestion: sermonQuestionSchema,
+  SermonDetail: sermonDetailSchema,
   PlaybackGrant: playbackGrantSchema,
   PlaybackGrantRequest: playbackGrantRequestSchema,
   GivingFund: givingFundSchema,

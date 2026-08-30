@@ -3829,6 +3829,520 @@
       ],
       "additionalProperties": false
     },
+    "SermonListItem": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "sermonId": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "publishedAt": {
+          "type": "string",
+          "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+        },
+        "preachedOn": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scriptureRefs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "seriesName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "publicationVersion": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "churchSlug": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "churchName": {
+          "type": "string"
+        },
+        "churchTimezone": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "sermonId",
+        "title",
+        "summary",
+        "publishedAt",
+        "preachedOn",
+        "scriptureRefs",
+        "seriesName",
+        "publicationVersion",
+        "churchSlug",
+        "churchName",
+        "churchTimezone"
+      ],
+      "additionalProperties": false
+    },
+    "SermonPage": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SermonListItem"
+          }
+        },
+        "nextCursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sermonVersion": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor",
+        "sermonVersion"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "SermonListItem": {
+          "type": "object",
+          "properties": {
+            "sermonId": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "summary": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "publishedAt": {
+              "type": "string",
+              "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+            },
+            "preachedOn": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "scriptureRefs": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "seriesName": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "publicationVersion": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "churchSlug": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "churchName": {
+              "type": "string"
+            },
+            "churchTimezone": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "sermonId",
+            "title",
+            "summary",
+            "publishedAt",
+            "preachedOn",
+            "scriptureRefs",
+            "seriesName",
+            "publicationVersion",
+            "churchSlug",
+            "churchName",
+            "churchTimezone"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "SermonPoint": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "scripture": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "title",
+        "summary",
+        "scripture"
+      ],
+      "additionalProperties": false
+    },
+    "SermonOutline": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "intro": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "points": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SermonPoint"
+          }
+        },
+        "application": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "closing": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "intro",
+        "points",
+        "application",
+        "closing"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "SermonPoint": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string"
+            },
+            "summary": {
+              "type": "string"
+            },
+            "scripture": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "title",
+            "summary",
+            "scripture"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "SermonQuestion": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "category": {
+          "type": "string"
+        },
+        "question": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "category",
+        "question"
+      ],
+      "additionalProperties": false
+    },
+    "SermonDetail": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "sermonId": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "publishedAt": {
+          "type": "string",
+          "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+        },
+        "preachedOn": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scriptureRefs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "seriesName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "publicationVersion": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "churchSlug": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "churchName": {
+          "type": "string"
+        },
+        "churchTimezone": {
+          "type": "string"
+        },
+        "outline": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SermonOutline"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "discussionQuestions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SermonQuestion"
+          }
+        }
+      },
+      "required": [
+        "sermonId",
+        "title",
+        "summary",
+        "publishedAt",
+        "preachedOn",
+        "scriptureRefs",
+        "seriesName",
+        "publicationVersion",
+        "churchSlug",
+        "churchName",
+        "churchTimezone",
+        "outline",
+        "discussionQuestions"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "SermonOutline": {
+          "type": "object",
+          "properties": {
+            "intro": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "points": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/SermonPoint"
+              }
+            },
+            "application": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "closing": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "intro",
+            "points",
+            "application",
+            "closing"
+          ],
+          "additionalProperties": false
+        },
+        "SermonPoint": {
+          "type": "object",
+          "properties": {
+            "title": {
+              "type": "string"
+            },
+            "summary": {
+              "type": "string"
+            },
+            "scripture": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "title",
+            "summary",
+            "scripture"
+          ],
+          "additionalProperties": false
+        },
+        "SermonQuestion": {
+          "type": "object",
+          "properties": {
+            "category": {
+              "type": "string"
+            },
+            "question": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "category",
+            "question"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
     "PlaybackGrant": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "object",

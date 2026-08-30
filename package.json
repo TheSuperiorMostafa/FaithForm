@@ -30,6 +30,7 @@
     "db:check": "node scripts/check-migrations.mjs",
     "check:features": "node scripts/check-feature-guards.mjs",
     "db:sermon": "node scripts/apply-sermon-migration.mjs",
+    "db:sermon-publication": "node scripts/apply-sermon-publication-migration.mjs",
     "db:stripe": "node scripts/apply-stripe-migration.mjs",
     "db:onboarding": "node scripts/apply-onboarding-migration.mjs",
     "db:giving-enhancements": "node scripts/apply-giving-enhancements-migration.mjs",

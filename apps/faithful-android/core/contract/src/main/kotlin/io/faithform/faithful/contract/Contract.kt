@@ -1205,6 +1205,90 @@ data class MediaDetail(
  * which is what lets a released client keep working when the server adds one.
  */
 @Serializable
+data class SermonListItem(
+    val sermonId: String,
+    val title: String,
+    val summary: String? = null,
+    val publishedAt: String,
+    val preachedOn: String? = null,
+    val scriptureRefs: List<String>,
+    val seriesName: String? = null,
+    val publicationVersion: Int,
+    val churchSlug: String,
+    val churchName: String,
+    val churchTimezone: String
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class SermonPage(
+    val items: List<SermonListItem>,
+    val nextCursor: String? = null,
+    val sermonVersion: Int
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class SermonPoint(
+    val title: String,
+    val summary: String,
+    val scripture: String? = null
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class SermonOutline(
+    val intro: String? = null,
+    val points: List<SermonPoint>,
+    val application: String? = null,
+    val closing: String? = null
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class SermonQuestion(
+    val category: String,
+    val question: String
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class SermonDetail(
+    val sermonId: String,
+    val title: String,
+    val summary: String? = null,
+    val publishedAt: String,
+    val preachedOn: String? = null,
+    val scriptureRefs: List<String>,
+    val seriesName: String? = null,
+    val publicationVersion: Int,
+    val churchSlug: String,
+    val churchName: String,
+    val churchTimezone: String,
+    val outline: SermonOutline? = null,
+    val discussionQuestions: List<SermonQuestion>
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
 data class PlaybackGrant(
     val capability: String,
     val expiresAt: String,

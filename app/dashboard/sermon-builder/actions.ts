@@ -13,6 +13,10 @@ import {
   verifySeriesAccess,
   verifySermonAccess,
 } from "@/lib/queries/sermons";
+import {
+  publishSermonToFaithful,
+  unpublishSermonFromFaithful,
+} from "@/lib/sermons/v1/publication";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -89,6 +93,89 @@ export async function deleteSeriesAction(
   } catch (e) {
     return {
       error: e instanceof Error ? e.message : "Could not delete series",
+    };
+  }
+}
+
+/**
+ * Shares a finished sermon's notes in the member app.
+ *
+ * Church admins only, and deliberately not the sermon's own author: putting
+ * something in front of a congregation is a publishing decision, not an
+ * authoring one. What members see is a projection — the outline and the
+ * discussion questions — never the manuscript or the preacher's style notes.
+ */
+export async function shareSermonInAppAction(input: {
+  sermonId: string;
+  visibility: "public" | "followers" | "members";
+  summary?: string | null;
+  preachedOn?: string | null;
+}): Promise<{ error?: string; publishedAt?: string }> {
+  try {
+    const auth = await requireChurchAuth();
+    if (!auth.isAdmin) {
+      return { error: "Only church admins can share sermons in the app." };
+    }
+
+    const denied = await featureActionError("sermon_builder");
+    if (denied) return { error: denied };
+
+    const supabase = createClient();
+    const sermon = await verifySermonAccess(supabase, input.sermonId, auth.churchId);
+    if (!sermon) return { error: "Sermon not found" };
+
+    const result = await publishSermonToFaithful({
+      churchId: auth.churchId,
+      sermonId: input.sermonId,
+      visibility: input.visibility,
+      summary: input.summary ?? null,
+      preachedOn: input.preachedOn ?? null,
+    });
+
+    if (!result.ok) return { error: result.error };
+
+    revalidatePath("/dashboard/sermon-builder");
+    revalidatePath(`/dashboard/sermon-builder/${input.sermonId}`);
+    return {
+      publishedAt:
+        result.state.status === "published" ? result.state.publishedAt : undefined,
+    };
+  } catch (e) {
+    return {
+      error: e instanceof Error ? e.message : "Could not share the sermon",
+    };
+  }
+}
+
+/** Takes a sermon back out of the member app. */
+export async function unshareSermonInAppAction(
+  sermonId: string,
+): Promise<{ error?: string }> {
+  try {
+    const auth = await requireChurchAuth();
+    if (!auth.isAdmin) {
+      return { error: "Only church admins can change what the app shows." };
+    }
+
+    const denied = await featureActionError("sermon_builder");
+    if (denied) return { error: denied };
+
+    const supabase = createClient();
+    const sermon = await verifySermonAccess(supabase, sermonId, auth.churchId);
+    if (!sermon) return { error: "Sermon not found" };
+
+    const result = await unpublishSermonFromFaithful({
+      churchId: auth.churchId,
+      sermonId,
+    });
+    if (!result.ok) return { error: result.error };
+
+    revalidatePath("/dashboard/sermon-builder");
+    revalidatePath(`/dashboard/sermon-builder/${sermonId}`);
+    return {};
+  } catch (e) {
+    return {
+      error: e instanceof Error ? e.message : "Could not update the sermon",
     };
   }
 }

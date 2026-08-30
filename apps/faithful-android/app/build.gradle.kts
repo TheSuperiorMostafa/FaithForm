@@ -144,6 +144,7 @@ dependencies {
     implementation(project(":core:design"))
     implementation(project(":core:attendance"))
     implementation(project(":core:media"))
+    implementation(project(":core:sermons"))
     implementation(project(":core:giving"))
 
     implementation(platform(libs.compose.bom))

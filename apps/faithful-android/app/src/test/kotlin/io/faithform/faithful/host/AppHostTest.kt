@@ -106,7 +106,7 @@ class AppNavigationTest {
     /** Mirrors what `MainActivity` registers. */
     private val implemented = setOf(
         "home", "account", "accountPrivacy", "discover", "church",
-        "announcements", "watch", "give", "checkIn",
+        "announcements", "watch", "give", "checkIn", "sermons",
     )
 
     private val registry = RouteRegistry(implemented = implemented)
@@ -123,13 +123,24 @@ class AppNavigationTest {
     )
 
     @Test
-    fun `sermons has no screen and is not registered`() {
-        // Prompt 10 was never built. Registering it would produce a tab that
-        // opens a blank page.
-        assertFalse("sermons" in implemented)
+    fun `sermons has a screen and opens when the server enables it`() {
+        // Prompt 10, built at last: `SermonScreens` is the screen behind this
+        // and `ENABLED_CAPABILITIES` publishes `sermons`.
+        assertTrue("sermons" in implemented)
         val resolution = registry.resolve(
             Destination.SermonArchive("grace"),
             session(setOf("sermons")),
+        )
+        assertTrue(resolution is RouteResolution.Allowed)
+    }
+
+    @Test
+    fun `sermons still closes for a church whose server withholds the capability`() {
+        // Having a screen is not the same as being switched on: a church on an
+        // older server, or one with the feature off, must still be refused.
+        val resolution = registry.resolve(
+            Destination.SermonArchive("grace"),
+            session(setOf("watch")),
         )
         assertTrue(resolution is RouteResolution.Rejected)
     }

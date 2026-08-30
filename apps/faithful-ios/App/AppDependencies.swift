@@ -86,11 +86,13 @@ final class AppDependencies {
 
     /// Every destination with a real screen behind it on iOS.
     ///
-    /// `sermonArchive` is **absent**: Prompt 10 was never built. The destination
-    /// exists in the enum, the capability key exists, and there is no screen —
-    /// so the registry resolves it to `.notImplemented` and nothing offers it.
-    /// Listing it here to "finish the set" would produce a tab that opens a
-    /// blank page.
+    /// The rule this list exists to enforce: a destination is listed only once
+    /// a screen actually opens behind it. `sermonArchive` was the long-standing
+    /// exception — declared since Prompt 4 with nothing behind it — and is
+    /// listed now because `SermonListView` and `SermonDetailView` exist and the
+    /// server publishes the `sermons` capability. Anything still unbuilt stays
+    /// out, so the registry resolves it to `.notImplemented` and nothing offers
+    /// it.
     static let implementedDestinations: Set<Destination> = [
         .home,
         .account,
@@ -101,5 +103,6 @@ final class AppDependencies {
         .watch(churchSlug: ""),
         .give(churchSlug: ""),
         .checkIn(churchSlug: ""),
+        .sermonArchive(churchSlug: ""),
     ]
 }

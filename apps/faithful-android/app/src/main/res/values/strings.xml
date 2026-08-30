@@ -188,6 +188,22 @@
     <string name="media_unavailable_title">This is no longer available</string>
     <string name="media_unavailable_body">The church removed it. Nothing you did caused this.</string>
     <string name="media_blocked_title">This church is not available to you</string>
+
+    <!-- Sermon notes -->
+    <string name="sermons_title">Sermon notes</string>
+    <string name="sermons_empty">No sermon notes have been shared yet.</string>
+    <string name="sermons_empty_search">Nothing matches that.</string>
+    <string name="sermons_search_label">Search sermon notes</string>
+    <string name="sermons_offline_title">FaithForm could not reach the server</string>
+    <string name="sermons_offline_body">Check your connection and try again.</string>
+    <string name="sermons_unavailable_title">This is no longer available</string>
+    <string name="sermons_unavailable_body">The church removed it. Nothing you did caused this.</string>
+    <string name="sermons_scripture_label">Scripture</string>
+    <string name="sermons_outline_label">Outline</string>
+    <string name="sermons_questions_label">Questions for discussion</string>
+    <string name="sermons_application_label">Taking it home</string>
+    <string name="sermons_notes_only">This sermon was shared without an outline.</string>
+    <string name="sermons_retry">Try again</string>
     <string name="media_play">Play</string>
     <string name="media_pause">Pause</string>
     <string name="media_buffering">Buffering…</string>
