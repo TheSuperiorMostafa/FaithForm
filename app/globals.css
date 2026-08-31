@@ -59,8 +59,38 @@
     --sidebar-border: rgba(255,255,255,0.06);
   }
 
+  /*
+   * Dark mode here is a class on <html>, not a media query, so `light dark`
+   * left every native control — the date and time pickers above all — following
+   * the operating system instead of the app. On a light OS in a dark dashboard
+   * that renders the calendar picker glyph near-black on a near-black field,
+   * which is how the "When" pickers ended up with no visible calendar button.
+   */
   html {
-    color-scheme: light dark;
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
+  /*
+   * The picker button is the only affordance a date or time field has. Give it
+   * room and a cursor so it reads as a button rather than decoration.
+   */
+  input[type="date"]::-webkit-calendar-picker-indicator,
+  input[type="time"]::-webkit-calendar-picker-indicator,
+  input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+    opacity: 0.75;
+    padding: 0;
+    margin-left: 0.25rem;
+  }
+
+  input[type="date"]::-webkit-calendar-picker-indicator:hover,
+  input[type="time"]::-webkit-calendar-picker-indicator:hover,
+  input[type="datetime-local"]::-webkit-calendar-picker-indicator:hover {
+    opacity: 1;
   }
 
   * {

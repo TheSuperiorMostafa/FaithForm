@@ -331,48 +331,26 @@ export function AnnouncementVerifyForm({
             </p>
           </div>
         ) : (
-          /* Two columns only once there is room for both pickers. A
-              `datetime-local` control is intrinsically wide, so side-by-side in a
-              narrow card (this form renders inside a queue row) made the two
-              overlap. `min-w-0` lets each shrink to its share of the grid. */
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <div className="flex min-w-0 flex-col gap-1">
-              <label
-                htmlFor={`start-${event.googleEventId}`}
-                className="text-xs font-medium text-muted-foreground"
-              >
-                Start
-              </label>
-              <Input
-                id={`start-${event.googleEventId}`}
-                type="datetime-local"
-                value={startAt}
-                onChange={(e) => {
-                  setStartAt(e.target.value);
-                  markPreviewStale();
-                }}
-                required
-                className="w-full min-w-0 tabular-nums"
-              />
-            </div>
-            <div className="flex min-w-0 flex-col gap-1">
-              <label
-                htmlFor={`end-${event.googleEventId}`}
-                className="text-xs font-medium text-muted-foreground"
-              >
-                End
-              </label>
-              <Input
-                id={`end-${event.googleEventId}`}
-                type="datetime-local"
-                value={endAt}
-                onChange={(e) => {
-                  setEndAt(e.target.value);
-                  markPreviewStale();
-                }}
-                className="w-full min-w-0 tabular-nums"
-              />
-            </div>
+          <div className="flex flex-col gap-3">
+            <DateTimeField
+              idPrefix={`start-${event.googleEventId}`}
+              label="Start"
+              value={startAt}
+              required
+              onChange={(next) => {
+                setStartAt(next);
+                markPreviewStale();
+              }}
+            />
+            <DateTimeField
+              idPrefix={`end-${event.googleEventId}`}
+              label="End"
+              value={endAt}
+              onChange={(next) => {
+                setEndAt(next);
+                markPreviewStale();
+              }}
+            />
           </div>
         )}
       </div>
@@ -515,6 +493,65 @@ export function AnnouncementVerifyForm({
         {pending ? "Submitting…" : "Verify & submit"}
       </Button>
     </form>
+  );
+}
+
+/**
+ * One instant, entered as a date and a time rather than one `datetime-local`.
+ *
+ * A `datetime-local` control has a large intrinsic width it will not go below,
+ * and this form renders inside a queue row. Below that width the browser keeps
+ * the field's own layout and clips whatever runs past the edge — which is
+ * always the right edge, where the calendar picker button lives. Two narrow
+ * fields fit the column, and each keeps its own visible picker.
+ *
+ * The value stays in `datetime-local` format either way, so callers and the
+ * ISO conversion around them are unchanged. A date with no time is not a valid
+ * instant, so the pair only reports upward once both halves are filled.
+ */
+function DateTimeField({
+  idPrefix,
+  label,
+  value,
+  required = false,
+  onChange,
+}: {
+  idPrefix: string;
+  label: string;
+  value: string;
+  required?: boolean;
+  onChange: (value: string) => void;
+}) {
+  const [date = "", time = ""] = value.split("T");
+
+  const emit = (nextDate: string, nextTime: string) => {
+    onChange(nextDate && nextTime ? `${nextDate}T${nextTime}` : "");
+  };
+
+  return (
+    <div className="flex flex-col gap-1">
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      <div className="grid grid-cols-[1fr_auto] gap-2">
+        <Input
+          id={`${idPrefix}-date`}
+          type="date"
+          aria-label={`${label} date`}
+          value={date}
+          onChange={(e) => emit(e.target.value, time)}
+          required={required}
+          className="w-full min-w-0 px-3 tabular-nums"
+        />
+        <Input
+          id={`${idPrefix}-time`}
+          type="time"
+          aria-label={`${label} time`}
+          value={time}
+          onChange={(e) => emit(date, e.target.value)}
+          required={required}
+          className="w-[9.5rem] min-w-0 px-3 tabular-nums"
+        />
+      </div>
+    </div>
   );
 }
 
