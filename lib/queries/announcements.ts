@@ -356,13 +356,12 @@ function eventTimeParts(
 
 /**
  * When an event happens, written the way an announcement reads out loud:
- * "August 4th 4:00–5:00PM".
+ * "August 4th 4:00PM".
  *
- * The end time is here because a congregation planning an evening around a
- * supper wants to know when it lets out. It is left off only where the
- * calendar never gave one, and the opening meridiem is dropped when both ends
- * share it, so the ordinary case reads as one span rather than two clock
- * times.
+ * Start time only. The end is deliberately not printed: a weekly email listing
+ * a dozen events reads as a wall of clock times when every line carries a
+ * span, and the thing a congregation scans for is when to show up. The end
+ * time still lives on the announcement itself for anyone who opens it.
  *
  * An all-day event prints as a bare date. `startAt` is then midnight UTC
  * standing in for a time nobody chose, so it is read back in UTC — see
@@ -370,7 +369,7 @@ function eventTimeParts(
  */
 export function formatEventWhen(
   startAt: string,
-  endAt?: string | null,
+  _endAt?: string | null,
   timeZone?: string | null,
   allDay?: boolean,
 ): string {
@@ -380,25 +379,7 @@ export function formatEventWhen(
   }
 
   const start = eventTimeParts(startAt, timeZone);
-  const startDate = `${start.month} ${withOrdinal(start.day)}`;
-  const startClock = `${start.hour}:${start.minute}`;
-
-  if (!endAt) return `${startDate} ${startClock}${start.meridiem}`;
-
-  const end = eventTimeParts(endAt, timeZone);
-  const endClock = `${end.hour}:${end.minute}`;
-
-  // An event running past midnight needs both dates spelled out; anything
-  // inside a single day repeats neither the month nor the day.
-  if (end.month !== start.month || end.day !== start.day) {
-    return `${startDate} ${startClock}${start.meridiem} – ${end.month} ${withOrdinal(end.day)} ${endClock}${end.meridiem}`;
-  }
-
-  if (end.meridiem === start.meridiem) {
-    return `${startDate} ${startClock}–${endClock}${end.meridiem}`;
-  }
-
-  return `${startDate} ${startClock}${start.meridiem}–${endClock}${end.meridiem}`;
+  return `${start.month} ${withOrdinal(start.day)} ${start.hour}:${start.minute}${start.meridiem}`;
 }
 
 /**

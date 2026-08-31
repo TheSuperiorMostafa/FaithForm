@@ -40,32 +40,23 @@ test("the church timezone decides the date, not the worker's UTC clock", () => {
   );
 });
 
-test("an event that ends says so, sharing one meridiem", () => {
+test("an end time is never printed, even when the calendar gave one", () => {
+  // The email lists a whole week; a span per line is noise. What a reader
+  // scans for is when to turn up.
   assert.equal(
     formatEventWhen(AUG_4_4PM_ET, AUG_4_5PM_ET, "America/New_York"),
-    "August 4th 4:00–5:00PM",
+    "August 4th 4:00PM",
   );
 });
 
-test("a span crossing noon keeps both meridiems", () => {
-  assert.equal(
-    formatEventWhen(
-      "2026-08-04T15:00:00.000Z",
-      "2026-08-04T17:00:00.000Z",
-      "America/New_York",
-    ),
-    "August 4th 11:00AM–1:00PM",
-  );
-});
-
-test("a span crossing midnight spells out the second date", () => {
+test("an event running past midnight still reads as its start", () => {
   assert.equal(
     formatEventWhen(
       "2026-08-05T02:00:00.000Z",
       "2026-08-05T05:00:00.000Z",
       "America/New_York",
     ),
-    "August 4th 10:00PM – August 5th 1:00AM",
+    "August 4th 10:00PM",
   );
 });
 
@@ -79,7 +70,7 @@ test("an all-day event prints its own date, never the evening before", () => {
   );
 });
 
-test("the weekly email prints the whole span of an event", () => {
+test("the weekly email prints only the start of an event", () => {
   const event = {
     title: "Back to School Night",
     location: "Fellowship Hall",
@@ -88,10 +79,12 @@ test("the weekly email prints the whole span of an event", () => {
   };
 
   const plain = formatWeeklyEmailEventBlock(event, "America/New_York");
-  assert.equal(plain.includes("August 4th 4:00–5:00PM"), true);
+  assert.equal(plain.includes("August 4th 4:00PM"), true);
+  assert.equal(plain.includes("5:00"), false);
 
   const html = formatEventsHtml([event], "America/New_York");
-  assert.equal(html.includes("August 4th 4:00–5:00PM"), true);
+  assert.equal(html.includes("August 4th 4:00PM"), true);
+  assert.equal(html.includes("5:00"), false);
 });
 
 test("the weekly email leaves off an end time the calendar never gave", () => {
