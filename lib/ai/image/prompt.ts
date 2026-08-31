@@ -1,5 +1,16 @@
 import type { SocialBackgroundTag } from "@/lib/social/constants";
 
+/**
+ * Fallback scenery, used only when the writer gave no `imageSubject`.
+ *
+ * These once described coffee three separate times — a latte under
+ * "fellowship", a mug under "prayer", a cup under "bible-study" — and
+ * "fellowship" is where a model puts most church events. That is how a summer
+ * evening, a youth hangout and a missions day all came back as photographs of
+ * the same cup of coffee. Coffee now appears in exactly one bucket, the one
+ * that is actually about coffee, and each hint describes something the others
+ * do not.
+ */
 const TAG_SCENE_HINTS: Record<SocialBackgroundTag, string> = {
   youth:
     "cinematic youth worship night, silhouettes of teens with hands raised under warm amber stage haze and golden bokeh string lights, shallow depth of field, energetic and hopeful",
@@ -8,13 +19,13 @@ const TAG_SCENE_HINTS: Record<SocialBackgroundTag, string> = {
   outreach:
     "warm neighborhood outreach scene at sunset, open welcoming street with soft sun flare and long shadows, community and hope, cinematic street photography",
   community:
-    "candid church community gathering in warm natural window light, softly blurred people sharing a meal, shallow depth of field, genuine connection",
+    "long table set outdoors under string lights at dusk, mismatched chairs and shared plates, softly blurred people mid-conversation, shallow depth of field, genuine connection",
   prayer:
-    "intimate close-up of weathered hands clasped in prayer over an open Bible beside a ceramic coffee mug on a rustic wooden table, warm rim light and deep chiaroscuro shadows, cross softly blurred in background",
+    "intimate close-up of weathered hands clasped in prayer over an open Bible on a rustic wooden table, warm rim light and deep chiaroscuro shadows, cross softly blurred in background",
   "bible-study":
-    "cozy Bible study still life, open Bible with highlighted pages and steaming coffee on a weathered wooden table under warm lamp light, shallow depth of field, inviting",
+    "open Bible with annotated margins and a reading lamp on a weathered wooden table, notebook and pen alongside, warm lamplight, shallow depth of field, quiet and studious",
   fellowship:
-    "artisan coffee cup with heart-shaped latte art on a rustic wooden table, steam rising, warm cafe window light with golden bokeh, Heine Bros-style coffee shop atmosphere",
+    "church fellowship hall in warm afternoon light, folding tables and shared food softly out of focus, people gathered mid-laughter in silhouette, documentary lifestyle photography",
   "seasonal-christmas":
     "elegant Christmas warmth, evergreen branches and softly glowing candlelight with creamy bokeh on dark wood, cozy and sacred",
   "seasonal-easter":
@@ -22,9 +33,9 @@ const TAG_SCENE_HINTS: Record<SocialBackgroundTag, string> = {
   family:
     "warm multigenerational family moment in soft natural light, tender and inclusive, gentle bokeh background, lifestyle photography",
   missions:
-    "hands serving together outdoors in warm afternoon light, compassion and purpose, documentary-style cinematic photography",
+    "hands loading supply boxes into a van in warm afternoon light, compassion and purpose, documentary-style cinematic photography",
   default:
-    "cinematic church event cover photo, warm golden-hour light streaming through large windows onto rustic wooden surfaces, shallow depth of field, moody chiaroscuro, spiritual and inviting",
+    "cinematic church event cover photo, warm golden-hour light streaming through large windows across an open interior, shallow depth of field, moody chiaroscuro, spiritual and inviting",
 };
 
 export type ImagePromptMode = "background" | "flyer";
@@ -33,6 +44,11 @@ export type GenerateEventBackgroundInput = {
   title: string;
   headline: string;
   backgroundTag: SocialBackgroundTag;
+  /**
+   * The scene written for this one event. Takes precedence over the tag hint,
+   * which only ever knew which of twelve buckets the event fell into.
+   */
+  imageSubject?: string | null;
   churchName: string;
   primaryColor: string;
   location?: string;
@@ -50,6 +66,19 @@ export type GeneratedBackground = {
   modelUsed: string;
 };
 
+/**
+ * What to photograph: the event's own scene when the writer supplied one,
+ * otherwise the tag's generic fallback. The cinematic treatment is appended
+ * either way, so a one-line subject still comes back looking like the rest.
+ */
+function resolveScene(input: GenerateEventBackgroundInput): string {
+  const subject = input.imageSubject?.trim();
+  if (subject) {
+    return `${subject.replace(/\.$/, "")}. Shot cinematically with dramatic directional light, shallow depth of field, rich filmic color grade, and subtle atmospheric haze`;
+  }
+  return TAG_SCENE_HINTS[input.backgroundTag] ?? TAG_SCENE_HINTS.default;
+}
+
 /** Route to the correct prompt for the requested generation mode. */
 export function buildImagePrompt(input: GenerateEventBackgroundInput): string {
   return input.mode === "flyer"
@@ -63,7 +92,7 @@ export function buildImagePrompt(input: GenerateEventBackgroundInput): string {
  * title, script accent word, date/time/location block, cinematic photo).
  */
 export function buildFullFlyerPrompt(input: GenerateEventBackgroundInput): string {
-  const scene = TAG_SCENE_HINTS[input.backgroundTag] ?? TAG_SCENE_HINTS.default;
+  const scene = resolveScene(input);
   const title = (input.headline || input.title).trim();
   const details: string[] = [];
   if (input.dateLine?.trim()) details.push(`Date: "${input.dateLine.trim()}"`);
@@ -85,6 +114,7 @@ export function buildFullFlyerPrompt(input: GenerateEventBackgroundInput): strin
     "LAYOUT: Title and text on the left or lower portion over a darker, legible area of the photo; keep the main photographic subject on the opposite side. Add subtle dark gradient scrims behind text so every word is crisp and highly legible. Include a thin gold divider or small cross accent as a tasteful detail.",
     "TYPOGRAPHY: Use tasteful, real, correctly-spelled typography with excellent kerning. Mix one bold condensed/poster display font for the main title with one elegant script for accents. Text must be sharp, clean, and perfectly readable — NOT warped, garbled, duplicated, or nonsensical.",
     "STYLE: Photorealistic background, polished graphic-design overlay. Looks like a real designer made it in Photoshop. No watermarks, no stock-photo logos, no UI chrome, no borders around the whole image, no page curl.",
+    "SUBJECT DISCIPLINE: Photograph the scene described above and nothing else. Do not add coffee cups, mugs, lattes or cafe tables unless that scene explicitly names them — they are not a default for church events.",
     "Output one cohesive finished flyer image.",
   ]
     .filter(Boolean)
@@ -98,7 +128,7 @@ export function buildFullFlyerPrompt(input: GenerateEventBackgroundInput): strin
 export function buildBackgroundPrompt(
   input: GenerateEventBackgroundInput,
 ): string {
-  const scene = TAG_SCENE_HINTS[input.backgroundTag] ?? TAG_SCENE_HINTS.default;
+  const scene = resolveScene(input);
   const locationHint = input.location?.trim()
     ? `Setting may subtly evoke "${input.location}" without showing readable signage.`
     : "";
@@ -113,6 +143,7 @@ export function buildBackgroundPrompt(
     "Composition: wide 16:9 landscape. Place the main focal subject toward the right or center-right. Keep the entire left third and bottom-left quadrant darker and visually calm (shadow, soft blur, or negative space) for text overlay legibility.",
     "Do NOT place bright busy detail in the lower-left corner.",
     "Absolutely NO text, letters, words, numbers, dates, times, captions, logos, watermarks, signatures, UI elements, borders, frames, collages, maps, or infographics anywhere in the image.",
+    "Photograph the scene described above and nothing else. Do NOT add coffee cups, mugs, lattes or cafe tables unless that scene explicitly names them — they are not a default for church events.",
     "Avoid identifiable staring faces; prefer symbolic objects, hands, silhouettes, architecture, or environments.",
     "Must look like a real professional photograph, not illustrated, cartoon, or 3D-rendered.",
   ]

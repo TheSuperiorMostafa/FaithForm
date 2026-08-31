@@ -32,6 +32,8 @@ export type SocialPreviewInput = {
   headline: string;
   templateKey: SocialTemplateKey;
   backgroundTag: string;
+  /** The scene written for this event, when the caption writer supplied one. */
+  imageSubject?: string | null;
   draftKey: string;
   startAt?: string;
   endAt?: string | null;
@@ -121,6 +123,7 @@ async function generateAiFlyer(
       title: input.title,
       headline: input.headline,
       backgroundTag: input.backgroundTag as SocialBackgroundTag,
+      imageSubject: input.imageSubject ?? null,
       churchName: branding.name,
       primaryColor: branding.primaryColor,
       accentColor: branding.accentColor,

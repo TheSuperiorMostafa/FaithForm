@@ -45,11 +45,65 @@ function buildDraftKey(input: GenerateSocialPreviewInput): string {
   return `draft-${Date.now()}`;
 }
 
+/**
+ * The church's own people, most senior first, as "Name — Title" lines.
+ *
+ * Without this the caption writer had no idea who ran the church, so an event
+ * called "Coffee with the Pastor" produced a caption inviting people to have
+ * coffee with an abstraction. Ordered so the first line is the one an event
+ * saying "the Pastor" almost certainly means.
+ */
+async function loadStaffLines(
+  supabase: SupabaseClient,
+  churchId: string,
+): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("church_staff")
+    .select(
+      "full_name, title, is_senior_pastor, is_executive_pastor, sort_order",
+    )
+    .eq("church_id", churchId);
+
+  if (error) {
+    // A caption without names still reads; a failed lookup must not stop the
+    // preview being generated at all.
+    console.error("loadStaffLines:", error.message);
+    return [];
+  }
+
+  type StaffRow = {
+    full_name: string | null;
+    title: string | null;
+    is_senior_pastor: boolean | null;
+    is_executive_pastor: boolean | null;
+    sort_order: number | null;
+  };
+
+  const rank = (row: StaffRow) =>
+    row.is_senior_pastor ? 0 : row.is_executive_pastor ? 1 : 2;
+
+  return ((data ?? []) as StaffRow[])
+    .filter((row) => row.full_name?.trim())
+    .sort(
+      (a, b) => rank(a) - rank(b) || (a.sort_order ?? 0) - (b.sort_order ?? 0),
+    )
+    .slice(0, 8)
+    .map((row) => {
+      const name = row.full_name!.trim();
+      const title = row.title?.trim();
+      const senior = row.is_senior_pastor ? " (senior pastor)" : "";
+      return title ? `${name} — ${title}${senior}` : `${name}${senior}`;
+    });
+}
+
 export async function generateSocialPreview(
   supabase: SupabaseClient,
   input: GenerateSocialPreviewInput,
 ): Promise<SocialPreviewResult> {
-  const branding = await loadChurchBranding(supabase, input.churchId);
+  const [branding, staff] = await Promise.all([
+    loadChurchBranding(supabase, input.churchId),
+    loadStaffLines(supabase, input.churchId),
+  ]);
   // The church's zone, not the server's: this runs on Vercel in UTC, where an
   // 8pm Eastern event would otherwise read as the next day in the caption.
   const when = formatDateTimeRange(
@@ -76,6 +130,7 @@ export async function generateSocialPreview(
       when: whenForPrompt,
       location: input.location,
       notes: input.notes,
+      staff,
     }),
     prompt:
       "Write a Facebook caption and graphic headline for this church event. Return structured JSON only.",
@@ -94,6 +149,7 @@ export async function generateSocialPreview(
     headline: flyerHeadline,
     templateKey: object.templateKey,
     backgroundTag: object.backgroundTag,
+    imageSubject: object.imageSubject,
     draftKey,
     startAt: input.startAt,
     endAt: input.endAt,

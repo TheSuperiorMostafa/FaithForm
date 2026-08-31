@@ -66,6 +66,17 @@ export const eventSocialPreviewSchema = z.object({
   facebookCaption: z.string().min(10).max(400),
   backgroundTag: socialBackgroundTagSchema,
   templateKey: socialTemplateKeySchema,
+  /**
+   * The photograph this specific event should be illustrated with, in the
+   * writer's own words.
+   *
+   * `backgroundTag` sorts an event into one of twelve buckets, and a bucket is
+   * all the image model used to get. Every "fellowship" event — a summer
+   * cookout, a newcomers' lunch, a games night — therefore came back as the
+   * same stock scene. This is the per-event escape hatch: whatever is actually
+   * happening, described concretely enough to photograph.
+   */
+  imageSubject: z.string().min(10).max(240),
   tone: z.string().optional(),
 });
 

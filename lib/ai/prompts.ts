@@ -122,6 +122,14 @@ export type EventSocialContext = {
   when: string;
   location: string;
   notes?: string;
+  /**
+   * The church's own people, "Name — Title" per line, senior pastor first.
+   *
+   * Without this the model has no way to know who "the Pastor" is, so a
+   * "Coffee with the Pastor" caption came out addressed to a job title. With
+   * it the caption can use the name the congregation actually says.
+   */
+  staff?: string[];
 };
 
 export function eventSocialSystemPrompt(ctx: EventSocialContext): string {
@@ -129,19 +137,27 @@ export function eventSocialSystemPrompt(ctx: EventSocialContext): string {
 
 Rules:
 - facebookCaption: Just 1-2 short, warm sentences that invite people to the event and capture why it matters. The date, time, and location already appear ON the graphic, so do NOT list them out — you may mention the day casually (e.g. "this Sunday"), but ONLY using the weekday given below under "When". Never infer, calculate, or guess a weekday, and never state a date or time that is not written there. Conversational and genuine. No hashtags. Keep it under 280 characters.
+  * If the event title refers to a staff member by role ("the Pastor", "Pastor", "our Pastor"), use that person's actual name from the staff list below instead — "coffee with Pastor Dan", not "coffee with Pastor". If no staff list is given, rewrite around it ("coffee with our pastor") rather than leaving a bare title dangling.
+  * Never invent a name, a title, or a person who is not in the staff list.
 - headline: The LARGE display title on a premium cinematic event flyer. This is the hero text — it must feel polished and intentional, never generic or keyword-stuffed.
   * Preserve the full event name when it already reads well (e.g. keep "Coffee with the Pastor", NOT "Coffee Pastor").
   * Use the event's natural phrasing — connecting words like "with the", "Night", "Men's", etc. are part of the brand.
   * Good examples: "Coffee with the Pastor", "Men's Prayer Breakfast", "Sunday Night Prayer Service", "Youth Worship Night".
   * Bad examples: "Coffee Pastor", "Prayer Event", "Church Meeting", "Community Gathering" (too vague).
   * Max 48 characters. Prefer 3-6 words when the event name supports it.
-- backgroundTag: Pick exactly one tag that best matches the event mood from: youth, worship, outreach, community, prayer, bible-study, fellowship, seasonal-christmas, seasonal-easter, family, missions, default.
+- imageSubject: One sentence describing the photograph that should illustrate THIS event, and no other. Name concrete, visible things — the setting, the objects, the time of day, what people are doing.
+  * Read the event title literally and photograph what it says. "Men's Prayer Breakfast" is a breakfast table; "Summer Nights" is a warm evening outdoors; "Missions Team Day" is people packing and loading; "Youth Hangout" is teenagers together; "Communion Sunday" is bread and cup.
+  * Do NOT describe coffee cups, mugs, lattes, or cafe tables unless the event is genuinely about coffee — this is the single most common failure, and it makes every flyer look identical.
+  * Do NOT describe any text, lettering, signage, or logos; the layout adds those separately.
+  * Avoid recognisable faces. Prefer hands, silhouettes, objects, tables, architecture, landscape, and light.
+- backgroundTag: Pick exactly one tag that best matches the event mood from: youth, worship, outreach, community, prayer, bible-study, fellowship, seasonal-christmas, seasonal-easter, family, missions, default. This is only a coarse fallback — imageSubject is what actually gets photographed.
 - templateKey: Pick one layout style from: general, youth, outreach, worship-night. Use "general" unless the event clearly fits a themed category.
 
 Church: ${ctx.churchName}
 Event title: ${ctx.title}
 When: ${ctx.when}
 Where: ${ctx.location || "See announcement for details"}
+${ctx.staff?.length ? `Church staff (use these real names where the event refers to one):\n${ctx.staff.map((line) => `- ${line}`).join("\n")}` : "Church staff: not on file — do not name anyone."}
 ${ctx.notes?.trim() ? `Extra notes: ${ctx.notes.trim()}` : ""}`;
 }
 
