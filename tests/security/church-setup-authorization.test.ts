@@ -71,9 +71,13 @@ test("a signed-in member of a church is redirected out of setup", () => {
 // No dead ends on the way in
 // ---------------------------------------------------------------------------
 
-test("the sign-in page offers the church-setup door", () => {
-  assert.match(loginForm, /href="\/setup"/);
-  assert.match(loginForm, /Set up your church/);
+test("the sign-in page does not advertise church setup", () => {
+  // Churches are onboarded by us, not by strangers finding a self-serve door
+  // on the sign-in screen. /setup still exists and is still reachable — the
+  // no-church dashboard panel below links to it — but it is no longer offered
+  // to anyone who lands on /login.
+  assert.doesNotMatch(loginForm, /href="\/setup"/);
+  assert.doesNotMatch(loginForm, /Set up your church/);
 });
 
 test("the sign-in page offers a way out of a forgotten password", () => {

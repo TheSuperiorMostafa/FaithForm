@@ -7,7 +7,6 @@ import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/brand/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
-import Link from "next/link";
 import {
   sendMagicLink,
   sendPasswordReset,
@@ -304,16 +303,6 @@ export function LoginForm() {
           </button>
         </form>
       )}
-
-      <p className="mt-6 border-t border-border pt-5 text-center text-sm text-muted-foreground">
-        New to FaithForm?{" "}
-        <Link
-          href="/setup"
-          className="font-semibold text-foreground underline underline-offset-4"
-        >
-          Set up your church
-        </Link>
-      </p>
     </div>
   );
 }
