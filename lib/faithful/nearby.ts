@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { filterChurchSlugsWithFeature } from "@/lib/features/access";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { VisitorError } from "@/lib/faithful/errors";
 
@@ -83,5 +84,12 @@ export async function findNearbyChurches(input: unknown): Promise<NearbyChurch[]
     });
   }
 
-  return results;
+  // Same rule as search: a church whose Member App feature is off is not in
+  // the app, so it is not on the map either.
+  const enabled = await filterChurchSlugsWithFeature(
+    results.map((church) => church.slug),
+    "member_app",
+  );
+
+  return results.filter((church) => enabled.has(church.slug));
 }

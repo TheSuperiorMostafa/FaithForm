@@ -106,13 +106,12 @@ export const navItems: NavItem[] = [
     icon: Globe,
     features: ["website"],
   },
-  // Ungated like Home: the member app is part of every church's account, and
-  // hiding its controls behind Settings meant nobody found them.
   {
     label: "Member App",
     shortLabel: "App",
     href: "/dashboard/app",
     icon: Smartphone,
+    features: ["member_app"],
   },
 ];
 

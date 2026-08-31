@@ -162,6 +162,85 @@ export async function isChurchFeatureEnabled(
   return data ? Boolean(data.enabled) : true;
 }
 
+/**
+ * The subset of `churchIds` that still has `key` switched on.
+ *
+ * `isChurchFeatureEnabled` answers for one church, which is the wrong shape for
+ * a discovery page: a search returning twenty churches would make twenty round
+ * trips. Same defaulting rule as the single-church read — a church with no row
+ * has never been changed, so it is on, and any error leaves every church in
+ * rather than emptying a listing because one lookup failed.
+ */
+export async function filterChurchIdsWithFeature(
+  churchIds: string[],
+  key: FeatureKey,
+): Promise<Set<string>> {
+  const kept = new Set(churchIds);
+  if (kept.size === 0) return kept;
+
+  const admin = createAdminClientOrNull();
+  if (!admin) return kept;
+
+  const { data, error } = await admin
+    .from("church_features")
+    .select("church_id, enabled")
+    .in("church_id", Array.from(kept))
+    .eq("feature_key", key);
+
+  if (error) {
+    if (!isMissingFeatureTable(error.message)) {
+      console.error("filterChurchIdsWithFeature:", error.message);
+    }
+    return kept;
+  }
+
+  for (const row of data ?? []) {
+    if (!row.enabled) kept.delete(row.church_id as string);
+  }
+
+  return kept;
+}
+
+/**
+ * The same filter, addressed by public slug.
+ *
+ * Nearby search never learns a church id — its projection deliberately returns
+ * only public columns — so the slugs are mapped back to ids here rather than
+ * widening that projection.
+ */
+export async function filterChurchSlugsWithFeature(
+  slugs: string[],
+  key: FeatureKey,
+): Promise<Set<string>> {
+  const kept = new Set(slugs);
+  if (kept.size === 0) return kept;
+
+  const admin = createAdminClientOrNull();
+  if (!admin) return kept;
+
+  const { data, error } = await admin
+    .from("churches")
+    .select("id, slug")
+    .in("slug", Array.from(kept));
+
+  if (error) {
+    console.error("filterChurchSlugsWithFeature:", error.message);
+    return kept;
+  }
+
+  const rows = (data ?? []) as { id: string; slug: string }[];
+  const enabledIds = await filterChurchIdsWithFeature(
+    rows.map((row) => row.id),
+    key,
+  );
+
+  for (const row of rows) {
+    if (!enabledIds.has(row.id)) kept.delete(row.slug);
+  }
+
+  return kept;
+}
+
 export type FeatureAccess = {
   auth: ChurchAuth;
   /** Account-level switches set by platform admins. */

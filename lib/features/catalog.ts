@@ -8,6 +8,7 @@ import {
   Megaphone,
   Phone,
   RadioTower,
+  Smartphone,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -36,6 +37,7 @@ export const FEATURE_KEYS = [
   "giving",
   "library",
   "website",
+  "member_app",
 ] as const;
 
 export type FeatureKey = (typeof FEATURE_KEYS)[number];
@@ -151,6 +153,17 @@ export const FEATURES: FeatureDefinition[] = [
     routes: ["/dashboard/website"],
     publicImpact:
       "Takes the church's public site offline on every connected domain, and stops the Visit form accepting messages.",
+  },
+  {
+    key: "member_app",
+    label: "Member App",
+    description:
+      "The church's presence in the Faithful app — discovery, join requests, and invitation links.",
+    href: "/dashboard/app",
+    icon: Smartphone,
+    routes: ["/dashboard/app"],
+    publicImpact:
+      "Delists the church from search and Nearby in the member app, and stops new members joining or following. People already connected keep the app and its content.",
   },
 ];
 

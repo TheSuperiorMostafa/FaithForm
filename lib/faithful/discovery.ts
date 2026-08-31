@@ -1,3 +1,4 @@
+import { filterChurchIdsWithFeature } from "@/lib/features/access";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { VisitorError } from "@/lib/faithful/errors";
 import {
@@ -78,8 +79,20 @@ export async function discoverChurches(input: unknown): Promise<DiscoveryPage> {
   const page = hasMore ? rows.slice(0, limit) : rows;
   const last = page[page.length - 1];
 
+  // A church whose Member App feature is switched off is not in the app, and
+  // that has to be true of search as well as of joining. Filtered after the
+  // keyset page rather than inside the projection so the cursor still describes
+  // the same underlying sequence — dropping rows here can shorten a page, never
+  // skip past one.
+  const enabled = await filterChurchIdsWithFeature(
+    page.map((row) => row.cursor_id as string),
+    "member_app",
+  );
+
   return {
-    churches: page.map(mapDiscovered),
+    churches: page
+      .filter((row) => enabled.has(row.cursor_id as string))
+      .map(mapDiscovered),
     nextCursor:
       hasMore && last
         ? { name: last.cursor_name as string, id: last.cursor_id as string }

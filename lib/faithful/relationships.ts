@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { isChurchFeatureEnabled } from "@/lib/features/access";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { VisitorError } from "@/lib/faithful/errors";
 import {
@@ -216,6 +217,19 @@ async function applyTransition(input: {
   return relationship;
 }
 
+
+/**
+ * A church whose Member App feature is switched off admits nobody new.
+ *
+ * Only the doors are guarded — following, joining, redeeming an invitation.
+ * Leaving and unfollowing stay open on purpose: whatever we switch off, a
+ * person must always be able to get themselves out.
+ */
+async function assertMemberAppEnabled(churchId: string): Promise<void> {
+  if (await isChurchFeatureEnabled(churchId, "member_app")) return;
+  throw new VisitorError("church_not_found", "Church not found.");
+}
+
 export async function followChurch(
   userId: string,
   churchSlug: string,
@@ -228,6 +242,7 @@ export async function followChurch(
   if (!church.isDiscoverable) {
     throw new VisitorError("church_not_found", "Church not found.");
   }
+  await assertMemberAppEnabled(church.id);
 
   return applyTransition({
     accountId: account.id,
@@ -270,6 +285,7 @@ export async function requestJoin(
   if (!church.isDiscoverable) {
     throw new VisitorError("church_not_found", "Church not found.");
   }
+  await assertMemberAppEnabled(church.id);
 
   return applyTransition({
     accountId: account.id,
@@ -338,6 +354,12 @@ export async function acceptJoinInvitation(
     .maybeSingle();
 
   if (!church) throw new VisitorError("church_not_found", "Church not found.");
+
+  // The Member App switch outranks the invitation. This runs after the token
+  // has been consumed, so refusing here spends it — which is the right way
+  // round: a church with no app must not gain a member, and an invitation to
+  // an app that no longer exists is not worth preserving.
+  await assertMemberAppEnabled(church.id as string);
 
   // An invitation is its own authority: an invite_only or unlisted church is
   // exactly the case invitations exist for, so discoverability is not required.
