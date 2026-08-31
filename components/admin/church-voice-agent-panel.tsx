@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select } from "@/components/ui/select";
+import type { RetellAgentSummary } from "@/lib/integrations/retell-client";
 import type { AgentMode, VoiceAssistantSettings } from "@/types/voice-assistant";
 
 function SubmitButton() {
@@ -26,10 +28,17 @@ export function ChurchVoiceAgentPanel({
   churchId,
   settings,
   hasRetellKey,
+  agents,
 }: {
   churchId: string;
   settings: VoiceAssistantSettings | null;
   hasRetellKey: boolean;
+  /**
+   * Agents on whichever Retell account serves this church. Empty when the
+   * API is unreachable or no key is configured — the field falls back to
+   * manual entry so linking still works.
+   */
+  agents: RetellAgentSummary[];
 }) {
   const [state, formAction] = useFormState<VoiceAgentFormState, FormData>(
     saveVoiceAgentLink,
@@ -40,15 +49,25 @@ export function ChurchVoiceAgentPanel({
   const [mode, setMode] = useState<AgentMode>(initialMode);
   const wasLinked = initialMode === "linked";
 
+  const savedAgentId = settings?.retail_ai_agent_id ?? "";
+  // An agent already linked from a church's own Retell account will not
+  // appear in a list fetched with FaithForm's key. Start in manual mode
+  // rather than silently offering to replace it.
+  const savedAgentIsListed = agents.some((a) => a.agentId === savedAgentId);
+  const [manualEntry, setManualEntry] = useState(
+    agents.length === 0 || (savedAgentId !== "" && !savedAgentIsListed),
+  );
+
   return (
     <Card>
       <CardHeader>
         <CardTitle>Linked Retell agent</CardTitle>
         <p className="mt-1 text-sm text-muted-foreground">
-          For a church whose AI phone agent was hand-built directly in Retell
-          before FaithForm existed. Linking connects call logs, transcripts,
-          and scoring to this dashboard — FaithForm never pushes a prompt or
-          configuration change to a linked agent.
+          Point this church at a specific agent from the connected Retell
+          account — one you built by hand, or one that predates FaithForm.
+          Linking connects call logs, transcripts, and scoring to this
+          dashboard; FaithForm never pushes a prompt or configuration change
+          to a linked agent.
         </p>
       </CardHeader>
       <CardContent>
@@ -97,14 +116,54 @@ export function ChurchVoiceAgentPanel({
           {mode === "linked" ? (
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2 sm:col-span-2">
-                <Label htmlFor="retell_agent_id">Retell agent ID</Label>
-                <Input
-                  id="retell_agent_id"
-                  name="retell_agent_id"
-                  required
-                  defaultValue={settings?.retail_ai_agent_id ?? ""}
-                  placeholder="agent_xxxxxxxxxxxxxxxxxxxxxxxx"
-                />
+                <Label htmlFor="retell_agent_id">Retell agent</Label>
+                {manualEntry ? (
+                  <Input
+                    id="retell_agent_id"
+                    name="retell_agent_id"
+                    required
+                    defaultValue={savedAgentId}
+                    placeholder="agent_xxxxxxxxxxxxxxxxxxxxxxxx"
+                  />
+                ) : (
+                  <Select
+                    id="retell_agent_id"
+                    name="retell_agent_id"
+                    required
+                    defaultValue={savedAgentIsListed ? savedAgentId : ""}
+                  >
+                    <option value="" disabled>
+                      Choose an agent…
+                    </option>
+                    {agents.map((agent) => (
+                      <option key={agent.agentId} value={agent.agentId}>
+                        {agent.agentName ?? agent.agentId}
+                        {agent.isPublished ? "" : " — draft, not published"}
+                      </option>
+                    ))}
+                  </Select>
+                )}
+                {agents.length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => setManualEntry((value) => !value)}
+                    className="text-xs font-medium text-accent underline underline-offset-2"
+                  >
+                    {manualEntry
+                      ? "Pick from the connected Retell account instead"
+                      : "Enter an agent ID manually"}
+                  </button>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Could not reach Retell to list agents — paste the ID instead.
+                  </p>
+                )}
+                {!manualEntry && (
+                  <p className="text-xs text-muted-foreground">
+                    A draft agent will not answer inbound calls until it is
+                    published in Retell.
+                  </p>
+                )}
               </div>
               <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="retell_api_key">

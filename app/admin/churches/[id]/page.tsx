@@ -4,6 +4,7 @@ import { ChurchDetailTabs } from "@/components/admin/church-detail-tabs";
 import { PageHeader } from "@/components/admin/page-header";
 import { getChurchFeatureState } from "@/lib/features/access";
 import type { FeatureKey } from "@/lib/features/catalog";
+import { listRetellAgents } from "@/lib/integrations/retell-client";
 import { hasChurchRetellKey } from "@/lib/integrations/retell-key";
 import {
   getAdminChurchActivity,
@@ -90,6 +91,7 @@ export default async function AdminChurchDetailPage({
     domainRequests,
     voiceAgentSettings,
     hasRetellKey,
+    retellAgents,
   ] = await Promise.all([
     getAdminChurchDetail(id),
     getAdminChurchActivity(id, activityFilters),
@@ -100,6 +102,9 @@ export default async function AdminChurchDetailPage({
     getChurchDomainRequests(id),
     getVoiceAssistantSettings(id, createAdminClient()),
     hasChurchRetellKey(id),
+    // Admin-only page: a Retell outage or a missing key should grey out the
+    // agent picker, not 500 the whole church record.
+    listRetellAgents(id).catch(() => []),
   ]);
 
   if (!detail) notFound();
@@ -134,6 +139,7 @@ export default async function AdminChurchDetailPage({
         )}
         voiceAgentSettings={voiceAgentSettings}
         hasRetellKey={hasRetellKey}
+        retellAgents={retellAgents}
       />
     </div>
   );

@@ -36,6 +36,7 @@ import type {
   SiteDomainRequest,
 } from "@/lib/sites/domain-queries";
 import type { ChurchProfileFormState } from "@/types/church-profile";
+import type { RetellAgentSummary } from "@/lib/integrations/retell-client";
 import type { VoiceAssistantSettings } from "@/types/voice-assistant";
 
 type ChurchDetailTabsProps = {
@@ -58,6 +59,8 @@ type ChurchDetailTabsProps = {
   voiceAgentSettings: VoiceAssistantSettings | null;
   /** Whether this church has its own saved Retell API key (never the key itself). */
   hasRetellKey: boolean;
+  /** Agents on the serving Retell account, for the picker. Empty if unreachable. */
+  retellAgents: RetellAgentSummary[];
 };
 
 function MemberAccessCell({
@@ -103,6 +106,7 @@ export function ChurchDetailTabs({
   defaultTab,
   voiceAgentSettings,
   hasRetellKey,
+  retellAgents,
 }: ChurchDetailTabsProps) {
   const openDomainRequests = domainRequests.filter((request) =>
     ["submitted", "in_review", "awaiting_church", "in_progress"].includes(
@@ -230,6 +234,7 @@ export function ChurchDetailTabs({
           churchId={detail.church.id}
           settings={voiceAgentSettings}
           hasRetellKey={hasRetellKey}
+          agents={retellAgents}
         />
       </TabsContent>
 

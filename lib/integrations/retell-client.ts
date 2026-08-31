@@ -91,3 +91,58 @@ export type RetellAgentResponse = {
     version?: number;
   };
 };
+
+export type RetellAgentSummary = {
+  agentId: string;
+  agentName: string | null;
+  version: number | null;
+  isPublished: boolean;
+};
+
+type RetellAgentListRow = {
+  agent_id?: string;
+  agent_name?: string | null;
+  version?: number | null;
+  is_published?: boolean;
+};
+
+/**
+ * Lists the agents on whichever Retell account serves this church — its own
+ * saved key when it has one, otherwise FaithForm's shared account.
+ *
+ * `GET /list-agents` returns one row per agent *version*, not one per agent
+ * (143 rows for 4 real agents on the shared account), and `pagination_key`
+ * responds 500, so this asks for a single oversized page and collapses it to
+ * the newest version of each distinct `agent_id`.
+ */
+export async function listRetellAgents(
+  churchId?: string | null,
+): Promise<RetellAgentSummary[]> {
+  const rows = await retellRequest<RetellAgentListRow[]>({
+    method: "GET",
+    path: "/list-agents?limit=1000",
+    churchId,
+  });
+
+  if (!Array.isArray(rows)) return [];
+
+  const newest = new Map<string, RetellAgentListRow>();
+  for (const row of rows) {
+    if (!row?.agent_id) continue;
+    const seen = newest.get(row.agent_id);
+    if (!seen || (row.version ?? 0) > (seen.version ?? 0)) {
+      newest.set(row.agent_id, row);
+    }
+  }
+
+  return [...newest.values()]
+    .map((row) => ({
+      agentId: row.agent_id as string,
+      agentName: row.agent_name?.trim() || null,
+      version: row.version ?? null,
+      isPublished: row.is_published === true,
+    }))
+    .sort((a, b) =>
+      (a.agentName ?? a.agentId).localeCompare(b.agentName ?? b.agentId),
+    );
+}
