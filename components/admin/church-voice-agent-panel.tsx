@@ -29,6 +29,7 @@ export function ChurchVoiceAgentPanel({
   settings,
   hasRetellKey,
   agents,
+  agentsError = null,
 }: {
   churchId: string;
   settings: VoiceAssistantSettings | null;
@@ -39,6 +40,12 @@ export function ChurchVoiceAgentPanel({
    * manual entry so linking still works.
    */
   agents: RetellAgentSummary[];
+  /**
+   * Why the list is empty, when it is. An empty dropdown that quietly turns
+   * into a text box is indistinguishable from a feature that was never built,
+   * which is exactly how this control got reported missing.
+   */
+  agentsError?: string | null;
 }) {
   const [state, formAction] = useFormState<VoiceAgentFormState, FormData>(
     saveVoiceAgentLink,
@@ -154,8 +161,10 @@ export function ChurchVoiceAgentPanel({
                       : "Enter an agent ID manually"}
                   </button>
                 ) : (
-                  <p className="text-xs text-muted-foreground">
-                    Could not reach Retell to list agents — paste the ID instead.
+                  <p className="text-xs text-amber-700 dark:text-amber-400">
+                    {agentsError ??
+                      "This Retell account has no agents yet."}{" "}
+                    Paste an agent ID instead, or add a key below and reload.
                   </p>
                 )}
                 {!manualEntry && (
@@ -188,13 +197,28 @@ export function ChurchVoiceAgentPanel({
                 </p>
               </div>
             </div>
-          ) : wasLinked ? (
-            <p className="rounded-lg border border-amber-200 bg-amber-100 px-3 py-2 text-sm text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/15 dark:text-amber-300">
-              Switching back to managed mode lets FaithForm resume
-              overwriting this agent&apos;s prompt and configuration from
-              Church Profile on the next save.
-            </p>
-          ) : null}
+          ) : (
+            <>
+              {/*
+                The picker only exists under "Linked", and a church defaults to
+                "Managed" — so someone looking for "choose which agent this
+                church uses" found a card with no picker in it and reasonably
+                concluded it had never been built. Say where it is.
+              */}
+              <p className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                To choose an agent this church already has in Retell, switch to{" "}
+                <strong className="text-foreground">Linked</strong> above — the
+                agent picker appears there.
+              </p>
+              {wasLinked && (
+                <p className="rounded-lg border border-amber-200 bg-amber-100 px-3 py-2 text-sm text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/15 dark:text-amber-300">
+                  Switching back to managed mode lets FaithForm resume
+                  overwriting this agent&apos;s prompt and configuration from
+                  Church Profile on the next save.
+                </p>
+              )}
+            </>
+          )}
 
           {settings?.retail_ai_agent_id && (
             <p className="text-xs text-muted-foreground">

@@ -61,6 +61,8 @@ type ChurchDetailTabsProps = {
   hasRetellKey: boolean;
   /** Agents on the serving Retell account, for the picker. Empty if unreachable. */
   retellAgents: RetellAgentSummary[];
+  /** Why the agent list is empty, when it is. Null means it simply is empty. */
+  retellAgentsError: string | null;
 };
 
 function MemberAccessCell({
@@ -107,6 +109,7 @@ export function ChurchDetailTabs({
   voiceAgentSettings,
   hasRetellKey,
   retellAgents,
+  retellAgentsError,
 }: ChurchDetailTabsProps) {
   const openDomainRequests = domainRequests.filter((request) =>
     ["submitted", "in_review", "awaiting_church", "in_progress"].includes(
@@ -235,6 +238,7 @@ export function ChurchDetailTabs({
           settings={voiceAgentSettings}
           hasRetellKey={hasRetellKey}
           agents={retellAgents}
+          agentsError={retellAgentsError}
         />
       </TabsContent>
 
