@@ -13,6 +13,11 @@ type DashboardShellProps = {
   role: string | null;
   /** Features this member may open — drives which nav rows render. */
   allowedFeatures: FeatureKey[];
+  /**
+   * Rendered above everything, full width. Server-composed so a client shell
+   * never has to know what a platform admin is.
+   */
+  banner?: React.ReactNode;
   children: React.ReactNode;
 };
 
@@ -21,6 +26,7 @@ export function DashboardShell({
   churchName,
   role,
   allowedFeatures,
+  banner,
   children,
 }: DashboardShellProps) {
   return (
@@ -41,6 +47,7 @@ export function DashboardShell({
         not reflow because a pointer crossed the nav.
       */}
       <div className="flex h-dvh min-w-0 flex-col overflow-hidden md:ml-[72px]">
+        {banner}
         <Topbar userEmail={userEmail} churchName={churchName} />
 
         <main className="flex-1 overflow-y-auto p-5 pb-24 md:p-8 md:pb-8">

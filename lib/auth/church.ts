@@ -6,7 +6,12 @@ import {
   isMissingFeaturePermissionsColumn,
   readGrantsFromAppMetadata,
 } from "@/lib/auth/feature-grants";
-import { parseFeatureKeys, type FeatureKey } from "@/lib/features/catalog";
+import {
+  FEATURE_KEYS,
+  parseFeatureKeys,
+  type FeatureKey,
+} from "@/lib/features/catalog";
+import { getActiveImpersonation } from "@/lib/auth/impersonation";
 
 export type ChurchAuth = {
   userId: string;
@@ -21,6 +26,15 @@ export type ChurchAuth = {
    * feature implicitly, so this is only consulted for non-admins.
    */
   featurePermissions: FeatureKey[];
+  /**
+   * Set when a platform admin is working inside this church rather than
+   * belonging to it. Drives the banner that keeps them aware of it; nothing
+   * else in the dashboard needs to care.
+   */
+  impersonation?: {
+    adminUserId: string;
+    adminEmail: string | null;
+  };
 };
 
 type ChurchUserLink = {
@@ -134,8 +148,47 @@ async function getChurchAuthWithClient(
 // Supabase database calls are not automatically memoized by React. Keeping the
 // zero-argument path in React's request cache means the dashboard layout,
 // feature gates, and page share one verified identity + church membership read.
-const getChurchAuthForRequest = cache(async () =>
-  getChurchAuthWithClient(createClient()),
+/**
+ * The church a platform admin has stepped into, as a full church context.
+ *
+ * They are given the admin role and every feature grant on purpose: the point
+ * of stepping in is to see and do what the church's own admin can. Account-level
+ * feature switches still apply — a church that has Giving turned off does not
+ * grow a Giving tab because we are looking at it.
+ */
+async function getImpersonatedChurchAuth(): Promise<ChurchAuth | null> {
+  const acting = await getActiveImpersonation();
+  if (!acting) return null;
+
+  const admin = createAdminClientOrNull();
+  if (!admin) return null;
+
+  const { data: church } = await admin
+    .from("churches")
+    .select("name, timezone")
+    .eq("id", acting.churchId)
+    .maybeSingle();
+
+  return {
+    userId: acting.adminUserId,
+    userEmail: acting.adminEmail ?? "",
+    churchId: acting.churchId,
+    churchName: (church?.name as string | null) ?? acting.churchName,
+    churchTimezone: (church?.timezone as string | null) ?? "America/New_York",
+    role: "admin",
+    isAdmin: true,
+    featurePermissions: [...FEATURE_KEYS],
+    impersonation: {
+      adminUserId: acting.adminUserId,
+      adminEmail: acting.adminEmail,
+    },
+  };
+}
+
+const getChurchAuthForRequest = cache(
+  async () =>
+    (await getImpersonatedChurchAuth()) ??
+    getChurchAuthWithClient(createClient()),
 );
 
 export function getChurchAuth(

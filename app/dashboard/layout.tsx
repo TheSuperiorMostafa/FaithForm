@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { Toaster } from "sonner";
 import { DashboardShell } from "@/components/dashboard/dashboard-shell";
+import { ImpersonationBanner } from "@/components/dashboard/impersonation-banner";
 import { getChurchAuth } from "@/lib/auth/church";
 import { getFeatureAccess } from "@/lib/features/access";
 
@@ -33,6 +34,11 @@ export default async function DashboardLayout({
         churchName={auth.churchName}
         role={auth.role}
         allowedFeatures={featureAccess?.allowed ?? []}
+        banner={
+          auth.impersonation ? (
+            <ImpersonationBanner churchName={auth.churchName} />
+          ) : null
+        }
       >
         {children}
       </DashboardShell>

@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { loadChurchProfileForAdmin } from "@/app/admin/church-profile-actions";
 import { ChurchDetailTabs } from "@/components/admin/church-detail-tabs";
+import { OpenChurchDashboardButton } from "@/components/admin/open-church-dashboard-button";
 import { PageHeader } from "@/components/admin/page-header";
 import { getChurchFeatureState } from "@/lib/features/access";
 import type { FeatureKey } from "@/lib/features/catalog";
@@ -102,9 +103,19 @@ export default async function AdminChurchDetailPage({
     getChurchDomainRequests(id),
     getVoiceAssistantSettings(id, createAdminClient()),
     hasChurchRetellKey(id),
-    // Admin-only page: a Retell outage or a missing key should grey out the
-    // agent picker, not 500 the whole church record.
-    listRetellAgents(id).catch(() => []),
+    // Admin-only page: a Retell outage or a missing key should explain itself
+    // in the agent picker, not 500 the whole church record. The reason is kept
+    // rather than swallowed — an empty dropdown with no explanation is what
+    // made this control look like it was never built.
+    listRetellAgents(id)
+      .then((agents) => ({ agents, error: null as string | null }))
+      .catch((error: unknown) => ({
+        agents: [] as Awaited<ReturnType<typeof listRetellAgents>>,
+        error:
+          error instanceof Error && /RETELL_API_KEY/i.test(error.message)
+            ? "No Retell API key is configured — add this church's key below, or set FaithForm's shared key."
+            : "Could not reach Retell to list agents.",
+      })),
   ]);
 
   if (!detail) notFound();
@@ -122,6 +133,12 @@ export default async function AdminChurchDetailPage({
       <PageHeader
         title={detail.church.name}
         description="Manage this church's profile, AI settings, features, users, integrations, activity, and support."
+        action={
+          <OpenChurchDashboardButton
+            churchId={detail.church.id}
+            churchName={detail.church.name}
+          />
+        }
       />
       <ChurchDetailTabs
         detail={detail}
@@ -139,7 +156,8 @@ export default async function AdminChurchDetailPage({
         )}
         voiceAgentSettings={voiceAgentSettings}
         hasRetellKey={hasRetellKey}
-        retellAgents={retellAgents}
+        retellAgents={retellAgents.agents}
+        retellAgentsError={retellAgents.error}
       />
     </div>
   );

@@ -32,6 +32,33 @@ export async function isPlatformAdminUser(user: User): Promise<boolean> {
   return Boolean(data?.user_id);
 }
 
+/**
+ * The same question as `isPlatformAdminUser`, asked with only an id.
+ *
+ * Impersonation re-checks membership on every request and has no `User` object
+ * to hand — only the id the signed note names.
+ */
+export async function isPlatformAdminUserId(userId: string): Promise<boolean> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("platform_admins")
+    .select("user_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("isPlatformAdminUserId platform_admins:", error.message);
+    return false;
+  }
+
+  if (data?.user_id) return true;
+
+  // Bootstrap admins are named by email, not by a row, so the address has to
+  // be fetched before the fallback can be applied.
+  const { data: user } = await admin.auth.admin.getUserById(userId);
+  return isBootstrapSuperAdminEmail(user.user?.email);
+}
+
 export async function requireSuperAdmin(): Promise<User> {
   const supabase = createClient();
   const {
