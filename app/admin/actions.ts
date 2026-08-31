@@ -4,13 +4,20 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireSuperAdmin } from "@/lib/auth/superadmin";
 import { sendInviteEmail } from "@/lib/email/invite";
-import { sendSupportTicketNotification } from "@/lib/email/support-ticket";
+import {
+  sendSupportTicketNotification,
+  sendSupportTicketReply,
+} from "@/lib/email/support-ticket";
 import { absoluteAppPath } from "@/lib/site-url";
 import type {
   AdminRole,
   SupportTicketPriority,
   SupportTicketStatus,
 } from "@/lib/queries/admin";
+import {
+  postTicketComment,
+  supportStatusLabel,
+} from "@/lib/support/comments";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateChurchSlug } from "@/lib/churches/slug";
 
@@ -358,5 +365,78 @@ export async function updateSupportTicket(formData: FormData) {
   revalidatePath(`/admin/support/${ticketId}`);
   if (data?.church_id) {
     revalidatePath(`/admin/churches/${data.church_id}`);
+  }
+}
+
+/**
+ * Our reply on a church's ticket.
+ *
+ * This is the only channel the church sees. `admin_notes` above stays private
+ * — it was written on the understanding that nobody outside the control center
+ * would read it, and quietly publishing years of it is not a thing to do by
+ * accident. Anything meant for the church is posted here, where it lands on
+ * their dashboard and in their inbox at the same time.
+ */
+export async function postSupportTicketReply(formData: FormData) {
+  const user = await requireSuperAdmin();
+
+  const ticketId = readString(formData, "ticketId");
+  const body = readString(formData, "body");
+
+  if (!ticketId) {
+    throw new Error("Invalid support ticket reply.");
+  }
+
+  const admin = createAdminClient();
+  const { data: ticket, error: ticketError } = await admin
+    .from("support_tickets")
+    .select("id, church_id, submitted_by, subject, status")
+    .eq("id", ticketId)
+    .maybeSingle();
+
+  if (ticketError) throw new Error(ticketError.message);
+  if (!ticket) throw new Error("That ticket could not be found.");
+
+  const posted = await postTicketComment(admin, {
+    ticketId: ticket.id as string,
+    churchId: (ticket.church_id as string | null) ?? null,
+    authorRole: "platform",
+    authorUserId: user.id,
+    authorName: "FaithForm Support",
+    body,
+  });
+
+  if (posted.error) throw new Error(posted.error);
+
+  await admin
+    .from("support_tickets")
+    .update({ updated_at: new Date().toISOString() })
+    .eq("id", ticket.id);
+
+  // The reply is stored and already on their dashboard. Mail failing after
+  // this point must not throw away the post.
+  try {
+    const submittedBy = ticket.submitted_by as string | null;
+    if (submittedBy) {
+      const { data } = await admin.auth.admin.getUserById(submittedBy);
+      const to = data.user?.email;
+      if (to) {
+        await sendSupportTicketReply({
+          to,
+          subject: ticket.subject as string,
+          message: body.trim(),
+          statusLabel: supportStatusLabel(ticket.status as string),
+        });
+      }
+    }
+  } catch (notifyError) {
+    console.error("postSupportTicketReply notify:", notifyError);
+  }
+
+  revalidatePath("/admin/support");
+  revalidatePath(`/admin/support/${ticketId}`);
+  revalidatePath("/dashboard/support");
+  if (ticket.church_id) {
+    revalidatePath(`/admin/churches/${ticket.church_id as string}`);
   }
 }

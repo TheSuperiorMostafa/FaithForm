@@ -1,4 +1,8 @@
 import { parseFeatureKeys, type FeatureKey } from "@/lib/features/catalog";
+import {
+  getTicketComments,
+  type SupportTicketComment,
+} from "@/lib/support/comments";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getGivePageUrl } from "@/lib/stripe/config";
 import {
@@ -187,8 +191,11 @@ export type AdminTicketListRow = {
 
 export type AdminTicketDetail = AdminTicketListRow & {
   body: string | null;
+  /** Internal only. Never rendered on a church's dashboard — see 0069. */
   adminNotes: string | null;
   updatedAt: string | null;
+  /** The shared thread, oldest first. What the church can actually read. */
+  comments: SupportTicketComment[];
 };
 
 export type MonthPoint = {
@@ -896,7 +903,10 @@ export async function getAdminSupportTicket(
   }
 
   const row = data as TicketRow;
-  const users = await listAuthUsersFor([row.submitted_by]);
+  const [users, comments] = await Promise.all([
+    listAuthUsersFor([row.submitted_by]),
+    getTicketComments(admin, row.id),
+  ]);
   const mapped = mapTicket(row, users);
 
   return {
@@ -904,6 +914,7 @@ export async function getAdminSupportTicket(
     body: row.body ?? null,
     adminNotes: row.admin_notes ?? null,
     updatedAt: row.updated_at ?? null,
+    comments,
   };
 }
 

@@ -1,15 +1,20 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { updateSupportTicket } from "@/app/admin/actions";
+import {
+  postSupportTicketReply,
+  updateSupportTicket,
+} from "@/app/admin/actions";
 import { PriorityBadge, StatusBadge } from "@/components/admin/badges";
 import { formatDateTime } from "@/components/admin/format";
 import { PageHeader } from "@/components/admin/page-header";
+import { TicketThread } from "@/components/support/ticket-thread";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { getAdminSupportTicket } from "@/lib/queries/admin";
+import { SUPPORT_COMMENT_MAX_LENGTH } from "@/lib/support/comments";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -27,7 +32,7 @@ export default async function AdminSupportTicketPage({ params }: PageProps) {
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-5">
       <PageHeader
         title={ticket.subject}
-        description="Review ticket details and update admin resolution notes."
+        description="Review the ticket, reply to the church, and set its status."
       />
 
       <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
@@ -82,7 +87,44 @@ export default async function AdminSupportTicketPage({ params }: PageProps) {
 
       <Card>
         <CardHeader>
+          <CardTitle>Conversation</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Everything here is visible to the church on their dashboard, and
+            every reply you post is emailed to whoever raised the ticket.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-5">
+          <TicketThread
+            comments={ticket.comments}
+            viewer="platform"
+            emptyLabel="Nothing has been said to this church yet."
+          />
+
+          <form action={postSupportTicketReply} className="space-y-3">
+            <input type="hidden" name="ticketId" value={ticket.id} />
+            <div className="space-y-2">
+              <Label htmlFor="reply">Reply to the church</Label>
+              <Textarea
+                id="reply"
+                name="body"
+                rows={5}
+                required
+                maxLength={SUPPORT_COMMENT_MAX_LENGTH}
+                placeholder="What should they hear back?"
+              />
+            </div>
+            <Button type="submit">Post reply &amp; email them</Button>
+          </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
           <CardTitle>Admin update</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Status and internal notes. Notes are for us only — the church never
+            sees them. Post a reply above to say something they can read.
+          </p>
         </CardHeader>
         <CardContent>
           <form action={updateSupportTicket} className="space-y-4">
@@ -96,7 +138,7 @@ export default async function AdminSupportTicketPage({ params }: PageProps) {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="adminNotes">Admin notes</Label>
+              <Label htmlFor="adminNotes">Internal notes (private)</Label>
               <Textarea
                 id="adminNotes"
                 name="adminNotes"
