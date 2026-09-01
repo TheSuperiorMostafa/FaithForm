@@ -102,45 +102,75 @@ export type RetellAgentSummary = {
 type RetellAgentListRow = {
   agent_id?: string;
   agent_name?: string | null;
-  version?: number | null;
-  is_published?: boolean;
+  /**
+   * Only present once an agent has been published at least once — a
+   * never-published draft omits the field entirely, which is how a draft is
+   * told apart from a live agent now that rows are per agent, not per version.
+   */
+  latest_published_version?: number | null;
 };
 
+type RetellAgentListPage = {
+  items?: RetellAgentListRow[];
+  has_more?: boolean;
+  pagination_key?: string | null;
+};
+
+/** Retell's documented maximum page size for `POST /v2/list-agents`. */
+const RETELL_AGENT_PAGE_LIMIT = 1000;
+
+/** Backstop so a misbehaving `has_more` cannot spin this forever. */
+const RETELL_AGENT_PAGE_CAP = 20;
+
 /**
- * Lists the agents on whichever Retell account serves this church — its own
- * saved key when it has one, otherwise FaithForm's shared account.
+ * Lists the voice agents on whichever Retell account serves this church — its
+ * own saved key when it has one, otherwise FaithForm's shared account.
  *
- * `GET /list-agents` returns one row per agent *version*, not one per agent
- * (143 rows for 4 real agents on the shared account), and `pagination_key`
- * responds 500, so this asks for a single oversized page and collapses it to
- * the newest version of each distinct `agent_id`.
+ * Uses `POST /v2/list-agents`, which replaced the retired `GET /list-agents`.
+ * The v2 endpoint returns one row per agent rather than one per agent
+ * *version* (4 rows instead of 143 on the shared account), so there is nothing
+ * left to collapse, and its `pagination_key` actually works — chat agents,
+ * which the old voice-only endpoint never returned, are filtered out to keep
+ * the picker showing the same set of agents as before.
  */
 export async function listRetellAgents(
   churchId?: string | null,
 ): Promise<RetellAgentSummary[]> {
-  const rows = await retellRequest<RetellAgentListRow[]>({
-    method: "GET",
-    path: "/list-agents?limit=1000",
-    churchId,
-  });
+  const rows: RetellAgentListRow[] = [];
+  let paginationKey: string | undefined;
 
-  if (!Array.isArray(rows)) return [];
+  for (let page = 0; page < RETELL_AGENT_PAGE_CAP; page += 1) {
+    const query = new URLSearchParams({
+      limit: String(RETELL_AGENT_PAGE_LIMIT),
+    });
+    if (paginationKey) query.set("pagination_key", paginationKey);
 
-  const newest = new Map<string, RetellAgentListRow>();
-  for (const row of rows) {
-    if (!row?.agent_id) continue;
-    const seen = newest.get(row.agent_id);
-    if (!seen || (row.version ?? 0) > (seen.version ?? 0)) {
-      newest.set(row.agent_id, row);
-    }
+    const response = await retellRequest<RetellAgentListPage>({
+      method: "POST",
+      path: `/v2/list-agents?${query.toString()}`,
+      body: {
+        filter_criteria: {
+          channel: { type: "string", op: "eq", value: "voice" },
+        },
+      },
+      churchId,
+    });
+
+    if (Array.isArray(response?.items)) rows.push(...response.items);
+    if (!response?.has_more || !response.pagination_key) break;
+    paginationKey = response.pagination_key;
   }
 
-  return [...newest.values()]
+  return rows
+    .filter(
+      (row): row is RetellAgentListRow & { agent_id: string } =>
+        Boolean(row?.agent_id),
+    )
     .map((row) => ({
-      agentId: row.agent_id as string,
+      agentId: row.agent_id,
       agentName: row.agent_name?.trim() || null,
-      version: row.version ?? null,
-      isPublished: row.is_published === true,
+      version: row.latest_published_version ?? null,
+      isPublished: typeof row.latest_published_version === "number",
     }))
     .sort((a, b) =>
       (a.agentName ?? a.agentId).localeCompare(b.agentName ?? b.agentId),
