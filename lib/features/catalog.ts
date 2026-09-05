@@ -1,4 +1,5 @@
 import {
+  Baby as BabyIcon,
   BookOpen,
   Contact,
   FolderOpen,
@@ -30,6 +31,7 @@ export const FEATURE_KEYS = [
   "attendance",
   "attendance_follow_up",
   "people",
+  "checkin",
   "announcements",
   "sermon_builder",
   "live_stream",
@@ -91,6 +93,17 @@ export const FEATURES: FeatureDefinition[] = [
     href: "/dashboard/people",
     icon: Contact,
     routes: ["/dashboard/people"],
+  },
+  {
+    key: "checkin",
+    label: "Check-In",
+    description:
+      "Households, rooms, children's check-in, and the checkout console.",
+    href: "/dashboard/checkin",
+    icon: BabyIcon,
+    routes: ["/dashboard/checkin"],
+    publicImpact:
+      "Parents lose pre-check-in and their pickup code in the member app. Anyone already checked in can still be checked out at the desk.",
   },
   {
     key: "announcements",

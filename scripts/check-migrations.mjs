@@ -86,6 +86,12 @@ const CHECKS = [
     "church_features.disabled_reason",
     "pnpm db:feature-reason",
   ],
+  [
+    "0070_phone_call_scoring_v2",
+    "phone_calls.call_classification",
+    "pnpm db:checkin",
+  ],
+  ["0071_households_and_checkin", "checkin_sessions", "pnpm db:checkin"],
 ];
 
 const databaseUrl = process.env.DATABASE_URL ?? process.env.SUPABASE_DB_URL;

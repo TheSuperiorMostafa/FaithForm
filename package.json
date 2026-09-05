@@ -79,7 +79,8 @@
     "verify:generated": "pnpm contract:check && pnpm design:check && pnpm localization:check",
     "db:faithful-push": "node scripts/apply-faithful-push-migration.mjs",
     "db:communications": "node scripts/apply-communications-migrations.mjs",
-    "db:attendance": "node scripts/apply-attendance-migration.mjs"
+    "db:attendance": "node scripts/apply-attendance-migration.mjs",
+    "db:checkin": "node scripts/apply-checkin-migrations.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.79",

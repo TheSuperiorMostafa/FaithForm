@@ -64,6 +64,10 @@ const BUCKETS = [
   // Files attached to the weekly announcement email. Private: the bytes are
   // read server-side when the Gmail draft is built and never linked to.
   { name: "communication-attachments", public: false },
+  // Background checks, signed waivers, and anything else held against a
+  // person. Private, and never served by a signed URL — every read goes
+  // through a route that re-checks the reader's role.
+  { name: "member-files", public: false },
 ];
 
 let failed = false;

@@ -11,6 +11,7 @@ import {
   updateMember,
 } from "@/app/dashboard/people/actions";
 import { Button } from "@/components/ui/button";
+import { MemberCarePanel } from "@/components/people/member-care-panel";
 import type { ChurchMember } from "@/lib/queries/members";
 import { formatPhoneDisplay } from "@/lib/people/validate-member";
 
@@ -279,6 +280,24 @@ export function MemberFormPanel({
           )}
         </div>
       </form>
+
+      {/*
+        Outside the form above, not inside it. The care panel has upload and
+        save forms of its own, and a nested <form> is invalid HTML that browsers
+        resolve by dropping the inner one — silently, and only at runtime.
+      */}
+      {isEdit && member ? (
+        <section className="mt-6 border-t border-border pt-6">
+          <h2 className="mb-4 font-heading text-lg font-semibold">
+            Care &amp; documents
+          </h2>
+          <MemberCarePanel
+            memberId={member.id}
+            memberName={member.first_name}
+            isAdmin={isAdmin}
+          />
+        </section>
+      ) : null}
     </div>
   );
 }

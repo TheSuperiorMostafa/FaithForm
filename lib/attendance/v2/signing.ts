@@ -55,6 +55,10 @@ export const CAPABILITY_TYPES = [
   "kiosk.pairing",
   "kiosk.credential",
   "shortcode",
+  // A parent's proof that they may collect their household's children. Its own
+  // type, so a scanned attendance code can never be presented at a checkout
+  // desk and vice versa — the two are signed under unrelated sub-keys.
+  "household.pickup",
 ] as const;
 
 export type CapabilityType = (typeof CAPABILITY_TYPES)[number];

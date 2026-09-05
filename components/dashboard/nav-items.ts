@@ -1,4 +1,5 @@
 import {
+  Baby,
   BookOpen,
   Contact,
   Globe,
@@ -63,6 +64,13 @@ export const navItems: NavItem[] = [
     href: "/dashboard/people",
     icon: Contact,
     features: ["people"],
+  },
+  {
+    label: "Check-In",
+    shortLabel: "Check-In",
+    href: "/dashboard/checkin",
+    icon: Baby,
+    features: ["checkin"],
   },
   {
     label: "Announcements",
