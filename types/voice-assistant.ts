@@ -1,3 +1,10 @@
+import type {
+  CallClassification,
+  CallerMood,
+  CallLabel,
+  CallUrgency,
+} from "@/lib/integrations/phone-call-scoring-prompt";
+
 export const VOICE_TONES = [
   "warm_friendly",
   "professional",
@@ -103,9 +110,25 @@ export type VoiceAssistantContext = {
   programs: string[];
 };
 
+/**
+ * What the scoring model returns, plus the `version` stamp that says which
+ * rubric produced it. Version 1 rows (migration 0036) carry only `score` and
+ * `rationale`; everything else is optional so the two can share one type
+ * without the UI having to branch on which era a call belongs to.
+ */
 export type PhoneCallScoreBreakdown = {
+  version?: number;
   score: number;
-  rationale: string;
+  /** Version 1 only — replaced by `summary` and `flag_reason`. */
+  rationale?: string;
+  call_type?: CallClassification;
+  label?: CallLabel;
+  summary?: string;
+  caller_mood?: CallerMood;
+  flag_reason?: string | null;
+  notify_pastor?: boolean;
+  urgency?: CallUrgency;
+  missing_knowledge?: string | null;
   [key: string]: unknown;
 };
 
@@ -123,6 +146,10 @@ export type PhoneCallRow = {
   score_breakdown: PhoneCallScoreBreakdown | null;
   notes: string | null;
   scored_at: string | null;
+  /** Lifted out of the breakdown so the log can filter and sort on them. */
+  call_classification: CallClassification | null;
+  notify_pastor: boolean | null;
+  urgency: CallUrgency | null;
 };
 
 export type VoiceAgentSyncStatus = {

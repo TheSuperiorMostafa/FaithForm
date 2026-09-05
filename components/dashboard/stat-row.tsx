@@ -106,7 +106,7 @@ export async function StatRow({ churchId, range }: StatRowProps) {
         metric={stats.phoneCalls}
         icon={Phone}
         range={range}
-        href="/dashboard/voice-assistant"
+        href="/dashboard/call-log"
       />
       <StatCard
         label="SM posts"

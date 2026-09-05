@@ -7,6 +7,11 @@ import { rescorePhoneCall } from "@/app/dashboard/voice-assistant/actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+  AttentionBadge,
+  ClassificationBadge,
+} from "@/components/voice-assistant/scoring-explainer";
+import { describeCallScore } from "@/lib/utils/call-score";
+import {
   formatCallDuration,
   maskPhoneNumber,
 } from "@/lib/utils/voice-assistant";
@@ -17,17 +22,10 @@ type CallDetailViewProps = {
   isAdmin: boolean;
 };
 
-function formatScore(score: number | null): string {
-  if (score == null || Number.isNaN(Number(score))) return "—";
-  return String(Math.round(Number(score)));
-}
-
 export function CallDetailView({ call, isAdmin }: CallDetailViewProps) {
   const [pending, startTransition] = useTransition();
-  const rationale =
-    typeof call.score_breakdown?.rationale === "string"
-      ? call.score_breakdown.rationale
-      : null;
+  const score = describeCallScore(call);
+  const retellSummary = call.outcome?.trim() || call.notes?.trim() || null;
 
   const handleRescore = () => {
     startTransition(async () => {
@@ -40,7 +38,7 @@ export function CallDetailView({ call, isAdmin }: CallDetailViewProps) {
       }
       toast.success(
         result.score != null
-          ? `Re-scored: ${Math.round(result.score)}`
+          ? `Re-scored: ${Math.round(result.score)} / 10`
           : "Call re-scored.",
       );
     });
@@ -108,45 +106,98 @@ export function CallDetailView({ call, isAdmin }: CallDetailViewProps) {
               </dd>
             </div>
             <div>
-              <dt className="text-xs text-muted-foreground">AI score</dt>
-              <dd className="mt-0.5 text-sm tabular-nums font-medium">
-                {formatScore(call.ai_score)}
+              <dt className="text-xs text-muted-foreground">Call type</dt>
+              <dd className="mt-0.5 flex flex-wrap items-center gap-1.5 text-sm">
+                {score.classification ? (
+                  <ClassificationBadge classification={score.classification} />
+                ) : (
+                  "—"
+                )}
+                <AttentionBadge view={score} />
               </dd>
             </div>
           </dl>
         </CardContent>
       </Card>
 
-      {(call.ai_score != null || rationale) && (
+      {(score.value != null || score.summary) && (
         <Card>
           <CardHeader>
             <CardTitle>Scoring</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <p className="text-2xl font-semibold tabular-nums">
-              {formatScore(call.ai_score)}
+            <p className={`text-3xl font-semibold tabular-nums ${score.toneClass}`}>
+              {score.value ?? "—"}
               <span className="ml-1 text-sm font-normal text-muted-foreground">
-                / 100
+                / {score.outOf}
               </span>
             </p>
-            {rationale && (
-              <p className="text-sm leading-relaxed text-muted-foreground">
-                {rationale}
+
+            {score.legacy && (
+              <p className="text-xs text-muted-foreground">
+                Scored by the previous rubric, before call types existed. The
+                number is that ranking converted, not a judgement the current
+                rubric made.
               </p>
             )}
+
+            {score.classificationHelp && (
+              <p className="text-xs text-muted-foreground">
+                {score.classificationHelp}
+              </p>
+            )}
+
+            {score.summary && (
+              <p className="text-sm leading-relaxed">{score.summary}</p>
+            )}
+
+            <dl className="grid gap-3 border-t border-border pt-3 sm:grid-cols-2">
+              {score.callerMood && (
+                <div>
+                  <dt className="text-xs text-muted-foreground">Caller mood</dt>
+                  <dd className="mt-0.5 text-sm capitalize">
+                    {score.callerMood}
+                  </dd>
+                </div>
+              )}
+              {score.urgencyLabel && (
+                <div>
+                  <dt className="text-xs text-muted-foreground">Urgency</dt>
+                  <dd className="mt-0.5 text-sm">{score.urgencyLabel}</dd>
+                </div>
+              )}
+              {score.flagReason && (
+                <div className="sm:col-span-2">
+                  <dt className="text-xs text-muted-foreground">
+                    What went wrong
+                  </dt>
+                  <dd className="mt-0.5 text-sm leading-relaxed">
+                    {score.flagReason}
+                  </dd>
+                </div>
+              )}
+              {score.missingKnowledge && (
+                <div className="sm:col-span-2">
+                  <dt className="text-xs text-muted-foreground">
+                    What the assistant did not know
+                  </dt>
+                  <dd className="mt-0.5 text-sm leading-relaxed">
+                    {score.missingKnowledge}
+                  </dd>
+                </div>
+              )}
+            </dl>
           </CardContent>
         </Card>
       )}
 
-      {(call.outcome || call.notes) && (
+      {retellSummary && retellSummary !== score.summary && (
         <Card>
           <CardHeader>
-            <CardTitle>Summary</CardTitle>
+            <CardTitle>Retell&rsquo;s summary</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm leading-relaxed">
-              {call.outcome ?? call.notes}
-            </p>
+            <p className="text-sm leading-relaxed">{retellSummary}</p>
           </CardContent>
         </Card>
       )}

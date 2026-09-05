@@ -86,9 +86,11 @@ export const navItems: NavItem[] = [
     features: ["live_stream"],
   },
   {
-    label: "Voice Assistant",
-    shortLabel: "Voice",
-    href: "/dashboard/voice-assistant",
+    // Assistant configuration lives in the control center now — a pastor wants
+    // to read what the phone did, not tune what it is.
+    label: "Call Log",
+    shortLabel: "Calls",
+    href: "/dashboard/call-log",
     icon: Phone,
     features: ["voice_assistant"],
   },

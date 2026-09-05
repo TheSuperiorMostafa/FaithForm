@@ -346,8 +346,37 @@ export async function getVoiceAssistantContext(
   };
 }
 
-const PHONE_CALL_SELECT =
+const PHONE_CALL_SELECT_LEGACY =
   "id, caller_number, duration_seconds, outcome, sentiment, transcript, called_at, ai_score, recording_url, call_successful, score_breakdown, notes, scored_at";
+
+const PHONE_CALL_SELECT = `${PHONE_CALL_SELECT_LEGACY}, call_classification, notify_pastor, urgency`;
+
+/** True when the database has not had migration 0070 applied yet. */
+function isMissingScoringColumns(message: string): boolean {
+  return /call_classification|notify_pastor|urgency/i.test(message);
+}
+
+/**
+ * Fill in the 0070 columns a pre-migration database does not have.
+ *
+ * They are only ever a faster copy of what already sits in `score_breakdown`,
+ * so a row read from an older schema is not missing information — it just has
+ * to be read out of the JSON instead. Every consumer goes through
+ * `describeCallScore`, which looks in both places.
+ */
+function withScoringDefaults(rows: unknown[]): PhoneCallRow[] {
+  return rows.map((row) => {
+    const record = row as Record<string, unknown>;
+    return {
+      ...(record as unknown as PhoneCallRow),
+      call_classification:
+        (record.call_classification as PhoneCallRow["call_classification"]) ??
+        null,
+      notify_pastor: (record.notify_pastor as boolean | null) ?? null,
+      urgency: (record.urgency as PhoneCallRow["urgency"]) ?? null,
+    };
+  });
+}
 
 export async function getRecentPhoneCalls(
   churchId: string,
@@ -355,14 +384,22 @@ export async function getRecentPhoneCalls(
   supabase?: SupabaseClient,
 ): Promise<PhoneCallRow[]> {
   const client = supabase ?? db();
-  const { data } = await client
-    .from("phone_calls")
-    .select(PHONE_CALL_SELECT)
-    .eq("church_id", churchId)
-    .order("called_at", { ascending: false })
-    .limit(limit);
+  const query = (columns: string) =>
+    client
+      .from("phone_calls")
+      .select(columns)
+      .eq("church_id", churchId)
+      .order("called_at", { ascending: false })
+      .limit(limit);
 
-  return (data ?? []) as PhoneCallRow[];
+  const { data, error } = await query(PHONE_CALL_SELECT);
+
+  if (error && isMissingScoringColumns(error.message)) {
+    const legacy = await query(PHONE_CALL_SELECT_LEGACY);
+    return withScoringDefaults(legacy.data ?? []);
+  }
+
+  return withScoringDefaults(data ?? []);
 }
 
 export async function getPhoneCallById(
@@ -371,14 +408,22 @@ export async function getPhoneCallById(
   supabase?: SupabaseClient,
 ): Promise<PhoneCallRow | null> {
   const client = supabase ?? db();
-  const { data } = await client
-    .from("phone_calls")
-    .select(PHONE_CALL_SELECT)
-    .eq("church_id", churchId)
-    .eq("id", callId)
-    .maybeSingle();
+  const query = (columns: string) =>
+    client
+      .from("phone_calls")
+      .select(columns)
+      .eq("church_id", churchId)
+      .eq("id", callId)
+      .maybeSingle();
 
-  return (data as PhoneCallRow | null) ?? null;
+  const { data, error } = await query(PHONE_CALL_SELECT);
+
+  if (error && isMissingScoringColumns(error.message)) {
+    const legacy = await query(PHONE_CALL_SELECT_LEGACY);
+    return legacy.data ? withScoringDefaults([legacy.data])[0] : null;
+  }
+
+  return data ? withScoringDefaults([data])[0] : null;
 }
 
 export async function getVoiceAgentSyncStatus(

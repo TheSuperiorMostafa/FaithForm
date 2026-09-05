@@ -9,6 +9,11 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
+  AttentionBadge,
+  ClassificationBadge,
+} from "@/components/voice-assistant/scoring-explainer";
+import { describeCallScore } from "@/lib/utils/call-score";
+import {
   formatCallDuration,
   maskPhoneNumber,
 } from "@/lib/utils/voice-assistant";
@@ -19,16 +24,6 @@ type RecentCallsBlockProps = {
   isAdmin: boolean;
   hasAgent: boolean;
 };
-
-function formatScore(score: number | null): string {
-  if (score == null || Number.isNaN(Number(score))) return "—";
-  return String(Math.round(Number(score)));
-}
-
-function formatSuccessful(value: boolean | null): string {
-  if (value == null) return "—";
-  return value ? "Yes" : "No";
-}
 
 export function RecentCallsBlock({
   calls,
@@ -58,7 +53,8 @@ export function RecentCallsBlock({
         <div>
           <CardTitle>Call log</CardTitle>
           <p className="mt-1 text-xs text-muted-foreground">
-            Calls from your Retell agent are saved here automatically.
+            Calls are saved here automatically. Ones that still need a person are
+            flagged.
           </p>
         </div>
         {isAdmin && (
@@ -99,59 +95,81 @@ export function RecentCallsBlock({
           </p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-left text-sm">
+            <table className="w-full min-w-[720px] text-left text-sm">
               <thead>
                 <tr className="border-b border-border text-xs text-muted-foreground">
                   <th className="pb-2 pr-4 font-medium">Date</th>
                   <th className="pb-2 pr-4 font-medium">Caller</th>
+                  <th className="pb-2 pr-4 font-medium">Type</th>
                   <th className="pb-2 pr-4 font-medium">Duration</th>
                   <th className="pb-2 pr-4 font-medium">Score</th>
-                  <th className="pb-2 pr-4 font-medium">Successful</th>
-                  <th className="pb-2 pr-4 font-medium">Summary</th>
+                  <th className="pb-2 pr-4 font-medium">What happened</th>
                   <th className="pb-2 pl-2 font-medium">
                     <span className="sr-only">Details</span>
                   </th>
                 </tr>
               </thead>
               <tbody>
-                {calls.map((call) => (
-                  <tr
-                    key={call.id}
-                    className="border-b border-border/60 last:border-0"
-                  >
-                    <td className="py-2.5 pr-4 tabular-nums">
-                      {new Date(call.called_at).toLocaleString(undefined, {
-                        month: "short",
-                        day: "numeric",
-                        hour: "numeric",
-                        minute: "2-digit",
-                      })}
-                    </td>
-                    <td className="py-2.5 pr-4">
-                      {maskPhoneNumber(call.caller_number)}
-                    </td>
-                    <td className="py-2.5 pr-4 tabular-nums">
-                      {formatCallDuration(call.duration_seconds)}
-                    </td>
-                    <td className="py-2.5 pr-4 tabular-nums text-muted-foreground">
-                      {formatScore(call.ai_score)}
-                    </td>
-                    <td className="py-2.5 pr-4 text-muted-foreground">
-                      {formatSuccessful(call.call_successful)}
-                    </td>
-                    <td className="max-w-[200px] truncate py-2.5 pr-4 text-muted-foreground">
-                      {call.outcome ?? "—"}
-                    </td>
-                    <td className="py-2.5 pl-2">
-                      <Link
-                        href={`/dashboard/voice-assistant/calls/${call.id}`}
-                        className="text-xs font-medium text-accent hover:underline"
+                {calls.map((call) => {
+                  const score = describeCallScore(call);
+
+                  return (
+                    <tr
+                      key={call.id}
+                      className="border-b border-border/60 last:border-0"
+                    >
+                      <td className="py-2.5 pr-4 tabular-nums">
+                        {new Date(call.called_at).toLocaleString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                          hour: "numeric",
+                          minute: "2-digit",
+                        })}
+                      </td>
+                      <td className="py-2.5 pr-4">
+                        {maskPhoneNumber(call.caller_number)}
+                      </td>
+                      <td className="py-2.5 pr-4">
+                        <span className="flex flex-wrap items-center gap-1.5">
+                          <ClassificationBadge
+                            classification={score.classification}
+                          />
+                          <AttentionBadge view={score} />
+                          {!score.classification && !score.needsAttention && "—"}
+                        </span>
+                      </td>
+                      <td className="py-2.5 pr-4 tabular-nums">
+                        {formatCallDuration(call.duration_seconds)}
+                      </td>
+                      <td
+                        className={`py-2.5 pr-4 font-medium tabular-nums ${score.toneClass}`}
+                        title={
+                          score.legacy
+                            ? "Scored by the previous 0–100 rubric"
+                            : undefined
+                        }
                       >
-                        View
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
+                        {score.value ?? "—"}
+                        {score.value != null && (
+                          <span className="font-normal text-muted-foreground">
+                            /{score.outOf}
+                          </span>
+                        )}
+                      </td>
+                      <td className="max-w-[240px] truncate py-2.5 pr-4 text-muted-foreground">
+                        {score.summary ?? "—"}
+                      </td>
+                      <td className="py-2.5 pl-2">
+                        <Link
+                          href={`/dashboard/call-log/${call.id}`}
+                          className="text-xs font-medium text-accent hover:underline"
+                        >
+                          View
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

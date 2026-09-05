@@ -23,6 +23,7 @@ import { ChurchGivingPanel } from "@/components/admin/church-giving-panel";
 import { ChurchVoiceAgentPanel } from "@/components/admin/church-voice-agent-panel";
 import { ChurchWebsitePanel } from "@/components/admin/church-website-panel";
 import { InviteChurchAdminCard } from "@/components/admin/invite-church-admin-card";
+import { OpenChurchDashboardButton } from "@/components/admin/open-church-dashboard-button";
 import { ChurchProfileForm } from "@/components/church-profile/church-profile-form";
 import type { FeatureFlags, FeatureNotices } from "@/lib/features/access";
 import { getFeature, type FeatureKey } from "@/lib/features/catalog";
@@ -240,6 +241,27 @@ export function ChurchDetailTabs({
           agents={retellAgents}
           agentsError={retellAgentsError}
         />
+        <Card>
+          <CardHeader>
+            <CardTitle>Assistant settings</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col items-start gap-3">
+            <p className="text-sm text-muted-foreground">
+              Persona, voice, greeting, office hours and after-hours behaviour.
+              These left the church&apos;s own navigation — pastors wanted the
+              call log, not the controls — so this is the way in. It opens
+              inside {detail.church.name}&apos;s dashboard, with their data.
+            </p>
+            <OpenChurchDashboardButton
+              churchId={detail.church.id}
+              churchName={detail.church.name}
+              next="/dashboard/voice-assistant"
+              label="Open assistant settings"
+              variant="outline"
+              size="sm"
+            />
+          </CardContent>
+        </Card>
       </TabsContent>
 
       <TabsContent value="features">

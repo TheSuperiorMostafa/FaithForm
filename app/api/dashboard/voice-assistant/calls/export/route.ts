@@ -4,6 +4,7 @@ import {
   forbiddenResponse,
   requireChurchAdmin,
 } from "@/lib/auth/require-church-admin";
+import { describeCallScore } from "@/lib/utils/call-score";
 import {
   formatCallDuration,
   maskPhoneNumber,
@@ -38,24 +39,40 @@ export async function GET() {
     "Date",
     "Caller",
     "Duration",
-    "Outcome",
-    "Sentiment",
+    "Call type",
     "Score",
+    "Out of",
+    "Needs a reply",
+    "Urgency",
+    "Caller mood",
+    "Summary",
+    "What went wrong",
+    "Missing knowledge",
+    "Sentiment",
     "Successful",
     "Recording URL",
     "Transcript",
   ].join(",");
 
-  const rows = calls.map((call) =>
-    [
+  const rows = calls.map((call) => {
+    const score = describeCallScore(call);
+
+    return [
       new Date(call.called_at).toISOString(),
       escapeCsv(maskPhoneNumber(call.caller_number)),
       escapeCsv(formatCallDuration(call.duration_seconds)),
-      escapeCsv(call.outcome),
+      escapeCsv(score.classificationLabel),
+      escapeCsv(score.value != null ? String(score.value) : ""),
+      // Two rubrics share this table; a bare number in a spreadsheet with no
+      // scale beside it is the one place that difference goes unnoticed.
+      escapeCsv(score.value != null ? String(score.outOf) : ""),
+      escapeCsv(score.needsAttention ? "Yes" : "No"),
+      escapeCsv(score.urgencyLabel),
+      escapeCsv(score.callerMood),
+      escapeCsv(score.summary),
+      escapeCsv(score.flagReason),
+      escapeCsv(score.missingKnowledge),
       escapeCsv(call.sentiment),
-      escapeCsv(
-        call.ai_score != null ? String(Math.round(Number(call.ai_score))) : "",
-      ),
       escapeCsv(
         call.call_successful == null
           ? ""
@@ -65,8 +82,8 @@ export async function GET() {
       ),
       escapeCsv(call.recording_url),
       escapeCsv(call.transcript),
-    ].join(","),
-  );
+    ].join(",");
+  });
 
   const csv = [header, ...rows].join("\n");
   const filename = `faithform-calls-${new Date().toISOString().slice(0, 10)}.csv`;

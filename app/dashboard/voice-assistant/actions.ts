@@ -135,7 +135,7 @@ export async function importVoiceAssistantCalls(): Promise<ImportCallsResult> {
   try {
     const { imported } = await importRetellCallsForChurch(auth.churchId);
     revalidatePath("/dashboard/voice-assistant");
-    revalidatePath("/dashboard/voice-assistant/calls");
+    revalidatePath("/dashboard/call-log");
     revalidatePath("/dashboard/call-log");
     revalidatePath("/dashboard");
     return { ok: true, imported };
@@ -173,8 +173,8 @@ export async function rescorePhoneCall(
 
   try {
     const result = await scorePhoneCallIfNeeded(callId, { force: true });
-    revalidatePath(`/dashboard/voice-assistant/calls/${callId}`);
-    revalidatePath("/dashboard/voice-assistant/calls");
+    revalidatePath(`/dashboard/call-log/${callId}`);
+    revalidatePath("/dashboard/call-log");
     revalidatePath(`/dashboard/call-log/${callId}`);
     revalidatePath("/dashboard/call-log");
     revalidatePath("/dashboard/voice-assistant");

@@ -1,3 +1,4 @@
+import type { ComponentProps } from "react";
 import { LogIn } from "lucide-react";
 
 import { startImpersonation } from "@/app/admin/impersonation-actions";
@@ -13,16 +14,26 @@ import { Button } from "@/components/ui/button";
 export function OpenChurchDashboardButton({
   churchId,
   churchName,
+  /** A dashboard path to land on, for doors that open onto one page. */
+  next,
+  label,
+  variant,
+  size,
 }: {
   churchId: string;
   churchName: string;
+  next?: string;
+  label?: string;
+  variant?: ComponentProps<typeof Button>["variant"];
+  size?: ComponentProps<typeof Button>["size"];
 }) {
   return (
     <form action={startImpersonation}>
       <input type="hidden" name="churchId" value={churchId} />
-      <Button type="submit" className="gap-2">
+      {next && <input type="hidden" name="next" value={next} />}
+      <Button type="submit" className="gap-2" variant={variant} size={size}>
         <LogIn className="size-4" aria-hidden />
-        Open {churchName}&apos;s dashboard
+        {label ?? `Open ${churchName}'s dashboard`}
       </Button>
     </form>
   );

@@ -57,7 +57,23 @@ export async function startImpersonation(formData: FormData) {
     maxAge: IMPERSONATION_TTL_SECONDS,
   });
 
-  redirect("/dashboard");
+  redirect(safeDashboardPath(formData.get("next")?.toString()));
+}
+
+/**
+ * Where inside the dashboard to land.
+ *
+ * Some doors into a church open onto a specific page — assistant settings, for
+ * one, which no longer has a tab of its own in the church's nav. The value
+ * arrives from a form, so it is matched against a literal prefix rather than
+ * parsed: `//evil.example` and `/dashboard@evil.example` are both things a URL
+ * parser can be talked into accepting, and neither is a page here.
+ */
+function safeDashboardPath(next: string | undefined): string {
+  if (!next) return "/dashboard";
+  if (next === "/dashboard") return next;
+  if (/^\/dashboard\/[A-Za-z0-9\-/]*$/.test(next)) return next;
+  return "/dashboard";
 }
 
 /**

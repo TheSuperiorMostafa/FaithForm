@@ -139,10 +139,10 @@ export async function upsertPhoneCallFromRetell(
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/voice-assistant");
-  revalidatePath("/dashboard/voice-assistant/calls");
+  revalidatePath("/dashboard/call-log");
   revalidatePath("/dashboard/call-log");
   if (phoneCallId) {
-    revalidatePath(`/dashboard/voice-assistant/calls/${phoneCallId}`);
+    revalidatePath(`/dashboard/call-log/${phoneCallId}`);
     revalidatePath(`/dashboard/call-log/${phoneCallId}`);
   }
 

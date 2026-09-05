@@ -120,10 +120,11 @@ export const FEATURES: FeatureDefinition[] = [
   {
     key: "voice_assistant",
     label: "Voice Assistant",
-    description: "AI phone answering, call log, and transcripts.",
-    href: "/dashboard/voice-assistant",
+    description:
+      "AI phone answering. The church sees the call log and transcripts; the assistant's own settings are platform-admin only.",
+    href: "/dashboard/call-log",
     icon: Phone,
-    routes: ["/dashboard/voice-assistant", "/dashboard/call-log"],
+    routes: ["/dashboard/call-log", "/dashboard/voice-assistant"],
   },
   {
     key: "giving",
