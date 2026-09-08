@@ -45,18 +45,28 @@ public struct FaithfulTheme: Sendable {
 
     public func font(_ role: FaithfulTokens.TextRole) -> Font {
         // `.custom(size:relativeTo:)` is what makes these roles scale with
-        // Dynamic Type instead of being pinned at a fixed point size.
+        // Dynamic Type instead of being pinned at a fixed point size. The
+        // previous `.system(...)` path did neither: it ignored the bundled
+        // families *and* pinned every size.
         let textStyle: Font.TextStyle = role.isDisplay ? .largeTitle : .body
-        return .system(size: role.size, weight: role.weight, design: role.isDisplay ? .serif : .default)
-            .leading(.standard)
-            ._faithfulScaled(relativeTo: textStyle)
-    }
-}
 
-extension Font {
-    /// Kept as a named seam so the scaling decision is stated once and can be
-    /// changed without touching every call site.
-    func _faithfulScaled(relativeTo _: Font.TextStyle) -> Font { self }
+        FaithfulFonts.registerIfNeeded()
+        guard FaithfulFonts.isAvailable else {
+            // A build whose resources did not arrive still has to render. Sans
+            // for both roles, because the web's headline face is Montserrat —
+            // falling back to a serif would reintroduce exactly the mismatch
+            // the bundled fonts exist to remove.
+            return .system(size: role.size, weight: role.weight)
+                .leading(.standard)
+        }
+
+        return .custom(
+            FaithfulFonts.faceName(isDisplay: role.isDisplay, weight: role.weight),
+            size: role.size,
+            relativeTo: textStyle
+        )
+        .leading(.standard)
+    }
 }
 
 private struct FaithfulThemeKey: EnvironmentKey {

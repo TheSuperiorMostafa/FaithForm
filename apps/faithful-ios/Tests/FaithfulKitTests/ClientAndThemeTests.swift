@@ -161,6 +161,50 @@ struct ThemeTests {
         #expect(FaithfulTheme(colorScheme: .light).palette.background != FaithfulTheme(colorScheme: .dark).palette.background)
     }
 
+    @Test("the web's type actually ships, rather than falling back to San Francisco")
+    func bundledFontsResolve() {
+        // The whole point of bundling is defeated silently: an unregistered
+        // face makes `Font.custom` fall back to the system font and the app
+        // still renders, looking subtly unlike the website. So assert the
+        // registration worked rather than trusting that it did.
+        #expect(FaithfulFonts.isAvailable)
+    }
+
+    @Test("display roles take Montserrat and text roles take Nunito")
+    func faceSelection() {
+        // Headlines must not resolve to a serif: the web's --font-heading is
+        // Montserrat, and a serif headline is the exact mismatch the bundled
+        // fonts were added to remove.
+        #expect(FaithfulFonts.faceName(isDisplay: true, weight: .semibold)
+            == FaithfulFonts.Name.displaySemibold)
+        #expect(FaithfulFonts.faceName(isDisplay: true, weight: .bold)
+            == FaithfulFonts.Name.displayBold)
+        #expect(FaithfulFonts.faceName(isDisplay: false, weight: .regular)
+            == FaithfulFonts.Name.textRegular)
+        #expect(FaithfulFonts.faceName(isDisplay: false, weight: .semibold)
+            == FaithfulFonts.Name.textSemibold)
+    }
+
+    @Test("every token role resolves to a bundled face")
+    func everyRoleHasAFace() {
+        let roles = [
+            FaithfulTokens.Text.displayLarge, FaithfulTokens.Text.displayMedium,
+            FaithfulTokens.Text.titleLarge, FaithfulTokens.Text.titleMedium,
+            FaithfulTokens.Text.body, FaithfulTokens.Text.bodySmall,
+            FaithfulTokens.Text.label, FaithfulTokens.Text.caption,
+        ]
+        let bundled = Set([
+            FaithfulFonts.Name.displaySemibold, FaithfulFonts.Name.displayBold,
+            FaithfulFonts.Name.textRegular, FaithfulFonts.Name.textSemibold,
+        ])
+        for role in roles {
+            let face = FaithfulFonts.faceName(isDisplay: role.isDisplay, weight: role.weight)
+            // A role mapping to a weight nobody bundled would ship as a
+            // fallback on that screen only — the hardest kind of drift to see.
+            #expect(bundled.contains(face))
+        }
+    }
+
     @Test("increased contrast thickens borders and promotes muted text")
     func increasedContrast() {
         let normal = FaithfulTheme(colorScheme: .light)

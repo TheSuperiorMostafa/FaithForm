@@ -242,16 +242,16 @@ public struct HomeFeedView: View {
             }
 
         case .empty:
-            EmptyStateView(title: L.emptyFeedTitle, explanation: L.emptyFeedBody)
+            EmptyStateView(title: L.emptyFeedTitle, explanation: L.emptyFeedBody, symbol: "tray")
 
         case .offlineNoCache:
-            EmptyStateView(title: L.offlineTitle, explanation: L.offlineBody)
+            EmptyStateView(title: L.offlineTitle, explanation: L.offlineBody, symbol: "wifi.slash")
 
         case .blocked:
-            EmptyStateView(title: L.blockedTitle, explanation: L.blockedBody)
+            EmptyStateView(title: L.blockedTitle, explanation: L.blockedBody, symbol: "hand.raised")
 
         case let .failed(message):
-            EmptyStateView(title: L.errorTitle, explanation: message)
+            EmptyStateView(title: L.errorTitle, explanation: message, symbol: "exclamationmark.triangle")
         }
     }
 }

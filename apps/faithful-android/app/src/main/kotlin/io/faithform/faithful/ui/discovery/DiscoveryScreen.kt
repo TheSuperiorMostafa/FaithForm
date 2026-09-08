@@ -1,10 +1,13 @@
 package io.faithform.faithful.ui.discovery
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,11 +22,14 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -33,6 +39,12 @@ import io.faithform.faithful.R
 import io.faithform.faithful.contract.DiscoveredChurch
 import io.faithform.faithful.design.FaithfulTokens
 import io.faithform.faithful.design.LocalFaithfulTheme
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.MarkEmailUnread
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.SearchOff
+import androidx.compose.material.icons.outlined.WarningAmber
+import androidx.compose.material.icons.outlined.WifiOff
 
 /**
  * The welcome screen someone sees with no church yet.
@@ -67,13 +79,29 @@ fun WelcomeScreen(onFindChurch: () -> Unit, onHaveInvitation: () -> Unit) {
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = FaithfulTokens.TouchTarget.recommended)
-        ) { Text(stringResource(R.string.find_a_church)) }
+        ) {
+            Icon(
+                Icons.Outlined.Search,
+                contentDescription = null,
+                modifier = Modifier.size(FaithfulTokens.IconSize.sizeMedium)
+            )
+            Spacer(Modifier.size(FaithfulTokens.Spacing.sm))
+            Text(stringResource(R.string.find_a_church))
+        }
         OutlinedButton(
             onClick = onHaveInvitation,
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = FaithfulTokens.TouchTarget.recommended)
-        ) { Text(stringResource(R.string.have_invitation)) }
+        ) {
+            Icon(
+                Icons.Outlined.MarkEmailUnread,
+                contentDescription = null,
+                modifier = Modifier.size(FaithfulTokens.IconSize.sizeMedium)
+            )
+            Spacer(Modifier.size(FaithfulTokens.Spacing.sm))
+            Text(stringResource(R.string.have_invitation))
+        }
     }
 }
 
@@ -163,7 +191,8 @@ fun DiscoveryScreen(
         when (phase) {
             is DiscoveryPhase.Idle -> EmptyState(
                 stringResource(R.string.search_results_title),
-                stringResource(R.string.search_placeholder)
+                stringResource(R.string.search_placeholder),
+                icon = Icons.Outlined.Search,
             )
             is DiscoveryPhase.Searching -> Column(
                 verticalArrangement = Arrangement.spacedBy(FaithfulTokens.Spacing.md)
@@ -179,15 +208,18 @@ fun DiscoveryScreen(
 
             is DiscoveryPhase.Empty -> EmptyState(
                 stringResource(R.string.no_results_title),
-                stringResource(R.string.no_results_body)
+                stringResource(R.string.no_results_body),
+                icon = Icons.Outlined.SearchOff,
             )
             is DiscoveryPhase.Offline -> EmptyState(
                 stringResource(R.string.offline_title),
-                stringResource(R.string.offline_body)
+                stringResource(R.string.offline_body),
+                icon = Icons.Outlined.WifiOff,
             )
             is DiscoveryPhase.Failed -> EmptyState(
                 stringResource(R.string.error_title),
-                phase.message
+                phase.message,
+                icon = Icons.Outlined.WarningAmber,
             )
         }
     }
@@ -261,18 +293,61 @@ fun SkeletonCard() {
     }
 }
 
+/**
+ * The one empty state, shared.
+ *
+ * [icon] is decorative and hidden from TalkBack — the title and body already
+ * carry the whole message, and a glyph that announced itself would say the
+ * same thing twice. Mirrors `EmptyStateView` on iOS, glyph for glyph.
+ */
 @Composable
-fun EmptyState(title: String, body: String) {
+fun EmptyState(
+    title: String,
+    body: String,
+    icon: ImageVector? = null,
+    modifier: Modifier = Modifier,
+    onRetry: (() -> Unit)? = null
+) {
     val theme = LocalFaithfulTheme.current
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(FaithfulTokens.Spacing.xl)
             .semantics(mergeDescendants = true) {},
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(FaithfulTokens.Spacing.sm)
+        verticalArrangement = Arrangement.spacedBy(FaithfulTokens.Spacing.md)
     ) {
-        Text(title, style = MaterialTheme.typography.titleMedium, color = theme.palette.contentPrimary)
-        Text(body, style = MaterialTheme.typography.bodyMedium, color = theme.palette.contentSecondary)
+        if (icon != null) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier
+                    .size(FaithfulTokens.IconSize.sizeHero + FaithfulTokens.Spacing.lg * 2)
+                    .background(theme.palette.brandAccent.copy(alpha = 0.14f), CircleShape)
+            ) {
+                Icon(
+                    icon,
+                    contentDescription = null,
+                    tint = theme.palette.brandPrimary,
+                    modifier = Modifier.size(FaithfulTokens.IconSize.sizeLarge)
+                )
+            }
+        }
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(FaithfulTokens.Spacing.sm)
+        ) {
+            Text(title, style = MaterialTheme.typography.titleMedium, color = theme.palette.contentPrimary)
+            Text(
+                body,
+                style = MaterialTheme.typography.bodyMedium,
+                color = theme.palette.contentSecondary,
+                textAlign = TextAlign.Center
+            )
+        }
+        if (onRetry != null) {
+            OutlinedButton(onClick = onRetry) {
+                Text(stringResource(R.string.try_again))
+            }
+        }
     }
 }

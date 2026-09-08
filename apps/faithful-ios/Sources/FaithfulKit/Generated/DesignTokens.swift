@@ -117,6 +117,7 @@ public enum FaithfulTokens {
 
     public enum Radius {
         public static let none: CGFloat = 0
+        public static let control: CGFloat = 10
         public static let sm: CGFloat = 8
         public static let md: CGFloat = 12
         public static let lg: CGFloat = 16

@@ -52,14 +52,14 @@ public struct ChurchProfileView: View {
         case .notFound:
             // A hidden church and an unknown slug read identically here, on
             // purpose: the screen must not reveal which it was.
-            EmptyStateView(title: L.noResultsTitle, explanation: L.noResultsBody)
+            EmptyStateView(title: L.noResultsTitle, explanation: L.noResultsBody, symbol: "magnifyingglass")
 
         case .offline:
-            EmptyStateView(title: L.offlineTitle, explanation: L.offlineBody)
+            EmptyStateView(title: L.offlineTitle, explanation: L.offlineBody, symbol: "wifi.slash")
 
         case let .failed(message):
             VStack(spacing: FaithfulTokens.Spacing.base) {
-                EmptyStateView(title: L.errorTitle, explanation: message)
+                EmptyStateView(title: L.errorTitle, explanation: message, symbol: "exclamationmark.triangle")
                 Button(L.tryAgain) { Task { await model.refresh(slug: slug) } }
                     .buttonStyle(FaithfulButtonStyle(kind: .secondary, theme: theme))
             }
@@ -301,13 +301,13 @@ public struct ChurchChooserView: View {
             }
 
         case .empty:
-            EmptyStateView(title: L.noChurchesTitle, explanation: L.noChurchesBody)
+            EmptyStateView(title: L.noChurchesTitle, explanation: L.noChurchesBody, symbol: "building.2")
 
         case .offline:
-            EmptyStateView(title: L.offlineTitle, explanation: L.offlineBody)
+            EmptyStateView(title: L.offlineTitle, explanation: L.offlineBody, symbol: "wifi.slash")
 
         case let .failed(message):
-            EmptyStateView(title: L.errorTitle, explanation: message)
+            EmptyStateView(title: L.errorTitle, explanation: message, symbol: "exclamationmark.triangle")
         }
     }
 

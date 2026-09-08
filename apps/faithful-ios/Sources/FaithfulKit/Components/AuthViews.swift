@@ -347,9 +347,19 @@ struct AuthField: View {
             .foregroundStyle(theme.palette.contentPrimary)
             .padding(.horizontal, FaithfulTokens.Spacing.base)
             .frame(minHeight: FaithfulTokens.TouchTarget.recommended)
+            // Outlined on the page background, the way the web's input is.
+            // The old filled `surfaceSunken` box read as disabled next to the
+            // website's bordered fields, and lost its edge entirely on a card.
             .background(
-                RoundedRectangle(cornerRadius: FaithfulTokens.Radius.md, style: .continuous)
-                    .fill(theme.palette.surfaceSunken)
+                RoundedRectangle(cornerRadius: FaithfulTokens.Radius.control, style: .continuous)
+                    .fill(theme.palette.background)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: FaithfulTokens.Radius.control, style: .continuous)
+                    .strokeBorder(
+                        theme.palette.border,
+                        lineWidth: FaithfulTokens.BorderWidth.standard
+                    )
             )
             .accessibilityLabel(Text(label))
 
@@ -604,7 +614,11 @@ struct CheckEmailView: View {
             // Mail; a device without it simply does not offer the button rather
             // than presenting one that does nothing.
             if let mail = URL(string: "message://"), UIApplication.shared.canOpenURL(mail) {
-                Button(L.authCheckEmailOpenMail) { UIApplication.shared.open(mail) }
+                Button {
+                    UIApplication.shared.open(mail)
+                } label: {
+                    Label(L.authCheckEmailOpenMail, systemImage: "envelope.open")
+                }
                     .buttonStyle(FaithfulButtonStyle(kind: .primary, theme: theme))
             }
             #endif
@@ -615,7 +629,7 @@ struct CheckEmailView: View {
                 if model.isResending {
                     ProgressView()
                 } else {
-                    Text(L.authCheckEmailResend)
+                    Label(L.authCheckEmailResend, systemImage: "arrow.clockwise")
                 }
             }
             .buttonStyle(FaithfulButtonStyle(kind: .secondary, theme: theme))

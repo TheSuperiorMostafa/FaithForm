@@ -59,18 +59,18 @@ public struct GivingHomeView: View {
         case .blocked:
             // The same answer a blocked visitor gets everywhere. Nothing about
             // giving, because there is nothing about this church to say.
-            EmptyStateView(title: L.givingBlockedTitle, explanation: L.givingEmptyBody)
+            EmptyStateView(title: L.givingBlockedTitle, explanation: L.givingEmptyBody, symbol: "heart")
 
         case .offline:
             VStack(spacing: FaithfulTokens.Spacing.md) {
-                EmptyStateView(title: L.givingOfflineTitle, explanation: L.givingOfflineBody)
+                EmptyStateView(title: L.givingOfflineTitle, explanation: L.givingOfflineBody, symbol: "wifi.slash")
                 Button(L.givingRetry, action: onRetry)
                     .buttonStyle(FaithfulButtonStyle(kind: .secondary, theme: theme))
             }
 
         case let .failed(message):
             VStack(spacing: FaithfulTokens.Spacing.md) {
-                EmptyStateView(title: L.givingFailedTitle, explanation: message)
+                EmptyStateView(title: L.givingFailedTitle, explanation: message, symbol: "exclamationmark.triangle")
                 Button(L.givingRetry, action: onRetry)
                     .buttonStyle(FaithfulButtonStyle(kind: .secondary, theme: theme))
             }
@@ -89,10 +89,11 @@ public struct GivingHomeView: View {
         if home.availability != "available" {
             EmptyStateView(
                 title: L.givingNotAcceptingTitle,
-                explanation: L.givingNotAcceptingBody
+                explanation: L.givingNotAcceptingBody,
+                symbol: "heart"
             )
         } else if home.funds.isEmpty {
-            EmptyStateView(title: L.givingEmptyTitle, explanation: L.givingEmptyBody)
+            EmptyStateView(title: L.givingEmptyTitle, explanation: L.givingEmptyBody, symbol: "heart")
         } else {
             VStack(alignment: .leading, spacing: FaithfulTokens.Spacing.lg) {
                 if let name = home.churchName {
@@ -434,14 +435,14 @@ public struct GivingOutcomeView: View {
 
         case let .failed(reason, _):
             VStack(spacing: FaithfulTokens.Spacing.md) {
-                EmptyStateView(title: L.givingFailedTitle, explanation: message(for: reason))
+                EmptyStateView(title: L.givingFailedTitle, explanation: message(for: reason), symbol: "exclamationmark.triangle")
                 Button(L.givingRetry, action: onDone)
                     .buttonStyle(FaithfulButtonStyle(kind: .secondary, theme: theme))
             }
 
         case .cancelled:
             VStack(spacing: FaithfulTokens.Spacing.md) {
-                EmptyStateView(title: L.givingCancelledTitle, explanation: L.givingSubtitle)
+                EmptyStateView(title: L.givingCancelledTitle, explanation: L.givingSubtitle, symbol: "xmark.circle")
                 Button(L.givingRetry, action: onDone)
                     .buttonStyle(FaithfulButtonStyle(kind: .secondary, theme: theme))
             }
@@ -517,7 +518,7 @@ public struct GivingHistoryView: View {
                 .frame(maxWidth: .infinity)
                 .padding(FaithfulTokens.Spacing.xl)
         } else if items.isEmpty {
-            EmptyStateView(title: L.givingHistoryTitle, explanation: L.givingHistoryEmpty)
+            EmptyStateView(title: L.givingHistoryTitle, explanation: L.givingHistoryEmpty, symbol: "heart")
         } else {
             VStack(alignment: .leading, spacing: FaithfulTokens.Spacing.md) {
                 // Said out loud, because a person looking at a giving list should

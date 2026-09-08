@@ -44,8 +44,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import android.content.Intent
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.material.icons.outlined.MarkEmailUnread
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.material.icons.outlined.Church
 import io.faithform.faithful.ConfirmationPhase
 import io.faithform.faithful.PendingChurchContext
 import io.faithform.faithful.R
@@ -491,7 +492,7 @@ private fun ChurchContextHeader(context: PendingChurchContext) {
                     )
             ) {
                 Icon(
-                    Icons.Filled.LocationOn,
+                    Icons.Outlined.Church,
                     contentDescription = null,
                     tint = theme.palette.brandPrimary,
                     modifier = Modifier.size(FaithfulTokens.IconSize.sizeLarge)
@@ -558,7 +559,7 @@ private fun CheckEmailScreen(viewModel: AuthViewModel, onSignIn: () -> Unit) {
                 .background(theme.palette.surface, CircleShape)
         ) {
             Icon(
-                Icons.Filled.Email,
+                Icons.Outlined.MarkEmailUnread,
                 contentDescription = null,
                 tint = theme.palette.brandPrimary,
                 modifier = Modifier.size(FaithfulTokens.IconSize.sizeHero)
@@ -628,7 +629,15 @@ private fun CheckEmailScreen(viewModel: AuthViewModel, onSignIn: () -> Unit) {
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(min = FaithfulTokens.TouchTarget.recommended)
-            ) { Text(stringResource(R.string.auth_check_email_open_mail)) }
+            ) {
+                Icon(
+                    Icons.Outlined.MarkEmailUnread,
+                    contentDescription = null,
+                    modifier = Modifier.size(FaithfulTokens.IconSize.sizeMedium)
+                )
+                Spacer(Modifier.size(FaithfulTokens.Spacing.sm))
+                Text(stringResource(R.string.auth_check_email_open_mail))
+            }
         }
 
         OutlinedButton(
@@ -643,6 +652,12 @@ private fun CheckEmailScreen(viewModel: AuthViewModel, onSignIn: () -> Unit) {
                     modifier = Modifier.heightIn(max = FaithfulTokens.Spacing.lg)
                 )
             } else {
+                Icon(
+                    Icons.Outlined.Refresh,
+                    contentDescription = null,
+                    modifier = Modifier.size(FaithfulTokens.IconSize.sizeMedium)
+                )
+                Spacer(Modifier.size(FaithfulTokens.Spacing.sm))
                 Text(stringResource(R.string.auth_check_email_resend))
             }
         }

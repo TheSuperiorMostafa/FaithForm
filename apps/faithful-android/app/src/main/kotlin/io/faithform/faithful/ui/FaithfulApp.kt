@@ -48,6 +48,11 @@ import io.faithform.faithful.ui.auth.AuthFlow
 import io.faithform.faithful.ui.auth.AuthViewModel
 import io.faithform.faithful.ui.discovery.LocationProvider
 import io.faithform.faithful.ui.onboarding.FindChurchFlow
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Church
+import androidx.compose.material.icons.outlined.WarningAmber
+import androidx.compose.material.icons.outlined.WifiOff
+import io.faithform.faithful.ui.discovery.EmptyState
 
 /**
  * The shell: every launch phase, each a real state with a real way forward.
@@ -113,7 +118,8 @@ fun FaithfulApp(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     EmptyState(
                         title = stringResource(R.string.offline_title),
-                        body = stringResource(R.string.offline_body)
+                        body = stringResource(R.string.offline_body),
+                        icon = Icons.Outlined.WifiOff,
                     )
                     OutlinedButton(onClick = viewModel::load) {
                         Text(stringResource(R.string.try_again))
@@ -131,7 +137,8 @@ fun FaithfulApp(
                         title = stringResource(R.string.error_title),
                         body = current.message.ifBlank {
                             stringResource(R.string.error_load_failed_body)
-                        }
+                        },
+                        icon = Icons.Outlined.WarningAmber,
                     )
                     OutlinedButton(onClick = viewModel::load) {
                         Text(stringResource(R.string.try_again))
@@ -209,7 +216,8 @@ private fun ReadyContent(
             if (bootstrap.relationships.isEmpty()) {
                 EmptyState(
                     title = stringResource(R.string.no_churches_title),
-                    body = stringResource(R.string.no_churches_body)
+                    body = stringResource(R.string.no_churches_body),
+                    icon = Icons.Outlined.Church,
                 )
             } else {
                 bootstrap.relationships.forEach { relationship ->
@@ -320,27 +328,6 @@ private fun StatusChip(text: String) {
                 vertical = FaithfulTokens.Spacing.xs
             )
     )
-}
-
-@Composable
-private fun EmptyState(title: String, body: String) {
-    val theme = LocalFaithfulTheme.current
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(FaithfulTokens.Spacing.xl)
-            .semantics(mergeDescendants = true) {},
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(FaithfulTokens.Spacing.sm)
-    ) {
-        Text(title, style = MaterialTheme.typography.titleMedium, color = theme.palette.contentPrimary)
-        Text(
-            body,
-            style = MaterialTheme.typography.bodyMedium,
-            color = theme.palette.contentSecondary,
-            textAlign = TextAlign.Center
-        )
-    }
 }
 
 @Composable

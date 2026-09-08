@@ -29,6 +29,11 @@ import io.faithform.faithful.ui.discovery.SkeletonCard
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Block
+import androidx.compose.material.icons.outlined.Inbox
+import androidx.compose.material.icons.outlined.WarningAmber
+import androidx.compose.material.icons.outlined.WifiOff
 
 /** Mirrors the iOS FeedPhase. Every state is one the contract can produce. */
 sealed interface FeedPhase {
@@ -81,23 +86,26 @@ fun HomeFeedScreen(
             is FeedPhase.Empty -> item {
                 EmptyState(
                     stringResource(R.string.empty_feed_title),
-                    stringResource(R.string.empty_feed_body)
+                    stringResource(R.string.empty_feed_body),
+                    icon = Icons.Outlined.Inbox,
                 )
             }
             is FeedPhase.OfflineNoCache -> item {
                 EmptyState(
                     stringResource(R.string.offline_title),
-                    stringResource(R.string.offline_body)
+                    stringResource(R.string.offline_body),
+                    icon = Icons.Outlined.WifiOff,
                 )
             }
             is FeedPhase.Blocked -> item {
                 EmptyState(
                     stringResource(R.string.blocked_title),
-                    stringResource(R.string.blocked_body)
+                    stringResource(R.string.blocked_body),
+                    icon = Icons.Outlined.Block,
                 )
             }
             is FeedPhase.Failed -> item {
-                EmptyState(stringResource(R.string.error_title), phase.message)
+                EmptyState(stringResource(R.string.error_title), phase.message, icon = Icons.Outlined.WarningAmber)
             }
         }
     }

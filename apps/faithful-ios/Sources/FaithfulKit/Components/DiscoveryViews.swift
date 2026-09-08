@@ -34,9 +34,13 @@ public struct WelcomeView: View {
             Spacer()
 
             VStack(spacing: FaithfulTokens.Spacing.md) {
-                Button(L.findAChurch, action: onFindChurch)
+                Button(action: onFindChurch) {
+                    Label(L.findAChurch, systemImage: "magnifyingglass")
+                }
                     .buttonStyle(FaithfulButtonStyle(kind: .primary, theme: theme))
-                Button(L.haveInvitation, action: onHaveInvitation)
+                Button(action: onHaveInvitation) {
+                    Label(L.haveInvitation, systemImage: "envelope.open")
+                }
                     .buttonStyle(FaithfulButtonStyle(kind: .secondary, theme: theme))
             }
         }
@@ -201,7 +205,7 @@ public struct DiscoveryView: View {
     private var content: some View {
         switch model.phase {
         case .idle:
-            EmptyStateView(title: L.searchResultsTitle, explanation: L.searchPlaceholder)
+            EmptyStateView(title: L.searchResultsTitle, explanation: L.searchPlaceholder, symbol: "magnifyingglass")
         case .searching:
             // A skeleton that mirrors the real card shape, not a spinner: it
             // tells the eye where the results will land.
@@ -219,11 +223,11 @@ public struct DiscoveryView: View {
                 .padding(.vertical, FaithfulTokens.Spacing.sm)
             }
         case .empty:
-            EmptyStateView(title: L.noResultsTitle, explanation: L.noResultsBody)
+            EmptyStateView(title: L.noResultsTitle, explanation: L.noResultsBody, symbol: "magnifyingglass")
         case .offline:
-            EmptyStateView(title: L.offlineTitle, explanation: L.offlineBody)
+            EmptyStateView(title: L.offlineTitle, explanation: L.offlineBody, symbol: "wifi.slash")
         case let .failed(message):
-            EmptyStateView(title: L.errorTitle, explanation: message)
+            EmptyStateView(title: L.errorTitle, explanation: message, symbol: "exclamationmark.triangle")
         }
         Spacer(minLength: 0)
     }

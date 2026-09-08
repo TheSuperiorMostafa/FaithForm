@@ -59,7 +59,7 @@ struct RootView: View {
 
             case .offlineNoCache:
                 VStack(spacing: FaithfulTokens.Spacing.md) {
-                    EmptyStateView(title: L.offlineTitle, explanation: L.offlineBody)
+                    EmptyStateView(title: L.offlineTitle, explanation: L.offlineBody, symbol: "wifi.slash")
                     Button(L.retry) { Task { await model.load() } }
                         .buttonStyle(FaithfulButtonStyle(kind: .secondary, theme: theme))
                         .padding(.horizontal, FaithfulTokens.Layout.screenPaddingHorizontal)
@@ -73,7 +73,8 @@ struct RootView: View {
                 VStack(spacing: FaithfulTokens.Spacing.md) {
                     EmptyStateView(
                         title: L.errorTitle,
-                        explanation: message.isEmpty ? L.errorLoadFailedBody : message
+                        explanation: message.isEmpty ? L.errorLoadFailedBody : message,
+                        symbol: "exclamationmark.triangle"
                     )
                     Button(L.retry) { Task { await model.load() } }
                         .buttonStyle(FaithfulButtonStyle(kind: .secondary, theme: theme))
@@ -170,7 +171,7 @@ struct RootView: View {
             if let church = model.selectedChurch {
                 churchScreen(for: tab, church: church)
             } else {
-                EmptyStateView(title: L.noChurchTitle, explanation: L.noChurchBody)
+                EmptyStateView(title: L.noChurchTitle, explanation: L.noChurchBody, symbol: "building.2")
             }
 
         case .account:

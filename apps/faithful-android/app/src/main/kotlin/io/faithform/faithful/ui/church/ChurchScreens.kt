@@ -34,6 +34,11 @@ import io.faithform.faithful.design.FaithfulTokens
 import io.faithform.faithful.design.LocalFaithfulTheme
 import io.faithform.faithful.ui.discovery.EmptyState
 import io.faithform.faithful.ui.discovery.SkeletonCard
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Church
+import androidx.compose.material.icons.outlined.SearchOff
+import androidx.compose.material.icons.outlined.WarningAmber
+import androidx.compose.material.icons.outlined.WifiOff
 
 /**
  * The church profile someone reads before deciding to follow or join.
@@ -83,16 +88,18 @@ fun ChurchProfileScreen(
             // A hidden church and an unknown slug read identically, on purpose.
             is ChurchProfilePhase.NotFound -> EmptyState(
                 stringResource(R.string.no_results_title),
-                stringResource(R.string.no_results_body)
+                stringResource(R.string.no_results_body),
+                icon = Icons.Outlined.SearchOff,
             )
 
             is ChurchProfilePhase.Offline -> EmptyState(
                 stringResource(R.string.offline_title),
-                stringResource(R.string.offline_body)
+                stringResource(R.string.offline_body),
+                icon = Icons.Outlined.WifiOff,
             )
 
             is ChurchProfilePhase.Failed -> {
-                EmptyState(stringResource(R.string.error_title), phase.message)
+                EmptyState(stringResource(R.string.error_title), phase.message, icon = Icons.Outlined.WarningAmber)
                 OutlinedButton(
                     onClick = onRetry,
                     modifier = Modifier
@@ -350,15 +357,18 @@ fun ChurchChooserScreen(
 
             is ChooserPhase.Empty -> EmptyState(
                 stringResource(R.string.no_churches_title),
-                stringResource(R.string.no_churches_body)
+                stringResource(R.string.no_churches_body),
+                icon = Icons.Outlined.Church,
             )
             is ChooserPhase.Offline -> EmptyState(
                 stringResource(R.string.offline_title),
-                stringResource(R.string.offline_body)
+                stringResource(R.string.offline_body),
+                icon = Icons.Outlined.WifiOff,
             )
             is ChooserPhase.Failed -> EmptyState(
                 stringResource(R.string.error_title),
-                phase.message
+                phase.message,
+                icon = Icons.Outlined.WarningAmber,
             )
         }
 

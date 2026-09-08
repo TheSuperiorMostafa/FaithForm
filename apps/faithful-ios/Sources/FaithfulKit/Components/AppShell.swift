@@ -49,7 +49,8 @@ public struct AppShellView: View {
         case .signedOut:
             EmptyStateView(
                 title: L.signInTitle,
-                explanation: L.signInBody
+                explanation: L.signInBody,
+                symbol: "person.crop.circle"
             )
 
         case let .ready(bootstrap, isStale):
@@ -70,12 +71,13 @@ public struct AppShellView: View {
         case .offlineNoCache:
             EmptyStateView(
                 title: L.offlineTitle,
-                explanation: L.offlineBody
+                explanation: L.offlineBody,
+                symbol: "wifi.slash"
             )
 
         case let .failed(message):
             VStack(spacing: FaithfulTokens.Spacing.base) {
-                EmptyStateView(title: L.errorTitle, explanation: message)
+                EmptyStateView(title: L.errorTitle, explanation: message, symbol: "exclamationmark.triangle")
                 Button(L.tryAgain, action: onRetry)
                     .buttonStyle(FaithfulButtonStyle(kind: .secondary, theme: theme))
             }
@@ -106,7 +108,8 @@ public struct AppShellView: View {
             if bootstrap.relationships.isEmpty {
                 EmptyStateView(
                     title: L.noChurchesTitle,
-                    explanation: L.noChurchesBody
+                    explanation: L.noChurchesBody,
+                    symbol: "building.2"
                 )
             } else {
                 ForEach(bootstrap.relationships, id: \.churchSlug) { relationship in

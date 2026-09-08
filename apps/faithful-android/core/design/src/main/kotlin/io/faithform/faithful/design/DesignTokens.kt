@@ -126,6 +126,7 @@ object FaithfulTokens {
 
     object Radius {
         val none: Dp = 0.dp
+        val control: Dp = 10.dp
         val sm: Dp = 8.dp
         val md: Dp = 12.dp
         val lg: Dp = 16.dp

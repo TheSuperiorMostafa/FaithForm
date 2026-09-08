@@ -21,7 +21,7 @@ struct UnconfiguredView: View {
 
     var body: some View {
         VStack(spacing: FaithfulTokens.Spacing.md) {
-            EmptyStateView(title: L.notConfiguredTitle, explanation: L.notConfiguredBody)
+            EmptyStateView(title: L.notConfiguredTitle, explanation: L.notConfiguredBody, symbol: "gearshape")
             // Shown only where debug affordances are compiled in. A church would
             // never see a configuration key name.
             #if DEBUG
@@ -62,7 +62,7 @@ struct HomeView: View {
                 }
                 .fixedSize(horizontal: false, vertical: true)
             } else {
-                EmptyStateView(title: L.noChurchTitle, explanation: L.noChurchBody)
+                EmptyStateView(title: L.noChurchTitle, explanation: L.noChurchBody, symbol: "building.2")
                 Button(L.tabChurch) { onOpen(.church) }
                     .buttonStyle(FaithfulButtonStyle(kind: .primary, theme: theme))
             }
@@ -82,7 +82,7 @@ struct ChurchSwitcherView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: FaithfulTokens.Spacing.md) {
             if relationships.isEmpty {
-                EmptyStateView(title: L.noChurchTitle, explanation: L.noChurchBody)
+                EmptyStateView(title: L.noChurchTitle, explanation: L.noChurchBody, symbol: "building.2")
             } else {
                 ForEach(relationships, id: \.churchSlug) { relationship in
                     Button {

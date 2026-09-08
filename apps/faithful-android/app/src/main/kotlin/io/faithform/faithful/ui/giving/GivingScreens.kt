@@ -39,6 +39,9 @@ import io.faithform.faithful.giving.GivingScreenState
 import io.faithform.faithful.giving.HistoryLabel
 import io.faithform.faithful.giving.formatGivingAmount
 import io.faithform.faithful.giving.historyLabel
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import io.faithform.faithful.ui.discovery.EmptyState
 
 /**
  * The Give experience.
@@ -72,6 +75,7 @@ fun GivingScreen(
                 title = stringResource(R.string.giving_blocked_title),
                 body = stringResource(R.string.giving_empty_body),
                 modifier = modifier,
+                icon = Icons.Outlined.FavoriteBorder,
             )
 
         GivingListPhase.Offline ->
@@ -121,6 +125,7 @@ private fun Loaded(
                 title = stringResource(R.string.giving_not_accepting_title),
                 body = stringResource(R.string.giving_not_accepting_body),
                 modifier = modifier,
+                icon = Icons.Outlined.FavoriteBorder,
             )
             return
         }
@@ -129,6 +134,7 @@ private fun Loaded(
                 title = stringResource(R.string.giving_empty_title),
                 body = stringResource(R.string.giving_empty_body),
                 modifier = modifier,
+                icon = Icons.Outlined.FavoriteBorder,
             )
             return
         }
@@ -427,6 +433,7 @@ fun GivingHistoryScreen(state: GivingScreenState, modifier: Modifier = Modifier)
             title = stringResource(R.string.giving_history_title),
             body = stringResource(R.string.giving_history_empty),
             modifier = modifier,
+            icon = Icons.Outlined.FavoriteBorder,
         )
         return
     }
@@ -486,29 +493,4 @@ private fun Centered(modifier: Modifier = Modifier, content: @Composable () -> U
         modifier = modifier.fillMaxWidth().padding(FaithfulTokens.Spacing.xl),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) { content() }
-}
-
-@Composable
-private fun EmptyState(
-    title: String,
-    body: String,
-    modifier: Modifier = Modifier,
-    onRetry: (() -> Unit)? = null,
-) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(FaithfulTokens.Spacing.xl)
-            .semantics(mergeDescendants = true) {},
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(FaithfulTokens.Spacing.sm),
-    ) {
-        Text(title, style = MaterialTheme.typography.titleMedium)
-        Text(body, style = MaterialTheme.typography.bodySmall)
-        if (onRetry != null) {
-            OutlinedButton(onClick = onRetry) {
-                Text(stringResource(R.string.giving_retry))
-            }
-        }
-    }
 }
