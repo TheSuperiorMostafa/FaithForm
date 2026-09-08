@@ -38,6 +38,40 @@ function rewriteGiveSubdomain(request: NextRequest): NextResponse | null {
   return NextResponse.rewrite(url);
 }
 
+/**
+ * Rescues a sign-in link whose path Supabase threw away.
+ *
+ * When a `redirect_to` is not on the Supabase project's allow-list, Supabase
+ * does not refuse it — it silently substitutes the project's bare Site URL and
+ * sends the person to the origin root. The code is still in the query string
+ * and still perfectly valid; it just arrives somewhere with no handler, so the
+ * exchange never happens and a working link reads as a broken one. Every
+ * emailed link fails the same way at once: magic link, password reset, invite,
+ * and the Faithful app's confirmations.
+ *
+ * The right fix is the allow-list, and this is not a substitute for it. But an
+ * auth code landing on the homepage has exactly one meaning, and the cost of
+ * acting on it is one redirect. Scoped to the root because that is the only
+ * place the fallback can land — which also keeps it clear of
+ * `/api/integrations/{google,facebook}/callback`, whose `code` means something
+ * else entirely.
+ */
+function recoverStrippedAuthCallback(request: NextRequest): NextResponse | null {
+  if (request.nextUrl.pathname !== "/") return null;
+
+  const params = request.nextUrl.searchParams;
+  // `error_description` covers the other half: an expired or spent link is
+  // reported on the same bare Site URL, where it currently renders as an
+  // ordinary homepage and tells the person nothing.
+  if (!params.has("code") && !params.has("error_description")) return null;
+
+  const url = request.nextUrl.clone();
+  url.pathname = "/auth/callback";
+  return NextResponse.redirect(url, {
+    headers: { "Cache-Control": "no-store, max-age=0" },
+  });
+}
+
 export async function updateSession(request: NextRequest) {
   if (process.env.NODE_ENV === "production") {
     const { assertProductionEnv, ProductionEnvError } = await import(
@@ -68,6 +102,11 @@ export async function updateSession(request: NextRequest) {
   // Supabase session round trip would be pure waste.
   const siteRewrite = await rewriteChurchSite(request);
   if (siteRewrite) return siteRewrite;
+
+  // After the tenant rewrites on purpose: a church's own domain is not where
+  // staff sign in, and a `code` arriving there is not ours to consume.
+  const rescued = recoverStrippedAuthCallback(request);
+  if (rescued) return rescued;
 
   let pendingCookies: {
     name: string;
