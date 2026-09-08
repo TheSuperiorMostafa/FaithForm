@@ -60,3 +60,42 @@ test("the integration callbacks are not on the root, so they stay untouched", ()
     );
   }
 });
+
+/**
+ * The half that the first version of this fix missed: routing the code to the
+ * right path is useless if it arrives on a host that has no `code_verifier`
+ * cookie for it. PKCE stores that cookie on whichever host the link was
+ * requested from, so a code landing anywhere else has to be sent home first.
+ */
+test("a code that lands on the wrong host is sent to the canonical one", () => {
+  assert.match(rescue, /getCanonicalSiteUrl\(\)/);
+  for (const part of ["protocol", "host", "port"]) {
+    assert.match(
+      rescue,
+      new RegExp(`url\\.${part} = canonical\\.${part}`),
+      `the ${part} is carried over`,
+    );
+  }
+});
+
+/**
+ * `nextUrl.host` is normalized by Next to the host it listens on, so it reads
+ * `localhost:3000` for a request that arrived for faithform.vercel.app.
+ * Comparing against it means the branch never fires — which is exactly the bug
+ * this test exists to keep from coming back.
+ */
+test("the host comparison uses the real header, not the normalized url", () => {
+  assert.match(rescue, /x-forwarded-host/);
+  assert.ok(
+    !/!==\s*request\.nextUrl\.host/.test(rescue),
+    "nextUrl.host is normalized and must not be the thing compared",
+  );
+});
+
+test("the destination comes from config, so an odd Host cannot steer the code", () => {
+  // The header may decide *whether* to redirect; it must never decide *where*.
+  assert.ok(
+    !/url\.host = (?!canonical)/.test(rescue),
+    "the only assignment to url.host is the canonical one",
+  );
+});

@@ -2,7 +2,7 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { isBootstrapSuperAdminEmail } from "@/lib/auth/superadmin-emails";
 import { mustChangePassword } from "@/lib/auth/temp-password";
-import { DEFAULT_PRODUCTION_SITE_URL } from "@/lib/site-url";
+import { DEFAULT_PRODUCTION_SITE_URL, getCanonicalSiteUrl } from "@/lib/site-url";
 import { rewriteChurchSite } from "@/lib/sites/tenant";
 import { createAdminClientOrNull } from "@/lib/supabase/admin";
 
@@ -67,6 +67,31 @@ function recoverStrippedAuthCallback(request: NextRequest): NextResponse | null 
 
   const url = request.nextUrl.clone();
   url.pathname = "/auth/callback";
+
+  // Delivering the code to the right *path* is only half of it. Under PKCE the
+  // exchange also needs the `code_verifier` cookie minted when the link was
+  // requested, and a cookie belongs to one host. Supabase's fallback sends the
+  // person to the Site URL's host, which is not the host they asked from, so
+  // the verifier is on the other domain and a correctly-routed code still
+  // cannot be spent.
+  //
+  // So the code goes home. Only the *comparison* consults the incoming host —
+  // `nextUrl.host` is normalized by Next to the host it is listening on, so it
+  // reports `localhost:3000` for a request that actually arrived for
+  // faithform.vercel.app, and comparing against it would silently never fire.
+  // The destination itself is a compiled-in configuration value, which is what
+  // makes this a redirect to ourselves rather than an open one: an unrecognised
+  // Host cannot steer the code anywhere, it can only send it home.
+  const canonical = new URL(getCanonicalSiteUrl());
+  const arrivedOn =
+    request.headers.get("x-forwarded-host") ?? request.headers.get("host");
+
+  if (arrivedOn && arrivedOn !== canonical.host) {
+    url.protocol = canonical.protocol;
+    url.host = canonical.host;
+    url.port = canonical.port;
+  }
+
   return NextResponse.redirect(url, {
     headers: { "Cache-Control": "no-store, max-age=0" },
   });
