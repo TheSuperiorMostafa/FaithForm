@@ -1,5 +1,5 @@
 import { authenticatedRoute } from "@/lib/mobile/v1/handler";
-import { followChurch, leaveChurch } from "@/lib/faithful/relationships";
+import { followChurch, leaveChurch } from "@/lib/faithform/relationships";
 import { resolveRelationshipState } from "@/lib/mobile/v1/discovery-service";
 
 export const dynamic = "force-dynamic";

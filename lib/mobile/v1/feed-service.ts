@@ -1,10 +1,10 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { VisitorError } from "@/lib/faithful/errors";
+import { VisitorError } from "@/lib/faithform/errors";
 import {
   getAnnouncementDetail,
   getAnnouncementFeed,
   type FeedCursor,
-} from "@/lib/faithful/announcements-feed";
+} from "@/lib/faithform/announcements-feed";
 import { resolveRelationshipState } from "@/lib/mobile/v1/discovery-service";
 import type { FeedItemDto } from "@/lib/mobile/v1/contract";
 

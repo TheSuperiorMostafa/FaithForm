@@ -10,7 +10,7 @@ import { safeRedirectPath } from "@/lib/security/safe-redirect";
 /**
  * The dashboard's post-auth callback, and only the dashboard's.
  *
- * The Faithful app finishes inside the app, on `faithful://auth/callback`; a
+ * The FaithForm app finishes inside the app, on `faithform://auth/callback`; a
  * mobile code has no business here and cannot be completed here anyway,
  * because its PKCE verifier lives in the phone's keychain. What this route
  * must guarantee is that a person who arrives by a stale or misrouted link is
@@ -39,7 +39,7 @@ export async function GET(request: Request) {
       }
 
       // A session that cannot open the dashboard must not be sent to it.
-      // This is the misroute case: a Faithful visitor whose confirmation link
+      // This is the misroute case: a FaithForm visitor whose confirmation link
       // was pointed at the Site URL lands here with a perfectly valid
       // identity and no staff membership. `/login` renders the explanation;
       // sending them to `/dashboard` produced the blank page.

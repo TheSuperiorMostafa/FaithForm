@@ -14,10 +14,10 @@ import test from "node:test";
  * not a pass.
  */
 
-const DATABASE_URL = process.env.FAITHFUL_TEST_DATABASE_URL;
+const DATABASE_URL = process.env.FAITHFORM_TEST_DATABASE_URL;
 
 const SKIP_REASON =
-  "FAITHFUL_TEST_DATABASE_URL is not set — no disposable Postgres target. " +
+  "FAITHFORM_TEST_DATABASE_URL is not set — no disposable Postgres target. " +
   "The publication and visibility rules are UNOBSERVED until this runs.";
 
 if (/prod/i.test(DATABASE_URL ?? "")) {
@@ -962,7 +962,7 @@ test("the legacy recording status is left alone", options,
 // The mobile-playability gate (Prompt 9 closure)
 // ---------------------------------------------------------------------------
 //
-// "Published to Faithful" must mean "playable by Faithful". These exercise the
+// "Published to FaithForm" must mean "playable by FaithForm". These exercise the
 // four independent places that enforce it: the projections, the detail lookup,
 // the transactional publish, and the playback grant.
 

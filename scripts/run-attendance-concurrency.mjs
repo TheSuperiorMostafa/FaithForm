@@ -11,10 +11,10 @@
 import { readFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 
-const url = process.env.FAITHFUL_TEST_DATABASE_URL;
+const url = process.env.FAITHFORM_TEST_DATABASE_URL;
 
 if (!url) {
-  console.error("FAIL set FAITHFUL_TEST_DATABASE_URL to a disposable Postgres target.");
+  console.error("FAIL set FAITHFORM_TEST_DATABASE_URL to a disposable Postgres target.");
   process.exit(1);
 }
 if (/prod/i.test(url)) {

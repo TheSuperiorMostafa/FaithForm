@@ -6,7 +6,7 @@ import { FundBreakdown } from "@/components/giving/fund-breakdown";
 import { GivingSetupCta } from "@/components/giving/giving-setup-cta";
 import { QrCodeCard } from "@/components/giving/qr-code-card";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FaithfulGivingPanel } from "@/components/giving/faithful-giving-panel";
+import { FaithFormGivingPanel } from "@/components/giving/faithform-giving-panel";
 import { getChurchAuth } from "@/lib/auth/church";
 import {
   getChurchGivingProfile,
@@ -59,7 +59,7 @@ export default async function GivingPage() {
         than in settings: publishing a fund is a giving decision, and the person
         making it is already looking at giving.
       */}
-      <FaithfulGivingPanel isAdmin={auth.isAdmin} />
+      <FaithFormGivingPanel isAdmin={auth.isAdmin} />
 
       {summary.failedSubscriptionCount > 0 && (
         <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm">

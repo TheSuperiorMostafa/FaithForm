@@ -136,7 +136,7 @@ returns uuid language sql stable as $$ select null::uuid $$;
 -- Legacy attendance
 -- ---------------------------------------------------------------------------
 --
--- The pre-Faithful model, created empty so a test can prove the new authority
+-- The pre-FaithForm model, created empty so a test can prove the new authority
 -- never writes to it. Prompt 6 asserts this by source inspection; with the
 -- tables present it can be *observed* — count before, count after, compare.
 --
@@ -260,7 +260,7 @@ create table if not exists public.media_views (
 -- ---------------------------------------------------------------------------
 --
 -- The shapes migrations 0013 and 0016 create in production, reduced to the
--- columns Faithful's giving path reads or writes. Deliberately *not* a copy of
+-- columns FaithForm's giving path reads or writes. Deliberately *not* a copy of
 -- the whole giving schema: statements, payouts, portal sessions and fee
 -- breakdowns are dashboard concerns and nothing here touches them.
 --

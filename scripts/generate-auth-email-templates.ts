@@ -229,7 +229,7 @@ index.push(
   "project's **Redirect URLs** allow-list. Anything not on the list is silently",
   "replaced with the project's Site URL, path and all, which is what broke",
   "sign-in before. Keep the list in step with",
-  "`contracts/faithful/v1/auth-callback.json`.",
+  "`contracts/faithform/v1/auth-callback.json`.",
   "",
 );
 

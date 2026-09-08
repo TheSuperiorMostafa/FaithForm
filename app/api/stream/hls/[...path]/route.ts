@@ -15,7 +15,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *
  * Prompt 9 moved the *upstream* half — the relay base, the server-side Basic
  * credential, the path derivation and the segment validation — into
- * `lib/stream/relay-upstream`, so this route and Faithful's header-authenticated
+ * `lib/stream/relay-upstream`, so this route and FaithForm's header-authenticated
  * `/api/media/v1/live` reach the relay through one contract rather than two
  * copies that could drift apart.
  *

@@ -3,8 +3,8 @@ import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { VisitorError } from "@/lib/faithful/errors";
-import { isValidTimeZone } from "@/lib/faithful/schemas";
+import { VisitorError } from "@/lib/faithform/errors";
+import { isValidTimeZone } from "@/lib/faithform/schemas";
 
 /**
  * Service occurrences.

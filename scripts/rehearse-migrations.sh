@@ -16,10 +16,10 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-HOST="${FAITHFUL_PG_HOST:-localhost}"
-PORT="${FAITHFUL_PG_PORT:-5432}"
-USER="${FAITHFUL_PG_USER:-postgres}"
-DB="${FAITHFUL_REHEARSAL_DB:-faithful_rehearsal_$$}"
+HOST="${FAITHFORM_PG_HOST:-localhost}"
+PORT="${FAITHFORM_PG_PORT:-5432}"
+USER="${FAITHFORM_PG_USER:-postgres}"
+DB="${FAITHFORM_REHEARSAL_DB:-faithform_rehearsal_$$}"
 
 if echo "$HOST" | grep -qiE "prod|supabase\.co|amazonaws|rds"; then
   echo "Refusing to rehearse against a host that looks like a real deployment: $HOST" >&2
@@ -46,14 +46,14 @@ psql_ -d "$DB" -q -v ON_ERROR_STOP=1 -f tests/database/fixtures/bootstrap.sql
 for file in supabase/migrations/*.sql; do
   name=$(basename "$file")
   case "$name" in
-    00[0-4]*|005[0-4]*) continue ;;  # pre-Faithful; the bootstrap stands in
+    00[0-4]*|005[0-4]*) continue ;;  # pre-FaithForm; the bootstrap stands in
   esac
   echo "  $name"
   psql_ -d "$DB" -q -v ON_ERROR_STOP=1 -f "$file"
 done
 
 echo ""
-echo "Chain applied. Every Faithful migration on disk, in order."
+echo "Chain applied. Every FaithForm migration on disk, in order."
 echo ""
 
 # The concurrency runner applies its own curated list. A migration added to the
@@ -81,8 +81,8 @@ echo "Running the database suite against the rehearsed database."
 # `host=` parameter. Getting this wrong produces an authentication error that
 # reads as a credentials problem, which is a long way from the truth.
 case "$HOST" in
-  /*) export FAITHFUL_TEST_DATABASE_URL="postgresql://${USER}@localhost:${PORT}/${DB}?host=${HOST}" ;;
-  *)  export FAITHFUL_TEST_DATABASE_URL="postgresql://${USER}@${HOST}:${PORT}/${DB}" ;;
+  /*) export FAITHFORM_TEST_DATABASE_URL="postgresql://${USER}@localhost:${PORT}/${DB}?host=${HOST}" ;;
+  *)  export FAITHFORM_TEST_DATABASE_URL="postgresql://${USER}@${HOST}:${PORT}/${DB}" ;;
 esac
 # The test *files*, not the runner: the runner would apply the chain a second
 # time, and migration 0055's `create policy` has no `if not exists` form.

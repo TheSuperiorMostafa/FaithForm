@@ -15,7 +15,7 @@ const CURSOR_KIND = "church-search";
 
 /**
  * Manual search. Anonymous by design and requiring no location permission —
- * someone deciding whether to use Faithful at all must be able to look.
+ * someone deciding whether to use FaithForm at all must be able to look.
  *
  * Shared-cacheable: the result is identical for everyone, and only
  * discoverable churches are ever returned.

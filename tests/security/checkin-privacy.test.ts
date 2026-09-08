@@ -185,11 +185,11 @@ test("the scanning interfaces cannot even express returning an image", () => {
   // Stronger than a rule saying not to save one: the protocol hands back
   // decoded strings, so there is no buffer in scope to write.
   const swift = readFileSync(
-    "apps/faithful-ios/Sources/FaithfulKit/Attendance/QrScanning.swift",
+    "apps/faithform-ios/Sources/FaithFormKit/Attendance/QrScanning.swift",
     "utf8",
   );
   const kotlin = readFileSync(
-    "apps/faithful-android/core/attendance/src/main/kotlin/io/faithform/faithful/attendance/QrScanning.kt",
+    "apps/faithform-android/core/attendance/src/main/kotlin/io/faithform/app/attendance/QrScanning.kt",
     "utf8",
   );
 
@@ -280,11 +280,11 @@ test("the client can decode nothing about a token it holds", () => {
   // no key, so it cannot read a token's occurrence, expiry, or church — which
   // is what makes "the server decides" true rather than aspirational.
   const swift = readFileSync(
-    "apps/faithful-ios/Sources/FaithfulKit/Attendance/QrScanning.swift",
+    "apps/faithform-ios/Sources/FaithFormKit/Attendance/QrScanning.swift",
     "utf8",
   );
   const kotlin = readFileSync(
-    "apps/faithful-android/core/attendance/src/main/kotlin/io/faithform/faithful/attendance/QrScanning.kt",
+    "apps/faithform-android/core/attendance/src/main/kotlin/io/faithform/app/attendance/QrScanning.kt",
     "utf8",
   );
 
@@ -353,11 +353,11 @@ test("no native file logs a scanned payload", () => {
 
 test("the scan submission type has no field that could carry a position", () => {
   const swift = readFileSync(
-    "apps/faithful-ios/Sources/FaithfulKit/Attendance/CheckInScanner.swift",
+    "apps/faithform-ios/Sources/FaithFormKit/Attendance/CheckInScanner.swift",
     "utf8",
   );
   const kotlin = readFileSync(
-    "apps/faithful-android/core/attendance/src/main/kotlin/io/faithform/faithful/attendance/CheckInScanner.kt",
+    "apps/faithform-android/core/attendance/src/main/kotlin/io/faithform/app/attendance/CheckInScanner.kt",
     "utf8",
   );
 
@@ -384,12 +384,12 @@ test("the scan submission type has no field that could carry a position", () => 
 
 test("the scan request body sends nothing but a code and an attempt id", () => {
   const swift = stripComments(
-    readFileSync("apps/faithful-ios/Sources/FaithfulKit/Attendance/APICheckInSubmitter.swift", "utf8"),
+    readFileSync("apps/faithform-ios/Sources/FaithFormKit/Attendance/APICheckInSubmitter.swift", "utf8"),
     "a.swift",
   );
   const kotlin = stripComments(
     readFileSync(
-      "apps/faithful-android/app/src/main/kotlin/io/faithform/faithful/attendance/ApiCheckInSubmitter.kt",
+      "apps/faithform-android/app/src/main/kotlin/io/faithform/app/attendance/ApiCheckInSubmitter.kt",
       "utf8",
     ),
     "a.kt",
@@ -445,7 +445,7 @@ test("the capture sweep fails on an injected violation", () => {
   // capture-to-disk call into a real source file, re-runs the real sweep,
   // requires it to catch it, and restores the file byte-for-byte.
   const target =
-    "apps/faithful-android/app/src/main/kotlin/io/faithform/faithful/attendance/CameraXScanner.kt";
+    "apps/faithform-android/app/src/main/kotlin/io/faithform/app/attendance/CameraXScanner.kt";
 
   assert.ok(PRODUCTION_NATIVE.includes(target), `the walk never reached ${target}`);
   assert.deepEqual(
@@ -472,7 +472,7 @@ test("the capture sweep fails on an injected violation", () => {
 });
 
 test("the signing-key sweep fails on an injected violation", () => {
-  const target = "apps/faithful-ios/Sources/FaithfulKit/Attendance/CheckInScanner.swift";
+  const target = "apps/faithform-ios/Sources/FaithFormKit/Attendance/CheckInScanner.swift";
 
   assert.ok(PRODUCTION_NATIVE.includes(target), `the walk never reached ${target}`);
   assert.deepEqual(
@@ -504,7 +504,7 @@ test("a comment mentioning a forbidden symbol is not a violation", () => {
   // its own rationale would be a permanent false positive — the kind that gets
   // the sweep deleted rather than fixed.
   const adapter = readFileSync(
-    "apps/faithful-android/app/src/main/kotlin/io/faithform/faithful/attendance/CameraXScanner.kt",
+    "apps/faithform-android/app/src/main/kotlin/io/faithform/app/attendance/CameraXScanner.kt",
     "utf8",
   );
   assert.ok(adapter.includes("ImageCapture"), "the rationale no longer names the symbol");

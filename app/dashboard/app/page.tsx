@@ -3,13 +3,13 @@ import { redirect } from "next/navigation";
 import {
   getCampusesForSettings,
   getInvitationsForSettings,
-} from "@/app/dashboard/settings/faithful-actions";
+} from "@/app/dashboard/settings/faithform-actions";
 import { getVisitorRelationships } from "@/app/dashboard/people/claim-actions";
 import { JoinRequestsPanel } from "@/components/people/join-requests-panel";
-import { FaithfulVisibilityCard } from "@/components/settings/faithful-visibility-card";
+import { FaithFormVisibilityCard } from "@/components/settings/faithform-visibility-card";
 import { VisitorInvitationsCard } from "@/components/settings/visitor-invitations-card";
 import { getChurchAuth } from "@/lib/auth/church";
-import { getChurchDiscoverySettings } from "@/lib/queries/faithful-settings";
+import { getChurchDiscoverySettings } from "@/lib/queries/faithform-settings";
 
 export const dynamic = "force-dynamic";
 
@@ -61,7 +61,7 @@ export default async function MemberAppPage() {
       </div>
 
       <JoinRequestsPanel requests={joinRequests} />
-      <FaithfulVisibilityCard
+      <FaithFormVisibilityCard
         isAdmin={auth.isAdmin}
         isDiscoverable={discovery.isDiscoverable}
         publicSummary={discovery.publicSummary}

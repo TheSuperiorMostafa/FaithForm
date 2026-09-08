@@ -2,7 +2,7 @@ import { MobileError } from "@/lib/mobile/v1/errors";
 import { publicRoute } from "@/lib/mobile/v1/handler";
 import { readJsonBody } from "@/lib/mobile/v1/protocol";
 import { invitationPreviewRequestSchema } from "@/lib/mobile/v1/contract";
-import { previewInvitation } from "@/lib/faithful/invitations";
+import { previewInvitation } from "@/lib/faithform/invitations";
 
 export const dynamic = "force-dynamic";
 

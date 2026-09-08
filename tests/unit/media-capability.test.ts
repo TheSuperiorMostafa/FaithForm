@@ -177,19 +177,19 @@ test("malformed input is refused rather than parsed", () => {
 // Domain separation from the website capability
 // ---------------------------------------------------------------------------
 
-test("a website playback token is not a Faithful capability, and vice versa", () => {
+test("a website playback token is not a FaithForm capability, and vice versa", () => {
   const websiteToken = signPlaybackToken(
     { churchId: "church-id", eventId: "event-id", audience: "public" },
     { secret: process.env.STREAM_PLAYBACK_SECRET },
   );
-  const { token: faithful } = issue({ kind: "live" });
+  const { token: faithform } = issue({ kind: "live" });
 
   // **The property that makes sharing one secret safe.** Both are signed with
   // `STREAM_PLAYBACK_SECRET`, but through different derived sub-keys — so a
   // website token, which is not account-scoped, cannot be replayed against a
-  // Faithful route, and a Faithful capability cannot open the website's.
+  // FaithForm route, and a FaithForm capability cannot open the website's.
   assert.equal(verifyMediaCapability(websiteToken).ok, false);
-  assert.equal(verifyPlaybackToken(faithful, { secret: process.env.STREAM_PLAYBACK_SECRET }), null);
+  assert.equal(verifyPlaybackToken(faithform, { secret: process.env.STREAM_PLAYBACK_SECRET }), null);
 });
 
 // ---------------------------------------------------------------------------

@@ -6,21 +6,21 @@
  *
  * Refuses without an explicit target and an explicit acknowledgement, so it
  * cannot be pointed at production by an absent-minded environment variable.
- * See docs/faithful/P6_LEGACY_MIGRATION_AND_RECONCILIATION.md.
+ * See docs/faithform/P6_LEGACY_MIGRATION_AND_RECONCILIATION.md.
  */
 import { readFileSync } from "node:fs";
 
-const url = process.env.FAITHFUL_MIGRATION_DATABASE_URL;
+const url = process.env.FAITHFORM_MIGRATION_DATABASE_URL;
 const confirmed =
-  process.env.FAITHFUL_MIGRATION_CONFIRM === "i-understand-this-is-not-production";
+  process.env.FAITHFORM_MIGRATION_CONFIRM === "i-understand-this-is-not-production";
 
 if (!url) {
-  console.error("FAIL set FAITHFUL_MIGRATION_DATABASE_URL to a non-production database.");
+  console.error("FAIL set FAITHFORM_MIGRATION_DATABASE_URL to a non-production database.");
   process.exit(1);
 }
 if (!confirmed) {
   console.error(
-    "FAIL set FAITHFUL_MIGRATION_CONFIRM=i-understand-this-is-not-production to proceed.",
+    "FAIL set FAITHFORM_MIGRATION_CONFIRM=i-understand-this-is-not-production to proceed.",
   );
   process.exit(1);
 }

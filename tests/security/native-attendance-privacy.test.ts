@@ -197,7 +197,7 @@ test("no out-of-scope feature leaked in", () => {
   //
   // Everything below is still out of scope and stays here.
   const offenders = sweep([
-    // Barcode formats Faithful does not read. QR is the only symbology, so a
+    // Barcode formats FaithForm does not read. QR is the only symbology, so a
     // library that decoded a driving licence or a loyalty card would be new
     // capability nobody asked for.
     "VNDetectBarcodes",
@@ -258,7 +258,7 @@ test("no out-of-scope feature leaked in", () => {
     "CardMultilineWidget",
     "CardFormView",
     "CardNumberEditText",
-    // No instrument management, and no bank rails. Faithful gives once; it does
+    // No instrument management, and no bank rails. FaithForm gives once; it does
     // not store a card, link an account, or move money by ACH.
     "CustomerSheet",
     "FinancialConnections",
@@ -325,13 +325,13 @@ test("coordinates are never written to an ordinary preference or cache", () => {
 
 test("the pending queue is encrypted on both platforms", () => {
   const kotlin = readFileSync(
-    "apps/faithful-android/app/src/main/kotlin/io/faithform/faithful/attendance/EncryptedPendingAttemptStore.kt",
+    "apps/faithform-android/app/src/main/kotlin/io/faithform/app/attendance/EncryptedPendingAttemptStore.kt",
     "utf8",
   );
   // Given an EncryptedSharedPreferences instance by the container, and the
   // mirror builds its own with a Keystore-backed master key.
   const receivers = readFileSync(
-    "apps/faithful-android/app/src/main/kotlin/io/faithform/faithful/attendance/GeofenceReceivers.kt",
+    "apps/faithform-android/app/src/main/kotlin/io/faithform/app/attendance/GeofenceReceivers.kt",
     "utf8",
   );
   assert.match(kotlin, /SharedPreferences/);
@@ -340,7 +340,7 @@ test("the pending queue is encrypted on both platforms", () => {
 
   // iOS declares the store as Keychain-backed in the protocol contract.
   const swift = readFileSync(
-    "apps/faithful-ios/Sources/FaithfulKit/Attendance/AutomaticAttendance.swift",
+    "apps/faithform-ios/Sources/FaithFormKit/Attendance/AutomaticAttendance.swift",
     "utf8",
   );
   assert.match(swift, /Keychain/);
@@ -352,7 +352,7 @@ test("the pending queue is encrypted on both platforms", () => {
 
 test("the manifest declares the permissions this app needs and no more", () => {
   const manifest = readFileSync(
-    "apps/faithful-android/app/src/main/AndroidManifest.xml",
+    "apps/faithform-android/app/src/main/AndroidManifest.xml",
     "utf8",
   );
   const code = stripComments(manifest, "AndroidManifest.xml");
@@ -380,12 +380,12 @@ test("the manifest declares the permissions this app needs and no more", () => {
 
 test("the camera is optional hardware, so a device without one can still install", () => {
   const manifest = readFileSync(
-    "apps/faithful-android/app/src/main/AndroidManifest.xml",
+    "apps/faithform-android/app/src/main/AndroidManifest.xml",
     "utf8",
   );
   const code = stripComments(manifest, "AndroidManifest.xml");
 
-  // `required="true"` would remove Faithful from the Play listing for every
+  // `required="true"` would remove FaithForm from the Play listing for every
   // device without a rear camera — people who would have used the typed code
   // perfectly well.
   assert.match(
@@ -397,7 +397,7 @@ test("the camera is optional hardware, so a device without one can still install
 
 test("the geofence receiver is not exported", () => {
   const manifest = readFileSync(
-    "apps/faithful-android/app/src/main/AndroidManifest.xml",
+    "apps/faithform-android/app/src/main/AndroidManifest.xml",
     "utf8",
   );
   const receiver = manifest.slice(
@@ -416,7 +416,7 @@ test("the geofence receiver is not exported", () => {
 
 test("the PendingIntent is mutable-with-an-explicit-component, as the API requires", () => {
   const source = readFileSync(
-    "apps/faithful-android/app/src/main/kotlin/io/faithform/faithful/attendance/PlayServicesGeofencing.kt",
+    "apps/faithform-android/app/src/main/kotlin/io/faithform/app/attendance/PlayServicesGeofencing.kt",
     "utf8",
   );
   const code = stripComments(source, "PlayServicesGeofencing.kt");
@@ -438,11 +438,11 @@ test("the PendingIntent is mutable-with-an-explicit-component, as the API requir
 
 test("both platforms derive the idempotency key identically", () => {
   const swift = readFileSync(
-    "apps/faithful-ios/Sources/FaithfulKit/Attendance/EvidenceMachine.swift",
+    "apps/faithform-ios/Sources/FaithFormKit/Attendance/EvidenceMachine.swift",
     "utf8",
   );
   const kotlin = readFileSync(
-    "apps/faithful-android/core/attendance/src/main/kotlin/io/faithform/faithful/attendance/EvidenceMachine.kt",
+    "apps/faithform-android/core/attendance/src/main/kotlin/io/faithform/app/attendance/EvidenceMachine.kt",
     "utf8",
   );
 
@@ -450,22 +450,22 @@ test("both platforms derive the idempotency key identically", () => {
   // Divergence here would mean the same person on two devices produced two
   // keys for one intent.
   for (const source of [swift, kotlin]) {
-    assert.ok(source.includes('"faithful.geofence.v2"'));
+    assert.ok(source.includes('"faithform.geofence.v2"'));
     assert.ok(source.includes('"gf-"'));
     assert.ok(/40/.test(source));
     // v1 derived the key from the occurrence alone, so an early refusal was
     // replayed for the rest of the service. Its return would be the regression.
-    assert.ok(!source.includes("faithful.geofence.v1"), "the v1 key scheme returned");
+    assert.ok(!source.includes("faithform.geofence.v1"), "the v1 key scheme returned");
   }
 });
 
 test("the key is derived from a logical attempt on both platforms", () => {
   const swift = readFileSync(
-    "apps/faithful-ios/Sources/FaithfulKit/Attendance/EvidenceMachine.swift",
+    "apps/faithform-ios/Sources/FaithFormKit/Attendance/EvidenceMachine.swift",
     "utf8",
   );
   const kotlin = readFileSync(
-    "apps/faithful-android/core/attendance/src/main/kotlin/io/faithform/faithful/attendance/EvidenceMachine.kt",
+    "apps/faithform-android/core/attendance/src/main/kotlin/io/faithform/app/attendance/EvidenceMachine.kt",
     "utf8",
   );
 
@@ -480,11 +480,11 @@ test("the attempt is opened before anything is submitted", () => {
   // Persisting the identity first is what makes a duplicate callback join the
   // attempt in progress instead of starting a second one with another key.
   const swift = readFileSync(
-    "apps/faithful-ios/Sources/FaithfulKit/Attendance/AutomaticAttendance.swift",
+    "apps/faithform-ios/Sources/FaithFormKit/Attendance/AutomaticAttendance.swift",
     "utf8",
   );
   const kotlin = readFileSync(
-    "apps/faithful-android/core/attendance/src/main/kotlin/io/faithform/faithful/attendance/AutomaticAttendance.kt",
+    "apps/faithform-android/core/attendance/src/main/kotlin/io/faithform/app/attendance/AutomaticAttendance.kt",
     "utf8",
   );
 
@@ -501,8 +501,8 @@ test("a terminal refusal closes the attempt on both platforms", () => {
   // Closing is the whole correction: the next entry opens a new attempt with a
   // new id and is validated fresh, instead of replaying the refusal.
   for (const path of [
-    "apps/faithful-ios/Sources/FaithfulKit/Attendance/AutomaticAttendance.swift",
-    "apps/faithful-android/core/attendance/src/main/kotlin/io/faithform/faithful/attendance/AutomaticAttendance.kt",
+    "apps/faithform-ios/Sources/FaithFormKit/Attendance/AutomaticAttendance.swift",
+    "apps/faithform-android/core/attendance/src/main/kotlin/io/faithform/app/attendance/AutomaticAttendance.kt",
   ]) {
     const source = readFileSync(path, "utf8");
     const fail = source.slice(source.indexOf("fun fail(") >= 0
@@ -517,12 +517,12 @@ test("neither platform sleeps through a dwell", () => {
   // process on Android, and would produce a feature that appeared to work only
   // in the foreground.
   const swift = stripComments(
-    readFileSync("apps/faithful-ios/Sources/FaithfulKit/Attendance/AutomaticAttendance.swift", "utf8"),
+    readFileSync("apps/faithform-ios/Sources/FaithFormKit/Attendance/AutomaticAttendance.swift", "utf8"),
     "x.swift",
   );
   const kotlin = stripComments(
     readFileSync(
-      "apps/faithful-android/core/attendance/src/main/kotlin/io/faithform/faithful/attendance/AutomaticAttendance.kt",
+      "apps/faithform-android/core/attendance/src/main/kotlin/io/faithform/app/attendance/AutomaticAttendance.kt",
       "utf8",
     ),
     "x.kt",
@@ -544,7 +544,7 @@ test("neither platform sleeps through a dwell", () => {
 test("the OS dwell transition is used on Android and driven by configuration", () => {
   const adapter = stripComments(
     readFileSync(
-      "apps/faithful-android/app/src/main/kotlin/io/faithform/faithful/attendance/PlayServicesGeofencing.kt",
+      "apps/faithform-android/app/src/main/kotlin/io/faithform/app/attendance/PlayServicesGeofencing.kt",
       "utf8",
     ),
     "x.kt",
@@ -567,11 +567,11 @@ test("the OS dwell transition is used on Android and driven by configuration", (
 
 test("both platforms bound retries without ever locking an occurrence out", () => {
   const swift = readFileSync(
-    "apps/faithful-ios/Sources/FaithfulKit/Attendance/AttemptPolicy.swift",
+    "apps/faithform-ios/Sources/FaithFormKit/Attendance/AttemptPolicy.swift",
     "utf8",
   );
   const kotlin = readFileSync(
-    "apps/faithful-android/core/attendance/src/main/kotlin/io/faithform/faithful/attendance/AttemptPolicy.kt",
+    "apps/faithform-android/core/attendance/src/main/kotlin/io/faithform/app/attendance/AttemptPolicy.kt",
     "utf8",
   );
 
@@ -679,8 +679,8 @@ test("the detection record is stamped by the database, not by the application", 
 
 test("both platforms treat the confirmation deadline as scheduling, not authority", () => {
   for (const path of [
-    "apps/faithful-ios/Sources/FaithfulKit/Attendance/EvidenceMachine.swift",
-    "apps/faithful-android/core/attendance/src/main/kotlin/io/faithform/faithful/attendance/EvidenceMachine.kt",
+    "apps/faithform-ios/Sources/FaithFormKit/Attendance/EvidenceMachine.swift",
+    "apps/faithform-android/core/attendance/src/main/kotlin/io/faithform/app/attendance/EvidenceMachine.kt",
   ]) {
     const source = readFileSync(path, "utf8");
     // A confirmation needs the server-issued detection, not just a deadline.
@@ -698,8 +698,8 @@ test("neither platform gates confirmation on in-memory state", () => {
   // background wake, not an edge one. Guarding on it made a persisted attempt
   // unconfirmable forever, so the stored attempt is the authority.
   for (const path of [
-    "apps/faithful-ios/Sources/FaithfulKit/Attendance/AutomaticAttendance.swift",
-    "apps/faithful-android/core/attendance/src/main/kotlin/io/faithform/faithful/attendance/AutomaticAttendance.kt",
+    "apps/faithform-ios/Sources/FaithFormKit/Attendance/AutomaticAttendance.swift",
+    "apps/faithform-android/core/attendance/src/main/kotlin/io/faithform/app/attendance/AutomaticAttendance.kt",
   ]) {
     const source = readFileSync(path, "utf8");
     // Anchored on the *declaration*, not the first mention — `confirmIfDue`
@@ -729,11 +729,11 @@ test("neither platform gates confirmation on in-memory state", () => {
 
 test("both platforms cap monitored regions at the same number", () => {
   const swift = readFileSync(
-    "apps/faithful-ios/Sources/FaithfulKit/Attendance/GeofenceReconciler.swift",
+    "apps/faithform-ios/Sources/FaithFormKit/Attendance/GeofenceReconciler.swift",
     "utf8",
   );
   const kotlin = readFileSync(
-    "apps/faithful-android/core/attendance/src/main/kotlin/io/faithform/faithful/attendance/GeofenceReconciler.kt",
+    "apps/faithform-android/core/attendance/src/main/kotlin/io/faithform/app/attendance/GeofenceReconciler.kt",
     "utf8",
   );
   assert.match(swift, /appleMonitoredRegionLimit = 20/);
@@ -745,11 +745,11 @@ test("both platforms cap monitored regions at the same number", () => {
 
 test("both platforms bound the pending queue to the same lifetime", () => {
   const swift = readFileSync(
-    "apps/faithful-ios/Sources/FaithfulKit/Attendance/EvidenceMachine.swift",
+    "apps/faithform-ios/Sources/FaithFormKit/Attendance/EvidenceMachine.swift",
     "utf8",
   );
   const kotlin = readFileSync(
-    "apps/faithful-android/core/attendance/src/main/kotlin/io/faithform/faithful/attendance/EvidenceMachine.kt",
+    "apps/faithform-android/core/attendance/src/main/kotlin/io/faithform/app/attendance/EvidenceMachine.kt",
     "utf8",
   );
   assert.match(swift, /pendingAttemptLifetime: TimeInterval = 2 \* 60 \* 60/);
@@ -798,7 +798,7 @@ test("the sweep fails on an injected violation", () => {
   // continuous-location call into a real source file, re-runs the real sweep,
   // requires it to catch it, and restores the file byte-for-byte.
   const target =
-    "apps/faithful-android/app/src/main/kotlin/io/faithform/faithful/attendance/PlayServicesGeofencing.kt";
+    "apps/faithform-android/app/src/main/kotlin/io/faithform/app/attendance/PlayServicesGeofencing.kt";
 
   assert.ok(PRODUCTION_NATIVE.includes(target), `the walk never reached ${target}`);
   assert.deepEqual(sweep(["requestLocationUpdates"]), [], "already failing before injection");

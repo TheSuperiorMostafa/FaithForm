@@ -6,8 +6,8 @@ import { toast } from "sonner";
 import {
   createVisitorInvitation,
   withdrawVisitorInvitation,
-} from "@/app/dashboard/settings/faithful-actions";
-import type { InvitationSummary } from "@/lib/faithful/invitations";
+} from "@/app/dashboard/settings/faithform-actions";
+import type { InvitationSummary } from "@/lib/faithform/invitations";
 import { Button } from "@/components/ui/button";
 import {
   Card,

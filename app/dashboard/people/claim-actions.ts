@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 
 import { getChurchAuth } from "@/lib/auth/church";
 import { featureActionError } from "@/lib/features/guard";
-import { toVisitorResult, type VisitorResult } from "@/lib/faithful/errors";
+import { toVisitorResult, type VisitorResult } from "@/lib/faithform/errors";
 import {
   approveClaim,
   listLinkAudit,
@@ -12,11 +12,11 @@ import {
   rejectClaim,
   revokeLink,
   type StaffClaimRow,
-} from "@/lib/faithful/people-claims";
+} from "@/lib/faithform/people-claims";
 import {
   listChurchRelationships,
   staffRelationshipDecision,
-} from "@/lib/faithful/staff-relationships";
+} from "@/lib/faithform/staff-relationships";
 
 /**
  * Staff resolution of People claims and visitor relationships.

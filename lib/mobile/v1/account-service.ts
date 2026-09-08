@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { VisitorError } from "@/lib/faithful/errors";
+import { VisitorError } from "@/lib/faithform/errors";
 import {
   ensureVisitorAccount,
   getVisitorAccount,
@@ -7,14 +7,14 @@ import {
   updateVisitorProfile,
   bumpAuthorizationVersion,
   type VisitorAccount,
-} from "@/lib/faithful/account";
+} from "@/lib/faithform/account";
 import {
   buildAccountExport,
   listAccountRequests,
   requestAccountAction,
-} from "@/lib/faithful/account-lifecycle";
-import { grantsPublishedContentAccess } from "@/lib/faithful/relationship-state";
-import { retireInstallationsForAccount } from "@/lib/faithful/push/installations";
+} from "@/lib/faithform/account-lifecycle";
+import { grantsPublishedContentAccess } from "@/lib/faithform/relationship-state";
+import { retireInstallationsForAccount } from "@/lib/faithform/push/installations";
 import type {
   Bootstrap,
   ChurchRelationshipDto,

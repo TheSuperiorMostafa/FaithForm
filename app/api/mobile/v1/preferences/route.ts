@@ -2,7 +2,7 @@ import { MobileError } from "@/lib/mobile/v1/errors";
 import { authenticatedRoute } from "@/lib/mobile/v1/handler";
 import { readJsonBody } from "@/lib/mobile/v1/protocol";
 import { setPreferenceRequestSchema } from "@/lib/mobile/v1/contract";
-import { listPreferences, setPreference } from "@/lib/faithful/push/installations";
+import { listPreferences, setPreference } from "@/lib/faithform/push/installations";
 
 export const dynamic = "force-dynamic";
 

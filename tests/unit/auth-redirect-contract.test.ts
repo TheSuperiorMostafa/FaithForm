@@ -5,10 +5,10 @@ import test from "node:test";
 
 import {
   DASHBOARD_CALLBACK_PATH,
-  FAITHFUL_MOBILE_CALLBACK,
+  FAITHFORM_MOBILE_CALLBACK,
   dashboardEmailRedirect,
   isAllowedDashboardRedirect,
-  isFaithfulMobileCallback,
+  isFaithFormMobileCallback,
 } from "../../lib/auth/auth-redirects";
 import { safeRedirectPath } from "../../lib/security/safe-redirect";
 import { callbackDiagnosticCode } from "../../lib/auth/callback-diagnostics";
@@ -18,18 +18,18 @@ import { resolveSignedInLanding } from "../../lib/auth/signed-in-landing";
 // The shared contract
 // ---------------------------------------------------------------------------
 //
-// `contracts/faithful/v1/auth-callback.json` is read here, by the Swift suite
+// `contracts/faithform/v1/auth-callback.json` is read here, by the Swift suite
 // (AuthCallbackTests) and by the Kotlin suite (AuthCallbackLinkTest). One set
 // of bytes, three languages, so a destination cannot be widened on one
 // platform and quietly stay narrow on the others.
 
 const contract = JSON.parse(
   readFileSync(
-    join(process.cwd(), "contracts/faithful/v1/auth-callback.json"),
+    join(process.cwd(), "contracts/faithform/v1/auth-callback.json"),
     "utf8",
   ),
 ) as {
-  faithful: { scheme: string; host: string; path: string; canonical: string };
+  faithform: { scheme: string; host: string; path: string; canonical: string };
   dashboard: {
     callbackPath: string;
     environments: Record<string, string>;
@@ -113,9 +113,9 @@ test("a post-auth path survives, sanitised, on the dashboard link", () => {
 
 test("the mobile callback is never an allowed dashboard destination", () => {
   withSiteUrl("https://faithform.io", () => {
-    assert.equal(isAllowedDashboardRedirect(FAITHFUL_MOBILE_CALLBACK), false);
+    assert.equal(isAllowedDashboardRedirect(FAITHFORM_MOBILE_CALLBACK), false);
     assert.equal(
-      isAllowedDashboardRedirect("faithful://auth/callback?code=abc"),
+      isAllowedDashboardRedirect("faithform://auth/callback?code=abc"),
       false,
     );
   });
@@ -135,7 +135,7 @@ test("every dashboardRejected vector degrades to the default, never to itself", 
       );
       // Nothing of the attempted destination survives into the emailed link.
       assert.ok(!link.includes("evil.example"), vector.why);
-      assert.ok(!link.toLowerCase().includes("faithful:"), vector.why);
+      assert.ok(!link.toLowerCase().includes("faithform:"), vector.why);
     }
   });
 });
@@ -156,11 +156,11 @@ test("an arbitrary absolute redirect is never accepted as a dashboard one", () =
 });
 
 test("the mobile callback is recognised for what it is, in any case form", () => {
-  assert.equal(isFaithfulMobileCallback(contract.faithful.canonical), true);
-  assert.equal(isFaithfulMobileCallback("FAITHFUL://AUTH/callback"), true);
-  assert.equal(isFaithfulMobileCallback("faithful://invite/aaaa"), false);
+  assert.equal(isFaithFormMobileCallback(contract.faithform.canonical), true);
+  assert.equal(isFaithFormMobileCallback("FAITHFORM://AUTH/callback"), true);
+  assert.equal(isFaithFormMobileCallback("faithform://invite/aaaa"), false);
   assert.equal(
-    isFaithfulMobileCallback(contract.dashboard.environments.production),
+    isFaithFormMobileCallback(contract.dashboard.environments.production),
     false,
   );
 });

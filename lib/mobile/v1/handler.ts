@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 
-import { VisitorError } from "@/lib/faithful/errors";
+import { VisitorError } from "@/lib/faithform/errors";
 import {
   MobileError,
   mobileCodeForDomainCode,

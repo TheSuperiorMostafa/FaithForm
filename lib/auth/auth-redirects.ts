@@ -5,12 +5,12 @@ import { safeRedirectPath } from "@/lib/security/safe-redirect";
  * Every post-auth destination this product will ever hand an identity provider.
  *
  * Two surfaces, two destinations, and no third: the church dashboard finishes
- * on its own web callback, and the Faithful app finishes inside the app on its
+ * on its own web callback, and the FaithForm app finishes inside the app on its
  * custom scheme. Neither may be reached from the other, and **neither is ever
  * taken from a request**: the value is derived from this build's configured
  * origin (dashboard) or from a compiled-in constant (app).
  *
- * Mirrors `contracts/faithful/v1/auth-callback.json`, which the iOS and Android
+ * Mirrors `contracts/faithform/v1/auth-callback.json`, which the iOS and Android
  * suites read as well; `tests/unit/auth-redirect-contract.test.ts` asserts the
  * two never drift.
  */
@@ -19,10 +19,10 @@ import { safeRedirectPath } from "@/lib/security/safe-redirect";
 export const DASHBOARD_CALLBACK_PATH = "/auth/callback";
 
 /**
- * The Faithful app's callback. Declared here only so this module can *refuse*
+ * The FaithForm app's callback. Declared here only so this module can *refuse*
  * it as a dashboard destination — the web app never sends anyone here.
  */
-export const FAITHFUL_MOBILE_CALLBACK = "faithful://auth/callback";
+export const FAITHFORM_MOBILE_CALLBACK = "faithform://auth/callback";
 
 /**
  * The absolute dashboard callback for this environment, optionally carrying a
@@ -57,7 +57,7 @@ export function isAllowedDashboardRedirect(candidate: string): boolean {
 
   // The app's custom scheme is a legitimate destination — for the app. It is
   // never a dashboard one, and treating it as such is the exact confusion that
-  // sent Faithful's confirmation emails into the staff dashboard.
+  // sent FaithForm's confirmation emails into the staff dashboard.
   if (url.protocol !== "https:" && url.protocol !== "http:") return false;
 
   const origin = getCanonicalSiteUrl();
@@ -71,12 +71,12 @@ export function isAllowedDashboardRedirect(candidate: string): boolean {
   return url.origin === expected.origin && url.pathname === expected.pathname;
 }
 
-/** Whether a string is the Faithful app's callback, in any case form. */
-export function isFaithfulMobileCallback(candidate: string): boolean {
+/** Whether a string is the FaithForm app's callback, in any case form. */
+export function isFaithFormMobileCallback(candidate: string): boolean {
   try {
     const url = new URL(candidate);
     return (
-      url.protocol.toLowerCase() === "faithful:" &&
+      url.protocol.toLowerCase() === "faithform:" &&
       url.host.toLowerCase() === "auth" &&
       url.pathname === "/callback"
     );

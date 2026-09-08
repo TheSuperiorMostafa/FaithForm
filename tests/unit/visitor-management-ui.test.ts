@@ -21,7 +21,7 @@ const joinPanel = readFileSync("components/people/join-requests-panel.tsx", "utf
 
 test("the Member App page is in the sidebar and renders the app controls", () => {
   assert.match(navItems, /href: "\/dashboard\/app"/);
-  assert.match(appPage, /<FaithfulVisibilityCard/);
+  assert.match(appPage, /<FaithFormVisibilityCard/);
   assert.match(appPage, /<VisitorInvitationsCard/);
   assert.match(appPage, /<JoinRequestsPanel/);
   assert.match(invitationsCard, /createVisitorInvitation/);

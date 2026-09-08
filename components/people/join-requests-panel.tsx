@@ -4,7 +4,7 @@ import { useTransition } from "react";
 import { toast } from "sonner";
 
 import { decideVisitorRelationship } from "@/app/dashboard/people/claim-actions";
-import type { ChurchRelationshipRow } from "@/lib/faithful/staff-relationships";
+import type { ChurchRelationshipRow } from "@/lib/faithform/staff-relationships";
 import { Button } from "@/components/ui/button";
 import {
   Card,

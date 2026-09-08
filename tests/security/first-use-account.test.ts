@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const account = readFileSync("lib/faithful/account.ts", "utf8");
-const relationships = readFileSync("lib/faithful/relationships.ts", "utf8");
+const account = readFileSync("lib/faithform/account.ts", "utf8");
+const relationships = readFileSync("lib/faithform/relationships.ts", "utf8");
 
 // ---------------------------------------------------------------------------
 // First authenticated use materializes the visitor account

@@ -1,7 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 /**
- * The playback capability a Faithful app presents to watch something.
+ * The playback capability a FaithForm app presents to watch something.
  *
  * ## Why this is not `lib/stream/playback.ts`
  *
@@ -11,7 +11,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
  * has no idea either: a visitor watching a livestream on a church's site is not
  * signed in.
  *
- * Faithful's visitors **are** signed in, their access depends on a relationship
+ * FaithForm's visitors **are** signed in, their access depends on a relationship
  * a church can revoke, and what they may watch depends on a publication
  * decision a pastor makes. So this capability names:
  *
@@ -26,11 +26,11 @@ import { createHmac, timingSafeEqual } from "node:crypto";
  *
  * Both are signed with `STREAM_PLAYBACK_SECRET`, but never with the raw secret:
  *
- *     subKey = HMAC(secret, "faithform.faithful.media.v1|" + type)
+ *     subKey = HMAC(secret, "faithform.faithform.media.v1|" + type)
  *
- * A Faithful capability therefore cannot verify as a website `cap`, and a
+ * A FaithForm capability therefore cannot verify as a website `cap`, and a
  * website `cap` — which is not account-scoped — cannot be replayed against a
- * Faithful route. Reusing the existing secret is deliberate: it introduces no
+ * FaithForm route. Reusing the existing secret is deliberate: it introduces no
  * new deployment variable, and the derivation is what makes the two
  * non-interchangeable rather than the storage location.
  *
@@ -44,7 +44,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
  * Nothing in this file logs.
  */
 
-const DOMAIN = "faithform.faithful.media.v1";
+const DOMAIN = "faithform.faithform.media.v1";
 const FORMAT = "FFM1";
 
 export const MEDIA_CAPABILITY_TYPES = ["playback"] as const;
@@ -58,7 +58,7 @@ export type MediaKind = "live" | "recording";
  * Short enough that a revoked visitor loses access within one refresh, long
  * enough that a phone is not renewing constantly on a train. Deliberately
  * **not** quantized the way the website capability is: that quantization exists
- * so a five-second status poll does not rewrite the player URL, and Faithful
+ * so a five-second status poll does not rewrite the player URL, and FaithForm
  * refreshes on an explicit schedule instead.
  */
 export const MEDIA_CAPABILITY_TTL_SECONDS = 5 * 60;

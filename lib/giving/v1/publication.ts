@@ -4,10 +4,10 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { isChurchFeatureEnabled } from "@/lib/features/access";
 
 /**
- * Publishing a fund to Faithful, from the dashboard.
+ * Publishing a fund to FaithForm, from the dashboard.
  *
  * The dashboard is where publication decisions are made, and this is the only
- * module that makes them. Faithful reads a projection; it never writes one.
+ * module that makes them. FaithForm reads a projection; it never writes one.
  *
  * ## What is deliberately not here
  *
@@ -181,13 +181,13 @@ export function normaliseAmounts(input: {
 }
 
 /**
- * Publishes a fund to Faithful, or changes how it is published.
+ * Publishes a fund to FaithForm, or changes how it is published.
  *
  * The readiness check is re-read here rather than taken from the page that
  * rendered the button: a Stripe capability can be withdrawn between a page load
  * and a click, and the click is the moment that matters.
  */
-export async function publishFundToFaithful(
+export async function publishFundToFaithForm(
   input: { churchId: string; fundId: string } & FundPublicationInput,
   supabase?: SupabaseClient,
 ): Promise<PublicationResult> {

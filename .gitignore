@@ -50,11 +50,11 @@ next-env.d.ts
 __pycache__/
 
 # Native build outputs
-apps/faithful-android/.gradle/
-apps/faithful-android/.kotlin/
-apps/faithful-android/build/
-apps/faithful-android/**/build/
-apps/faithful-android/local.properties
-apps/faithful-ios/.build/
-apps/faithful-ios/.swiftpm/
-apps/faithful-ios/*.xcodeproj/xcuserdata/
+apps/faithform-android/.gradle/
+apps/faithform-android/.kotlin/
+apps/faithform-android/build/
+apps/faithform-android/**/build/
+apps/faithform-android/local.properties
+apps/faithform-ios/.build/
+apps/faithform-ios/.swiftpm/
+apps/faithform-ios/*.xcodeproj/xcuserdata/

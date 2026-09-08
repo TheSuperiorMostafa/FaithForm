@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * Generates the Faithful mobile contract from the authoritative Zod schemas in
+ * Generates the FaithForm mobile contract from the authoritative Zod schemas in
  * lib/mobile/v1/contract.ts.
  *
  * Outputs, all committed:
- *   contracts/faithful/v1/schema.json                       — JSON Schema 2020-12
- *   apps/faithful-ios/Sources/FaithfulKit/Generated/Contract.swift
- *   apps/faithful-android/core/contract/src/main/kotlin/.../Contract.kt
+ *   contracts/faithform/v1/schema.json                       — JSON Schema 2020-12
+ *   apps/faithform-ios/Sources/FaithFormKit/Generated/Contract.swift
+ *   apps/faithform-android/core/contract/src/main/kotlin/.../Contract.kt
  *
  * Run with --check to verify the committed output is current without writing.
  * CI uses --check so a contract change that skips regeneration fails the build
@@ -41,8 +41,8 @@ function buildJsonSchema() {
   }
   return {
     $schema: "https://json-schema.org/draft/2020-12/schema",
-    $id: "https://faithform.io/contracts/faithful/v1/schema.json",
-    title: "Faithful mobile contract v1",
+    $id: "https://faithform.io/contracts/faithform/v1/schema.json",
+    title: "FaithForm mobile contract v1",
     description: HEADER_LINES.join(" "),
     $defs: definitions,
   };
@@ -337,7 +337,7 @@ function buildKotlin(jsonSchema) {
   const out = [];
   out.push(...HEADER_LINES.map((line) => `// ${line}`));
   out.push("");
-  out.push("package io.faithform.faithful.contract");
+  out.push("package io.faithform.app.contract");
   out.push("");
   out.push("import kotlinx.serialization.SerialName");
   out.push("import kotlinx.serialization.Serializable");
@@ -404,16 +404,16 @@ const jsonSchema = buildJsonSchema();
 
 const artifacts = [
   {
-    path: "contracts/faithful/v1/schema.json",
+    path: "contracts/faithform/v1/schema.json",
     content: `${JSON.stringify(jsonSchema, null, 2)}\n`,
   },
   {
-    path: "apps/faithful-ios/Sources/FaithfulKit/Generated/Contract.swift",
+    path: "apps/faithform-ios/Sources/FaithFormKit/Generated/Contract.swift",
     content: `${buildSwift(jsonSchema)}\n`,
   },
   {
     path:
-      "apps/faithful-android/core/contract/src/main/kotlin/io/faithform/faithful/contract/Contract.kt",
+      "apps/faithform-android/core/contract/src/main/kotlin/io/faithform/app/contract/Contract.kt",
     content: `${buildKotlin(jsonSchema)}\n`,
   },
 ];

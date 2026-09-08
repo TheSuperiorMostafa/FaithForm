@@ -83,10 +83,10 @@ const SERVER_MEDIA_FILES = [
   "lib/stream/relay-upstream.ts",
   ...walk("app/api/media", new Set([".ts"])),
   ...walk("app/api/mobile/v1/media", new Set([".ts"])),
-  "app/dashboard/live-streaming/faithful-actions.ts",
+  "app/dashboard/live-streaming/faithform-actions.ts",
 ];
 
-const CLIENT_MEDIA_FILES = ["components/live-streaming/faithful-publishing-panel.tsx"];
+const CLIENT_MEDIA_FILES = ["components/live-streaming/faithform-publishing-panel.tsx"];
 
 // ---------------------------------------------------------------------------
 // Non-vacuity
@@ -146,7 +146,7 @@ test("the native live route never rewrites a capability into segment URLs", () =
   const route = stripComments(read("app/api/media/v1/live/[...path]/route.ts"), "a.ts");
 
   // The website's route passes `cap=…` to the rewriter so a browser player can
-  // fetch segments. Passing anything here would put Faithful's capability into
+  // fetch segments. Passing anything here would put FaithForm's capability into
   // every segment URL, which is what the header strategy exists to avoid.
   assert.match(route, /rewriteM3u8Playlist\(playlist, request\.nextUrl\.pathname\)/);
   assert.ok(!/rewriteM3u8Playlist\([^)]*cap/.test(route));
@@ -154,11 +154,11 @@ test("the native live route never rewrites a capability into segment URLs", () =
 
 test("neither native player puts a capability in a URL", () => {
   const swift = stripComments(
-    read("apps/faithful-ios/Sources/FaithfulKit/Media/AVPlayerAdapter.swift"),
+    read("apps/faithform-ios/Sources/FaithFormKit/Media/AVPlayerAdapter.swift"),
     "a.swift",
   );
   const kotlin = stripComments(
-    read("apps/faithful-android/app/src/main/kotlin/io/faithform/faithful/media/Media3PlayerAdapter.kt"),
+    read("apps/faithform-android/app/src/main/kotlin/io/faithform/app/media/Media3PlayerAdapter.kt"),
     "a.kt",
   );
 
@@ -171,7 +171,7 @@ test("neither native player puts a capability in a URL", () => {
   // a header of its own.
   assert.match(kotlin, /setDefaultRequestProperties\(headers\.mutableView\(\)\)/);
   const headers = stripComments(
-    read("apps/faithful-android/core/media/src/main/kotlin/io/faithform/faithful/media/MediaPlayback.kt"),
+    read("apps/faithform-android/core/media/src/main/kotlin/io/faithform/app/media/MediaPlayback.kt"),
     "a.kt",
   );
   assert.match(headers, /headers\["Authorization"\] = "Bearer \$capability"/);
@@ -295,7 +295,7 @@ test("no native media file persists a capability", () => {
   // The one thing that must never reach disk. `URLSessionConfiguration.ephemeral`
   // and the absence of a cache data source are what make that structural.
   const swift = stripComments(
-    read("apps/faithful-ios/Sources/FaithfulKit/Media/AVPlayerAdapter.swift"),
+    read("apps/faithform-ios/Sources/FaithFormKit/Media/AVPlayerAdapter.swift"),
     "a.swift",
   );
   assert.match(swift, /URLSessionConfiguration\.ephemeral/);
@@ -352,7 +352,7 @@ test("the archive cursor has its own kind", () => {
 
 test("the client caches projections but never a capability", () => {
   const client = stripComments(
-    read("apps/faithful-ios/Sources/FaithfulKit/Media/MediaClient.swift"),
+    read("apps/faithform-ios/Sources/FaithFormKit/Media/MediaClient.swift"),
     "a.swift",
   );
   const grant = client.slice(client.indexOf("public func grant("));
@@ -368,7 +368,7 @@ test("the client caches projections but never a capability", () => {
 test("only a staff action sets a publication timestamp", () => {
   // Not a webhook, not a filename, not a provider URL.
   const webhook = stripComments(read("app/api/stream/recording-complete/route.ts"), "a.ts");
-  for (const forbidden of ["mobile_visibility", "mobile_published_at", "publishToFaithful"]) {
+  for (const forbidden of ["mobile_visibility", "mobile_published_at", "publishToFaithForm"]) {
     assert.ok(!webhook.includes(forbidden), `the relay webhook sets ${forbidden}`);
   }
 
@@ -378,14 +378,14 @@ test("only a staff action sets a publication timestamp", () => {
 });
 
 test("publishing requires an admin and an exact tenant predicate", () => {
-  const actions = stripComments(read("app/dashboard/live-streaming/faithful-actions.ts"), "a.ts");
+  const actions = stripComments(read("app/dashboard/live-streaming/faithform-actions.ts"), "a.ts");
   assert.match(actions, /if \(!auth\.isAdmin\)/);
   assert.match(actions, /const auth = await requireAdmin\(\)/);
 
   const publication = stripComments(read("lib/media/v1/publication.ts"), "a.ts");
   // An id from another church matches nothing rather than being published by a
   // guess.
-  const publish = publication.slice(publication.indexOf("export async function publishToFaithful"));
+  const publish = publication.slice(publication.indexOf("export async function publishToFaithForm"));
   assert.match(publish, /\.eq\("church_id", input\.churchId\)/);
 });
 
@@ -456,7 +456,7 @@ test("no download, cast, chat or donation surface exists in the media path", () 
 });
 
 test("the media contract exposes no view-tracking identity", () => {
-  const schema = JSON.parse(read("contracts/faithful/v1/schema.json"));
+  const schema = JSON.parse(read("contracts/faithform/v1/schema.json"));
   const media = JSON.stringify([
     schema.$defs.ArchiveItem,
     schema.$defs.MediaDetail,
@@ -638,7 +638,7 @@ test("eligibility is decided from bytes, not from a name or a claim", () => {
 });
 
 test("no visitor-facing type carries a codec, a container, or a refusal reason", () => {
-  const schema = JSON.parse(read("contracts/faithful/v1/schema.json"));
+  const schema = JSON.parse(read("contracts/faithform/v1/schema.json"));
   const visitorFacing = JSON.stringify([
     schema.$defs.ArchiveItem,
     schema.$defs.MediaDetail,
@@ -739,7 +739,7 @@ function withInjectedCopy<T>(
 }
 
 test("the capability-in-URL sweep fails on an injected violation", () => {
-  const target = "apps/faithful-android/app/src/main/kotlin/io/faithform/faithful/media/Media3PlayerAdapter.kt";
+  const target = "apps/faithform-android/app/src/main/kotlin/io/faithform/app/media/Media3PlayerAdapter.kt";
 
   const hasQueryCapability = (path: string) =>
     stripComments(readFileSync(path, "utf8"), path).includes("?cap=");
@@ -767,7 +767,7 @@ test("the capability-in-URL sweep fails on an injected violation", () => {
 });
 
 test("the download sweep fails on an injected violation", () => {
-  const target = "apps/faithful-ios/Sources/FaithfulKit/Media/AVPlayerAdapter.swift";
+  const target = "apps/faithform-ios/Sources/FaithFormKit/Media/AVPlayerAdapter.swift";
 
   // The walk finds the real file — asserted directly rather than inferred from
   // whether an injection was caught.
@@ -799,7 +799,7 @@ test("a comment naming a forbidden symbol is not a violation", () => {
   // The counterpart risk. These files explain at length *why* there is no
   // download manager and no cast provider, and a sweep that matched its own
   // rationale would be a permanent false positive.
-  const adapter = read("apps/faithful-android/app/src/main/kotlin/io/faithform/faithful/media/Media3PlayerAdapter.kt");
+  const adapter = read("apps/faithform-android/app/src/main/kotlin/io/faithform/app/media/Media3PlayerAdapter.kt");
   assert.ok(adapter.includes("DownloadManager"), "the rationale no longer names the symbol");
   assert.deepEqual(sweep(["DownloadManager"], PRODUCTION_NATIVE), []);
 });

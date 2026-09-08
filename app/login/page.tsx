@@ -17,7 +17,7 @@ export default async function LoginPage() {
   if (user) {
     // Route by what the account actually is, not by the fact of a session.
     // Sending every authenticated user to /dashboard is what used to trap
-    // Faithful visitor accounts in a /login ↔ /dashboard redirect loop that
+    // FaithForm visitor accounts in a /login ↔ /dashboard redirect loop that
     // rendered as a blank page.
     const hasChurchMembership = Boolean(await getChurchAuth());
     const landing = resolveSignedInLanding({
@@ -46,7 +46,7 @@ export default async function LoginPage() {
 }
 
 /**
- * A signed-in account with no dashboard to show — a Faithful visitor account,
+ * A signed-in account with no dashboard to show — a FaithForm visitor account,
  * or a staff account whose membership was removed. Rendered as a page, never
  * another redirect, and it grants nothing: the only actions are leaving and
  * knowing where to go instead.
@@ -61,8 +61,8 @@ function NoDashboardAccess() {
         </h1>
         <p className="mt-4 text-base text-muted-foreground">
           You&apos;re signed in, but this account isn&apos;t on a church&apos;s
-          staff team. If you created your account in the Faithful app, you&apos;re
-          all set — open Faithful on your phone to continue.
+          staff team. If you created your account in the FaithForm app, you&apos;re
+          all set — open FaithForm on your phone to continue.
         </p>
         <p className="mt-3 text-base text-muted-foreground">
           If you should have staff access, ask your church admin to invite you.

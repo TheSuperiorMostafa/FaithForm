@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 import { MOBILE_ERROR_CODE_LIST } from "@/lib/mobile/v1/errors";
-import { RELATIONSHIP_STATES, JOIN_POLICIES } from "@/lib/faithful/relationship-state";
+import { RELATIONSHIP_STATES, JOIN_POLICIES } from "@/lib/faithform/relationship-state";
 
 /**
  * The canonical mobile contract.
@@ -1053,7 +1053,7 @@ export const givingHomeSchema = z
     /**
      * Whether this church runs recurring gifts at all.
      *
-     * Faithful gives one-time. This exists so the app can say where recurring
+     * FaithForm gives one-time. This exists so the app can say where recurring
      * lives rather than pretending it does not exist.
      */
     recurringAvailable: z.boolean(),

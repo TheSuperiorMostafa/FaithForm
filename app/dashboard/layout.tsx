@@ -17,7 +17,7 @@ export default async function DashboardLayout({
     getFeatureAccess(),
   ]);
 
-  // No staff membership, no dashboard — including for a signed-in Faithful
+  // No staff membership, no dashboard — including for a signed-in FaithForm
   // visitor who arrived here on a stale or misrouted link. `/login` is the one
   // place that decides what a signed-in account without a church should see,
   // and it renders that state rather than bouncing back here: this pair used

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Builds the Faithful iOS **app** — unsigned, for a device target.
+# Builds the FaithForm iOS **app** — unsigned, for a device target.
 #
 # Deterministic on purpose:
 #   * the project is generated from `project.yml`, so there is no committed
@@ -14,7 +14,7 @@
 
 set -euo pipefail
 
-cd "$(dirname "$0")/../apps/faithful-ios"
+cd "$(dirname "$0")/../apps/faithform-ios"
 
 if ! command -v xcodegen >/dev/null 2>&1; then
   echo "xcodegen is not installed. Run: brew install xcodegen" >&2
@@ -27,12 +27,12 @@ fi
 
 xcodegen generate --spec project.yml --quiet
 
-DERIVED="${IOS_APP_DERIVED_DATA:-${TMPDIR:-/tmp}/faithful-ios-app}"
+DERIVED="${IOS_APP_DERIVED_DATA:-${TMPDIR:-/tmp}/faithform-ios-app}"
 LOG="${DERIVED}.log"
 
 COMMON=(
-  -project Faithful.xcodeproj
-  -scheme Faithful
+  -project FaithForm.xcodeproj
+  -scheme FaithForm
   -derivedDataPath "$DERIVED"
   CODE_SIGNING_ALLOWED=NO
   CODE_SIGNING_REQUIRED=NO
@@ -88,7 +88,7 @@ fi
 # A warning inside a package dependency is excluded for the same reason: this
 # build cannot fix Stripe's SDK.
 if grep -E "^/.*:[0-9]+:[0-9]+: warning:" "$LOG" 2>/dev/null \
-  | grep -vE "(DerivedData|SourcePackages|\.build|Faithful\.xcodeproj)/" \
+  | grep -vE "(DerivedData|SourcePackages|\.build|FaithForm\.xcodeproj)/" \
   | sort -u | grep . >&2; then
   echo "iOS app build produced warnings in this repository's sources." >&2
   exit 1

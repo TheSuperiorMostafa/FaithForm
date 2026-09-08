@@ -5,7 +5,7 @@ import { getStreamRelaySettings } from "@/lib/stream/relay";
  *
  * Two routes now proxy HLS: the website's `/api/stream/hls/[...path]`, which
  * authenticates with a query-string capability because that is what an
- * `hls.js` player in a browser can carry, and Faithful's
+ * `hls.js` player in a browser can carry, and FaithForm's
  * `/api/media/v1/live/[...path]`, which authenticates with a bearer header
  * because that is what a native player can carry without putting a credential
  * in a URL.

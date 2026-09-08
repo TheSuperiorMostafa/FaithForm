@@ -20,7 +20,7 @@ const NEW_TABLES = [
   "attendance_kiosk_credentials",
 ];
 
-test("the migration sorts after every prior Faithful migration", () => {
+test("the migration sorts after every prior FaithForm migration", () => {
   const files = readdirSync("supabase/migrations")
     .filter((name) => /^\d{4}_.+\.sql$/.test(name))
     .sort();

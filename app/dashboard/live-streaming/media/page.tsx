@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { FaithfulPublishingPanel } from "@/components/live-streaming/faithful-publishing-panel";
+import { FaithFormPublishingPanel } from "@/components/live-streaming/faithform-publishing-panel";
 import { MediaList } from "@/components/live-streaming/media-list";
 import { getChurchAuth } from "@/lib/auth/church";
 import { listMediaItems } from "@/lib/stream/media-library";
@@ -26,7 +26,7 @@ export default async function LiveStreamingMediaPage() {
         </p>
       </div>
 
-      <FaithfulPublishingPanel />
+      <FaithFormPublishingPanel />
 
       <MediaList items={items} />
     </div>

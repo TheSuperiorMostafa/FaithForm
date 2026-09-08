@@ -14,10 +14,10 @@ import {
 } from "@/lib/media/v1/rendition";
 
 /**
- * Publishing to Faithful, from the dashboard.
+ * Publishing to FaithForm, from the dashboard.
  *
  * The dashboard is where publishing decisions are made, and this is the only
- * module that makes them. Faithful reads a projection; it never writes one.
+ * module that makes them. FaithForm reads a projection; it never writes one.
  *
  * Two rules shape everything here:
  *
@@ -70,7 +70,7 @@ export type MediaPublicationState =
   /** A playable file exists and nobody has published it. */
   | "ready"
   /**
-   * A file exists, and Faithful cannot play it on both platforms.
+   * A file exists, and FaithForm cannot play it on both platforms.
    *
    * Its own state rather than a variant of `ready`, because the action is
    * completely different: `ready` needs a decision, this needs a different file.
@@ -78,7 +78,7 @@ export type MediaPublicationState =
   | "needs_conversion"
   /** Not yet probed. Cannot be published until it has been. */
   | "unverified"
-  /** Visible in Faithful. */
+  /** Visible in FaithForm. */
   | "published"
   /** Was visible; a staff member took it down. */
   | "unpublished"
@@ -104,7 +104,7 @@ export type PublishableItem = {
   /** Whether this item is in a state a human is allowed to publish. */
   canPublish: boolean;
   /**
-   * Whether Faithful can actually play it, proven from the object's own bytes.
+   * Whether FaithForm can actually play it, proven from the object's own bytes.
    *
    * Always true for a live event: there is no stored file to verify, and a live
    * stream's eligibility is the session check that was already there.
@@ -276,7 +276,7 @@ export type PublicationResult =
         | "not_publishable"
         | "invalid_poster"
         | "unavailable"
-        /** Faithful cannot play the file. `explanation` says what to do. */
+        /** FaithForm cannot play the file. `explanation` says what to do. */
         | "not_playable"
         /** A concurrent re-probe replaced the verdict. Try again. */
         | "verification_stale"
@@ -294,14 +294,14 @@ export type PublicationResult =
 const TABLE = { live: "stream_events", recording: "stream_recordings" } as const;
 
 /**
- * Makes an item visible in Faithful.
+ * Makes an item visible in FaithForm.
  *
  * The publishability check is the important half. A recording that is still
  * `processing` has no playable file behind it, and a cancelled event never
  * happened — publishing either would put a card in front of a congregation that
  * cannot be played. Both are refused here rather than filtered later.
  */
-export async function publishToFaithful(
+export async function publishToFaithForm(
   input: {
     churchId: string;
     kind: "live" | "recording";
@@ -449,6 +449,10 @@ export async function publishToFaithful(
       };
     }
 
+    // Still `_faithful`, and deliberately. The function was created by an
+    // applied migration and lives in Postgres under that name; renaming it here
+    // would not rename it there, it would only stop finding it. Same reason the
+    // six 0054-0068 migration files keep their original filenames.
     const { data, error } = await db.rpc("publish_recording_to_faithful", {
       p_recording_id: input.id,
       p_church_id: input.churchId,
@@ -547,7 +551,7 @@ export async function publishToFaithful(
  * capability — which is what stops a device that is *already watching* at its
  * next refresh, roughly a minute later, instead of at the end of the sermon.
  */
-export async function unpublishFromFaithful(
+export async function unpublishFromFaithForm(
   input: {
     churchId: string;
     kind: "live" | "recording";
@@ -616,7 +620,7 @@ function recordingState(row: Record<string, unknown>): MediaPublicationState {
   if (row.mobile_revoked_at) return "revoked";
 
   // **Eligibility outranks intent.** A recording a church published and which
-  // has since been proved unplayable is not "in Faithful" — the projections
+  // has since been proved unplayable is not "in FaithForm" — the projections
   // stopped serving it the moment the verdict was written — so the dashboard
   // must not keep claiming it is.
   const verified = Boolean(row.mobile_rendition_verified_at);

@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { MAX_BULK_MEMBERS, markPresentBulk } from "@/lib/attendance/v2/roster";
-import { VisitorError } from "@/lib/faithful/errors";
+import { VisitorError } from "@/lib/faithform/errors";
 
 const batchSql = readFileSync("supabase/migrations/0056_attendance_batch.sql", "utf8");
 const roster = readFileSync("lib/attendance/v2/roster.ts", "utf8");
@@ -17,7 +17,7 @@ const sql = batchSql.replace(/--.*$/gm, "");
  * A fake `rpc` that records what it was called with and returns a canned row
  * set. The real semantics are proven against Postgres in
  * `tests/database/attendance-concurrency.test.ts`; what is proven here is that
- * the TypeScript wrapper hands the database the right call and faithfully
+ * the TypeScript wrapper hands the database the right call and faithformly
  * relays what comes back.
  */
 function fakeClient(

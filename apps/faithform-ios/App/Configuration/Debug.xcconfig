@@ -1,0 +1,21 @@
+#include "Base.xcconfig"
+
+FAITHFORM_BUNDLE_ID_SUFFIX = .debug
+FAITHFORM_ENVIRONMENT_KEY = development
+
+// A simulator reaches the host machine on localhost. A device does not, and a
+// developer pointing a device at a laptop sets this to that laptop's LAN
+// address for the duration.
+FAITHFORM_API_ORIGIN = http:/$()/localhost:3000
+
+// Debug affordances are compiled in here and nowhere else.
+FAITHFORM_ALLOW_DEBUG_CONTROLS = YES
+
+// Point at a local Supabase, or a project you own. Never a church's.
+//
+// Filled from Local.xcconfig (gitignored) via the FAITHFORM_DEV_* names, so a
+// developer's own project never lands in the repository and a build without
+// one still fails closed: the sign-in screen renders, and submitting explains
+// that no identity provider is configured.
+FAITHFORM_SUPABASE_URL = $(FAITHFORM_DEV_SUPABASE_URL)
+FAITHFORM_SUPABASE_ANON_KEY = $(FAITHFORM_DEV_SUPABASE_ANON_KEY)

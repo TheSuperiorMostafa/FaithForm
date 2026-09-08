@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Compiles FaithfulKit **for iOS**, which `swift build` does not.
+# Compiles FaithFormKit **for iOS**, which `swift build` does not.
 #
 # `swift build` and `swift test` run for the host — macOS. Every `#if os(iOS)`
 # block in this package is therefore invisible to them: the camera scanner, the
@@ -16,13 +16,13 @@
 # ## Why this is now a thin wrapper
 #
 # When it was written there was no iOS application, so it built the package
-# directly with `xcodebuild -scheme Faithful`. Prompt 12 added an app target, and
-# `Faithful.xcodeproj` now sits in the same directory — so that same command
+# directly with `xcodebuild -scheme FaithForm`. Prompt 12 added an app target, and
+# `FaithForm.xcodeproj` now sits in the same directory — so that same command
 # resolves to the *project*, not the package, and fails asking for a development
 # team.
 #
 # Rather than fight the ambiguity, this delegates. `build-ios-app.sh` compiles
-# the app for a device, and the app depends on FaithfulKit, so FaithfulKit is
+# the app for a device, and the app depends on FaithFormKit, so FaithFormKit is
 # compiled for iOS as part of it — with the same warnings-as-errors rule. The
 # check this script exists for is performed; it is simply performed by the build
 # that now subsumes it.

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { compareSecret } from "@/lib/security/compare-secret";
-import { runNotificationWorker } from "@/lib/faithful/push/outbox";
+import { runNotificationWorker } from "@/lib/faithform/push/outbox";
 
 /**
  * The notification delivery worker's invocation path.

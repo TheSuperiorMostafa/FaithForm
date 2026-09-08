@@ -13,7 +13,7 @@ import { featureActionError } from "@/lib/features/guard";
 import {
   applyMobilePublication,
   withdrawMobilePublication,
-} from "@/lib/faithful/push/publish-hook";
+} from "@/lib/faithform/push/publish-hook";
 import { createClient } from "@/lib/supabase/server";
 import { isAppleEventId } from "@/lib/integrations/apple-calendar";
 import { patchChurchCalendarEvent } from "@/lib/integrations/calendar";
@@ -68,7 +68,7 @@ function parsePublishForm(formData: FormData) {
   const socialGraphicPath = String(formData.get("social_graphic_path") ?? "").trim();
   const socialGraphicUrl = String(formData.get("social_graphic_url") ?? "").trim();
 
-  // Faithful publication. Absent means "not in the app" — a publish that does
+  // FaithForm publication. Absent means "not in the app" — a publish that does
   // not mention the app must not start appearing in it.
   const mobileVisibilityRaw = String(formData.get("mobile_visibility") ?? "none").trim();
   const mobileVisibility = (
@@ -298,7 +298,7 @@ export async function publishAnnouncement(
   if (!mobileResult.applied && payload.mobileVisibility !== "none") {
     errors.push(
       mobileResult.unavailableReason === "migration_0054_missing"
-        ? "Saved, but the app feed is unavailable — run `pnpm db:faithful-push`."
+        ? "Saved, but the app feed is unavailable — run `pnpm db:faithform-push`."
         : "Saved, but could not publish to the app.",
     );
   }
@@ -603,7 +603,7 @@ export async function unsubmitAnnouncement(
   }
 
   // Taking it back from the web takes it out of the app as well, and cancels
-  // anything not yet delivered. Leaving it visible in Faithful after an
+  // anything not yet delivered. Leaving it visible in FaithForm after an
   // unsubmit would be the worst kind of stale.
   await withdrawMobilePublication(ctx.churchId, id).catch(() => undefined);
 

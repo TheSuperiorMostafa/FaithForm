@@ -4,7 +4,7 @@ import { readJsonBody } from "@/lib/mobile/v1/protocol";
 import { playbackGrantRequestSchema } from "@/lib/mobile/v1/contract";
 import { grantPlayback } from "@/lib/media/v1/media-service";
 import { checkRateLimit } from "@/lib/security/rate-limit";
-import { getVisitorAccount } from "@/lib/faithful/account";
+import { getVisitorAccount } from "@/lib/faithform/account";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
  *
  * **Authenticated, unlike the list and detail routes.** Browsing a church's
  * public sermons signed out is the same exposure its website already has;
- * *watching* through Faithful mints a capability that must be scoped to an
+ * *watching* through FaithForm mints a capability that must be scoped to an
  * account and revocable with that account's relationship, and there is no
  * account to scope it to for an anonymous caller.
  *

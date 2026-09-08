@@ -172,7 +172,7 @@ export const FEATURES: FeatureDefinition[] = [
     key: "member_app",
     label: "Member App",
     description:
-      "The church's presence in the Faithful app: discovery, join requests, and invitation links.",
+      "The church's presence in the FaithForm app: discovery, join requests, and invitation links.",
     href: "/dashboard/app",
     icon: Smartphone,
     routes: ["/dashboard/app"],

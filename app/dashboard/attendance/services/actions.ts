@@ -7,7 +7,7 @@ import { revalidatePath } from "next/cache";
 import { getChurchAuth } from "@/lib/auth/church";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { featureActionError } from "@/lib/features/guard";
-import { fail, toVisitorResult, type VisitorResult } from "@/lib/faithful/errors";
+import { fail, toVisitorResult, type VisitorResult } from "@/lib/faithform/errors";
 import {
   cancelOccurrence,
   createManualOccurrence,
@@ -321,7 +321,7 @@ export async function startCheckinDisplay(input: {
       // A pastor is not the person who edits an environment variable, and a
       // message that names one is both unhelpful to them and one more place a
       // deployment detail travels to a browser. The variable is named in
-      // `docs/faithful/P8_OPERATIONS_RUNBOOK.md`, where the person who can act
+      // `docs/faithform/P8_OPERATIONS_RUNBOOK.md`, where the person who can act
       // on it will look. `tests/security/checkin-privacy.test.ts` keeps it out
       // of anything that ships to a client.
       return fail(

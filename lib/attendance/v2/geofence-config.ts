@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { VisitorError } from "@/lib/faithful/errors";
-import { getVisitorAccount } from "@/lib/faithful/account";
+import { VisitorError } from "@/lib/faithform/errors";
+import { getVisitorAccount } from "@/lib/faithform/account";
 import {
   hasAutomaticAttendanceConsent,
   resolveSelfCheckInMember,
@@ -275,7 +275,7 @@ export async function buildGeofenceConfiguration(
 
   const regions: GeofenceRegion[] = positioned.map((campus) => ({
     // Stable across refreshes so the OS updates rather than re-registers.
-    regionId: `faithful.campus.${campus.id as string}`,
+    regionId: `faithform.campus.${campus.id as string}`,
     campusName: campus.name as string,
     latitude: Number(campus.latitude),
     longitude: Number(campus.longitude),

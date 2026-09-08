@@ -79,7 +79,7 @@ test("browser and native stream surfaces cannot serialize the persistent publish
   assert.match(publishAuth, /body\.action === "read"/);
   // The relay's Basic credential is attached to the *upstream* request and
   // never returned. Prompt 9 moved that half into `lib/stream/relay-upstream`
-  // so the website route and Faithful's header-authenticated live route reach
+  // so the website route and FaithForm's header-authenticated live route reach
   // the relay through one contract instead of two copies that could drift.
   //
   // The property is therefore asserted in its new home — and, more strongly

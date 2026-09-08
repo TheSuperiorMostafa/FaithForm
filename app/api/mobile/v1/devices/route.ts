@@ -5,7 +5,7 @@ import { registerDeviceRequestSchema } from "@/lib/mobile/v1/contract";
 import {
   registerInstallation,
   retireInstallation,
-} from "@/lib/faithful/push/installations";
+} from "@/lib/faithform/push/installations";
 
 export const dynamic = "force-dynamic";
 

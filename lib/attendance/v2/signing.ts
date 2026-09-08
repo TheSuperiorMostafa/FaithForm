@@ -1,7 +1,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
 /**
- * The signing authority behind every Faithful check-in capability.
+ * The signing authority behind every FaithForm check-in capability.
  *
  * Prompt 6 signed QR codes with `ATTENDANCE_QR_SECRET` directly: one key, one
  * format, no key identifier, and no separation between what a signature was
@@ -15,7 +15,7 @@ import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
  * **Domain separation.** No capability is ever signed with the master key.
  * Every type derives its own sub-key:
  *
- *     subKey(type) = HMAC(master, "faithform.faithful.attendance.v1|" + type)
+ *     subKey(type) = HMAC(master, "faithform.faithform.attendance.v1|" + type)
  *
  * A token minted as a display capability therefore cannot verify as a check-in
  * token even if an attacker rewrote its body, because the two were signed under
@@ -45,7 +45,7 @@ import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
  * credential; `tests/security/checkin-privacy.test.ts` sweeps for it.
  */
 
-const DOMAIN = "faithform.faithful.attendance.v1";
+const DOMAIN = "faithform.faithform.attendance.v1";
 
 /** Every distinct purpose a key may be used for. Each gets its own sub-key. */
 export const CAPABILITY_TYPES = [

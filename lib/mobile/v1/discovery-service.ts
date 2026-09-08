@@ -1,9 +1,9 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { VisitorError } from "@/lib/faithful/errors";
-import { getVisitorAccount, ensureVisitorAccount } from "@/lib/faithful/account";
-import { discoverChurches, getPublicChurchProfile } from "@/lib/faithful/discovery";
-import { findNearbyChurches } from "@/lib/faithful/nearby";
-import type { RelationshipState } from "@/lib/faithful/relationship-state";
+import { VisitorError } from "@/lib/faithform/errors";
+import { getVisitorAccount, ensureVisitorAccount } from "@/lib/faithform/account";
+import { discoverChurches, getPublicChurchProfile } from "@/lib/faithform/discovery";
+import { findNearbyChurches } from "@/lib/faithform/nearby";
+import type { RelationshipState } from "@/lib/faithform/relationship-state";
 import type {
   ChurchProfileDto,
   DiscoveredChurchDto,

@@ -198,7 +198,7 @@ export const PORTABLE_BRANDS = new Set([
  * modern Android devices do, but Android support is hardware-dependent and
  * `MediaCodec` availability varies by device — so it cannot be promised for
  * *both* platforms from a server-side check. A church whose pipeline produces
- * HEVC keeps the recording; it simply cannot publish it to Faithful until the
+ * HEVC keeps the recording; it simply cannot publish it to FaithForm until the
  * pipeline emits H.264.
  */
 export const PORTABLE_VIDEO_CODECS = new Set(["avc1", "avc3"]);
@@ -218,7 +218,7 @@ const MEDIA_HANDLERS = new Set(["vide", "soun"]);
  * Sample entry types that mean the samples are protected.
  *
  * A protected track is refused outright rather than unwrapped to its original
- * format: Faithful ships no key acquisition and no CDM, so an encrypted
+ * format: FaithForm ships no key acquisition and no CDM, so an encrypted
  * rendition is unplayable regardless of what `frma` says was underneath.
  */
 const PROTECTED_SAMPLE_ENTRIES = new Set(["encv", "enca", "encs", "enct", "encf", "encm"]);
@@ -891,7 +891,7 @@ function judgeAudio(config: AudioConfig): RenditionReason | null {
 }
 
 /**
- * Decides whether a recording may be published to Faithful.
+ * Decides whether a recording may be published to FaithForm.
  *
  * The order of the checks is the order in which a person would want to be told:
  * the container first, then which codecs, then how those codecs are configured.
@@ -1025,7 +1025,7 @@ export function assessRendition(
 export function staffExplanation(reason: RenditionReason): string {
   switch (reason) {
     case "ok":
-      return "Ready for the Faithful app.";
+      return "Ready for the FaithForm app.";
     case "container_matroska":
     case "container_unrecognised":
     case "container_brand_unsupported":
@@ -1039,7 +1039,7 @@ export function staffExplanation(reason: RenditionReason): string {
       return "This recording's video or audio settings are outside what every phone can play. Check the streaming box's encoder settings, then record or upload it again.";
     case "codec_config_missing":
     case "codec_config_conflict":
-      return "Faithful can't tell how this recording was encoded, so it can't promise phones will play it. It needs re-recording or converting.";
+      return "FaithForm can't tell how this recording was encoded, so it can't promise phones will play it. It needs re-recording or converting.";
     case "track_encrypted":
       return "This recording is protected, and the app has no way to unlock it.";
     case "no_playable_track":
@@ -1053,11 +1053,11 @@ export function staffExplanation(reason: RenditionReason): string {
     case "file_missing":
       return "The file for this recording is no longer in storage.";
     case "object_changed":
-      return "This recording's file changed after it was checked. Faithful is checking it again.";
+      return "This recording's file changed after it was checked. FaithForm is checking it again.";
     case "object_identity_unavailable":
     case "probe_timeout":
     case "probe_unavailable":
-      return "Faithful couldn't check this recording just now. Try again in a few minutes.";
+      return "FaithForm couldn't check this recording just now. Try again in a few minutes.";
   }
 }
 

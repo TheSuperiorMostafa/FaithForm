@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { VisitorError } from "@/lib/faithful/errors";
-import { getVisitorAccount } from "@/lib/faithful/account";
+import { VisitorError } from "@/lib/faithform/errors";
+import { getVisitorAccount } from "@/lib/faithform/account";
 import { resolveRelationshipState } from "@/lib/mobile/v1/discovery-service";
 import {
   issueMediaCapability,
@@ -13,7 +13,7 @@ import {
 } from "@/lib/media/v1/rendition-check";
 
 /**
- * The Faithful media surface: what a church has published, and permission to
+ * The FaithForm media surface: what a church has published, and permission to
  * watch it.
  *
  * Every function here re-derives authorization from the caller's own

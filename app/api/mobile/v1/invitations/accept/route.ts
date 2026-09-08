@@ -2,7 +2,7 @@ import { MobileError } from "@/lib/mobile/v1/errors";
 import { authenticatedRoute } from "@/lib/mobile/v1/handler";
 import { readJsonBody, requireIdempotencyKey } from "@/lib/mobile/v1/protocol";
 import { acceptInvitationRequestSchema } from "@/lib/mobile/v1/contract";
-import { acceptJoinInvitation } from "@/lib/faithful/relationships";
+import { acceptJoinInvitation } from "@/lib/faithform/relationships";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";

@@ -142,7 +142,7 @@ export function CheckinDisplayBoard() {
           of a live capability. */}
       <img
         src={frame.qrImage}
-        alt="Scan this code with the Faithful app to check in"
+        alt="Scan this code with the FaithForm app to check in"
         className="h-auto w-[min(70vh,70vw)] max-w-[720px]"
       />
 

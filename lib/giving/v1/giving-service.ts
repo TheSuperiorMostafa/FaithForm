@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { VisitorError } from "@/lib/faithful/errors";
-import { getVisitorAccount } from "@/lib/faithful/account";
+import { VisitorError } from "@/lib/faithform/errors";
+import { getVisitorAccount } from "@/lib/faithform/account";
 import { isChurchFeatureEnabled } from "@/lib/features/access";
 import { resolveRelationshipState } from "@/lib/mobile/v1/discovery-service";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -13,7 +13,7 @@ import {
 } from "@/lib/giving/v1/payment-provider";
 
 /**
- * Faithful's giving surface.
+ * FaithForm's giving surface.
  *
  * Every function here re-derives authorization from the caller's own
  * relationship on every call, and every one of them decides the money — the
@@ -125,7 +125,7 @@ export type GivingHomeDto = {
    * Whether this church runs recurring gifts at all.
    *
    * Reported so the app can be truthful about what exists rather than silent.
-   * Faithful gives one-time; recurring lives in the church's existing donor
+   * FaithForm gives one-time; recurring lives in the church's existing donor
    * portal, and saying so is better than pretending it does not exist.
    */
   recurringAvailable: boolean;
@@ -171,7 +171,7 @@ export async function getGivingHome(input: {
   }));
 
   // Whether the church has ever run a recurring gift. A fact about the church's
-  // own rows, not a claim about what Faithful can do with it.
+  // own rows, not a claim about what FaithForm can do with it.
   const { count } = await db
     .from("giving_subscriptions")
     .select("id", { count: "exact", head: true })
@@ -372,9 +372,9 @@ export async function startDonation(
         church_id: resolved.church.churchId,
         fund_id: input.fundId,
         gift_type: "one_time",
-        source: "faithful_mobile",
-        faithful_attempt_id: attemptId,
-        faithful_account_id: account.id,
+        source: "faithform_mobile",
+        faithform_attempt_id: attemptId,
+        faithform_account_id: account.id,
       },
       receiptEmail: null,
     });

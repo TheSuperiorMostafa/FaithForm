@@ -3,7 +3,7 @@
  *
  * This decision used to be implicit — the login page sent every authenticated
  * user to /dashboard, and the dashboard layout sent everyone without a church
- * membership back to /login. For a Faithful visitor account (real Supabase
+ * membership back to /login. For a FaithForm visitor account (real Supabase
  * identity, no `church_users` row) those two rules chased each other into a
  * redirect loop the browser rendered as a blank page. Making the decision a
  * total function ends that: every case has exactly one destination, and
@@ -20,7 +20,7 @@ export function resolveSignedInLanding(input: {
 }): SignedInLanding {
   if (input.hasChurchMembership) return { kind: "dashboard" };
   if (input.isPlatformAdmin) return { kind: "admin" };
-  // A visitor (Faithful) account, or a stale staff account whose membership
+  // A visitor (FaithForm) account, or a stale staff account whose membership
   // was removed. Rendered in place — redirecting anywhere signed-in-gated
   // would restart the loop, and granting access is not this function's call.
   return { kind: "no_dashboard_access" };

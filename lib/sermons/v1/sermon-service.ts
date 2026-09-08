@@ -1,9 +1,9 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { VisitorError } from "@/lib/faithful/errors";
+import { VisitorError } from "@/lib/faithform/errors";
 import { resolveRelationshipState } from "@/lib/mobile/v1/discovery-service";
 
 /**
- * The Faithful sermon surface: the notes a church chose to hand out.
+ * The FaithForm sermon surface: the notes a church chose to hand out.
  *
  * Deliberately a much smaller projection than the Sermon Builder's own row. A
  * sermon record carries the preacher's manuscript, the style notes they wrote

@@ -2,7 +2,7 @@ import { MobileError } from "@/lib/mobile/v1/errors";
 import { authenticatedRoute } from "@/lib/mobile/v1/handler";
 import { readJsonBody } from "@/lib/mobile/v1/protocol";
 import { attendanceConsentRequestSchema } from "@/lib/mobile/v1/contract";
-import { recordConsent } from "@/lib/faithful/account";
+import { recordConsent } from "@/lib/faithform/account";
 
 export const dynamic = "force-dynamic";
 

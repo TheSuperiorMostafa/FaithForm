@@ -1,5 +1,5 @@
 import { authenticatedRoute } from "@/lib/mobile/v1/handler";
-import { requestJoin } from "@/lib/faithful/relationships";
+import { requestJoin } from "@/lib/faithform/relationships";
 
 export const dynamic = "force-dynamic";
 

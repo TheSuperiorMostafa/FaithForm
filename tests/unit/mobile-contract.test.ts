@@ -37,7 +37,7 @@ import {
 } from "@/lib/mobile/v1/protocol";
 import { mobileFailure, mobileSuccess, newRequestId } from "@/lib/mobile/v1/envelope";
 
-const FIXTURE_DIR = "contracts/faithful/v1/fixtures";
+const FIXTURE_DIR = "contracts/faithform/v1/fixtures";
 const fixtureNames = readdirSync(FIXTURE_DIR)
   .filter((name) => name.endsWith(".json"))
   .map((name) => name.replace(/\.json$/, ""))
@@ -105,7 +105,7 @@ test("a granted geofence configuration carries what an OS region needs", () => {
     assert.equal(typeof region.latitude, "number");
     assert.equal(typeof region.longitude, "number");
     assert.ok(region.radiusMeters > 0);
-    assert.match(region.regionId, /^faithful\.campus\./);
+    assert.match(region.regionId, /^faithform\.campus\./);
   }
 });
 
@@ -511,14 +511,14 @@ test("an error response is never cached, even on a cacheable route", async () =>
 // ---------------------------------------------------------------------------
 
 test("the generated JSON Schema matches the registered schemas", () => {
-  const schema = JSON.parse(readFileSync("contracts/faithful/v1/schema.json", "utf8"));
+  const schema = JSON.parse(readFileSync("contracts/faithform/v1/schema.json", "utf8"));
   const declared = Object.keys(CONTRACT_SCHEMAS).sort();
   const generated = Object.keys(schema.$defs).sort();
   assert.deepEqual(generated, declared);
 });
 
 test("no contract schema declares a sensitive field", () => {
-  const schema = JSON.parse(readFileSync("contracts/faithful/v1/schema.json", "utf8"));
+  const schema = JSON.parse(readFileSync("contracts/faithform/v1/schema.json", "utf8"));
   const serialized = JSON.stringify(schema).toLowerCase();
   for (const term of [
     "accesstoken", "refreshtoken", "servicerole", "apikey",
@@ -542,11 +542,11 @@ test("a string literal generates a String, not a Bool", () => {
   // and then failed to decode at run time — caught by a fixture test, not by
   // reading the generator.
   const swift = readFileSync(
-    "apps/faithful-ios/Sources/FaithfulKit/Generated/Contract.swift",
+    "apps/faithform-ios/Sources/FaithFormKit/Generated/Contract.swift",
     "utf8",
   );
   const kotlin = readFileSync(
-    "apps/faithful-android/core/contract/src/main/kotlin/io/faithform/faithful/contract/Contract.kt",
+    "apps/faithform-android/core/contract/src/main/kotlin/io/faithform/app/contract/Contract.kt",
     "utf8",
   );
 
@@ -570,7 +570,7 @@ test("a string literal generates a String, not a Bool", () => {
 });
 
 test("the media contract carries no provider or storage detail", () => {
-  const schema = JSON.parse(readFileSync("contracts/faithful/v1/schema.json", "utf8"));
+  const schema = JSON.parse(readFileSync("contracts/faithform/v1/schema.json", "utf8"));
   const media = JSON.stringify([
     schema.$defs.ArchiveItem,
     schema.$defs.MediaDetail,

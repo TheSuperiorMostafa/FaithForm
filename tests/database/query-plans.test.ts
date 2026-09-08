@@ -29,10 +29,10 @@ import test from "node:test";
  * item.
  */
 
-const DATABASE_URL = process.env.FAITHFUL_TEST_DATABASE_URL;
+const DATABASE_URL = process.env.FAITHFORM_TEST_DATABASE_URL;
 
 const SKIP_REASON =
-  "FAITHFUL_TEST_DATABASE_URL is not set — no disposable Postgres target. " +
+  "FAITHFORM_TEST_DATABASE_URL is not set — no disposable Postgres target. " +
   "The hot-path index coverage is UNOBSERVED until this runs.";
 
 if (/prod/i.test(DATABASE_URL ?? "")) {

@@ -23,7 +23,7 @@ export const dynamic = "force-dynamic";
  *
  * **An offline kiosk cannot claim anything.** If this request does not reach the
  * server there is no result, and the tablet's own code says so rather than
- * showing a tick and hoping. Faithful does not queue kiosk check-ins locally:
+ * showing a tick and hoping. FaithForm does not queue kiosk check-ins locally:
  * a queue would mean telling someone they were counted before anything had
  * decided that they were, and the honest failure is to say the desk is offline.
  */

@@ -1,5 +1,5 @@
 /**
- * The portable encoding policy: what Faithful will promise both platforms can
+ * The portable encoding policy: what FaithForm will promise both platforms can
  * play, and why each bound is where it is.
  *
  * This file is the policy. `rendition.ts` is the parser that enforces it. They
@@ -20,8 +20,8 @@
  *
  * Read from the projects, not assumed:
  *
- *   * **iOS 17+** — `apps/faithful-ios/Package.swift` declares `.iOS(.v17)`.
- *   * **Android API 26+ (8.0)** — `apps/faithful-android/app/build.gradle.kts`
+ *   * **iOS 17+** — `apps/faithform-ios/Package.swift` declares `.iOS(.v17)`.
+ *   * **Android API 26+ (8.0)** — `apps/faithform-android/app/build.gradle.kts`
  *     declares `minSdk = 26`.
  *
  * Android is the binding constraint on every bound below. iOS 17 runs only on

@@ -4,16 +4,16 @@ import test from "node:test";
 
 const read = (path: string) => readFileSync(path, "utf8");
 
-const relationships = read("lib/faithful/relationships.ts");
-const claims = read("lib/faithful/people-claims.ts");
-const campuses = read("lib/faithful/campuses.ts");
-const discovery = read("lib/faithful/discovery.ts");
-const invitations = read("lib/faithful/invitations.ts");
-const lifecycle = read("lib/faithful/account-lifecycle.ts");
-const account = read("lib/faithful/account.ts");
-const settingsActions = read("app/dashboard/settings/faithful-actions.ts");
+const relationships = read("lib/faithform/relationships.ts");
+const claims = read("lib/faithform/people-claims.ts");
+const campuses = read("lib/faithform/campuses.ts");
+const discovery = read("lib/faithform/discovery.ts");
+const invitations = read("lib/faithform/invitations.ts");
+const lifecycle = read("lib/faithform/account-lifecycle.ts");
+const account = read("lib/faithform/account.ts");
+const settingsActions = read("app/dashboard/settings/faithform-actions.ts");
 const claimActions = read("app/dashboard/people/claim-actions.ts");
-const staffRelationships = read("lib/faithful/staff-relationships.ts");
+const staffRelationships = read("lib/faithform/staff-relationships.ts");
 
 // ---------------------------------------------------------------------------
 // Tenant resolution
@@ -74,7 +74,7 @@ test("campus and service-time writes cannot cross a tenant", () => {
 // Visitors are not staff
 // ---------------------------------------------------------------------------
 
-test("no Faithful module ever writes church_users", () => {
+test("no FaithForm module ever writes church_users", () => {
   for (const [name, source] of [
     ["relationships", relationships],
     ["claims", claims],
@@ -92,7 +92,7 @@ test("no Faithful module ever writes church_users", () => {
   }
 });
 
-test("no Faithful module creates, merges or deletes a People record", () => {
+test("no FaithForm module creates, merges or deletes a People record", () => {
   for (const [name, source] of [
     ["claims", claims],
     ["lifecycle", lifecycle],
@@ -340,7 +340,7 @@ test("every visitor-facing list is bounded and cursor-paged", () => {
 // Logging hygiene
 // ---------------------------------------------------------------------------
 
-test("no Faithful module logs tokens, contacts, coordinates or People data", () => {
+test("no FaithForm module logs tokens, contacts, coordinates or People data", () => {
   for (const [name, source] of [
     ["relationships", relationships],
     ["claims", claims],

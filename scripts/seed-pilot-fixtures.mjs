@@ -18,10 +18,10 @@
 
 import { randomUUID } from "node:crypto";
 
-const url = process.env.FAITHFUL_TEST_DATABASE_URL;
+const url = process.env.FAITHFORM_TEST_DATABASE_URL;
 
 if (!url) {
-  console.error("FAITHFUL_TEST_DATABASE_URL is not set.");
+  console.error("FAITHFORM_TEST_DATABASE_URL is not set.");
   process.exit(1);
 }
 if (/prod|supabase\.co|amazonaws|rds\./i.test(url)) {

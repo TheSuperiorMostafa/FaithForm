@@ -47,7 +47,7 @@ function rewriteGiveSubdomain(request: NextRequest): NextResponse | null {
  * and still perfectly valid; it just arrives somewhere with no handler, so the
  * exchange never happens and a working link reads as a broken one. Every
  * emailed link fails the same way at once: magic link, password reset, invite,
- * and the Faithful app's confirmations.
+ * and the FaithForm app's confirmations.
  *
  * The right fix is the allow-list, and this is not a substitute for it. But an
  * auth code landing on the homepage has exactly one meaning, and the cost of

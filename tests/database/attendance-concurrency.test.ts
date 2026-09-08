@@ -13,7 +13,7 @@ import test from "node:test";
  * They skip — loudly, with a reason — when no disposable database is
  * configured. They must run in non-production CI once one is.
  *
- *   FAITHFUL_TEST_DATABASE_URL=postgres://…  pnpm test:database
+ *   FAITHFORM_TEST_DATABASE_URL=postgres://…  pnpm test:database
  *
  * The target must already have every migration applied. Nothing here is
  * destructive to anything it did not create: each test builds its own church,
@@ -21,10 +21,10 @@ import test from "node:test";
  * afterwards.
  */
 
-const DATABASE_URL = process.env.FAITHFUL_TEST_DATABASE_URL;
+const DATABASE_URL = process.env.FAITHFORM_TEST_DATABASE_URL;
 
 const SKIP_REASON =
-  "FAITHFUL_TEST_DATABASE_URL is not set — no disposable Postgres target. " +
+  "FAITHFORM_TEST_DATABASE_URL is not set — no disposable Postgres target. " +
   "This is an external dependency, not a passing test: the concurrency " +
   "invariant is UNOBSERVED until this runs.";
 
@@ -1519,7 +1519,7 @@ test("a detection cannot be replayed across account, member, occurrence or regio
       memberId: fixture.memberIds[0],
       accountId: account,
       attemptId: "attempt-replay",
-      regionId: "faithful.campus.a",
+      regionId: "faithform.campus.a",
       configVersion: 7003,
     });
     const id = detection.detection_id as string;
@@ -1528,7 +1528,7 @@ test("a detection cannot be replayed across account, member, occurrence or regio
       ["detection_wrong_account", { accountId: otherAccount }],
       ["detection_wrong_member", { memberId: fixture.memberIds[1] }],
       ["detection_wrong_occurrence", { occurrenceId: other.occurrenceId }],
-      ["detection_wrong_region", { regionId: "faithful.campus.elsewhere" }],
+      ["detection_wrong_region", { regionId: "faithform.campus.elsewhere" }],
       ["detection_stale_configuration", { configVersion: 7004 }],
     ];
 
@@ -1538,7 +1538,7 @@ test("a detection cannot be replayed across account, member, occurrence or regio
         occurrenceId: fixture.occurrenceId,
         memberId: fixture.memberIds[0],
         accountId: account,
-        regionId: "faithful.campus.a",
+        regionId: "faithform.campus.a",
         configVersion: 7003,
         ...override,
       });
@@ -1553,7 +1553,7 @@ test("a detection cannot be replayed across account, member, occurrence or regio
       occurrenceId: fixture.occurrenceId,
       memberId: fixture.memberIds[0],
       accountId: account,
-      regionId: "faithful.campus.a",
+      regionId: "faithform.campus.a",
       configVersion: 7003,
     });
     assert.equal(honest.ok, true);

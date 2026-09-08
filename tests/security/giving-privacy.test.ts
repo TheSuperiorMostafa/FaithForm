@@ -67,8 +67,8 @@ test("the sweeps inspect a real tree", () => {
   assert.ok(PRODUCTION_NATIVE.length > 40, `only ${PRODUCTION_NATIVE.length} production files`);
   assert.ok(SERVER_GIVING_FILES.length >= 8, `only ${SERVER_GIVING_FILES.length} server files`);
   for (const anchor of [
-    "apps/faithful-ios/Sources/FaithfulKit/Giving/Giving.swift",
-    "apps/faithful-android/core/giving/src/main/kotlin/io/faithform/faithful/giving/Giving.kt",
+    "apps/faithform-ios/Sources/FaithFormKit/Giving/Giving.swift",
+    "apps/faithform-android/core/giving/src/main/kotlin/io/faithform/app/giving/Giving.kt",
   ]) {
     assert.ok(PRODUCTION_NATIVE.includes(anchor), `${anchor} is not in the swept set`);
   }
@@ -132,8 +132,8 @@ test("the amount is bounded in three independent places", () => {
   assert.match(service, /ABSOLUTE_MAX_CENTS/);
 
   for (const native of [
-    "apps/faithful-ios/Sources/FaithfulKit/Giving/Giving.swift",
-    "apps/faithful-android/core/giving/src/main/kotlin/io/faithform/faithful/giving/Giving.kt",
+    "apps/faithform-ios/Sources/FaithFormKit/Giving/Giving.swift",
+    "apps/faithform-android/core/giving/src/main/kotlin/io/faithform/app/giving/Giving.kt",
   ]) {
     assert.match(read(native), /minimumCents|minAmountCents/);
   }
@@ -169,11 +169,11 @@ test("both platforms map a completed sheet to awaiting confirmation", () => {
   // The single most important line on each platform. A version that mapped
   // `completed` to a confirmed state would show a receipt for a gift that could
   // still fail.
-  const swift = read("apps/faithful-ios/Sources/FaithfulKit/Giving/Giving.swift");
+  const swift = read("apps/faithform-ios/Sources/FaithFormKit/Giving/Giving.swift");
   assert.match(swift, /case \.completed: return \.awaitingConfirmation\(attempt\)/);
 
   const kotlin = read(
-    "apps/faithful-android/core/giving/src/main/kotlin/io/faithform/faithful/giving/Giving.kt",
+    "apps/faithform-android/core/giving/src/main/kotlin/io/faithform/app/giving/Giving.kt",
   );
   assert.match(kotlin, /SheetOutcome\.COMPLETED -> DonationPhase\.AwaitingConfirmation\(attempt\)/);
 });
@@ -194,7 +194,7 @@ test("no card number is collected anywhere in the app", () => {
     "CardMultilineWidget",
     "CardFormView",
     "CardNumberEditText",
-    // Both: instrument and bank management, which Faithful does not have.
+    // Both: instrument and bank management, which FaithForm does not have.
     "CustomerSheet",
     "FinancialConnections",
     "USBankAccount",
@@ -219,7 +219,7 @@ test("no WebView checkout exists", () => {
   }
 });
 
-test("Faithful reuses the existing Stripe authority and creates no second one", () => {
+test("FaithForm reuses the existing Stripe authority and creates no second one", () => {
   const provider = stripComments(read("lib/giving/v1/payment-provider.ts"));
   // The platform key, the connected-account call shape and the application fee
   // all come from the modules the web flow already uses.
@@ -244,7 +244,7 @@ test("Faithful reuses the existing Stripe authority and creates no second one", 
 // ---------------------------------------------------------------------------
 
 test("no visitor-facing type carries a donor email, a Stripe id, or a fee", () => {
-  const schema = JSON.parse(read("contracts/faithful/v1/schema.json"));
+  const schema = JSON.parse(read("contracts/faithform/v1/schema.json"));
   const visitorFacing = JSON.stringify([
     schema.$defs.GivingFund,
     schema.$defs.GivingHome,
@@ -280,9 +280,9 @@ test("a receipt makes no tax claim", () => {
   const surfaces = [
     "lib/mobile/v1/contract.ts",
     "lib/giving/v1/giving-service.ts",
-    "components/giving/faithful-giving-panel.tsx",
-    "apps/faithful-ios/Sources/FaithfulKit/Giving/Giving.swift",
-    "apps/faithful-android/core/giving/src/main/kotlin/io/faithform/faithful/giving/Giving.kt",
+    "components/giving/faithform-giving-panel.tsx",
+    "apps/faithform-ios/Sources/FaithFormKit/Giving/Giving.swift",
+    "apps/faithform-android/core/giving/src/main/kotlin/io/faithform/app/giving/Giving.kt",
   ];
   for (const file of surfaces) {
     const code = read(file).toLowerCase();
@@ -303,11 +303,11 @@ test("no fabricated fundraising number exists", () => {
   // No totals, no goals, no donor counts, no progress bars. None of it is
   // supported by canonical data, and all of it would be a number a church would
   // then have to defend.
-  const panel = stripComments(read("components/giving/faithful-giving-panel.tsx"));
+  const panel = stripComments(read("components/giving/faithform-giving-panel.tsx"));
   for (const symbol of ["goalCents", "raisedCents", "donorCount", "progress", "percentFunded"]) {
     assert.ok(!panel.includes(symbol), `the panel shows ${symbol}`);
   }
-  const schema = read("contracts/faithful/v1/schema.json").toLowerCase();
+  const schema = read("contracts/faithform/v1/schema.json").toLowerCase();
   for (const symbol of ["goalcents", "raisedcents", "donorcount", "totalraised"]) {
     assert.ok(!schema.includes(symbol), `the contract carries ${symbol}`);
   }
@@ -332,9 +332,9 @@ test("a provider error never reaches a phone or a log", () => {
 
 test("both platforms redact identifiers before anything is logged", () => {
   for (const [file, symbol] of [
-    ["apps/faithful-ios/Sources/FaithfulKit/Giving/Giving.swift", "redactForLog"],
+    ["apps/faithform-ios/Sources/FaithFormKit/Giving/Giving.swift", "redactForLog"],
     [
-      "apps/faithful-android/core/giving/src/main/kotlin/io/faithform/faithful/giving/Giving.kt",
+      "apps/faithform-android/core/giving/src/main/kotlin/io/faithform/app/giving/Giving.kt",
       "redactForLog",
     ],
   ]) {
@@ -379,10 +379,10 @@ test("the existing web giving flow is untouched", () => {
   assert.match(webhooks, /claimStripeEvent|claim_stripe_webhook_event/);
 });
 
-test("the Faithful projection off the webhook cannot fail a church's reconciliation", () => {
+test("the FaithForm projection off the webhook cannot fail a church's reconciliation", () => {
   const webhooks = read("lib/stripe/webhooks.ts");
   const projection = webhooks.slice(
-    webhooks.indexOf("async function projectFaithfulAttempt"),
+    webhooks.indexOf("async function projectFaithFormAttempt"),
     webhooks.indexOf("async function handleSubscription"),
   );
   assert.ok(projection.length > 200, "the projection was renamed and this sweep went stale");

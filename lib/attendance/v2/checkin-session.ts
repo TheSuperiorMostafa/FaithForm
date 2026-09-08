@@ -57,7 +57,7 @@ import {
  * It is **not** proof of physical presence. Anyone willing to relay codes in
  * real time — a video call pointed at the screen, a person texting the code
  * every thirty seconds — defeats it, and no QR system can detect that from a
- * signature. Faithful does not claim otherwise anywhere in its interface or its
+ * signature. FaithForm does not claim otherwise anywhere in its interface or its
  * documentation. Presence evidence, where a church wants it, comes from the
  * geofence path built in Prompts 6 and 7, and even that is evidence rather than
  * proof.

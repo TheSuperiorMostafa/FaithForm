@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { VisitorError } from "@/lib/faithful/errors";
+import { VisitorError } from "@/lib/faithform/errors";
 import type {
   AttendanceOutcome,
   AttendanceReason,
@@ -93,7 +93,7 @@ export async function recordAttendance(
 }
 
 /**
- * Resolves the People record a Faithful account may check in as.
+ * Resolves the People record a FaithForm account may check in as.
  *
  * This is the gate the whole self-check-in story rests on. Email, phone,
  * device id, visitor relationship and coordinates establish nothing: only an

@@ -16,7 +16,7 @@ import { authorizeDelivery } from "@/lib/media/v1/media-service";
 export const dynamic = "force-dynamic";
 
 /**
- * Live HLS for the Faithful apps.
+ * Live HLS for the FaithForm apps.
  *
  * ## Why this exists beside `/api/stream/hls`
  *
@@ -27,7 +27,7 @@ export const dynamic = "force-dynamic";
  *
  * A native player can. `AVAssetResourceLoaderDelegate` on iOS and
  * `DefaultHttpDataSource.setDefaultRequestProperties` on Android both attach a
- * header to *every* request, playlist and segment alike. So Faithful's
+ * header to *every* request, playlist and segment alike. So FaithForm's
  * capability never enters a URL — not the playlist's, not a segment's, not a
  * screenshot's, and not a proxy log's.
  *
@@ -121,7 +121,7 @@ export async function GET(
   if (upstream.upstreamPath.endsWith(".m3u8")) {
     const playlist = await response.text();
     // **No query suffix.** The website's route passes `cap=…` here so its
-    // browser player can fetch segments; passing anything would put Faithful's
+    // browser player can fetch segments; passing anything would put FaithForm's
     // capability into every segment URL, which is precisely what the header
     // strategy exists to avoid.
     const rewritten = rewriteM3u8Playlist(playlist, request.nextUrl.pathname);

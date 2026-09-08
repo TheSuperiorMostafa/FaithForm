@@ -7,7 +7,7 @@ import {
   approvePeopleClaim,
   rejectPeopleClaim,
 } from "@/app/dashboard/people/claim-actions";
-import type { StaffClaimRow } from "@/lib/faithful/people-claims";
+import type { StaffClaimRow } from "@/lib/faithform/people-claims";
 import { Button } from "@/components/ui/button";
 import {
   Card,

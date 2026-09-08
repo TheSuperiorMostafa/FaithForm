@@ -4,7 +4,7 @@ import { applicationFeeAmount } from "@/lib/stripe/config";
 import { getStripe, isStripeConfigured } from "@/lib/stripe/client";
 
 /**
- * The one place Faithful talks to Stripe, behind an interface a test can supply.
+ * The one place FaithForm talks to Stripe, behind an interface a test can supply.
  *
  * ## Why an interface at all
  *

@@ -1,0 +1,16 @@
+#include "Base.xcconfig"
+
+FAITHFORM_BUNDLE_ID_SUFFIX =
+FAITHFORM_ENVIRONMENT_KEY = production
+
+// **Deliberately empty**, for the same reason as staging: the production origin
+// is a deployment decision, not a source constant. Supply it at build time.
+//
+// A release build with this unset fails closed rather than pointing somewhere.
+FAITHFORM_API_ORIGIN =
+
+FAITHFORM_ALLOW_DEBUG_CONTROLS = NO
+
+// Deliberately empty, like the origin above.
+FAITHFORM_SUPABASE_URL =
+FAITHFORM_SUPABASE_ANON_KEY =

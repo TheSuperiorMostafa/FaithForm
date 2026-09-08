@@ -15,10 +15,10 @@ import test from "node:test";
  * not a pass.
  */
 
-const DATABASE_URL = process.env.FAITHFUL_TEST_DATABASE_URL;
+const DATABASE_URL = process.env.FAITHFORM_TEST_DATABASE_URL;
 
 const SKIP_REASON =
-  "FAITHFUL_TEST_DATABASE_URL is not set — no disposable Postgres target. " +
+  "FAITHFORM_TEST_DATABASE_URL is not set — no disposable Postgres target. " +
   "The giving isolation and idempotency rules are UNOBSERVED until this runs.";
 
 if (/prod/i.test(DATABASE_URL ?? "")) {
@@ -700,7 +700,7 @@ test("a webhook for an intent nobody claimed changes nothing", options,
   run(1, async ([client], track) => {
     const fixture = await seedChurch(client);
     track(fixture);
-    // The web giving flow creates intents with no Faithful attempt behind them.
+    // The web giving flow creates intents with no FaithForm attempt behind them.
     // Those must reconcile into `giving_donations` and touch nothing here.
     const result = await webhookSays(client, "pi_from_the_website", "succeeded");
     assert.equal(result.ok, false);
@@ -881,7 +881,7 @@ test("the first gift wins the link, and a second gift does not repoint it", opti
 // The rest of giving is untouched
 // ---------------------------------------------------------------------------
 
-test("publishing a fund to Faithful changes nothing about the fund itself", options,
+test("publishing a fund to FaithForm changes nothing about the fund itself", options,
   run(1, async ([client], track) => {
     const fixture = await seedChurch(client);
     track(fixture);

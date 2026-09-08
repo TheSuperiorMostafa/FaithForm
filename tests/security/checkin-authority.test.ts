@@ -325,7 +325,7 @@ test("every capability type derives its own sub-key", () => {
   assert.match(code, /function subKey\(type: CapabilityType, material: string\): Buffer \{\s*return createHmac\("sha256", material\)\.update\(`\$\{DOMAIN\}\|\$\{type\}`\)/);
   // The issuer and audience are inside the derivation string, so a token from
   // another deployment or another product never verifies here.
-  assert.match(code, /const DOMAIN = "faithform\.faithful\.attendance\.v1"/);
+  assert.match(code, /const DOMAIN = "faithform\.faithform\.attendance\.v1"/);
   // And nothing signs with the master key directly.
   assert.ok(
     !/createHmac\("sha256", key\.material\)\.update\(payload/.test(code),
@@ -372,12 +372,12 @@ test("the short-code alphabet has not drifted between server, iOS and Android", 
   assert.match(shortCode, new RegExp(`SHORT_CODE_ALPHABET = "${expected}"`));
   assert.match(shortCode, /SHORT_CODE_LENGTH = 7/);
 
-  const swift = read("apps/faithful-ios/Sources/FaithfulKit/Attendance/QrScanning.swift");
+  const swift = read("apps/faithform-ios/Sources/FaithFormKit/Attendance/QrScanning.swift");
   assert.match(swift, new RegExp(`alphabet = "${expected}"`));
   assert.match(swift, /length = 7/);
 
   const kotlin = read(
-    "apps/faithful-android/core/attendance/src/main/kotlin/io/faithform/faithful/attendance/QrScanning.kt",
+    "apps/faithform-android/core/attendance/src/main/kotlin/io/faithform/app/attendance/QrScanning.kt",
   );
   assert.match(kotlin, new RegExp(`ALPHABET = "${expected}"`));
   assert.match(kotlin, /LENGTH = 7/);

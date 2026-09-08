@@ -14,8 +14,8 @@ import {
   verifySermonAccess,
 } from "@/lib/queries/sermons";
 import {
-  publishSermonToFaithful,
-  unpublishSermonFromFaithful,
+  publishSermonToFaithForm,
+  unpublishSermonFromFaithForm,
 } from "@/lib/sermons/v1/publication";
 import { createClient } from "@/lib/supabase/server";
 
@@ -124,7 +124,7 @@ export async function shareSermonInAppAction(input: {
     const sermon = await verifySermonAccess(supabase, input.sermonId, auth.churchId);
     if (!sermon) return { error: "Sermon not found" };
 
-    const result = await publishSermonToFaithful({
+    const result = await publishSermonToFaithForm({
       churchId: auth.churchId,
       sermonId: input.sermonId,
       visibility: input.visibility,
@@ -164,7 +164,7 @@ export async function unshareSermonInAppAction(
     const sermon = await verifySermonAccess(supabase, sermonId, auth.churchId);
     if (!sermon) return { error: "Sermon not found" };
 
-    const result = await unpublishSermonFromFaithful({
+    const result = await unpublishSermonFromFaithForm({
       churchId: auth.churchId,
       sermonId,
     });

@@ -72,7 +72,7 @@ function nativeSourceFiles(dir: string): string[] {
 }
 
 // ---------------------------------------------------------------------------
-// A faithful stand-in for the route's cache decision
+// A faithform stand-in for the route's cache decision
 // ---------------------------------------------------------------------------
 
 const REVALIDATION_PERIOD_MS = 15 * 60 * 1000;
@@ -97,7 +97,7 @@ const configuration = (
   churchSlug: "grace",
   regions: [
     {
-      regionId: "faithful.campus.11111111-1111-4111-8111-111111111111",
+      regionId: "faithform.campus.11111111-1111-4111-8111-111111111111",
       campusName: "Main",
       latitude: 38.2527,
       longitude: -85.7585,
@@ -309,7 +309,7 @@ test("a moved region changes the validator", () => {
       configuration: configuration({
         regions: [
           {
-            regionId: "faithful.campus.11111111-1111-4111-8111-111111111111",
+            regionId: "faithform.campus.11111111-1111-4111-8111-111111111111",
             campusName: "Main",
             latitude: 0,
             longitude: 0,
@@ -539,9 +539,9 @@ test("no integrity value is emitted, signed, or accepted anywhere", () => {
 
 test("the generated clients carry no integrity field either", () => {
   for (const path of [
-    "contracts/faithful/v1/schema.json",
-    "apps/faithful-ios/Sources/FaithfulKit/Generated/Contract.swift",
-    "apps/faithful-android/core/contract/src/main/kotlin/io/faithform/faithful/contract/Contract.kt",
+    "contracts/faithform/v1/schema.json",
+    "apps/faithform-ios/Sources/FaithFormKit/Generated/Contract.swift",
+    "apps/faithform-android/core/contract/src/main/kotlin/io/faithform/app/contract/Contract.kt",
   ]) {
     const generated = readFileSync(path, "utf8");
     assert.ok(!generated.includes("integrity"), `${path} is stale`);
@@ -557,11 +557,11 @@ test("the configuration carries what an OS region needs", () => {
   assert.equal(typeof region.latitude, "number");
   assert.equal(typeof region.longitude, "number");
   assert.equal(typeof region.radiusMeters, "number");
-  assert.match(region.regionId, /^faithful\.campus\./);
+  assert.match(region.regionId, /^faithform\.campus\./);
 });
 
 test("the region id is stable, so the OS updates rather than re-registers", () => {
-  assert.match(source, /regionId: `faithful\.campus\.\$\{campus\.id as string\}`/);
+  assert.match(source, /regionId: `faithform\.campus\.\$\{campus\.id as string\}`/);
 });
 
 test("regions are bounded to what a platform will accept", () => {
@@ -656,8 +656,8 @@ test("region monitoring exists only in the designated adapters", () => {
 
   const ALLOWED = new Set([
     // The only two production files permitted to touch a location framework.
-    "apps/faithful-ios/Sources/FaithfulKit/Attendance/CoreLocationAdapter.swift",
-    "apps/faithful-android/app/src/main/kotlin/io/faithform/faithful/attendance/PlayServicesGeofencing.kt",
+    "apps/faithform-ios/Sources/FaithFormKit/Attendance/CoreLocationAdapter.swift",
+    "apps/faithform-android/app/src/main/kotlin/io/faithform/app/attendance/PlayServicesGeofencing.kt",
   ]);
 
   // Production sources only. The adapters' own tests necessarily construct the
@@ -715,8 +715,8 @@ test("the adapters are thin — no decisions leaked into them", () => {
   // nothing more. A refusal reason or a policy threshold appearing here would
   // mean a rule that no test can reach without a device.
   for (const path of [
-    "apps/faithful-ios/Sources/FaithfulKit/Attendance/CoreLocationAdapter.swift",
-    "apps/faithful-android/app/src/main/kotlin/io/faithform/faithful/attendance/PlayServicesGeofencing.kt",
+    "apps/faithform-ios/Sources/FaithFormKit/Attendance/CoreLocationAdapter.swift",
+    "apps/faithform-android/app/src/main/kotlin/io/faithform/app/attendance/PlayServicesGeofencing.kt",
   ]) {
     const code = readFileSync(path, "utf8")
       .replace(/\/\*[\s\S]*?\*\//g, "")
@@ -753,8 +753,8 @@ test("background location is declared once, in the manifest, and nowhere else", 
   assert.deepEqual(
     files.sort(),
     [
-      "apps/faithful-android/app/src/main/AndroidManifest.xml",
-      "apps/faithful-android/app/src/main/kotlin/io/faithform/faithful/attendance/PlayServicesGeofencing.kt",
+      "apps/faithform-android/app/src/main/AndroidManifest.xml",
+      "apps/faithform-android/app/src/main/kotlin/io/faithform/app/attendance/PlayServicesGeofencing.kt",
     ],
     "background location must not spread beyond the manifest and its checker",
   );

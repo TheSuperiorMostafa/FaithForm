@@ -523,7 +523,7 @@ test("avc3 may omit its parameter sets; avc1 may not", () => {
 // ---------------------------------------------------------------------------
 
 test("an encrypted sample entry cannot be published", () => {
-  // Faithful ships no key acquisition and no CDM, so an encrypted rendition is
+  // FaithForm ships no key acquisition and no CDM, so an encrypted rendition is
   // unplayable whatever `frma` says was underneath.
   for (const format of ["encv", "enca"]) {
     const handler = format === "encv" ? "vide" : "soun";

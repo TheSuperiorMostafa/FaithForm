@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { VisitorError } from "@/lib/faithful/errors";
-import { getVisitorAccount } from "@/lib/faithful/account";
+import { VisitorError } from "@/lib/faithform/errors";
+import { getVisitorAccount } from "@/lib/faithform/account";
 import {
   hasAutomaticAttendanceConsent,
   recordAttendance,

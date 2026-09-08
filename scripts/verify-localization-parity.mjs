@@ -12,10 +12,10 @@
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-const SWIFT_STRINGS = "apps/faithful-ios/Sources/FaithfulKit/Strings.swift";
-const ANDROID_STRINGS = "apps/faithful-android/app/src/main/res/values/strings.xml";
+const SWIFT_STRINGS = "apps/faithform-ios/Sources/FaithFormKit/Strings.swift";
+const ANDROID_STRINGS = "apps/faithform-android/app/src/main/res/values/strings.xml";
 const SWIFT_VIEW_DIRS = [
-  "apps/faithful-ios/Sources/FaithfulKit/Components",
+  "apps/faithform-ios/Sources/FaithFormKit/Components",
 ];
 
 /**

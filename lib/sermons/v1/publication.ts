@@ -32,7 +32,7 @@ function client(supabase?: SupabaseClient) {
  * A draft is a work in progress by definition, and the builder's own status
  * field already says so — there is no second notion of "ready" to invent here.
  */
-export async function publishSermonToFaithful(
+export async function publishSermonToFaithForm(
   input: {
     churchId: string;
     sermonId: string;
@@ -95,7 +95,7 @@ export async function publishSermonToFaithful(
  * alone would hide it, and setting both means a future change to one filter
  * cannot quietly resurrect it.
  */
-export async function unpublishSermonFromFaithful(
+export async function unpublishSermonFromFaithForm(
   input: { churchId: string; sermonId: string },
   supabase?: SupabaseClient,
 ): Promise<SermonPublicationResult> {

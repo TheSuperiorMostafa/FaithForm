@@ -453,9 +453,9 @@ test("a capability is enabled only when both platforms have a screen for it", ()
     accountService.indexOf("function projectProfile"),
   );
 
-  const ios = read("apps/faithful-ios/App/AppDependencies.swift");
+  const ios = read("apps/faithform-ios/App/AppDependencies.swift");
   const android = read(
-    "apps/faithful-android/app/src/main/kotlin/io/faithform/faithful/MainActivity.kt",
+    "apps/faithform-android/app/src/main/kotlin/io/faithform/app/MainActivity.kt",
   );
 
   // capability key → how each platform names the same destination.

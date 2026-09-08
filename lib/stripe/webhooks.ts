@@ -405,11 +405,11 @@ async function handlePaymentIntent(
   });
 
   await maybeSendDonationReceipt(donationId, status);
-  await projectFaithfulAttempt(pi, status, donationId, eventCreated, churchId);
+  await projectFaithFormAttempt(pi, status, donationId, eventCreated, churchId);
 }
 
 /**
- * Copies this webhook's conclusion onto a Faithful donation attempt.
+ * Copies this webhook's conclusion onto a FaithForm donation attempt.
  *
  * **This is the only thing that makes a phone show a receipt.** The native
  * payment sheet's own success callback writes nothing anywhere: it reports that
@@ -422,14 +422,14 @@ async function handlePaymentIntent(
  * redeliver an event that already reconciled correctly. The app's next status
  * poll re-reads the donation anyway.
  */
-async function projectFaithfulAttempt(
+async function projectFaithFormAttempt(
   pi: Stripe.PaymentIntent,
   status: DonationStatus,
   donationId: string | null,
   eventCreated: number,
   churchId: string,
 ): Promise<void> {
-  const attemptId = pi.metadata?.faithful_attempt_id;
+  const attemptId = pi.metadata?.faithform_attempt_id;
   if (!attemptId) return;
 
   const admin = createAdminClient();
@@ -453,7 +453,7 @@ async function projectFaithfulAttempt(
   // and two people who share an inbox would otherwise see each other's giving
   // history the moment one of them signed in. The link is written because this
   // account demonstrably gave, and `link_giving_donor` keeps the first one.
-  const accountId = pi.metadata?.faithful_account_id;
+  const accountId = pi.metadata?.faithform_account_id;
   if (status !== "succeeded" || !accountId || !donationId) return;
 
   try {
@@ -509,7 +509,7 @@ async function projectAttemptFromCharge(
       p_event_at: eventAt,
     });
   } catch {
-    /* non-fatal, as with every Faithful projection off this path */
+    /* non-fatal, as with every FaithForm projection off this path */
   }
 }
 
