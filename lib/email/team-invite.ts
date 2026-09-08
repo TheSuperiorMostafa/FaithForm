@@ -1,105 +1,66 @@
 import { Resend } from "resend";
-import { escapeHtml } from "@/lib/email/escape-html";
+import {
+  renderEmail,
+  type EmailBlock,
+  type RenderedEmail,
+} from "@/lib/email/layout";
 import { absoluteAppPath, getCanonicalSiteUrl } from "@/lib/site-url";
 import { resolveFromAddress } from "@/lib/email/sender";
 
-function buildTeamInviteHtml(params: {
+function buildTeamInviteEmail(params: {
   churchName: string;
   loginUrl: string;
   email: string;
   featureLabels: string[];
   isAdmin: boolean;
   tempPassword: string | null;
-}): string {
-  const accessList = params.isAdmin
-    ? "<li style=\"margin:0 0 6px;\">Full admin access to every enabled tool</li>"
+}): RenderedEmail {
+  const access = params.isAdmin
+    ? ["Full admin access to every enabled tool"]
     : params.featureLabels.length > 0
       ? params.featureLabels
-          .map(
-            (label) =>
-              `<li style="margin:0 0 6px;">${escapeHtml(label)}</li>`,
-          )
-          .join("")
-      : "<li style=\"margin:0 0 6px;\">Your church admin will grant tool access shortly</li>";
+      : ["Your church admin will grant tool access shortly"];
 
-  const credentials = params.tempPassword
-    ? `<table cellpadding="0" cellspacing="0" width="100%" style="margin:0 0 28px;border:1px solid #E5E7EB;border-radius:10px;background:#F8F7F4;">
-                  <tr>
-                    <td style="padding:20px 24px;">
-                      <p style="margin:0 0 10px;font-size:13px;font-weight:700;color:#002D5F;text-transform:uppercase;letter-spacing:0.06em;">
-                        Your temporary password
-                      </p>
-                      <p style="margin:0 0 4px;font-size:14px;color:#6B7280;">Email</p>
-                      <p style="margin:0 0 14px;font-size:16px;font-weight:600;color:#111827;">${escapeHtml(params.email)}</p>
-                      <p style="margin:0 0 4px;font-size:14px;color:#6B7280;">Temporary password</p>
-                      <p style="margin:0;font-family:'SFMono-Regular',Consolas,monospace;font-size:20px;font-weight:700;letter-spacing:1px;color:#111827;">${escapeHtml(params.tempPassword)}</p>
-                    </td>
-                  </tr>
-                </table>
-                <p style="margin:0 0 28px;font-size:15px;color:#374151;line-height:1.6;">
-                  FaithForm asks you to pick your own password the first time you
-                  sign in, and the temporary one stops working right after.
-                </p>`
-    : `<p style="margin:0 0 28px;font-size:16px;color:#374151;line-height:1.6;">
-                  Sign in with <strong>${escapeHtml(params.email)}</strong> and the
-                  FaithForm password you already use.
-                </p>`;
+  const credentials: EmailBlock[] = params.tempPassword
+    ? [
+        {
+          kind: "callout",
+          title: "Your temporary password",
+          rows: [
+            { label: "Email", value: params.email },
+            { label: "Temporary password", value: params.tempPassword, mono: true },
+          ],
+        },
+        {
+          kind: "paragraph",
+          text: "FaithForm asks you to pick your own password the first time you sign in, and the temporary one stops working right after.",
+        },
+      ]
+    : [
+        {
+          kind: "paragraph",
+          text: `Sign in with ${params.email} and the FaithForm password you already use.`,
+        },
+      ];
 
-  return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-</head>
-<body style="margin:0;padding:0;background-color:#F8F7F4;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background-color:#F8F7F4;padding:40px 20px;">
-    <tr>
-      <td align="center">
-        <table width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 4px 24px rgba(0,45,95,0.08);">
-          <tr>
-            <td style="background-color:#002D5F;padding:32px 40px;text-align:center;">
-              <span style="font-family:Georgia,serif;font-size:28px;font-weight:700;color:#ffffff;letter-spacing:-0.5px;">FaithForm</span>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:40px;">
-              <h1 style="margin:0 0 20px;font-size:24px;font-weight:700;color:#002D5F;line-height:1.3;">
-                You've been added to ${escapeHtml(params.churchName)} on FaithForm
-              </h1>
-              <p style="margin:0 0 24px;font-size:16px;color:#374151;line-height:1.6;">
-                Your account is ready.
-              </p>
-
-              ${credentials}
-
-              <p style="margin:0 0 8px;font-size:14px;font-weight:600;color:#002D5F;text-transform:uppercase;letter-spacing:0.06em;">
-                What you can access
-              </p>
-              <ul style="margin:0 0 28px;padding-left:20px;font-size:16px;color:#374151;line-height:1.6;">
-                ${accessList}
-              </ul>
-
-              <table cellpadding="0" cellspacing="0" style="margin:0 0 32px;">
-                <tr>
-                  <td style="background-color:#C5A059;border-radius:10px;">
-                    <a href="${params.loginUrl}" style="display:inline-block;padding:16px 32px;font-size:16px;font-weight:600;color:#ffffff;text-decoration:none;">
-                      Sign in to FaithForm
-                    </a>
-                  </td>
-                </tr>
-              </table>
-
-              <p style="margin:0;font-size:12px;color:#9CA3AF;line-height:1.5;word-break:break-all;">
-                Or copy this link: ${params.loginUrl}
-              </p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
+  return renderEmail({
+    title: `You've been added to ${params.churchName} on FaithForm`,
+    preheader: params.tempPassword
+      ? "Your account is ready — here is your temporary password."
+      : "Your account is ready. Sign in with your existing password.",
+    heading: `You've been added to ${params.churchName} on FaithForm`,
+    blocks: [
+      { kind: "paragraph", text: "Your account is ready." },
+      ...credentials,
+      { kind: "subheading", text: "What you can access" },
+      { kind: "list", items: access },
+      { kind: "button", label: "Sign in to FaithForm", url: params.loginUrl },
+      {
+        kind: "muted",
+        text: `If the button does not work, paste this into your browser: ${params.loginUrl}`,
+      },
+    ],
+  });
 }
 
 export type SendTeamInviteEmailParams = {
@@ -130,19 +91,22 @@ export async function sendTeamInviteEmail(
     return { sent: false, loginUrl };
   }
 
+  const content = buildTeamInviteEmail({
+    churchName: params.churchName,
+    loginUrl,
+    email: params.email,
+    featureLabels: params.featureLabels,
+    isAdmin: params.isAdmin,
+    tempPassword: params.tempPassword ?? null,
+  });
+
   const resend = new Resend(apiKey);
   const { error } = await resend.emails.send({
     from: `FaithForm <${from}>`,
     to: params.email,
     subject: `You've been added to ${params.churchName} on FaithForm`,
-    html: buildTeamInviteHtml({
-      churchName: params.churchName,
-      loginUrl,
-      email: params.email,
-      featureLabels: params.featureLabels,
-      isAdmin: params.isAdmin,
-      tempPassword: params.tempPassword ?? null,
-    }),
+    html: content.html,
+    text: content.text,
   });
 
   if (error) {

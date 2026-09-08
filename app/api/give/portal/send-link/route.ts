@@ -71,6 +71,7 @@ export async function POST(request: Request) {
       isNewDonor: false,
       primaryColor: church.givingPrimaryColor,
       accentColor: church.givingAccentColor,
+      logoUrl: church.logoUrl,
     });
     if (!sent) console.error("[portal-link] delivery unavailable");
   } catch {

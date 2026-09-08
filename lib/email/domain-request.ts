@@ -1,8 +1,12 @@
 import { Resend } from "resend";
 
-import { escapeHtml } from "@/lib/email/escape-html";
 import { BOOTSTRAP_SUPERADMIN_EMAILS } from "@/lib/auth/superadmin-emails";
 import { resolveFromAddress } from "@/lib/email/sender";
+import {
+  renderEmail,
+  type EmailBlock,
+  type RenderedEmail,
+} from "@/lib/email/layout";
 
 /**
  * Tells us a church asked for a domain.
@@ -30,107 +34,6 @@ export type DomainRequestEmailParams = {
   reviewUrl: string;
 };
 
-function row(label: string, value: string): string {
-  return `
-    <tr>
-      <td style="padding:10px 0;border-bottom:1px solid #EAE7E0;vertical-align:top;width:130px;">
-        <span style="font-size:12px;letter-spacing:0.06em;text-transform:uppercase;color:#6B7280;">${escapeHtml(label)}</span>
-      </td>
-      <td style="padding:10px 0;border-bottom:1px solid #EAE7E0;">
-        <span style="font-size:15px;color:#002D5F;">${value}</span>
-      </td>
-    </tr>`;
-}
-
-function buildHtml(params: DomainRequestEmailParams): string {
-  const headline =
-    params.kind === "connect_existing"
-      ? "wants to connect a domain they own"
-      : "needs a domain registered";
-
-  const rows = [row("Church", escapeHtml(params.churchName))];
-
-  if (params.hostname) {
-    rows.push(
-      row(
-        params.kind === "connect_existing" ? "Domain" : "First choice",
-        `<code>${escapeHtml(params.hostname)}</code>`,
-      ),
-    );
-  }
-
-  if (params.alternateHostnames.length > 0) {
-    rows.push(
-      row(
-        "Alternatives",
-        params.alternateHostnames
-          .map((h) => `<code>${escapeHtml(h)}</code>`)
-          .join(", "),
-      ),
-    );
-  }
-
-  if (params.registrar) rows.push(row("Registrar", escapeHtml(params.registrar)));
-  if (params.contactName) rows.push(row("Contact", escapeHtml(params.contactName)));
-
-  if (params.contactEmail) {
-    rows.push(
-      row(
-        "Email",
-        `<a href="mailto:${escapeHtml(params.contactEmail)}" style="color:#002D5F;">${escapeHtml(params.contactEmail)}</a>`,
-      ),
-    );
-  }
-
-  if (params.contactPhone) rows.push(row("Phone", escapeHtml(params.contactPhone)));
-
-  if (params.notes) {
-    rows.push(
-      row("Notes", escapeHtml(params.notes).replace(/\n/g, "<br />")),
-    );
-  }
-
-  return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-</head>
-<body style="margin:0;padding:0;background-color:#F8F7F4;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#F8F7F4;padding:32px 16px;">
-    <tr>
-      <td align="center">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background-color:#FFFFFF;border-radius:14px;padding:32px;">
-          <tr>
-            <td>
-              <h1 style="margin:0 0 6px;font-size:20px;color:#002D5F;">
-                ${escapeHtml(params.churchName)} ${escapeHtml(headline)}
-              </h1>
-              <p style="margin:0 0 22px;font-size:14px;color:#6B7280;">
-                New domain request in the control center.
-              </p>
-              <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-                ${rows.join("")}
-              </table>
-              <p style="margin:26px 0 0;">
-                <a href="${escapeHtml(params.reviewUrl)}" style="display:inline-block;background-color:#002D5F;color:#FFFFFF;text-decoration:none;font-size:15px;padding:12px 22px;border-radius:8px;">
-                  Open the request
-                </a>
-              </p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
-}
-
-/**
- * Recipients are the platform's own admins, never a value from the request —
- * the form is church-supplied input and must not be able to address our mail.
- */
 function recipients(): string[] {
   const configured = process.env.DOMAIN_REQUEST_NOTIFY_EMAIL?.trim();
   if (configured) {
@@ -140,6 +43,65 @@ function recipients(): string[] {
       .filter(Boolean);
   }
   return BOOTSTRAP_SUPERADMIN_EMAILS;
+}
+
+function buildDomainRequestEmail(
+  params: DomainRequestEmailParams,
+): RenderedEmail {
+  const headline =
+    params.kind === "connect_existing"
+      ? "wants to connect a domain they own"
+      : "needs a domain registered";
+
+  const details: EmailBlock[] = [
+    { kind: "detail", label: "Church", value: params.churchName },
+  ];
+
+  if (params.hostname) {
+    details.push({
+      kind: "detail",
+      label: params.kind === "connect_existing" ? "Domain" : "First choice",
+      value: params.hostname,
+    });
+  }
+  if (params.alternateHostnames.length > 0) {
+    details.push({
+      kind: "detail",
+      label: "Alternatives",
+      value: params.alternateHostnames.join(", "),
+    });
+  }
+  if (params.registrar) {
+    details.push({ kind: "detail", label: "Registrar", value: params.registrar });
+  }
+  if (params.contactName) {
+    details.push({ kind: "detail", label: "Contact", value: params.contactName });
+  }
+  if (params.contactEmail) {
+    details.push({ kind: "detail", label: "Email", value: params.contactEmail });
+  }
+  if (params.contactPhone) {
+    details.push({ kind: "detail", label: "Phone", value: params.contactPhone });
+  }
+
+  return renderEmail({
+    title: `${params.churchName} ${headline}`,
+    preheader: `New domain request from ${params.churchName}.`,
+    heading: `${params.churchName} ${headline}`,
+    blocks: [
+      { kind: "paragraph", text: "New domain request in the control center." },
+      ...details,
+      ...(params.notes
+        ? ([
+            { kind: "subheading", text: "Notes" },
+            { kind: "quote", text: params.notes },
+          ] as EmailBlock[])
+        : []),
+      { kind: "button", label: "Review request", url: params.reviewUrl },
+    ],
+    footerNote: "FaithForm control center",
+    permissionNote: "You received this because you handle FaithForm domain requests.",
+  });
 }
 
 export async function sendDomainRequestEmail(
@@ -156,6 +118,8 @@ export async function sendDomainRequestEmail(
     return { sent: false };
   }
 
+  const content = buildDomainRequestEmail(params);
+
   try {
     const resend = new Resend(apiKey);
     const { error } = await resend.emails.send({
@@ -164,7 +128,8 @@ export async function sendDomainRequestEmail(
       // Not replyTo: the church contact is unverified input, and a reply should
       // go through the control center where it is recorded.
       subject: `Domain request — ${params.churchName}`,
-      html: buildHtml(params),
+      html: content.html,
+      text: content.text,
     });
 
     if (error) {

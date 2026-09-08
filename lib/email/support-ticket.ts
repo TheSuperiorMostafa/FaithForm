@@ -1,7 +1,11 @@
 import { Resend } from "resend";
 
-import { escapeHtml } from "@/lib/email/escape-html";
 import { absoluteAppPath } from "@/lib/site-url";
+import {
+  renderEmail,
+  type EmailBlock,
+  type RenderedEmail,
+} from "@/lib/email/layout";
 
 /**
  * Every piece of mail a support ticket generates.
@@ -52,7 +56,7 @@ function resendClient(): Resend | null {
 async function send(params: {
   to: string[];
   subject: string;
-  html: string;
+  content: RenderedEmail;
   replyTo?: string;
   /** Names this message in logs when it cannot be sent. */
   label: string;
@@ -69,7 +73,8 @@ async function send(params: {
       to: params.to,
       replyTo: params.replyTo ?? SUPPORT_EMAIL,
       subject: params.subject,
-      html: params.html,
+      html: params.content.html,
+      text: params.content.text,
     });
     if (error) {
       console.error(`[FaithForm] ${params.label} Resend error:`, error);
@@ -80,46 +85,6 @@ async function send(params: {
     console.error(`[FaithForm] ${params.label} failed:`, error);
     return false;
   }
-}
-
-function shell(inner: string): string {
-  return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-</head>
-<body style="margin:0;padding:0;background-color:#F8F7F4;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color:#F8F7F4;padding:32px 16px;">
-    <tr>
-      <td align="center">
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:560px;background-color:#FFFFFF;border-radius:14px;padding:32px;">
-          <tr>
-            <td>
-${inner}
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`;
-}
-
-function quoteBlock(body: string | null): string {
-  const html = body
-    ? escapeHtml(body).replace(/\n/g, "<br />")
-    : "<em>No details given.</em>";
-  return `<div style="font-size:15px;line-height:1.6;color:#002D5F;border-left:3px solid #C9A227;padding-left:14px;">${html}</div>`;
-}
-
-function button(href: string, label: string): string {
-  return `<p style="margin:26px 0 0;">
-                <a href="${escapeHtml(href)}" style="display:inline-block;background-color:#002D5F;color:#FFFFFF;text-decoration:none;font-size:15px;padding:12px 22px;border-radius:8px;">
-                  ${escapeHtml(label)}
-                </a>
-              </p>`;
 }
 
 export type SupportTicketEmailParams = {
@@ -136,25 +101,30 @@ export type SupportTicketEmailParams = {
 export async function sendSupportTicketNotification(
   params: SupportTicketEmailParams,
 ): Promise<{ emailed: boolean }> {
-  const inner = `<h1 style="margin:0 0 6px;font-size:20px;color:#002D5F;">
-                ${escapeHtml(params.subject)}
-              </h1>
-              <p style="margin:0 0 22px;font-size:14px;color:#6B7280;">
-                New support ticket from ${escapeHtml(params.churchName)}${
-                  params.submittedByEmail
-                    ? ` · ${escapeHtml(params.submittedByEmail)}`
-                    : ""
-                } · ${escapeHtml(params.priority)} priority
-              </p>
-              ${quoteBlock(params.body)}
-              ${button(params.reviewUrl, "Open the ticket")}`;
+  const content = renderEmail({
+    title: `Support — ${params.churchName}: ${params.subject}`,
+    preheader: `${params.priority} priority ticket from ${params.churchName}.`,
+    heading: params.subject,
+    blocks: [
+      { kind: "detail", label: "Church", value: params.churchName },
+      ...(params.submittedByEmail
+        ? ([{ kind: "detail", label: "From", value: params.submittedByEmail }] as EmailBlock[])
+        : []),
+      { kind: "detail", label: "Priority", value: params.priority },
+      { kind: "subheading", text: "What they sent" },
+      { kind: "quote", text: params.body ?? "No details given." },
+      { kind: "button", label: "Open the ticket", url: params.reviewUrl },
+    ],
+    footerNote: "FaithForm control center",
+    permissionNote: "You received this because you handle FaithForm support.",
+  });
 
   const emailed = await send({
     to: internalRecipients(),
     // Replying to the notification should reach the church, not our own inbox.
     replyTo: params.submittedByEmail ?? SUPPORT_EMAIL,
     subject: `Support — ${params.churchName}: ${params.subject}`,
-    html: shell(inner),
+    content,
     label: "Support ticket notification",
   });
 
@@ -175,31 +145,32 @@ export type SupportTicketAckParams = {
 export async function sendSupportTicketAck(
   params: SupportTicketAckParams,
 ): Promise<boolean> {
-  const inner = `<h1 style="margin:0 0 6px;font-size:20px;color:#002D5F;">
-                We've got your request
-              </h1>
-              <p style="margin:0 0 22px;font-size:15px;line-height:1.6;color:#002D5F;">
-                Thanks for reaching out. Your support request is with the
-                FaithForm team, and we'll reply by email as soon as we've
-                looked at it. You can follow the conversation from your
-                dashboard at any time.
-              </p>
-              <p style="margin:0 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:0.04em;color:#6B7280;">
-                What you sent us
-              </p>
-              <p style="margin:0 0 10px;font-size:15px;font-weight:600;color:#002D5F;">
-                ${escapeHtml(params.subject)}
-              </p>
-              ${quoteBlock(params.body)}
-              ${button(absoluteAppPath("/dashboard/support"), "View your tickets")}
-              <p style="margin:26px 0 0;font-size:13px;color:#6B7280;">
-                Need to add something? Just reply to this email.
-              </p>`;
+  const content = renderEmail({
+    title: `We received your request — ${params.subject}`,
+    preheader: "Your support request is with the FaithForm team.",
+    heading: "We've got your request",
+    blocks: [
+      {
+        kind: "paragraph",
+        text: "Thanks for reaching out. Your support request is with the FaithForm team, and we'll reply by email as soon as we've looked at it. You can follow the conversation from your dashboard at any time.",
+      },
+      { kind: "subheading", text: "What you sent us" },
+      { kind: "paragraph", text: params.subject },
+      { kind: "quote", text: params.body ?? "No details given." },
+      {
+        kind: "button",
+        label: "View your tickets",
+        url: absoluteAppPath("/dashboard/support"),
+      },
+      { kind: "muted", text: "Need to add something? Just reply to this email." },
+    ],
+    permissionNote: `You received this because you raised a support request for ${params.churchName}.`,
+  });
 
   return send({
     to: [params.to],
     subject: `We received your request — ${params.subject}`,
-    html: shell(inner),
+    content,
     label: "Support ticket acknowledgement",
   });
 }
@@ -219,22 +190,28 @@ export type SupportTicketReplyParams = {
 export async function sendSupportTicketReply(
   params: SupportTicketReplyParams,
 ): Promise<boolean> {
-  const inner = `<h1 style="margin:0 0 6px;font-size:20px;color:#002D5F;">
-                FaithForm replied to your request
-              </h1>
-              <p style="margin:0 0 22px;font-size:14px;color:#6B7280;">
-                ${escapeHtml(params.subject)} · ${escapeHtml(params.statusLabel)}
-              </p>
-              ${quoteBlock(params.message)}
-              ${button(absoluteAppPath("/dashboard/support"), "Open the conversation")}
-              <p style="margin:26px 0 0;font-size:13px;color:#6B7280;">
-                Reply to this email to get back to us.
-              </p>`;
+  const content = renderEmail({
+    title: `Re: ${params.subject}`,
+    preheader: "We replied to your support request.",
+    heading: "FaithForm replied to your request",
+    blocks: [
+      { kind: "detail", label: "Request", value: params.subject },
+      { kind: "detail", label: "Status", value: params.statusLabel },
+      { kind: "quote", text: params.message },
+      {
+        kind: "button",
+        label: "Open the conversation",
+        url: absoluteAppPath("/dashboard/support"),
+      },
+      { kind: "muted", text: "Reply to this email to get back to us." },
+    ],
+    permissionNote: "You received this because you raised a support request with FaithForm.",
+  });
 
   return send({
     to: [params.to],
     subject: `Re: ${params.subject}`,
-    html: shell(inner),
+    content,
     label: "Support ticket reply",
   });
 }

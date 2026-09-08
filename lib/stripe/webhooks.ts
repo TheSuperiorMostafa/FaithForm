@@ -657,7 +657,7 @@ async function handleInvoice(
     const admin = createAdminClient();
     const { data: church } = await admin
       .from("churches")
-      .select("name, slug, giving_primary_color, giving_accent_color")
+      .select("name, slug, logo_url, giving_primary_color, giving_accent_color")
       .eq("id", churchId)
       .maybeSingle();
 
@@ -678,6 +678,7 @@ async function handleInvoice(
         churchSlug: (church?.slug as string) ?? "",
         primaryColor: (church?.giving_primary_color as string | null) ?? null,
         accentColor: (church?.giving_accent_color as string | null) ?? null,
+        logoUrl: (church?.logo_url as string | null) ?? null,
         idempotencyKey: `failed-invoice/${invoice.id}`,
       });
 

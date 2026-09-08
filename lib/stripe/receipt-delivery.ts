@@ -35,7 +35,7 @@ export async function deliverDonationReceipt(
   const { data: church } = donation?.church_id
     ? await client
         .from("churches")
-        .select("name, slug, ein, giving_primary_color, giving_accent_color")
+        .select("name, slug, ein, logo_url, giving_primary_color, giving_accent_color")
         .eq("id", donation.church_id)
         .maybeSingle()
     : { data: null };
@@ -66,6 +66,7 @@ export async function deliverDonationReceipt(
         ),
         primaryColor: (church.giving_primary_color as string | null) ?? null,
         accentColor: (church.giving_accent_color as string | null) ?? null,
+        logoUrl: (church.logo_url as string | null) ?? null,
         idempotencyKey: `donation-receipt/${donationId}`,
       });
       sent = result.sent;
