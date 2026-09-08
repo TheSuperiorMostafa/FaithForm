@@ -129,7 +129,7 @@ test("the generated Supabase templates are branded and keep their variables", ()
     assert.ok(!html.includes("localhost"), `${file} was generated against localhost`);
     assert.ok(
       html.includes("{{ .ConfirmationURL }}") || html.includes("{{ .Token }}"),
-      `${file} has no Supabase variable — its links would be dead`,
+      `${file} has no Supabase variable: its links would be dead`,
     );
   }
 });

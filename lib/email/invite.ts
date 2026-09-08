@@ -14,13 +14,13 @@ function buildInviteEmail(params: {
 
   return renderEmail({
     title: `Set up ${params.churchName} on FaithForm`,
-    preheader: `Your setup link for ${params.churchName} — it takes about five minutes.`,
+    preheader: `Your setup link for ${params.churchName}: it takes about five minutes.`,
     heading: `You've been invited to set up ${params.churchName} on FaithForm`,
     blocks: [
       { kind: "paragraph", text: greeting },
       {
         kind: "paragraph",
-        text: "FaithForm helps your church team track attendance, manage announcements, build sermons, and save hours on weekly ministry admin. Complete your setup to get started — it only takes about 5 minutes.",
+        text: "FaithForm helps your church team track attendance, manage announcements, build sermons, and save hours on weekly ministry admin. Complete your setup to get started: it only takes about 5 minutes.",
       },
       { kind: "button", label: "Complete your setup", url: params.inviteUrl },
       { kind: "muted", text: "This invite expires in 7 days." },

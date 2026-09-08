@@ -81,7 +81,7 @@ test("a code that lands on the wrong host is sent to the canonical one", () => {
 /**
  * `nextUrl.host` is normalized by Next to the host it listens on, so it reads
  * `localhost:3000` for a request that arrived for faithform.vercel.app.
- * Comparing against it means the branch never fires — which is exactly the bug
+ * Comparing against it means the branch never fires, which is exactly the bug
  * this test exists to keep from coming back.
  */
 test("the host comparison uses the real header, not the normalized url", () => {

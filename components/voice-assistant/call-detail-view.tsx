@@ -92,14 +92,14 @@ export function CallDetailView({ call, isAdmin }: CallDetailViewProps) {
             <div>
               <dt className="text-xs text-muted-foreground">Sentiment</dt>
               <dd className="mt-0.5 text-sm capitalize">
-                {call.sentiment ?? "—"}
+                {call.sentiment ?? ""}
               </dd>
             </div>
             <div>
               <dt className="text-xs text-muted-foreground">Successful</dt>
               <dd className="mt-0.5 text-sm">
                 {call.call_successful == null
-                  ? "—"
+                  ? ""
                   : call.call_successful
                     ? "Yes"
                     : "No"}
@@ -111,7 +111,7 @@ export function CallDetailView({ call, isAdmin }: CallDetailViewProps) {
                 {score.classification ? (
                   <ClassificationBadge classification={score.classification} />
                 ) : (
-                  "—"
+                  ""
                 )}
                 <AttentionBadge view={score} />
               </dd>
@@ -127,7 +127,7 @@ export function CallDetailView({ call, isAdmin }: CallDetailViewProps) {
           </CardHeader>
           <CardContent className="space-y-3">
             <p className={`text-3xl font-semibold tabular-nums ${score.toneClass}`}>
-              {score.value ?? "—"}
+              {score.value ?? ""}
               <span className="ml-1 text-sm font-normal text-muted-foreground">
                 / {score.outOf}
               </span>

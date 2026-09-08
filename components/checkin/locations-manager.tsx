@@ -22,7 +22,7 @@ import type { ChurchLocation } from "@/types/checkin";
  *
  * There is no taxonomy to pick from and no minimum. "Nursery" and "Middle
  * School Overflow Room" are the same kind of thing, both typed in here, and a
- * new one is assignable the moment it is saved — which is the acceptance
+ * new one is assignable the moment it is saved, which is the acceptance
  * criterion this screen exists to satisfy.
  */
 export function LocationsManager({
@@ -114,7 +114,7 @@ export function LocationsManager({
                     name="capacity"
                     type="number"
                     min={1}
-                    placeholder="—"
+                    placeholder=""
                   />
                 </div>
                 <div className="flex gap-2">
@@ -138,7 +138,7 @@ export function LocationsManager({
       {locations.length === 0 ? (
         <Card>
           <CardContent className="py-8 text-center text-sm text-muted-foreground">
-            No rooms yet. Add the places your church actually uses — nothing is
+            No rooms yet. Add the places your church actually uses: nothing is
             preset, and nothing has to match anyone else&rsquo;s structure.
           </CardContent>
         </Card>
@@ -265,7 +265,7 @@ export function LocationsManager({
                             updateLocation,
                             formData,
                             location.isActive
-                              ? "Room switched off — its history is kept."
+                              ? "Room switched off: its history is kept."
                               : "Room switched back on.",
                           );
                         }}
@@ -298,7 +298,7 @@ export function LocationsManager({
       )}
 
       <p className="text-xs text-muted-foreground">
-        Deleting a room with check-ins behind it is refused — switch it off
+        Deleting a room with check-ins behind it is refused: switch it off
         instead. It stops being assignable and every past record survives.
       </p>
     </div>

@@ -42,7 +42,7 @@ function rewriteGiveSubdomain(request: NextRequest): NextResponse | null {
  * Rescues a sign-in link whose path Supabase threw away.
  *
  * When a `redirect_to` is not on the Supabase project's allow-list, Supabase
- * does not refuse it — it silently substitutes the project's bare Site URL and
+ * does not refuse it: it silently substitutes the project's bare Site URL and
  * sends the person to the origin root. The code is still in the query string
  * and still perfectly valid; it just arrives somewhere with no handler, so the
  * exchange never happens and a working link reads as a broken one. Every
@@ -52,7 +52,7 @@ function rewriteGiveSubdomain(request: NextRequest): NextResponse | null {
  * The right fix is the allow-list, and this is not a substitute for it. But an
  * auth code landing on the homepage has exactly one meaning, and the cost of
  * acting on it is one redirect. Scoped to the root because that is the only
- * place the fallback can land — which also keeps it clear of
+ * place the fallback can land, which also keeps it clear of
  * `/api/integrations/{google,facebook}/callback`, whose `code` means something
  * else entirely.
  */
@@ -75,7 +75,7 @@ function recoverStrippedAuthCallback(request: NextRequest): NextResponse | null 
   // the verifier is on the other domain and a correctly-routed code still
   // cannot be spent.
   //
-  // So the code goes home. Only the *comparison* consults the incoming host —
+  // So the code goes home. Only the *comparison* consults the incoming host.
   // `nextUrl.host` is normalized by Next to the host it is listening on, so it
   // reports `localhost:3000` for a request that actually arrived for
   // faithform.vercel.app, and comparing against it would silently never fire.

@@ -19,7 +19,7 @@ function resolveColor(
 /**
  * A donation receipt is the church's document, not ours. The header carries
  * their name, their colours and their logo, and FaithForm appears nowhere in
- * the body — the donor gave to a church, and the paperwork should say so.
+ * the body: the donor gave to a church, and the paperwork should say so.
  */
 function churchBrand(params: {
   churchName: string;
@@ -142,7 +142,7 @@ export async function sendPortalMagicLinkEmail(
     title: params.isNewDonor
       ? `Create your donor account at ${params.churchName}`
       : `Sign in to give to ${params.churchName}`,
-    preheader: "Your sign-in link — it expires in 30 minutes.",
+    preheader: "Your sign-in link: it expires in 30 minutes.",
     heading: params.isNewDonor
       ? "Set up your donor account"
       : "Your sign-in link",
@@ -173,7 +173,7 @@ export async function sendPortalMagicLinkEmail(
 
   const subject = params.isNewDonor
     ? `Create your donor account at ${params.churchName}`
-    : `${params.churchName} Giving — sign in`;
+    : `${params.churchName} Giving: sign in`;
 
   return sendResendEmail({
     to: params.donorEmail,
@@ -212,7 +212,7 @@ export async function sendDonationReceiptEmail(
   const content = renderEmail({
     brand: churchBrand(params),
     title: `Receipt for your gift to ${params.churchName}`,
-    preheader: `${formatMoney(params.amountCents)} on ${params.giftDate} — keep this for your tax records.`,
+    preheader: `${formatMoney(params.amountCents)} on ${params.giftDate}: keep this for your tax records.`,
     heading: "Thank you for your gift",
     blocks: [
       { kind: "paragraph", text: greeting },

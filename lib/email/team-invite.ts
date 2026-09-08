@@ -46,7 +46,7 @@ function buildTeamInviteEmail(params: {
   return renderEmail({
     title: `You've been added to ${params.churchName} on FaithForm`,
     preheader: params.tempPassword
-      ? "Your account is ready — here is your temporary password."
+      ? "Your account is ready: here is your temporary password."
       : "Your account is ready. Sign in with your existing password.",
     heading: `You've been added to ${params.churchName} on FaithForm`,
     blocks: [
@@ -74,7 +74,7 @@ export type SendTeamInviteEmailParams = {
 
 /**
  * Tells a new teammate their account exists and hands over the temporary
- * password to get in with. It carries no auth token — the password is single
+ * password to get in with. It carries no auth token: the password is single
  * use in practice, since FaithForm makes them replace it on first sign-in.
  */
 export async function sendTeamInviteEmail(

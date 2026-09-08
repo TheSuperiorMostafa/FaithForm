@@ -13,11 +13,11 @@ import {
  * Three notes leave here, all on the same address so a church only ever sees
  * one mailbox for help:
  *
- *   1. To us — a church raised a ticket. Nobody sits refreshing the control
+ *   1. To us: a church raised a ticket. Nobody sits refreshing the control
  *      center, so the queue gets a doorbell.
- *   2. To them — we have it. A church that files a ticket into silence has no
+ *   2. To them: we have it. A church that files a ticket into silence has no
  *      way to tell a saved ticket from a lost one.
- *   3. To them again — we replied. The reply is on the dashboard either way;
+ *   3. To them again: we replied. The reply is on the dashboard either way;
  *      the mail is what makes them look.
  *
  * Failure is swallowed throughout. The ticket row is committed before any of
@@ -34,7 +34,7 @@ function supportFromAddress(): string {
 }
 
 /**
- * Recipients are the platform's own inbox, never a value from the ticket — the
+ * Recipients are the platform's own inbox, never a value from the ticket: the
  * form is church-supplied input and must not be able to address our mail.
  */
 function internalRecipients(): string[] {
@@ -63,7 +63,7 @@ async function send(params: {
 }): Promise<boolean> {
   const resend = resendClient();
   if (!resend || params.to.length === 0) {
-    console.log(`[FaithForm] ${params.label} not sent — email is not configured.`);
+    console.log(`[FaithForm] ${params.label} not sent: email is not configured.`);
     return false;
   }
 
@@ -102,7 +102,7 @@ export async function sendSupportTicketNotification(
   params: SupportTicketEmailParams,
 ): Promise<{ emailed: boolean }> {
   const content = renderEmail({
-    title: `Support — ${params.churchName}: ${params.subject}`,
+    title: `Support request from ${params.churchName}: ${params.subject}`,
     preheader: `${params.priority} priority ticket from ${params.churchName}.`,
     heading: params.subject,
     blocks: [
@@ -123,7 +123,7 @@ export async function sendSupportTicketNotification(
     to: internalRecipients(),
     // Replying to the notification should reach the church, not our own inbox.
     replyTo: params.submittedByEmail ?? SUPPORT_EMAIL,
-    subject: `Support — ${params.churchName}: ${params.subject}`,
+    subject: `Support request from ${params.churchName}: ${params.subject}`,
     content,
     label: "Support ticket notification",
   });
@@ -140,13 +140,13 @@ export type SupportTicketAckParams = {
 
 /**
  * Sent to the church the moment their ticket lands. It promises nothing about
- * timing — it only confirms the thing arrived and says where to watch it.
+ * timing: it only confirms the thing arrived and says where to watch it.
  */
 export async function sendSupportTicketAck(
   params: SupportTicketAckParams,
 ): Promise<boolean> {
   const content = renderEmail({
-    title: `We received your request — ${params.subject}`,
+    title: `We received your request: ${params.subject}`,
     preheader: "Your support request is with the FaithForm team.",
     heading: "We've got your request",
     blocks: [
@@ -169,7 +169,7 @@ export async function sendSupportTicketAck(
 
   return send({
     to: [params.to],
-    subject: `We received your request — ${params.subject}`,
+    subject: `We received your request: ${params.subject}`,
     content,
     label: "Support ticket acknowledgement",
   });

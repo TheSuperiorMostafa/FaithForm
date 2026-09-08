@@ -8,7 +8,7 @@
 -- separate until you write down what a checkout actually is: a credential held
 -- by *a household* authorising release of *a child in that household* to an
 -- adult who belongs to it. Without households there is nothing to hang the
--- credential on, so the directory is not a nice-to-have alongside check-in —
+-- credential on, so the directory is not a nice-to-have alongside check-in,
 -- it is the thing check-in is built out of.
 --
 -- ## Locations are not an age-tier system
@@ -31,7 +31,7 @@
 --
 -- QR credentials are signed tokens, not rows: they carry their own expiry and
 -- there is nothing to leak. Six-digit codes *are* rows, because six digits
--- collide — two households drawing 418 302 in the same week would hand a staff
+-- collide: two households drawing 418 302 in the same week would hand a staff
 -- member an ambiguous match, and only a unique index can prevent that.
 
 -- ---------------------------------------------------------------------------
@@ -54,7 +54,7 @@ create table if not exists public.church_locations (
   -- door over a number in a database is worse than being one over.
   capacity integer check (capacity is null or capacity > 0),
 
-  -- Where an adult goes unless someone says otherwise — "Sanctuary" for most
+  -- Where an adult goes unless someone says otherwise: "Sanctuary" for most
   -- churches. A default, not a category: it is a location like any other.
   is_default_adult_location boolean not null default false,
 
@@ -93,7 +93,7 @@ create table if not exists public.households (
 
   notes text,
 
-  -- Bumped when a household's codes must stop working before the week is out —
+  -- Bumped when a household's codes must stop working before the week is out,
   -- a lost phone, a custody change. Folded into code generation so the next
   -- issue differs from the last.
   code_rotation integer not null default 0,
@@ -122,7 +122,7 @@ create table if not exists public.household_members (
   relationship text not null
     check (relationship in ('guardian', 'dependent', 'other')),
 
-  -- What to call it on screen — "Mother", "Grandson", "Foster child". Never
+  -- What to call it on screen: "Mother", "Grandson", "Foster child". Never
   -- read as authorization; `relationship` above is.
   relationship_label text,
 
@@ -133,7 +133,7 @@ create table if not exists public.household_members (
 );
 
 -- A person belongs to exactly one household. Two households claiming the same
--- child is precisely the ambiguity a custody chain must not contain — the
+-- child is precisely the ambiguity a custody chain must not contain: the
 -- answer for a grandparent or a separated parent is an explicit pickup
 -- authorization below, which is auditable, and not a second membership, which
 -- is not.
@@ -185,8 +185,8 @@ create unique index if not exists household_pickup_active_idx
 --
 -- One code per household per service week, spoken aloud at a desk by a parent
 -- who could not open their phone. Stored rather than derived so that the
--- uniqueness a staff member depends on — "this code identifies exactly one
--- family" — is enforced by the database instead of hoped for.
+-- uniqueness a staff member depends on: "this code identifies exactly one
+-- family": is enforced by the database instead of hoped for.
 --
 -- Held in plaintext on purpose: a code that cannot be shown to the parent who
 -- must read it out is not a code. The mitigations are that it is worthless
@@ -224,7 +224,7 @@ create unique index if not exists household_checkout_codes_household_idx
 --
 -- Not to be confused with `attendance_checkin_sessions` (0059), which is a
 -- projector showing a rotating code to a congregation. This is one person, in
--- one room, for one service — the row a volunteer means when they ask who is
+-- one room, for one service: the row a volunteer means when they ask who is
 -- in their room right now.
 --
 -- Adults are in this table too. A parent serving in the nursery is checked in
@@ -366,7 +366,7 @@ create table if not exists public.member_files (
   uploaded_by uuid references auth.users (id) on delete set null,
   uploaded_by_name text,
 
-  -- For the documents that go stale — a background check due to be re-run.
+  -- For the documents that go stale: a background check due to be re-run.
   expires_on date,
 
   created_at timestamptz not null default now()
@@ -414,7 +414,7 @@ create trigger checkin_sessions_updated_at
 --
 -- Reads are scoped to the church. Every write goes through a server action
 -- holding the service role, which is also what decides whether a release was
--- authorised — a church member must never be able to write a checkout row
+-- authorised: a church member must never be able to write a checkout row
 -- directly, credential or not.
 
 alter table public.church_locations enable row level security;
@@ -450,8 +450,8 @@ create policy checkin_sessions_select on public.checkin_sessions
   for select to authenticated
   using (church_id in (select public.user_church_ids()));
 
--- Codes are not shown in the dashboard at all — staff type one in, they never
--- read one out — so nothing in the church's own session needs to select them.
+-- Codes are not shown in the dashboard at all: staff type one in, they never
+-- read one out, so nothing in the church's own session needs to select them.
 -- Only the service role, verifying a code a parent presented, ever reads here.
 
 -- A background check is admin-only unless someone deliberately marked a file

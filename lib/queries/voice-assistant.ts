@@ -234,7 +234,7 @@ function formatEventLine(title: string, startAt: string, location?: string): str
     minute: "2-digit",
   });
   const loc = location?.trim();
-  return loc ? `${title} — ${when} (${loc})` : `${title} — ${when}`;
+  return loc ? `${title}, ${when} (${loc})` : `${title}, ${when}`;
 }
 
 function uniqueLines(lines: string[]): string[] {
@@ -322,7 +322,7 @@ export async function getVoiceAssistantContext(
     publicStaff.length > 0
       ? publicStaff
       : profile?.phone
-        ? [`Main office — ${profile.phone}`]
+        ? [`Main office: ${profile.phone}`]
         : [];
 
   const serviceSchedule =
@@ -360,7 +360,7 @@ function isMissingScoringColumns(message: string): boolean {
  * Fill in the 0070 columns a pre-migration database does not have.
  *
  * They are only ever a faster copy of what already sits in `score_breakdown`,
- * so a row read from an older schema is not missing information — it just has
+ * so a row read from an older schema is not missing information: it just has
  * to be read out of the JSON instead. Every consumer goes through
  * `describeCallScore`, which looks in both places.
  */

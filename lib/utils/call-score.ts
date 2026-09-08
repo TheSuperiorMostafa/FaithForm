@@ -12,8 +12,8 @@ import type { PhoneCallRow } from "@/types/voice-assistant";
 /**
  * One place that decides what a scored call looks like on screen.
  *
- * Two rubrics are in the table at once — 0–100 rows from before migration 0070
- * and 1–10 rows after it — and a "7" means opposite things in each. Rather than
+ * Two rubrics are in the table at once: 0–100 rows from before migration 0070
+ * and 1–10 rows after it, and a "7" means opposite things in each. Rather than
  * letting each component guess, every read goes through here, and a legacy row
  * says so out loud instead of quietly showing a 7 that used to be a 70.
  */
@@ -54,7 +54,7 @@ function firstString(...values: unknown[]): string | null {
 }
 
 /**
- * Green at 8+, amber in the middle, red at 3 and below — on the 1–10 scale.
+ * Green at 8+, amber in the middle, red at 3 and below: on the 1–10 scale.
  * Legacy rows are deliberately left neutral: their number is a converted rank,
  * not a judgement the current rubric ever made, and colouring it would dress
  * up a guess as a verdict.
@@ -102,8 +102,8 @@ export function describeCallScore(call: PhoneCallRow): CallScoreView {
   };
 }
 
-/** "8 / 10", or "—" when the call has not been scored. */
+/** "8 / 10", or "" when the call has not been scored. */
 export function formatCallScore(view: CallScoreView): string {
-  if (view.value == null) return "—";
+  if (view.value == null) return "";
   return `${view.value} / ${view.outOf}`;
 }

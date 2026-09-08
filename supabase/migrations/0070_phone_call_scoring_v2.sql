@@ -6,7 +6,7 @@
 -- 0036 scored every call 0–100 on one question: did this go well? For a church
 -- phone line that question is backwards most of the time. The single most
 -- common call a church answers is a Google Business Listing robocall, and the
--- best possible handling of one — recognise it, decline, hang up — scores near
+-- best possible handling of one, recognise it, decline, hang up, scores near
 -- zero under "did the caller get what they wanted". So the calls the assistant
 -- handled *best* sank to the bottom of the log, and the column stopped being
 -- worth reading.
@@ -18,9 +18,9 @@
 -- lifted out of the JSON blob into real columns, because they are the ones the
 -- dashboard filters and sorts on:
 --
---   * `call_classification` — spam / no_engagement / vendor / real
---   * `notify_pastor`       — does a human at the church need to see this
---   * `urgency`             — how fast
+--   * `call_classification`: spam / no_engagement / vendor / real
+--   * `notify_pastor`      : does a human at the church need to see this
+--   * `urgency`            : how fast
 --
 -- Keeping them in `score_breakdown` would mean a jsonb path scan on every call
 -- log page load, and no index worth having.
@@ -30,7 +30,7 @@
 -- Rows scored under 0036 are on a 0–100 scale and rows scored from here on are
 -- on 1–10, and there is no honest way to have both in one column. The old
 -- values are rescaled rather than dropped: dividing by ten preserves the only
--- thing a v1 score ever conveyed — its rank against the other v1 calls — while
+-- thing a v1 score ever conveyed, its rank against the other v1 calls, while
 -- putting it in the range the UI now renders. They keep `version: 1` in their
 -- breakdown, so nothing later mistakes a converted score for a judged one, and
 -- their classification stays null because v1 never made one.
@@ -76,7 +76,7 @@ create index if not exists phone_calls_attention_idx
   on public.phone_calls (church_id, notify_pastor, called_at desc)
   where notify_pastor is true;
 
--- Filtering the log by kind — "show me only the real calls" — is the other
+-- Filtering the log by kind, "show me only the real calls", is the other
 -- read this table gets, and it is always scoped to one church.
 create index if not exists phone_calls_classification_idx
   on public.phone_calls (church_id, call_classification, called_at desc);

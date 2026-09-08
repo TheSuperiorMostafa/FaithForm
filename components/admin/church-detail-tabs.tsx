@@ -48,7 +48,7 @@ type ChurchDetailTabsProps = {
   featureNotices: FeatureNotices;
   /** church_users.id → granted features, for the Users tab. */
   featurePermissionsByMemberId: Record<string, FeatureKey[]>;
-  /** Church identity, services, staff and AI knowledge — we own this, not the church. */
+  /** Church identity, services, staff and AI knowledge: we own this, not the church. */
   profileForm: ChurchProfileFormState;
   domains: SiteDomainDetail[];
   domainRequests: SiteDomainRequest[];
@@ -248,8 +248,8 @@ export function ChurchDetailTabs({
           <CardContent className="flex flex-col items-start gap-3">
             <p className="text-sm text-muted-foreground">
               Persona, voice, greeting, office hours and after-hours behaviour.
-              These left the church&apos;s own navigation — pastors wanted the
-              call log, not the controls — so this is the way in. It opens
+              These left the church&apos;s own navigation: pastors wanted the
+              call log, not the controls, so this is the way in. It opens
               inside {detail.church.name}&apos;s dashboard, with their data.
             </p>
             <OpenChurchDashboardButton

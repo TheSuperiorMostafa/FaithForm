@@ -22,10 +22,10 @@ export const VOICE_GENDERS = ["male", "female"] as const;
 export type VoiceGender = (typeof VOICE_GENDERS)[number];
 
 /**
- * 'managed' — FaithForm creates the Retell agent and pushes prompt/config
+ * 'managed': FaithForm creates the Retell agent and pushes prompt/config
  * updates on every save (the default, and everything before this field
  * existed).
- * 'linked' — the agent was hand-built directly in Retell, before FaithForm
+ * 'linked': the agent was hand-built directly in Retell, before FaithForm
  * existed, or otherwise lives outside FaithForm's control. Call logs,
  * transcripts and scoring still flow in, but FaithForm never writes to the
  * agent or its LLM.
@@ -119,7 +119,7 @@ export type VoiceAssistantContext = {
 export type PhoneCallScoreBreakdown = {
   version?: number;
   score: number;
-  /** Version 1 only — replaced by `summary` and `flag_reason`. */
+  /** Version 1 only: replaced by `summary` and `flag_reason`. */
   rationale?: string;
   call_type?: CallClassification;
   label?: CallLabel;

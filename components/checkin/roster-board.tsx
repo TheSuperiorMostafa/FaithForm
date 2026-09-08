@@ -24,7 +24,7 @@ type RosterBoardProps = {
 };
 
 function formatTime(value: string | null): string {
-  if (!value) return "—";
+  if (!value) return "";
   return new Date(value).toLocaleTimeString(undefined, {
     hour: "numeric",
     minute: "2-digit",
@@ -266,7 +266,7 @@ export function RosterBoard({
                             </p>
                             <p className="text-xs text-muted-foreground">
                               {session.status === "pre_checked_in"
-                                ? "Pre-checked in — not yet received"
+                                ? "Pre-checked in, not yet received"
                                 : `In at ${formatTime(session.checkedInAt)}`}
                               {session.householdName && ` · ${session.householdName}`}
                             </p>
@@ -305,7 +305,7 @@ export function RosterBoard({
 
       <p className="text-xs text-muted-foreground">
         Showing {serviceDate}. Releasing a child happens under{" "}
-        <strong>Checkout</strong> — it needs a credential, so it is never a
+        <strong>Checkout</strong>: it needs a credential, so it is never a
         button on this list.
       </p>
     </div>

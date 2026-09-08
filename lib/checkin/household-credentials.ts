@@ -22,7 +22,7 @@ import { serviceWeekStart } from "@/lib/checkin/service-week";
  * **The six-digit code is a row**, because six digits collide. Two households
  * drawing 418302 in the same week would hand a volunteer a match that names
  * two families, and the only honest way to prevent that is a unique index and
- * a retry — which is exactly what `issueWeeklyCode` does. It is stored in
+ * a retry, which is exactly what `issueWeeklyCode` does. It is stored in
  * plaintext for the unavoidable reason that a parent has to be able to read it
  * off their phone and say it out loud.
  *
@@ -55,7 +55,7 @@ type QrBody = {
  * A QR payload for one household, good until the end of its service week.
  *
  * The rotation counter is folded in so that bumping it on a
- * household — a lost phone, a custody change — produces a token that no longer
+ * household, a lost phone, a custody change, produces a token that no longer
  * matches the one already on the old device.
  */
 export function mintPickupQr(input: {
@@ -85,7 +85,7 @@ export type PickupQrVerification =
   | { ok: false; reason: "invalid" | "expired" };
 
 /**
- * Signature, then expiry, then contents — in that order, and nothing inside
+ * Signature, then expiry, then contents: in that order, and nothing inside
  * the payload is trusted before the signature over it has been proven.
  */
 export function verifyPickupQr(
@@ -132,7 +132,7 @@ function randomSixDigits(): string {
  *
  * The unique index on `(church_id, week_start, code)` is the authority. A
  * collision surfaces as a constraint violation and is retried, rather than
- * being pre-checked with a select — which would be a race with every other
+ * being pre-checked with a select, which would be a race with every other
  * household being issued a code at the same moment on a Sunday morning.
  */
 export async function issueWeeklyCode(
@@ -167,8 +167,8 @@ export async function issueWeeklyCode(
     if (!error && data) return data.code as string;
     if (!error) break;
 
-    // 23505 is a unique violation. Either this household raced itself — in
-    // which case the row that won is the answer — or the code collided with
+    // 23505 is a unique violation. Either this household raced itself: in
+    // which case the row that won is the answer, or the code collided with
     // another household's and a different one has to be drawn.
     if (error.code !== "23505") return null;
 
@@ -193,8 +193,8 @@ export type CodeLookup =
 /**
  * Which household a staff member just typed a code for.
  *
- * Scoped to the current week and to this church, so last week's code — the one
- * still sitting in a screenshot on a parent's phone — resolves to nothing
+ * Scoped to the current week and to this church, so last week's code: the one
+ * still sitting in a screenshot on a parent's phone: resolves to nothing
  * rather than to whoever holds it now.
  */
 export async function lookupWeeklyCode(

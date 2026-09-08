@@ -5,7 +5,7 @@
  *
  * `onboarding@resend.dev` is Resend's shared testing sender. It is not ours, it
  * carries no FaithForm DKIM signature, and Resend restricts it to the address
- * that owns the account — so a church invite sent from it reaches nobody except
+ * that owns the account, so a church invite sent from it reaches nobody except
  * us. That is not a delivery problem anyone can debug from the outside: the
  * invite records as sent, the pastor never receives it, and the only way to get
  * a church set up is to invite yourself and hand it over afterwards.
@@ -32,7 +32,7 @@ export function isSandboxSender(address: string): boolean {
 
 /**
  * `RESEND_FROM_EMAIL` when it names a real mailbox of ours, and the default
- * otherwise — including when it is blank, whitespace, or the sandbox sender.
+ * otherwise: including when it is blank, whitespace, or the sandbox sender.
  */
 export function resolveFromAddress(): string {
   const configured = process.env.RESEND_FROM_EMAIL?.trim();

@@ -3,7 +3,7 @@
  * Creates the storage buckets FaithForm expects. Safe to re-run.
  *
  * `stream-recordings` was never created in production, so every finished
- * broadcast produced a database row pointing at a bucket that did not exist —
+ * broadcast produced a database row pointing at a bucket that did not exist,
  * signing a playback URL failed and the Media page said "processing" forever.
  *
  * Usage:
@@ -50,7 +50,7 @@ const supabase = createClient(url, key, {
 
 /**
  * No fileSizeLimit is set on purpose. A per-bucket limit cannot exceed the
- * project's global upload limit, and asking for more is rejected outright —
+ * project's global upload limit, and asking for more is rejected outright,
  * leaving it null makes the bucket inherit whatever the project allows.
  */
 const BUCKETS = [
@@ -65,7 +65,7 @@ const BUCKETS = [
   // read server-side when the Gmail draft is built and never linked to.
   { name: "communication-attachments", public: false },
   // Background checks, signed waivers, and anything else held against a
-  // person. Private, and never served by a signed URL — every read goes
+  // person. Private, and never served by a signed URL: every read goes
   // through a route that re-checks the reader's role.
   { name: "member-files", public: false },
 ];
@@ -77,7 +77,7 @@ for (const bucket of BUCKETS) {
 
   if (existing) {
     console.log(
-      `• ${bucket.name} — already exists (public=${existing.public})`,
+      `• ${bucket.name}: already exists (public=${existing.public})`,
     );
     continue;
   }
@@ -88,9 +88,9 @@ for (const bucket of BUCKETS) {
 
   if (error) {
     failed = true;
-    console.error(`✗ ${bucket.name} — ${error.message}`);
+    console.error(`✗ ${bucket.name}: ${error.message}`);
   } else {
-    console.log(`✓ ${bucket.name} — created (public=${bucket.public})`);
+    console.log(`✓ ${bucket.name}: created (public=${bucket.public})`);
   }
 }
 

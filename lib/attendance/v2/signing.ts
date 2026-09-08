@@ -20,7 +20,7 @@ import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
  * A token minted as a display capability therefore cannot verify as a check-in
  * token even if an attacker rewrote its body, because the two were signed under
  * keys that are computationally unrelated. The issuer and audience are bound the
- * same way — they are inside the derivation string, so a token from another
+ * same way: they are inside the derivation string, so a token from another
  * deployment or another product never verifies here. That is stronger than
  * carrying `iss` and `aud` as claims and checking them, and it costs no bytes on
  * a code someone has to scan across a sanctuary. The type is *also* carried in
@@ -32,12 +32,12 @@ import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
  * its key by a fingerprint derived *from* the key, which reveals nothing about
  * it. So an operator rotates by moving the current value into the previous slot,
  * installing a new one, and removing the old slot once the longest-lived
- * capability has expired — with nothing invalidated mid-service.
+ * capability has expired: with nothing invalidated mid-service.
  *
  * **Fail closed.** A missing, short, or placeholder key does not fall back to a
  * default, a constant, or an unsigned mode. Minting returns `null` and
  * verification refuses. A deployment with no key configured has no QR check-in,
- * which is the correct behaviour and is visible rather than silent — see
+ * which is the correct behaviour and is visible rather than silent: see
  * `checkinSigningStatus`.
  *
  * **Nothing here is ever logged.** No function in this file writes to the
@@ -57,7 +57,7 @@ export const CAPABILITY_TYPES = [
   "shortcode",
   // A parent's proof that they may collect their household's children. Its own
   // type, so a scanned attendance code can never be presented at a checkout
-  // desk and vice versa — the two are signed under unrelated sub-keys.
+  // desk and vice versa: the two are signed under unrelated sub-keys.
   "household.pickup",
 ] as const;
 
@@ -111,7 +111,7 @@ function keyRing(): SigningKey[] {
 
   const previous = usableSecret(process.env.ATTENDANCE_QR_SECRET_PREVIOUS);
   // A previous slot that still holds the current value is not a rotation and
-  // must not double the ring — it would just mean two identical entries.
+  // must not double the ring: it would just mean two identical entries.
   if (previous && previous !== current) {
     ring.push({ id: fingerprint(previous), material: previous, mintable: false });
   }
@@ -298,7 +298,7 @@ export function keyedHash(type: CapabilityType, value: string): string | null {
  *
  * A lookup tries these in order, so a code hashed before a rotation still
  * resolves during the grace period. One probe in the ordinary case, two while a
- * rotation is in flight — and once the previous slot is removed, the old hashes
+ * rotation is in flight, and once the previous slot is removed, the old hashes
  * stop resolving, which is what ends the grace.
  */
 export function keyedHashCandidates(type: CapabilityType, value: string): string[] {
@@ -315,7 +315,7 @@ export function randomToken(bytes = 32): string {
 /**
  * A value derived from the key and a label, rather than drawn at random.
  *
- * Used where two independent callers must agree without coordinating — both
+ * Used where two independent callers must agree without coordinating: both
  * pollers of a display compute the same rotation nonce because both compute
  * this, not because either stored it.
  */

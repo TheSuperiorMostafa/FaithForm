@@ -16,7 +16,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *
  * `requireSuperAdmin` runs first and redirects anyone who is not one, so the
  * note is only ever written for an account that has just proven itself. The
- * church id is checked against the table rather than trusted from the form —
+ * church id is checked against the table rather than trusted from the form,
  * the value arrives from a browser, and a signed note naming a church that
  * does not exist would only fail later and less clearly.
  */
@@ -43,7 +43,7 @@ export async function startImpersonation(formData: FormData) {
 
   if (!note) {
     throw new Error(
-      "Impersonation is not configured — set IMPERSONATION_SECRET or a Supabase service key.",
+      "Impersonation is not configured: set IMPERSONATION_SECRET or a Supabase service key.",
     );
   }
 
@@ -63,7 +63,7 @@ export async function startImpersonation(formData: FormData) {
 /**
  * Where inside the dashboard to land.
  *
- * Some doors into a church open onto a specific page — assistant settings, for
+ * Some doors into a church open onto a specific page: assistant settings, for
  * one, which no longer has a tab of its own in the church's nav. The value
  * arrives from a form, so it is matched against a literal prefix rather than
  * parsed: `//evil.example` and `/dashboard@evil.example` are both things a URL

@@ -769,7 +769,7 @@ async function processStripeEventEffects(event: Stripe.Event): Promise<void> {
           .or(
             `stripe_event_created_at.is.null,stripe_event_created_at.lte.${eventCreatedAt}`,
           );
-        // A refund is a state a donor must see. Only the webhook may write it —
+        // A refund is a state a donor must see. Only the webhook may write it,
         // there is no client path to `refunded`, which is what stops an app from
         // claiming a gift was returned when it was not.
         await admin.rpc("project_giving_attempt_state", {

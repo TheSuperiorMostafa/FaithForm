@@ -214,7 +214,7 @@ test("an override demands a written reason before it reaches the database", () =
 
 test("a household found by name can only be released as an override", () => {
   // The name path is a separate action, and the console opens the reason box
-  // for anything it returns — a name is not a credential.
+  // for anything it returns: a name is not a credential.
   assert.match(actions, /export async function lookupHouseholdForOverride/);
   assert.match(actions, /method: "override" as CheckoutMethod/);
   assert.match(console_, /setOverrideMode\(true\)/);

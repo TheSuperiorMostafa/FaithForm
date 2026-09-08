@@ -57,7 +57,7 @@ async function requireStation(): Promise<Context | { ok: false; error: string }>
   return { auth, admin: createAdminClient() };
 }
 
-/** Configuration — rooms, households, authorizations — is the admin's. */
+/** Configuration, rooms, households, authorizations, is the admin's. */
 async function requireAdmin(): Promise<Context | { ok: false; error: string }> {
   const context = await requireStation();
   if ("ok" in context) return context;
@@ -160,7 +160,7 @@ export async function updateLocation(formData: FormData): Promise<ActionResult> 
 
 /**
  * "Sanctuary" is where an adult goes unless told otherwise. One per church,
- * enforced by a partial unique index — so the old default has to be cleared
+ * enforced by a partial unique index, so the old default has to be cleared
  * before the new one is set, rather than both being true for an instant.
  */
 export async function setDefaultAdultLocation(
@@ -234,7 +234,7 @@ export async function deleteLocation(formData: FormData): Promise<ActionResult> 
 
   if (usage.sessions > 0 || usage.defaultFor > 0) {
     return fail(
-      `That room has ${usage.sessions} check-in${usage.sessions === 1 ? "" : "s"} on record and is the default for ${usage.defaultFor} ${usage.defaultFor === 1 ? "person" : "people"}. Turn it off instead — it keeps the history and stops it being assignable.`,
+      `That room has ${usage.sessions} check-in${usage.sessions === 1 ? "" : "s"} on record and is the default for ${usage.defaultFor} ${usage.defaultFor === 1 ? "person" : "people"}. Turn it off instead: it keeps the history and stops it being assignable.`,
     );
   }
 
@@ -318,7 +318,7 @@ export async function addHouseholdMember(
   }
 
   // Both sides are re-checked against this church rather than trusted from the
-  // form — the ids arrive from a browser, and a household in another church
+  // form: the ids arrive from a browser, and a household in another church
   // would otherwise be writable by anyone who guessed its id.
   const [{ data: household }, { data: member }] = await Promise.all([
     context.admin
@@ -670,8 +670,8 @@ export type CheckoutLookup = {
  * take them".
  *
  * This releases nobody. It is the read a staff member does before confirming,
- * and it is a server action rather than a route so that the code table — which
- * no church session may select from — is only ever read by the service role.
+ * and it is a server action rather than a route so that the code table, which
+ * no church session may select from: is only ever read by the service role.
  */
 export async function lookupCheckoutCredential(input: {
   kind: "qr" | "code";
@@ -776,7 +776,7 @@ export async function lookupCheckoutCredential(input: {
  *
  * Kept deliberately separate from `lookupCheckoutCredential` rather than folded
  * in as another `kind`. A name is not a credential, and anything reached this
- * way can only be released as an `override` — which demands a written reason
+ * way can only be released as an `override`, which demands a written reason
  * and is flagged for review. Collapsing the two would make the difference
  * invisible at exactly the place it matters.
  */
@@ -832,7 +832,7 @@ export async function lookupHouseholdForOverride(
  * Release children to the adult in front of the desk.
  *
  * The update is conditional on the session still being open, so a second press
- * of the button — or a second volunteer at a second station — changes zero rows
+ * of the button, or a second volunteer at a second station, changes zero rows
  * rather than overwriting who released the child and when. Every release
  * records the staff member, the instant, and which credential was verified.
  */
@@ -850,7 +850,7 @@ export async function completeCheckout(input: {
   const reason = input.overrideReason?.trim() ?? "";
   if (input.method === "override" && reason.length < 4) {
     return fail(
-      "An override has to say why — which ID was checked, or who confirmed it.",
+      "An override has to say why, which ID was checked, or who confirmed it.",
     );
   }
 
@@ -935,7 +935,7 @@ export async function getHouseholdCredentials(
   };
 }
 
-/** Kill this household's current code and QR — a lost phone, a custody change. */
+/** Kill this household's current code and QR: a lost phone, a custody change. */
 export async function rotateCredentials(
   formData: FormData,
 ): Promise<ActionResult> {

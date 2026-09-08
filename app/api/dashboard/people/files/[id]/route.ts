@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
  *
  * Deliberately not a signed storage URL. A signed URL is a bearer token with a
  * lifetime, and once it is in a browser history, a chat message, or a
- * screenshot it keeps working for anyone who has it — which is the wrong
+ * screenshot it keeps working for anyone who has it, which is the wrong
  * property for a background check. Streaming the bytes through here means the
  * church, the role, and the file's own visibility are all re-checked at the
  * moment of the read, and access ends the moment the person's role does.

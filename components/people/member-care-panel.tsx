@@ -89,7 +89,7 @@ export function MemberCarePanel({
           value={medicalNotes}
           readOnly={!isAdmin}
           onChange={(event) => setMedicalNotes(event.target.value)}
-          placeholder="Peanut allergy — EpiPen in the blue bag."
+          placeholder="Peanut allergy: EpiPen in the blue bag."
           className="w-full rounded-[10px] border-[1.5px] border-border bg-background px-4 py-3 text-[15px] shadow-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 read-only:opacity-70"
         />
         <p className="text-xs text-muted-foreground">
@@ -264,7 +264,7 @@ export function MemberCarePanel({
               </Button>
               <p className="mt-1.5 text-xs text-muted-foreground">
                 {ALLOWED_MEMBER_FILE_EXTENSIONS.join(", ")}. Background checks
-                default to admins only — nobody on general staff sees them
+                default to admins only: nobody on general staff sees them
                 unless you say so.
               </p>
             </div>

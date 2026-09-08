@@ -14,7 +14,7 @@ export const RELATIONSHIP_LABELS: Record<HouseholdRelationship, string> = {
 
 /**
  * What each relationship actually grants. Shown next to the picker, because
- * "guardian" reads as a description and is in fact a permission — the mistake
+ * "guardian" reads as a description and is in fact a permission: the mistake
  * that matters here is made at the moment somebody chooses one.
  */
 export const RELATIONSHIP_DESCRIPTIONS: Record<HouseholdRelationship, string> = {
@@ -110,7 +110,7 @@ export type CheckinSessionRow = {
   checkinMethod: CheckinMethod | null;
   checkoutMethod: CheckoutMethod | null;
   checkoutOverrideReason: string | null;
-  /** Read live rather than snapshotted — an allergy noted this morning counts. */
+  /** Read live rather than snapshotted: an allergy noted this morning counts. */
   medicalNotes: string | null;
 };
 

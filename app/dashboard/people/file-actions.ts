@@ -24,8 +24,8 @@ export type MemberFileResult = { ok: true } | { ok: false; error: string };
  * Not because a volunteer could not be trusted with a waiver, but because the
  * same control carries background checks, and the default has to be set by the
  * most sensitive thing that passes through it. A church that wants a particular
- * file seen more widely marks that file staff-visible; the reverse — tightening
- * a default after somebody has already uploaded under it — never happens.
+ * file seen more widely marks that file staff-visible; the reverse: tightening
+ * a default after somebody has already uploaded under it: never happens.
  */
 async function requireFileAdmin() {
   const auth = await getChurchAuth();

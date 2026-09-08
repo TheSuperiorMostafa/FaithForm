@@ -37,7 +37,7 @@ function buildSiteContactEmail(
   }
 
   return renderEmail({
-    title: `New website enquiry — ${params.churchName}`,
+    title: `New website enquiry: ${params.churchName}`,
     preheader: `${params.name} filled in the contact form on your website.`,
     heading: "New website enquiry",
     blocks: [

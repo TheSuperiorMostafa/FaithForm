@@ -90,7 +90,7 @@ export function RecentCallsBlock({
         {calls.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             Calls will appear here once your assistant is live. After you assign a
-            phone number in Retell, new calls log automatically — or use Sync from
+            phone number in Retell, new calls log automatically, or use Sync from
             Retell to pull recent history.
           </p>
         ) : (
@@ -135,7 +135,7 @@ export function RecentCallsBlock({
                             classification={score.classification}
                           />
                           <AttentionBadge view={score} />
-                          {!score.classification && !score.needsAttention && "—"}
+                          {!score.classification && !score.needsAttention && ""}
                         </span>
                       </td>
                       <td className="py-2.5 pr-4 tabular-nums">
@@ -149,7 +149,7 @@ export function RecentCallsBlock({
                             : undefined
                         }
                       >
-                        {score.value ?? "—"}
+                        {score.value ?? ""}
                         {score.value != null && (
                           <span className="font-normal text-muted-foreground">
                             /{score.outOf}
@@ -157,7 +157,7 @@ export function RecentCallsBlock({
                         )}
                       </td>
                       <td className="max-w-[240px] truncate py-2.5 pr-4 text-muted-foreground">
-                        {score.summary ?? "—"}
+                        {score.summary ?? ""}
                       </td>
                       <td className="py-2.5 pl-2">
                         <Link

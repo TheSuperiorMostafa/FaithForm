@@ -284,7 +284,7 @@ export function MemberFormPanel({
       {/*
         Outside the form above, not inside it. The care panel has upload and
         save forms of its own, and a nested <form> is invalid HTML that browsers
-        resolve by dropping the inner one — silently, and only at runtime.
+        resolve by dropping the inner one: silently, and only at runtime.
       */}
       {isEdit && member ? (
         <section className="mt-6 border-t border-border pt-6">

@@ -3,11 +3,11 @@
  * Applies the phone-call scoring rubric (0070) and children's check-in (0071).
  *
  * Both are additive and safe to re-run. 0070 rescales the surviving 0–100
- * scores to 1–10 exactly once — it stamps `version: 1` into each breakdown
+ * scores to 1–10 exactly once: it stamps `version: 1` into each breakdown
  * first, and only rescales rows carrying that stamp, so running it twice does
  * not divide anything by ten again.
  *
- * 0071 stores person documents in the `member-files` bucket — run
+ * 0071 stores person documents in the `member-files` bucket: run
  * `pnpm storage:buckets` as well, or uploads will fail against a bucket that
  * does not exist.
  *

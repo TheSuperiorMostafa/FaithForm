@@ -29,7 +29,7 @@ export default async function CallLogPage() {
           Call Log
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Every call your phone assistant answered — who rang, what they wanted,
+          Every call your phone assistant answered: who rang, what they wanted,
           and how it was handled.
           {needsAttention > 0 && (
             <>

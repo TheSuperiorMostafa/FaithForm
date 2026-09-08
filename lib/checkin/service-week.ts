@@ -5,7 +5,7 @@
  * parent reads out, the roster a volunteer looks at, the headcount a director
  * compares. Getting the week from the server's clock would put a church in
  * Hawaii on next week's code at 7pm on a Saturday, and a church in Maine on
- * last week's at 1am Sunday — so the date is always resolved through the
+ * last week's at 1am Sunday, so the date is always resolved through the
  * church's timezone, never through the process's.
  *
  * Weeks start on Sunday because that is what "this week's code" means to

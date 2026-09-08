@@ -123,7 +123,7 @@ export async function scorePhoneCallIfNeeded(
       client,
       phoneCallId,
       buildNoEngagementBreakdown(
-        "No transcript was recorded — the caller hung up, said nothing, or the line was dead.",
+        "No transcript was recorded: the caller hung up, said nothing, or the line was dead.",
       ),
     );
   }
@@ -166,7 +166,7 @@ export async function scorePhoneCallIfNeeded(
 }
 
 /**
- * The three lifted columns are a query convenience, not the record itself —
+ * The three lifted columns are a query convenience, not the record itself,
  * `score_breakdown` already holds every one of them. So on a database that has
  * not had 0070 applied, the score is still written rather than lost, and the
  * columns fill in when the migration lands.

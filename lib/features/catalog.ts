@@ -18,10 +18,10 @@ import {
  * The single source of truth for gateable product areas.
  *
  * Two independent switches decide whether someone sees a feature:
- *   1. Account level  — a platform admin turns the feature on/off for a church
+ *   1. Account level: a platform admin turns the feature on/off for a church
  *                       (`church_features`). Off means nobody in that church
  *                       sees it, admins included.
- *   2. User level     — a church admin grants individual members access
+ *   2. User level:    a church admin grants individual members access
  *                       (`church_users.feature_permissions`). Church admins
  *                       implicitly hold every grant.
  *
@@ -147,7 +147,7 @@ export const FEATURES: FeatureDefinition[] = [
     icon: Heart,
     routes: ["/dashboard/giving"],
     publicImpact:
-      "Takes the public giving page offline and stops new gifts. Existing recurring gifts keep running — donors can still pause or cancel them, but not restart or raise one.",
+      "Takes the public giving page offline and stops new gifts. Existing recurring gifts keep running: donors can still pause or cancel them, but not restart or raise one.",
   },
   {
     key: "library",
@@ -161,7 +161,7 @@ export const FEATURES: FeatureDefinition[] = [
     key: "website",
     label: "Website",
     description:
-      "Public church website — page content, design, sermon feed, and visitor messages.",
+      "Public church website: page content, design, sermon feed, and visitor messages.",
     href: "/dashboard/website",
     icon: Globe,
     routes: ["/dashboard/website"],
@@ -172,7 +172,7 @@ export const FEATURES: FeatureDefinition[] = [
     key: "member_app",
     label: "Member App",
     description:
-      "The church's presence in the Faithful app — discovery, join requests, and invitation links.",
+      "The church's presence in the Faithful app: discovery, join requests, and invitation links.",
     href: "/dashboard/app",
     icon: Smartphone,
     routes: ["/dashboard/app"],
@@ -198,7 +198,7 @@ export function isFeatureKey(value: unknown): value is FeatureKey {
   );
 }
 
-/** Keeps only recognised keys — stale grants in the DB are ignored, not trusted. */
+/** Keeps only recognised keys: stale grants in the DB are ignored, not trusted. */
 export function parseFeatureKeys(values: unknown): FeatureKey[] {
   if (!Array.isArray(values)) return [];
   return values.filter(isFeatureKey);

@@ -24,7 +24,7 @@ type Props = {
 /**
  * The directory, searched the way a front desk actually searches it.
  *
- * Typing "John Doe" matches the *person* and returns the household — which is
+ * Typing "John Doe" matches the *person* and returns the household, which is
  * the whole point of the feature, and the reason this does not simply filter
  * household names. A child whose surname differs from the household's would be
  * invisible to a name filter, and that child is exactly who someone is looking
@@ -182,7 +182,7 @@ export function HouseholdsDirectory({
         <p className="text-xs text-muted-foreground">
           {unassignedCount}{" "}
           {unassignedCount === 1 ? "person is" : "people are"} not in a household
-          yet. They can still be checked in — they just have no pickup
+          yet. They can still be checked in: they just have no pickup
           credential, so releasing them needs a staff override.
         </p>
       )}

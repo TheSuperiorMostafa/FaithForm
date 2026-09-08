@@ -70,7 +70,7 @@ export async function listLocations(
  *
  * The spec asks for a warning rather than a silent orphaning, and a warning
  * that cannot say "37 check-ins, 4 people default here" is not one anybody can
- * act on. `head: true` keeps this to a count — the rows themselves are never
+ * act on. `head: true` keeps this to a count: the rows themselves are never
  * needed.
  */
 export async function locationUsage(
@@ -231,7 +231,7 @@ export async function getHousehold(
   )
     .map(mapHouseholdMember)
     .filter((row): row is HouseholdMemberRow => row !== null)
-    // Guardians first, then children, then everyone else — the order a person
+    // Guardians first, then children, then everyone else: the order a person
     // reading a household card expects.
     .sort((a, b) => {
       const rank = { guardian: 0, dependent: 1, other: 2 } as const;
@@ -280,7 +280,7 @@ export async function getHousehold(
  *
  * This is the whole point of the directory: a volunteer types "John Doe" and
  * gets the Doe household, not John. Two steps rather than one query because
- * the match is on a *member* and the result is a *household* — searching the
+ * the match is on a *member* and the result is a *household*: searching the
  * household name instead would miss a child whose surname differs from the
  * household's.
  */
@@ -403,7 +403,7 @@ export async function getRoster(
     .filter((row): row is CheckinSessionRow => row !== null);
 }
 
-/** The open sessions for one household — what a checkout desk is releasing. */
+/** The open sessions for one household: what a checkout desk is releasing. */
 export async function getHouseholdOpenSessions(
   churchId: string,
   householdId: string,
@@ -434,12 +434,12 @@ export async function getHouseholdOpenSessions(
  *
  * Counts sessions that reached `checked_in` or beyond. A pre-check-in that
  * nobody turned up for is not attendance, and counting it would make the
- * numbers drift upward the moment parents start using the app — which is
+ * numbers drift upward the moment parents start using the app, which is
  * exactly when a director would be looking at them.
  */
 export async function getLocationStats(
   churchId: string,
-  options: { weeks?: number; endWeekStart: string } ,
+  options: { weeks?: number; endWeekStart: string },
   supabase?: SupabaseClient,
 ): Promise<{ weeks: string[]; rows: LocationHeadcount[] }> {
   const client = supabase ?? db();

@@ -15,7 +15,7 @@ const RANGES = [4, 8, 13, 26];
  * The trend compares the most recent week against the one before it, and only
  * that: a director asking "are we growing" on a Monday morning means since last
  * Sunday, not since the mean of the range. Rooms with no attendance in the
- * window are absent rather than shown as a row of zeros — an empty row says
+ * window are absent rather than shown as a row of zeros: an empty row says
  * nothing except that the room exists, which the Rooms tab already covers.
  */
 export function LocationStatsTable({

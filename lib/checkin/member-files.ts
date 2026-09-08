@@ -1,10 +1,10 @@
 /**
- * Documents held against a person — background checks, signed waivers, the
+ * Documents held against a person: background checks, signed waivers, the
  * paperwork a church is obliged to keep and obliged not to leave lying around.
  *
  * The bucket is private and nothing here ever hands out a durable URL. A file
  * is fetched through a route that re-checks who is asking, every time, because
- * the alternative — a public link that works forever for anyone who has it — is
+ * the alternative, a public link that works forever for anyone who has it, is
  * exactly the wrong shape for a document that says whether somebody has a
  * criminal record.
  */
@@ -65,7 +65,7 @@ export function sanitizeMemberFileName(
 
   if (!base) return `document.${fallbackExtension}`;
 
-  // A dot anywhere is not an extension — "../../etc/passwd" has three and none
+  // A dot anywhere is not an extension: "../../etc/passwd" has three and none
   // of them say what the file is. Only a short alphanumeric tail counts.
   return /\.[a-z0-9]{1,8}$/i.test(base) ? base : `${base}.${fallbackExtension}`;
 }

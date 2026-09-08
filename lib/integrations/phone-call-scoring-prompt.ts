@@ -7,7 +7,7 @@
  * call", which quietly punished the assistant for the calls it handled best.
  * A Google Business Listing robocall that the assistant recognised and hung up
  * on is a *win* for the church, but "did the caller get what they wanted" reads
- * it as a total failure — so the spam that churches get most of scored lowest,
+ * it as a total failure, so the spam that churches get most of scored lowest,
  * and the score column stopped meaning anything.
  *
  * So the rubric classifies before it scores. A call is triaged into one of four
@@ -56,11 +56,11 @@ export const CLASSIFICATION_LABELS: Record<CallClassification, string> = {
  * number on screen is never unexplained.
  */
 export const CLASSIFICATION_DESCRIPTIONS: Record<CallClassification, string> = {
-  spam: "A robocall, scam, or automated sales pitch. Scored on how cleanly the assistant refused it — a scam that fails is a win.",
+  spam: "A robocall, scam, or automated sales pitch. Scored on how cleanly the assistant refused it: a scam that fails is a win.",
   no_engagement:
     "Nobody spoke: a hang-up, dead air, or a wrong number. Always scored 5, because there is nothing to judge.",
   vendor:
-    "A real person selling something — cleaning, roofing, directories. Scored on how the assistant handled them.",
+    "A real person selling something: cleaning, roofing, directories. Scored on how the assistant handled them.",
   real: "A genuine church call. Scored on whether the caller actually got what they needed.",
 };
 
@@ -103,15 +103,15 @@ export function buildPhoneCallScoringSystem({
 }: ScoringChurchContext): string {
   const { subject, reflexive } = pronounsFor(voiceGender);
 
-  return `You are evaluating the performance of ${assistantName}, an AI phone receptionist for ${churchName}. ${assistantName} is the AGENT who answers the phone. The other party is the CALLER. Never confuse these roles — if the transcript opens with a greeting from ${churchName}, that is ${assistantName}.
+  return `You are evaluating the performance of ${assistantName}, an AI phone receptionist for ${churchName}. ${assistantName} is the AGENT who answers the phone. The other party is the CALLER. Never confuse these roles: if the transcript opens with a greeting from ${churchName}, that is ${assistantName}.
 
-STEP 1 — Classify the call:
+STEP 1: Classify the call:
 - spam: robocalls, scams, automated solicitations (especially Google Business Listing scams), pre-recorded sales messages
 - no_engagement: ${assistantName} greets but the caller never speaks, hangs up immediately, wrong number, dead air, or the transcript is empty
 - vendor: a real human selling or soliciting services (cleaning, roofing, striping, directories)
-- real: any genuine church-related call — service times, rentals, assistance requests, messages for staff, property questions, member questions
+- real: any genuine church-related call: service times, rentals, assistance requests, messages for staff, property questions, member questions
 
-STEP 2 — Score based on classification:
+STEP 2: Score based on classification:
 
 If spam: score how well ${assistantName} handled it, not whether the caller got what they wanted. Correctly identifying the scam, declining, and ending the call cleanly is a 10. Getting manipulated, pressing options, or giving out information is a 1. A scam that fails is a SUCCESS for the church.
 
@@ -131,7 +131,7 @@ HARD RULES:
 - If ${assistantName} tells a caller a date is unavailable when that caller is the existing reservation holder, score 2.
 - Do not penalize ${assistantName} for refusing scams, declining to give financial assistance, or routing something to the church office when that is genuinely the correct answer.
 
-STEP 3 — Decide whether to notify the pastor:
+STEP 3: Decide whether to notify the pastor:
 Set notify_pastor true for real calls that a human at the church needs to know about: someone in crisis, a member or visitor, an unresolved request, a property or building matter, a repeat caller, or anything where a person is waiting on a response. Set false for spam, no_engagement, and routine questions ${assistantName} fully answered (service times, address, hours).
 
 Set urgency:

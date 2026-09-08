@@ -100,7 +100,7 @@ export async function saveVoiceAssistantSettings(
       agentId = sync?.agentId;
     } catch (err) {
       if (err instanceof RetellLinkedAgentError) {
-        // Linked churches manage their agent directly in Retell — the save
+        // Linked churches manage their agent directly in Retell: the save
         // above already updated FaithForm's own records, so this is not a
         // failure, just a routine no-op.
         revalidatePath("/dashboard/voice-assistant");

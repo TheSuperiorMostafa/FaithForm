@@ -21,14 +21,14 @@ import { CHECKOUT_METHOD_LABELS } from "@/types/checkin";
 /**
  * The desk where a child is released.
  *
- * Two credentials get you to the same place — a list of this household's
- * children and the adults entitled to collect them — and neither releases
+ * Two credentials get you to the same place: a list of this household's
+ * children and the adults entitled to collect them, and neither releases
  * anybody. A staff member ticks who is actually leaving and confirms. That
  * second step is the point: the credential proves the family, the person at the
  * desk confirms the handover, and both halves are recorded.
  *
  * A scanner is a keyboard. Most QR readers churches buy type the payload and
- * press Enter, so the scan field is a plain text input that submits on Enter —
+ * press Enter, so the scan field is a plain text input that submits on Enter,
  * no camera permission, no device pairing, nothing to go wrong at 9am.
  */
 export function CheckoutConsole() {
@@ -59,8 +59,8 @@ export function CheckoutConsole() {
     });
   }
 
-  // Anything reached by name is an override by construction — there was no
-  // credential — so the reason box is open before the desk can confirm.
+  // Anything reached by name is an override by construction: there was no
+  // credential, so the reason box is open before the desk can confirm.
   function chooseOverrideHousehold(match: CheckoutLookup) {
     setLookup(match);
     setSelected(new Set(match.sessions.map((s) => s.id)));
@@ -277,7 +277,7 @@ export function CheckoutConsole() {
               <CardTitle>{lookup.householdName}</CardTitle>
               <p className="mt-1 text-sm text-muted-foreground">
                 {lookup.method === "override"
-                  ? "Found by name — no credential was presented."
+                  ? "Found by name: no credential was presented."
                   : `Verified by ${CHECKOUT_METHOD_LABELS[lookup.method].toLowerCase()}.`}
               </p>
             </div>
@@ -358,7 +358,7 @@ export function CheckoutConsole() {
                     <Input
                       id="override-reason"
                       value={overrideReason}
-                      placeholder="Checked driver's licence — Sarah Doe, mother"
+                      placeholder="Checked driver's licence: Sarah Doe, mother"
                       onChange={(event) => setOverrideReason(event.target.value)}
                     />
                     <p className="text-xs text-amber-800 dark:text-amber-300">

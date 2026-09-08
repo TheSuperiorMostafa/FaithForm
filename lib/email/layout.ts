@@ -9,7 +9,7 @@ import { getCanonicalSiteUrl } from "@/lib/site-url";
  * Six modules each hand-rolled their own document, which is how they drifted:
  * two golds (#C5A059 and #C9A227), two borders, `#ffffff` and `#FFFFFF`, and
  * not one of them ever showed the logo. Worse, none sent a plain-text part, so
- * every message arrived as HTML-only — which spam filters weigh against you,
+ * every message arrived as HTML-only, which spam filters weigh against you,
  * and which leaves screen readers and text-mode clients with whatever the
  * client can scrape.
  *
@@ -23,11 +23,11 @@ import { getCanonicalSiteUrl } from "@/lib/site-url";
  * every style inline, no flexbox, no grid, no external stylesheet, and a VML
  * fallback so the button is a button rather than a bare link. `<style>` in the
  * head is stripped by Gmail's clipping and by several corporate gateways, so
- * nothing that matters may live there — the media query is a progressive
+ * nothing that matters may live there: the media query is a progressive
  * enhancement for phones and nothing depends on it.
  */
 
-/** Straight from tailwind.config.ts — the same navy and gold the app uses. */
+/** Straight from tailwind.config.ts: the same navy and gold the app uses. */
 export const BRAND = {
   navy: "#002D5F",
   gold: "#C5A059",
@@ -62,7 +62,7 @@ export type EmailBrand = {
   accent: string;
   /**
    * Absolute https URL to a square logo, or null for a wordmark on its own.
-   * Never a relative path — an email has no origin to resolve one against.
+   * Never a relative path: an email has no origin to resolve one against.
    */
   logoUrl?: string | null;
 };
@@ -71,7 +71,7 @@ export type EmailBlock =
   | { kind: "paragraph"; text: string }
   | { kind: "subheading"; text: string }
   | { kind: "button"; label: string; url: string }
-  /** A label/value row — receipts, ticket metadata, contact submissions. */
+  /** A label/value row: receipts, ticket metadata, contact submissions. */
   | { kind: "detail"; label: string; value: string }
   /** Someone else's words, set apart from ours. */
   | { kind: "quote"; text: string }
@@ -79,7 +79,7 @@ export type EmailBlock =
   | { kind: "muted"; text: string }
   | { kind: "list"; items: string[] }
   /**
-   * A boxed panel for the one thing the reader came for — a temporary
+   * A boxed panel for the one thing the reader came for: a temporary
    * password, a receipt total. `mono` sets a value in a fixed-pitch face so a
    * credential can be transcribed without guessing at l versus 1.
    */
@@ -95,7 +95,7 @@ export type EmailDocument = {
   title: string;
   /**
    * The grey line the inbox shows after the subject. Without one, clients
-   * scrape the first text in the document — which is the logo's alt text.
+   * scrape the first text in the document, which is the logo's alt text.
    */
   preheader: string;
   heading: string;
@@ -207,7 +207,7 @@ ${block.rows
 }
 
 const DEFAULT_FOOTER =
-  "FaithForm — church management that gives your staff their week back.";
+  "FaithForm: church management that gives your staff their week back.";
 
 export function renderEmail(doc: EmailDocument): RenderedEmail {
   return { html: renderHtml(doc), text: renderText(doc) };
@@ -226,7 +226,7 @@ function renderHtml(doc: EmailDocument): string {
   // in the wordmark alone, which is better than a broken image icon.
   //
   // The absolute-URL check is here rather than at the call site because an
-  // email has no origin to resolve a relative path against —
+  // email has no origin to resolve a relative path against:
   // "/church-logos/x.png" is a broken image in every inbox on earth. Enforcing
   // it in the one place that writes the tag means no caller can reintroduce
   // it. http is tolerated only so a local build still previews its own logo;
@@ -252,7 +252,7 @@ function renderHtml(doc: EmailDocument): string {
   <noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript>
   <![endif]-->
   <style>
-    /* Progressive enhancement only — every client that drops this still gets
+    /* Progressive enhancement only: every client that drops this still gets
        a correct email, because the layout is inline and table-based. */
     @media only screen and (max-width:600px) {
       .ff-card { width:100% !important; border-radius:0 !important; }

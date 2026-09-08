@@ -4,7 +4,7 @@
  *
  * Migrations here are applied by hand, one bespoke script at a time, so a
  * database can sit several behind without anything saying so. The symptom
- * surfaces much later and somewhere unrelated — "Could not find the table
+ * surfaces much later and somewhere unrelated: "Could not find the table
  * 'public.church_features' in the schema cache" when a platform admin toggles a
  * feature, months after 0041 was skipped.
  *

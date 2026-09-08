@@ -245,7 +245,7 @@ export function HouseholdDetail({
                     <strong className="text-foreground">
                       {RELATIONSHIP_LABELS[value]}
                     </strong>{" "}
-                    — {RELATIONSHIP_DESCRIPTIONS[value]}
+                    {RELATIONSHIP_DESCRIPTIONS[value]}
                   </li>
                 ))}
               </ul>
@@ -261,7 +261,7 @@ export function HouseholdDetail({
             Also allowed to collect
           </CardTitle>
           <p className="mt-1 text-sm text-muted-foreground">
-            Someone outside the household — a grandparent, a neighbour — this
+            Someone outside the household, a grandparent, a neighbour, this
             family has said may pick their children up.
           </p>
         </CardHeader>
@@ -396,7 +396,7 @@ export function HouseholdDetail({
                 formData.set("householdId", household.id);
                 run(
                   rotateCredentials(formData),
-                  "Replaced — the old code and QR stop working now.",
+                  "Replaced: the old code and QR stop working now.",
                   () => setCredentials(null),
                 );
               }}

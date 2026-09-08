@@ -175,7 +175,7 @@ test("a call scored under the retired rubric says so instead of shrinking to a 7
   assert.equal(view.outOf, 100);
   assert.equal(formatCallScore(view), "70 / 100");
   assert.equal(view.classification, null);
-  // Its rationale still has to reach the screen — it is all a v1 row ever said.
+  // Its rationale still has to reach the screen: it is all a v1 row ever said.
   assert.equal(view.summary, "Answered the question but sounded scripted.");
   // And it is left uncoloured: a converted rank is not a verdict.
   assert.equal(view.toneClass, "text-muted-foreground");
@@ -185,7 +185,7 @@ test("an unscored call shows a dash rather than a zero", () => {
   const view = describeCallScore(call());
 
   assert.equal(view.value, null);
-  assert.equal(formatCallScore(view), "—");
+  assert.equal(formatCallScore(view), "");
   assert.equal(view.needsAttention, false);
 });
 

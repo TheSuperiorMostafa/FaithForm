@@ -5,7 +5,7 @@ import { getChurchAuth } from "@/lib/auth/church";
 import { isPlatformAdminUserId } from "@/lib/auth/superadmin";
 
 /**
- * Assistant configuration — ours to hold, not the church's.
+ * Assistant configuration: ours to hold, not the church's.
  *
  * Nothing on these pages is a decision a pastor asked to make. The persona, the
  * voice, the knowledge the agent answers from and the Retell agent it is bound

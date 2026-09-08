@@ -11,7 +11,7 @@ import {
 /**
  * Tells us a church asked for a domain.
  *
- * A domain request is a promise of human work — someone has to buy a name or
+ * A domain request is a promise of human work: someone has to buy a name or
  * walk a pastor through their registrar. The control center is the system of
  * record, but nobody refreshes a queue they are not expecting to have anything
  * in it, so the queue gets a doorbell.
@@ -127,7 +127,7 @@ export async function sendDomainRequestEmail(
       to,
       // Not replyTo: the church contact is unverified input, and a reply should
       // go through the control center where it is recorded.
-      subject: `Domain request — ${params.churchName}`,
+      subject: `Domain request: ${params.churchName}`,
       html: content.html,
       text: content.text,
     });

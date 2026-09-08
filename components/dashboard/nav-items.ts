@@ -24,7 +24,7 @@ export type NavItem = {
   /** Hide from mobile bottom nav (sidebar only). */
   sidebarOnly?: boolean;
   /**
-   * Gate this row behind features — it shows when the member holds any one of
+   * Gate this row behind features: it shows when the member holds any one of
    * them. Attendance lists both of its grants, so a pastor with Follow-up only
    * still reaches the section (its layout forwards them to the right tab).
    * Items with no features (Home, Support, Settings) are always available.
@@ -32,7 +32,7 @@ export type NavItem = {
   features?: FeatureKey[];
 };
 
-/** Keeps nav in sync with route guards — hidden rows are also unreachable. */
+/** Keeps nav in sync with route guards: hidden rows are also unreachable. */
 export function filterNavByFeatures(
   items: NavItem[],
   allowed: FeatureKey[],
@@ -94,7 +94,7 @@ export const navItems: NavItem[] = [
     features: ["live_stream"],
   },
   {
-    // Assistant configuration lives in the control center now — a pastor wants
+    // Assistant configuration lives in the control center now: a pastor wants
     // to read what the phone did, not tune what it is.
     label: "Call Log",
     shortLabel: "Calls",
