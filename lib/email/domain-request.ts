@@ -2,6 +2,7 @@ import { Resend } from "resend";
 
 import { escapeHtml } from "@/lib/email/escape-html";
 import { BOOTSTRAP_SUPERADMIN_EMAILS } from "@/lib/auth/superadmin-emails";
+import { resolveFromAddress } from "@/lib/email/sender";
 
 /**
  * Tells us a church asked for a domain.
@@ -145,7 +146,7 @@ export async function sendDomainRequestEmail(
   params: DomainRequestEmailParams,
 ): Promise<{ sent: boolean }> {
   const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM_EMAIL ?? "noreply@faithform.io";
+  const from = resolveFromAddress();
   const to = recipients();
 
   if (!apiKey || to.length === 0) {

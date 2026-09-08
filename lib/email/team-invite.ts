@@ -1,6 +1,7 @@
 import { Resend } from "resend";
 import { escapeHtml } from "@/lib/email/escape-html";
 import { absoluteAppPath, getCanonicalSiteUrl } from "@/lib/site-url";
+import { resolveFromAddress } from "@/lib/email/sender";
 
 function buildTeamInviteHtml(params: {
   churchName: string;
@@ -120,7 +121,7 @@ export async function sendTeamInviteEmail(
 ): Promise<{ sent: boolean; loginUrl: string }> {
   const loginUrl = absoluteAppPath("/login");
   const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.RESEND_FROM_EMAIL ?? "noreply@faithform.io";
+  const from = resolveFromAddress();
 
   if (!apiKey) {
     console.log(

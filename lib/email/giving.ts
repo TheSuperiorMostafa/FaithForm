@@ -1,6 +1,7 @@
 import { getSiteUrl } from "@/lib/stripe/config";
 import { escapeHtml } from "@/lib/email/escape-html";
 import { isValidHexColor } from "@/lib/giving/branding";
+import { resolveFromAddress } from "@/lib/email/sender";
 
 const DEFAULT_PRIMARY = "#002D5F";
 const DEFAULT_ACCENT = "#C5A059";
@@ -82,7 +83,7 @@ async function sendResendEmail(params: {
   idempotencyKey?: string;
 }): Promise<{ sent: boolean }> {
   const apiKey = process.env.RESEND_API_KEY?.trim();
-  const from = process.env.RESEND_FROM_EMAIL?.trim() || "noreply@faithform.io";
+  const from = resolveFromAddress();
 
   if (!apiKey) {
     console.info(`[giving-email] ${params.logLabel} unavailable`);
