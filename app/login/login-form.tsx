@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useFormState, useFormStatus } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -71,7 +71,23 @@ export function LoginForm() {
   // /auth/callback lands here with ?error=auth when a link could not be
   // exchanged — expired, already used, or truncated. Saying so beats the
   // previous behaviour, which was a bare sign-in form with no explanation.
-  const linkFailed = searchParams.get("error") === "auth";
+  //
+  // Held in state and stripped from the URL, rather than read from it on every
+  // render. Left in the address bar it outlives the failure it describes: it
+  // survives a reload, a switch to the password tab, and a fresh magic-link
+  // request, so a stale "that link expired" sits above a form that is working
+  // and reads as a new error arriving before anything was even sent.
+  const [linkFailed, setLinkFailed] = useState(
+    () => searchParams.get("error") === "auth",
+  );
+
+  useEffect(() => {
+    if (searchParams.get("error") !== "auth") return;
+    const next = new URLSearchParams(searchParams);
+    next.delete("error");
+    const query = next.toString();
+    router.replace(query ? `/login?${query}` : "/login", { scroll: false });
+  }, [router, searchParams]);
   // Password first: teammates are set up with a temporary password, so that is
   // the path most people arrive on. Magic link stays for anyone who prefers it.
   const [mode, setMode] = useState<"magic" | "password" | "reset">("password");
@@ -221,7 +237,11 @@ export function LoginForm() {
       </div>
 
       {mode === "magic" ? (
-        <form action={magicAction} className="space-y-4">
+        <form
+          action={magicAction}
+          onSubmit={() => setLinkFailed(false)}
+          className="space-y-4"
+        >
           <div>
             <label
               htmlFor="email-magic"
@@ -249,7 +269,11 @@ export function LoginForm() {
           <MagicSubmit />
         </form>
       ) : (
-        <form action={passwordAction} className="space-y-4">
+        <form
+          action={passwordAction}
+          onSubmit={() => setLinkFailed(false)}
+          className="space-y-4"
+        >
           <div>
             <label
               htmlFor="email-pw"
