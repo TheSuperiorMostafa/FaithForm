@@ -51,7 +51,13 @@ test("an unavailable limiter fails closed", async () => {
   delete process.env.SUPABASE_SECRET_KEY;
   delete process.env.SUPABASE_SERVICE_ROLE_KEY;
   const result = await checkRateLimit("test", { limit: 1, windowMs: 1_000 });
-  assert.deepEqual(result, { ok: false, retryAfterSeconds: 60 });
+  // Still closed, and now says *why* it closed: a caller that cannot tell this
+  // apart from a real overage ends up telling people they tried too often.
+  assert.deepEqual(result, {
+    ok: false,
+    reason: "unavailable",
+    retryAfterSeconds: 60,
+  });
   restoreEnv("NEXT_PUBLIC_SUPABASE_URL", priorUrl);
   restoreEnv("SUPABASE_SECRET_KEY", priorService);
   restoreEnv("SUPABASE_SERVICE_ROLE_KEY", priorLegacyService);

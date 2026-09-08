@@ -12,19 +12,53 @@ export type LoginFormState = {
   error?: string;
 };
 
+/**
+ * Turns a provider refusal into something the person at the keyboard can act
+ * on. Supabase reports its own throttling in prose that varies by endpoint and
+ * version, and passing it through verbatim produced sign-in screens quoting
+ * "For security purposes, you can only request this after 54 seconds."
+ */
+function describeAuthError(message: string): string | null {
+  const text = message.toLowerCase();
+  if (!/rate limit|too many|after \d+ seconds|try again/.test(text)) return null;
+
+  const seconds = /after (\d+) seconds?/.exec(text)?.[1];
+  if (seconds) {
+    return `Please wait ${seconds} seconds before requesting another link.`;
+  }
+  if (text.includes("email rate limit")) {
+    return "Too many sign-in emails have been sent from this site in the last hour. Wait an hour, or sign in with your password instead.";
+  }
+  return "Too many attempts just now. Wait a minute and try again.";
+}
+
 async function enforceLoginRateLimit(action: string): Promise<LoginFormState | null> {
   const ip = await getRequestIpFromHeaders();
   const rate = await assertRateLimit(`login:${action}:${ip}`, {
     limit: 10,
     windowMs: 15 * 60 * 1000,
   });
-  if (!rate.ok) {
+
+  if (rate.ok) return null;
+
+  // A limiter that cannot answer refuses the request, because failing open on
+  // sign-in is worse. But it must not claim the person did something they did
+  // not do: "too many attempts" sends them off counting their own tries, when
+  // the truth is that no number of attempts would have worked.
+  if (rate.reason === "unavailable") {
+    console.error(`[login] ${action} refused: the rate limiter is unavailable`);
     return {
       ok: false,
-      error: "Too many attempts. Please wait a few minutes and try again.",
+      error:
+        "Sign-in is temporarily unavailable. This is a problem on our side, not with your account. Please try again in a few minutes.",
     };
   }
-  return null;
+
+  const minutes = Math.max(1, Math.ceil(rate.retryAfterSeconds / 60));
+  return {
+    ok: false,
+    error: `Too many attempts. Please try again in ${minutes} minute${minutes === 1 ? "" : "s"}.`,
+  };
 }
 
 export async function sendMagicLink(
@@ -60,7 +94,7 @@ export async function sendMagicLink(
   });
 
   if (error) {
-    return { ok: false, error: error.message };
+    return { ok: false, error: describeAuthError(error.message) ?? error.message };
   }
 
   return { ok: true };
@@ -137,7 +171,10 @@ export async function signInWithPassword(
   const { error } = await supabase.auth.signInWithPassword({ email, password });
 
   if (error) {
-    return { ok: false, error: error.message };
+    // A throttled sign-in and a wrong password are not the same problem, and
+    // "Invalid login credentials" sends someone to reset a password that was
+    // right all along.
+    return { ok: false, error: describeAuthError(error.message) ?? error.message };
   }
 
   return { ok: true };

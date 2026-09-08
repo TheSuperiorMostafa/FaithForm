@@ -6,9 +6,19 @@ export type RateLimitOptions = {
   windowMs: number;
 };
 
+/**
+ * `limited` means the caller really did exceed the allowance. `unavailable`
+ * means the limiter itself could not answer, and the request is refused
+ * because failing open on a login endpoint is worse than failing closed.
+ *
+ * The distinction exists because callers were telling people "too many
+ * attempts" for both. A broken limiter then presents exactly as a permanent
+ * lockout: every browser, every account, no attempt count that could explain
+ * it, and nothing in the product that says otherwise.
+ */
 export type RateLimitResult =
   | { ok: true }
-  | { ok: false; retryAfterSeconds: number };
+  | { ok: false; reason: "limited" | "unavailable"; retryAfterSeconds: number };
 
 /**
  * Forwarded headers are accepted only when the deployment explicitly declares
@@ -55,21 +65,27 @@ export async function checkRateLimit(
     !Number.isInteger(options.windowMs) ||
     options.windowMs < 1000
   ) {
-    return { ok: false, retryAfterSeconds: 60 };
+    console.error("[rate-limit] called with invalid options", options);
+    return { ok: false, reason: "unavailable", retryAfterSeconds: 60 };
   }
 
   const admin = createAdminClientOrNull();
   if (!admin) {
-    console.error("[rate-limit] unavailable");
-    return { ok: false, retryAfterSeconds: 60 };
+    console.error(
+      "[rate-limit] no service-role client: every rate-limited route now refuses",
+    );
+    return { ok: false, reason: "unavailable", retryAfterSeconds: 60 };
   }
 
   let hashedKey: string;
   try {
     hashedKey = hashRateLimitKey(key);
-  } catch {
-    console.error("[rate-limit] configuration unavailable");
-    return { ok: false, retryAfterSeconds: 60 };
+  } catch (err) {
+    console.error(
+      "[rate-limit] RATE_LIMIT_KEY_SECRET is missing or rejected: every rate-limited route now refuses",
+      err,
+    );
+    return { ok: false, reason: "unavailable", retryAfterSeconds: 60 };
   }
 
   const windowSeconds = Math.ceil(options.windowMs / 1000);
@@ -80,8 +96,11 @@ export async function checkRateLimit(
   });
 
   if (error || !data?.[0]) {
-    console.error("[rate-limit] store unavailable");
-    return { ok: false, retryAfterSeconds: 60 };
+    console.error(
+      "[rate-limit] consume_api_rate_limit did not answer: every rate-limited route now refuses",
+      error,
+    );
+    return { ok: false, reason: "unavailable", retryAfterSeconds: 60 };
   }
 
   const result = data[0] as {
@@ -91,6 +110,7 @@ export async function checkRateLimit(
   if (result.allowed) return { ok: true };
   return {
     ok: false,
+    reason: "limited",
     retryAfterSeconds: Math.max(1, result.retry_after_seconds || 1),
   };
 }
