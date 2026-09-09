@@ -6,6 +6,23 @@ const BASE_SECURITY_HEADERS = [
 ];
 
 const nextConfig = {
+  experimental: {
+    serverActions: {
+      // Next defaults this to 1MB, which is smaller than any photo a phone
+      // takes. Every upload in the app runs through a Server Action, so
+      // without this a church picking a banner photo gets a raw 413 from the
+      // framework before our own size check, and our own friendly message,
+      // ever run.
+      //
+      // 4MB rather than the 12MB the upload field offers: Vercel refuses a
+      // serverless request body over 4.5MB whatever Next is configured to
+      // accept, so anything higher here would only move the failure. Photos
+      // above this are shrunk in the browser before they are sent, in
+      // lib/sites/downscale-image.ts.
+      bodySizeLimit: "4mb",
+    },
+  },
+
   async headers() {
     return [
       // The embed player is meant to be iframed into a church's own website,

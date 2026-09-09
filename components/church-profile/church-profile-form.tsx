@@ -18,6 +18,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { normalizeHexColor } from "@/lib/giving/branding";
+import { downscaleForUpload } from "@/lib/sites/downscale-image";
 import {
   AI_KNOWLEDGE_FIELDS,
   DAY_OF_WEEK_LABELS,
@@ -103,10 +104,14 @@ export function ChurchProfileForm({
   const patch = (next: Partial<ChurchProfileFormState>) =>
     setForm((prev) => ({ ...prev, ...next }));
 
+  // Both uploads travel as Server Action bodies, which are capped well below
+  // the sizes these fields advertise. Shrinking first is what keeps a photo
+  // straight off a phone from failing at the framework, before either action
+  // gets to answer with a message of its own.
   const handleLogoUpload = async (file: File) => {
     const fd = new FormData();
     fd.set("churchId", churchId);
-    fd.set("logo", file);
+    fd.set("logo", await downscaleForUpload(file));
     const result = await uploadChurchProfileLogo(fd);
     if ("error" in result) {
       toast.error(result.error);
@@ -119,7 +124,7 @@ export function ChurchProfileForm({
   const handleCoverUpload = async (file: File) => {
     const fd = new FormData();
     fd.set("churchId", churchId);
-    fd.set("cover", file);
+    fd.set("cover", await downscaleForUpload(file));
     const result = await uploadChurchCoverImage(fd);
     if ("error" in result) {
       toast.error(result.error);

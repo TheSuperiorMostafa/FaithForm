@@ -10,6 +10,7 @@ import { ImageCropper } from "@/components/website-admin/image-cropper";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { downscaleForUpload, UPLOAD_BUDGET_BYTES } from "@/lib/sites/downscale-image";
 import { getAspect, type ImageAspectKey } from "@/lib/sites/image-aspects";
 import { cn } from "@/lib/utils";
 
@@ -50,8 +51,12 @@ export function ImageUploadField({
   const [showUrl, setShowUrl] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [cropping, setCropping] = useState<File | null>(null);
+  // Shrinking a 12MP photo takes a beat, and it happens before the upload
+  // starts, so it needs its own flag to hold the spinner open.
+  const [preparing, setPreparing] = useState(false);
 
   const preset = getAspect(aspect);
+  const busy = pending || preparing;
 
   function upload(file: File, crop?: Area) {
     setError(null);
@@ -76,20 +81,46 @@ export function ImageUploadField({
     });
   }
 
-  /** Shaped images go through the cropper; free-form ones upload straight away. */
-  function accept(file: File) {
+  /**
+   * Shaped images go through the cropper; free-form ones upload straight away.
+   *
+   * The shrink has to happen first, before the cropper opens, because the
+   * cropper reports its rectangle in source-image pixels. Resizing afterwards
+   * would leave those coordinates pointing at an image that no longer exists.
+   */
+  async function accept(file: File) {
     setError(null);
-    if (preset.ratio === null) {
-      upload(file);
+    setPreparing(true);
+
+    let ready: File;
+    try {
+      ready = await downscaleForUpload(file);
+    } finally {
+      setPreparing(false);
+    }
+
+    // Only a file the browser could not decode, a HEIC outside Safari being
+    // the realistic case, arrives here still oversized. Saying so beats
+    // letting the request die at the server's body limit, which surfaces as an
+    // error nobody wrote.
+    if (ready.size > UPLOAD_BUDGET_BYTES) {
+      setError(
+        "That photo is too large to upload. Save it as a JPG and try again.",
+      );
       return;
     }
-    setCropping(file);
+
+    if (preset.ratio === null) {
+      upload(ready);
+      return;
+    }
+    setCropping(ready);
   }
 
   function onDrop(event: React.DragEvent) {
     event.preventDefault();
     setDragging(false);
-    if (disabled || pending) return;
+    if (disabled || busy) return;
 
     const file = event.dataTransfer.files?.[0];
     if (!file) return;
@@ -97,7 +128,7 @@ export function ImageUploadField({
       setError("That file isn't an image.");
       return;
     }
-    accept(file);
+    void accept(file);
   }
 
   return (
@@ -144,7 +175,7 @@ export function ImageUploadField({
               type="button"
               variant="outline"
               size="sm"
-              disabled={disabled || pending}
+              disabled={disabled || busy}
               onClick={() => inputRef.current?.click()}
             >
               Replace
@@ -153,7 +184,7 @@ export function ImageUploadField({
               type="button"
               variant="ghost"
               size="sm"
-              disabled={disabled || pending}
+              disabled={disabled || busy}
               onClick={() => {
                 setError(null);
                 onChange("");
@@ -177,10 +208,12 @@ export function ImageUploadField({
             dragging ? "border-accent bg-accent/5" : "border-border bg-muted/20",
           )}
         >
-          {pending ? (
+          {busy ? (
             <>
               <Loader2 className="size-5 animate-spin text-muted-foreground" aria-hidden />
-              <p className="text-sm text-muted-foreground">Uploading…</p>
+              <p className="text-sm text-muted-foreground">
+                {preparing ? "Preparing…" : "Uploading…"}
+              </p>
             </>
           ) : (
             <>
@@ -189,7 +222,7 @@ export function ImageUploadField({
                 <button
                   type="button"
                   className="font-semibold text-accent underline underline-offset-4"
-                  disabled={disabled}
+                  disabled={disabled || busy}
                   onClick={() => inputRef.current?.click()}
                 >
                   Choose a photo
@@ -210,12 +243,12 @@ export function ImageUploadField({
         type="file"
         accept="image/*"
         className="sr-only"
-        disabled={disabled || pending}
+        disabled={disabled || busy}
         onChange={(e) => {
           const file = e.target.files?.[0];
           // Reset so picking the same file twice still fires a change.
           e.target.value = "";
-          if (file) accept(file);
+          if (file) void accept(file);
         }}
       />
 
