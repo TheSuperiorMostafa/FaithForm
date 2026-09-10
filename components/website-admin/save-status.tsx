@@ -43,6 +43,15 @@ export function SaveStatus({
           Saved
         </span>
       );
+    // Not an error yet: another attempt is already on its way, so it reads as
+    // work in progress rather than as something the church has to fix.
+    case "retrying":
+      return (
+        <span className={cn(base, "text-amber-700 dark:text-amber-400", className)} role="status">
+          <Loader2 className="size-3.5 animate-spin" aria-hidden />
+          {status.message}
+        </span>
+      );
     case "error":
       return (
         <span className={cn(base, "text-destructive", className)} role="alert">
