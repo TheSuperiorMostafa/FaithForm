@@ -1,9 +1,14 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   absoluteHref,
+  calDavRequest,
+  CalDavAuthError,
+  CalDavError,
   parseMultiStatus,
   responseProperty,
+  toEntityTag,
 } from "@/lib/integrations/caldav";
 import {
   buildAppleEventId,
@@ -196,4 +201,198 @@ test("an event with no end is given an hour", () => {
     endAt: null,
   });
   assert.match(ics, /DTEND:20260804T210000Z/);
+});
+
+// ---------------------------------------------------------------------------
+// Requests: status handling, redirects, and entity tags
+// ---------------------------------------------------------------------------
+
+type Seen = { url: string; method: string; auth: string | null; body: string | undefined };
+
+/** Swaps global fetch for a scripted one for the length of `run`. */
+async function withFetch(
+  respond: (seen: Seen) => Response,
+  run: (seen: Seen[]) => Promise<void>,
+) {
+  const original = globalThis.fetch;
+  const seen: Seen[] = [];
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    const headers = new Headers(init?.headers);
+    const entry: Seen = {
+      url: String(input),
+      method: init?.method ?? "GET",
+      auth: headers.get("authorization"),
+      body: typeof init?.body === "string" ? init.body : undefined,
+    };
+    seen.push(entry);
+    return respond(entry);
+  }) as typeof fetch;
+  try {
+    await run(seen);
+  } finally {
+    globalThis.fetch = original;
+  }
+}
+
+const creds = { username: "pastor@icloud.com", password: "abcdabcdabcdabcd" };
+
+test("an ETag goes back in If-Match exactly as iCloud sent it", () => {
+  assert.equal(toEntityTag('"C=12@U=abc"'), '"C=12@U=abc"');
+  assert.equal(toEntityTag('W/"weak-1"'), 'W/"weak-1"');
+  // A bare value, as parseMultiStatus hands back, gets its quotes once.
+  assert.equal(toEntityTag("C=12@U=abc"), '"C=12@U=abc"');
+  assert.notEqual(toEntityTag('"C=12@U=abc"'), '""C=12@U=abc""');
+});
+
+test("only a 401 counts as a refused login; a 403 keeps the connection", async () => {
+  await withFetch(
+    () => new Response("", { status: 401 }),
+    async () => {
+      await assert.rejects(
+        calDavRequest("https://p52-caldav.icloud.com/9/calendars/", creds, { method: "PROPFIND" }),
+        CalDavAuthError,
+      );
+    },
+  );
+
+  await withFetch(
+    () => new Response("read-only", { status: 403 }),
+    async () => {
+      const failure = await calDavRequest(
+        "https://p52-caldav.icloud.com/9/calendars/shared/evt.ics",
+        creds,
+        { method: "PUT", body: "BEGIN:VCALENDAR" },
+      ).catch((err: unknown) => err);
+      assert.ok(failure instanceof CalDavError);
+      assert.ok(!(failure instanceof CalDavAuthError));
+      assert.equal((failure as CalDavError).status, 403);
+    },
+  );
+});
+
+test("a redirect to another iCloud host is followed with the login and the same request", async () => {
+  await withFetch(
+    (seen) =>
+      seen.url.startsWith("https://caldav.icloud.com/")
+        ? new Response(null, {
+            status: 301,
+            headers: { location: "https://p52-caldav.icloud.com/9/principal/" },
+          })
+        : new Response("<multistatus/>", { status: 207, headers: { etag: '"e1"' } }),
+    async (seen) => {
+      const result = await calDavRequest("https://caldav.icloud.com/.well-known/caldav", creds, {
+        method: "PROPFIND",
+        depth: "0",
+        body: "<propfind/>",
+        followRedirect: (url) => url.hostname.endsWith(".icloud.com"),
+      });
+
+      assert.equal(result.status, 207);
+      assert.equal(result.etag, '"e1"');
+      assert.equal(seen.length, 2);
+      assert.equal(seen[1]?.url, "https://p52-caldav.icloud.com/9/principal/");
+      assert.equal(seen[1]?.method, "PROPFIND");
+      assert.equal(seen[1]?.body, "<propfind/>");
+      assert.equal(seen[1]?.auth, seen[0]?.auth);
+      assert.match(seen[1]?.auth ?? "", /^Basic /);
+    },
+  );
+});
+
+test("a redirect off Apple is refused before the login is sent there", async () => {
+  await withFetch(
+    () =>
+      new Response(null, { status: 302, headers: { location: "https://attacker.example/steal" } }),
+    async (seen) => {
+      await assert.rejects(
+        calDavRequest("https://caldav.icloud.com/.well-known/caldav", creds, {
+          method: "PROPFIND",
+          followRedirect: (url) => url.hostname.endsWith(".icloud.com"),
+        }),
+        CalDavError,
+      );
+      assert.equal(seen.length, 1);
+      assert.ok(seen.every((entry) => !entry.url.includes("attacker.example")));
+    },
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Writing events
+// ---------------------------------------------------------------------------
+
+test("an all-day event is written as dates, not as midnight UTC", () => {
+  const ics = buildEventIcs({
+    uid: "retreat@faithform.io",
+    title: "Men's retreat",
+    startAt: "2026-09-12T00:00:00.000Z",
+    endAt: "2026-09-15T00:00:00.000Z",
+    allDay: true,
+  });
+
+  assert.match(ics, /DTSTART;VALUE=DATE:20260912\r\n/);
+  assert.match(ics, /DTEND;VALUE=DATE:20260915\r\n/);
+  assert.doesNotMatch(ics, /DTSTART:2026/);
+
+  const [event] = parseIcsEvents(ics);
+  assert.equal(event?.start.dateOnly, true);
+  assert.equal(event?.end?.day, 15);
+});
+
+test("an all-day event with no end, or a bad one, is one day long", () => {
+  for (const endAt of [null, "2026-09-12T00:00:00.000Z", "2026-09-10T00:00:00.000Z"]) {
+    const ics = buildEventIcs({
+      uid: "picnic@faithform.io",
+      title: "Picnic",
+      startAt: "2026-09-12T00:00:00.000Z",
+      endAt,
+      allDay: true,
+    });
+    assert.match(ics, /DTEND;VALUE=DATE:20260913\r\n/, `end ${endAt}`);
+  }
+});
+
+test("a rewrite carries the event's notes and a higher sequence", () => {
+  const ics = buildEventIcs({
+    uid: "evt@example.org",
+    title: "Prayer",
+    description: "Bring a friend",
+    startAt: "2026-08-04T20:00:00.000Z",
+    endAt: null,
+    sequence: 3,
+  });
+  assert.match(ics, /DESCRIPTION:Bring a friend/);
+  assert.match(ics, /SEQUENCE:3/);
+});
+
+test("long lines fold by bytes and never split a character", () => {
+  const title = `Café de oración 🙏 ${"é".repeat(60)} ${"🙏".repeat(20)}`;
+  const ics = buildEventIcs({
+    uid: "unicode@faithform.io",
+    title,
+    startAt: "2026-08-04T20:00:00.000Z",
+    endAt: null,
+  });
+
+  for (const line of ics.split("\r\n")) {
+    assert.ok(Buffer.byteLength(line, "utf8") <= 75, `line is ${Buffer.byteLength(line, "utf8")} bytes`);
+    assert.doesNotMatch(line, /[\uD800-\uDBFF](?![\uDC00-\uDFFF])/, "a surrogate pair was split");
+  }
+  assert.equal(parseIcsEvents(ics)[0]?.summary, title);
+});
+
+test("a one-off event's id does not carry its start time", () => {
+  const href = "https://p52-caldav.icloud.com/9/calendars/church/evt.ics";
+  const id = buildAppleEventId(href, "");
+
+  assert.equal(id, `apple:${href}`);
+  assert.deepEqual(parseAppleEventId(id), { href, occurrenceId: "" });
+});
+
+test("the patch path sends the ETag through toEntityTag and keeps the notes", () => {
+  const source = readFileSync("lib/integrations/apple-calendar.ts", "utf8");
+  const patch = source.slice(source.indexOf("export async function patchAppleCalendarEvent"));
+  assert.match(patch, /"If-Match": toEntityTag\(existing\.etag\)/);
+  assert.doesNotMatch(patch, /"If-Match": `"\$\{existing\.etag\}"`/);
+  assert.match(patch, /description: before\?\.description/);
 });

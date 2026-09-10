@@ -2,13 +2,15 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
   absoluteHref,
-  calDavRequest,
+  calDavRequest as rawCalDavRequest,
   CalDavAuthError,
   CalDavError,
   parseMultiStatus,
   responseProperty,
+  toEntityTag,
   type CalDavCredentials,
 } from "@/lib/integrations/caldav";
+import { allDaySpan } from "@/lib/integrations/all-day";
 import { expandIcsEvents, parseIcsEvents } from "@/lib/integrations/ics";
 import {
   getIntegration,
@@ -38,6 +40,13 @@ const APPLE_EVENT_PREFIX = "apple:";
  * Apple: a redirect or a tampered response that pointed somewhere else would
  * otherwise be handed a working password.
  */
+function isICloudUrl(parsed: URL): boolean {
+  return (
+    parsed.protocol === "https:" &&
+    (parsed.hostname === "icloud.com" || parsed.hostname.endsWith(".icloud.com"))
+  );
+}
+
 function assertICloudUrl(url: string): string {
   let parsed: URL;
   try {
@@ -46,14 +55,19 @@ function assertICloudUrl(url: string): string {
     throw new CalDavError("iCloud returned an address we could not read.");
   }
 
-  const onApple =
-    parsed.protocol === "https:" &&
-    (parsed.hostname === "icloud.com" || parsed.hostname.endsWith(".icloud.com"));
-
-  if (!onApple) {
+  if (!isICloudUrl(parsed)) {
     throw new CalDavError("Refusing to send iCloud credentials off Apple.");
   }
   return parsed.toString();
+}
+
+/** Every request in this module may follow iCloud to its partition hosts, and nowhere else. */
+function calDavRequest(
+  url: string,
+  credentials: CalDavCredentials,
+  init: Omit<Parameters<typeof rawCalDavRequest>[2], "followRedirect">,
+) {
+  return rawCalDavRequest(url, credentials, { ...init, followRedirect: isICloudUrl });
 }
 
 export class AppleReconnectRequiredError extends Error {
@@ -74,7 +88,9 @@ export function isAppleEventId(eventId: string): boolean {
  * again, and to tell two occurrences of the same weekly service apart.
  */
 export function buildAppleEventId(href: string, occurrenceId: string): string {
-  return `${APPLE_EVENT_PREFIX}${href}#${occurrenceId}`;
+  return occurrenceId
+    ? `${APPLE_EVENT_PREFIX}${href}#${occurrenceId}`
+    : `${APPLE_EVENT_PREFIX}${href}`;
 }
 
 export function parseAppleEventId(
@@ -111,11 +127,19 @@ export async function discoverAppleCalendars(
   <d:prop><d:current-user-principal /></d:prop>
 </d:propfind>`;
 
-  const principalRes = await calDavRequest(
-    ICLOUD_DISCOVERY_URL,
-    credentials,
-    { method: "PROPFIND", depth: "0", body: principalXml },
-  );
+  let principalRes: Awaited<ReturnType<typeof calDavRequest>>;
+  try {
+    principalRes = await calDavRequest(ICLOUD_DISCOVERY_URL, credentials, {
+      method: "PROPFIND",
+      depth: "0",
+      body: principalXml,
+    });
+  } catch (err) {
+    // Asking "who am I" is refused for one reason only: the login. Anywhere
+    // later, a 403 is about a single calendar and says nothing of the password.
+    if (err instanceof CalDavError && err.status === 403) throw new CalDavAuthError();
+    throw err;
+  }
 
   const principalHref = parseMultiStatus(principalRes.text)
     .map((response) => responseProperty(response, "current-user-principal"))
@@ -268,6 +292,36 @@ export async function listAppleCalendarEventsInRange(
   const connection = await getAppleConnection(churchId, supabase);
   if (!connection) return [];
 
+  try {
+    return await queryCalendarEvents(connection, startISO, endISO);
+  } catch (err) {
+    if (err instanceof CalDavAuthError) await flagReconnect(churchId, supabase);
+    throw err;
+  }
+}
+
+/**
+ * Proves a calendar can be read with these credentials, before anything is
+ * saved. Connecting used to save first and test afterwards, so a failed test
+ * left a stored connection behind that the church had just been told failed.
+ */
+export async function verifyAppleCalendarReadable(
+  credentials: CalDavCredentials,
+  calendarUrl: string,
+): Promise<void> {
+  const now = new Date();
+  await queryCalendarEvents(
+    { credentials, calendarUrl: assertICloudUrl(calendarUrl), calendarName: "" },
+    now.toISOString(),
+    new Date(now.getTime() + 7 * 86_400_000).toISOString(),
+  );
+}
+
+async function queryCalendarEvents(
+  connection: AppleConnection,
+  startISO: string,
+  endISO: string,
+): Promise<CalendarEventPreview[]> {
   const queryXml = `<?xml version="1.0" encoding="utf-8" ?>
 <c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
   <d:prop>
@@ -283,17 +337,11 @@ export async function listAppleCalendarEventsInRange(
   </c:filter>
 </c:calendar-query>`;
 
-  let text: string;
-  try {
-    ({ text } = await calDavRequest(connection.calendarUrl, connection.credentials, {
-      method: "REPORT",
-      depth: "1",
-      body: queryXml,
-    }));
-  } catch (err) {
-    if (err instanceof CalDavAuthError) await flagReconnect(churchId, supabase);
-    throw err;
-  }
+  const { text } = await calDavRequest(connection.calendarUrl, connection.credentials, {
+    method: "REPORT",
+    depth: "1",
+    body: queryXml,
+  });
 
   const events: CalendarEventPreview[] = [];
 
@@ -312,11 +360,22 @@ export async function listAppleCalendarEventsInRange(
       href,
     }));
 
+    // Only a series needs an occurrence in its id. A one-off event is the whole
+    // calendar object, and keying it by its start time meant that moving it,
+    // the most ordinary edit there is, gave it a new id and cut it loose from
+    // the announcement already published for it.
+    const recurring = new Set(
+      parsed.filter((event) => event.rrule || event.recurrenceId).map((event) => event.uid),
+    );
+
     // iCloud returns whole calendar objects, recurrence rules intact, so the
     // occurrences inside the window are worked out here.
     for (const occurrence of expandIcsEvents(parsed, startISO, endISO)) {
       events.push({
-        googleEventId: buildAppleEventId(href, occurrence.occurrenceId),
+        googleEventId: buildAppleEventId(
+          href,
+          recurring.has(occurrence.uid) ? occurrence.occurrenceId : "",
+        ),
         calendarId: connection.calendarUrl,
         title: occurrence.summary || "Untitled event",
         location: occurrence.location,
@@ -343,17 +402,36 @@ function icsEscape(value: string): string {
     .replace(/\r?\n/g, "\\n");
 }
 
-/** Folds a content line at 75 octets, as RFC 5545 requires. */
+/**
+ * Folds a content line at 75 octets, as RFC 5545 requires.
+ *
+ * Counted in UTF-8 bytes and cut only between characters. Counting UTF-16
+ * units let a title with accents or an emoji run past the limit, and could
+ * split an emoji in half across the fold.
+ */
 function foldLine(line: string): string {
-  if (line.length <= 74) return line;
-  const pieces: string[] = [line.slice(0, 74)];
-  let rest = line.slice(74);
-  while (rest.length > 73) {
-    pieces.push(` ${rest.slice(0, 73)}`);
-    rest = rest.slice(73);
+  if (Buffer.byteLength(line, "utf8") <= 75) return line;
+
+  const pieces: string[] = [];
+  let current = "";
+  let currentBytes = 0;
+  // The continuation's leading space counts toward its 75.
+  let limit = 75;
+
+  for (const char of line) {
+    const bytes = Buffer.byteLength(char, "utf8");
+    if (currentBytes + bytes > limit) {
+      pieces.push(current);
+      current = "";
+      currentBytes = 0;
+      limit = 74;
+    }
+    current += char;
+    currentBytes += bytes;
   }
-  if (rest) pieces.push(` ${rest}`);
-  return pieces.join("\r\n");
+  if (current) pieces.push(current);
+
+  return pieces.map((piece, i) => (i === 0 ? piece : ` ${piece}`)).join("\r\n");
 }
 
 export function buildEventIcs(input: {
@@ -363,12 +441,31 @@ export function buildEventIcs(input: {
   description?: string;
   startAt: string;
   endAt: string | null;
+  /**
+   * Written as dates, not times. Without this an all-day event came back as a
+   * one-hour event at midnight UTC, which is the evening before for the whole
+   * of the Americas.
+   */
+  allDay?: boolean;
+  /** Bumped on every rewrite so calendar apps take the new version. */
+  sequence?: number;
   now?: Date;
 }): string {
   const start = new Date(input.startAt);
-  const end = input.endAt
-    ? new Date(input.endAt)
-    : new Date(start.getTime() + 60 * 60 * 1000);
+
+  let when: string[];
+  if (input.allDay) {
+    const span = allDaySpan(input.startAt, input.endAt);
+    when = [
+      `DTSTART;VALUE=DATE:${span.start.replace(/-/g, "")}`,
+      `DTEND;VALUE=DATE:${span.end.replace(/-/g, "")}`,
+    ];
+  } else {
+    const end = input.endAt
+      ? new Date(input.endAt)
+      : new Date(start.getTime() + 60 * 60 * 1000);
+    when = [`DTSTART:${icsStamp(start)}`, `DTEND:${icsStamp(end)}`];
+  }
 
   const lines = [
     "BEGIN:VCALENDAR",
@@ -378,8 +475,8 @@ export function buildEventIcs(input: {
     "BEGIN:VEVENT",
     `UID:${input.uid}`,
     `DTSTAMP:${icsStamp(input.now ?? new Date())}`,
-    `DTSTART:${icsStamp(start)}`,
-    `DTEND:${icsStamp(end)}`,
+    ...when,
+    ...(input.sequence ? [`SEQUENCE:${input.sequence}`] : []),
     `SUMMARY:${icsEscape(input.title)}`,
     ...(input.location?.trim()
       ? [`LOCATION:${icsEscape(input.location.trim())}`]
@@ -410,8 +507,12 @@ export async function insertAppleCalendarEvent(
     throw new CalDavError("iCloud Calendar is not connected.");
   }
 
-  const uid = `${crypto.randomUUID()}@faithform.io`;
-  const href = `${connection.calendarUrl.replace(/\/$/, "")}/${uid}.ics`;
+  const id = crypto.randomUUID();
+  const uid = `${id}@faithform.io`;
+  // The file is named without the "@". iCloud is free to hand an href back
+  // percent-encoded, and "%40" in the listing against "@" here would make the
+  // event we just created look like a different one.
+  const href = `${connection.calendarUrl.replace(/\/$/, "")}/${id}.ics`;
   const ics = buildEventIcs({ uid, ...input });
 
   try {
@@ -428,7 +529,7 @@ export async function insertAppleCalendarEvent(
 
   const start = new Date(input.startAt);
   return {
-    googleEventId: buildAppleEventId(href, start.toISOString()),
+    googleEventId: buildAppleEventId(href, ""),
     calendarId: connection.calendarUrl,
     title: input.title,
     location: input.location ?? "",
@@ -453,6 +554,7 @@ export async function patchAppleCalendarEvent(
     location: string;
     startAt: string;
     endAt: string | null;
+    allDay?: boolean;
   },
   supabase?: SupabaseClient,
 ): Promise<void> {
@@ -479,22 +581,32 @@ export async function patchAppleCalendarEvent(
     throw err;
   }
 
-  if (/^RRULE:/im.test(existing.text)) {
+  const current = parseIcsEvents(existing.text);
+
+  if (
+    /^RRULE:/im.test(existing.text) ||
+    current.some((event) => event.rrule || event.recurrenceId)
+  ) {
     throw new CalDavError(
-      "This is a repeating iCloud event — change it in Apple Calendar so the whole series stays right.",
+      "This is a repeating iCloud event. Change it in Apple Calendar so the whole series stays right.",
     );
   }
 
-  const uid =
-    existing.text.match(/^UID:(.+)$/im)?.[1]?.trim() ??
-    `${crypto.randomUUID()}@faithform.io`;
+  // Read through the parser, which unfolds long lines. A regex over the raw
+  // text cut a long UID at its first fold and wrote back a different event.
+  const before = current[0];
+  const uid = before?.uid || `${crypto.randomUUID()}@faithform.io`;
 
   const ics = buildEventIcs({
     uid,
     title: input.title,
     location: input.location,
+    // The announcement does not own the event's notes, so they are kept.
+    description: before?.description,
     startAt: input.startAt,
     endAt: input.endAt,
+    allDay: input.allDay ?? before?.start.dateOnly ?? false,
+    sequence: (before?.sequence ?? 0) + 1,
   });
 
   try {
@@ -502,9 +614,9 @@ export async function patchAppleCalendarEvent(
       method: "PUT",
       body: ics,
       contentType: "text/calendar; charset=utf-8",
-      // Only overwrite the version we just read — a change made in Apple
+      // Only overwrite the version we just read: a change made in Apple
       // Calendar in the meantime should win rather than be silently lost.
-      headers: existing.etag ? { "If-Match": `"${existing.etag}"` } : {},
+      headers: existing.etag ? { "If-Match": toEntityTag(existing.etag) } : {},
     });
   } catch (err) {
     if (err instanceof CalDavAuthError) await flagReconnect(churchId, supabase);

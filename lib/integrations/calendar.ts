@@ -137,6 +137,7 @@ export async function patchChurchCalendarEvent(
     location: string;
     startAt: string;
     endAt: string | null;
+    allDay?: boolean;
   },
   supabase?: SupabaseClient,
 ): Promise<void> {
@@ -154,6 +155,7 @@ export async function patchChurchCalendarEvent(
       location: input.location,
       startAt: input.startAt,
       endAt: input.endAt,
+      allDay: input.allDay,
     },
     supabase,
   );

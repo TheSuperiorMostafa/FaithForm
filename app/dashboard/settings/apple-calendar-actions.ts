@@ -6,7 +6,7 @@ import { getChurchAuth } from "@/lib/auth/church";
 import { featureActionError } from "@/lib/features/guard";
 import {
   discoverAppleCalendars,
-  listAppleCalendarEventsInRange,
+  verifyAppleCalendarReadable,
   type AppleCalendarChoice,
 } from "@/lib/integrations/apple-calendar";
 import { CalDavAuthError, CalDavError } from "@/lib/integrations/caldav";
@@ -32,12 +32,19 @@ export type AppleConnectState =
 
 export type AppleSaveState = { ok: true } | { ok: false; error: string };
 
-function failureMessage(err: unknown): string {
+function failureMessage(err: unknown, step: "list" | "save"): string {
   if (err instanceof CalDavAuthError) {
-    return "Apple would not accept that. Check the Apple ID, and make sure the password is an app-specific password generated at account.apple.com — not the Apple ID's own password.";
+    return "Apple would not accept that. Check the Apple ID, and make sure the password is an app-specific password generated at account.apple.com, not the Apple ID's own password.";
   }
   if (err instanceof CalDavError) return err.message;
-  return "Could not reach iCloud. Try again in a moment.";
+
+  // Anything that is not a CalDAV error happened on our side, not Apple's.
+  // It used to be reported as "Could not reach iCloud", which sent people off
+  // to retry a login that had already worked.
+  console.error(`[apple-calendar] ${step} failed:`, err);
+  return step === "save"
+    ? "Apple accepted the login, but FaithForm could not save the connection. Try again, and contact support if it keeps happening."
+    : "Something went wrong on our side while talking to iCloud. Try again in a moment.";
 }
 
 type ChurchAuth = NonNullable<Awaited<ReturnType<typeof getChurchAuth>>>;
@@ -85,7 +92,7 @@ export async function listAppleCalendarsAction(
     });
     return { ok: true, calendars: discovery.calendars };
   } catch (err) {
-    return { ok: false, error: failureMessage(err) };
+    return { ok: false, error: failureMessage(err, "list") };
   }
 }
 
@@ -122,6 +129,10 @@ export async function connectAppleCalendarAction(
       return { ok: false, error: "That calendar is no longer on this Apple ID." };
     }
 
+    // Prove these credentials can read events from this calendar before
+    // anything is stored, so a failure leaves nothing half-connected behind.
+    await verifyAppleCalendarReadable({ username: appleId, password }, chosen.url);
+
     const existing = await getIntegration(auth.churchId, "apple", supabase);
     const metadata: AppleIntegrationMetadata = {
       ...clearReconnectFlags(existing?.metadata),
@@ -147,20 +158,10 @@ export async function connectAppleCalendarAction(
       supabase,
     );
 
-    // Prove the saved connection can actually read events before telling the
-    // church it is connected.
-    const now = new Date();
-    await listAppleCalendarEventsInRange(
-      auth.churchId,
-      now.toISOString(),
-      new Date(now.getTime() + 7 * 86_400_000).toISOString(),
-      supabase,
-    );
-
     revalidatePath("/dashboard/settings");
     revalidatePath("/dashboard/announcements");
     return { ok: true };
   } catch (err) {
-    return { ok: false, error: failureMessage(err) };
+    return { ok: false, error: failureMessage(err, "save") };
   }
 }

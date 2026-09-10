@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { logActivity } from "@/lib/activity/log";
+import { calendarEditFor } from "@/lib/announcements/calendar-edit";
 import {
   addToEmailQueue,
   removeFromEmailQueue,
@@ -91,12 +92,19 @@ function parsePublishForm(formData: FormData) {
     return { ok: false as const, error: "End must be after start" };
   }
 
-  const calendarChanged =
-    Boolean(googleEventId) &&
-    (title !== originalTitle ||
-      location !== originalLocation ||
-      startAt !== originalStartAt ||
-      (endAt ?? "") !== originalEndAt);
+  const calendarEdit = calendarEditFor({
+    title,
+    location,
+    startAt,
+    endAt,
+    allDay,
+    original: {
+      title: originalTitle,
+      location: originalLocation,
+      startAt: originalStartAt,
+      endAt: originalEndAt,
+    },
+  });
 
   return {
     ok: true as const,
@@ -112,7 +120,8 @@ function parsePublishForm(formData: FormData) {
       announcementId,
       pushToFacebook,
       pushToTeam,
-      calendarChanged,
+      calendarChanged: Boolean(googleEventId) && calendarEdit.changed,
+      calendarEndAt: calendarEdit.endAt,
       facebookCaption,
       socialGraphicPath,
       socialGraphicUrl,
@@ -407,7 +416,8 @@ export async function publishAnnouncement(
             title: payload.title,
             location: payload.location,
             startAt: payload.startAt,
-            endAt: payload.endAt,
+            endAt: payload.calendarEndAt,
+            allDay: payload.allDay,
           },
           ctx.supabase,
         );

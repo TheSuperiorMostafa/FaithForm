@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { google } from "googleapis";
+import { allDaySpan } from "@/lib/integrations/all-day";
 import {
   getGoogleAuthClient,
   GoogleReconnectRequiredError,
@@ -157,6 +158,7 @@ export async function patchCalendarEvent(
     location: string;
     startAt: string;
     endAt: string | null;
+    allDay?: boolean;
   },
   supabase?: SupabaseClient,
 ) {
@@ -165,17 +167,12 @@ export async function patchCalendarEvent(
 
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-  try {
-    await calendar.events.patch({
-      calendarId: input.calendarId,
-      eventId: input.googleEventId,
-      requestBody: {
-        summary: input.title,
-        location: input.location || undefined,
-        start: {
-          dateTime: input.startAt,
-          timeZone,
-        },
+  // An all-day event is patched as dates. Sending `dateTime` turned it into a
+  // one-hour event at midnight UTC, the evening before across the Americas.
+  const when = input.allDay
+    ? allDayRange(input.startAt, input.endAt)
+    : {
+        start: { dateTime: input.startAt, timeZone },
         end: input.endAt
           ? { dateTime: input.endAt, timeZone }
           : {
@@ -184,6 +181,16 @@ export async function patchCalendarEvent(
               ).toISOString(),
               timeZone,
             },
+      };
+
+  try {
+    await calendar.events.patch({
+      calendarId: input.calendarId,
+      eventId: input.googleEventId,
+      requestBody: {
+        summary: input.title,
+        location: input.location || undefined,
+        ...when,
       },
     });
   } catch (err) {
@@ -198,4 +205,13 @@ export async function patchCalendarEvent(
     }
     throw err;
   }
+}
+
+/** `dateTime` is cleared so the event is only ever one kind or the other. */
+function allDayRange(startAt: string, endAt: string | null) {
+  const span = allDaySpan(startAt, endAt);
+  return {
+    start: { date: span.start, dateTime: null },
+    end: { date: span.end, dateTime: null },
+  };
 }
