@@ -2,9 +2,9 @@ import { Download, Mail, MessageSquare, Video, type LucideIcon } from "lucide-re
 import { redirect } from "next/navigation";
 
 import { buttonVariants } from "@/components/ui/button";
+import { getCurrentChurchId } from "@/lib/auth/current-church";
 import {
   getAttendanceReportMonths,
-  getCurrentChurchId,
   getMonthlyReportMonths,
 } from "@/lib/queries/library";
 import { createClient } from "@/lib/supabase/server";

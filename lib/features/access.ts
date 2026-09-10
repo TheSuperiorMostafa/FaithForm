@@ -267,9 +267,12 @@ async function getFeatureAccessForClient(
   const auth = await getChurchAuth(client);
   if (!auth) return null;
 
-  const { flags, notices } = client
-    ? await getChurchFeatureState(auth.churchId, client)
-    : await getCachedChurchFeatureState(auth.churchId);
+  // A platform admin's own client cannot read another church's switches
+  // through RLS, so their church context always reads through the service role.
+  const { flags, notices } =
+    client && !auth.impersonation
+      ? await getChurchFeatureState(auth.churchId, client)
+      : await getCachedChurchFeatureState(auth.churchId);
 
   return {
     auth,

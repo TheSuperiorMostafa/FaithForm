@@ -5,7 +5,7 @@ import { SimpleSermonDetail } from "@/components/sermon-builder/simple-sermon-de
 import { SermonEditor } from "@/components/sermon-builder/sermon-editor";
 import { ShareInAppCard } from "@/components/sermon-builder/share-in-app-card";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentChurchId } from "@/lib/queries/dashboard";
+import { getCurrentChurchId } from "@/lib/auth/current-church";
 import { getSlideThemeById } from "@/lib/queries/slide-themes";
 import { getLatestAsset, getSermon } from "@/lib/queries/sermons";
 import type { DiscussionQuestion } from "@/types/sermon";

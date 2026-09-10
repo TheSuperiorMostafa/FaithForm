@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { getCurrentChurchId } from "@/lib/queries/library";
+import { getCurrentChurchId } from "@/lib/auth/current-church";
 
 export async function requireChurchContext(
   supabase: SupabaseClient,

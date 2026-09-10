@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { SeriesPlanner } from "@/components/sermon-builder/series-planner";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentChurchId } from "@/lib/queries/dashboard";
+import { getCurrentChurchId } from "@/lib/auth/current-church";
 
 export const dynamic = "force-dynamic";
 

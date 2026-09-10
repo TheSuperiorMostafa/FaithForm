@@ -7,7 +7,7 @@ import { createMemberDuringAttendance } from "@/app/dashboard/people/actions";
 import { featureActionError } from "@/lib/features/guard";
 import { createClient } from "@/lib/supabase/server";
 import { getChurchTimezone } from "@/lib/queries/attendance";
-import { getCurrentChurchId } from "@/lib/queries/dashboard";
+import { getCurrentChurchId } from "@/lib/auth/current-church";
 import { isSundayDate } from "@/lib/utils/dates";
 
 export type AttendanceEntryInput = {

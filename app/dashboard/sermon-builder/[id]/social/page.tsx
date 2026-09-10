@@ -3,7 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { SocialSnippetsPanel } from "@/components/sermon-builder/social-snippets";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentChurchId } from "@/lib/queries/dashboard";
+import { getCurrentChurchId } from "@/lib/auth/current-church";
 import { getLatestAsset, getSermon } from "@/lib/queries/sermons";
 import type { SocialSnippets } from "@/types/sermon";
 

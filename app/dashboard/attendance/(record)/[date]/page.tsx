@@ -8,7 +8,7 @@ import {
   getRecordByDate,
 } from "@/lib/queries/attendance";
 import { getFeatureAccess } from "@/lib/features/access";
-import { getCurrentChurchId } from "@/lib/queries/dashboard";
+import { getCurrentChurchId } from "@/lib/auth/current-church";
 import { createClient } from "@/lib/supabase/server";
 import { isSundayDate, isValidDateParam } from "@/lib/utils/dates";
 

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { listSlideThemesForChurch } from "@/lib/queries/slide-themes";
-import { getCurrentChurchId } from "@/lib/queries/dashboard";
+import { getCurrentChurchId } from "@/lib/auth/current-church";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";

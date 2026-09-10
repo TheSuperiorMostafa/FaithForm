@@ -191,11 +191,32 @@ const getChurchAuthForRequest = cache(
     getChurchAuthWithClient(createClient()),
 );
 
+/**
+ * The same answer for a caller that brought its own client.
+ *
+ * Passing a client used to skip impersonation entirely, which sent a platform
+ * admin's work inside a church to their *own* church instead: Settings showed
+ * nothing connected, and an iCloud connection or a published announcement
+ * landed on the wrong account. The church they are acting in wins whenever the
+ * client belongs to that same admin. A client for anyone else, such as a
+ * bearer-token API call, is answered for its own user as before.
+ */
+async function getChurchAuthForClient(
+  client: SupabaseClient,
+): Promise<ChurchAuth | null> {
+  const impersonated = await getImpersonatedChurchAuth();
+  if (impersonated) {
+    const { data } = await client.auth.getClaims();
+    if (data?.claims?.sub === impersonated.userId) return impersonated;
+  }
+  return getChurchAuthWithClient(client);
+}
+
 export function getChurchAuth(
   supabase?: SupabaseClient,
 ): Promise<ChurchAuth | null> {
   return supabase
-    ? getChurchAuthWithClient(supabase)
+    ? getChurchAuthForClient(supabase)
     : getChurchAuthForRequest();
 }
 

@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { DeleteSeriesButton } from "@/components/sermon-builder/delete-series-button";
 import { SeriesTimeline } from "@/components/sermon-builder/series-timeline";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentChurchId } from "@/lib/queries/dashboard";
+import { getCurrentChurchId } from "@/lib/auth/current-church";
 import { getSeries } from "@/lib/queries/sermons";
 
 export const dynamic = "force-dynamic";

@@ -5,7 +5,7 @@ import {
   getDefaultTranslationId,
 } from "@/lib/bible/translations";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentChurchId } from "@/lib/queries/dashboard";
+import { getCurrentChurchId } from "@/lib/auth/current-church";
 import { getChurchAISettings } from "@/lib/queries/sermons";
 
 export const dynamic = "force-dynamic";

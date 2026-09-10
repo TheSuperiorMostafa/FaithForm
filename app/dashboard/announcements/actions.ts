@@ -31,7 +31,7 @@ import {
 import { getChurchAnnouncementFacebookSchedule } from "@/lib/queries/church-profile";
 import { getChurchTimezone } from "@/lib/queries/attendance";
 import { hasIntegration } from "@/lib/integrations/tokens";
-import { getCurrentChurchId } from "@/lib/queries/dashboard";
+import { getCurrentChurchId } from "@/lib/auth/current-church";
 import type { PublishResult } from "@/lib/integrations/types";
 import { getMondayWeekWindowInTimeZone } from "@/lib/utils/calendar";
 

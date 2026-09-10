@@ -5,7 +5,7 @@ import { SimpleSermonBuilder } from "@/components/sermon-builder/simple-sermon-b
 import { getCuratedTranslations, getDefaultTranslationId } from "@/lib/bible/translations";
 import { parseScriptureRef } from "@/lib/sermon-builder/parse-ref";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentChurchId } from "@/lib/queries/dashboard";
+import { getCurrentChurchId } from "@/lib/auth/current-church";
 import { getChurchAISettings, getSermon } from "@/lib/queries/sermons";
 
 export const dynamic = "force-dynamic";

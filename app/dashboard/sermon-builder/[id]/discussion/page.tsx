@@ -3,7 +3,7 @@ import { redirect, notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { DiscussionQuestions } from "@/components/sermon-builder/discussion-questions";
 import { createClient } from "@/lib/supabase/server";
-import { getCurrentChurchId } from "@/lib/queries/dashboard";
+import { getCurrentChurchId } from "@/lib/auth/current-church";
 import { getLatestAsset, getSermon } from "@/lib/queries/sermons";
 import type { DiscussionQuestion } from "@/types/sermon";
 

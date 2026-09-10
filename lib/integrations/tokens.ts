@@ -53,42 +53,47 @@ const EMPTY_STATUS = {
 };
 
 /**
- * Reads only the status fields safe to serialize to a browser. User clients go
- * through a projection RPC; workers use the service role and construct that
- * same projection server-side.
+ * Reads only the status fields safe to serialize to a browser.
+ *
+ * The projection is built here, through the service role, whenever that is
+ * available. Every caller passes a church id it resolved from the signed-in
+ * member, the same trust `getIntegration` already extends to the full row.
+ * The projection RPC stays as the fallback, but it cannot be the first choice:
+ * it scopes itself by `auth.uid()`, so a platform admin working inside a church
+ * and every background job got zero rows and no error, which read as "nothing
+ * is connected". It also predates iCloud and returns no Apple fields at all.
  */
 async function loadIntegrationStatusRows(
   churchId: string,
   supabase?: SupabaseClient,
 ): Promise<IntegrationStatusRow[]> {
-  if (supabase) {
-    const { data, error } = await supabase.rpc("get_church_integration_status", {
-      p_church_id: churchId,
-    });
+  const admin = createAdminClientOrNull();
 
-    if (!error) {
-      return (data ?? []) as IntegrationStatusRow[];
+  if (admin) {
+    const { data, error } = await admin
+      .from("church_integrations")
+      .select("provider, access_token, metadata")
+      .eq("church_id", churchId);
+
+    if (!error && data) {
+      return data.map((row) => ({
+        provider: row.provider as string,
+        connected: Boolean((row.access_token as string | null)?.trim()),
+        metadata: projectSafeMetadata(
+          row.provider as IntegrationProvider,
+          (row.metadata ?? {}) as Record<string, unknown>,
+        ),
+      }));
     }
   }
 
-  const admin = createAdminClientOrNull();
-  if (!admin) return [];
+  if (!supabase) return [];
 
-  const { data, error } = await admin
-    .from("church_integrations")
-    .select("provider, access_token, metadata")
-    .eq("church_id", churchId);
+  const { data, error } = await supabase.rpc("get_church_integration_status", {
+    p_church_id: churchId,
+  });
 
-  if (error || !data) return [];
-
-  return data.map((row) => ({
-    provider: row.provider as string,
-    connected: Boolean((row.access_token as string | null)?.trim()),
-    metadata: projectSafeMetadata(
-      row.provider as IntegrationProvider,
-      (row.metadata ?? {}) as Record<string, unknown>,
-    ),
-  }));
+  return error ? [] : ((data ?? []) as IntegrationStatusRow[]);
 }
 
 function projectSafeMetadata(
