@@ -11,6 +11,12 @@ import {
   type CalDavCredentials,
 } from "@/lib/integrations/caldav";
 import { allDaySpan } from "@/lib/integrations/all-day";
+import {
+  calendarNameFromIcs,
+  CalendarFeedError,
+  fetchICloudFeed,
+  normalizeICloudFeedUrl,
+} from "@/lib/integrations/apple-feed";
 import { expandIcsEvents, parseIcsEvents } from "@/lib/integrations/ics";
 import {
   getIntegration,
@@ -245,24 +251,59 @@ type AppleConnection = {
   calendarName: string;
 };
 
-async function getAppleConnection(
+type AppleLink = { feedUrl: string; calendarName: string };
+
+/** The church's iCloud connection, whichever way it was made. */
+async function loadAppleConnection(
   churchId: string,
   supabase?: SupabaseClient,
-): Promise<AppleConnection | null> {
+): Promise<
+  | { mode: "caldav"; connection: AppleConnection }
+  | { mode: "public_link"; link: AppleLink }
+  | null
+> {
   const integration = await getIntegration(churchId, "apple", supabase);
   if (!integration?.access_token) return null;
 
   const metadata = (integration.metadata ?? {}) as AppleIntegrationMetadata;
+
+  if (metadata.mode === "public_link") {
+    const feedUrl = normalizeICloudFeedUrl(integration.access_token);
+    if (!feedUrl) return null;
+    return {
+      mode: "public_link",
+      link: { feedUrl, calendarName: metadata.calendar_name ?? "iCloud" },
+    };
+  }
+
   if (!metadata.apple_id || !metadata.calendar_url) return null;
 
   return {
-    credentials: {
-      username: metadata.apple_id,
-      password: integration.access_token,
+    mode: "caldav",
+    connection: {
+      credentials: {
+        username: metadata.apple_id,
+        password: integration.access_token,
+      },
+      calendarUrl: assertICloudUrl(metadata.calendar_url),
+      calendarName: metadata.calendar_name ?? "iCloud",
     },
-    calendarUrl: assertICloudUrl(metadata.calendar_url),
-    calendarName: metadata.calendar_name ?? "iCloud",
   };
+}
+
+/** Said whenever something asks a link connection to write. */
+export const READ_ONLY_ICLOUD_MESSAGE =
+  "Your iCloud calendar is connected with a read-only link, so FaithForm cannot change it. Add or edit the event in Apple Calendar and it will show up here.";
+
+/** The CalDAV connection needed to write, or an explanation of why there is none. */
+async function getWritableAppleConnection(
+  churchId: string,
+  supabase?: SupabaseClient,
+): Promise<AppleConnection> {
+  const loaded = await loadAppleConnection(churchId, supabase);
+  if (!loaded) throw new CalDavError("iCloud Calendar is not connected.");
+  if (loaded.mode === "public_link") throw new CalDavError(READ_ONLY_ICLOUD_MESSAGE);
+  return loaded.connection;
 }
 
 async function flagReconnect(
@@ -289,15 +330,86 @@ export async function listAppleCalendarEventsInRange(
   endISO: string,
   supabase?: SupabaseClient,
 ): Promise<CalendarEventPreview[]> {
-  const connection = await getAppleConnection(churchId, supabase);
-  if (!connection) return [];
+  const loaded = await loadAppleConnection(churchId, supabase);
+  if (!loaded) return [];
+
+  // A dead link is reported, not wiped: one bad answer from Apple should not
+  // cost the church the link, and the message says how to replace it.
+  if (loaded.mode === "public_link") {
+    const ics = await fetchICloudFeed(loaded.link.feedUrl);
+    return eventsFromAppleFeed(ics, startISO, endISO);
+  }
 
   try {
-    return await queryCalendarEvents(connection, startISO, endISO);
+    return await queryCalendarEvents(loaded.connection, startISO, endISO);
   } catch (err) {
     if (err instanceof CalDavAuthError) await flagReconnect(churchId, supabase);
     throw err;
   }
+}
+
+const APPLE_FEED_EVENT_PREFIX = `${APPLE_EVENT_PREFIX}feed:`;
+
+/** Where announcements record the calendar for link events. Never the link itself. */
+export const APPLE_FEED_CALENDAR_ID = "icloud:public-link";
+
+/** An event read through a public link, which FaithForm must never try to write. */
+export function isReadOnlyAppleEventId(eventId: string): boolean {
+  return eventId.startsWith(APPLE_FEED_EVENT_PREFIX);
+}
+
+/**
+ * The events in a public calendar feed that fall inside a window.
+ *
+ * A feed has no per-event address to write back to, so ids are built from the
+ * event's UID, plus the occurrence for a series. That keeps an announcement
+ * attached to its event when the event is moved in Apple Calendar.
+ */
+export function eventsFromAppleFeed(
+  ics: string,
+  startISO: string,
+  endISO: string,
+): CalendarEventPreview[] {
+  const parsed = parseIcsEvents(ics);
+  const recurring = new Set(
+    parsed.filter((event) => event.rrule || event.recurrenceId).map((event) => event.uid),
+  );
+
+  return expandIcsEvents(parsed, startISO, endISO).map((occurrence) => ({
+    googleEventId: `${APPLE_FEED_EVENT_PREFIX}${occurrence.uid}${
+      recurring.has(occurrence.uid) ? `#${occurrence.occurrenceId}` : ""
+    }`,
+    calendarId: APPLE_FEED_CALENDAR_ID,
+    title: occurrence.summary || "Untitled event",
+    location: occurrence.location,
+    startAt: occurrence.startAt,
+    endAt: occurrence.endAt,
+    allDay: occurrence.allDay,
+    source: "apple" as const,
+    readOnly: true,
+  }));
+}
+
+/**
+ * Checks a pasted link before it is saved: that it is an iCloud public
+ * calendar link, that Apple serves it, and what the calendar is called.
+ */
+export async function inspectAppleCalendarLink(
+  input: string,
+): Promise<{ feedUrl: string; calendarName: string | null; eventCount: number }> {
+  const feedUrl = normalizeICloudFeedUrl(input);
+  if (!feedUrl) {
+    throw new CalendarFeedError(
+      "That does not look like an iCloud calendar link. It should start with webcal:// and mention icloud.com.",
+    );
+  }
+
+  const ics = await fetchICloudFeed(feedUrl);
+  return {
+    feedUrl,
+    calendarName: calendarNameFromIcs(ics),
+    eventCount: parseIcsEvents(ics).length,
+  };
 }
 
 /**
@@ -502,10 +614,7 @@ export async function insertAppleCalendarEvent(
   },
   supabase?: SupabaseClient,
 ): Promise<CalendarEventPreview> {
-  const connection = await getAppleConnection(churchId, supabase);
-  if (!connection) {
-    throw new CalDavError("iCloud Calendar is not connected.");
-  }
+  const connection = await getWritableAppleConnection(churchId, supabase);
 
   const id = crypto.randomUUID();
   const uid = `${id}@faithform.io`;
@@ -558,10 +667,11 @@ export async function patchAppleCalendarEvent(
   },
   supabase?: SupabaseClient,
 ): Promise<void> {
-  const connection = await getAppleConnection(churchId, supabase);
-  if (!connection) {
-    throw new CalDavError("iCloud Calendar is not connected.");
+  if (isReadOnlyAppleEventId(input.eventId)) {
+    throw new CalDavError(READ_ONLY_ICLOUD_MESSAGE);
   }
+
+  const connection = await getWritableAppleConnection(churchId, supabase);
 
   const parsedId = parseAppleEventId(input.eventId);
   if (!parsedId) {

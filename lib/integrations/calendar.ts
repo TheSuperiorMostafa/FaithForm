@@ -5,6 +5,7 @@ import {
   isAppleEventId,
   listAppleCalendarEventsInRange,
   patchAppleCalendarEvent,
+  READ_ONLY_ICLOUD_MESSAGE,
 } from "@/lib/integrations/apple-calendar";
 import {
   insertCalendarEvent,
@@ -120,9 +121,11 @@ export async function insertChurchCalendarEvent(
     return { ...event, source: "google" };
   }
 
-  if (status.apple.connected) {
+  if (status.apple.connected && !status.apple.readOnly) {
     return insertAppleCalendarEvent(churchId, input, supabase);
   }
+
+  if (status.apple.connected) throw new Error(READ_ONLY_ICLOUD_MESSAGE);
 
   throw new Error("No calendar is connected.");
 }

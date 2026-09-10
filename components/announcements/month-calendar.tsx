@@ -44,6 +44,8 @@ type MonthCalendarProps = {
   initialPublishedAnnouncements: Record<string, AnnouncementRow>;
   /** Any calendar at all — Google, iCloud, or both. */
   calendarConnected: boolean;
+  /** False when the only calendar is a read-only iCloud link. */
+  canCreateEvents: boolean;
   /** Google specifically: the weekly draft is a Gmail draft. */
   googleConnected: boolean;
   facebookConnected: boolean;
@@ -74,6 +76,7 @@ export function MonthCalendar({
   initialPublishedByGoogleId,
   initialPublishedAnnouncements,
   calendarConnected,
+  canCreateEvents,
   googleConnected,
   facebookConnected,
 }: MonthCalendarProps) {
@@ -325,20 +328,23 @@ export function MonthCalendar({
           <Button type="button" variant="outline" size="sm" onClick={goToday}>
             Today
           </Button>
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => setCreateOpen(true)}
-          >
-            <CalendarPlus className="size-4" strokeWidth={1.75} />
-            New event
-          </Button>
+          {canCreateEvents && (
+            <Button
+              type="button"
+              size="sm"
+              onClick={() => setCreateOpen(true)}
+            >
+              <CalendarPlus className="size-4" strokeWidth={1.75} />
+              New event
+            </Button>
+          )}
         </div>
       </div>
 
       {error && (
         <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-          {error}. Try reconnecting Google in Settings.
+          {error.replace(/[.!?]$/, "")}. Check the calendar connection in
+          Settings.
         </p>
       )}
 
@@ -551,13 +557,17 @@ export function MonthCalendar({
               <div className="flex flex-col items-center gap-4 rounded-xl border border-dashed border-border px-4 py-10 text-center">
                 <p className="text-sm text-muted-foreground">
                   {events.length === 0
-                    ? "No events on your calendar yet. Create one to announce it."
+                    ? canCreateEvents
+                      ? "No events on your calendar yet. Create one to announce it."
+                      : "No events on your calendar yet. Add one in Apple Calendar and it will show up here within a few minutes."
                     : "Click a day or event on the calendar to get started."}
                 </p>
-                <Button type="button" onClick={() => setCreateOpen(true)}>
-                  <CalendarPlus className="size-4" strokeWidth={1.75} />
-                  New event
-                </Button>
+                {canCreateEvents && (
+                  <Button type="button" onClick={() => setCreateOpen(true)}>
+                    <CalendarPlus className="size-4" strokeWidth={1.75} />
+                    New event
+                  </Button>
+                )}
               </div>
             )}
           </CardContent>

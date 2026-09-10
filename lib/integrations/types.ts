@@ -63,6 +63,13 @@ export type FacebookIntegrationMetadata = IntegrationHealthMetadata & {
  * hands metadata to browsers.
  */
 export type AppleIntegrationMetadata = IntegrationHealthMetadata & {
+  /**
+   * How the church connected. `public_link` is the calendar's own "Public
+   * Calendar" link from Apple Calendar: no Apple ID, no password, read only.
+   * Its URL sits in `access_token` because the link is itself the key to the
+   * calendar. Absent means `caldav`, the Apple ID and app-specific password.
+   */
+  mode?: "caldav" | "public_link";
   apple_id?: string;
   /** Absolute CalDAV URL of the calendar the church chose. */
   calendar_url?: string;
@@ -111,6 +118,11 @@ export type CalendarEventPreview = {
   allDay?: boolean;
   htmlLink?: string;
   source?: CalendarSource;
+  /**
+   * Read through a public calendar link, so FaithForm can show it but not
+   * change it. Edits to the event itself happen in Apple Calendar.
+   */
+  readOnly?: boolean;
 };
 
 export type CalendarSource = "google" | "apple";

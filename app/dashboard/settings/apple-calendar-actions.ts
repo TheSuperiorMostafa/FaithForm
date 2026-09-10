@@ -6,9 +6,11 @@ import { getChurchAuth } from "@/lib/auth/church";
 import { featureActionError } from "@/lib/features/guard";
 import {
   discoverAppleCalendars,
+  inspectAppleCalendarLink,
   verifyAppleCalendarReadable,
   type AppleCalendarChoice,
 } from "@/lib/integrations/apple-calendar";
+import { CalendarFeedError } from "@/lib/integrations/apple-feed";
 import { CalDavAuthError, CalDavError } from "@/lib/integrations/caldav";
 import {
   clearReconnectFlags,
@@ -136,6 +138,8 @@ export async function connectAppleCalendarAction(
     const existing = await getIntegration(auth.churchId, "apple", supabase);
     const metadata: AppleIntegrationMetadata = {
       ...clearReconnectFlags(existing?.metadata),
+      // Stated outright: an earlier link connection leaves `public_link` here.
+      mode: "caldav",
       apple_id: appleId,
       calendar_url: chosen.url,
       calendar_name: calendarName || chosen.name,
@@ -164,4 +168,69 @@ export async function connectAppleCalendarAction(
   } catch (err) {
     return { ok: false, error: failureMessage(err, "save") };
   }
+}
+
+/**
+ * Connecting iCloud with the calendar's public link: no Apple ID, no password.
+ *
+ * The link is read once before saving, so a church learns right away if it
+ * pasted the wrong thing, and so the calendar can be shown by its own name.
+ * It replaces any earlier iCloud connection rather than sitting beside one.
+ */
+export async function connectAppleCalendarLinkAction(
+  formData: FormData,
+): Promise<AppleSaveState> {
+  const gate = await requireAnnouncementsAdmin();
+  if (!gate.ok) return gate;
+  const { auth, supabase } = gate;
+
+  const pasted = formData.get("calendarLink")?.toString() ?? "";
+  if (!pasted.trim()) {
+    return { ok: false, error: "Paste the calendar link from Apple Calendar first." };
+  }
+
+  let inspected: Awaited<ReturnType<typeof inspectAppleCalendarLink>>;
+  try {
+    inspected = await inspectAppleCalendarLink(pasted);
+  } catch (err) {
+    if (err instanceof CalendarFeedError) return { ok: false, error: err.message };
+    console.error("[apple-calendar] link check failed:", err);
+    return {
+      ok: false,
+      error: "Something went wrong on our side while reading that link. Try again in a moment.",
+    };
+  }
+
+  const metadata: AppleIntegrationMetadata = {
+    mode: "public_link",
+    calendar_name: inspected.calendarName ?? "iCloud calendar",
+    connected_at: new Date().toISOString(),
+  };
+
+  try {
+    await saveIntegration(
+      {
+        churchId: auth.churchId,
+        provider: "apple",
+        // The link is the key to the calendar, so it is kept where keys are
+        // kept: never in metadata, which the status projection hands out.
+        accessToken: inspected.feedUrl,
+        refreshToken: null,
+        tokenExpiresAt: null,
+        metadata: metadata as Record<string, unknown>,
+        connectedBy: auth.userId,
+      },
+      supabase,
+    );
+  } catch (err) {
+    console.error("[apple-calendar] link save failed:", err);
+    return {
+      ok: false,
+      error: "The link works, but FaithForm could not save it. Try again, and contact support if it keeps happening.",
+    };
+  }
+
+  revalidatePath("/dashboard/settings");
+  revalidatePath("/dashboard/announcements");
+  return { ok: true };
 }

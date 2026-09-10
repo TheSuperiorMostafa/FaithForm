@@ -47,6 +47,8 @@ const EMPTY_STATUS = {
     connected: false,
     appleId: null as string | null,
     calendarName: null as string | null,
+    /** Connected through a public link: events show, but cannot be written. */
+    readOnly: false,
     needsReconnect: false,
     reconnectReason: null as string | null,
   },
@@ -137,6 +139,7 @@ function projectSafeMetadata(
     // password — which lives in access_token and is not read here at all.
     return {
       ...common,
+      mode: metadata.mode,
       apple_id: metadata.apple_id,
       calendar_name: metadata.calendar_name,
     };
@@ -209,6 +212,7 @@ export async function getIntegrationStatus(
       connected: Boolean(apple?.connected),
       appleId: appleMeta.apple_id ?? null,
       calendarName: appleMeta.calendar_name ?? null,
+      readOnly: appleMeta.mode === "public_link",
       needsReconnect: Boolean(!apple?.connected && appleMeta.needs_reconnect),
       reconnectReason:
         !apple?.connected && appleMeta.needs_reconnect

@@ -16,7 +16,10 @@ import {
   withdrawMobilePublication,
 } from "@/lib/faithform/push/publish-hook";
 import { createClient } from "@/lib/supabase/server";
-import { isAppleEventId } from "@/lib/integrations/apple-calendar";
+import {
+  isAppleEventId,
+  isReadOnlyAppleEventId,
+} from "@/lib/integrations/apple-calendar";
 import { patchChurchCalendarEvent } from "@/lib/integrations/calendar";
 import { generateEmergencySocialGraphic, downloadSocialGraphic } from "@/lib/social/generate-graphic";
 import {
@@ -393,7 +396,14 @@ export async function publishAnnouncement(
     }
   }
 
-  if (payload.googleEventId && payload.calendarChanged) {
+  // An event read through a public iCloud link has nowhere to be written back
+  // to. The announcement keeps the edits; the form already said the calendar
+  // event itself is changed in Apple Calendar, so this is not an error.
+  if (
+    payload.googleEventId &&
+    payload.calendarChanged &&
+    !isReadOnlyAppleEventId(payload.googleEventId)
+  ) {
     // The event id says which calendar it came from, so an iCloud event is
     // written back to iCloud rather than looked for in Google.
     const onApple = isAppleEventId(payload.googleEventId);

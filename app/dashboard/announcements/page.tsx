@@ -55,6 +55,10 @@ export default async function AnnouncementsPage() {
   const googleConnected = integrationStatus.google.connected;
   const appleConnected = integrationStatus.apple.connected;
   const calendarConnected = googleConnected || appleConnected;
+  // A calendar connected through a public iCloud link can be read, not
+  // written, so it cannot take a new event.
+  const canCreateEvents =
+    googleConnected || (appleConnected && !integrationStatus.apple.readOnly);
   const facebookConnected = integrationStatus.facebook.connected;
   const connected = { google: googleConnected, apple: appleConnected };
 
@@ -119,6 +123,7 @@ export default async function AnnouncementsPage() {
           endISO={endISO}
           connected={connected}
           calendarConnected={calendarConnected}
+          canCreateEvents={canCreateEvents}
           googleConnected={googleConnected}
           facebookConnected={facebookConnected}
           publishedPromise={publishedPromise}
@@ -229,6 +234,7 @@ async function CalendarSection({
   endISO,
   connected,
   calendarConnected,
+  canCreateEvents,
   googleConnected,
   facebookConnected,
   publishedPromise,
@@ -240,6 +246,7 @@ async function CalendarSection({
   endISO: string;
   connected: ConnectedCalendars;
   calendarConnected: boolean;
+  canCreateEvents: boolean;
   googleConnected: boolean;
   facebookConnected: boolean;
   publishedPromise: PublishedPromise;
@@ -283,6 +290,7 @@ async function CalendarSection({
         initialPublishedByGoogleId={publishedByGoogleId}
         initialPublishedAnnouncements={publishedAnnouncements}
         calendarConnected={calendarConnected}
+        canCreateEvents={canCreateEvents}
         googleConnected={googleConnected}
         facebookConnected={facebookConnected}
       />

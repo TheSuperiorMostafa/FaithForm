@@ -283,6 +283,15 @@ export function AnnouncementVerifyForm({
         </div>
       )}
 
+      {/* Said up front, so an edit here is not mistaken for an edit to the
+          calendar: a link connection cannot write back to iCloud. */}
+      {event.readOnly && (
+        <p className="text-xs text-muted-foreground">
+          This event comes from your iCloud calendar link. Changes here update
+          the announcement only; change the event itself in Apple Calendar.
+        </p>
+      )}
+
       <div className="flex flex-col gap-2">
         <Label htmlFor={`title-${event.googleEventId}`}>Title</Label>
         <Input
