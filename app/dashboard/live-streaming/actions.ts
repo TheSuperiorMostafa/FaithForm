@@ -15,6 +15,12 @@ import {
   cancelStreamEvent,
   createStreamEvent,
 } from "@/lib/stream/events";
+import { assertRateLimit } from "@/lib/security/rate-limit";
+import {
+  buildCapabilityStreamName,
+  MAX_INGEST_TTL_SEC,
+  signIngestToken,
+} from "@/lib/stream/ingest-token";
 import { saveStreamRelaySettings } from "@/lib/stream/relay";
 import { STREAM_RECORDINGS_BUCKET } from "@/lib/stream/recording-storage";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -164,6 +170,70 @@ export async function createStreamingPcPairingCode(): Promise<
         error instanceof Error
           ? error.message
           : "Could not create pairing code.",
+    };
+  }
+}
+
+export type RevealIngestKeyState = StreamRelayActionState & {
+  /** The full string OBS wants in its Stream Key field. */
+  ingestKey?: string;
+  expiresAt?: string;
+};
+
+/**
+ * A stream key for a church running OBS by hand.
+ *
+ * Not the persistent publish key: that was retired because it sat in public
+ * playback URLs, and nothing here brings it back. This is the same expiring,
+ * tenant-bound capability the paired encoder agent is handed when it starts a
+ * broadcast, minted for a person instead of a machine. It lives four hours,
+ * the most the relay will honour, so it has to be made on the day. It is
+ * returned only in this action's reply, never in the page's props, so it is
+ * never in the HTML or the RSC payload; it is audited, and it is rate limited
+ * so a stolen admin session cannot mint keys by the thousand.
+ */
+export async function revealIngestKey(): Promise<RevealIngestKeyState> {
+  const gate = await requireStreamAccess();
+  if (!gate.ok) return { ok: false, error: gate.error };
+  const auth = gate.auth;
+  if (!auth.isAdmin) {
+    return { ok: false, error: "Only church admins can see the stream key." };
+  }
+
+  const limit = await assertRateLimit(`stream:ingest-key:${auth.churchId}`, {
+    limit: 10,
+    windowMs: 60 * 60 * 1000,
+  });
+  if (!limit.ok) {
+    return {
+      ok: false,
+      error:
+        limit.reason === "limited"
+          ? `That is enough keys for now. Try again in ${Math.max(1, Math.ceil(limit.retryAfterSeconds / 60))} minutes.`
+          : "Stream keys cannot be issued right now. Try again in a minute.",
+    };
+  }
+
+  try {
+    const ttlSec = MAX_INGEST_TTL_SEC;
+    const token = signIngestToken(auth.churchId, { ttlSec });
+
+    await logAdminAction({
+      churchId: auth.churchId,
+      taskName: "Revealed a stream key for a manual encoder",
+      triggerSource: "Live Streaming",
+    });
+
+    return {
+      ok: true,
+      ingestKey: buildCapabilityStreamName(auth.churchId, token),
+      expiresAt: new Date(Date.now() + ttlSec * 1000).toISOString(),
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error ? error.message : "Could not create a stream key.",
     };
   }
 }

@@ -21,7 +21,7 @@ const ENCODERS = [
     steps: [
       "Settings → Stream → Service: Custom",
       "Server: your FaithForm RTMP URL (shown above)",
-      "Stream key: your church stream key",
+      "Stream key: press Show stream key in the Encoder settings card above and paste the whole value; it lasts 4 hours",
       "Output → Video: 1920×1080, 30 fps; Output mode Advanced; Encoder x264 or NVENC; bitrate 6000 Kbps; keyframe 2 s",
     ],
   },
@@ -29,7 +29,7 @@ const ENCODERS = [
     name: "ATEM / Blackmagic",
     steps: [
       "Streaming → Service: Custom",
-      "Server and key from FaithForm encoder card",
+      "Server URL and a fresh stream key from the Encoder settings card above",
       "Encoder: H.264, 1080p30, 6000 kbps, keyframe every 60 frames at 30 fps",
     ],
   },
@@ -37,7 +37,7 @@ const ENCODERS = [
     name: "vMix",
     steps: [
       "Add Output → External → destination RTMP",
-      "URL and stream name from FaithForm",
+      "URL and a fresh stream key from the Encoder settings card above",
       "Streaming quality: 1080p, 30 fps, 6000 kbps",
     ],
   },

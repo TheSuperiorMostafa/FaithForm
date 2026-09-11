@@ -145,6 +145,7 @@ export function LiveStreamingDashboard({
           <div className="flex flex-col gap-6 border-t border-border p-5">
             <EncoderSetupCard
               ingestServerUrl={settings.ingestServerUrl}
+              isAdmin={isAdmin}
             />
 
             <EncoderPairingCard isAdmin={isAdmin} devices={encoderDevices} />
