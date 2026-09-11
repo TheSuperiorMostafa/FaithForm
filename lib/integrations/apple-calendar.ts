@@ -157,7 +157,7 @@ export async function discoverAppleCalendars(
   }
 
   const principalUrl = assertICloudUrl(
-    absoluteHref(principalHref.trim(), ICLOUD_DISCOVERY_URL),
+    absoluteHref(principalHref.trim(), principalRes.url),
   );
 
   const homeXml = `<?xml version="1.0" encoding="utf-8" ?>
@@ -181,7 +181,7 @@ export async function discoverAppleCalendars(
   }
 
   const calendarHomeUrl = assertICloudUrl(
-    absoluteHref(homeHref.trim(), principalUrl),
+    absoluteHref(homeHref.trim(), homeRes.url),
   );
 
   const listXml = `<?xml version="1.0" encoding="utf-8" ?>
@@ -201,22 +201,39 @@ export async function discoverAppleCalendars(
   });
 
   const calendars: AppleCalendarChoice[] = [];
+  const responses = parseMultiStatus(listRes.text);
 
-  for (const response of parseMultiStatus(listRes.text)) {
+  for (const response of responses) {
     const resourceType = responseProperty(response, "resourcetype") ?? "";
-    if (!/<(?:[A-Za-z0-9_.-]+:)?calendar\b/i.test(resourceType)) continue;
 
-    // Skip the scheduling inbox/outbox, which are calendars by resource type
-    // but hold invitations rather than a church's events.
-    if (/(?:inbox|outbox|notification)/i.test(resourceType)) continue;
+    // A calendar the account owns, or one it subscribes to. The element name
+    // has to end there: `calendar-proxy-read` and friends are principals.
+    const owned = /<(?:[A-Za-z0-9_.-]+:)?calendar(?:\s[^>]*)?\/?>/i.test(resourceType);
+    const subscribed = /<(?:[A-Za-z0-9_.-]+:)?subscribed(?:\s[^>]*)?\/?>/i.test(resourceType);
+    if (!owned && !subscribed) continue;
 
+    // The scheduling inbox and outbox are calendars by resource type but hold
+    // invitations, not a church's events. Matched as element names: a bare
+    // substring test here also caught namespace declarations, and a calendar
+    // whose XML merely mentioned a notification namespace was dropped.
+    if (
+      /<(?:[A-Za-z0-9_.-]+:)?(?:schedule-inbox|schedule-outbox|notification)(?:\s[^>]*)?\/?>/i.test(
+        resourceType,
+      )
+    ) {
+      continue;
+    }
+
+    // Reminders lists say VTODO only. Either quote style: iCloud is not
+    // consistent about it, and a calendar refused for its punctuation is the
+    // whole list refused, since the church's calendar is one of them.
     const components =
       responseProperty(response, "supported-calendar-component-set") ?? "";
-    if (components && !/name="VEVENT"/i.test(components)) continue;
+    if (components && !/name=["']VEVENT["']/i.test(components)) continue;
 
     let url: string;
     try {
-      url = assertICloudUrl(absoluteHref(response.href, calendarHomeUrl));
+      url = assertICloudUrl(absoluteHref(response.href, listRes.url));
     } catch {
       continue;
     }
@@ -230,15 +247,31 @@ export async function discoverAppleCalendars(
       name:
         responseProperty(response, "displayname")?.trim() ||
         decodeURIComponent(url.replace(/\/$/, "").split("/").pop() ?? "Calendar"),
-      // No privilege set reported means iCloud did not narrow it; assume the
-      // owner's own calendar is writable and let a failed write say otherwise.
-      writable: privileges
-        ? /<(?:[A-Za-z0-9_.-]+:)?write(?:-content)?\b/i.test(privileges)
-        : true,
+      // A subscription is read-only by nature. Otherwise, no privilege set
+      // reported means iCloud did not narrow it; assume the owner's own
+      // calendar is writable and let a failed write say otherwise.
+      writable: subscribed
+        ? false
+        : privileges
+          ? /<(?:[A-Za-z0-9_.-]+:)?write(?:-content)?\b/i.test(privileges)
+          : true,
     });
   }
 
   if (calendars.length === 0) {
+    // What iCloud actually listed, so the next report of this message can be
+    // read rather than guessed at. Hrefs and resource types only: no
+    // credentials travel in a multistatus body, and no event data is here.
+    console.error(
+      "[apple-calendar] no usable calendars at",
+      listRes.url,
+      responses.map((response) => ({
+        href: response.href,
+        resourcetype: (responseProperty(response, "resourcetype") ?? "")
+          .replace(/\s+/g, " ")
+          .slice(0, 160),
+      })),
+    );
     throw new CalDavError("That Apple ID has no calendars we can read.");
   }
 

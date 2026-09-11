@@ -66,7 +66,7 @@ export async function calDavRequest(
      */
     followRedirect?: (target: URL) => boolean;
   },
-): Promise<{ status: number; text: string; etag: string | null }> {
+): Promise<{ status: number; text: string; etag: string | null; url: string }> {
   let target = url;
   let method = init.method;
   let body = init.body;
@@ -82,6 +82,7 @@ export async function calDavRequest(
         method,
         headers: {
           Authorization: authHeader(credentials),
+          "User-Agent": "FaithForm/1.0 (+https://faithform.io)",
           "Content-Type": init.contentType ?? 'application/xml; charset="utf-8"',
           ...(init.depth ? { Depth: init.depth } : {}),
           ...(init.headers ?? {}),
@@ -152,6 +153,9 @@ export async function calDavRequest(
     status: response.status,
     text,
     etag: response.headers.get("etag"),
+    // Where the answer actually came from, redirects included. A relative
+    // href in the body is relative to this, not to the address first asked.
+    url: target,
   };
 }
 
@@ -168,10 +172,20 @@ function decodeXmlText(value: string): string {
     .replace(/&amp;/g, "&");
 }
 
-/** Matches an element by local name, whatever namespace prefix it carries. */
+/**
+ * Matches an element by local name, whatever namespace prefix it carries.
+ *
+ * The opening tag must not be self-closing. `<C:calendar-home-set/>` is how a
+ * server reports a property it does not have, and the old pattern read it as
+ * an opening tag and captured everything up to the next real closing tag,
+ * which could be the same property in a later propstat. Discovery then took
+ * the first href it found in that stretch, the principal's, as the calendar
+ * home, listed a principal instead of a calendar collection, and told the
+ * church its Apple ID had no calendars.
+ */
 function elementPattern(localName: string, flags = "i"): RegExp {
   return new RegExp(
-    `<(?:[A-Za-z0-9_.-]+:)?${localName}(?:\\s[^>]*)?>([\\s\\S]*?)</(?:[A-Za-z0-9_.-]+:)?${localName}>`,
+    `<(?:[A-Za-z0-9_.-]+:)?${localName}(?:\\s[^>]*)?(?<!/)>([\\s\\S]*?)</(?:[A-Za-z0-9_.-]+:)?${localName}>`,
     flags,
   );
 }
@@ -179,6 +193,22 @@ function elementPattern(localName: string, flags = "i"): RegExp {
 function firstElement(xml: string, localName: string): string | null {
   const match = xml.match(elementPattern(localName));
   return match ? (match[1] ?? "") : null;
+}
+
+/**
+ * The `propstat` blocks whose status is a success. A response carries one per
+ * status: the properties the server had under 200, the ones it did not under
+ * 404. A value is only ever read from the first kind, so a 404 block's empty
+ * placeholder can never be mistaken for the answer.
+ */
+function successfulPropstats(body: string): string[] {
+  const blocks: string[] = [];
+  for (const match of body.matchAll(elementPattern("propstat", "gi"))) {
+    const inner = match[1] ?? "";
+    const status = firstElement(inner, "status") ?? "";
+    if (/\b2\d\d\b/.test(status)) blocks.push(inner);
+  }
+  return blocks;
 }
 
 export type MultiStatusResponse = {
@@ -210,6 +240,15 @@ export function responseProperty(
   response: MultiStatusResponse,
   localName: string,
 ): string | null {
+  const scopes = successfulPropstats(response.body);
+  for (const scope of scopes) {
+    const value = firstElement(scope, localName);
+    if (value !== null) return decodeXmlText(value);
+  }
+  // A body with no propstat at all is not something a WebDAV server sends,
+  // but a hand-written fixture might; read it whole rather than refuse it.
+  if (scopes.length > 0) return null;
+
   const value = firstElement(response.body, localName);
   return value === null ? null : decodeXmlText(value);
 }

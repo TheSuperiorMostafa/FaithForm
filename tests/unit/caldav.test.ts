@@ -13,6 +13,7 @@ import {
 import {
   buildAppleEventId,
   buildEventIcs,
+  discoverAppleCalendars,
   isAppleEventId,
   parseAppleEventId,
 } from "@/lib/integrations/apple-calendar";
@@ -395,4 +396,236 @@ test("the patch path sends the ETag through toEntityTag and keeps the notes", ()
   assert.match(patch, /"If-Match": toEntityTag\(existing\.etag\)/);
   assert.doesNotMatch(patch, /"If-Match": `"\$\{existing\.etag\}"`/);
   assert.match(patch, /description: before\?\.description/);
+});
+
+// ---------------------------------------------------------------------------
+// Discovery against what iCloud really sends
+// ---------------------------------------------------------------------------
+
+/**
+ * iCloud's own dialect: single-quoted attributes, default namespaces declared
+ * inline, a 404 propstat listing the properties it lacks as self-closing tags
+ * with attributes, and the scheduling and notification collections sitting
+ * beside the calendars. Every one of these had a way of emptying the list.
+ */
+const ICLOUD_PRINCIPAL = `<?xml version='1.0' encoding='UTF-8'?>
+<multistatus xmlns='DAV:'>
+  <response>
+    <href>/</href>
+    <propstat>
+      <prop>
+        <current-user-principal>
+          <href>/123456789/principal/</href>
+        </current-user-principal>
+      </prop>
+      <status>HTTP/1.1 200 OK</status>
+    </propstat>
+  </response>
+</multistatus>`;
+
+const ICLOUD_HOME = `<?xml version='1.0' encoding='UTF-8'?>
+<multistatus xmlns='DAV:'>
+  <response>
+    <href>/123456789/principal/</href>
+    <propstat>
+      <prop>
+        <calendar-home-set xmlns='urn:ietf:params:xml:ns:caldav'>
+          <href xmlns='DAV:'>https://p52-caldav.icloud.com/123456789/calendars/</href>
+        </calendar-home-set>
+      </prop>
+      <status>HTTP/1.1 200 OK</status>
+    </propstat>
+  </response>
+</multistatus>`;
+
+const ICLOUD_LIST = `<?xml version='1.0' encoding='UTF-8'?>
+<multistatus xmlns='DAV:'>
+  <response>
+    <href>/123456789/calendars/</href>
+    <propstat>
+      <prop>
+        <supported-calendar-component-set xmlns='urn:ietf:params:xml:ns:caldav'/>
+        <current-user-privilege-set/>
+      </prop>
+      <status>HTTP/1.1 404 Not Found</status>
+    </propstat>
+    <propstat>
+      <prop>
+        <displayname></displayname>
+        <resourcetype>
+          <collection/>
+        </resourcetype>
+      </prop>
+      <status>HTTP/1.1 200 OK</status>
+    </propstat>
+  </response>
+  <response>
+    <href>/123456789/calendars/home/</href>
+    <propstat>
+      <prop>
+        <displayname>Home</displayname>
+        <resourcetype>
+          <collection/>
+          <calendar xmlns='urn:ietf:params:xml:ns:caldav'/>
+        </resourcetype>
+        <current-user-privilege-set>
+          <privilege><read/></privilege>
+          <privilege><write/></privilege>
+        </current-user-privilege-set>
+        <supported-calendar-component-set xmlns='urn:ietf:params:xml:ns:caldav'>
+          <comp name='VEVENT'/>
+        </supported-calendar-component-set>
+      </prop>
+      <status>HTTP/1.1 200 OK</status>
+    </propstat>
+  </response>
+  <response>
+    <href>/123456789/calendars/1A2B3C4D-church-events/</href>
+    <propstat>
+      <prop>
+        <displayname>Church Events</displayname>
+        <resourcetype><collection/><C:calendar xmlns:C='urn:ietf:params:xml:ns:caldav'/></resourcetype>
+        <current-user-privilege-set><privilege><read/></privilege><privilege><write-content/></privilege></current-user-privilege-set>
+        <C:supported-calendar-component-set xmlns:C='urn:ietf:params:xml:ns:caldav'><C:comp name="VEVENT"/><C:comp name="VTODO"/></C:supported-calendar-component-set>
+      </prop>
+      <status>HTTP/1.1 200 OK</status>
+    </propstat>
+  </response>
+  <response>
+    <href>/123456789/calendars/tasks/</href>
+    <propstat>
+      <prop>
+        <displayname>Reminders</displayname>
+        <resourcetype><collection/><calendar xmlns='urn:ietf:params:xml:ns:caldav'/></resourcetype>
+        <supported-calendar-component-set xmlns='urn:ietf:params:xml:ns:caldav'><comp name='VTODO'/></supported-calendar-component-set>
+      </prop>
+      <status>HTTP/1.1 200 OK</status>
+    </propstat>
+  </response>
+  <response>
+    <href>/123456789/calendars/inbox/</href>
+    <propstat>
+      <prop>
+        <displayname>Inbox</displayname>
+        <resourcetype><collection/><schedule-inbox xmlns='urn:ietf:params:xml:ns:caldav'/></resourcetype>
+      </prop>
+      <status>HTTP/1.1 200 OK</status>
+    </propstat>
+  </response>
+  <response>
+    <href>/123456789/calendars/outbox/</href>
+    <propstat>
+      <prop>
+        <displayname>Outbox</displayname>
+        <resourcetype><collection/><schedule-outbox xmlns='urn:ietf:params:xml:ns:caldav'/></resourcetype>
+      </prop>
+      <status>HTTP/1.1 200 OK</status>
+    </propstat>
+  </response>
+  <response>
+    <href>/123456789/calendars/notification/</href>
+    <propstat>
+      <prop>
+        <displayname>notification</displayname>
+        <resourcetype><collection/><notification xmlns='http://calendarserver.org/ns/'/></resourcetype>
+      </prop>
+      <status>HTTP/1.1 200 OK</status>
+    </propstat>
+  </response>
+  <response>
+    <href>/123456789/calendars/9F8E7D6C-holidays/</href>
+    <propstat>
+      <prop>
+        <displayname>US Holidays</displayname>
+        <resourcetype><collection/><subscribed xmlns='http://calendarserver.org/ns/'/></resourcetype>
+        <supported-calendar-component-set xmlns='urn:ietf:params:xml:ns:caldav'><comp name='VEVENT'/></supported-calendar-component-set>
+      </prop>
+      <status>HTTP/1.1 200 OK</status>
+    </propstat>
+  </response>
+</multistatus>`;
+
+test("a property missing under 404 is not read out of a self-closing placeholder", () => {
+  const [home] = parseMultiStatus(ICLOUD_LIST);
+  assert.ok(home);
+  // The 404 block lists this property as `<... xmlns='…'/>`. It must read as
+  // absent, not as everything between that tag and the next closing one.
+  assert.equal(responseProperty(home, "supported-calendar-component-set"), null);
+  assert.equal(responseProperty(home, "current-user-privilege-set"), null);
+  assert.match(responseProperty(home, "resourcetype") ?? "", /<collection\/>/);
+});
+
+test("discovery walks iCloud's three hops and keeps only the calendars that hold events", async () => {
+  await withFetch(
+    (seen) => {
+      if (seen.url === "https://caldav.icloud.com/.well-known/caldav") {
+        return new Response(null, {
+          status: 301,
+          headers: { location: "https://caldav.icloud.com/" },
+        });
+      }
+      if (seen.url === "https://caldav.icloud.com/") {
+        return new Response(ICLOUD_PRINCIPAL, { status: 207 });
+      }
+      if (seen.url === "https://caldav.icloud.com/123456789/principal/") {
+        return new Response(ICLOUD_HOME, { status: 207 });
+      }
+      if (seen.url === "https://p52-caldav.icloud.com/123456789/calendars/") {
+        return new Response(ICLOUD_LIST, { status: 207 });
+      }
+      return new Response("unexpected " + seen.url, { status: 500 });
+    },
+    async (seen) => {
+      const discovery = await discoverAppleCalendars(creds);
+
+      assert.equal(
+        discovery.calendarHomeUrl,
+        "https://p52-caldav.icloud.com/123456789/calendars/",
+      );
+      assert.deepEqual(
+        discovery.calendars.map((calendar) => [calendar.name, calendar.writable]),
+        [
+          ["Home", true],
+          ["Church Events", true],
+          ["US Holidays", false],
+        ],
+      );
+      assert.equal(
+        discovery.calendars[0]?.url,
+        "https://p52-caldav.icloud.com/123456789/calendars/home/",
+      );
+
+      // Every hop carried the login, and the listing went to the partition
+      // host iCloud named rather than back to the generic one.
+      assert.ok(seen.every((entry) => entry.auth?.startsWith("Basic ")));
+      assert.equal(seen.at(-1)?.url, "https://p52-caldav.icloud.com/123456789/calendars/");
+      assert.equal(seen.at(-1)?.method, "PROPFIND");
+    },
+  );
+});
+
+test("a list with nothing but reminders and scheduling collections says so", async () => {
+  const onlyTasks = ICLOUD_LIST.replace(/<response>\s*<href>\/123456789\/calendars\/(?:home|1A2B3C4D-church-events|9F8E7D6C-holidays)\/<\/href>[\s\S]*?<\/response>/g, "");
+  const originalError = console.error;
+  console.error = () => {};
+  try {
+    await withFetch(
+      (seen) =>
+        seen.url.endsWith("/.well-known/caldav")
+          ? new Response(ICLOUD_PRINCIPAL, { status: 207 })
+          : seen.url.endsWith("/principal/")
+            ? new Response(ICLOUD_HOME, { status: 207 })
+            : new Response(onlyTasks, { status: 207 }),
+      async () => {
+        await assert.rejects(
+          discoverAppleCalendars(creds),
+          (err: unknown) =>
+            err instanceof CalDavError &&
+            /no calendars we can read/.test(err.message),
+        );
+      },
+    );
+  } finally {
+    console.error = originalError;
+  }
 });
