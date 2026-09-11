@@ -213,7 +213,16 @@ export async function uploadCommunicationAttachment(
 
   if (uploadError) {
     console.error("[communications] attachment upload failed:", uploadError.message);
-    return { ok: false, error: "That file could not be uploaded. Please try again." };
+    return {
+      ok: false,
+      // The one storage failure a person can do something about is the bucket
+      // never having been created on this project. It is made by
+      // `pnpm storage:buckets`, not by a migration, and "try again" was the
+      // wrong advice for as long as it was missing.
+      error: /bucket not found/i.test(uploadError.message)
+        ? "The attachment storage bucket has not been created on this project yet. Run `pnpm storage:buckets`, then try again."
+        : "That file could not be uploaded. Please try again.",
+    };
   }
 
   const { error: insertError } = await admin

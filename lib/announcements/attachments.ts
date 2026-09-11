@@ -5,11 +5,16 @@ import { createAdminClient } from "@/lib/supabase/admin";
 export const COMMUNICATION_ATTACHMENTS_BUCKET = "communication-attachments";
 
 /**
- * Gmail rejects a message over 35MB, and the base64 wrapper adds about a third
- * to whatever goes in it. 8MB per file keeps a bulletin and a flyer comfortably
- * inside that with room for the message itself.
+ * 4MB per file, and the number is set by the road, not the destination.
+ *
+ * Gmail would take far more (35MB a message), but an attachment reaches this
+ * app as a Server Action body, and that body is capped at 4MB by next.config
+ * because Vercel refuses anything over 4.5MB regardless. The limit used to say
+ * 8MB, so a 6MB bulletin was turned away by the framework before the action
+ * ran, with no message this app wrote. Images larger than this are shrunk in
+ * the browser first; documents are simply refused with a reason.
  */
-export const MAX_ATTACHMENT_BYTES = 8 * 1024 * 1024;
+export const MAX_ATTACHMENT_BYTES = 4 * 1024 * 1024;
 
 /** How many files may ride along with one weekly email. */
 export const MAX_ATTACHMENTS_PER_CHURCH = 5;

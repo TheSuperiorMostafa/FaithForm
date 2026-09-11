@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import nextConfig from "../../next.config.mjs";
+import { MAX_ATTACHMENT_BYTES } from "@/lib/announcements/attachments";
+import { MAX_MEMBER_FILE_BYTES } from "@/lib/checkin/member-files";
 import { UPLOAD_BUDGET_BYTES } from "@/lib/sites/downscale-image";
 
 /**
@@ -45,4 +47,12 @@ test("the browser never builds a file the server will refuse", () => {
     UPLOAD_BUDGET_BYTES < limitBytes(),
     "downscaled uploads must leave room for multipart and crop fields",
   );
+});
+
+test("no upload promises more than a Server Action body can carry", () => {
+  // Each of these travels as an action body. A limit above the ceiling is a
+  // promise the framework breaks on the church's behalf, with a raw error in
+  // place of the message the action would have written.
+  assert.ok(MAX_ATTACHMENT_BYTES <= limitBytes(), "weekly email attachments");
+  assert.ok(MAX_MEMBER_FILE_BYTES <= limitBytes(), "member documents");
 });

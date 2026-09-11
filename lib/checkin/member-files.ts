@@ -11,8 +11,13 @@
 
 export const MEMBER_FILES_BUCKET = "member-files";
 
-/** Enough for a scanned multi-page background check; short of a video. */
-export const MAX_MEMBER_FILE_BYTES = 15 * 1024 * 1024;
+/**
+ * 4MB: what a Server Action body can carry on this platform (next.config caps
+ * it there because Vercel refuses more). Enough for a scanned background check
+ * at a sensible resolution; the old 15MB promise could not be kept and turned
+ * a large scan into a framework error with no message.
+ */
+export const MAX_MEMBER_FILE_BYTES = 4 * 1024 * 1024;
 
 export const MAX_FILES_PER_MEMBER = 20;
 

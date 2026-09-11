@@ -15,6 +15,14 @@ import {
   MAX_ATTACHMENT_BYTES,
   type CommunicationAttachment,
 } from "@/lib/announcements/attachments";
+import { downscaleForUpload } from "@/lib/sites/downscale-image";
+
+const MAX_MB = Math.round(MAX_ATTACHMENT_BYTES / (1024 * 1024));
+
+/** Photos can be shrunk to fit; a PDF cannot, so it is refused with a reason. */
+function isShrinkableImage(file: File): boolean {
+  return /^image\/(jpeg|png|webp)$/i.test(file.type);
+}
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -46,20 +54,40 @@ export function CommunicationAttachmentsForm({
 
   const full = attachments.length >= MAX_ATTACHMENTS_PER_CHURCH;
 
-  const handleFile = (file: File) => {
+  const handleFile = (picked: File) => {
     setError(null);
     setNotice(null);
 
-    const formData = new FormData();
-    formData.set("file", file);
-
     startTransition(async () => {
-      const result = await uploadCommunicationAttachment(formData);
-      if (!result.ok) {
-        setError(result.error ?? "That file could not be attached.");
+      const file = isShrinkableImage(picked)
+        ? await downscaleForUpload(picked)
+        : picked;
+
+      // Checked here, before the request leaves. Past this size the framework
+      // refuses the body before the action runs, and what came back was a
+      // crash rather than a sentence.
+      if (file.size > MAX_ATTACHMENT_BYTES) {
+        setError(
+          `${picked.name} is ${(file.size / (1024 * 1024)).toFixed(1)}MB; the weekly email can carry files up to ${MAX_MB}MB each. Compress it or attach a smaller file.`,
+        );
         return;
       }
-      setNotice(`${file.name} will go out with the weekly email.`);
+
+      const formData = new FormData();
+      formData.set("file", file);
+
+      try {
+        const result = await uploadCommunicationAttachment(formData);
+        if (!result.ok) {
+          setError(result.error ?? "That file could not be attached.");
+          return;
+        }
+        setNotice(`${picked.name} will go out with the weekly email.`);
+      } catch {
+        setError(
+          "That file could not be sent to the server. Check your connection and try again.",
+        );
+      }
     });
   };
 
@@ -83,8 +111,8 @@ export function CommunicationAttachmentsForm({
         <CardTitle>Files in the weekly email</CardTitle>
         <p className="text-sm text-muted-foreground">
           Anything here is attached to every Monday draft — a bulletin, a sign-up
-          sheet, a flyer. Up to {MAX_ATTACHMENTS_PER_CHURCH} files,{" "}
-          {Math.round(MAX_ATTACHMENT_BYTES / (1024 * 1024))}MB each.
+          sheet, a flyer. Up to {MAX_ATTACHMENTS_PER_CHURCH} files, {MAX_MB}MB
+          each; photos larger than that are shrunk to fit.
         </p>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
