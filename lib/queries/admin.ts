@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { parseFeatureKeys, type FeatureKey } from "@/lib/features/catalog";
 import {
   getTicketComments,
@@ -352,7 +353,18 @@ function inferProvider(model: string | null): string {
   return "Unknown";
 }
 
-async function listAuthUsersMap(): Promise<Map<string, AuthUserSummary>> {
+/**
+ * Every account on the platform, read once per request.
+ *
+ * Several admin queries need emails for a handful of user ids, and each of
+ * them paged through the whole directory to get them. On a page that calls
+ * three of those, that was three full scans of the Auth API per render, and
+ * the Auth API throttles. `cache` folds them into one for the length of the
+ * request.
+ */
+const listAuthUsersMap = cache(async function listAuthUsersMap(): Promise<
+  Map<string, AuthUserSummary>
+> {
   const admin = createAdminClient();
   const users = new Map<string, AuthUserSummary>();
   const perPage = 1000;
@@ -378,7 +390,7 @@ async function listAuthUsersMap(): Promise<Map<string, AuthUserSummary>> {
   }
 
   return users;
-}
+});
 
 async function listAuthUsersFor(
   userIds: Iterable<string | null | undefined>,
