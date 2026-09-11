@@ -3,13 +3,22 @@ import { requireChurchAuth } from "@/lib/auth/church";
 import { featureAccessDenied } from "@/lib/features/guard";
 import { UPLOADS_CATEGORY } from "@/lib/queries/slide-themes";
 import { rowToSlideTheme, type SlideThemeRow } from "@/lib/sermon-builder/slide-theme-shared";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const BUCKET = "sermon-themes";
-const MAX_BYTES = 10 * 1024 * 1024;
+
+/**
+ * 4MB, because that is what actually arrives. Vercel refuses a request body
+ * over 4.5MB before this handler runs, and the bucket itself is capped at 5MB.
+ * The button offered 10MB and a phone photo took it up on that, so the upload
+ * died in the framework with no message this app wrote. Photos above this are
+ * shrunk in the browser before they are sent.
+ */
+const MAX_BYTES = 4 * 1024 * 1024;
 const ALLOWED = new Map([
   ["image/jpeg", "jpg"],
   ["image/png", "png"],
@@ -42,7 +51,7 @@ export async function POST(request: Request) {
     }
     if (file.size > MAX_BYTES) {
       return NextResponse.json(
-        { error: "Images must be 10MB or smaller." },
+        { error: "Images must be 4MB or smaller." },
         { status: 400 },
       );
     }
@@ -60,11 +69,24 @@ export async function POST(request: Request) {
     const id = uploadThemeId();
     const path = `${auth.churchId}/${id}.${extension}`;
 
-    const { error: uploadError } = await supabase.storage
-      .from(BUCKET)
-      .upload(path, file, { contentType: file.type, upsert: false });
+    // The object is written with the service client. The bucket only ever had
+    // a public *read* policy, so a church's own session was refused at the
+    // storage layer on every upload ("new row violates row-level security"),
+    // which is where "upload your own theme" had been failing. The caller is
+    // already authenticated, feature-checked, and the path is prefixed with
+    // their church id, so the tenant boundary is this handler's, not the
+    // bucket's. The row below still goes through the church's own session,
+    // where the table policy decides.
+    const storage = createAdminClient().storage.from(BUCKET);
+
+    const { error: uploadError } = await storage.upload(
+      path,
+      Buffer.from(await file.arrayBuffer()),
+      { contentType: file.type, upsert: false },
+    );
 
     if (uploadError) {
+      console.error("[sermon-themes] upload failed:", uploadError.message);
       return NextResponse.json(
         { error: `Could not store the image: ${uploadError.message}` },
         { status: 500 },
@@ -93,7 +115,8 @@ export async function POST(request: Request) {
 
     if (error || !data) {
       // Don't leave the orphaned object behind if the row failed.
-      await supabase.storage.from(BUCKET).remove([path]);
+      await storage.remove([path]);
+      console.error("[sermon-themes] row insert failed:", error?.message);
       return NextResponse.json(
         { error: error?.message ?? "Could not save the theme" },
         { status: 500 },
@@ -136,8 +159,11 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
+    // Same service client as the upload: the bucket grants browsers no writes.
+    // The row was already deleted through the church's own session above, so
+    // the object being removed is one this church proved it owned.
     if (existing.image_path) {
-      await supabase.storage.from(BUCKET).remove([existing.image_path]);
+      await createAdminClient().storage.from(BUCKET).remove([existing.image_path]);
     }
 
     return NextResponse.json({ ok: true });

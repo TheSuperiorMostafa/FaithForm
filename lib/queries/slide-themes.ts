@@ -29,11 +29,20 @@ export async function listSlideThemes(): Promise<SlideTheme[]> {
 
   try {
     const supabase = createClient();
-    const { data, error } = await supabase
-      .from("slide_themes")
-      .select("*")
-      .eq("active", true)
-      .order("sort_order", { ascending: true });
+    const catalog = (withChurchColumn: boolean) => {
+      let query = supabase.from("slide_themes").select("*").eq("active", true);
+      // Only the platform catalog. This cache is shared by every tenant, and
+      // without the filter the first church to load the picker after its own
+      // upload baked that upload into what every other church was shown.
+      if (withChurchColumn) query = query.is("church_id", null);
+      return query.order("sort_order", { ascending: true });
+    };
+
+    let { data, error } = await catalog(true);
+    if (error && /church_id/i.test(error.message)) {
+      // Pre-0045 database: no uploads exist to leak, so the plain read is safe.
+      ({ data, error } = await catalog(false));
+    }
 
     if (error || !data?.length) {
       cachedThemes = jsonFallbackThemes();
