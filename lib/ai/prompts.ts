@@ -145,13 +145,13 @@ Rules:
   * Good examples: "Coffee with the Pastor", "Men's Prayer Breakfast", "Sunday Night Prayer Service", "Youth Worship Night".
   * Bad examples: "Coffee Pastor", "Prayer Event", "Church Meeting", "Community Gathering" (too vague).
   * Max 48 characters. Prefer 3-6 words when the event name supports it.
-- imageSubject: One sentence describing the photograph that should illustrate THIS event, and no other. Name concrete, visible things — the setting, the objects, the time of day, what people are doing.
-  * Read the event title literally and photograph what it says. "Men's Prayer Breakfast" is a breakfast table; "Summer Nights" is a warm evening outdoors; "Missions Team Day" is people packing and loading; "Youth Hangout" is teenagers together; "Communion Sunday" is bread and cup.
+- imageSubject: One sentence describing the visual motif a graphic designer should build THIS event's flyer around, and no other. Name concrete things: objects, places, shapes, textures, symbols, seasons, light.
+  * Never people. No faces, figures, silhouettes, hands, crowds, or "people doing" anything; the flyer is a designed graphic, not a photograph of a congregation. Describe what would be on the table, on the wall, or in the sky, not who is there.
+  * Read the event title literally. "Men's Prayer Breakfast" is a set breakfast table with an open Bible in morning light; "Summer Nights" is string lights against a dusk gradient; "Missions Team Day" is a world-map dot pattern with route lines and packed boxes; "Youth Hangout" is bold colour blocks with game-controller and headphone line icons; "Communion Sunday" is bread and a cup on linen.
   * Do NOT describe coffee cups, mugs, lattes, or cafe tables unless the event is genuinely about coffee — this is the single most common failure, and it makes every flyer look identical.
   * Do NOT describe any text, lettering, signage, or logos; the layout adds those separately.
-  * Avoid recognisable faces. Prefer hands, silhouettes, objects, tables, architecture, landscape, and light.
-- backgroundTag: Pick exactly one tag that best matches the event mood from: youth, worship, outreach, community, prayer, bible-study, fellowship, seasonal-christmas, seasonal-easter, family, missions, default. This is only a coarse fallback — imageSubject is what actually gets photographed.
-- templateKey: Pick one layout style from: general, youth, outreach, worship-night. Use "general" unless the event clearly fits a themed category.
+- backgroundTag: Pick exactly one tag that best matches the event mood from: youth, worship, outreach, community, prayer, bible-study, fellowship, seasonal-christmas, seasonal-easter, family, missions, default. This is only a coarse fallback — imageSubject is what the design is actually built around.
+- templateKey: Pick one design direction from: general (editorial poster), youth (bold and energetic), outreach (warm and welcoming), worship-night (atmospheric and refined). Use "general" unless the event clearly fits a themed category.
 
 Church: ${ctx.churchName}
 Event title: ${ctx.title}
