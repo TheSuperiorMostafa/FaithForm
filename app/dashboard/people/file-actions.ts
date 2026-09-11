@@ -115,7 +115,12 @@ export async function uploadMemberFile(
 
   if (uploadError) {
     console.error("[member-files] upload failed:", uploadError.message);
-    return { ok: false, error: "That file could not be uploaded. Try again." };
+    return {
+      ok: false,
+      error: /bucket not found/i.test(uploadError.message)
+        ? "The document storage bucket has not been created on this project yet. Run `pnpm storage:buckets`, then try again."
+        : "That file could not be uploaded. Try again.",
+    };
   }
 
   const { error: insertError } = await guard.admin.from("member_files").insert({

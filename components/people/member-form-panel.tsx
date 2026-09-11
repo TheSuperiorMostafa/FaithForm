@@ -11,7 +11,13 @@ import {
   updateMember,
 } from "@/app/dashboard/people/actions";
 import { Button } from "@/components/ui/button";
-import { MemberCarePanel } from "@/components/people/member-care-panel";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  MemberCareSection,
+  MemberDocumentsSection,
+  MemberHouseholdSection,
+  useMemberCareDetails,
+} from "@/components/people/member-care-panel";
 import type { ChurchMember } from "@/lib/queries/members";
 import { formatPhoneDisplay } from "@/lib/people/validate-member";
 
@@ -27,6 +33,14 @@ type MemberFormPanelProps = {
 const inputClassName =
   "min-h-12 rounded-[10px] border-[1.5px] border-border bg-background px-4 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
 
+/**
+ * One person, in tabs.
+ *
+ * Details, care, documents and household used to sit in one column that had
+ * to be scrolled top to bottom and back, with two Save buttons a screen apart.
+ * Each is now its own tab, and the panel is wide enough that the upload form
+ * lays out in two columns instead of a stack of five.
+ */
 export function MemberFormPanel({
   member,
   isAdmin,
@@ -50,6 +64,8 @@ export function MemberFormPanel({
   const [isSaving, startSaveTransition] = useTransition();
   const [isDeactivating, startDeactivateTransition] = useTransition();
   const [isReactivating, startReactivateTransition] = useTransition();
+
+  const care = useMemberCareDetails(isEdit && member ? member.id : null);
 
   function handleSave() {
     setError(null);
@@ -109,36 +125,15 @@ export function MemberFormPanel({
     });
   }
 
-  return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="font-heading text-xl font-semibold text-foreground">
-            {readOnly ? "Person details" : isEdit ? "Edit person" : "Add person"}
-          </h2>
-          <p className="mt-1 text-base text-muted-foreground">
-            {readOnly
-              ? "Phone numbers are managed by church admins."
-              : "Phone numbers are used for attendance follow-up texts."}
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close panel"
-          className="flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          <X className="size-5" aria-hidden />
-        </button>
-      </div>
-
-      <form
-        className="mt-5 flex flex-col gap-4"
-        onSubmit={(event) => {
-          event.preventDefault();
-          if (!readOnly) handleSave();
-        }}
-      >
+  const detailsForm = (
+    <form
+      className="flex flex-col gap-4"
+      onSubmit={(event) => {
+        event.preventDefault();
+        if (!readOnly) handleSave();
+      }}
+    >
+      <div className="grid gap-4 sm:grid-cols-2">
         <div className="flex flex-col gap-2">
           <label htmlFor="member-first-name" className="text-base font-semibold">
             First name
@@ -165,139 +160,201 @@ export function MemberFormPanel({
             className={inputClassName}
           />
         </div>
+      </div>
 
-        <div className="flex flex-col gap-2">
-          <label htmlFor="member-phone" className="text-base font-semibold">
-            Phone
-          </label>
-          <input
-            id="member-phone"
-            type="tel"
-            value={phone}
-            onChange={(event) => setPhone(event.target.value)}
-            readOnly={readOnly}
-            placeholder="(502) xxx-xxxx"
-            className={inputClassName}
-          />
-          {!readOnly ? (
-            <p className="text-xs text-muted-foreground">
-              Used for attendance follow-up texts.
-            </p>
-          ) : null}
-        </div>
-
-        <div className="flex flex-col gap-2">
-          <label htmlFor="member-email" className="text-base font-semibold">
-            Email (optional)
-          </label>
-          <input
-            id="member-email"
-            type="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            readOnly={readOnly}
-            className={inputClassName}
-          />
-        </div>
-
-        {error ? (
-          <p className="text-base text-destructive" role="alert">
-            {error}
+      <div className="flex flex-col gap-2">
+        <label htmlFor="member-phone" className="text-base font-semibold">
+          Phone
+        </label>
+        <input
+          id="member-phone"
+          type="tel"
+          value={phone}
+          onChange={(event) => setPhone(event.target.value)}
+          readOnly={readOnly}
+          placeholder="(502) xxx-xxxx"
+          className={inputClassName}
+        />
+        {!readOnly ? (
+          <p className="text-xs text-muted-foreground">
+            Used for attendance follow-up texts.
           </p>
         ) : null}
+      </div>
 
-        <div className="flex flex-col gap-3 pt-2">
-          {readOnly ? (
+      <div className="flex flex-col gap-2">
+        <label htmlFor="member-email" className="text-base font-semibold">
+          Email (optional)
+        </label>
+        <input
+          id="member-email"
+          type="email"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          readOnly={readOnly}
+          className={inputClassName}
+        />
+      </div>
+
+      {error ? (
+        <p className="text-base text-destructive" role="alert">
+          {error}
+        </p>
+      ) : null}
+
+      <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center">
+        {readOnly ? (
+          <Button
+            type="button"
+            variant="outline"
+            className="h-12 text-base sm:w-auto"
+            onClick={onClose}
+          >
+            Close
+          </Button>
+        ) : (
+          <>
             <Button
-              type="button"
-              variant="outline"
-              className="h-12 w-full text-base"
-              onClick={onClose}
+              type="submit"
+              className="h-12 text-base sm:min-w-40"
+              disabled={isSaving}
             >
-              Close
+              {isSaving ? "Saving..." : isEdit ? "Save" : "Add person"}
             </Button>
-          ) : (
-            <>
-              <Button
-                type="submit"
-                className="h-12 w-full text-base"
-                disabled={isSaving}
-              >
-                {isSaving ? "Saving..." : "Save"}
-              </Button>
 
-              {isEdit && member ? (
-                member.is_active ? (
-                  confirmDeactivate ? (
-                    <div className="flex flex-col gap-2 rounded-xl border border-destructive/30 bg-destructive/5 p-4">
-                      <p className="text-sm text-foreground">
-                        Remove {member.first_name} from the active roster?
-                        Attendance history is kept.
-                      </p>
-                      <div className="flex gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          className="h-11 flex-1 text-base"
-                          onClick={() => setConfirmDeactivate(false)}
-                        >
-                          Keep
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          className="h-11 flex-1 text-base"
-                          disabled={isDeactivating}
-                          onClick={handleDeactivate}
-                        >
-                          {isDeactivating ? "Removing..." : "Deactivate"}
-                        </Button>
-                      </div>
+            {isEdit && member ? (
+              member.is_active ? (
+                confirmDeactivate ? (
+                  <div className="flex flex-col gap-2 rounded-xl border border-destructive/30 bg-destructive/5 p-4 sm:flex-1">
+                    <p className="text-sm text-foreground">
+                      Remove {member.first_name} from the active roster?
+                      Attendance history is kept.
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="h-11 flex-1 text-base"
+                        onClick={() => setConfirmDeactivate(false)}
+                      >
+                        Keep
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        className="h-11 flex-1 text-base"
+                        disabled={isDeactivating}
+                        onClick={handleDeactivate}
+                      >
+                        {isDeactivating ? "Removing..." : "Deactivate"}
+                      </Button>
                     </div>
-                  ) : (
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="h-11 w-full text-base text-destructive"
-                      onClick={() => setConfirmDeactivate(true)}
-                    >
-                      Deactivate person
-                    </Button>
-                  )
+                  </div>
                 ) : (
                   <Button
                     type="button"
-                    variant="outline"
-                    className="h-11 w-full text-base"
-                    disabled={isReactivating}
-                    onClick={handleReactivate}
+                    variant="ghost"
+                    className="h-11 text-base text-destructive sm:ml-auto"
+                    onClick={() => setConfirmDeactivate(true)}
                   >
-                    {isReactivating ? "Reactivating..." : "Reactivate person"}
+                    Deactivate person
                   </Button>
                 )
-              ) : null}
-            </>
-          )}
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-11 text-base sm:ml-auto"
+                  disabled={isReactivating}
+                  onClick={handleReactivate}
+                >
+                  {isReactivating ? "Reactivating..." : "Reactivate person"}
+                </Button>
+              )
+            ) : null}
+          </>
+        )}
+      </div>
+    </form>
+  );
+
+  const documentCount = care.details?.files.length ?? null;
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="font-heading text-xl font-semibold text-foreground">
+            {readOnly
+              ? "Person details"
+              : isEdit && member
+                ? `${member.first_name} ${member.last_name}`.trim()
+                : "Add person"}
+          </h2>
+          <p className="mt-1 text-base text-muted-foreground">
+            {readOnly
+              ? "Phone numbers are managed by church admins."
+              : isEdit
+                ? "Details, care notes, documents and household in one place."
+                : "Phone numbers are used for attendance follow-up texts."}
+          </p>
         </div>
-      </form>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close panel"
+          className="flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+        >
+          <X className="size-5" aria-hidden />
+        </button>
+      </div>
 
       {/*
-        Outside the form above, not inside it. The care panel has upload and
-        save forms of its own, and a nested <form> is invalid HTML that browsers
-        resolve by dropping the inner one: silently, and only at runtime.
+        The care, document and household sections carry forms of their own, so
+        they sit beside the details form as tab panels rather than inside it: a
+        nested <form> is invalid HTML that browsers resolve by dropping the
+        inner one, silently, and only at runtime.
       */}
       {isEdit && member ? (
-        <section className="mt-6 border-t border-border pt-6">
-          <h2 className="mb-4 font-heading text-lg font-semibold">
-            Care &amp; documents
-          </h2>
-          <MemberCarePanel
-            memberId={member.id}
-            memberName={member.first_name}
-            isAdmin={isAdmin}
-          />
-        </section>
-      ) : null}
+        <Tabs defaultValue="details" className="mt-4">
+          <TabsList className="w-full justify-start overflow-x-auto">
+            <TabsTrigger value="details">Details</TabsTrigger>
+            <TabsTrigger value="care">Care</TabsTrigger>
+            <TabsTrigger value="documents">
+              Documents{documentCount != null && documentCount > 0 ? ` (${documentCount})` : ""}
+            </TabsTrigger>
+            <TabsTrigger value="household">Household</TabsTrigger>
+          </TabsList>
+          <TabsContent value="details" className="mt-5">
+            {detailsForm}
+          </TabsContent>
+          <TabsContent value="care" className="mt-5">
+            <MemberCareSection
+              memberId={member.id}
+              memberName={member.first_name}
+              isAdmin={isAdmin}
+              state={care}
+            />
+          </TabsContent>
+          <TabsContent value="documents" className="mt-5">
+            <MemberDocumentsSection
+              memberId={member.id}
+              isAdmin={isAdmin}
+              state={care}
+            />
+          </TabsContent>
+          <TabsContent value="household" className="mt-5">
+            <MemberHouseholdSection
+              memberId={member.id}
+              memberName={member.first_name}
+              isAdmin={isAdmin}
+              state={care}
+            />
+          </TabsContent>
+        </Tabs>
+      ) : (
+        <div className="mt-5">{detailsForm}</div>
+      )}
     </div>
   );
 }

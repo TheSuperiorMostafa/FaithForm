@@ -147,7 +147,7 @@ export function HouseholdsDirectory({
           {visible.map((household) => (
             <Link
               key={household.id}
-              href={`/dashboard/checkin/households/${household.id}`}
+              href={`/dashboard/people/households/${household.id}`}
               className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-accent"
             >
               <p className="font-heading text-base font-semibold">

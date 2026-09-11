@@ -258,3 +258,41 @@ test("the Rooms tab shows who is in each room right now", () => {
   assert.match(locationsPage, /occupancy=\{occupancy\}/);
 });
 
+// ---------------------------------------------------------------------------
+// Households live under People
+// ---------------------------------------------------------------------------
+
+const peopleLayout = readFileSync("app/dashboard/people/layout.tsx", "utf8");
+const checkinLayout = readFileSync("app/dashboard/checkin/layout.tsx", "utf8");
+const oldIndex = readFileSync("app/dashboard/checkin/households/page.tsx", "utf8");
+const oldDetail = readFileSync(
+  "app/dashboard/checkin/households/[id]/page.tsx",
+  "utf8",
+);
+const directory = readFileSync("components/people/households-directory.tsx", "utf8");
+const detailView = readFileSync("components/people/household-detail.tsx", "utf8");
+const memberPanel = readFileSync("components/people/member-form-panel.tsx", "utf8");
+
+test("households are a tab of People, gated on Check-In, and no longer a Check-In tab", () => {
+  assert.match(peopleLayout, /href: "\/dashboard\/people\/households"/);
+  assert.match(peopleLayout, /canAccessFeature\(access, "checkin"\)/);
+  assert.doesNotMatch(checkinLayout, /href: "\/dashboard\/checkin\/households"/);
+  assert.match(
+    readFileSync("app/dashboard/people/households/layout.tsx", "utf8"),
+    /feature="checkin"/,
+  );
+});
+
+test("the old household addresses still land", () => {
+  assert.match(oldIndex, /redirect\("\/dashboard\/people\/households"\)/);
+  assert.match(oldDetail, /redirect\(`\/dashboard\/people\/households\/\$\{encodeURIComponent\(id\)\}`\)/);
+  assert.doesNotMatch(directory, /checkin\/households/);
+  assert.doesNotMatch(detailView, /checkin\/households/);
+  assert.match(actions, /revalidatePath\("\/dashboard\/people\/households"\)/);
+});
+
+test("a person's household is reachable from their own record", () => {
+  assert.match(memberPanel, /<TabsTrigger value="household">/);
+  assert.match(memberPanel, /<TabsTrigger value="documents">/);
+  assert.match(memberPanel, /<TabsTrigger value="care">/);
+});

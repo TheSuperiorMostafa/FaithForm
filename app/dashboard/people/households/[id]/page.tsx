@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 
-import { HouseholdDetail } from "@/components/checkin/household-detail";
+import { HouseholdDetail } from "@/components/people/household-detail";
 import { getChurchAuth } from "@/lib/auth/church";
 import { getHousehold } from "@/lib/queries/checkin";
 import { getMembersForChurch } from "@/lib/queries/members";

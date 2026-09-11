@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { HouseholdsDirectory } from "@/components/checkin/households-directory";
+import { HouseholdsDirectory } from "@/components/people/households-directory";
 import { getChurchAuth } from "@/lib/auth/church";
 import { listHouseholds } from "@/lib/queries/checkin";
 import { createClient } from "@/lib/supabase/server";

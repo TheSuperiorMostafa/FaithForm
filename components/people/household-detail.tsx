@@ -84,7 +84,7 @@ export function HouseholdDetail({
   return (
     <div className="flex flex-col gap-6">
       <Link
-        href="/dashboard/checkin/households"
+        href="/dashboard/people/households"
         className="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
       >
         <ArrowLeft className="size-4" aria-hidden />

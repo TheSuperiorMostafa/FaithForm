@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { FeatureGate } from "@/components/dashboard/feature-gate";
 import {
   SectionLinkTabs,
@@ -8,7 +9,6 @@ import {
 const checkinTabs: SectionLinkTab[] = [
   { label: "Today", href: "/dashboard/checkin", match: "exact" },
   { label: "Checkout", href: "/dashboard/checkin/checkout" },
-  { label: "Households", href: "/dashboard/checkin/households" },
   { label: "Rooms", href: "/dashboard/checkin/locations" },
   { label: "Stats", href: "/dashboard/checkin/stats" },
 ];
@@ -22,7 +22,15 @@ export default function CheckinLayout({ children }: { children: ReactNode }) {
             Check-In
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Who is in which room, and who may collect them.
+            Who is in which room right now. Households, and who may collect
+            whom, are under{" "}
+            <Link
+              href="/dashboard/people/households"
+              className="font-medium text-accent hover:underline"
+            >
+              People
+            </Link>
+            .
           </p>
         </header>
 

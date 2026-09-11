@@ -2,21 +2,50 @@
 
 import { getChurchAuth } from "@/lib/auth/church";
 import { featureActionError } from "@/lib/features/guard";
-import { listLocations, listMemberFiles } from "@/lib/queries/checkin";
+import {
+  listHouseholds,
+  listLocations,
+  listMemberFiles,
+} from "@/lib/queries/checkin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import type { ChurchLocation, MemberFile } from "@/types/checkin";
+import type {
+  ChurchLocation,
+  HouseholdRelationship,
+  HouseholdSummary,
+  MemberFile,
+} from "@/types/checkin";
+
+/** The one household a person belongs to, if any. */
+export type MemberHouseholdLink = {
+  membershipId: string;
+  id: string;
+  name: string;
+  relationship: HouseholdRelationship;
+  relationshipLabel: string | null;
+};
 
 export type MemberCareDetails = {
   medicalNotes: string | null;
   defaultLocationId: string | null;
   locations: ChurchLocation[];
   files: MemberFile[];
+  household: MemberHouseholdLink | null;
+  /** Every household in the church, for putting this person into one. */
+  households: HouseholdSummary[];
   /** False on a database that has not had migration 0071 applied. */
   available: boolean;
 };
 
 export type CareResult<T> = { ok: true; data: T } | { ok: false; error: string };
+
+type HouseholdMembershipRow = {
+  id: string;
+  household_id: string;
+  relationship: HouseholdRelationship;
+  relationship_label: string | null;
+  households: { id: string; name: string } | { id: string; name: string }[] | null;
+};
 
 /**
  * Everything the People panel shows below the name and phone number.
@@ -54,6 +83,8 @@ export async function getMemberCareDetails(
         defaultLocationId: null,
         locations: [],
         files: [],
+        household: null,
+        households: [],
         available: false,
       },
     };
@@ -61,12 +92,24 @@ export async function getMemberCareDetails(
 
   if (!member) return { ok: false, error: "That person could not be found." };
 
-  const [locations, files] = await Promise.all([
+  const [locations, files, households, { data: membership }] = await Promise.all([
     listLocations(auth.churchId, {}, supabase),
     // Read through the user's own client so the admin-only visibility policy on
     // `member_files` decides what comes back, rather than this function.
     listMemberFiles(memberId, supabase),
+    listHouseholds(auth.churchId, supabase),
+    supabase
+      .from("household_members")
+      .select("id, household_id, relationship, relationship_label, households(id, name)")
+      .eq("member_id", memberId)
+      .eq("church_id", auth.churchId)
+      .maybeSingle(),
   ]);
+
+  const row = (membership as HouseholdMembershipRow | null) ?? null;
+  const householdRow = Array.isArray(row?.households)
+    ? (row?.households[0] ?? null)
+    : (row?.households ?? null);
 
   return {
     ok: true,
@@ -75,6 +118,17 @@ export async function getMemberCareDetails(
       defaultLocationId: (member.default_location_id as string | null) ?? null,
       locations,
       files,
+      household:
+        row && householdRow
+          ? {
+              membershipId: row.id,
+              id: householdRow.id,
+              name: householdRow.name,
+              relationship: row.relationship,
+              relationshipLabel: row.relationship_label ?? null,
+            }
+          : null,
+      households,
       available: true,
     },
   };

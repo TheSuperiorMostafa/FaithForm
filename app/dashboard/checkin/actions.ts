@@ -73,12 +73,12 @@ function isContext(value: Context | { ok: false }): value is Context {
 
 function revalidateCheckin(householdId?: string) {
   revalidatePath("/dashboard/checkin");
-  revalidatePath("/dashboard/checkin/households");
   revalidatePath("/dashboard/checkin/locations");
   revalidatePath("/dashboard/checkin/stats");
   revalidatePath("/dashboard/people");
+  revalidatePath("/dashboard/people/households");
   if (householdId) {
-    revalidatePath(`/dashboard/checkin/households/${householdId}`);
+    revalidatePath(`/dashboard/people/households/${householdId}`);
   }
 }
 

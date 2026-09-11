@@ -149,22 +149,17 @@ export function PeopleManager({ initialMembers, isAdmin }: PeopleManagerProps) {
   }
 
   return (
-    <div
-      className={cn(
-        "mx-auto flex w-full flex-col gap-6 pb-28 lg:flex-row lg:items-stretch",
-        panelOpen ? "max-w-6xl" : "max-w-2xl",
-      )}
-    >
-      <div className="flex w-full flex-col gap-5 lg:min-w-0 lg:flex-1">
-      <header className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex flex-col gap-2">
-          <h1 className="border-l-4 border-accent pl-3 font-heading text-[26px] font-bold text-foreground">
-            People
-          </h1>
-          <p className="text-base text-muted-foreground">
-            Add phone numbers so follow-up texts can reach absent members.
-          </p>
-        </div>
+    <div className="flex w-full flex-col gap-6 pb-28 lg:flex-row lg:items-stretch">
+      {/*
+        The list keeps a readable width whether or not the panel is open; the
+        panel takes the rest of the row rather than a fixed 380px, which is
+        what had every form in it stacking into a single narrow column.
+      */}
+      <div className="flex w-full flex-col gap-5 lg:min-w-0 lg:flex-1 lg:max-w-3xl">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-base text-muted-foreground">
+          Add phone numbers so follow-up texts can reach absent members.
+        </p>
         {isAdmin ? (
           <Button
             type="button"
@@ -175,7 +170,7 @@ export function PeopleManager({ initialMembers, isAdmin }: PeopleManagerProps) {
             Add Person
           </Button>
         ) : null}
-      </header>
+      </div>
 
       {!isAdmin ? (
         <p className="rounded-xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground shadow-card dark:shadow-none">
@@ -389,8 +384,8 @@ export function PeopleManager({ initialMembers, isAdmin }: PeopleManagerProps) {
           */}
           <aside
             className={cn(
-              "fixed inset-y-0 right-0 z-50 w-full max-w-md overflow-y-auto border-l border-border bg-card shadow-card-hover",
-              "lg:relative lg:inset-y-auto lg:z-auto lg:w-[380px] lg:max-w-none lg:shrink-0",
+              "fixed inset-y-0 right-0 z-50 w-full max-w-lg overflow-y-auto border-l border-border bg-card shadow-card-hover",
+              "lg:relative lg:inset-y-auto lg:z-auto lg:w-[540px] lg:max-w-none lg:shrink-0 xl:w-[620px]",
               "lg:self-stretch lg:overflow-visible lg:border-l-0 lg:bg-transparent lg:shadow-none",
             )}
           >
