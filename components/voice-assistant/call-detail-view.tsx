@@ -9,8 +9,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   AttentionBadge,
   ClassificationBadge,
+  LegacyScoreBadge,
 } from "@/components/voice-assistant/scoring-explainer";
-import { describeCallScore } from "@/lib/utils/call-score";
+import { describeCallScore, LEGACY_SCORE_NOTE } from "@/lib/utils/call-score";
 import {
   formatCallDuration,
   maskPhoneNumber,
@@ -110,6 +111,8 @@ export function CallDetailView({ call, isAdmin }: CallDetailViewProps) {
               <dd className="mt-0.5 flex flex-wrap items-center gap-1.5 text-sm">
                 {score.classification ? (
                   <ClassificationBadge classification={score.classification} />
+                ) : score.legacy ? (
+                  <LegacyScoreBadge />
                 ) : (
                   ""
                 )}
@@ -134,11 +137,7 @@ export function CallDetailView({ call, isAdmin }: CallDetailViewProps) {
             </p>
 
             {score.legacy && (
-              <p className="text-xs text-muted-foreground">
-                Scored by the previous rubric, before call types existed. The
-                number is that ranking converted, not a judgement the current
-                rubric made.
-              </p>
+              <p className="text-xs text-muted-foreground">{LEGACY_SCORE_NOTE}</p>
             )}
 
             {score.classificationHelp && (

@@ -10,7 +10,9 @@ import {
   syncRetellPhoneForChurch,
 } from "@/lib/integrations/retell-phone";
 import { importRetellCallsForChurch } from "@/lib/integrations/retell-calls";
+import { PHONE_CALL_SCORING_VERSION } from "@/lib/integrations/phone-call-scoring-prompt";
 import { scorePhoneCallIfNeeded } from "@/lib/integrations/score-phone-call";
+import { createAdminClient } from "@/lib/supabase/admin";
 import {
   getPhoneCallById,
   upsertVoiceAssistantSettings,
@@ -186,6 +188,78 @@ export async function rescorePhoneCall(
         err instanceof Error ? err.message : "Could not re-score this call.",
     };
   }
+}
+
+export type RescoreLegacyCallsResult =
+  | { ok: true; rescored: number; failed: number; remaining: number }
+  | { error: string };
+
+/**
+ * How many older calls one round judges. Each is a model call of a few
+ * seconds; five in parallel keeps a round well inside the action's time
+ * budget, and the button keeps asking for another round until none are left.
+ */
+const LEGACY_RESCORE_BATCH = 5;
+
+/**
+ * Judge one round of calls the retired rubric scored, under the current one.
+ *
+ * Migration 0070 converted their numbers but could not invent the kind of call
+ * each was, or whether anyone still needs to ring back, because the old rubric
+ * never asked. Until they are re-scored the log shows a converted rank with no
+ * kind and the old reasoning beside it, which reads as wrong because it is.
+ */
+export async function rescoreLegacyPhoneCalls(): Promise<RescoreLegacyCallsResult> {
+  const auth = await requireChurchAuth();
+
+  const denied = await featureActionError("voice_assistant");
+  if (denied) return { error: denied };
+
+  if (!auth.isAdmin) {
+    return { error: "Only church admins can re-score calls." };
+  }
+
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("phone_calls")
+    .select("id, score_breakdown")
+    .eq("church_id", auth.churchId)
+    .not("scored_at", "is", null)
+    .order("called_at", { ascending: false });
+
+  if (error) {
+    console.error("[voice-assistant] legacy re-score lookup failed", error);
+    return { error: "Could not load the older calls." };
+  }
+
+  const legacy = (data ?? []).filter((row) => {
+    const version = (row.score_breakdown as { version?: unknown } | null)
+      ?.version;
+    return typeof version !== "number" || version < PHONE_CALL_SCORING_VERSION;
+  });
+
+  const batch = legacy.slice(0, LEGACY_RESCORE_BATCH);
+  const results = await Promise.allSettled(
+    batch.map((row) =>
+      scorePhoneCallIfNeeded(row.id as string, { force: true, admin }),
+    ),
+  );
+  const rescored = results.filter(
+    (result) => result.status === "fulfilled" && result.value != null,
+  ).length;
+
+  if (rescored > 0) {
+    revalidatePath("/dashboard/call-log");
+    revalidatePath("/dashboard/voice-assistant");
+    revalidatePath("/dashboard");
+  }
+
+  return {
+    ok: true,
+    rescored,
+    failed: batch.length - rescored,
+    remaining: legacy.length - rescored,
+  };
 }
 
 export async function provisionVoicePhoneNumber(input?: {

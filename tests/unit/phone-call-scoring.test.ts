@@ -7,7 +7,11 @@ import {
   CLASSIFICATION_DESCRIPTIONS,
   PHONE_CALL_SCORING_VERSION,
 } from "@/lib/integrations/phone-call-scoring-prompt";
-import { describeCallScore, formatCallScore } from "@/lib/utils/call-score";
+import {
+  describeCallScore,
+  formatCallScore,
+  isLegacyCallScore,
+} from "@/lib/utils/call-score";
 import type { PhoneCallRow } from "@/types/voice-assistant";
 
 const navItems = readFileSync("components/dashboard/nav-items.ts", "utf8");
@@ -16,6 +20,15 @@ const voiceLayout = readFileSync(
   "utf8",
 );
 const scorer = readFileSync("lib/integrations/score-phone-call.ts", "utf8");
+const actions = readFileSync("app/dashboard/voice-assistant/actions.ts", "utf8");
+const callsBlock = readFileSync(
+  "components/voice-assistant/recent-calls-block.tsx",
+  "utf8",
+);
+const explainer = readFileSync(
+  "components/voice-assistant/scoring-explainer.tsx",
+  "utf8",
+);
 const migration = readFileSync(
   "supabase/migrations/0070_phone_call_scoring_v2.sql",
   "utf8",
@@ -158,10 +171,13 @@ test("a call scored under the current rubric reads out of 10", () => {
   assert.equal(view.summary, "A member asked about the food pantry hours.");
 });
 
-test("a call scored under the retired rubric says so instead of shrinking to a 7", () => {
+test("a call the retired rubric scored is shown on the converted 1–10 scale, uncoloured", () => {
+  // Migration 0070 already turned this row's 70 into a 7 and stamped it
+  // version 1. Labelling that 7 "/100" is how every older call in a church's
+  // log came to read "5/100", "3/100", "10/100".
   const view = describeCallScore(
     call({
-      ai_score: 70,
+      ai_score: 7,
       scored_at: "2026-05-01T15:05:00.000Z",
       score_breakdown: {
         version: 1,
@@ -172,13 +188,68 @@ test("a call scored under the retired rubric says so instead of shrinking to a 7
   );
 
   assert.equal(view.legacy, true);
-  assert.equal(view.outOf, 100);
-  assert.equal(formatCallScore(view), "70 / 100");
+  assert.equal(view.outOf, 10);
+  assert.equal(formatCallScore(view), "7 / 10");
   assert.equal(view.classification, null);
   // Its rationale still has to reach the screen: it is all a v1 row ever said.
   assert.equal(view.summary, "Answered the question but sounded scripted.");
   // And it is left uncoloured: a converted rank is not a verdict.
   assert.equal(view.toneClass, "text-muted-foreground");
+});
+
+test("a score 0070 never converted keeps the scale it was given on", () => {
+  const view = describeCallScore(
+    call({
+      ai_score: 70,
+      scored_at: "2026-05-01T15:05:00.000Z",
+      score_breakdown: { version: 1, score: 70, rationale: "Fine." },
+    }),
+  );
+
+  assert.equal(view.legacy, true);
+  assert.equal(formatCallScore(view), "70 / 100");
+});
+
+test("a scored row with no rubric stamp at all counts as legacy", () => {
+  const row = call({
+    ai_score: 6,
+    scored_at: "2026-05-01T15:05:00.000Z",
+    score_breakdown: { score: 6, rationale: "Okay." },
+  });
+
+  assert.equal(isLegacyCallScore(row), true);
+  assert.equal(describeCallScore(row).legacy, true);
+});
+
+test("a row scored by the current rubric is not legacy, and an unscored one is not either", () => {
+  assert.equal(isLegacyCallScore(call()), false);
+  assert.equal(
+    isLegacyCallScore(
+      call({
+        ai_score: 9,
+        scored_at: "2026-09-01T15:05:00.000Z",
+        score_breakdown: { version: PHONE_CALL_SCORING_VERSION, score: 9 },
+      }),
+    ),
+    false,
+  );
+});
+
+test("older calls can be re-scored in one sitting, a round at a time", () => {
+  // The action judges a handful per round so no request runs long enough to
+  // be cut off, and the button loops until the action reports none left.
+  assert.match(actions, /export async function rescoreLegacyPhoneCalls\(/);
+  assert.match(actions, /force: true, admin/);
+  assert.match(actions, /version < PHONE_CALL_SCORING_VERSION/);
+  assert.match(callsBlock, /rescoreLegacyPhoneCalls\(\)/);
+  assert.match(callsBlock, /Re-score \$\{legacyCount\} older call/);
+  assert.match(callsBlock, /remaining === 0 \|\| result\.rescored === 0/);
+});
+
+test("the explainer no longer promises a /100 that the migration removed", () => {
+  assert.doesNotMatch(explainer, /shown out of 100/);
+  assert.match(explainer, /Re-score older calls/);
+  assert.match(explainer, /Not yet sorted/);
 });
 
 test("an unscored call shows a dash rather than a zero", () => {

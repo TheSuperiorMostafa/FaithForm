@@ -1,18 +1,27 @@
 "use client";
 
 import Link from "next/link";
-import { useTransition } from "react";
-import { Download, RefreshCw } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
+import { Download, RefreshCw, Sparkles } from "lucide-react";
 import { toast } from "sonner";
-import { importVoiceAssistantCalls } from "@/app/dashboard/voice-assistant/actions";
+import {
+  importVoiceAssistantCalls,
+  rescoreLegacyPhoneCalls,
+} from "@/app/dashboard/voice-assistant/actions";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   AttentionBadge,
   ClassificationBadge,
+  LegacyScoreBadge,
 } from "@/components/voice-assistant/scoring-explainer";
-import { describeCallScore } from "@/lib/utils/call-score";
+import {
+  describeCallScore,
+  isLegacyCallScore,
+  LEGACY_SCORE_NOTE,
+} from "@/lib/utils/call-score";
 import {
   formatCallDuration,
   maskPhoneNumber,
@@ -25,12 +34,27 @@ type RecentCallsBlockProps = {
   hasAgent: boolean;
 };
 
+/**
+ * A guard on the re-score loop, not a quota: at five calls a round this is
+ * three hundred calls in one sitting, more than any church log we have seen.
+ * Anything left after that is one more click away.
+ */
+const MAX_RESCORE_ROUNDS = 60;
+
 export function RecentCallsBlock({
   calls,
   isAdmin,
   hasAgent,
 }: RecentCallsBlockProps) {
+  const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [rescoring, startRescore] = useTransition();
+  const [progress, setProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
+
+  const legacyCount = calls.filter(isLegacyCallScore).length;
 
   const handleImport = () => {
     startTransition(async () => {
@@ -47,6 +71,48 @@ export function RecentCallsBlock({
     });
   };
 
+  // One click, many rounds. Each round judges a handful of calls so no single
+  // request runs long enough to be cut off, and the table refreshes between
+  // rounds so the kinds fill in as it goes.
+  const handleRescoreLegacy = () => {
+    startRescore(async () => {
+      let done = 0;
+      let failed = 0;
+      let remaining = legacyCount;
+      setProgress({ done: 0, total: legacyCount });
+
+      for (let round = 0; round < MAX_RESCORE_ROUNDS; round++) {
+        const result = await rescoreLegacyPhoneCalls();
+        if (!("ok" in result)) {
+          toast.error(result.error);
+          break;
+        }
+        done += result.rescored;
+        failed += result.failed;
+        remaining = result.remaining;
+        setProgress({ done, total: done + remaining });
+        if (remaining === 0 || result.rescored === 0) break;
+      }
+
+      setProgress(null);
+      router.refresh();
+
+      if (done === 0 && failed === 0) {
+        toast.success("Every call is already scored by the current rubric.");
+      } else if (failed > 0) {
+        toast.warning(
+          `Re-scored ${done} call${done === 1 ? "" : "s"}. ${failed} could not be scored; try again in a moment.`,
+        );
+      } else if (remaining > 0) {
+        toast.success(
+          `Re-scored ${done} calls so far. Click again to continue with the remaining ${remaining}.`,
+        );
+      } else {
+        toast.success(`Re-scored ${done} older call${done === 1 ? "" : "s"}.`);
+      }
+    });
+  };
+
   return (
     <Card>
       <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
@@ -58,7 +124,25 @@ export function RecentCallsBlock({
           </p>
         </div>
         {isAdmin && (
-          <div className="flex shrink-0 flex-wrap gap-2">
+          <div className="flex shrink-0 flex-wrap justify-end gap-2">
+            {legacyCount > 0 && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={rescoring}
+                onClick={handleRescoreLegacy}
+                title={LEGACY_SCORE_NOTE}
+              >
+                <Sparkles
+                  className={`mr-1.5 size-3.5 ${rescoring ? "animate-pulse" : ""}`}
+                  aria-hidden
+                />
+                {rescoring && progress
+                  ? `Re-scoring ${Math.min(progress.done + 1, progress.total)} of ${progress.total}…`
+                  : `Re-score ${legacyCount} older call${legacyCount === 1 ? "" : "s"}`}
+              </Button>
+            )}
             {hasAgent && (
               <Button
                 type="button"
@@ -131,11 +215,14 @@ export function RecentCallsBlock({
                       </td>
                       <td className="py-2.5 pr-4">
                         <span className="flex flex-wrap items-center gap-1.5">
-                          <ClassificationBadge
-                            classification={score.classification}
-                          />
+                          {score.legacy && !score.classification ? (
+                            <LegacyScoreBadge />
+                          ) : (
+                            <ClassificationBadge
+                              classification={score.classification}
+                            />
+                          )}
                           <AttentionBadge view={score} />
-                          {!score.classification && !score.needsAttention && ""}
                         </span>
                       </td>
                       <td className="py-2.5 pr-4 tabular-nums">
@@ -143,11 +230,7 @@ export function RecentCallsBlock({
                       </td>
                       <td
                         className={`py-2.5 pr-4 font-medium tabular-nums ${score.toneClass}`}
-                        title={
-                          score.legacy
-                            ? "Scored by the previous 0–100 rubric"
-                            : undefined
-                        }
+                        title={score.legacy ? LEGACY_SCORE_NOTE : undefined}
                       >
                         {score.value ?? ""}
                         {score.value != null && (

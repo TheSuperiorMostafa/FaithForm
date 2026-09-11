@@ -6,7 +6,7 @@ import {
   CLASSIFICATION_LABELS,
   type CallClassification,
 } from "@/lib/integrations/phone-call-scoring-prompt";
-import type { CallScoreView } from "@/lib/utils/call-score";
+import { LEGACY_SCORE_NOTE, type CallScoreView } from "@/lib/utils/call-score";
 
 const CLASSIFICATION_VARIANT: Record<
   CallClassification,
@@ -27,6 +27,18 @@ export function ClassificationBadge({
   return (
     <Badge variant={CLASSIFICATION_VARIANT[classification]}>
       {CLASSIFICATION_LABELS[classification]}
+    </Badge>
+  );
+}
+
+/**
+ * A call the retired rubric scored has no kind, because that rubric never
+ * asked. An empty Type cell reads as a bug; this says what it actually is.
+ */
+export function LegacyScoreBadge() {
+  return (
+    <Badge variant="muted" title={LEGACY_SCORE_NOTE}>
+      Not yet sorted
     </Badge>
   );
 }
@@ -111,9 +123,13 @@ export function ScoringExplainer() {
         </p>
 
         <p className="text-xs text-muted-foreground">
-          Calls scored before this rubric shipped are shown out of 100 and marked
-          as such. Their number is the old ranking, converted, not a judgement
-          this rubric made.
+          Calls scored before this rubric shipped are marked{" "}
+          <strong className="font-medium text-foreground">Not yet sorted</strong>{" "}
+          and shown uncoloured. Their number is the old ranking converted to
+          1–10, not a judgement this rubric made. Use{" "}
+          <strong className="font-medium text-foreground">Re-score older calls</strong>{" "}
+          above to judge them properly; it sorts each one by kind and replaces
+          the old reasoning.
         </p>
       </CardContent>
     </Card>

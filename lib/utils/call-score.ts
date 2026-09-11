@@ -12,16 +12,21 @@ import type { PhoneCallRow } from "@/types/voice-assistant";
 /**
  * One place that decides what a scored call looks like on screen.
  *
- * Two rubrics are in the table at once: 0–100 rows from before migration 0070
- * and 1–10 rows after it, and a "7" means opposite things in each. Rather than
- * letting each component guess, every read goes through here, and a legacy row
- * says so out loud instead of quietly showing a 7 that used to be a 70.
+ * Two rubrics have written to this table. Rows judged by the retired 0–100
+ * rubric were rescaled to 1–10 by migration 0070 and stamped `version: 1`, so
+ * their number sits on the same scale as everything else but is a converted
+ * rank, not a verdict the current rubric made. Every read goes through here so
+ * a converted row is shown uncoloured and says so, rather than each component
+ * guessing.
  */
 export type CallScoreView = {
-  /** Rounded, in whatever scale this row was actually scored on. */
+  /** Rounded, on the 1–10 scale (or 0–100 for a row 0070 never converted). */
   value: number | null;
   outOf: 10 | 100;
-  /** Scored by the retired 0–100 rubric, so it has no classification. */
+  /**
+   * Scored by the retired rubric: it has no kind, and its number is a
+   * converted rank. Re-scoring replaces it with a real judgement.
+   */
   legacy: boolean;
   classification: CallClassification | null;
   classificationLabel: string | null;
@@ -39,6 +44,10 @@ export type CallScoreView = {
   /** Badge colouring, keyed off the band the score falls in. */
   toneClass: string;
 };
+
+/** Shown wherever a converted score appears, so nobody reads it as a verdict. */
+export const LEGACY_SCORE_NOTE =
+  "Scored before calls were sorted by kind. The number is the old ranking converted to 1–10, not a judgement the current rubric made. Re-score to judge it properly.";
 
 function toNumber(value: number | null): number | null {
   if (value == null) return null;
@@ -66,11 +75,21 @@ function toneFor(score: number | null, legacy: boolean): string {
   return "text-red-600 dark:text-red-400";
 }
 
+/** True for a row the current rubric has not judged, whatever the old one said. */
+export function isLegacyCallScore(call: PhoneCallRow): boolean {
+  const version =
+    typeof call.score_breakdown?.version === "number"
+      ? call.score_breakdown.version
+      : null;
+  return (
+    call.scored_at != null &&
+    (version === null || version < PHONE_CALL_SCORING_VERSION)
+  );
+}
+
 export function describeCallScore(call: PhoneCallRow): CallScoreView {
   const breakdown = call.score_breakdown ?? null;
-  const version =
-    typeof breakdown?.version === "number" ? breakdown.version : null;
-  const legacy = call.scored_at != null && version !== null && version < PHONE_CALL_SCORING_VERSION;
+  const legacy = isLegacyCallScore(call);
 
   const classification =
     call.call_classification ?? (breakdown?.call_type as CallClassification | undefined) ?? null;
@@ -81,7 +100,10 @@ export function describeCallScore(call: PhoneCallRow): CallScoreView {
 
   return {
     value,
-    outOf: legacy ? 100 : 10,
+    // 0070 rescaled every converted score into 1–10, so the denominator is 10
+    // for both rubrics. A value still above 10 is a row that migration never
+    // reached, and the only honest label for it is the scale it was given on.
+    outOf: value != null && value > 10 ? 100 : 10,
     legacy,
     classification,
     classificationLabel: classification
