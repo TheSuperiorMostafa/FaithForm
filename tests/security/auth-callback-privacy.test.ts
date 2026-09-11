@@ -4,16 +4,16 @@ import test from "node:test";
 
 const read = (path: string) => readFileSync(path, "utf8");
 
-const IOS_AUTH = "apps/faithful-ios/Sources/FaithfulKit/Session/SupabaseAuth.swift";
-const IOS_CALLBACK = "apps/faithful-ios/Sources/FaithfulKit/Session/AuthCallback.swift";
-const IOS_MODEL = "apps/faithful-ios/Sources/FaithfulKit/Features/AuthModel.swift";
-const IOS_ROOT = "apps/faithful-ios/App/RootModel.swift";
+const IOS_AUTH = "apps/faithform-ios/Sources/FaithFormKit/Session/SupabaseAuth.swift";
+const IOS_CALLBACK = "apps/faithform-ios/Sources/FaithFormKit/Session/AuthCallback.swift";
+const IOS_MODEL = "apps/faithform-ios/Sources/FaithFormKit/Features/AuthModel.swift";
+const IOS_ROOT = "apps/faithform-ios/App/RootModel.swift";
 const ANDROID_AUTH =
-  "apps/faithful-android/core/network/src/main/kotlin/io/faithform/faithful/network/SupabaseAuthClient.kt";
+  "apps/faithform-android/core/network/src/main/kotlin/io/faithform/app/network/SupabaseAuthClient.kt";
 const ANDROID_CALLBACK =
-  "apps/faithful-android/core/navigation/src/main/kotlin/io/faithform/faithful/navigation/AuthCallbackLink.kt";
+  "apps/faithform-android/core/navigation/src/main/kotlin/io/faithform/app/navigation/AuthCallbackLink.kt";
 const ANDROID_VIEWMODEL =
-  "apps/faithful-android/app/src/main/kotlin/io/faithform/faithful/AppViewModel.kt";
+  "apps/faithform-android/app/src/main/kotlin/io/faithform/app/AppViewModel.kt";
 const WEB_CALLBACK = "app/auth/callback/route.ts";
 
 // ---------------------------------------------------------------------------
@@ -142,7 +142,7 @@ test("credential material is stored only in the platform's secure store", () => 
   assert.doesNotMatch(ios, /UserDefaults/);
 
   const container =
-    "apps/faithful-android/app/src/main/kotlin/io/faithform/faithful/session/AppContainer.kt";
+    "apps/faithform-android/app/src/main/kotlin/io/faithform/app/session/AppContainer.kt";
   const source = read(container);
   // The verifier store writes through `secureStore`, which is the
   // EncryptedSharedPreferences instance built above it.
@@ -178,7 +178,11 @@ test("the visitor no-access page grants no dashboard access and creates no membe
 
 test("the dashboard layout still refuses an account without staff membership", () => {
   const layout = read("app/dashboard/layout.tsx");
-  assert.match(layout, /const \[auth, featureAccess, cookieStore\]/);
+  // Only the auth fetch is the security property here. The rest of the
+  // destructure is whatever the layout happens to need — 7bf476b dropped
+  // `cookieStore` with the sidebar toggle, and a test that fails for that is
+  // asserting the shape of a tuple, not that staff membership is required.
+  assert.match(layout, /const \[auth, featureAccess/);
   assert.match(layout, /if \(!auth\) \{\s*\n\s*redirect\("\/login"\);/);
   assert.doesNotMatch(layout, /\.insert\(/);
 });
