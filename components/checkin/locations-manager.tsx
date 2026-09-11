@@ -27,9 +27,12 @@ import type { ChurchLocation } from "@/types/checkin";
  */
 export function LocationsManager({
   locations,
+  occupancy = {},
   isAdmin,
 }: {
   locations: ChurchLocation[];
+  /** room id → the people checked in there right now. */
+  occupancy?: Record<string, string[]>;
   isAdmin: boolean;
 }) {
   const [pending, startTransition] = useTransition();
@@ -206,6 +209,27 @@ export function LocationsManager({
                     </div>
                   )}
                 </form>
+
+                <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-border pt-3 text-sm">
+                  <Badge
+                    variant={
+                      location.capacity != null &&
+                      (occupancy[location.id]?.length ?? 0) > location.capacity
+                        ? "warning"
+                        : occupancy[location.id]?.length
+                          ? "info"
+                          : "muted"
+                    }
+                  >
+                    {occupancy[location.id]?.length ?? 0} checked in now
+                    {location.capacity != null && ` / ${location.capacity}`}
+                  </Badge>
+                  <span className="text-muted-foreground">
+                    {occupancy[location.id]?.length
+                      ? occupancy[location.id].join(", ")
+                      : "Nobody is in this room right now."}
+                  </span>
+                </p>
 
                 <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3">
                   {location.isDefaultAdultLocation ? (

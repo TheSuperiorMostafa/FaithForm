@@ -228,3 +228,33 @@ test("the checkout console never offers release without a confirm step", () => {
     /runLookup[\s\S]{0,600}completeCheckout/,
   );
 });
+
+// ---------------------------------------------------------------------------
+// Reading the roster back
+// ---------------------------------------------------------------------------
+
+const queries = readFileSync("lib/queries/checkin.ts", "utf8");
+const locationsPage = readFileSync(
+  "app/dashboard/checkin/locations/page.tsx",
+  "utf8",
+);
+
+test("the roster says which of the two member links it wants", () => {
+  // A session references members twice, once for who was checked in and once
+  // for who they were released to. An unhinted embed is refused by PostgREST
+  // as ambiguous, and with the error dropped every room read as empty.
+  assert.match(queries, /members!member_id\(id, first_name, last_name, medical_notes\)/);
+  assert.doesNotMatch(queries, /\n\s+members\(id, first_name, last_name, medical_notes\)/);
+});
+
+test("a roster read that fails is logged rather than shown as an empty room", () => {
+  assert.match(queries, /\[checkin\] roster read failed/);
+  assert.match(queries, /\[checkin\] household sessions read failed/);
+  assert.match(actions, /\[checkin\] check-in insert failed/);
+});
+
+test("the Rooms tab shows who is in each room right now", () => {
+  assert.match(locationsPage, /getRoster\(auth\.churchId, today/);
+  assert.match(locationsPage, /occupancy=\{occupancy\}/);
+});
+

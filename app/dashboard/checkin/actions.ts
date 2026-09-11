@@ -563,6 +563,7 @@ export async function checkInMember(
     .from("household_members")
     .select("household_id")
     .eq("member_id", memberId)
+    .eq("church_id", context.auth.churchId)
     .maybeSingle();
 
   const today = localDateInTimeZone(context.auth.churchTimezone);
@@ -596,7 +597,10 @@ export async function checkInMember(
       .eq("id", open.id)
       .eq("status", "pre_checked_in");
 
-    if (error) return fail("Could not complete that check-in.");
+    if (error) {
+      console.error("[checkin] completing a pre-check-in failed:", error.message);
+      return fail("Could not complete that check-in.");
+    }
 
     revalidateCheckin();
     return { ok: true, data: { sessionId: open.id as string } };
@@ -619,9 +623,16 @@ export async function checkInMember(
     .single();
 
   if (error || !data) {
+    if (error?.code === "23505") {
+      return fail("That person was just checked in from another station.");
+    }
+    // Said out loud in the server log. A missing table, a schema-cache miss
+    // and a constraint violation all used to collapse into one sentence that
+    // told nobody which it was.
+    console.error("[checkin] check-in insert failed:", error?.message ?? "no row");
     return fail(
-      error?.code === "23505"
-        ? "That person was just checked in from another station."
+      /relation .* does not exist|schema cache/i.test(error?.message ?? "")
+        ? "Check-In has not been set up on this database yet."
         : "Could not check that person in.",
     );
   }
@@ -646,7 +657,10 @@ export async function moveSession(formData: FormData): Promise<ActionResult> {
     .eq("church_id", context.auth.churchId)
     .in("status", ["pre_checked_in", "checked_in"]);
 
-  if (error) return fail("Could not move that person.");
+  if (error) {
+    console.error("[checkin] move failed:", error.message);
+    return fail("Could not move that person.");
+  }
 
   revalidateCheckin();
   return { ok: true };

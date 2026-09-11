@@ -61,7 +61,8 @@ export async function listLocations(
 
   if (!options.includeInactive) query = query.eq("is_active", true);
 
-  const { data } = await query;
+  const { data, error } = await query;
+  if (error) console.error("[checkin] rooms read failed:", error.message);
   return (data ?? []).map((row) => mapLocation(row as Record<string, unknown>));
 }
 
@@ -325,11 +326,16 @@ export async function findHouseholdsByPersonName(
 // ROSTER
 // ---------------------------------------------------------------------------
 
+// `members!member_id`, not `members(...)`: a session points at members twice,
+// once for who was checked in and once for who they were released to, and an
+// unhinted embed makes PostgREST refuse the whole read as ambiguous (PGRST201).
+// That refusal was silently swallowed below, so every room read as empty and
+// every check-in looked like it had not happened.
 const SESSION_SELECT = `
   id, member_id, household_id, location_id, status, local_service_date,
   pre_checked_in_at, checked_in_at, checked_out_at,
   checkin_method, checkout_method, checkout_override_reason,
-  members(id, first_name, last_name, medical_notes),
+  members!member_id(id, first_name, last_name, medical_notes),
   church_locations(id, name),
   households(id, name)
 `;
@@ -396,7 +402,10 @@ export async function getRoster(
     query = query.in("status", ["pre_checked_in", "checked_in"]);
   }
 
-  const { data } = await query.order("checked_in_at", { ascending: true });
+  const { data, error } = await query.order("checked_in_at", {
+    ascending: true,
+  });
+  if (error) console.error("[checkin] roster read failed:", error.message);
 
   return ((data ?? []) as unknown as SessionJoin[])
     .map(mapSession)
@@ -412,13 +421,16 @@ export async function getHouseholdOpenSessions(
 ): Promise<CheckinSessionRow[]> {
   const client = supabase ?? db();
 
-  const { data } = await client
+  const { data, error } = await client
     .from("checkin_sessions")
     .select(SESSION_SELECT)
     .eq("church_id", churchId)
     .eq("household_id", householdId)
     .eq("local_service_date", localServiceDate)
     .in("status", ["pre_checked_in", "checked_in"]);
+  if (error) {
+    console.error("[checkin] household sessions read failed:", error.message);
+  }
 
   return ((data ?? []) as unknown as SessionJoin[])
     .map(mapSession)
@@ -446,12 +458,13 @@ export async function getLocationStats(
   const weeks = recentServiceWeeks(options.endWeekStart, options.weeks ?? 8);
   const earliest = weeks[0];
 
-  const { data } = await client
+  const { data, error } = await client
     .from("checkin_sessions")
     .select("location_id, local_service_date, church_locations(id, name)")
     .eq("church_id", churchId)
     .in("status", ["checked_in", "checked_out"])
     .gte("local_service_date", earliest);
+  if (error) console.error("[checkin] stats read failed:", error.message);
 
   const byLocation = new Map<string, LocationHeadcount>();
 
