@@ -336,8 +336,10 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+/* Relative rather than static: the phone menu's drawer is positioned against
+ * the header, and a static header would hand that job to some ancestor. */
 .site-nav-static {
-  position: static;
+  position: relative;
 }
 
 .site-nav-inner {
@@ -393,6 +395,81 @@
 .site-nav-links .site-btn {
   padding: 10px 22px;
   font-size: 14.5px;
+}
+
+/* The phone menu. Hidden on wide screens, where the links sit in the header. */
+.site-nav-menu {
+  display: none;
+}
+
+.site-nav-menu-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font: 600 13px/1 inherit;
+  font-family: inherit;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.site-nav-menu-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.site-nav-scrim {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  height: 100vh;
+  border: 0;
+  padding: 0;
+  background: rgba(0, 0, 0, 0.45);
+  cursor: default;
+}
+
+.site-nav-drawer {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+  padding: 12px var(--site-section-x) 20px;
+  background: var(--site-ink);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 24px 40px rgba(0, 0, 0, 0.35);
+}
+
+.site-nav-drawer-link {
+  display: block;
+  padding: 16px 18px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.site-nav-drawer-link:active,
+.site-nav-drawer-link:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.site-nav-drawer-cta {
+  margin-top: 6px;
+  width: 100%;
 }
 
 /* --------------------------------------------------------------------------
@@ -1308,11 +1385,19 @@
     gap: 36px;
   }
 
+  /* The header links move into the drawer: six of them wrapped beside the
+   * church's name here and squeezed it into five lines. */
   .site-nav-links {
-    gap: 18px;
-    font-size: 13.5px;
-    flex-wrap: wrap;
-    justify-content: flex-end;
+    display: none;
+  }
+
+  .site-nav-menu {
+    display: block;
+    flex: none;
+  }
+
+  .site-nav-title {
+    font-size: 16px;
   }
 
   .site-head-split {

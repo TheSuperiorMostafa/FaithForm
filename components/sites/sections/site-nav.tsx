@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import type { NavContent } from "@/types/site";
 
 import { Action } from "../primitives";
+import { SiteNavMenu } from "./site-nav-menu";
 
 function SiteNav({ content, ctx }: SectionComponentProps<NavContent>) {
   return (
@@ -34,6 +35,8 @@ function SiteNav({ content, ctx }: SectionComponentProps<NavContent>) {
           ))}
           <Action action={content.cta} />
         </div>
+
+        <SiteNavMenu links={content.links} cta={content.cta} />
       </div>
     </nav>
   );
