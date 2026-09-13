@@ -77,15 +77,20 @@ final class RootModel {
     /// invitation — without collapsing the UI back to a spinner first.
     func load(quiet: Bool) async {
         if !quiet { state.apply(.loading) }
+        // Captured before anything can fail, so an offline reload still has
+        // something honest to show: the last account this launch loaded,
+        // labelled stale, rather than a blank "you're offline".
+        let previous = lastBootstrap
         do {
             let response = try await dependencies.api.send(
                 "api/mobile/v1/account/bootstrap",
                 as: Bootstrap.self
             )
             guard let bootstrap = response.value else {
-                state.apply(.offlineNoCache)
+                showOffline(previous)
                 return
             }
+            lastBootstrap = bootstrap
 
             // First authenticated use with no recorded policy versions: the
             // person accepted them a moment ago, on the account screen that
@@ -103,14 +108,39 @@ final class RootModel {
             // Typed code and correlation id only — never the message, a token,
             // or anything else a person or provider wrote.
             Self.log.failure(error.code, requestId: error.requestId)
-            // An expired session is signed-out, not an error: the person needs
-            // to sign in, and a retry button would do nothing for them.
-            state.apply(
-                error.code == .unauthenticated || error.code == .sessionExpired
-                    ? .signedOut
-                    : .failed(message: error.displayMessage)
-            )
+            switch error.code {
+            case .unauthenticated, .sessionExpired:
+                // An expired session is signed-out, not an error: the person
+                // needs to sign in, and a retry button would do nothing for them.
+                // `SessionManager` only reaches this when the identity provider
+                // refused the refresh token itself.
+                state.apply(.signedOut)
+            case .unavailable where error.requestId == nil:
+                // Never reached FaithForm: no network, or a refresh that could
+                // not reach the identity provider. **The session is still on the
+                // device**, so this is offline, not signed out — and the next
+                // retry on a better connection picks up exactly where it was.
+                showOffline(previous)
+            default:
+                state.apply(.failed(message: error.displayMessage))
+            }
         } catch {
+            showOffline(previous)
+        }
+    }
+
+    /// The last bootstrap this launch loaded successfully.
+    ///
+    /// In memory only, like the rest of the projection cache, and dropped on
+    /// sign-out. It exists so a reload that fails offline — pull to refresh
+    /// on a train, a quiet reload after the access token lapsed — keeps what the
+    /// person was already looking at instead of replacing it with a blank.
+    private var lastBootstrap: Bootstrap?
+
+    private func showOffline(_ previous: Bootstrap?) {
+        if let previous {
+            state.apply(.ready(previous, isStale: true))
+        } else {
             state.apply(.offlineNoCache)
         }
     }
@@ -282,6 +312,7 @@ final class RootModel {
 
         await dependencies.cache.purgeAll()
         await dependencies.session.purgeEverything()
+        lastBootstrap = nil
         selectedChurch = nil
         selectedTab = .home
         onboardingState = nil

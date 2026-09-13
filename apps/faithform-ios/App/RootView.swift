@@ -63,6 +63,12 @@ struct RootView: View {
                     Button(L.retry) { Task { await model.load() } }
                         .buttonStyle(FaithFormButtonStyle(kind: .secondary, theme: theme))
                         .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
+                    // The session survives being offline now, so the way out has
+                    // to be here too. Otherwise a person on a device that will
+                    // never reach the network again could not leave it.
+                    Button(L.signOut) { Task { await model.signOut() } }
+                        .buttonStyle(FaithFormButtonStyle(kind: .quiet, theme: theme))
+                        .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
                 }
 
             case let .failed(message):
