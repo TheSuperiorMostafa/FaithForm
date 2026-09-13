@@ -41,7 +41,11 @@ val supabaseAnonKey = configValue("faithform.supabaseAnonKey")
 
 android {
     namespace = "io.faithform.app"
-    compileSdk = 34
+    // API 36 (Android 16). Google Play requires new apps and updates to target
+    // it from 31 August 2026, and a target cannot be higher than what the app
+    // compiles against — so both move together, and AGP moved to the 8.13 line
+    // because it is the last 8.x release that knows this platform.
+    compileSdk = 36
 
     defaultConfig {
         // Matches the iOS bundle identifier, so one product has one id on both
@@ -55,7 +59,7 @@ android {
         // recorded in docs/faithform/P4_EXTERNAL_SETUP_RUNBOOK.md.
         applicationId = "io.faithform.app"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
