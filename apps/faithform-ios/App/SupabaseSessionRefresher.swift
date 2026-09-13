@@ -23,6 +23,14 @@ import FaithFormKit
 /// Sessions are *created* by `SupabaseAuthClient` in FaithFormKit, behind the
 /// sign-in flow. This stays separate and refresh-only: renewal runs inside
 /// `SessionManager`'s single-flight path with no UI anywhere near it.
+///
+/// ## Which failures end a session
+///
+/// Exactly one: Supabase refusing the refresh token, decided by
+/// `SupabaseRefreshRejection` and thrown as `.sessionExpired`. No network, a
+/// timeout, a 5xx, a rate limit or an unreadable body are thrown as
+/// `.unavailable`, and `SessionManager` keeps the session through them — see
+/// `SessionRefreshing`.
 struct SupabaseSessionRefresher: SessionRefreshing {
     private let environment: APIEnvironment
     private let supabaseURL: URL?
@@ -41,7 +49,8 @@ struct SupabaseSessionRefresher: SessionRefreshing {
     func refresh(refreshToken: String) async throws -> StoredSession {
         // Fails closed, and names the missing key rather than the value. A build
         // with no identity provider configured cannot refresh, and pretending
-        // otherwise would leave a person staring at a spinner.
+        // otherwise would leave a person staring at a spinner. Not a rejection
+        // of the token, though, so the session is kept.
         guard let supabaseURL, let anonKey else {
             throw APIError(
                 code: .unavailable,
@@ -60,11 +69,28 @@ struct SupabaseSessionRefresher: SessionRefreshing {
         request.httpBody = try JSONEncoder().encode(["refresh_token": refreshToken])
         request.timeoutInterval = 20
 
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await URLSession.shared.data(for: request)
+        } catch {
+            // Offline, timed out, DNS, TLS. The request never got an answer
+            // about the token, so this must not read as one.
+            throw APIError.transport(error)
+        }
+
+        guard let http = response as? HTTPURLResponse else {
+            throw APIError.transport(URLError(.badServerResponse))
+        }
+
+        guard (200..<300).contains(http.statusCode) else {
             // The provider's body can name an account and an error code written
-            // for a developer. Only the class of failure crosses back.
-            throw APIError(code: .sessionExpired, message: L.signInBody)
+            // for a developer. It is read only to decide *which* of two classes
+            // this is, and only the class crosses back.
+            if SupabaseRefreshRejection.isDefinitive(status: http.statusCode, body: data) {
+                throw APIError(code: .sessionExpired, message: L.signInBody)
+            }
+            throw APIError.transport(URLError(.badServerResponse))
         }
 
         struct TokenResponse: Decodable {
@@ -75,7 +101,13 @@ struct SupabaseSessionRefresher: SessionRefreshing {
             let user: User
         }
 
-        let decoded = try JSONDecoder().decode(TokenResponse.self, from: data)
+        let decoded: TokenResponse
+        do {
+            decoded = try JSONDecoder().decode(TokenResponse.self, from: data)
+        } catch {
+            // A 200 nobody could read — a captive portal's page, most often.
+            throw APIError.transport(error)
+        }
         return StoredSession(
             accessToken: decoded.access_token,
             refreshToken: decoded.refresh_token,

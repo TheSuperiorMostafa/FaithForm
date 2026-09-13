@@ -372,3 +372,60 @@ public struct SupabaseAuthClient: SessionAuthenticating {
         return AuthFailure(kind: .other, message: L.authErrorGeneric)
     }
 }
+
+/// Whether a failed token refresh is the provider **refusing the token**.
+///
+/// ## Why this is its own decision
+///
+/// A session ends for one reason: the identity provider looked at the refresh
+/// token and said no. Every other way a refresh can fail — no network, a
+/// timeout, a 5xx, a rate limit, a misconfigured key — says nothing about the
+/// token, and ending the session over one of those signs a person out for
+/// being on a train. `SessionManager` keeps the session unless this says yes.
+///
+/// ## What counts
+///
+/// A 400, 401 or 403 **and** a body that names the token: `invalid_grant`, a
+/// refresh token that was not found or already used, a session that is gone,
+/// or a user that no longer exists or is banned. GoTrue has written these as
+/// `error_code`, as OAuth's `error`, and only in prose, over its lifetime, so
+/// all three are read. A bare 401 is not enough on its own — GoTrue answers
+/// "Invalid API key" with one, and that is a build to fix, not a person to sign
+/// out.
+public enum SupabaseRefreshRejection {
+    private struct Body: Decodable {
+        let error_code: String?
+        let error: String?
+        let msg: String?
+        let message: String?
+        let error_description: String?
+    }
+
+    static let rejectingCodes: Set<String> = [
+        "invalid_grant",
+        "refresh_token_not_found",
+        "refresh_token_already_used",
+        "session_not_found",
+        "session_expired",
+        "user_not_found",
+        "user_banned",
+    ]
+
+    public static func isDefinitive(status: Int, body: Data) -> Bool {
+        guard [400, 401, 403].contains(status) else { return false }
+        guard let decoded = try? JSONDecoder.faithform.decode(Body.self, from: body) else {
+            return false
+        }
+
+        let codes = [decoded.error_code, decoded.error].compactMap { $0?.lowercased() }
+        if codes.contains(where: rejectingCodes.contains) { return true }
+
+        let text = [decoded.msg, decoded.message, decoded.error_description]
+            .compactMap { $0?.lowercased() }
+            .joined(separator: " ")
+        return text.contains("invalid refresh token")
+            || text.contains("refresh token not found")
+            || text.contains("refresh token already used")
+            || text.contains("revoked")
+    }
+}

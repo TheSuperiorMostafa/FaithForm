@@ -29,6 +29,19 @@ public struct StoredSession: Codable, Sendable, Equatable {
     }
 }
 
+/// Renews a session from its refresh token.
+///
+/// ## The one distinction a conformer must get right
+///
+/// Throw `APIError` with `.sessionExpired` (or `.unauthenticated`) **only** when
+/// the identity provider looked at the refresh token and refused it — spent,
+/// revoked, never issued. That is the one failure that ends a session.
+///
+/// Everything else is not an answer about the token at all: no network, a
+/// timeout, a 5xx, a rate limit, a body nobody could read, a build with no
+/// provider configured. Throw anything else for those — `APIError.transport`,
+/// `.unavailable`, a `URLError` — and `SessionManager` keeps the session so the
+/// next attempt, on a better connection, can still succeed.
 public protocol SessionRefreshing: Sendable {
     func refresh(refreshToken: String) async throws -> StoredSession
 }
@@ -91,7 +104,14 @@ public actor SessionManager: TokenProviding {
         if !session.isExpired(now: now()) { return session.accessToken }
 
         if let existing = inFlightRefresh {
-            return try await existing.value.accessToken
+            // A caller that joined someone else's refresh sees the same public
+            // answer the owner does. The owner alone decides whether to
+            // invalidate, so a rejection is not acted on twice.
+            do {
+                return try await existing.value.accessToken
+            } catch {
+                throw Self.publicError(for: error)
+            }
         }
 
         let task = Task<StoredSession, Error> { [refresher, session] in
@@ -101,16 +121,50 @@ public actor SessionManager: TokenProviding {
 
         defer { inFlightRefresh = nil }
 
+        let refreshed: StoredSession
         do {
-            let refreshed = try await task.value
-            try adopt(refreshed)
-            return refreshed.accessToken
+            refreshed = try await task.value
         } catch {
-            // A refresh that fails is terminal for this session: keeping a dead
-            // token would make every later call fail in a less obvious way.
-            await invalidate()
-            throw APIError(code: .sessionExpired, message: "Your session has expired.")
+            if Self.isDefinitiveRejection(error) {
+                // The provider refused this refresh token. That is terminal for
+                // the session: keeping a dead token would make every later call
+                // fail in a less obvious way.
+                await invalidate()
+            }
+            // **Anything else keeps the session.** This used to invalidate on
+            // every failure, network included — so opening the app on a train
+            // an hour after the access token expired signed the person out, and
+            // they had to find their password to read a feed that was cached.
+            // A refresh that never reached the provider says nothing about the
+            // token, and the next attempt on a better connection will work.
+            throw Self.publicError(for: error)
         }
+
+        try adopt(refreshed)
+        return refreshed.accessToken
+    }
+
+    /// Whether a refresher's failure is the provider refusing the token.
+    ///
+    /// Only the two codes `SessionRefreshing` reserves for it. Deliberately not
+    /// "any `APIError`": a transport failure is an `APIError` too, and treating
+    /// it as a rejection is exactly the bug this exists to prevent.
+    static func isDefinitiveRejection(_ error: Error) -> Bool {
+        guard let error = error as? APIError else { return false }
+        return error.code == .sessionExpired || error.code == .unauthenticated
+    }
+
+    /// What a caller of `validAccessToken` is told.
+    ///
+    /// A rejection becomes `sessionExpired`, which the app reads as signed out.
+    /// Everything else becomes the same retryable `unavailable` a dropped
+    /// connection produces, which the app reads as offline — with the session
+    /// still on the device.
+    static func publicError(for error: Error) -> APIError {
+        if isDefinitiveRejection(error) {
+            return APIError(code: .sessionExpired, message: "Your session has expired.")
+        }
+        return APIError.transport(error)
     }
 
     public func invalidate() async {

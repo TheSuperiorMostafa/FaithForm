@@ -32,6 +32,58 @@ actor CountingRefresher: SessionRefreshing {
     }
 }
 
+/// The ways a refresh fails *without* the provider saying anything about the
+/// token.
+enum TransientFailure: String, CaseIterable, Sendable, CustomTestStringConvertible {
+    case noNetwork
+    case serverUnavailable
+    case unreadable
+
+    var error: Error {
+        switch self {
+        case .noNetwork: return URLError(.notConnectedToInternet)
+        case .serverUnavailable: return APIError.transport(URLError(.badServerResponse))
+        case .unreadable: return DecodingError.dataCorrupted(.init(codingPath: [], debugDescription: "html"))
+        }
+    }
+
+    var testDescription: String { rawValue }
+}
+
+/// Plays back a fixed sequence of refresh outcomes, one per call.
+actor ScriptedRefresher: SessionRefreshing {
+    enum Step: Sendable {
+        case succeed
+        case fail(any Error & Sendable)
+    }
+
+    private var steps: [Step]
+    private var calls = 0
+
+    init(_ steps: [Step]) { self.steps = steps }
+
+    func callCount() -> Int { calls }
+
+    func refresh(refreshToken: String) async throws -> StoredSession {
+        calls += 1
+        // Long enough for concurrent callers to genuinely overlap.
+        try? await Task.sleep(for: .milliseconds(30))
+        let step = steps.isEmpty ? .succeed : steps.removeFirst()
+        switch step {
+        case .succeed:
+            return StoredSession(
+                accessToken: "fresh-\(calls)",
+                refreshToken: "next-\(calls)",
+                expiresAt: Date().addingTimeInterval(3600),
+                accountId: "account-1",
+                environmentKey: "test"
+            )
+        case let .fail(error):
+            throw error
+        }
+    }
+}
+
 @Suite("Session lifecycle")
 struct SessionTests {
 
@@ -97,7 +149,7 @@ struct SessionTests {
         #expect(Set(tokens) == ["fresh-1"])
     }
 
-    @Test("a failed refresh clears the session rather than leaving a dead token")
+    @Test("a refused refresh clears the session rather than leaving a dead token")
     func failedRefreshInvalidates() async throws {
         let store = InMemorySecureStore()
         let manager = SessionManager(
@@ -112,6 +164,122 @@ struct SessionTests {
         }
         #expect(await manager.currentSession() == nil)
         #expect(store.isEmpty())
+    }
+
+    @Test("a refresh that cannot reach the provider keeps the session", arguments: [
+        TransientFailure.noNetwork,
+        TransientFailure.serverUnavailable,
+        TransientFailure.unreadable,
+    ])
+    func transientRefreshKeepsSession(_ failure: TransientFailure) async throws {
+        // **The regression this guards.** Opening the app offline an hour after
+        // the access token expired used to delete the stored session, so the
+        // person was signed out for having no signal. A refresh that never got
+        // an answer about the token says nothing about the token.
+        let store = InMemorySecureStore()
+        let refresher = ScriptedRefresher([.fail(failure.error), .succeed])
+        let manager = SessionManager(
+            store: store,
+            refresher: refresher,
+            environmentKey: "test"
+        )
+        let expired = session(expiresIn: 5)
+        try await manager.adopt(expired)
+
+        do {
+            _ = try await manager.validAccessToken()
+            Issue.record("a failed refresh returned a token")
+        } catch let error as APIError {
+            // Reported the way a dropped connection is, so the app shows
+            // offline rather than the sign-in screen.
+            #expect(error.code == .unavailable)
+            #expect(error.retryable)
+            #expect(error.requestId == nil)
+        }
+
+        #expect(await manager.currentSession() == expired)
+        #expect(!store.isEmpty())
+
+        // Back on a network: the same refresh token still works.
+        #expect(try await manager.validAccessToken() == "fresh-2")
+        #expect(await refresher.callCount() == 2)
+    }
+
+    @Test("a refresh token the provider refuses ends the session")
+    func definitiveRejectionClearsSession() async throws {
+        let store = InMemorySecureStore()
+        let manager = SessionManager(
+            store: store,
+            refresher: ScriptedRefresher([
+                .fail(APIError(code: .sessionExpired, message: "refresh token revoked")),
+            ]),
+            environmentKey: "test"
+        )
+        try await manager.adopt(session(expiresIn: 5))
+
+        do {
+            _ = try await manager.validAccessToken()
+            Issue.record("a refused refresh returned a token")
+        } catch let error as APIError {
+            #expect(error.code == .sessionExpired)
+        }
+        #expect(await manager.currentSession() == nil)
+        #expect(store.isEmpty())
+    }
+
+    @Test("callers sharing a refresh that failed offline all keep the session")
+    func sharedTransientFailure() async throws {
+        let store = InMemorySecureStore()
+        let refresher = ScriptedRefresher([.fail(URLError(.notConnectedToInternet))])
+        let manager = SessionManager(
+            store: store,
+            refresher: refresher,
+            environmentKey: "test"
+        )
+        try await manager.adopt(session(expiresIn: 5))
+
+        let codes = await withTaskGroup(of: MobileErrorCode?.self) { group in
+            for _ in 0..<6 {
+                group.addTask {
+                    do {
+                        _ = try await manager.validAccessToken()
+                        return nil
+                    } catch {
+                        return (error as? APIError)?.code
+                    }
+                }
+            }
+            var collected: [MobileErrorCode?] = []
+            for await code in group { collected.append(code) }
+            return collected
+        }
+
+        #expect(codes.allSatisfy { $0 == .unavailable })
+        #expect(await refresher.callCount() == 1)
+        #expect(!store.isEmpty())
+    }
+
+    @Test("only a refusal that names the token counts as one", arguments: [
+        // GoTrue's current shape.
+        (400, #"{"code":400,"error_code":"refresh_token_not_found","msg":"Invalid Refresh Token: Refresh Token Not Found"}"#, true),
+        (400, #"{"error_code":"refresh_token_already_used","msg":"Invalid Refresh Token: Already Used"}"#, true),
+        // OAuth's older shape.
+        (400, #"{"error":"invalid_grant","error_description":"Invalid Refresh Token: Refresh Token Not Found"}"#, true),
+        (403, #"{"error_code":"session_not_found","msg":"Session from session_id claim in JWT does not exist"}"#, true),
+        (401, #"{"msg":"Invalid Refresh Token: Revoked"}"#, true),
+        // A bad key is a broken build, not a person to sign out.
+        (401, #"{"message":"Invalid API key"}"#, false),
+        // Not about the token at all.
+        (400, #"{"error_code":"validation_failed","msg":"refresh_token is required"}"#, false),
+        (429, #"{"error_code":"over_request_rate_limit"}"#, false),
+        (500, #"{"error_code":"unexpected_failure"}"#, false),
+        (502, "<html>Bad Gateway</html>", false),
+        (400, "", false),
+    ])
+    func refreshRejectionClassification(_ status: Int, _ body: String, _ expected: Bool) {
+        #expect(
+            SupabaseRefreshRejection.isDefinitive(status: status, body: Data(body.utf8)) == expected
+        )
     }
 
     @Test("a session from another environment is never adopted or used")
