@@ -27,11 +27,17 @@ FAITHFORM_BUNDLE_ID = $(FAITHFORM_BUNDLE_ID:default=io.faithform.app)
 PRODUCT_BUNDLE_IDENTIFIER = $(FAITHFORM_BUNDLE_ID)$(FAITHFORM_BUNDLE_ID_SUFFIX)
 
 PRODUCT_NAME = FaithForm
-MARKETING_VERSION = 0.1.0
-CURRENT_PROJECT_VERSION = 1
+// The store launch. The build number goes up with every upload to App Store
+// Connect, which refuses a second binary under a number it has already seen.
+MARKETING_VERSION = 1.0.0
+CURRENT_PROJECT_VERSION = 2
 
 // The minimum server-supported client build. The server refuses anything older,
 // so this is a fact about compatibility rather than a display string.
+//
+// Deliberately **not** CURRENT_PROJECT_VERSION: an App Store upload bumps that
+// for reasons that have nothing to do with the API, and tying the two together
+// would make every resubmission look like a protocol change.
 FAITHFORM_CLIENT_BUILD = 1
 
 // ---------------------------------------------------------------------------
