@@ -389,3 +389,49 @@ public enum MediaFormatting {
         return "\(max(1, minutes))m"
     }
 }
+
+#if os(iOS)
+import AVFoundation
+import UIKit
+
+/// The picture of whatever `AVPlayerAdapter` is playing.
+///
+/// Separated behind `#if os(iOS)` because it is UIKit, and kept deliberately
+/// inert, like `CheckInCameraPreview`: it displays a player the adapter drives
+/// and owns nothing. It cannot load an item, play, pause, seek or see a
+/// capability, so a surface left on screen by a layout mistake cannot start
+/// anything — and before the person taps Play it is simply black.
+///
+/// Letterboxed rather than cropped: a sermon slide with its edges cut off is a
+/// slide nobody can read.
+public struct MediaVideoSurface: UIViewRepresentable {
+    private let player: AVPlayer
+
+    public init(player: AVPlayer) {
+        self.player = player
+    }
+
+    public func makeUIView(context: Context) -> SurfaceView {
+        let view = SurfaceView()
+        view.playerLayer.player = player
+        view.playerLayer.videoGravity = .resizeAspect
+        view.backgroundColor = .black
+        // Decorative to VoiceOver: the title, the state and the controls beside
+        // it carry everything a person needs, and "video" read aloud adds nothing.
+        view.isAccessibilityElement = false
+        return view
+    }
+
+    public func updateUIView(_ uiView: SurfaceView, context: Context) {
+        if uiView.playerLayer.player !== player { uiView.playerLayer.player = player }
+    }
+
+    public final class SurfaceView: UIView {
+        public override class var layerClass: AnyClass { AVPlayerLayer.self }
+        var playerLayer: AVPlayerLayer {
+            // Safe: `layerClass` guarantees the type.
+            layer as! AVPlayerLayer
+        }
+    }
+}
+#endif

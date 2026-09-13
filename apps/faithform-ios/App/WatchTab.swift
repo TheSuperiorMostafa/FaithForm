@@ -142,8 +142,11 @@ struct RecordingScreen: View {
             make: { features.mediaDetail(mediaId: mediaId) },
             onCreate: { model in await Self.connect(model, to: features) }
         ) { model in
-            MediaDetailScreen(model: model)
-                .navigationBarTitleDisplayMode(.inline)
+            VStack(spacing: 0) {
+                VideoFrame(features: features)
+                MediaDetailScreen(model: model)
+            }
+            .navigationBarTitleDisplayMode(.inline)
         }
     }
 
@@ -175,46 +178,13 @@ struct LiveServiceScreen: View {
             make: { features.mediaDetail(mediaId: live.mediaId) },
             onCreate: { model in await RecordingScreen.connect(model, to: features) }
         ) { model in
-            ScrollView {
-                VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
-                    Text(L.mediaLiveNowBadge)
-                        .font(theme.font(FaithFormTokens.Text.caption))
-                        .foregroundStyle(theme.palette.brandPrimary)
-                    Text(live.title)
-                        .font(theme.font(FaithFormTokens.Text.displayLarge))
-                        .foregroundStyle(theme.palette.contentPrimary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text(live.churchName)
-                        .font(theme.font(FaithFormTokens.Text.body))
-                        .foregroundStyle(theme.palette.contentSecondary)
-
-                    if let message = model.failureMessage {
-                        Text(message)
-                            .font(theme.font(FaithFormTokens.Text.body))
-                            .foregroundStyle(theme.palette.contentSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    switch model.playback {
-                    case .preparing, .buffering:
-                        HStack(spacing: FaithFormTokens.Spacing.sm) {
-                            ProgressView()
-                            Text(L.mediaBuffering)
-                                .font(theme.font(FaithFormTokens.Text.body))
-                                .foregroundStyle(theme.palette.contentSecondary)
-                        }
-                        .accessibilityElement(children: .combine)
-                    case .playing:
-                        Button(L.mediaPause) { Task { await model.pause() } }
-                            .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
-                    case .idle, .paused, .ended, .failed:
-                        Button(L.mediaWatchLive) { Task { await model.play(kind: .live) } }
-                            .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
-                    }
+            VStack(spacing: 0) {
+                VideoFrame(features: features)
+                ScrollView {
+                    LiveServiceDetails(live: live, model: model)
+                        .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
+                        .padding(.vertical, FaithFormTokens.Spacing.xl)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
-                .padding(.vertical, FaithFormTokens.Spacing.xl)
             }
             .background(theme.palette.background)
             .navigationBarTitleDisplayMode(.inline)
@@ -222,6 +192,68 @@ struct LiveServiceScreen: View {
             // another screen is sound nobody can find the source of.
             .onDisappear { Task { await model.stop() } }
         }
+    }
+}
+
+private struct LiveServiceDetails: View {
+    @Environment(\.faithformTheme) private var theme
+    let live: LiveMedia
+    let model: MediaDetailModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
+            Text(L.mediaLiveNowBadge)
+                .font(theme.font(FaithFormTokens.Text.caption))
+                .foregroundStyle(theme.palette.brandPrimary)
+            Text(live.title)
+                .font(theme.font(FaithFormTokens.Text.displayLarge))
+                .foregroundStyle(theme.palette.contentPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(live.churchName)
+                .font(theme.font(FaithFormTokens.Text.body))
+                .foregroundStyle(theme.palette.contentSecondary)
+
+            if let message = model.failureMessage {
+                Text(message)
+                    .font(theme.font(FaithFormTokens.Text.body))
+                    .foregroundStyle(theme.palette.contentSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            switch model.playback {
+            case .preparing, .buffering:
+                HStack(spacing: FaithFormTokens.Spacing.sm) {
+                    ProgressView()
+                    Text(L.mediaBuffering)
+                        .font(theme.font(FaithFormTokens.Text.body))
+                        .foregroundStyle(theme.palette.contentSecondary)
+                }
+                .accessibilityElement(children: .combine)
+            case .playing:
+                Button(L.mediaPause) { Task { await model.pause() } }
+                    .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
+            case .idle, .paused, .ended, .failed:
+                Button(L.mediaWatchLive) { Task { await model.play(kind: .live) } }
+                    .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+/// The picture, above a recording's or a live service's details.
+///
+/// 16:9, because that is what a service is filmed in, and pinned above the
+/// scrolling text so the video stays in view while a person reads the summary.
+/// Black until Play: the surface displays the church's shared player and starts
+/// nothing itself.
+private struct VideoFrame: View {
+    let features: ChurchFeatures
+
+    var body: some View {
+        MediaVideoSurface(player: features.player.videoPlayer)
+            .aspectRatio(16.0 / 9.0, contentMode: .fit)
+            .frame(maxWidth: .infinity)
     }
 }
 
