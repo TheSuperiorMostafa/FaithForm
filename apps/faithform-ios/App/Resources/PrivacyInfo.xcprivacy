@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+        What FaithForm 1.0 for iPhone collects, and why.
+
+        Bundled automatically: the app target sources everything under App/.
+        App Store Connect's privacy answers must say the same thing as this
+        file, and https://faithform.io/privacy must say the same as both. A
+        change to what the app sends is a change to all three, in one go.
+
+        Third-party SDKs carry their own manifests (Stripe's ships inside its
+        package), and Xcode merges them into the privacy report at archive
+        time. This file describes FaithForm's own code only.
+    -->
+
+    <!--
+        No tracking. No advertising identifier, no analytics or advertising
+        SDK, no data shared with a data broker, and nothing combined with
+        another company's data. There is no App Tracking Transparency prompt
+        because there is nothing to ask about.
+    -->
+    <key>NSPrivacyTracking</key>
+    <false/>
+    <key>NSPrivacyTrackingDomains</key>
+    <array/>
+
+    <key>NSPrivacyCollectedDataTypes</key>
+    <array>
+        <!-- Signing in, and the receipt address for gifts. -->
+        <dict>
+            <key>NSPrivacyCollectedDataType</key>
+            <string>NSPrivacyCollectedDataTypeEmailAddress</string>
+            <key>NSPrivacyCollectedDataTypeLinked</key>
+            <true/>
+            <key>NSPrivacyCollectedDataTypeTracking</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypePurposes</key>
+            <array>
+                <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+            </array>
+        </dict>
+
+        <!-- The name a person gives at sign-up, shown to churches they join. -->
+        <dict>
+            <key>NSPrivacyCollectedDataType</key>
+            <string>NSPrivacyCollectedDataTypeName</string>
+            <key>NSPrivacyCollectedDataTypeLinked</key>
+            <true/>
+            <key>NSPrivacyCollectedDataTypeTracking</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypePurposes</key>
+            <array>
+                <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+            </array>
+        </dict>
+
+        <!-- The account ID FaithForm assigns. -->
+        <dict>
+            <key>NSPrivacyCollectedDataType</key>
+            <string>NSPrivacyCollectedDataTypeUserID</string>
+            <key>NSPrivacyCollectedDataTypeLinked</key>
+            <true/>
+            <key>NSPrivacyCollectedDataTypeTracking</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypePurposes</key>
+            <array>
+                <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+            </array>
+        </dict>
+
+        <!--
+            "Churches near me": one fix, sent once, used for that search.
+
+            **Not linked.** The search is sent without the person's session
+            (`authenticated: false` in DiscoveryModel), and the privacy policy
+            promises the location is not stored, logged, or connected to the
+            account. Declared at all — rather than left out as real-time
+            processing — because it is precise and it does leave the device,
+            and under-declaring a location is the worse mistake.
+
+            Automatic check-in, which would send a location tied to an account,
+            is not reachable in 1.0. It must change this entry when it ships.
+        -->
+        <dict>
+            <key>NSPrivacyCollectedDataType</key>
+            <string>NSPrivacyCollectedDataTypePreciseLocation</string>
+            <key>NSPrivacyCollectedDataTypeLinked</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypeTracking</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypePurposes</key>
+            <array>
+                <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+            </array>
+        </dict>
+
+        <!--
+            Giving history: the church, fund, amount, time and status of each
+            gift, so the app can show a person their own giving and receipts.
+        -->
+        <dict>
+            <key>NSPrivacyCollectedDataType</key>
+            <string>NSPrivacyCollectedDataTypePurchaseHistory</string>
+            <key>NSPrivacyCollectedDataTypeLinked</key>
+            <true/>
+            <key>NSPrivacyCollectedDataTypeTracking</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypePurposes</key>
+            <array>
+                <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+            </array>
+        </dict>
+
+        <!--
+            Payment details, entered in Stripe's own sheet and sent to Stripe
+            directly. FaithForm never receives a card number; it is declared
+            here because the collection happens inside this app.
+        -->
+        <dict>
+            <key>NSPrivacyCollectedDataType</key>
+            <string>NSPrivacyCollectedDataTypePaymentInfo</string>
+            <key>NSPrivacyCollectedDataTypeLinked</key>
+            <true/>
+            <key>NSPrivacyCollectedDataTypeTracking</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypePurposes</key>
+            <array>
+                <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+            </array>
+        </dict>
+
+        <!--
+            Everything else a person does that a church can see: the churches
+            they follow or join, invitations they accept, and check-ins from a
+            scanned or typed code (church, service, time and outcome — never a
+            photo). None of Apple's named categories fits these.
+        -->
+        <dict>
+            <key>NSPrivacyCollectedDataType</key>
+            <string>NSPrivacyCollectedDataTypeOtherDataTypes</string>
+            <key>NSPrivacyCollectedDataTypeLinked</key>
+            <true/>
+            <key>NSPrivacyCollectedDataTypeTracking</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypePurposes</key>
+            <array>
+                <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+            </array>
+        </dict>
+    </array>
+
+    <!--
+        Required-reason APIs: none in FaithForm's own code.
+
+        Checked, not assumed: the app and FaithFormKit use no UserDefaults
+        (credentials, resume positions and a pending gift all live in the
+        Keychain), no file timestamps, no disk-space queries, no system boot
+        time and no active keyboard list. The response cache is in memory.
+        An entry is added in the same change that first calls one of them.
+    -->
+    <key>NSPrivacyAccessedAPITypes</key>
+    <array/>
+</dict>
+</plist>
