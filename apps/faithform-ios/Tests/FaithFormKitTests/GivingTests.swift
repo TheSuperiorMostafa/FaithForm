@@ -309,6 +309,175 @@ struct WalletTests {
 }
 
 // ---------------------------------------------------------------------------
+// In the app, in Safari, or not at all
+// ---------------------------------------------------------------------------
+
+@Suite("Giving route")
+struct GivingRouteTests {
+    private let merchant = "merchant.io.faithform.app"
+    private let page = "https://faithform.io/give/grace"
+
+    @Test("an approved church, an entitled build and a capable device give in the app")
+    func inApp() {
+        #expect(
+            givingRoute(
+                applePayApproved: true,
+                merchantID: merchant,
+                deviceCanMakePayments: true,
+                webGiveURL: page
+            ) == .inApp
+        )
+    }
+
+    @Test("a church Apple has not approved always gives in Safari")
+    func notApproved() {
+        // Guideline 3.2.1(vi). No combination of device and build makes an
+        // unapproved church's gift legal inside the app.
+        for canPay in [true, false] {
+            for merchantID in [merchant, nil] {
+                #expect(
+                    givingRoute(
+                        applePayApproved: false,
+                        merchantID: merchantID,
+                        deviceCanMakePayments: canPay,
+                        webGiveURL: page
+                    ) == .web(URL(string: page)!)
+                )
+            }
+        }
+    }
+
+    @Test("an approved church in a build that cannot offer Apple Pay gives in Safari, not by card")
+    func approvedWithoutApplePay() {
+        // The trap this function exists for: approval alone would show Stripe's
+        // sheet with cards only, which is an in-app donation without Apple Pay.
+        for merchantID in [nil, "", "   "] {
+            #expect(
+                givingRoute(
+                    applePayApproved: true,
+                    merchantID: merchantID,
+                    deviceCanMakePayments: true,
+                    webGiveURL: page
+                ) == .web(URL(string: page)!),
+                "merchant \(merchantID ?? "nil")"
+            )
+        }
+        #expect(
+            givingRoute(
+                applePayApproved: true,
+                merchantID: merchant,
+                deviceCanMakePayments: false,
+                webGiveURL: page
+            ) == .web(URL(string: page)!)
+        )
+    }
+
+    @Test("with no way in and no give page, nothing is offered")
+    func unavailable() {
+        #expect(
+            givingRoute(
+                applePayApproved: false,
+                merchantID: merchant,
+                deviceCanMakePayments: true,
+                webGiveURL: nil
+            ) == .unavailable
+        )
+        #expect(
+            givingRoute(
+                applePayApproved: true,
+                merchantID: nil,
+                deviceCanMakePayments: true,
+                webGiveURL: "   "
+            ) == .unavailable
+        )
+    }
+
+    @Test("only an https give page is ever opened")
+    func httpsOnly() {
+        for bad in ["http://faithform.io/give/grace", "javascript:alert(1)", "faithform://give", "not a url", "https://"] {
+            #expect(
+                givingRoute(
+                    applePayApproved: false,
+                    merchantID: nil,
+                    deviceCanMakePayments: false,
+                    webGiveURL: bad
+                ) == .unavailable,
+                "\(bad)"
+            )
+        }
+    }
+
+    @Test("the route reads straight off the funds response")
+    func fromHome() {
+        let approved = makeHome(applePayApproved: true)
+        #expect(
+            givingRoute(
+                applePayApproved: approved.applePayApproved,
+                merchantID: merchant,
+                deviceCanMakePayments: true,
+                webGiveURL: approved.webGiveUrl
+            ) == .inApp
+        )
+
+        // A church that is not accepting has neither channel, server-side.
+        let closed = makeHome(availability: "not_accepting", applePayApproved: false, webGiveUrl: nil)
+        #expect(
+            givingRoute(
+                applePayApproved: closed.applePayApproved,
+                merchantID: merchant,
+                deviceCanMakePayments: true,
+                webGiveURL: closed.webGiveUrl
+            ) == .unavailable
+        )
+    }
+}
+
+@Suite("Pending donation store")
+struct PendingDonationStoreTests {
+    private func partition(account: String = "account-1", church: String = "grace", version: Int = 1) -> CachePartition {
+        CachePartition(
+            environment: "test",
+            accountId: account,
+            churchSlug: church,
+            authorizationVersion: version
+        )
+    }
+
+    @Test("an attempt survives being written and read back")
+    func roundTrip() async {
+        let keychain = InMemorySecureStore()
+        let store = SecurePendingDonationStore(store: keychain, partition: partition())
+        await store.save(attempt)
+        #expect(await store.load() == attempt)
+
+        await store.clear()
+        #expect(await store.load() == nil)
+        #expect(keychain.isEmpty())
+    }
+
+    @Test("another account or another church never sees the attempt")
+    func partitioned() async {
+        let keychain = InMemorySecureStore()
+        await SecurePendingDonationStore(store: keychain, partition: partition()).save(attempt)
+
+        #expect(await SecurePendingDonationStore(store: keychain, partition: partition(account: "account-2")).load() == nil)
+        #expect(await SecurePendingDonationStore(store: keychain, partition: partition(church: "hope")).load() == nil)
+        // An authorization bump mid-payment must not orphan the only record
+        // that lets the app ask what became of the gift.
+        #expect(await SecurePendingDonationStore(store: keychain, partition: partition(version: 2)).load() == attempt)
+    }
+
+    @Test("sign-out's sweep removes it")
+    func purgedOnSignOut() async throws {
+        let keychain = InMemorySecureStore()
+        let store = SecurePendingDonationStore(store: keychain, partition: partition())
+        await store.save(attempt)
+        try keychain.deleteAll()
+        #expect(await store.load() == nil)
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Nothing sensitive is written down
 // ---------------------------------------------------------------------------
 

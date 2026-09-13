@@ -163,10 +163,11 @@ public final class GivingModel {
         donation = .presenting(attempt)
 
         let allowApplePay = applePayAvailable(
-            // The session does not carry a wallet flag today: no Apple merchant
-            // identifier is configured, so the answer is false and the code path
-            // stays switched off until the external setup is done.
-            serverAllows: applePayMerchantID != nil,
+            // The server's per-church approval, from the funds response this
+            // gift was started from. The host only reaches `give()` through
+            // `givingRoute(...) == .inApp`, which already required it — this is
+            // the same fact read again rather than a second opinion.
+            serverAllows: listPhase.home?.applePayApproved == true,
             deviceCanMakePayments: deviceCanUseApplePay(),
             merchantID: applePayMerchantID
         )
@@ -295,4 +296,51 @@ public protocol PendingDonationStore: Sendable {
     func save(_ attempt: DonationAttempt) async
     func load() async -> DonationAttempt?
     func clear() async
+}
+
+/// The pending attempt, in the Keychain.
+///
+/// Not because an attempt is a secret — it is not, see above — but because the
+/// Keychain is where this app keeps everything that must survive a kill **and**
+/// disappear on sign-out: the session, the PKCE verifier and resume positions
+/// all live under the same service, and sign-out's `deleteAll` sweeps every one
+/// of them. A pending gift left behind in `UserDefaults` would be resumed for
+/// whoever signs in next.
+///
+/// One entry per environment, account and church, so a second account on the
+/// same phone can never pick up the first one's gift, and switching churches
+/// never resumes a gift to the other.
+public struct SecurePendingDonationStore: PendingDonationStore {
+    private let store: SecureStoring
+    private let key: String
+
+    public init(store: SecureStoring, partition: CachePartition) {
+        self.store = store
+        // The authorization version is deliberately left out: a version bump
+        // mid-payment must not orphan the one record that lets the app ask the
+        // server what became of the gift.
+        self.key = [
+            "giving.pending",
+            partition.environment,
+            partition.accountId ?? "anonymous",
+            partition.churchSlug ?? "-",
+        ].joined(separator: "|")
+    }
+
+    public func save(_ attempt: DonationAttempt) async {
+        guard let data = try? JSONEncoder.faithform.encode(attempt) else { return }
+        try? store.write(data, for: key)
+    }
+
+    public func load() async -> DonationAttempt? {
+        guard
+            let data = try? store.read(key),
+            let attempt = try? JSONDecoder.faithform.decode(DonationAttempt.self, from: data)
+        else { return nil }
+        return attempt
+    }
+
+    public func clear() async {
+        try? store.delete(key)
+    }
 }
