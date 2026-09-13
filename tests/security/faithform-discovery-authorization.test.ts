@@ -132,7 +132,22 @@ test("sign-out and deletion both retire notification authority", () => {
   const accountService = read("lib/mobile/v1/account-service.ts");
   const lifecycle = read("lib/faithform/account-lifecycle.ts");
   assert.match(accountService, /retireInstallationsForAccount\(account\.id, "signed_out"\)/);
-  assert.match(lifecycle, /retireInstallationsForAccount\(accountId, "account_deleted"\)/);
+  // At the moment deletion is requested, not when the cron later carries it
+  // out: the worker picks recipients from live devices, not account status.
+  const request = lifecycle.slice(
+    lifecycle.indexOf("export async function requestAccountAction"),
+    lifecycle.indexOf("export type VisitorExport"),
+  );
+  assert.match(
+    request,
+    /if \(parsed\.data\.kind === "deletion"\) \{[\s\S]*?retireInstallationsForAccount\(account\.id, "account_deleted"\)/,
+  );
+  // And the deletion itself removes the device rows and their tokens.
+  const migration = read("supabase/migrations/0054_faithful_publication_and_push.sql");
+  assert.match(
+    migration,
+    /create table if not exists public\.visitor_device_installations \(\s*id uuid primary key default gen_random_uuid\(\),\s*account_id uuid not null references public\.visitor_accounts \(id\) on delete cascade,/,
+  );
 });
 
 test("a preference may only be set for a church with a live relationship", () => {

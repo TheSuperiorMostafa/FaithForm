@@ -1,5 +1,3 @@
-import type { SupabaseClient } from "@supabase/supabase-js";
-
 import { createAdminClient } from "@/lib/supabase/admin";
 import { VisitorError } from "@/lib/faithform/errors";
 import { bumpAuthorizationVersion, requireActiveAccount, getVisitorAccount } from "@/lib/faithform/account";
@@ -14,8 +12,9 @@ import { retireInstallationsForAccount } from "@/lib/faithform/push/installation
  * the claim to be someone; it never deletes the `members` row, the attendance
  * that references it, or any financial history. Those belong to the church.
  *
- * Final retention periods are a product and legal decision and are not encoded
- * here — see P3_IDENTITY_AND_TENANCY_REPORT.md.
+ * This file records requests; `account-deletion.ts` carries deletions out.
+ * What is deleted and what is kept is stated publicly on /account-deletion,
+ * and the two must stay in step.
  */
 
 export type AccountRequest = {
@@ -105,6 +104,13 @@ export async function requestAccountAction(
       })
       .eq("id", account.id);
     await bumpAuthorizationVersion(account.id, admin);
+
+    // /account-deletion says the account stops working right away, and the
+    // deletion itself waits for the next cron run. The notification worker
+    // resolves recipients from relationships and live devices, not from
+    // account status, so without this a deleted-in-waiting account would keep
+    // receiving a church's announcements until then.
+    await retireInstallationsForAccount(account.id, "account_deleted");
   }
 
   return mapRequest(data);
@@ -187,112 +193,12 @@ export async function buildAccountExport(userId: string): Promise<VisitorExport>
   };
 }
 
-/**
- * Carries out a deletion request.
- *
- * Resumable and idempotent: every step is safe to repeat, so an interrupted
- * run finishes correctly on the next attempt rather than leaving an account
- * half-deleted.
- *
- * What is removed or anonymized is only what the account owns. What is
- * retained — and why — is stated in the report document.
+/*
+ * Carrying out a deletion request is `account-deletion.ts`, run by the cron at
+ * /api/webhooks/accounts/deletion. It deletes the Supabase Auth user and lets
+ * the schema's foreign keys decide what goes with it and what a church keeps,
+ * rather than deleting table by table from here; the reasons are in that file.
  */
-export async function processDeletion(
-  accountId: string,
-  client?: SupabaseClient,
-): Promise<void> {
-  const admin = client ?? createAdminClient();
-
-  await admin
-    .from("visitor_account_requests")
-    .update({ status: "processing", started_at: new Date().toISOString() })
-    .eq("account_id", accountId)
-    .eq("kind", "deletion")
-    .in("status", ["pending", "processing"]);
-
-  const now = new Date().toISOString();
-
-  // 1. Detach every active People link, with an audit row each. The members
-  //    rows themselves are untouched: the church keeps its people.
-  const { data: links } = await admin
-    .from("visitor_people_links")
-    .select("id, church_id, member_id")
-    .eq("account_id", accountId)
-    .eq("is_active", true);
-
-  for (const link of links ?? []) {
-    await admin
-      .from("visitor_people_links")
-      .update({
-        is_active: false,
-        revoked_at: now,
-        revoke_reason: "account_deleted",
-        updated_at: now,
-      })
-      .eq("id", link.id as string)
-      .eq("is_active", true);
-
-    await admin.from("visitor_people_link_events").insert({
-      church_id: link.church_id as string,
-      account_id: accountId,
-      link_id: link.id as string,
-      member_id: link.member_id as string,
-      action: "link_revoked_account_deleted",
-      from_status: "active",
-      to_status: "revoked",
-      actor_type: "system",
-    });
-  }
-
-  // 2. Withdraw open claims so no church is left reviewing a request from an
-  //    account that no longer exists.
-  await admin
-    .from("visitor_people_claims")
-    .update({ status: "withdrawn", updated_at: now })
-    .eq("account_id", accountId)
-    .in("status", ["pending", "disputed"]);
-
-  // 3. End relationships. `blocked` is preserved on purpose: a church's
-  //    decision to block must survive the account being deleted and recreated.
-  await admin
-    .from("visitor_church_relationships")
-    .update({ state: "left", left_at: now, updated_at: now })
-    .eq("account_id", accountId)
-    .in("state", ["following", "pending", "joined"]);
-
-  // 4. Stop every device on this account from receiving anything further.
-  await retireInstallationsForAccount(accountId, "account_deleted");
-
-  // 5. Invalidate anything an invitation could still redeem into.
-  await admin
-    .from("visitor_invitations")
-    .update({ revoked_at: now })
-    .eq("accepted_by_account_id", accountId)
-    .is("revoked_at", null);
-
-  // 6. Anonymize the profile itself and drop the church preference.
-  await admin
-    .from("visitor_accounts")
-    .update({
-      display_name: null,
-      avatar_url: null,
-      communication_prefs: {},
-      selected_church_id: null,
-      status: "deleted",
-      deactivated_at: now,
-      updated_at: now,
-    })
-    .eq("id", accountId);
-
-  await bumpAuthorizationVersion(accountId, admin);
-
-  await admin
-    .from("visitor_account_requests")
-    .update({ status: "completed", completed_at: now })
-    .eq("account_id", accountId)
-    .eq("kind", "deletion")
-    .in("status", ["pending", "processing"]);
-}
 
 export async function listAccountRequests(
   userId: string,

@@ -138,6 +138,16 @@ deleting and recreating an account cannot launder a block.
 run completes correctly on retry. A test asserts it never touches `members`,
 `attendance_records`, `attendance_entries`, `giving_donations`, or `giving_donors`.
 
+> **Superseded.** `processDeletion` was never called, and kept the Supabase Auth
+> user (email and password), which Apple 5.1.1(v) and Google Play do not allow.
+> Deletion is now `lib/faithform/account-deletion.ts`, run hourly by the cron at
+> `/api/webhooks/accounts/deletion`: it deletes the Auth user and the schema's
+> foreign keys remove the account's data, while church records keep their rows
+> with the account link nulled (migration 0073 keeps the request row too). A
+> blocked relationship is now deleted with the account. A block never followed
+> a person to a new email address, and nothing matches people by email by
+> design. Someone with dashboard access keeps their sign-in; see that file.
+
 ## Files and migrations changed
 
 **Added** — `supabase/migrations/0053_visitor_identity.sql`;

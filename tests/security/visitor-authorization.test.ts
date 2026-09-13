@@ -10,6 +10,7 @@ const campuses = read("lib/faithform/campuses.ts");
 const discovery = read("lib/faithform/discovery.ts");
 const invitations = read("lib/faithform/invitations.ts");
 const lifecycle = read("lib/faithform/account-lifecycle.ts");
+const deletion = read("lib/faithform/account-deletion.ts");
 const account = read("lib/faithform/account.ts");
 const settingsActions = read("app/dashboard/settings/faithform-actions.ts");
 const claimActions = read("app/dashboard/people/claim-actions.ts");
@@ -96,6 +97,7 @@ test("no FaithForm module creates, merges or deletes a People record", () => {
   for (const [name, source] of [
     ["claims", claims],
     ["lifecycle", lifecycle],
+    ["deletion", deletion],
     ["relationships", relationships],
     ["invitations", invitations],
   ] as const) {
@@ -107,18 +109,36 @@ test("no FaithForm module creates, merges or deletes a People record", () => {
 });
 
 test("account deletion never destroys church-owned history", () => {
-  const fn = lifecycle.slice(lifecycle.indexOf("export async function processDeletion"));
   for (const table of [
     "members",
     "attendance_records",
     "attendance_entries",
+    "attendance_facts",
+    "attendance_attempts",
     "giving_donations",
     "giving_donors",
+    "sermons",
   ]) {
-    assert.ok(!fn.includes(`from("${table}")`), `deletion touches ${table}`);
+    assert.ok(!deletion.includes(`from("${table}")`), `deletion touches ${table}`);
   }
-  // A block survives account deletion; only live states are ended.
-  assert.match(fn, /\.in\("state", \["following", "pending", "joined"\]\)/);
+  // Exactly two things are ever deleted directly (the Auth user or, for a
+  // staff member, the app account row), and the schema's foreign keys decide
+  // the rest (pinned in tests/policies/account-deletion-migration.test.ts).
+  const deletes = deletion.match(/\.delete\(\)/g) ?? [];
+  assert.equal(deletes.length, 1, "a table-by-table delete crept into account deletion");
+  assert.match(deletion, /from\("visitor_accounts"\)\.delete\(\)\.eq\("id", accountId\)/);
+  assert.match(deletion, /auth\.admin\.deleteUser\(userId, false\)/);
+  assert.ok(!lifecycle.includes("processDeletion("), "the old table-by-table deletion is back");
+});
+
+test("account deletion reads staff membership and never writes it", () => {
+  // The deletion job is the one FaithForm module that must look at
+  // church_users: a row there is why a sign-in is kept. Looking is all it
+  // may do.
+  assert.match(deletion, /table: "church_users", column: "user_id"/);
+  assert.match(deletion, /\.from\(dependent\.table\)\s*\.select\(dependent\.column\)/);
+  assert.ok(!/from\(dependent\.table\)\s*\.(insert|update|upsert|delete)\(/.test(deletion));
+  assert.ok(!deletion.includes('from("church_users")'));
 });
 
 // ---------------------------------------------------------------------------
