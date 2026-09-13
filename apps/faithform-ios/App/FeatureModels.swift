@@ -1,3 +1,4 @@
+import AVFoundation
 import Foundation
 import PassKit
 import UIKit
@@ -73,8 +74,16 @@ final class ChurchFeatures {
 
     /// One player per church, shared by whichever recording or live service is
     /// open. Only one can be on screen at a time, and a second `AVPlayer` would
-    /// be a second audio session competing for the same speaker.
-    private(set) lazy var player = AVPlayerAdapter()
+    /// be a second audio source competing for the same speaker.
+    private(set) lazy var player: AVPlayerAdapter = {
+        // A service is something a person chose to hear. The default audio
+        // category follows the ring/silent switch, so a phone left on silent
+        // would play a sermon with no sound and no explanation. Setting the
+        // category does not start a session or interrupt anything else playing;
+        // that happens only when the person presses Play.
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback)
+        return AVPlayerAdapter()
+    }()
 
     private(set) lazy var playback = MediaPlaybackCoordinator(
         granter: dependencies.media,

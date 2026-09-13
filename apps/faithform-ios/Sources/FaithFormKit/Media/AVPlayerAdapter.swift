@@ -44,7 +44,8 @@ public actor AVPlayerAdapter: MediaPlayerFacade {
     static let interceptScheme = "faithform-media"
 
     #if os(iOS)
-    private let player = AVPlayer()
+    private let surface = PlayerSurface()
+    private var player: AVPlayer { surface.player }
     private var loader: CapabilityResourceLoader?
     private var item: AVPlayerItem?
     private var timeObserver: Any?
@@ -54,6 +55,28 @@ public actor AVPlayerAdapter: MediaPlayerFacade {
     private var handler: (@Sendable (PlayerEvent) -> Void)?
 
     public init() {}
+
+    #if os(iOS)
+    /// The player, for the layer that shows its picture — and for nothing else.
+    ///
+    /// Without it a recording plays as sound over a screen of text: the Watch
+    /// tab's whole point, missing. Exposed the way `AVFoundationScanner` exposes
+    /// its capture session to the camera preview, and for the same reasons.
+    /// `nonisolated` because a layer is built on the main actor and cannot await,
+    /// and safe to hand out because `AVPlayerLayer` only *displays* a player
+    /// something else drives. **Every command still goes through this actor**:
+    /// `MediaVideoSurface` has no play, no seek, no item and no capability.
+    public nonisolated var videoPlayer: AVPlayer { surface.player }
+
+    /// Holds the player so the reference can be read from any isolation.
+    ///
+    /// `@unchecked Sendable` is a claim, and this is the claim: the one stored
+    /// value is immutable, the actor is the only thing that mutates the player
+    /// it points at, and the only other reader is a display layer.
+    private final class PlayerSurface: @unchecked Sendable {
+        let player = AVPlayer()
+    }
+    #endif
 
     public func setEventHandler(_ handler: @Sendable @escaping (PlayerEvent) -> Void) async {
         self.handler = handler
