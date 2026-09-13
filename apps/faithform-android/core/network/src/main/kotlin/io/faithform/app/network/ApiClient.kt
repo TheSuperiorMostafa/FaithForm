@@ -54,8 +54,28 @@ class ApiClient(
     private val environment: ApiEnvironment,
     private val clientBuild: Int,
     private val transport: HttpTransport,
-    private val tokens: TokenProvider?
+    private val tokens: TokenProvider?,
+    /**
+     * Told whenever the server or the identity provider ends this session.
+     *
+     * Any screen can be the one whose request discovers it — a sermon list, a
+     * gift, a check-in — and each of them would otherwise need to know how to
+     * sign a person out. The shell subscribes once instead, and every feature
+     * only has to report its own failure.
+     */
+    private val onSessionEnded: (() -> Unit)? = null
 ) {
+    /**
+     * An absolute URL for a server-relative path such as a playback grant's
+     * `deliveryUrl`, on this build's own origin. Anything that is not a path is
+     * refused — mirrors `APIClient.absoluteURL(for:)` on iOS — so a response can
+     * never point the player at another host.
+     */
+    fun absoluteUrl(path: String): String? {
+        if (!path.startsWith("/") || path.startsWith("//")) return null
+        return environment.baseUrl.trimEnd('/') + path
+    }
+
     suspend fun <T> send(
         path: String,
         serializer: KSerializer<MobileSuccess<T>>,
@@ -129,10 +149,11 @@ class ApiClient(
         val failure = ApiException.from(response.body, response.status, requestId)
         // A rejected token is cleared exactly once so the next call
         // re-authenticates rather than replaying a credential known to be dead.
-        if (failure.code == MobileErrorCode.UNAUTHENTICATED ||
-            failure.code == MobileErrorCode.SESSION_EXPIRED
+        if (authenticated && (failure.code == MobileErrorCode.UNAUTHENTICATED ||
+                failure.code == MobileErrorCode.SESSION_EXPIRED)
         ) {
             tokens?.invalidate()
+            onSessionEnded?.invoke()
         }
         throw failure
     }
@@ -168,6 +189,7 @@ class ApiClient(
             AuthException.Kind.RATE_LIMITED -> throw ApiException.transport()
             else -> {
                 provider.invalidate()
+                onSessionEnded?.invoke()
                 throw ApiException(
                     MobileErrorCode.SESSION_EXPIRED,
                     "Your session has ended. Sign in again."

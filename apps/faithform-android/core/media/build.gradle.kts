@@ -15,6 +15,10 @@ kotlin { jvmToolchain(17) }
  */
 dependencies {
     api(project(":core:contract"))
+    // The typed API client and the projection cache, for `MediaClient`. Both
+    // are pure JVM: the client is tested here against a scripted transport,
+    // exactly as `:core:network` tests itself, so "no network" still holds.
+    api(project(":core:network"))
     api(project(":core:storage"))
     api(libs.kotlinx.coroutines.core)
 

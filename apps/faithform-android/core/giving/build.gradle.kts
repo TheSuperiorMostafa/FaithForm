@@ -19,6 +19,9 @@ kotlin { jvmToolchain(17) }
  */
 dependencies {
     api(project(":core:contract"))
+    // The typed API client, for `GivingClient`. Pure JVM and tested against a
+    // scripted transport; the Stripe SDK is still not a dependency here.
+    api(project(":core:network"))
     api(project(":core:storage"))
     api(libs.kotlinx.coroutines.core)
 
