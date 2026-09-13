@@ -4570,6 +4570,20 @@
           "type": "integer",
           "minimum": -9007199254740991,
           "maximum": 9007199254740991
+        },
+        "applePayApproved": {
+          "type": "boolean"
+        },
+        "webGiveUrl": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -4577,7 +4591,9 @@
         "churchName",
         "funds",
         "recurringAvailable",
-        "givingVersion"
+        "givingVersion",
+        "applePayApproved",
+        "webGiveUrl"
       ],
       "additionalProperties": false,
       "$defs": {

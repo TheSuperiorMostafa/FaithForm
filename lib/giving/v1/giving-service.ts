@@ -5,6 +5,7 @@ import { getVisitorAccount } from "@/lib/faithform/account";
 import { isChurchFeatureEnabled } from "@/lib/features/access";
 import { resolveRelationshipState } from "@/lib/mobile/v1/discovery-service";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { givingChannelsFor, type GivingChannels } from "@/lib/giving/v1/giving-channels";
 import {
   attemptStatusForIntent,
   givingProviderConfigured,
@@ -62,6 +63,8 @@ export type GivingChurch = {
   name: string;
   stripeAccountId: string;
   currency: string;
+  /** Migration 0072. See `givingChannelsFor` for what it decides. */
+  applePayDonationsApproved: boolean;
 };
 
 async function resolveGivingChurch(
@@ -70,11 +73,25 @@ async function resolveGivingChurch(
 ): Promise<{ ok: true; church: GivingChurch } | { ok: false; availability: GivingAvailability }> {
   const db = client(supabase);
 
-  const { data } = await db
+  let { data, error } = await db
     .from("churches")
-    .select("id, name, slug, stripe_account_id, stripe_charges_enabled")
+    .select(
+      "id, name, slug, stripe_account_id, stripe_charges_enabled, apple_pay_donations_approved",
+    )
     .eq("slug", slug)
     .maybeSingle();
+
+  // A database that has not had 0072 applied refuses the whole select, which
+  // would read as "not found" for every church and switch off giving on both
+  // platforms. Asking again without the column keeps giving up, and the church
+  // simply reads as unapproved — the state every church is in before 0072.
+  if (error && /apple_pay_donations_approved/i.test(error.message)) {
+    ({ data, error } = await db
+      .from("churches")
+      .select("id, name, slug, stripe_account_id, stripe_charges_enabled")
+      .eq("slug", slug)
+      .maybeSingle());
+  }
 
   // A church that does not exist and a church that is hidden are one answer, as
   // everywhere else in the visitor API.
@@ -98,6 +115,9 @@ async function resolveGivingChurch(
       name: data.name as string,
       stripeAccountId,
       currency: CURRENCY,
+      applePayDonationsApproved:
+        (data as { apple_pay_donations_approved?: unknown }).apple_pay_donations_approved ===
+        true,
     },
   };
 }
@@ -130,6 +150,19 @@ export type GivingHomeDto = {
    */
   recurringAvailable: boolean;
   givingVersion: number;
+  /**
+   * Whether the iPhone app may take this church's gifts with Apple Pay in-app.
+   *
+   * False unless a platform admin has verified the church's Candid Seal, and
+   * always false when the church is not accepting. See `givingChannelsFor`.
+   */
+  applePayApproved: GivingChannels["applePayApproved"];
+  /**
+   * The church's public web give page, absolute — where an iPhone sends a
+   * giver whose church is not approved. Null whenever `availability` is not
+   * `available`.
+   */
+  webGiveUrl: GivingChannels["webGiveUrl"];
 };
 
 export async function getGivingHome(input: {
@@ -147,6 +180,7 @@ export async function getGivingHome(input: {
       funds: [],
       recurringAvailable: false,
       givingVersion: 0,
+      ...givingChannelsFor(null),
     };
   }
 
@@ -186,6 +220,10 @@ export async function getGivingHome(input: {
     // A single validator over every published fund: any edit to any of them
     // moves it, and a phone's cached giving screen revalidates.
     givingVersion: funds.reduce((total, fund) => total + fund.publicationVersion, funds.length),
+    ...givingChannelsFor({
+      slug: resolved.church.slug,
+      applePayDonationsApproved: resolved.church.applePayDonationsApproved,
+    }),
   };
 }
 

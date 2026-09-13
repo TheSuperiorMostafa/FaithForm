@@ -27,6 +27,11 @@ export const GET = authenticatedRoute(
       // list's validator.
       funds: data.funds.map((fund) => `${fund.fundId}:${fund.publicationVersion}`),
       recurring: data.recurringAvailable ? "1" : "0",
+      // Approval moves no fund's version, so without these a church approved
+      // (or withdrawn) in the control center would keep answering 304 and the
+      // phone would go on offering the channel it had cached.
+      applePay: data.applePayApproved ? "1" : "0",
+      webGiveUrl: data.webGiveUrl,
     });
 
     if (etagMatches(request.headers.get("if-none-match"), etag)) {

@@ -2376,19 +2376,25 @@ public struct GivingHome: Codable, Hashable, Sendable {
     public let funds: [GivingFund]
     public let recurringAvailable: Bool
     public let givingVersion: Int
+    public let applePayApproved: Bool
+    public let webGiveUrl: String?
 
     public init(
         availability: String,
         churchName: String? = nil,
         funds: [GivingFund],
         recurringAvailable: Bool,
-        givingVersion: Int
+        givingVersion: Int,
+        applePayApproved: Bool,
+        webGiveUrl: String? = nil
     ) {
         self.availability = availability
         self.churchName = churchName
         self.funds = funds
         self.recurringAvailable = recurringAvailable
         self.givingVersion = givingVersion
+        self.applePayApproved = applePayApproved
+        self.webGiveUrl = webGiveUrl
     }
 }
 

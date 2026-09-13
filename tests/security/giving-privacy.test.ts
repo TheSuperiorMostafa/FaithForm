@@ -361,6 +361,28 @@ test("giving responses are never cached by anything shared", () => {
   }
 });
 
+test("approving or withdrawing a church moves the fund list's validator", () => {
+  // The approval changes no fund's publication version, so a validator built
+  // only from funds would answer 304 and leave an iPhone offering Apple Pay for
+  // a church we had just withdrawn, or a Safari hop for one we had approved.
+  const route = stripComments(read("app/api/mobile/v1/giving/[slug]/funds/route.ts"));
+  const etag = route.slice(route.indexOf("computeEtag("), route.indexOf("etagMatches("));
+  assert.ok(etag.length > 50, "the validator moved and this sweep went stale");
+  assert.match(etag, /data\.applePayApproved/);
+  assert.match(etag, /data\.webGiveUrl/);
+});
+
+test("an in-app gift is never offered for a church that cannot accept one", () => {
+  // The closed-church branch reports no channel at all; an approval on its own
+  // must not read as "open for giving".
+  const service = stripComments(read("lib/giving/v1/giving-service.ts"));
+  const closed = service.slice(
+    service.indexOf("if (!resolved.ok) {"),
+    service.indexOf("const relationshipState"),
+  );
+  assert.match(closed, /givingChannelsFor\(null\)/);
+});
+
 // ---------------------------------------------------------------------------
 // Nothing else moved
 // ---------------------------------------------------------------------------

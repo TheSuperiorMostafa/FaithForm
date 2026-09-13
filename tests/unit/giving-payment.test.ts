@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import {
+  NO_GIVING_CHANNELS,
+  givingChannelsFor,
+} from "@/lib/giving/v1/giving-channels";
 import { attemptStatusForIntent } from "@/lib/giving/v1/payment-provider";
+import { getGivePageUrl } from "@/lib/site-url";
 import {
   MAX_SUGGESTED_AMOUNTS,
   PLATFORM_MAX_CENTS,
@@ -149,4 +154,109 @@ test("a fractional or non-finite amount cannot reach the database", () => {
     }).ok,
     false,
   );
+});
+
+// ---------------------------------------------------------------------------
+// Which channel a phone may use
+// ---------------------------------------------------------------------------
+//
+// Apple allows an in-app donation without In-App Purchase only for a nonprofit
+// it has approved (guideline 3.2.1(vi)). The approval is a per-church fact from
+// migration 0072; everything else about the decision is here.
+
+/** Runs a body with the give-URL environment pinned, then restores it. */
+function withGiveEnv<T>(env: Record<string, string | undefined>, body: () => T): T {
+  const previous = Object.fromEntries(
+    Object.keys(env).map((key) => [key, process.env[key]]),
+  );
+  const apply = (values: Record<string, string | undefined>) => {
+    for (const [key, value] of Object.entries(values)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  };
+  apply(env);
+  try {
+    return body();
+  } finally {
+    apply(previous);
+  }
+}
+
+const PRODUCTION_GIVE_ENV = {
+  NEXT_PUBLIC_SITE_URL: "https://faithform.io",
+  NEXT_PUBLIC_GIVE_USE_DEDICATED_HOST: undefined,
+  NEXT_PUBLIC_GIVE_HOST: undefined,
+};
+
+test("a church that cannot be given to offers neither channel", () => {
+  // Not "approved, but nowhere to go": an approval must never read as open for
+  // giving on its own, and a closed church has no give page worth opening.
+  assert.deepEqual(givingChannelsFor(null), {
+    applePayApproved: false,
+    webGiveUrl: null,
+  });
+  assert.deepEqual(givingChannelsFor(null), NO_GIVING_CHANNELS);
+});
+
+test("an unapproved church still gets its web give page", () => {
+  withGiveEnv(PRODUCTION_GIVE_ENV, () => {
+    assert.deepEqual(
+      givingChannelsFor({ slug: "grace-church", applePayDonationsApproved: false }),
+      {
+        applePayApproved: false,
+        webGiveUrl: "https://faithform.io/give/grace-church",
+      },
+    );
+  });
+});
+
+test("an approved church may use Apple Pay and keeps the web page as a fallback", () => {
+  withGiveEnv(PRODUCTION_GIVE_ENV, () => {
+    assert.deepEqual(
+      givingChannelsFor({ slug: "grace-church", applePayDonationsApproved: true }),
+      {
+        applePayApproved: true,
+        webGiveUrl: "https://faithform.io/give/grace-church",
+      },
+    );
+  });
+});
+
+test("only a literal true approves — a malformed value costs a hop, not the listing", () => {
+  for (const value of [undefined, null, "true", 1] as unknown[]) {
+    const channels = givingChannelsFor({
+      slug: "grace-church",
+      applePayDonationsApproved: value as boolean,
+    });
+    assert.equal(channels.applePayApproved, false, String(value));
+  }
+});
+
+test("the web give URL is the same one the dashboard prints", () => {
+  // One helper for the QR code, the settings card and the app, so a church's
+  // printed link and the app's link cannot drift apart — including on a
+  // dedicated give host.
+  withGiveEnv(
+    {
+      NEXT_PUBLIC_SITE_URL: "https://faithform.io",
+      NEXT_PUBLIC_GIVE_USE_DEDICATED_HOST: "true",
+      NEXT_PUBLIC_GIVE_HOST: "give.faithform.io",
+    },
+    () => {
+      const channels = givingChannelsFor({
+        slug: "grace-church",
+        applePayDonationsApproved: false,
+      });
+      assert.equal(channels.webGiveUrl, getGivePageUrl("grace-church"));
+      assert.equal(channels.webGiveUrl, "https://give.faithform.io/grace-church");
+    },
+  );
+});
+
+test("the closed-church result is a fresh object, never the shared constant", () => {
+  const first = givingChannelsFor(null);
+  (first as { applePayApproved: boolean }).applePayApproved = true;
+  assert.equal(givingChannelsFor(null).applePayApproved, false);
+  assert.equal(NO_GIVING_CHANNELS.applePayApproved, false);
 });

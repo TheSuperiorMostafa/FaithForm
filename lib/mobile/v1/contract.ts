@@ -1058,6 +1058,23 @@ export const givingHomeSchema = z
      */
     recurringAvailable: z.boolean(),
     givingVersion: z.number().int(),
+    /**
+     * Whether the iPhone app may take this church's gifts with Apple Pay inside
+     * the app.
+     *
+     * Apple allows an in-app donation without In-App Purchase only when it is
+     * paid with Apple Pay and the receiving nonprofit is Apple-approved
+     * (guideline 3.2.1(vi)). The recipient is the church, so this is per church
+     * and set by FaithForm after verifying its Candid Seal. When false, iPhone
+     * opens `webGiveUrl` in Safari instead of showing a payment sheet. Android
+     * has no such rule and may ignore it. Always false unless `available`.
+     */
+    applePayApproved: z.boolean(),
+    /**
+     * The church's public web give page, absolute. Opened in the system browser
+     * — never an in-app web view. Null unless `availability` is `available`.
+     */
+    webGiveUrl: url.nullable(),
   })
   .meta({ id: "GivingHome" });
 

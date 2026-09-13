@@ -14,6 +14,7 @@ import {
   attendanceConsentResultSchema,
   attendanceResultSchema,
   geofenceConfigResponseSchema,
+  givingHomeSchema,
   healthSchema,
   relationshipPageSchema,
 } from "@/lib/mobile/v1/contract";
@@ -515,6 +516,69 @@ test("the generated JSON Schema matches the registered schemas", () => {
   const declared = Object.keys(CONTRACT_SCHEMAS).sort();
   const generated = Object.keys(schema.$defs).sort();
   assert.deepEqual(generated, declared);
+});
+
+// ---------------------------------------------------------------------------
+// Giving channels
+// ---------------------------------------------------------------------------
+//
+// iPhone may take a gift in-app only for a church Apple has approved (guideline
+// 3.2.1(vi)); every other church is given to on its web page in Safari. Both
+// facts are required, so an older server that omits them fails loudly in a
+// fixture rather than decoding as "approved" by default on some platform.
+
+const givingHome = (overrides: Record<string, unknown> = {}) => ({
+  availability: "available",
+  churchName: "Grace Church",
+  funds: [],
+  recurringAvailable: false,
+  givingVersion: 0,
+  applePayApproved: false,
+  webGiveUrl: "https://faithform.io/give/grace-church",
+  ...overrides,
+});
+
+test("GivingHome carries the Apple Pay approval and the web give page", () => {
+  assert.ok(givingHomeSchema.safeParse(givingHome()).success);
+  assert.ok(givingHomeSchema.safeParse(givingHome({ applePayApproved: true })).success);
+  // A church that is not accepting has no page to open.
+  assert.ok(
+    givingHomeSchema.safeParse(
+      givingHome({ availability: "not_accepting", churchName: null, webGiveUrl: null }),
+    ).success,
+  );
+});
+
+test("neither giving channel field may be omitted or mistyped", () => {
+  for (const field of ["applePayApproved", "webGiveUrl"]) {
+    const body: Record<string, unknown> = givingHome();
+    delete body[field];
+    assert.equal(givingHomeSchema.safeParse(body).success, false, `${field} is optional`);
+  }
+  assert.equal(givingHomeSchema.safeParse(givingHome({ applePayApproved: "true" })).success, false);
+  assert.equal(givingHomeSchema.safeParse(givingHome({ webGiveUrl: 42 })).success, false);
+
+  const schema = JSON.parse(readFileSync("contracts/faithform/v1/schema.json", "utf8"));
+  const required: string[] = schema.$defs.GivingHome.required;
+  assert.ok(required.includes("applePayApproved"));
+  assert.ok(required.includes("webGiveUrl"));
+});
+
+test("both platforms decode the giving channel fields with the right types", () => {
+  const swift = readFileSync(
+    "apps/faithform-ios/Sources/FaithFormKit/Generated/Contract.swift",
+    "utf8",
+  );
+  const kotlin = readFileSync(
+    "apps/faithform-android/core/contract/src/main/kotlin/io/faithform/app/contract/Contract.kt",
+    "utf8",
+  );
+  const swiftHome = swift.slice(swift.indexOf("public struct GivingHome"));
+  const kotlinHome = kotlin.slice(kotlin.indexOf("data class GivingHome"));
+  assert.match(swiftHome.slice(0, 800), /public let applePayApproved: Bool\n/);
+  assert.match(swiftHome.slice(0, 800), /public let webGiveUrl: String\?\n/);
+  assert.match(kotlinHome.slice(0, 400), /val applePayApproved: Boolean,/);
+  assert.match(kotlinHome.slice(0, 400), /val webGiveUrl: String\? = null/);
 });
 
 test("no contract schema declares a sensitive field", () => {

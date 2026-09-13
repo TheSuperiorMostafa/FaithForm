@@ -1357,7 +1357,9 @@ data class GivingHome(
     val churchName: String? = null,
     val funds: List<GivingFund>,
     val recurringAvailable: Boolean,
-    val givingVersion: Int
+    val givingVersion: Int,
+    val applePayApproved: Boolean,
+    val webGiveUrl: String? = null
 )
 
 /**
