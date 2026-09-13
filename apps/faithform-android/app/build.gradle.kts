@@ -10,13 +10,24 @@ plugins {
 /**
  * Where a staging or release build points.
  *
- * Supplied at build time — `-Pfaithform.stagingOrigin=https://…` — and **empty by
- * default**. An empty origin is not a mistake to work around: `AppEnvironment`
- * turns it into a fail-closed state rather than falling back to production,
- * which is what this file used to do.
+ * **Release defaults to `https://faithform.io`; staging has no default.**
+ *
+ * This file used to leave both empty, so that a build nobody had pointed would
+ * show the "FaithForm isn't set up" screen instead of reaching production. That
+ * protected against the wrong thing. A staging build silently writing to real
+ * churches is the danger, and staging still has no default. A *release* build
+ * has exactly one correct origin, and leaving it blank did not make anyone
+ * think harder about it — it made it possible to upload an app to Google Play
+ * that could do nothing but apologise.
+ *
+ * Both are overridable with `-Pfaithform.releaseOrigin=…` /
+ * `-Pfaithform.stagingOrigin=…`, and both are checked below: a shippable build
+ * with a blank or non-https origin now fails at configuration time, before a
+ * line compiles, rather than producing an APK that fails closed on a phone.
  */
-val stagingOrigin = (project.findProperty("faithform.stagingOrigin") as String?).orEmpty()
-val releaseOrigin = (project.findProperty("faithform.releaseOrigin") as String?).orEmpty()
+val stagingOrigin = (project.findProperty("faithform.stagingOrigin") as String?).orEmpty().trim()
+val releaseOrigin = ((project.findProperty("faithform.releaseOrigin") as String?)
+    ?.takeIf { it.isNotBlank() } ?: "https://faithform.io").trim()
 
 /**
  * The identity provider. Both values are public by design — Supabase publishes
@@ -24,8 +35,10 @@ val releaseOrigin = (project.findProperty("faithform.releaseOrigin") as String?)
  * a particular project, so they stay out of the repository: supplied with
  * `-Pfaithform.supabaseUrl=… -Pfaithform.supabaseAnonKey=…`, or for local work
  * from `local.properties` (gitignored), mirroring iOS's `Local.xcconfig`.
- * Empty fails closed: the sign-in screen renders, and submitting says what is
- * missing rather than spinning.
+ *
+ * In a debug build, empty still fails closed at runtime: the sign-in screen
+ * renders and submitting says what is missing. A staging or release build with
+ * either one empty does not configure at all — see [requireShippable].
  */
 val localProperties = Properties().apply {
     val file = rootProject.file("local.properties")
@@ -33,11 +46,101 @@ val localProperties = Properties().apply {
 }
 
 fun configValue(name: String): String =
-    (project.findProperty(name) as String?)
-        ?: localProperties.getProperty(name).orEmpty()
+    ((project.findProperty(name) as String?)
+        ?: localProperties.getProperty(name).orEmpty()).trim()
 
 val supabaseUrl = configValue("faithform.supabaseUrl")
 val supabaseAnonKey = configValue("faithform.supabaseAnonKey")
+
+/**
+ * Whether this invocation will produce an installable artifact of [buildType].
+ *
+ * Read from the requested task names, which Gradle knows before configuration
+ * and which are part of the configuration-cache key, so the answer can never be
+ * stale. `./gradlew test` and `:app:assembleDebug` configure every build type
+ * too; they must keep working on a CI runner with no `local.properties`, so
+ * they are not shippable requests. `assembleRelease`, `bundleRelease`,
+ * `installStaging` and a bare `assemble`/`bundle`/`build` are.
+ */
+fun producesArtifact(buildType: String): Boolean =
+    gradle.startParameter.taskNames
+        .map { it.substringAfterLast(':').lowercase() }
+        .any { task ->
+            task in setOf("assemble", "bundle", "build") ||
+                (listOf("assemble", "bundle", "package", "install", "publish", "upload")
+                    .any { task.startsWith(it) } && task.contains(buildType))
+        }
+
+/**
+ * Refuses to configure a shippable build that could only fail closed.
+ *
+ * The runtime check in `AppEnvironment` is still there and still right for a
+ * developer's debug build. For an artifact headed to testers or to Play, the
+ * same mistake is caught here instead — with a message naming the missing
+ * property — because an APK that opens to "isn't set up" has already been
+ * uploaded by the time anyone sees that screen.
+ */
+fun requireShippable(buildType: String, origin: String, originProperty: String) {
+    if (!producesArtifact(buildType)) return
+    val problems = buildList {
+        if (origin.isBlank()) add("$originProperty is empty")
+        else if (!origin.startsWith("https://")) add("$originProperty must be an https origin")
+        if (supabaseUrl.isBlank()) add("faithform.supabaseUrl is empty")
+        if (supabaseAnonKey.isBlank()) add("faithform.supabaseAnonKey is empty")
+    }
+    if (problems.isNotEmpty()) {
+        throw GradleException(
+            "FaithForm $buildType build is not configured: ${problems.joinToString("; ")}. " +
+                "Pass -P<name>=<value>, or set the Supabase values in local.properties.",
+        )
+    }
+}
+
+requireShippable("release", releaseOrigin, "faithform.releaseOrigin")
+requireShippable("staging", stagingOrigin, "faithform.stagingOrigin")
+
+/**
+ * The upload key, from the environment and nowhere else.
+ *
+ * Google Play App Signing holds the real app-signing key; what a build signs
+ * with is the *upload* key, which Play can reset if it is lost. Its path and
+ * passwords come from four environment variables so that none of them can be
+ * committed, echoed into a build log by a `-P` flag, or left in
+ * `gradle.properties`:
+ *
+ *   FAITHFORM_UPLOAD_KEYSTORE           absolute path to the .jks / .keystore
+ *   FAITHFORM_UPLOAD_KEYSTORE_PASSWORD
+ *   FAITHFORM_UPLOAD_KEY_ALIAS
+ *   FAITHFORM_UPLOAD_KEY_PASSWORD
+ *
+ * All four or nothing. With none set, `bundleRelease` still succeeds and
+ * produces an **unsigned** bundle — useful on CI, not accepted by Play — and
+ * says so in the build output rather than silently.
+ */
+val uploadKeystore = providers.environmentVariable("FAITHFORM_UPLOAD_KEYSTORE").orNull
+val uploadKeystorePassword = providers.environmentVariable("FAITHFORM_UPLOAD_KEYSTORE_PASSWORD").orNull
+val uploadKeyAlias = providers.environmentVariable("FAITHFORM_UPLOAD_KEY_ALIAS").orNull
+val uploadKeyPassword = providers.environmentVariable("FAITHFORM_UPLOAD_KEY_PASSWORD").orNull
+val uploadSigningValues = listOf(uploadKeystore, uploadKeystorePassword, uploadKeyAlias, uploadKeyPassword)
+val hasUploadSigning = uploadSigningValues.all { !it.isNullOrBlank() }
+
+val shipping = producesArtifact("release") || producesArtifact("staging")
+if (shipping && !hasUploadSigning && uploadSigningValues.any { !it.isNullOrBlank() }) {
+    // Half a signing configuration is a typo, not a choice. Building unsigned
+    // anyway would fail later, at upload, with a far less useful message. A
+    // debug build does not sign with the upload key, so it is not held to it.
+    throw GradleException(
+        "FaithForm upload signing is partially configured: set all four of " +
+            "FAITHFORM_UPLOAD_KEYSTORE, FAITHFORM_UPLOAD_KEYSTORE_PASSWORD, " +
+            "FAITHFORM_UPLOAD_KEY_ALIAS and FAITHFORM_UPLOAD_KEY_PASSWORD, or none.",
+    )
+}
+if (shipping && !hasUploadSigning) {
+    logger.lifecycle(
+        "FaithForm: FAITHFORM_UPLOAD_* is not set, so this release/staging artifact is UNSIGNED. " +
+            "Google Play will not accept it until it is signed with the upload key.",
+    )
+}
 
 android {
     namespace = "io.faithform.app"
@@ -65,6 +168,17 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        if (hasUploadSigning) {
+            create("upload") {
+                storeFile = file(uploadKeystore!!)
+                storePassword = uploadKeystorePassword
+                keyAlias = uploadKeyAlias
+                keyPassword = uploadKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         debug {
             applicationIdSuffix = ".debug"
@@ -86,15 +200,16 @@ android {
             matchingFallbacks += listOf("release")
             isMinifyEnabled = false
             isShrinkResources = false
-            // **Deliberately empty.** There is no staging origin in this
+            // **Deliberately no default.** There is no staging origin in this
             // repository, and a default would be a guess about somebody's
-            // infrastructure. A build with this empty fails closed — see
-            // `AppEnvironment` — rather than falling back to production.
+            // infrastructure. Building a staging artifact without one fails at
+            // configuration — see `requireShippable` above.
             buildConfigField("String", "API_ORIGIN", "\"$stagingOrigin\"")
             buildConfigField("String", "ENVIRONMENT_KEY", "\"staging\"")
             buildConfigField("boolean", "ALLOW_DEBUG_CONTROLS", "false")
             buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
             buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
+            if (hasUploadSigning) signingConfig = signingConfigs.getByName("upload")
         }
         release {
             isMinifyEnabled = true
@@ -103,22 +218,16 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            // **Deliberately empty**, for the same reason as staging: the
-            // production origin is a deployment decision, not a source
-            // constant. Supply it with `-Pfaithform.releaseOrigin=…`.
-            //
-            // This used to hardcode `https://faithform.io`. A release build that
-            // points somewhere by default is a release build nobody has to think
-            // about pointing, and the one time that matters is the time it is
-            // wrong.
+            // `https://faithform.io` unless overridden — see `releaseOrigin`.
             buildConfigField("String", "API_ORIGIN", "\"$releaseOrigin\"")
             buildConfigField("String", "ENVIRONMENT_KEY", "\"production\"")
             buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
             buildConfigField("String", "SUPABASE_ANON_KEY", "\"$supabaseAnonKey\"")
             // Debug affordances are compiled out of release rather than hidden.
             buildConfigField("boolean", "ALLOW_DEBUG_CONTROLS", "false")
-            // No signingConfig here: release signing comes from the environment
-            // at build time so no key or password is ever committed.
+            // The upload key when the environment supplies it; otherwise the
+            // bundle is built unsigned and the build output says so.
+            if (hasUploadSigning) signingConfig = signingConfigs.getByName("upload")
         }
     }
 

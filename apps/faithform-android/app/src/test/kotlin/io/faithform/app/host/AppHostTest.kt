@@ -41,9 +41,11 @@ class AppEnvironmentTest {
 
     @Test
     fun `a missing origin fails closed rather than falling back to production`() {
-        // **The inversion that matters.** This file used to hardcode
-        // `https://faithform.io` in the release build type, which is why a
-        // release build nobody had thought about pointing was pointed anyway.
+        // **The loader never guesses.** The release build type now supplies
+        // `https://faithform.io` at build time and a shippable build refuses to
+        // configure without an origin (see `ReleaseBuildTest`), but this runtime
+        // check stays independent of that: whatever reaches the phone empty
+        // fails closed here rather than falling back to production.
         val result = load(origin = "") as AppEnvironment.Unconfigured
         assertTrue(result.reason.contains("API_ORIGIN"))
         assertFalse("the reason named a fallback", result.reason.contains("faithform.io"))
