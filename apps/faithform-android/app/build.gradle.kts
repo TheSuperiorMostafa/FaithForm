@@ -200,6 +200,10 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    // A real HTTP server on the loopback, so the OkHttp exchange is proven
+    // against bytes on a socket rather than against a scripted transport — the
+    // layer a scripted transport stands in for is the one that was missing.
+    testImplementation(libs.okhttp.mockwebserver)
     // Robolectric runs the Android framework on the JVM, so the Play services
     // adapter, the three receivers, the encrypted store and the manifest are
     // all exercised by `gradlew :app:testDebugUnitTest` with no emulator.

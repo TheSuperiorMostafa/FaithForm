@@ -8,7 +8,7 @@ import io.faithform.app.network.ApiClient
 import io.faithform.app.network.ApiEnvironment
 import io.faithform.app.network.CodeVerifierStore
 import io.faithform.app.network.HttpTransport
-import io.faithform.app.network.OkHttpTransport
+import io.faithform.app.network.OkHttpExchange
 import io.faithform.app.network.SupabaseAuthClient
 import io.faithform.app.network.SupabaseAuthConfig
 import io.faithform.app.FaithFormApplication
@@ -48,7 +48,16 @@ class AppContainer(
         EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
     )
 
-    val transport: HttpTransport = OkHttpTransport()
+    /**
+     * Every request the app makes — the API and the identity provider alike —
+     * goes through OkHttp here.
+     *
+     * This line used to construct a transport with no exchange behind it, so
+     * every call threw before leaving the phone and the app said "offline" on
+     * a working network. `OkHttpTransport` can no longer be built without one,
+     * and `NetworkWiringTest` holds this line to the real exchange.
+     */
+    val transport: HttpTransport = OkHttpExchange.transport()
 
     /**
      * The PKCE verifier between signup and the confirmation link's return.
