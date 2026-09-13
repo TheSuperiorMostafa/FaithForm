@@ -189,12 +189,16 @@ struct AppBundleTests {
     @Test("only the two justified usage descriptions are declared")
     func usageDescriptions() {
         // A declared permission is a promise. These two name features that
-        // exist; the absent ones name features that do not.
+        // exist in 1.0 — QR check-in and churches near me; the absent ones name
+        // features that do not.
         #expect(info["NSCameraUsageDescription"] != nil)
         #expect(info["NSLocationWhenInUseUsageDescription"] != nil)
-        #expect(info["NSLocationAlwaysAndWhenInUseUsageDescription"] != nil)
 
         for absent in [
+            // Automatic check-in is not reachable in 1.0, so nothing may ask
+            // for location all the time.
+            "NSLocationAlwaysAndWhenInUseUsageDescription",
+            "NSLocationAlwaysUsageDescription",
             "NSPhotoLibraryUsageDescription",
             "NSPhotoLibraryAddUsageDescription",
             "NSMicrophoneUsageDescription",
@@ -207,6 +211,52 @@ struct AppBundleTests {
         ] {
             #expect(info[absent] == nil, "\(absent) is declared and nothing needs it")
         }
+    }
+
+    @Test("the privacy manifest ships, and the build's own tooling does not")
+    func bundleContents() throws {
+        // The manifest is found by App Store Connect only inside the .app, so
+        // "the file exists in the repository" is not the claim that matters.
+        let manifestURL = try #require(
+            Bundle.main.url(forResource: "PrivacyInfo", withExtension: "xcprivacy"),
+            "PrivacyInfo.xcprivacy is not in the app bundle"
+        )
+        let manifest = try #require(
+            try PropertyListSerialization.propertyList(
+                from: Data(contentsOf: manifestURL),
+                format: nil
+            ) as? [String: Any]
+        )
+        #expect(manifest["NSPrivacyTracking"] as? Bool == false)
+        #expect((manifest["NSPrivacyTrackingDomains"] as? [String])?.isEmpty == true)
+        let collected = (manifest["NSPrivacyCollectedDataTypes"] as? [[String: Any]] ?? [])
+            .compactMap { $0["NSPrivacyCollectedDataType"] as? String }
+        for type in [
+            "NSPrivacyCollectedDataTypeEmailAddress",
+            "NSPrivacyCollectedDataTypeName",
+            "NSPrivacyCollectedDataTypeUserID",
+            "NSPrivacyCollectedDataTypePreciseLocation",
+            "NSPrivacyCollectedDataTypePurchaseHistory",
+            "NSPrivacyCollectedDataTypePaymentInfo",
+        ] {
+            #expect(collected.contains(type), "\(type) is not declared")
+        }
+
+        // A Team ID placeholder and a build script are for the people building
+        // the app, and used to be copied into it.
+        for leftover in ["Local.xcconfig.example", "check-assets.sh"] {
+            let path = Bundle.main.bundleURL.appendingPathComponent(leftover).path
+            #expect(!FileManager.default.fileExists(atPath: path), "\(leftover) is in the app bundle")
+        }
+    }
+
+    @Test("a merchant ID reaches the app only through the Apple Pay switch")
+    func applePayMerchant() {
+        // The host tests run the Debug configuration, which signs with no
+        // entitlements and so must never be told a merchant ID: an approved
+        // church's gift would otherwise open a sheet this build cannot pay with.
+        #expect(info["FaithFormApplePayMerchantID"] != nil, "the key is missing from Info.plist")
+        #expect((info["FaithFormApplePayMerchantID"] as? String ?? "").isEmpty)
     }
 
     @Test("no background mode is declared")

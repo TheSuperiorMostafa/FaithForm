@@ -52,6 +52,14 @@ targets:
     platform: iOS
     sources:
       - path: App
+        # Everything under App/ is compiled or bundled unless it is listed here.
+        # These two are for the people building the app, not for the people
+        # installing it: the example config names a Team ID placeholder, and
+        # the asset check is run from its path by the build phase below. Both
+        # used to be copied into the shipped .app.
+        excludes:
+          - Configuration/Local.xcconfig.example
+          - Scripts/check-assets.sh
     dependencies:
       - package: FaithFormKit
         product: FaithFormKit
