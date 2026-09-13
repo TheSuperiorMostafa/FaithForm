@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getChurchAuth } from "@/lib/auth/church";
@@ -6,6 +7,7 @@ import { isPlatformAdminUser } from "@/lib/auth/superadmin";
 import { resolveSignedInLanding } from "@/lib/auth/signed-in-landing";
 import { Logo } from "@/components/brand/logo";
 import { Button } from "@/components/ui/button";
+import { LEGAL_PATHS } from "@/lib/legal/policy-versions";
 import { LoginForm } from "./login-form";
 
 export default async function LoginPage() {
@@ -40,8 +42,32 @@ export default async function LoginPage() {
         <Suspense fallback={<div className="h-96 animate-pulse rounded-2xl bg-card" />}>
           <LoginForm />
         </Suspense>
+        <LegalLinks />
       </div>
     </main>
+  );
+}
+
+/**
+ * Under the card rather than inside it: the card changes shape between sign-in,
+ * magic link and reset, and these links should not move or disappear with it.
+ * The sign-in page is also the first page anyone arriving at faithform.io sees,
+ * so it is where a store reviewer looks for the policies.
+ */
+function LegalLinks() {
+  return (
+    <nav
+      aria-label="Legal"
+      className="mt-6 flex items-center justify-center gap-4 text-sm text-muted-foreground"
+    >
+      <Link href={LEGAL_PATHS.privacy} className="hover:text-foreground hover:underline underline-offset-4">
+        Privacy
+      </Link>
+      <span aria-hidden>·</span>
+      <Link href={LEGAL_PATHS.terms} className="hover:text-foreground hover:underline underline-offset-4">
+        Terms
+      </Link>
+    </nav>
   );
 }
 

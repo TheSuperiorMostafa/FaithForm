@@ -1,5 +1,6 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { routeGate } from "@/lib/auth/route-access";
 import { isBootstrapSuperAdminEmail } from "@/lib/auth/superadmin-emails";
 import { mustChangePassword } from "@/lib/auth/temp-password";
 import { DEFAULT_PRODUCTION_SITE_URL, getCanonicalSiteUrl } from "@/lib/site-url";
@@ -180,11 +181,16 @@ export async function updateSession(request: NextRequest) {
     | null
     | undefined;
 
-  if (request.nextUrl.pathname.startsWith("/onboarding")) {
+  // What is gated lives in `routeGate`, where it can be tested without a
+  // request. Anything it calls public — the legal pages, giving, watch, sign-in
+  // — falls through every branch below untouched.
+  const gate = routeGate(request.nextUrl.pathname);
+
+  if (gate === "onboarding") {
     return response;
   }
 
-  if (!userId && request.nextUrl.pathname.startsWith("/dashboard")) {
+  if (!userId && gate === "signed_in") {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return withSessionState(NextResponse.redirect(url));
@@ -193,9 +199,7 @@ export async function updateSession(request: NextRequest) {
   // Someone signed in with the temporary password an admin handed them gets no
   // further than the set-password screen. Scoped to the signed-in areas so a
   // public giving or watch page still renders for them.
-  const isSignedInArea =
-    request.nextUrl.pathname.startsWith("/dashboard") ||
-    request.nextUrl.pathname.startsWith("/admin");
+  const isSignedInArea = gate === "signed_in" || gate === "platform_admin";
 
   if (
     userId &&
@@ -208,7 +212,7 @@ export async function updateSession(request: NextRequest) {
     return withSessionState(NextResponse.redirect(url));
   }
 
-  if (request.nextUrl.pathname.startsWith("/admin")) {
+  if (gate === "platform_admin") {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
 

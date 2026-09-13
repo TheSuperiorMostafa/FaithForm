@@ -14,6 +14,7 @@ import {
   requestAccountAction,
 } from "@/lib/faithform/account-lifecycle";
 import { grantsPublishedContentAccess } from "@/lib/faithform/relationship-state";
+import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/legal/policy-versions";
 import { retireInstallationsForAccount } from "@/lib/faithform/push/installations";
 import type {
   Bootstrap,
@@ -33,9 +34,13 @@ import type {
  * The policy versions the client must have accepted. Bumping either of these
  * makes every client re-prompt, because the profile's stored version stops
  * matching.
+ *
+ * Defined beside the documents themselves, which print the same value as their
+ * effective date, so what a phone asks a person to accept and what `/terms` and
+ * `/privacy` say cannot drift apart.
  */
-export const REQUIRED_TERMS_VERSION = "2026-08-01";
-export const REQUIRED_PRIVACY_VERSION = "2026-08-01";
+export const REQUIRED_TERMS_VERSION = TERMS_VERSION;
+export const REQUIRED_PRIVACY_VERSION = PRIVACY_VERSION;
 
 /**
  * What this server build will actually serve. Prompts 5–11 add their own keys
