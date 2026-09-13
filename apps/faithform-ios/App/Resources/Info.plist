@@ -104,15 +104,25 @@
         education screen's "Use my location" and never at launch; the search by
         name, city or postal code needs no permission at all.
 
-        **When in use only.** `NSLocationAlwaysAndWhenInUseUsageDescription` was
-        here for automatic attendance, which 1.0 does not ship: nothing in the
-        app reaches that flow, so nothing can ask for location all the time, and
-        a declared permission nothing asks for is a promise with no feature
-        behind it. It comes back in the same change that makes automatic
-        check-in reachable.
+        **Nothing in 1.0 asks for location all the time.** Automatic check-in
+        is not reachable, so the "Always" prompt below can never appear.
     -->
     <key>NSLocationWhenInUseUsageDescription</key>
     <string>FaithForm uses your location to show churches near you. It is used for that search and not stored.</string>
+
+    <!--
+        Declared anyway, and never shown.
+
+        FaithFormKit's automatic-attendance adapter still calls
+        `requestAlwaysAuthorization`, so the symbol is in the binary even
+        though no screen reaches it. App Store Connect scans for that symbol
+        and rejects an upload whose Info.plist has no matching purpose string
+        (ITMS-90683), whether or not the call can happen. Declaring the string
+        is what lets the build upload; not wiring the flow is what keeps the
+        prompt from ever appearing.
+    -->
+    <key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+    <string>FaithForm checks you in when you arrive at your church, even if the app is closed. It only ever looks at whether you are near a place your church set up, and never where else you go.</string>
 
     <!--
         QR check-in (Prompt 8). Asked only after an explicit tap on "Scan the
@@ -130,8 +140,6 @@
           * NSContactsUsageDescription — nothing reads contacts.
           * NSUserTrackingUsageDescription — there is no tracking to ask about.
           * NSFaceIDUsageDescription — nothing uses biometrics.
-          * NSLocationAlwaysAndWhenInUseUsageDescription — automatic check-in
-            is not in 1.0; see above.
           * UIBackgroundModes — nothing runs in the background in 1.0, and
             declaring `location` would enable continuous updates this app
             does not do.

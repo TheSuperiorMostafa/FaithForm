@@ -227,18 +227,21 @@ struct AppBundleTests {
 
     private var info: [String: Any] { Bundle.main.infoDictionary ?? [:] }
 
-    @Test("only the two justified usage descriptions are declared")
+    @Test("only the justified usage descriptions are declared")
     func usageDescriptions() {
-        // A declared permission is a promise. These two name features that
-        // exist in 1.0 — QR check-in and churches near me; the absent ones name
-        // features that do not.
+        // A declared permission is a promise. Camera and when-in-use location
+        // name features that exist in 1.0 — QR check-in and churches near me;
+        // the absent ones name features that do not.
         #expect(info["NSCameraUsageDescription"] != nil)
         #expect(info["NSLocationWhenInUseUsageDescription"] != nil)
+        // The one exception, and it is never shown: the binary links
+        // `requestAlwaysAuthorization` through FaithFormKit's attendance
+        // adapter, and App Store Connect refuses an upload that references it
+        // without a purpose string (ITMS-90683). See Info.plist.
+        #expect(info["NSLocationAlwaysAndWhenInUseUsageDescription"] != nil)
 
         for absent in [
-            // Automatic check-in is not reachable in 1.0, so nothing may ask
-            // for location all the time.
-            "NSLocationAlwaysAndWhenInUseUsageDescription",
+            // The pre-iOS 11 key. Nothing targets a system that reads it.
             "NSLocationAlwaysUsageDescription",
             "NSPhotoLibraryUsageDescription",
             "NSPhotoLibraryAddUsageDescription",
