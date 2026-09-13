@@ -59,9 +59,14 @@ class ManifestAndReceiverTest {
 
         // Read from the *merged* manifest, so a permission pulled in by a
         // library — Play services, say — would fail this too.
+        //
+        // The v1 list. Background location, boot-completed and notifications
+        // belong to automatic attendance and push, which v1 does not ship; a
+        // permission declared for an unreachable feature is still a promise on
+        // the Play listing and a question in review.
         assertEquals(
             listOf(
-                "android.permission.ACCESS_BACKGROUND_LOCATION",
+                // Nearby churches, foreground only.
                 "android.permission.ACCESS_COARSE_LOCATION",
                 "android.permission.ACCESS_FINE_LOCATION",
                 "android.permission.ACCESS_NETWORK_STATE",
@@ -70,11 +75,28 @@ class ManifestAndReceiverTest {
                 // nothing else can reach `requestPermission`.
                 "android.permission.CAMERA",
                 "android.permission.INTERNET",
-                "android.permission.POST_NOTIFICATIONS",
-                "android.permission.RECEIVE_BOOT_COMPLETED",
             ),
             declared,
         )
+    }
+
+    @Test
+    fun `v1 declares no background location, boot or notification permission`() {
+        val declared = context.packageManager
+            .getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS)
+            .requestedPermissions.orEmpty().toSet()
+
+        for (deferred in listOf(
+            // Automatic attendance is out of scope for v1, and background
+            // location is reviewed by hand on Play with a declaration and a
+            // video. It must not reach the listing ahead of the feature.
+            "android.permission.ACCESS_BACKGROUND_LOCATION",
+            "android.permission.RECEIVE_BOOT_COMPLETED",
+            // Push is v1.1.
+            "android.permission.POST_NOTIFICATIONS",
+        )) {
+            assertFalse("$deferred is declared in v1", deferred in declared)
+        }
     }
 
     @Test
@@ -117,67 +139,44 @@ class ManifestAndReceiverTest {
     }
 
     // -----------------------------------------------------------------------
-    // Receiver registration and export state
+    // Receiver registration
     // -----------------------------------------------------------------------
 
+    /**
+     * v1 registers no receiver at all.
+     *
+     * The geofence, boot and package-replaced receivers still exist in source —
+     * they are tested directly below and by `AndroidAdapterTest` — but nothing
+     * in the manifest points at them, so no broadcast can wake the automatic
+     * attendance code in a build that does not offer it. When the feature
+     * ships, these assertions flip back to the exported-state checks they
+     * replaced: geofence `exported=false`, boot guarded by the system-only
+     * permission.
+     */
     @Test
-    fun `the geofence receiver is registered and not exported`() {
-        val info = context.packageManager.getReceiverInfo(
-            ComponentName(context, GeofenceBroadcastReceiver::class.java),
-            0,
-        )
-        assertNotNull(info)
-        // Only the system and Play services may deliver a transition. An
-        // exported receiver would let any app on the device forge one.
-        assertFalse("the geofence receiver is exported", info.exported)
-        assertTrue(info.enabled)
-    }
-
-    @Test
-    fun `the boot receiver is exported but guarded by a system-only permission`() {
-        val info = context.packageManager.getReceiverInfo(
-            ComponentName(context, BootAndUpdateReceiver::class.java),
-            0,
-        )
-        // It must be exported to hear BOOT_COMPLETED at all...
-        assertTrue(info.exported)
-        // ...so the guard is the permission, which only the system holds.
-        assertEquals("android.permission.RECEIVE_BOOT_COMPLETED", info.permission)
-    }
-
-    @Test
-    fun `the package-replaced receiver is not exported`() {
-        val info = context.packageManager.getReceiverInfo(
-            ComponentName(context, PackageReplacedReceiver::class.java),
-            0,
-        )
-        assertFalse(info.exported)
-    }
-
-    @Test
-    fun `the boot receiver actually resolves for BOOT_COMPLETED`() {
-        // Declaring the receiver is not the same as it being reachable: a typo
-        // in the intent filter produces a receiver that never fires, and
-        // nothing else would catch that.
-        val matches = context.packageManager.queryBroadcastReceivers(
-            Intent(Intent.ACTION_BOOT_COMPLETED),
-            0,
-        )
+    fun `no receiver is registered in the v1 manifest`() {
+        val receivers = context.packageManager
+            .getPackageInfo(context.packageName, PackageManager.GET_RECEIVERS)
+            .receivers.orEmpty()
         assertTrue(
-            "BOOT_COMPLETED resolves to: ${matches.map { it.activityInfo.name }}",
-            matches.any { it.activityInfo.name == BootAndUpdateReceiver::class.java.name },
+            "registered receivers: ${receivers.map { it.name }}",
+            receivers.none { it.name.startsWith("io.faithform.app") },
         )
     }
 
     @Test
-    fun `the package-replaced receiver resolves for MY_PACKAGE_REPLACED`() {
-        val matches = context.packageManager.queryBroadcastReceivers(
-            Intent(Intent.ACTION_MY_PACKAGE_REPLACED),
-            0,
-        )
-        assertTrue(
-            matches.any { it.activityInfo.name == PackageReplacedReceiver::class.java.name },
-        )
+    fun `a reboot or an app update wakes nothing`() {
+        for (action in listOf(
+            Intent.ACTION_BOOT_COMPLETED,
+            Intent.ACTION_LOCKED_BOOT_COMPLETED,
+            Intent.ACTION_MY_PACKAGE_REPLACED,
+        )) {
+            val matches = context.packageManager.queryBroadcastReceivers(Intent(action), 0)
+            assertTrue(
+                "$action resolves to: ${matches.map { it.activityInfo.name }}",
+                matches.none { it.activityInfo.packageName == context.packageName },
+            )
+        }
     }
 
     // -----------------------------------------------------------------------

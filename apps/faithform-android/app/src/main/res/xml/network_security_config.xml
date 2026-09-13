@@ -1,8 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    Cleartext is off everywhere. The debug build talks to a local dev server on
-    the emulator loopback address, which is the single documented exception and
-    exists only in the debug manifest's base config below.
+    Cleartext is off, and only the system's trust store is trusted.
+
+    This is the configuration every staging and release build ships. It has no
+    domain exceptions and no user-installed certificate authorities, so a proxy
+    certificate added on the device cannot read FaithForm's traffic and no host
+    can be reached over plain http.
+
+    The debug build replaces this file with its own copy at
+    `src/debug/res/xml/network_security_config.xml`, which adds exactly one
+    exception: cleartext to 10.0.2.2, the emulator's alias for the developer's
+    own machine, where `next dev` listens on http. Because the override lives
+    in the debug source set, it is not merely unused in release - it is absent
+    from the release APK.
 -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="false">
