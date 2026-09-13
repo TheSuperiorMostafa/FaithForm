@@ -382,14 +382,18 @@ private func makeHome(
             publicationVersion: 1
         )
     ],
-    recurring: Bool = false
+    recurring: Bool = false,
+    applePayApproved: Bool = false,
+    webGiveUrl: String? = "https://faithform.io/give/grace"
 ) -> GivingHome {
     GivingHome(
         availability: availability,
         churchName: "Grace Chapel",
         funds: funds,
         recurringAvailable: recurring,
-        givingVersion: 1
+        givingVersion: 1,
+        applePayApproved: applePayApproved,
+        webGiveUrl: webGiveUrl
     )
 }
 
