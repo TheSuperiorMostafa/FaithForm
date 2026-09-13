@@ -130,8 +130,10 @@ struct ChurchProfileHostView: View {
 /// What stands in front of the tabs while the account has no church: the
 /// welcome screen's two doors, then discovery or invitation entry.
 ///
-/// Signing out stays reachable the whole way through — a first-run flow a
-/// person cannot leave is a dead end with extra steps.
+/// Signing out **and deleting the account** stay reachable the whole way
+/// through, behind the Account button — a first-run flow a person cannot leave
+/// is a dead end with extra steps, and someone who created an account and then
+/// thought better of it has no church to find first.
 struct OnboardingFlowView: View {
     enum Route: Hashable {
         case search
@@ -139,6 +141,8 @@ struct OnboardingFlowView: View {
         /// One church, opened directly — the destination a `faithform://church/`
         /// link resolved to before the person had an account.
         case church(String)
+        /// Sign out, delete the account, and the legal pages.
+        case account
     }
 
     @Environment(\.faithformTheme) private var theme
@@ -167,7 +171,7 @@ struct OnboardingFlowView: View {
             )
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(L.signOut) { Task { await root.signOut() } }
+                    Button(L.account) { path.append(.account) }
                         .font(theme.font(FaithFormTokens.Text.label))
                 }
             }
@@ -185,6 +189,17 @@ struct OnboardingFlowView: View {
                     }
                 case let .church(slug):
                     ChurchProfileHostView(slug: slug, dependencies: dependencies, root: root)
+                case .account:
+                    ScrollView {
+                        AccountView(
+                            dependencies: dependencies,
+                            root: root,
+                            displayName: root.state.bootstrap?.profile.displayName
+                        )
+                        .padding(FaithFormTokens.Spacing.lg)
+                    }
+                    .background(theme.palette.background)
+                    .navigationTitle(L.account)
                 }
             }
         }

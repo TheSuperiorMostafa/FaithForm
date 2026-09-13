@@ -123,12 +123,12 @@ struct AppEnvironmentTests {
 @Suite("App composition")
 struct AppCompositionTests {
 
-    @Test("sermons has no screen, and is not registered")
+    @Test("sermon notes are registered, and reached from Watch rather than a tab")
     @MainActor
-    func sermonsAbsent() {
-        // Prompt 10 was never built. The destination exists in the enum, the
-        // capability key exists, and there is no screen — so registering it
-        // would produce a tab that opens a blank page.
+    func sermonsOnWatch() {
+        // Sermon notes have screens now — `SermonListView` and
+        // `SermonDetailView` — so the destination is registered. They sit on
+        // Watch beside the recordings: a tab of their own would be a sixth.
         //
         // Asserted through the *capability key* rather than the registry's
         // internal identity function, which the app module cannot see — and
@@ -137,8 +137,46 @@ struct AppCompositionTests {
         let capabilities = Set(
             AppDependencies.implementedDestinations.map(\.requiredCapability)
         )
-        #expect(!capabilities.contains("sermons"))
+        #expect(capabilities.contains("sermons"))
         #expect(RootTab.allCases.allSatisfy { $0.destination.requiredCapability != "sermons" })
+        #expect(RootModel.tab(for: .sermonArchive(churchSlug: "grace")) == .watch)
+    }
+
+    @Test("the tab bar never needs a More tab")
+    func atMostFiveTabs() {
+        // An iPhone tab bar shows five. A sixth folds the last two into "More",
+        // which would put Account — sign-out and account deletion — one level
+        // further down behind a generic label.
+        #expect(RootTab.allCases.count <= 5)
+        #expect(RootTab.allCases.last == .account)
+    }
+
+    @Test("finding and switching churches lands on Home")
+    func churchLinksOpenHome() {
+        #expect(RootModel.tab(for: .churchDiscovery) == .home)
+        #expect(RootModel.tab(for: .church(slug: "grace")) == .home)
+    }
+
+    @Test("Watch never opens on a half that is switched off")
+    func watchSections() {
+        // Both on: whatever was asked for.
+        #expect(WatchTabView.effectiveSection(requested: .sermons, showsMedia: true, showsSermons: true) == .sermons)
+        #expect(WatchTabView.effectiveSection(requested: .media, showsMedia: true, showsSermons: true) == .media)
+        // A sermons link to a church with notes off shows the recordings…
+        #expect(WatchTabView.effectiveSection(requested: .sermons, showsMedia: true, showsSermons: false) == .media)
+        // …and a server with only notes on shows the notes.
+        #expect(WatchTabView.effectiveSection(requested: .media, showsMedia: false, showsSermons: true) == .sermons)
+    }
+
+    @Test("the check-in tab polls only for a scan the person started")
+    func checkInPolling() {
+        // The camera rule, from the host's side: nothing here may run before
+        // "Scan the code" was tapped.
+        #expect(!CheckInTabView.awaitsScan(.idle))
+        #expect(!CheckInTabView.awaitsScan(.requestingPermission))
+        #expect(CheckInTabView.awaitsScan(.scanning))
+        #expect(CheckInTabView.awaitsScan(.submitting))
+        #expect(!CheckInTabView.awaitsScan(.blocked(.cameraDenied)))
     }
 
     @Test("every tab maps to a destination the app implements")
@@ -165,7 +203,6 @@ struct AppCompositionTests {
         // Announcements is reachable by deep link and has no tab of its own.
         // Mapping it to `home` would silently send someone somewhere else.
         #expect(RootModel.tab(for: .announcements(churchSlug: "grace")) == nil)
-        #expect(RootModel.tab(for: .sermonArchive(churchSlug: "grace")) == nil)
     }
 
     @Test("church-scoped destinations are scoped to the selected church")
@@ -174,6 +211,10 @@ struct AppCompositionTests {
         // church that does not allow it.
         #expect(RootModel.scoped(.watch(churchSlug: ""), to: "grace") == .watch(churchSlug: "grace"))
         #expect(RootModel.scoped(.give(churchSlug: ""), to: "grace") == .give(churchSlug: "grace"))
+        #expect(
+            RootModel.scoped(.sermonArchive(churchSlug: ""), to: "grace")
+                == .sermonArchive(churchSlug: "grace")
+        )
         #expect(RootModel.scoped(.home, to: "grace") == .home)
         #expect(RootModel.scoped(.watch(churchSlug: "a"), to: nil) == .watch(churchSlug: "a"))
     }

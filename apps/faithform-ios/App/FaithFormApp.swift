@@ -67,6 +67,8 @@ enum LaunchOutcome {
                     environment: environment,
                     clientBuild: clientBuild,
                     allowsDebugControls: allowsDebugControls,
+                    applePayMerchantID: Bundle.main.infoDictionary?["FaithFormApplePayMerchantID"] as? String,
+                    secureStore: keychain,
                     session: session,
                     auth: SupabaseAuthLoader.load(
                         environment: environment,

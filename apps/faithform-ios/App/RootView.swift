@@ -11,8 +11,15 @@ import FaithFormKit
 /// There is no hardcoded tab list, so a feature cannot appear because someone
 /// added it to an array.
 ///
-/// That is why `Sermons` is not here: Prompt 10 was never built, the destination
-/// is unregistered, and the registry resolves it to `.notImplemented`.
+/// ## Five tabs, not six
+///
+/// Home, Check in, Watch, Give and Account. An iPhone tab bar shows five; a
+/// sixth folds the last two into "More", which would have put Account — and
+/// with it sign-out and account deletion — behind a generic label. The old
+/// Church tab was the one that was not a destination, so switching and finding
+/// churches moved onto Home, beside the feed they change (see `HomeTabView`),
+/// and sermon notes joined recordings on Watch rather than taking a tab of their
+/// own (see `WatchTabView`).
 ///
 /// ## Reauthorization
 ///
@@ -20,16 +27,24 @@ import FaithFormKit
 /// each render. A relationship revoked while the app is open removes the tab on
 /// the next pass rather than at the next cold start, and the screen behind it
 /// re-checks server-side anyway.
+///
+/// ## Whose data a tab shows
+///
+/// The selected church's, through `RootModel.features`, which is rebuilt whole
+/// when the church, the account or the authorization version changes. Each
+/// church tab is keyed by that container, so a switch tears the old screens
+/// down — stopping a camera or a player on the way — and the next church's
+/// screens start from their own models, never the previous church's rows.
 struct RootView: View {
     @Environment(\.faithformTheme) private var theme
     private let dependencies: AppDependencies
     @State private var model: RootModel
-    @State private var churchTabDiscovery: DiscoveryModel
+    @State private var discovery: DiscoveryModel
 
     init(dependencies: AppDependencies) {
         self.dependencies = dependencies
         _model = State(initialValue: RootModel(dependencies: dependencies))
-        _churchTabDiscovery = State(
+        _discovery = State(
             initialValue: DiscoveryModel(
                 api: dependencies.api,
                 location: DiscoveryLocationProvider()
@@ -74,20 +89,26 @@ struct RootView: View {
             case let .failed(message):
                 // A real failure with a session on the device. The sentence is
                 // the server envelope's own, already redacted server-side, and
-                // both ways forward are here: try again, or leave cleanly —
-                // never a dead end that reads like the offline screen.
-                VStack(spacing: FaithFormTokens.Spacing.md) {
-                    EmptyStateView(
-                        title: L.errorTitle,
-                        explanation: message.isEmpty ? L.errorLoadFailedBody : message,
-                        symbol: "exclamationmark.triangle"
-                    )
-                    Button(L.retry) { Task { await model.load() } }
-                        .buttonStyle(FaithFormButtonStyle(kind: .secondary, theme: theme))
-                        .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
-                    Button(L.signOut) { Task { await model.signOut() } }
-                        .buttonStyle(FaithFormButtonStyle(kind: .quiet, theme: theme))
-                        .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
+                // every way forward is here: try again, leave cleanly, or delete
+                // the account — never a dead end that reads like the offline
+                // screen. An account whose bootstrap will not load is exactly
+                // the one somebody may be trying to be rid of.
+                ScrollView {
+                    VStack(spacing: FaithFormTokens.Spacing.md) {
+                        EmptyStateView(
+                            title: L.errorTitle,
+                            explanation: message.isEmpty ? L.errorLoadFailedBody : message,
+                            symbol: "exclamationmark.triangle"
+                        )
+                        Button(L.retry) { Task { await model.load() } }
+                            .buttonStyle(FaithFormButtonStyle(kind: .secondary, theme: theme))
+                        Button(L.signOut) { Task { await model.signOut() } }
+                            .buttonStyle(FaithFormButtonStyle(kind: .quiet, theme: theme))
+                        AccountDeletionControl(root: model)
+                            .padding(.top, FaithFormTokens.Spacing.lg)
+                    }
+                    .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
+                    .padding(.vertical, FaithFormTokens.Spacing.xl)
                 }
 
             case let .ready(bootstrap, isStale):
@@ -106,6 +127,13 @@ struct RootView: View {
             guard let url = note.userInfo?["url"] as? URL else { return }
             model.open(url)
         }
+        // Said on the screen the person lands on, which is the signed-out one:
+        // the request went through, and the sign-out was not a crash.
+        .alert(L.deleteAccountRequestedTitle, isPresented: $model.accountDeletionRequested) {
+            // The system's own OK.
+        } message: {
+            Text(L.deleteAccountRequestedBody)
+        }
     }
 
     @ViewBuilder
@@ -114,122 +142,74 @@ struct RootView: View {
 
         TabView(selection: $model.selectedTab) {
             ForEach(available, id: \.self) { tab in
-                NavigationStack {
-                    VStack(spacing: 0) {
-                        if isStale { OfflineBanner(message: L.offlineCached) }
-                        screen(for: tab, bootstrap: bootstrap)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                    .background(theme.palette.background)
-                    .navigationTitle(tab.title)
-                }
-                .tabItem { Label(tab.title, systemImage: tab.symbol) }
-                .tag(tab)
+                screen(for: tab, bootstrap: bootstrap, isStale: isStale)
+                    .tabItem { Label(tab.title, systemImage: tab.symbol) }
+                    .tag(tab)
             }
         }
     }
 
     @ViewBuilder
-    private func screen(for tab: RootTab, bootstrap: Bootstrap) -> some View {
+    private func screen(for tab: RootTab, bootstrap: Bootstrap, isStale: Bool) -> some View {
         switch tab {
         case .home:
-            ScrollView {
-                HomeView(
-                    bootstrap: bootstrap,
-                    selectedChurch: model.selectedChurch,
-                    onOpen: { model.select($0) }
-                )
-                .padding(FaithFormTokens.Spacing.lg)
-            }
-
-        case .church:
-            ScrollView {
-                VStack(spacing: FaithFormTokens.Spacing.lg) {
-                    ChurchSwitcherView(
-                        relationships: bootstrap.relationships,
-                        selectedSlug: model.selectedChurch?.churchSlug,
-                        onSelect: { model.selectChurch($0) }
-                    )
-                    // Multi-church by design: an account is never bound to one
-                    // congregation, so finding the next one starts here.
-                    NavigationLink(value: ChurchTabRoute.search) {
-                        Text(L.addAnotherChurch)
-                    }
-                    .buttonStyle(FaithFormButtonStyle(kind: .secondary, theme: theme))
-                }
-                .padding(FaithFormTokens.Spacing.lg)
-            }
-            .navigationDestination(for: ChurchTabRoute.self) { route in
-                switch route {
-                case .search:
-                    DiscoverySearchView(
-                        dependencies: dependencies,
-                        root: model,
-                        discovery: churchTabDiscovery
-                    )
-                }
-            }
+            HomeTabView(
+                dependencies: dependencies,
+                root: model,
+                bootstrap: bootstrap,
+                isStale: isStale,
+                discovery: discovery
+            )
 
         case .checkIn, .watch, .give:
-            // Every church-scoped tab needs a church. Without one the honest
-            // thing is to say so and point at the switcher, not to render an
-            // empty feature.
-            if let church = model.selectedChurch {
-                churchScreen(for: tab, church: church)
+            // Every church-scoped tab needs a church, and the registry only
+            // offers one while a church is selected. The empty state covers the
+            // instant between a relationship ending and the tab disappearing.
+            if let features = model.features {
+                churchScreen(for: tab, features: features, isStale: isStale)
+                    .id(features.key)
             } else {
-                EmptyStateView(title: L.noChurchTitle, explanation: L.noChurchBody, symbol: "building.2")
+                NavigationStack {
+                    EmptyStateView(title: L.noChurchTitle, explanation: L.noChurchBody, symbol: "building.2")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(theme.palette.background)
+                        .navigationTitle(tab.title)
+                }
             }
 
         case .account:
-            ScrollView {
-                AccountView(
-                    bootstrap: bootstrap,
-                    environmentKey: dependencies.environment.key,
-                    onSignOut: { Task { await model.signOut() } }
-                )
-                .padding(FaithFormTokens.Spacing.lg)
-            }
+            AccountTabView(
+                dependencies: dependencies,
+                root: model,
+                bootstrap: bootstrap,
+                isStale: isStale
+            )
         }
     }
 
     @ViewBuilder
-    private func churchScreen(for tab: RootTab, church: ChurchRelationship) -> some View {
+    private func churchScreen(for tab: RootTab, features: ChurchFeatures, isStale: Bool) -> some View {
         switch tab {
         case .checkIn:
-            ScrollView {
-                CheckInEntryView(churchName: church.churchName)
-                    .padding(FaithFormTokens.Spacing.lg)
-            }
+            CheckInTabView(root: model, features: features, isStale: isStale)
         case .watch:
-            ScrollView {
-                MediaEntryView(churchName: church.churchName)
-                    .padding(FaithFormTokens.Spacing.lg)
-            }
+            WatchTabView(root: model, features: features, isStale: isStale)
         case .give:
-            ScrollView {
-                GivingEntryView(churchName: church.churchName)
-                    .padding(FaithFormTokens.Spacing.lg)
-            }
+            GiveTabView(features: features, isStale: isStale)
         default:
             EmptyView()
         }
     }
 }
 
-/// Where the church tab can go beyond its root: finding another church. The
-/// profile push below it belongs to `DiscoverySearchView`.
-enum ChurchTabRoute: Hashable {
-    case search
-}
-
 /// The tabs the visitor journey can contain.
 ///
-/// One case per *destination that has a screen*. Deliberately not one case per
-/// `Destination`: `sermonArchive` has no screen, and a tab enum that mirrored
-/// the destination enum would invite someone to add it.
+/// One case per *place a person goes*, which is deliberately not one case per
+/// `Destination`: finding a church is reached from Home, sermon notes from
+/// Watch, and announcements from the feed. A tab enum that mirrored the
+/// destination enum would invite a sixth tab, and a sixth tab is "More".
 enum RootTab: Hashable, CaseIterable {
     case home
-    case church
     case checkIn
     case watch
     case give
@@ -238,7 +218,6 @@ enum RootTab: Hashable, CaseIterable {
     var destination: Destination {
         switch self {
         case .home: return .home
-        case .church: return .churchDiscovery
         case .checkIn: return .checkIn(churchSlug: "")
         case .watch: return .watch(churchSlug: "")
         case .give: return .give(churchSlug: "")
@@ -249,7 +228,6 @@ enum RootTab: Hashable, CaseIterable {
     var title: String {
         switch self {
         case .home: return L.tabHome
-        case .church: return L.tabChurch
         case .checkIn: return L.tabCheckIn
         case .watch: return L.tabWatch
         case .give: return L.tabGive
@@ -260,7 +238,6 @@ enum RootTab: Hashable, CaseIterable {
     var symbol: String {
         switch self {
         case .home: return "house"
-        case .church: return "building.2"
         case .checkIn: return "qrcode.viewfinder"
         case .watch: return "play.rectangle"
         case .give: return "heart"
