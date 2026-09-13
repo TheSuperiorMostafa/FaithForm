@@ -14,7 +14,20 @@ final class AppDependencies {
     let cache: PartitionedCache
     let session: SessionManager
     let media: MediaClient
+    let sermons: SermonClient
     let giving: GivingClient
+    /// The Keychain, under this app's one service. Everything that must
+    /// survive a kill and vanish on sign-out lives here — the session, the PKCE
+    /// verifier, resume positions and a pending gift — so sign-out's
+    /// `deleteAll` sweeps all of it at once.
+    let secureStore: SecureStoring
+    let resumePositions: KeychainResumePositionStore
+    /// The Apple Pay merchant ID this build is entitled to, or nil.
+    ///
+    /// Nil unless `FAITHFORM_ENABLE_APPLE_PAY` switched the entitlement on (see
+    /// Base.xcconfig), and nil means every gift goes to Safari — see
+    /// `givingRoute(...)`.
+    let applePayMerchantID: String?
     let allowsDebugControls: Bool
     /// Creates sessions. Nil when this build has no identity provider
     /// configured — the sign-in screen still renders, and submitting explains
@@ -25,11 +38,18 @@ final class AppDependencies {
         environment: APIEnvironment,
         clientBuild: Int,
         allowsDebugControls: Bool,
+        applePayMerchantID: String?,
+        secureStore: SecureStoring,
         session: SessionManager,
         auth: SessionAuthenticating?
     ) {
         self.environment = environment
         self.allowsDebugControls = allowsDebugControls
+        self.applePayMerchantID = applePayMerchantID.flatMap {
+            let trimmed = $0.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }
+        self.secureStore = secureStore
         self.session = session
         self.auth = auth
 
@@ -46,7 +66,9 @@ final class AppDependencies {
         // data. The cache itself is environment-agnostic; the *keys* are not.
         self.cache = PartitionedCache()
         self.media = MediaClient(api: api, cache: cache)
+        self.sermons = SermonClient(api: api, cache: cache)
         self.giving = GivingClient(api: api, cache: cache)
+        self.resumePositions = KeychainResumePositionStore(store: secureStore)
     }
 
     /// The registry for the capabilities the server currently reports.

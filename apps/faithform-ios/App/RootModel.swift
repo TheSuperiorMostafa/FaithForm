@@ -17,6 +17,30 @@ final class RootModel {
     /// never inferred here from an empty list, so both platforms agree.
     private(set) var onboardingState: OnboardingState?
 
+    /// The signed-in account, from the stored session.
+    ///
+    /// Read once per successful load rather than from the bootstrap, which
+    /// deliberately carries no account id. It keys every cache partition, so a
+    /// second account on the same phone can never read the first one's rows.
+    private(set) var accountId: String?
+
+    /// The selected church's feature models — see `ChurchFeatures`. Replaced
+    /// whole whenever the church, the account or the authorization version
+    /// changes, and nil with no church selected.
+    private(set) var features: ChurchFeatures?
+
+    /// Videos or sermon notes, on the Watch tab. Here rather than in the tab so
+    /// a sermons link can choose it.
+    var watchSection: WatchSection = .media
+
+    /// The account-deletion request. Rebuilt on sign-out so the next account on
+    /// this phone starts with a fresh idempotency key.
+    private(set) var deletion: AccountDeletionModel
+
+    /// Set once a deletion request has been accepted and the device signed out,
+    /// so the signed-out screen can say what just happened.
+    var accountDeletionRequested = false
+
     let onboarding: OnboardingModel
     private(set) var authModel: AuthModel!
 
@@ -26,6 +50,7 @@ final class RootModel {
         self.dependencies = dependencies
         self.state = AppState(environmentKey: dependencies.environment.key)
         self.onboarding = OnboardingModel(api: dependencies.api)
+        self.deletion = AccountDeletionModel(api: dependencies.api)
         self.authModel = AuthModel(auth: dependencies.auth) { [weak self] session, displayName in
             await self?.completeAuth(session, displayName: displayName)
         }
@@ -101,6 +126,7 @@ final class RootModel {
             // failure here falls back to nil — showing home to someone who
             // could be onboarding beats a dead app over a routing hint.
             onboardingState = await onboarding.refresh()
+            accountId = await dependencies.session.currentSession()?.accountId
 
             state.apply(.ready(bootstrap, isStale: false))
             adoptSelection(bootstrap)
@@ -158,13 +184,45 @@ final class RootModel {
     /// implement all remove the tab on the next pass — which is why a tab list
     /// is computed rather than stored.
     func availableTabs(bootstrap: Bootstrap) -> [RootTab] {
-        let registry = dependencies.registry(for: bootstrap)
-        let snapshot = RouteRegistry.SessionSnapshot(
+        RootTab.allCases.filter { tab in
+            switch tab {
+            case .watch:
+                // Watch holds two things — recordings and sermon notes — and is
+                // worth a tab if either is on.
+                return isAllowed(tab.destination, in: bootstrap)
+                    || isAllowed(.sermonArchive(churchSlug: ""), in: bootstrap)
+            default:
+                return isAllowed(tab.destination, in: bootstrap)
+            }
+        }
+    }
+
+    /// Whether a destination resolves as allowed against the current bootstrap.
+    ///
+    /// Church-scoped destinations are resolved against the *selected* church,
+    /// so nothing survives a switch to a church that does not allow it.
+    func isAllowed(_ destination: Destination) -> Bool {
+        guard let bootstrap = state.bootstrap else { return false }
+        return isAllowed(destination, in: bootstrap)
+    }
+
+    private func isAllowed(_ destination: Destination, in bootstrap: Bootstrap) -> Bool {
+        let scoped = Self.scoped(destination, to: selectedChurch?.churchSlug)
+        let resolution = dependencies.registry(for: bootstrap)
+            .resolve(scoped, session: Self.snapshot(bootstrap))
+        if case .allowed = resolution { return true }
+        return false
+    }
+
+    /// The registry's view of this account.
+    ///
+    /// `canReadPublishedContent` is the server's own answer, not a state string
+    /// this app re-interprets. Deriving it here would be a second copy of an
+    /// authorization rule.
+    nonisolated static func snapshot(_ bootstrap: Bootstrap) -> RouteRegistry.SessionSnapshot {
+        RouteRegistry.SessionSnapshot(
             isAuthenticated: true,
             capabilities: Set(bootstrap.enabledCapabilities),
-            // `canReadPublishedContent` is the server's own answer, not a
-            // state string this app re-interprets. Deriving it here would be a
-            // second copy of an authorization rule.
             churchAccess: Dictionary(
                 uniqueKeysWithValues: bootstrap.relationships.map {
                     ($0.churchSlug, $0.canReadPublishedContent)
@@ -176,29 +234,46 @@ final class RootModel {
                     .map(\.churchSlug)
             )
         )
-
-        return RootTab.allCases.filter { tab in
-            // Church-scoped tabs are resolved against the *selected* church, so
-            // a tab cannot survive a switch to a church that does not allow it.
-            let destination = Self.scoped(tab.destination, to: selectedChurch?.churchSlug)
-            if case .allowed = registry.resolve(destination, session: snapshot) { return true }
-            return false
-        }
     }
 
     func selectChurch(_ relationship: ChurchRelationship) {
         selectedChurch = relationship
-        // A church switch changes the cache partition. Nothing from the previous
-        // church can be read afterwards, because the key no longer matches.
-        Task {
-            await dependencies.cache.purge(
-                partition: dependencies.partition(
-                    for: state.bootstrap,
-                    accountId: nil,
-                    churchSlug: relationship.churchSlug
-                )
-            )
+        // A church switch changes the cache partition, and with it the whole
+        // feature container. Nothing from the previous church can be read
+        // afterwards, because neither the key nor the models are the same.
+        //
+        // The new church's cached rows are deliberately **kept**: they belong
+        // to this account and this church, and are what lets a switch back
+        // render at once instead of starting from a spinner.
+        refreshFeatures()
+    }
+
+    /// Rebuilds `features` if, and only if, what it is keyed by changed.
+    ///
+    /// Called after every selection change and every load. A quiet reload that
+    /// changes nothing keeps the same models — and with them a scan in
+    /// progress, a gift being confirmed, and a sermon's playback.
+    private func refreshFeatures() {
+        guard let church = selectedChurch else {
+            features = nil
+            return
         }
+        guard let bootstrap = state.bootstrap else { return }
+        let key = ChurchFeatures.Key(
+            accountId: accountId,
+            churchSlug: church.churchSlug,
+            authorizationVersion: bootstrap.profile.authorizationVersion
+        )
+        guard features?.key != key else { return }
+        features = ChurchFeatures(
+            key: key,
+            partition: dependencies.partition(
+                for: bootstrap,
+                accountId: accountId,
+                churchSlug: church.churchSlug
+            ),
+            dependencies: dependencies
+        )
     }
 
     func select(_ tab: RootTab) { selectedTab = tab }
@@ -257,22 +332,19 @@ final class RootModel {
                   match.canReadPublishedContent
             else { return }
             selectedChurch = match
+            refreshFeatures()
         }
 
         let registry = dependencies.registry(for: bootstrap)
-        let snapshot = RouteRegistry.SessionSnapshot(
-            isAuthenticated: true,
-            capabilities: Set(bootstrap.enabledCapabilities),
-            churchAccess: Dictionary(
-                uniqueKeysWithValues: bootstrap.relationships.map {
-                    ($0.churchSlug, $0.canReadPublishedContent)
-                }
-            ),
-            blockedChurches: Set(
-                bootstrap.relationships.filter { $0.state == .blocked }.map(\.churchSlug)
-            )
-        )
-        guard case .allowed = registry.resolve(destination, session: snapshot) else { return }
+        guard case .allowed = registry.resolve(destination, session: Self.snapshot(bootstrap)) else {
+            return
+        }
+
+        switch destination {
+        case .sermonArchive: watchSection = .sermons
+        case .watch: watchSection = .media
+        default: break
+        }
 
         if let tab = Self.tab(for: destination) { selectedTab = tab }
     }
@@ -314,6 +386,10 @@ final class RootModel {
         await dependencies.session.purgeEverything()
         lastBootstrap = nil
         selectedChurch = nil
+        features = nil
+        accountId = nil
+        watchSection = .media
+        deletion = AccountDeletionModel(api: dependencies.api)
         selectedTab = .home
         onboardingState = nil
         onboarding.clearPendingInvitation()
@@ -321,25 +397,46 @@ final class RootModel {
         state.apply(.signedOut)
     }
 
+    /// Asks the server to delete this account, and signs out if it agreed.
+    ///
+    /// A failure leaves everything as it was — still signed in, the reason on
+    /// `deletion.phase`, and the same request ready to retry under the same
+    /// idempotency key. Only an accepted request signs out, and then
+    /// `accountDeletionRequested` lets the signed-out screen say so.
+    func deleteAccount() async {
+        guard await deletion.requestDeletion() else { return }
+        await signOut()
+        accountDeletionRequested = true
+    }
+
     private func adoptSelection(_ bootstrap: Bootstrap) {
-        // The server's stored preference wins when it still names a readable
-        // church — it is the choice the person actually made, on any device.
-        if let preferred = onboardingState?.selectedChurchSlug,
-           let match = bootstrap.relationships.first(where: { $0.churchSlug == preferred }),
-           match.canReadPublishedContent {
-            selectedChurch = match
-            return
+        selectedChurch = Self.selection(
+            in: bootstrap,
+            preferred: onboardingState?.selectedChurchSlug,
+            current: selectedChurch?.churchSlug
+        )
+        refreshFeatures()
+    }
+
+    /// Which church to show after a load.
+    ///
+    /// The server's stored preference wins when it still names a readable
+    /// church — it is the choice the person actually made, on any device. Then
+    /// the church already on screen, if it is still readable. Otherwise the
+    /// first usable one: the previously selected church is gone, blocked, or was
+    /// left, and a stale selection would be refused by every church tab.
+    nonisolated static func selection(
+        in bootstrap: Bootstrap,
+        preferred: String?,
+        current: String?
+    ) -> ChurchRelationship? {
+        for slug in [preferred, current].compactMap({ $0 }) {
+            if let match = bootstrap.relationships.first(where: { $0.churchSlug == slug }),
+               match.canReadPublishedContent {
+                return match
+            }
         }
-        if let current = selectedChurch,
-           let refreshed = bootstrap.relationships.first(where: { $0.churchSlug == current.churchSlug }),
-           refreshed.canReadPublishedContent {
-            selectedChurch = refreshed
-            return
-        }
-        // The previously selected church is gone, blocked, or was left. Falling
-        // back to the first usable one is better than leaving a stale selection
-        // that every church-scoped tab would then refuse.
-        selectedChurch = bootstrap.relationships.first(where: \.canReadPublishedContent)
+        return bootstrap.relationships.first(where: \.canReadPublishedContent)
     }
 
     nonisolated static func scoped(_ destination: Destination, to slug: String?) -> Destination {
@@ -349,6 +446,7 @@ final class RootModel {
         case .watch: return .watch(churchSlug: slug)
         case .give: return .give(churchSlug: slug)
         case .announcements: return .announcements(churchSlug: slug)
+        case .sermonArchive: return .sermonArchive(churchSlug: slug)
         case .church: return .church(slug: slug)
         default: return destination
         }
@@ -357,13 +455,16 @@ final class RootModel {
     nonisolated static func tab(for destination: Destination) -> RootTab? {
         switch destination {
         case .home: return .home
-        case .churchDiscovery, .church: return .church
+        // Finding and switching churches lives on Home now — see `HomeTabView`.
+        case .churchDiscovery, .church: return .home
         case .checkIn: return .checkIn
-        case .watch: return .watch
+        // Sermon notes are the other half of Watch; `open` picks the section.
+        case .watch, .sermonArchive: return .watch
         case .give: return .give
         case .account, .accountPrivacy: return .account
-        // No tab. The destination exists and no screen does.
-        case .announcements, .sermonArchive: return nil
+        // No tab. Announcements are reachable by link and have no screen of
+        // their own; sending them to Home would be a guess about intent.
+        case .announcements: return nil
         }
     }
 }

@@ -6,6 +6,9 @@ import FaithFormKit
 /// Deliberately thin. Each one composes what `FaithFormKit` already provides and
 /// adds only what a *host* has to decide: which church is selected, what the
 /// environment is, and what to say when a person has no church yet.
+///
+/// The tabs themselves are in `HomeTab`, `CheckInTab`, `WatchTab`, `GiveTab`
+/// and `AccountScreens`; what they share per church is in `FeatureModels`.
 
 // MARK: - Not configured
 
@@ -34,40 +37,6 @@ struct UnconfiguredView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(theme.palette.background)
-    }
-}
-
-// MARK: - Home
-
-/// The selected church, and the ways into it.
-///
-/// Shows what is true and nothing else: no placeholder card for a feature that
-/// is off, and no "coming soon".
-struct HomeView: View {
-    @Environment(\.faithformTheme) private var theme
-    let bootstrap: Bootstrap
-    let selectedChurch: ChurchRelationship?
-    let onOpen: (RootTab) -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
-            if let church = selectedChurch {
-                VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.xs) {
-                    Text(church.churchName)
-                        .font(theme.font(FaithFormTokens.Text.displayLarge))
-                        .foregroundStyle(theme.palette.contentPrimary)
-                    Text(L.homeSubtitle)
-                        .font(theme.font(FaithFormTokens.Text.body))
-                        .foregroundStyle(theme.palette.contentSecondary)
-                }
-                .fixedSize(horizontal: false, vertical: true)
-            } else {
-                EmptyStateView(title: L.noChurchTitle, explanation: L.noChurchBody, symbol: "building.2")
-                Button(L.tabChurch) { onOpen(.church) }
-                    .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -113,97 +82,6 @@ struct ChurchSwitcherView: View {
                     )
                 }
             }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-// MARK: - Feature entry points
-
-/// Check-in.
-///
-/// **Opening this starts nothing.** The camera is untouched until someone taps
-/// the scanner, which is the rule Prompt 8 established and the reason a deep
-/// link to this screen cannot raise a permission prompt.
-struct CheckInEntryView: View {
-    @Environment(\.faithformTheme) private var theme
-    let churchName: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.md) {
-            Text(churchName)
-                .font(theme.font(FaithFormTokens.Text.titleMedium))
-                .foregroundStyle(theme.palette.contentPrimary)
-            Text(L.checkInEntryBody)
-                .font(theme.font(FaithFormTokens.Text.body))
-                .foregroundStyle(theme.palette.contentSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-struct MediaEntryView: View {
-    @Environment(\.faithformTheme) private var theme
-    let churchName: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.md) {
-            Text(churchName)
-                .font(theme.font(FaithFormTokens.Text.titleMedium))
-                .foregroundStyle(theme.palette.contentPrimary)
-            Text(L.mediaEntryBody)
-                .font(theme.font(FaithFormTokens.Text.body))
-                .foregroundStyle(theme.palette.contentSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-struct GivingEntryView: View {
-    @Environment(\.faithformTheme) private var theme
-    let churchName: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.md) {
-            Text(churchName)
-                .font(theme.font(FaithFormTokens.Text.titleMedium))
-                .foregroundStyle(theme.palette.contentPrimary)
-            Text(L.givingSubtitle)
-                .font(theme.font(FaithFormTokens.Text.body))
-                .foregroundStyle(theme.palette.contentSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-// MARK: - Account
-
-/// Profile, permissions, privacy and the environment this build points at.
-struct AccountView: View {
-    @Environment(\.faithformTheme) private var theme
-    let bootstrap: Bootstrap
-    let environmentKey: String
-    let onSignOut: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
-            VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.xs) {
-                Text(bootstrap.profile.displayName ?? L.appName)
-                    .font(theme.font(FaithFormTokens.Text.displayLarge))
-                    .foregroundStyle(theme.palette.contentPrimary)
-                // Which environment this build points at, always visible.
-                // A pilot tester holding a staging build and a production build
-                // must be able to tell them apart without opening Settings.
-                Text(environmentKey)
-                    .font(theme.font(FaithFormTokens.Text.caption))
-                    .foregroundStyle(theme.palette.contentSecondary)
-            }
-
-            Button(L.signOut, action: onSignOut)
-                .buttonStyle(FaithFormButtonStyle(kind: .secondary, theme: theme))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
