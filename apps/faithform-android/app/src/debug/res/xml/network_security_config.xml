@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    DEBUG BUILDS ONLY. Overrides `src/main/res/xml/network_security_config.xml`.
+
+    The debug build's API origin is http://10.0.2.2:3000 - the Android emulator's
+    alias for the host machine, where the web app's dev server listens without
+    TLS. That one address may be reached over cleartext. Every other host is
+    still refused, exactly as in release, so a debug build cannot quietly talk
+    plain http to a real server either.
+
+    `localhost` is deliberately not listed: on a device it is the phone itself,
+    and nothing FaithForm needs listens there.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">10.0.2.2</domain>
+    </domain-config>
+</network-security-config>

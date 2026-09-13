@@ -204,8 +204,6 @@ class AppManifestTest {
             "android.permission.INTERNET",
             "android.permission.CAMERA",
             "android.permission.ACCESS_FINE_LOCATION",
-            "android.permission.ACCESS_BACKGROUND_LOCATION",
-            "android.permission.POST_NOTIFICATIONS",
         )) {
             assertTrue("$required is missing", manifest.contains(required))
         }
@@ -220,6 +218,11 @@ class AppManifestTest {
             "ACTIVITY_RECOGNITION",
             "AD_ID",
             "QUERY_ALL_PACKAGES",
+            // Features that exist in source and are not in v1: automatic
+            // attendance (background location, boot re-registration) and push.
+            "ACCESS_BACKGROUND_LOCATION",
+            "RECEIVE_BOOT_COMPLETED",
+            "POST_NOTIFICATIONS",
         )) {
             assertFalse("$absent is declared and nothing needs it", manifest.contains(absent))
         }
@@ -237,14 +240,50 @@ class AppManifestTest {
     }
 
     @Test
-    fun `the geofence receiver cannot be reached by another app`() {
-        val receiver = manifest.substringAfter("GeofenceBroadcastReceiver").substringBefore("/>")
-        assertTrue(receiver.contains("android:exported=\"false\""))
+    fun `no receiver can be reached by another app, because v1 registers none`() {
+        // Automatic attendance is not in v1, so nothing that could be woken by
+        // a broadcast is declared. Its receivers return with the feature.
+        assertFalse(manifest.contains("<receiver"))
+    }
+
+    @Test
+    fun `the Open Mail button can see a mail app on Android 11 and later`() {
+        // Without a <queries> entry, resolveActivity returns null on API 30+
+        // and the button on the check-your-email screen is never shown.
+        val queries = manifest.substringAfter("<queries>").substringBefore("</queries>")
+        assertTrue(queries.contains("android.intent.action.MAIN"))
+        assertTrue(queries.contains("android.intent.category.APP_EMAIL"))
     }
 
     @Test
     fun `cleartext traffic is off`() {
         assertTrue(manifest.contains("android:usesCleartextTraffic=\"false\""))
         assertTrue(manifest.contains("android:networkSecurityConfig"))
+    }
+
+    @Test
+    fun `the shipped network security config permits no cleartext and no user CAs`() {
+        val main = File("src/main/res/xml/network_security_config.xml").readText()
+            .replace(Regex("<!--[\\s\\S]*?-->"), "")
+        assertTrue(main.contains("cleartextTrafficPermitted=\"false\""))
+        assertFalse("release permits cleartext somewhere", main.contains("cleartextTrafficPermitted=\"true\""))
+        assertFalse("release trusts user-installed CAs", main.contains("src=\"user\""))
+        assertFalse(main.contains("<domain-config"))
+    }
+
+    @Test
+    fun `only the debug build may speak cleartext, and only to the emulator host`() {
+        val debug = File("src/debug/res/xml/network_security_config.xml").readText()
+            .replace(Regex("<!--[\\s\\S]*?-->"), "")
+        val domains = Regex("<domain[^>]*>([^<]+)</domain>").findAll(debug).map { it.groupValues[1].trim() }.toList()
+        assertEquals(listOf("10.0.2.2"), domains)
+        assertTrue(debug.contains("<base-config cleartextTrafficPermitted=\"false\">"))
+        // No staging or release source set may carry an override of its own.
+        for (variant in listOf("release", "staging")) {
+            assertFalse(
+                "$variant overrides the network security config",
+                File("src/$variant/res/xml/network_security_config.xml").exists(),
+            )
+        }
     }
 }

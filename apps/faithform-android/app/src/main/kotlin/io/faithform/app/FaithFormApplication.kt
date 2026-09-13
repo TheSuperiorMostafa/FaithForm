@@ -1,7 +1,6 @@
 package io.faithform.app
 
 import android.app.Application
-import io.faithform.app.notifications.NotificationChannels
 import io.faithform.app.session.AppContainer
 
 /**
@@ -44,8 +43,11 @@ class FaithFormApplication : Application() {
             supabaseAnonKey = BuildConfig.SUPABASE_ANON_KEY
         )
 
-        // Channels must exist before the first notification arrives or Android
-        // silently drops it. Creating one is not a prompt and shows nothing.
-        NotificationChannels.ensureCreated(this)
+        // No notification channels are created in v1. Push arrives in v1.1,
+        // together with POST_NOTIFICATIONS in the manifest; creating channels
+        // now would list "Announcements" and "Events" in system settings for
+        // an app that sends neither. `NotificationChannels.ensureCreated` is
+        // ready for that release and goes back here, before the first
+        // notification can arrive.
     }
 }
