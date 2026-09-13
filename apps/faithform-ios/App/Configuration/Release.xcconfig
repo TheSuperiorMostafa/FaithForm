@@ -3,14 +3,15 @@
 FAITHFORM_BUNDLE_ID_SUFFIX =
 FAITHFORM_ENVIRONMENT_KEY = production
 
-// **Deliberately empty**, for the same reason as staging: the production origin
-// is a deployment decision, not a source constant. Supply it at build time.
-//
-// A release build with this unset fails closed rather than pointing somewhere.
-FAITHFORM_API_ORIGIN =
+// Production. Written here rather than supplied at build time because an
+// archive made from Xcode's Organizer cannot be handed build-setting overrides,
+// and a store build that opens on "FaithForm isn't set up" is the failure this
+// replaced. Every value in this file is public: the origin is the website, and
+// the Supabase publishable key is shipped to every browser that loads it.
+FAITHFORM_API_ORIGIN = https:/$()/faithform.io
 
 FAITHFORM_ALLOW_DEBUG_CONTROLS = NO
 
-// Deliberately empty, like the origin above.
-FAITHFORM_SUPABASE_URL =
-FAITHFORM_SUPABASE_ANON_KEY =
+// The same project and publishable key the web app uses in production.
+FAITHFORM_SUPABASE_URL = https:/$()/wwiclymyfplsyezxyzva.supabase.co
+FAITHFORM_SUPABASE_ANON_KEY = sb_publishable_ttxxg2YeGWYtB3ikP3MSXg_VODvVCia

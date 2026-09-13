@@ -8,7 +8,8 @@
 // or in Xcode: Settings → Accounts → your account → Manage Certificates.
 
 DEVELOPMENT_TEAM = YOUR_TEAM_ID
-FAITHFORM_BUNDLE_ID_PREFIX = com.yourname
+// Only if you are not on the FaithForm Apple team.
+// FAITHFORM_BUNDLE_ID = com.yourname.faithform
 
 // The identity provider a Debug build signs in against. Both values are
 // public by design (Supabase publishes them for clients); they live here only

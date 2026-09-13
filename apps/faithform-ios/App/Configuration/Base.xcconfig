@@ -12,18 +12,19 @@
 //
 //     apps/faithform-ios/App/Configuration/Local.xcconfig
 //     DEVELOPMENT_TEAM = ABCDE12345
-//     FAITHFORM_BUNDLE_ID_PREFIX = com.yourname
+//     FAITHFORM_BUNDLE_ID = com.yourname.faithform
 //
 // Included first so everything below can be overridden by it.
 #include? "Local.xcconfig"
 
-// The bundle identifier is a *placeholder* and is meant to be overridden.
-// Set FAITHFORM_BUNDLE_ID_PREFIX in your own environment or in a local
-// xcconfig; the default is deliberately obvious rather than someone's real
-// reverse-DNS name.
-// Only used when Local.xcconfig did not set one.
-FAITHFORM_BUNDLE_ID_PREFIX = $(FAITHFORM_BUNDLE_ID_PREFIX:default=io.faithform.placeholder)
-PRODUCT_BUNDLE_IDENTIFIER = $(FAITHFORM_BUNDLE_ID_PREFIX).faithform$(FAITHFORM_BUNDLE_ID_SUFFIX)
+// The App ID registered with Apple, and the same applicationId the Android app
+// ships under. Debug and Staging append a suffix so all three install side by
+// side on one phone.
+//
+// Someone building on their own Apple team cannot sign `io.faithform.app`; they
+// set FAITHFORM_BUNDLE_ID in Local.xcconfig to something they own.
+FAITHFORM_BUNDLE_ID = $(FAITHFORM_BUNDLE_ID:default=io.faithform.app)
+PRODUCT_BUNDLE_IDENTIFIER = $(FAITHFORM_BUNDLE_ID)$(FAITHFORM_BUNDLE_ID_SUFFIX)
 
 PRODUCT_NAME = FaithForm
 MARKETING_VERSION = 0.1.0
