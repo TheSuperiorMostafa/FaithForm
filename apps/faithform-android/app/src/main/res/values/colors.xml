@@ -1,4 +1,7 @@
 <resources>
-    <!-- Brand navy, matching design/faithform/tokens.json brandPrimary. -->
-    <color name="ic_launcher_background">#002D5F</color>
+    <!-- The iOS app icon's own ground, sampled from AppIcon.png (the median of
+         its border): a warm off-white rather than pure white, so the icon reads
+         as the same object on both stores. It was brand navy while the
+         foreground was a placeholder cross. -->
+    <color name="ic_launcher_background">#FEFAF8</color>
 </resources>

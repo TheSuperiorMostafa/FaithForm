@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The themed-icon layer (Android 13+): the same traced mark as
+    ic_launcher_foreground, in one colour, which the launcher replaces with the
+    wallpaper-derived tint.
+
+    Only alpha survives theming, so the two parts of the mark are told apart by
+    opacity rather than by hue - the F solid, the fold at 60% - which keeps the
+    fold legible as a separate shape instead of merging into one silhouette.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="1024"
+    android:viewportHeight="1024">
+
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M409,277 L688,277 L688,373 L465,373 L418,420 L418,440 L595,440 L498,537 L418,537 L418,702 L321,702 L321,365 Z" />
+
+    <path
+        android:fillColor="#99FFFFFF"
+        android:pathData="M465,373 L688,373 L688,431 L421,698 L418,698 L418,537 L498,537 L595,440 L418,440 L418,420 Z" />
+</vector>
