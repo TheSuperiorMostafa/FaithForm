@@ -30,10 +30,12 @@ import UIKit
 ///
 /// ## What is not verified here
 ///
-/// **This has never been run.** There is no iOS app target in this repository —
-/// `apps/faithform-ios` is a library — so nothing presents this sheet, and no
-/// device has seen it. It compiles for iOS, which is what the device-build gate
-/// checks, and that is the whole of the claim.
+/// **This has not been run against a real payment.** The app target presents
+/// it now — from the Give tab, and only when `givingRoute(...)` says `.inApp`,
+/// which needs an Apple-approved church and a build carrying a merchant ID —
+/// but no such build has existed yet, so no device has completed a gift through
+/// it. It compiles for iOS, which is what the device-build gate checks, and
+/// that is the whole of the claim.
 public actor StripePaymentSheetAdapter: PaymentSheetFacade {
 
     private let presenter: @MainActor () -> UIViewController?
