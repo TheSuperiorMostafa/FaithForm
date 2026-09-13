@@ -29,6 +29,9 @@
     },
     "app/api/webhooks/attendance/cleanup/route.ts": {
       "maxDuration": 60
+    },
+    "app/api/webhooks/accounts/deletion/route.ts": {
+      "maxDuration": 60
     }
   },
   "crons": [
@@ -55,6 +58,10 @@
     {
       "path": "/api/webhooks/attendance/cleanup",
       "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/webhooks/accounts/deletion",
+      "schedule": "20 * * * *"
     }
   ]
 }
