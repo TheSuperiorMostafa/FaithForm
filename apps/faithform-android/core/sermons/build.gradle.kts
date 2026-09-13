@@ -14,6 +14,11 @@ kotlin { jvmToolchain(17) }
  */
 dependencies {
     api(project(":core:contract"))
+    // The typed API client and the projection cache, for `SermonClient`, and
+    // the cache partition every read is scoped to. Pure JVM, tested against a
+    // scripted transport.
+    api(project(":core:network"))
+    api(project(":core:storage"))
     api(libs.kotlinx.coroutines.core)
 
     testImplementation(libs.junit)

@@ -239,4 +239,44 @@ class ApiClientTest {
             assertFalse(error.displayMessage.contains("html"))
         }
     }
+
+    @Test
+    fun `the shell is told once when the server ends the session, and not for a public request`() = runTest {
+        var ended = 0
+        val body = """{"ok":false,"error":{"code":"unauthenticated","message":"Sign in.","retryable":false},
+            "meta":{"apiVersion":"1.0","apiMajor":1,"requestId":"r","minimumSupportedClientBuild":1}}"""
+        val transport = RecordingTransport(
+            mutableListOf(HttpResponse(401, body, emptyMap()), HttpResponse(401, body, emptyMap())),
+        )
+        val api = ApiClient(ApiEnvironment("development", "https://api.example"), 1, transport, FakeTokens()) { ended += 1 }
+
+        runCatching { api.send(path = "api/mobile/v1/feed/grace", serializer = echo) }
+        assertEquals(1, ended)
+
+        // A signed-out request that the server refuses says nothing about the
+        // session on this device, and must not end it.
+        runCatching { api.send(path = "api/mobile/v1/churches/search", serializer = echo, authenticated = false) }
+        assertEquals(1, ended)
+    }
+
+    @Test
+    fun `a refused refresh tells the shell too`() = runTest {
+        var ended = 0
+        val tokens = FakeTokens { throw AuthException(AuthException.Kind.INVALID_CREDENTIALS) }
+        val api = ApiClient(ApiEnvironment("development", "https://api.example"), 1, RecordingTransport(mutableListOf()), tokens) { ended += 1 }
+        runCatching { api.send(path = "api/x", serializer = echo) }
+        assertEquals(1, ended)
+    }
+
+    @Test
+    fun `a server-relative path becomes absolute on this origin, and nothing else does`() {
+        val api = client(RecordingTransport(mutableListOf()))
+        assertEquals(
+            "https://api.example/api/media/v1/recording/grace/r1",
+            api.absoluteUrl("/api/media/v1/recording/grace/r1"),
+        )
+        for (foreign in listOf("https://evil.example/x", "//evil.example/x", "relative/path", "")) {
+            assertEquals("$foreign was accepted", null, api.absoluteUrl(foreign))
+        }
+    }
 }

@@ -215,7 +215,24 @@ data class PaymentSheetRequest(
     val merchantName: String,
     /** Only ever true when the server said the platform is configured for it. */
     val allowGooglePay: Boolean,
-)
+    /**
+     * The gift's currency, as the server's donation session states it
+     * (ISO 4217, upper-cased for the wallet). Never a constant in this app: a
+     * church's Stripe account decides its currency, and a sheet that assumed
+     * dollars would describe a Canadian church's gift wrongly.
+     */
+    val currencyCode: String,
+    /**
+     * The merchant's country for a wallet sheet. The session does not carry one
+     * today, so [DEFAULT_COUNTRY_CODE] applies until it does.
+     */
+    val countryCode: String = DEFAULT_COUNTRY_CODE,
+) {
+    companion object {
+        /** Used only when the server supplies no country. */
+        const val DEFAULT_COUNTRY_CODE = "US"
+    }
+}
 
 /**
  * The Stripe payment sheet, as this app is allowed to see it.

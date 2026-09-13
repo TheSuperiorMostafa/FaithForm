@@ -7,6 +7,9 @@ kotlin { jvmToolchain(17) }
 
 dependencies {
     api(project(":core:contract"))
+    // The partition-aware cache, so `ProjectionCache` can keep an ETag beside
+    // each projection. Pure JVM, like this module.
+    api(project(":core:storage"))
     api(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
     testImplementation(libs.junit)

@@ -81,6 +81,17 @@ class PartitionedCache(private val maxEntries: Int = 200) {
         entries[Key(partition.storageKey, name)]?.payload
     }
 
+    /**
+     * The payload with the moment it was stored, so a reader can decide how
+     * stale it is. The etag is carried inside the payload by whoever wrote it;
+     * this layer stores strings and knows nothing about HTTP.
+     */
+    suspend fun loadEntry(name: String, partition: CachePartition): CacheEntry<String>? = mutex.withLock {
+        entries[Key(partition.storageKey, name)]?.let { stored ->
+            CacheEntry(value = stored.payload, etag = null, storedAtMillis = stored.storedAtMillis)
+        }
+    }
+
     suspend fun purge(partition: CachePartition) = mutex.withLock {
         entries.keys.filter { it.partition == partition.storageKey }.forEach { entries.remove(it) }
     }
