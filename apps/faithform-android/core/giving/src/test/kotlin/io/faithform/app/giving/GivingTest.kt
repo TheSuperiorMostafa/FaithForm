@@ -340,6 +340,12 @@ class GivingScreenStateTest {
         funds = funds,
         recurringAvailable = recurring,
         givingVersion = 1,
+        // An iPhone-only gate. Android takes a gift in Stripe's own sheet for
+        // any church whose availability is `available`, so nothing on this
+        // platform reads it — which is exactly why the fixture sets it false:
+        // a decision that changed with it would be a bug.
+        applePayApproved = false,
+        webGiveUrl = if (availability == "available") "https://grace.example/give" else null,
     )
 
     @Test
