@@ -140,6 +140,13 @@ export type AdminChurchDetail = {
     stripeRequirementsDue: string[];
     givingEnabledAt: string | null;
     givePageUrl: string;
+    /**
+     * Whether we have verified this church's Candid Seal, which is what lets
+     * the iPhone app take its gifts with Apple Pay instead of sending the giver
+     * to the web give page. `null` when migration 0072 is not applied yet, so
+     * the panel can say so rather than show a switch that cannot save.
+     */
+    applePayDonations: { approved: boolean; approvedAt: string | null } | null;
   };
   settings: {
     aiProvider: string | null;
@@ -695,6 +702,7 @@ export async function getAdminChurchDetail(
     inviteRes,
     supportTickets,
     usageSummary,
+    applePayRes,
   ] = await Promise.all([
     admin
       .from("churches")
@@ -735,6 +743,14 @@ export async function getAdminChurchDetail(
       .maybeSingle(),
     getSupportTickets({ churchId }),
     getChurchDashboardUsageSummary(churchId),
+    // Asked separately from the church row on purpose. Folding these columns
+    // into the select above would turn an unapplied 0072 into a 404 for the
+    // whole church record; on its own it only costs the one switch.
+    admin
+      .from("churches")
+      .select("apple_pay_donations_approved, apple_pay_donations_approved_at")
+      .eq("id", churchId)
+      .maybeSingle(),
   ]);
 
   if (churchRes.error || !churchRes.data) {
@@ -815,6 +831,15 @@ export async function getAdminChurchDetail(
       stripeRequirementsDue: requirementsDue,
       givingEnabledAt: church.giving_enabled_at ?? null,
       givePageUrl: getGivePageUrl(slug),
+      applePayDonations:
+        applePayRes.error || !applePayRes.data
+          ? null
+          : {
+              approved: applePayRes.data.apple_pay_donations_approved === true,
+              approvedAt:
+                (applePayRes.data.apple_pay_donations_approved_at as string | null) ??
+                null,
+            },
     },
     settings: settingsRes.data
       ? {
