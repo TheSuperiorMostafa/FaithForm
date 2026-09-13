@@ -184,9 +184,13 @@ struct SignUpView: View {
             AuthErrorText(message: message)
         }
 
-        Text(L.authTermsNotice)
+        // The two documents are links, not just names. A person agreeing to
+        // something should be one tap from reading it, and App Review checks
+        // that they are. SwiftUI opens them through `openURL`, in Safari.
+        Text(LegalLinks.termsNotice())
             .font(theme.font(FaithFormTokens.Text.caption))
             .foregroundStyle(theme.mutedContent)
+            .tint(theme.palette.brandPrimary)
             .fixedSize(horizontal: false, vertical: true)
 
         Button {

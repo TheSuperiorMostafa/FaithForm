@@ -136,6 +136,32 @@ public enum L {
     public static var deleteAccountHint: String {
         t("delete_account_hint", "Removes your FaithForm profile. Your church keeps its own records.")
     }
+    public static var deleteAccountConfirmTitle: String {
+        t("delete_account_confirm_title", "Delete your FaithForm account?")
+    }
+    public static var deleteAccountConfirmBody: String {
+        t("delete_account_confirm_body", "Your account stops working right away and you'll be signed out. We finish deleting your profile and church connections within 30 days. Churches keep their own records, including your gifts. This can't be undone.")
+    }
+    public static var deleteAccountWorking: String {
+        t("delete_account_working", "Deleting your account…")
+    }
+    public static var deleteAccountRequestedTitle: String {
+        t("delete_account_requested_title", "Your account is being deleted")
+    }
+    public static var deleteAccountRequestedBody: String {
+        t("delete_account_requested_body", "You've been signed out. We'll finish deleting your information within 30 days.")
+    }
+    public static var deleteAccountFailedTitle: String {
+        t("delete_account_failed_title", "Your account wasn't deleted")
+    }
+    public static var deleteAccountFailedBody: String {
+        t("delete_account_failed_body", "FaithForm couldn't reach the server. Check your connection and try again.")
+    }
+    public static var privacyPolicy: String { t("privacy_policy", "Privacy Policy") }
+    public static var termsOfService: String { t("terms_of_service", "Terms of Service") }
+    public static var accountDeletionHelp: String {
+        t("account_deletion_help", "How account deletion works")
+    }
     public static var signInTitle: String { t("sign_in_title", "Sign in to continue") }
     public static var signInBody: String {
         t("sign_in_body", "FaithForm keeps your churches, your giving and your check-ins in one place.")
@@ -675,6 +701,12 @@ public enum L {
     public static var givingLoading: String {
         t("giving_loading", "Loading…")
     }
+    public static var givingGiveOnline: String {
+        t("giving_give_online", "Give online")
+    }
+    public static var givingWebBody: String {
+        t("giving_web_body", "Gifts to this church are made on its giving page, which opens in Safari.")
+    }
 
     // MARK: - App host (Prompt 12)
 
@@ -740,6 +772,12 @@ public enum L {
     }
     public static var authTermsNotice: String {
         t("auth_terms_notice", "By continuing, you agree to FaithForm's Terms of Service and Privacy Policy.")
+    }
+    /// The same sentence with the two document names as placeholders, so each
+    /// can be a link in any language without guessing where the words fall.
+    /// `%1$@` is `terms_of_service`, `%2$@` is `privacy_policy`.
+    public static var authTermsNoticeLinked: String {
+        t("auth_terms_notice_linked", "By continuing, you agree to FaithForm's %1$@ and %2$@.")
     }
     public static var authForgotPassword: String {
         t("auth_forgot_password", "Forgot password?")
