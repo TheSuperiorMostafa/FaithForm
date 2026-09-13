@@ -1,6 +1,7 @@
 package io.faithform.app.network
 
 import io.faithform.app.contract.MobileErrorCode
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -65,9 +66,12 @@ class ApiClient(
         idempotencyKey: String? = null,
         authenticated: Boolean = true
     ): ApiResult<T> {
+        // Percent-encoded, like `URLQueryItem` on iOS. A search for
+        // "St. Mark's & St. John's" is a value, and an unencoded `&` would
+        // silently split it into a second, meaningless parameter.
         val queryString = if (query.isEmpty()) "" else {
             query.entries.sortedBy { it.key }
-                .joinToString("&", prefix = "?") { "${it.key}=${it.value}" }
+                .joinToString("&", prefix = "?") { "${encode(it.key)}=${encode(it.value)}" }
         }
 
         val headers = buildMap {
@@ -81,11 +85,11 @@ class ApiClient(
                     MobileErrorCode.UNAUTHENTICATED,
                     "Sign in to continue."
                 )
-                put("Authorization", "Bearer ${provider.validAccessToken()}")
+                put("Authorization", "Bearer ${accessToken(provider)}")
             }
         }
 
-        val response = runCatching {
+        val response = try {
             transport.perform(
                 HttpRequest(
                     method = method,
@@ -94,7 +98,14 @@ class ApiClient(
                     body = body
                 )
             )
-        }.getOrElse { throw ApiException.transport() }
+        } catch (cancelled: CancellationException) {
+            // A screen that went away is not a network failure. Mapping this to
+            // "could not reach the server" would show an offline state for a
+            // request nobody is waiting on — and swallow the cancellation.
+            throw cancelled
+        } catch (_: Exception) {
+            throw ApiException.transport()
+        }
 
         val requestId = response.header("X-Request-Id")
         val etag = response.header("ETag")
@@ -125,6 +136,52 @@ class ApiClient(
         }
         throw failure
     }
+
+    /**
+     * A usable access token, or the one failure that describes why not.
+     *
+     * Renewing an expired token is itself a network call, to the identity
+     * provider, and it can fail two very different ways:
+     *
+     * * **The provider could not be reached** (offline, a 5xx, rate limited).
+     *   The session may be perfectly good; this is a transport error and the
+     *   app says so and offers a retry.
+     * * **The provider refused the refresh token** — `invalid_grant`,
+     *   `refresh_token_not_found`, `refresh_token_already_used`, or anything
+     *   else it answers with a 4xx. That session is over and no retry will
+     *   revive it. It is invalidated and surfaced as `SESSION_EXPIRED`, which
+     *   the shell turns into the sign-in screen.
+     *
+     * Before this, both escaped as an untyped exception and the shell showed
+     * "you're offline" forever to someone whose refresh token had been revoked
+     * — a dead end with a retry button that could never work.
+     */
+    private suspend fun accessToken(provider: TokenProvider): String = try {
+        provider.validAccessToken()
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (error: ApiException) {
+        throw error
+    } catch (error: AuthException) {
+        when (error.kind) {
+            AuthException.Kind.OFFLINE,
+            AuthException.Kind.RATE_LIMITED -> throw ApiException.transport()
+            else -> {
+                provider.invalidate()
+                throw ApiException(
+                    MobileErrorCode.SESSION_EXPIRED,
+                    "Your session has ended. Sign in again."
+                )
+            }
+        }
+    } catch (_: Exception) {
+        // No session at all, or no identity provider to renew one with. Either
+        // way the only way forward is signing in.
+        throw ApiException(MobileErrorCode.UNAUTHENTICATED, "Sign in to continue.")
+    }
+
+    private fun encode(value: String): String =
+        java.net.URLEncoder.encode(value, Charsets.UTF_8.name()).replace("+", "%20")
 }
 
 /**
