@@ -13,6 +13,16 @@
     <string name="sign_out">Sign out</string>
     <string name="delete_account">Delete my account</string>
     <string name="delete_account_hint">Removes your FaithForm profile. Your church keeps its own records.</string>
+    <string name="delete_account_confirm_title">Delete your FaithForm account?</string>
+    <string name="delete_account_confirm_body">Your account stops working right away and you\'ll be signed out. We finish deleting your profile and church connections within 30 days. Churches keep their own records, including your gifts. This can\'t be undone.</string>
+    <string name="delete_account_working">Deleting your account…</string>
+    <string name="delete_account_requested_title">Your account is being deleted</string>
+    <string name="delete_account_requested_body">You\'ve been signed out. We\'ll finish deleting your information within 30 days.</string>
+    <string name="delete_account_failed_title">Your account wasn\'t deleted</string>
+    <string name="delete_account_failed_body">FaithForm couldn\'t reach the server. Check your connection and try again.</string>
+    <string name="privacy_policy">Privacy Policy</string>
+    <string name="terms_of_service">Terms of Service</string>
+    <string name="account_deletion_help">How account deletion works</string>
     <string name="offline_cached">Showing what was saved on this device.</string>
     <string name="offline_title">You\'re offline</string>
     <string name="offline_body">FaithForm will load your account as soon as you\'re back on a network.</string>
@@ -270,6 +280,11 @@
     <string name="giving_status_disputed">Under review</string>
     <string name="giving_recurring_elsewhere">Giving every week or month is set up on this church\'s giving page.</string>
     <string name="giving_loading">Loading…</string>
+    <!-- iPhone-only in practice: iOS sends a church without Apple Pay approval
+         to its web giving page. Every church gives in the app on Android, so
+         these two are kept for parity and not shown. -->
+    <string name="giving_give_online">Give online</string>
+    <string name="giving_web_body">Gifts to this church are made on its giving page, which opens in your browser.</string>
 
     <!-- App host (Prompt 12) -->
     <string name="tab_home">Home</string>
@@ -298,6 +313,8 @@
     <string name="auth_password_label">Password</string>
     <string name="auth_password_hint">At least 8 characters</string>
     <string name="auth_terms_notice">By continuing, you agree to FaithForm\'s Terms of Service and Privacy Policy.</string>
+    <!-- %1$s is terms_of_service and %2$s is privacy_policy, each drawn as a link. -->
+    <string name="auth_terms_notice_linked">By continuing, you agree to FaithForm\'s %1$s and %2$s.</string>
     <string name="auth_forgot_password">Forgot password?</string>
     <string name="auth_reset_title">Reset your password</string>
     <string name="auth_reset_body">Enter your email and we\'ll send you a link to set a new one.</string>
