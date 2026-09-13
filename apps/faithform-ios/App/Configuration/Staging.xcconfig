@@ -14,6 +14,11 @@ FAITHFORM_API_ORIGIN =
 
 FAITHFORM_ALLOW_DEBUG_CONTROLS = NO
 
+// The Apple Pay merchant ID. Public — it is in every signed binary's
+// entitlements — and used only when FAITHFORM_ENABLE_APPLE_PAY is YES; see
+// Base.xcconfig.
+FAITHFORM_APPLE_PAY_MERCHANT_ID = merchant.io.faithform.app
+
 // Deliberately empty, like the origin above.
 FAITHFORM_SUPABASE_URL =
 FAITHFORM_SUPABASE_ANON_KEY =

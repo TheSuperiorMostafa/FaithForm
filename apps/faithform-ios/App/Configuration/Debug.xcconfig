@@ -11,6 +11,11 @@ FAITHFORM_API_ORIGIN = http:/$()/localhost:3000
 // Debug affordances are compiled in here and nowhere else.
 FAITHFORM_ALLOW_DEBUG_CONTROLS = YES
 
+// No Apple Pay in Debug, whatever FAITHFORM_ENABLE_APPLE_PAY says: Debug signs
+// with no entitlements at all, so a merchant ID here would be one the build is
+// not entitled to use. Gifts go to the web give page.
+FAITHFORM_APPLE_PAY_MERCHANT_ID =
+
 // Point at a local Supabase, or a project you own. Never a church's.
 //
 // Filled from Local.xcconfig (gitignored) via the FAITHFORM_DEV_* names, so a

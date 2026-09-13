@@ -18,3 +18,9 @@ DEVELOPMENT_TEAM = YOUR_TEAM_ID
 // web app's .env.local.
 FAITHFORM_DEV_SUPABASE_URL = https:/$()/your-project-ref.supabase.co
 FAITHFORM_DEV_SUPABASE_ANON_KEY = your-publishable-key
+
+// Only on the machine that archives App Store and TestFlight builds, and only
+// once the signing team's profile carries the Apple Pay capability for
+// merchant.io.faithform.app. Anywhere else it makes signing fail. See
+// Base.xcconfig.
+// FAITHFORM_ENABLE_APPLE_PAY = YES
