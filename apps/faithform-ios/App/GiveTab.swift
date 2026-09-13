@@ -186,8 +186,12 @@ struct GiveTabView: View {
             }
             .background(theme.palette.background)
             // No way back while the server is still deciding: leaving would not
-            // stop the gift, only the person's view of it.
-            .navigationBarBackButtonHidden(Self.isInFlight(model.donation))
+            // stop the gift, only the person's view of it. Once polling has
+            // given up the screen says the receipt will follow, has no button
+            // of its own, and so must let the person leave.
+            .navigationBarBackButtonHidden(
+                Self.isInFlight(model.donation) && !model.pollingExhausted
+            )
             .navigationBarTitleDisplayMode(.inline)
 
         case .history:
