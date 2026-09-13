@@ -5,14 +5,17 @@ package io.faithform.app
  *
  * ## Why it fails closed
  *
- * The origin comes from the build type, and **staging and release ship with it
- * empty**. That is deliberate. A build whose origin is missing does not fall
- * back to production: it produces [Unconfigured], the app shows a state that
- * says so, and the developer sees exactly which value is absent.
+ * The origin comes from the build type. A build whose origin is missing does
+ * not fall back to production: it produces [Unconfigured], the app shows a
+ * state that says so, and the developer sees exactly which value is absent.
  *
- * The usual default is the other way round — a fallback to production — and it
- * is the reason staging builds end up writing to real churches. This file used
- * to be that: `release` hardcoded `https://faithform.io`.
+ * The usual default is the other way round — a runtime fallback to production —
+ * and it is the reason staging builds end up writing to real churches. So the
+ * one default that exists lives in the *release build type*
+ * (`https://faithform.io`), staging has none, and a staging or release artifact
+ * without an origin refuses to configure at build time. This loader is the
+ * second, independent refusal: whatever still reaches a phone empty, or over
+ * cleartext outside development, fails closed here.
  *
  * Mirrors `AppEnvironment.swift` on iOS, decision for decision.
  */
