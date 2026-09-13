@@ -290,6 +290,70 @@ public func applePayAvailable(
 }
 
 // ---------------------------------------------------------------------------
+// Where a gift is made
+// ---------------------------------------------------------------------------
+
+/// Where this phone may take a gift to one church.
+public enum GivingRoute: Equatable, Sendable {
+    /// Fund, amount, confirm, and Stripe's sheet with Apple Pay — inside the app.
+    case inApp
+    /// The church's own give page, opened in Safari. Nothing about money
+    /// happens in the app.
+    case web(URL)
+    /// Neither is possible right now. The screen says why; it offers nothing.
+    case unavailable
+}
+
+/// Decides whether a gift happens in the app, in Safari, or not at all.
+///
+/// ## The rule this encodes
+///
+/// Apple's App Review Guideline 3.2.1(vi) lets a third-party app take a
+/// donation without In-App Purchase **only** when Apple Pay is offered and the
+/// nonprofit receiving it is one Apple has approved. Guideline 3.2.2(iv) lets
+/// any nonprofit take gifts *outside* the app — in Safari. FaithForm's gifts go
+/// to the church, so approval is a fact about each church, and the server
+/// reports it as `applePayApproved`.
+///
+/// So the in-app flow needs three things at once:
+///
+///  * **The church is approved.** Without it an in-app gift is exactly what the
+///    guideline forbids, whatever this device can do.
+///  * **This build can offer Apple Pay** — it carries a merchant identifier,
+///    which only exists where the in-app-payments entitlement does. An approved
+///    church in a build without one would get Stripe's sheet with cards only,
+///    which is an in-app donation without Apple Pay: the same violation by
+///    another route.
+///  * **This device can make Apple Pay payments at all.** A device that cannot
+///    would see the same cards-only sheet.
+///
+/// Missing any of them, the gift goes to Safari if the church has a give page,
+/// and nowhere if it does not. An `https` page only: the server builds it from
+/// the site's own origin, so anything else is a misconfiguration, and opening a
+/// cleartext link to a payment page is not a thing to do on a guess.
+public func givingRoute(
+    applePayApproved: Bool,
+    merchantID: String?,
+    deviceCanMakePayments: Bool,
+    webGiveURL: String?
+) -> GivingRoute {
+    let hasMerchant = !(merchantID?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+    if applePayApproved && hasMerchant && deviceCanMakePayments {
+        return .inApp
+    }
+
+    guard
+        let raw = webGiveURL?.trimmingCharacters(in: .whitespacesAndNewlines),
+        let url = URL(string: raw),
+        url.scheme?.lowercased() == "https",
+        url.host?.isEmpty == false
+    else {
+        return .unavailable
+    }
+    return .web(url)
+}
+
+// ---------------------------------------------------------------------------
 // What must never be written down
 // ---------------------------------------------------------------------------
 
