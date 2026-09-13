@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/brand/logo";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { isAuthFragment } from "@/lib/auth/recovery-fragment";
 import { cn } from "@/lib/utils";
 import {
   sendMagicLink,
@@ -80,6 +81,19 @@ export function LoginForm() {
   const [linkFailed, setLinkFailed] = useState(
     () => searchParams.get("error") === "auth",
   );
+
+  // A reset link from the phone apps carries its session in the URL fragment.
+  // When its `redirect_to` is not on Supabase's allow-list, Supabase sends it
+  // to the bare Site URL instead of /auth/callback, the root page redirects on
+  // to here, and the fragment rides along — to a page with nothing that reads
+  // it. The path is lost but the answer is not, so send it to the page that
+  // does read it. A full load rather than a client navigation, so the fragment
+  // arrives exactly as Supabase wrote it.
+  useEffect(() => {
+    if (isAuthFragment(window.location.hash)) {
+      window.location.replace(`/auth/confirm${window.location.hash}`);
+    }
+  }, []);
 
   useEffect(() => {
     if (searchParams.get("error") !== "auth") return;

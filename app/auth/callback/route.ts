@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { callbackDiagnosticCode } from "@/lib/auth/callback-diagnostics";
 import { sessionCameFromRecovery } from "@/lib/auth/recovery";
+import { callbackNeedsFragmentHandoff } from "@/lib/auth/recovery-fragment";
 import { getChurchAuth } from "@/lib/auth/church";
 import { isPlatformAdminUser } from "@/lib/auth/superadmin";
 import { resolveSignedInLanding } from "@/lib/auth/signed-in-landing";
@@ -67,9 +68,21 @@ export async function GET(request: Request) {
     }
   }
 
-  // Exhausted: no code, a refused code, or a provider-reported failure. All of
-  // them mean the same thing to the person holding the link — it did not work
-  // and signing in does. The query string carries a single opaque marker; the
+  // Nothing on the query string at all is not yet a failure. A reset link the
+  // phone apps requested comes back on the implicit flow, with the session in
+  // the URL fragment, and a fragment never reaches this server — only script on
+  // the page can read it. `/auth/confirm` is that script. The redirect carries
+  // no fragment of its own, so the browser keeps the original one across it;
+  // if there turns out to be nothing there, that page lands on the same
+  // `/login?error=auth` as below.
+  if (callbackNeedsFragmentHandoff(searchParams)) {
+    console.info("[auth] callback handed off to /auth/confirm to read the fragment");
+    return redirectTo(`${origin}/auth/confirm`);
+  }
+
+  // Exhausted: a refused code, or a provider-reported failure. Both mean the
+  // same thing to the person holding the link — it did not work and signing
+  // in does. The query string carries a single opaque marker; the
   // machine-readable reason goes to the server log and nowhere else, so no
   // provider wording, address, or code is ever shown or linked.
   console.warn(
