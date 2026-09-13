@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+        FaithForm.entitlements, plus Apple Pay.
+
+        Signed with only when FAITHFORM_ENABLE_APPLE_PAY is YES, in Staging and
+        Release. The signing team's provisioning profile must carry the Apple Pay
+        capability for the merchant ID below, or signing fails — which is why
+        this is a separate file behind a switch rather than a line in the
+        default one. See Base.xcconfig.
+
+        Keep everything else identical to FaithForm.entitlements.
+    -->
+    <key>aps-environment</key>
+    <string>development</string>
+
+    <!--
+        In-app gifts to a church Apple has approved (guideline 3.2.1(vi)) are
+        paid with Apple Pay through Stripe's payment sheet. Must match
+        FAITHFORM_APPLE_PAY_MERCHANT_ID in Staging.xcconfig and Release.xcconfig,
+        which is what the app hands the sheet.
+    -->
+    <key>com.apple.developer.in-app-payments</key>
+    <array>
+        <string>merchant.io.faithform.app</string>
+    </array>
+</dict>
+</plist>

@@ -33,3 +33,43 @@ CURRENT_PROJECT_VERSION = 1
 // The minimum server-supported client build. The server refuses anything older,
 // so this is a fact about compatibility rather than a display string.
 FAITHFORM_CLIENT_BUILD = 1
+
+// ---------------------------------------------------------------------------
+// Apple Pay
+// ---------------------------------------------------------------------------
+//
+// In-app gifts need Apple Pay (guideline 3.2.1(vi)), and Apple Pay needs the
+// `com.apple.developer.in-app-payments` entitlement naming a merchant ID that
+// is registered to the signing team. A provisioning profile without that
+// capability **fails to sign** — so the entitlement cannot simply be declared
+// for everyone.
+//
+// FAITHFORM_ENABLE_APPLE_PAY is the switch, and it chooses both halves together:
+//
+//   * which entitlements file Staging and Release sign with (project.yml), and
+//   * whether the app is told a merchant ID at all (Info.plist).
+//
+// Off (the default): the plain entitlements, no merchant ID, and every gift
+// goes to the church's give page in Safari. A personal team signs this fine.
+//
+// On: the Apple Pay entitlements, the merchant ID from Staging/Release, and an
+// approved church's gifts happen in the app. Set it on the machine that
+// archives store and TestFlight builds, once `merchant.io.faithform.app` is
+// registered and the FaithForm team's profile carries the capability:
+//
+//     apps/faithform-ios/App/Configuration/Local.xcconfig
+//     FAITHFORM_ENABLE_APPLE_PAY = YES
+//
+// The two can never disagree: a merchant ID reaches the app only through the
+// same switch that adds the entitlement, so a build cannot offer Apple Pay it
+// is not entitled to, and Debug — which signs with no entitlements at all —
+// sets no merchant ID to be switched on.
+FAITHFORM_ENABLE_APPLE_PAY = $(FAITHFORM_ENABLE_APPLE_PAY:default=NO)
+
+FAITHFORM_ENTITLEMENTS_NO = App/Resources/FaithForm.entitlements
+FAITHFORM_ENTITLEMENTS_YES = App/Resources/FaithForm-ApplePay.entitlements
+FAITHFORM_ENTITLEMENTS = $(FAITHFORM_ENTITLEMENTS_$(FAITHFORM_ENABLE_APPLE_PAY))
+
+FAITHFORM_APPLE_PAY_MERCHANT_ID_FOR_NO =
+FAITHFORM_APPLE_PAY_MERCHANT_ID_FOR_YES = $(FAITHFORM_APPLE_PAY_MERCHANT_ID)
+FAITHFORM_APPLE_PAY_MERCHANT_ID_IN_APP = $(FAITHFORM_APPLE_PAY_MERCHANT_ID_FOR_$(FAITHFORM_ENABLE_APPLE_PAY))

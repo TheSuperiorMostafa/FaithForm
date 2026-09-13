@@ -74,13 +74,20 @@ targets:
       # provisioning rather than the capability, so it reads as a broken project.
       #
       # Push is not testable on a personal team or a simulator anyway, so nothing
-      # is lost by scoping it. Apple Pay and associated domains are absent
-      # entirely — see P12_IOS_APP_TARGET_AND_SIGNING.md.
+      # is lost by scoping it. Associated domains are absent entirely — see
+      # P12_IOS_APP_TARGET_AND_SIGNING.md.
+      #
+      # **Which** entitlements file is a switch, not a constant. Apple Pay needs
+      # `com.apple.developer.in-app-payments`, and a profile without that
+      # capability fails to sign an app that declares it. FAITHFORM_ENTITLEMENTS
+      # resolves to the plain file unless FAITHFORM_ENABLE_APPLE_PAY is YES — see
+      # Base.xcconfig, where the same switch decides whether the app is told a
+      # merchant ID, so the two cannot disagree.
       configs:
         Staging:
-          CODE_SIGN_ENTITLEMENTS: App/Resources/FaithForm.entitlements
+          CODE_SIGN_ENTITLEMENTS: $(FAITHFORM_ENTITLEMENTS)
         Release:
-          CODE_SIGN_ENTITLEMENTS: App/Resources/FaithForm.entitlements
+          CODE_SIGN_ENTITLEMENTS: $(FAITHFORM_ENTITLEMENTS)
     preBuildScripts:
       - name: Placeholder assets must be replaced
         script: '"$SRCROOT/App/Scripts/check-assets.sh"'
