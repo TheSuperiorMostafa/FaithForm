@@ -18,15 +18,28 @@ import { LEGAL_PATHS, SUPPORT_EMAIL } from "@/lib/legal/policy-versions";
  *   - The in-app request (POST /api/mobile/v1/account/requests, kind
  *     "deletion") records the request and immediately stops the account
  *     working: lib/faithform/account-lifecycle.ts `requestAccountAction` sets
- *     status `deletion_requested`, and `requireActiveAccount` refuses it.
- *   - The deletion itself is `processDeletion` in the same file. When this
- *     page was written it had no caller — no route, cron or script runs it —
- *     and it anonymises the profile but does not remove the Supabase Auth user
- *     (email and password). Until both are wired up, requests must be completed
- *     by hand within the 30 days promised below.
- *   - Retained by design (same file's header): a church's `members` row, the
- *     attendance that references it, and financial history belong to the
- *     church.
+ *     status `deletion_requested`, retires the account's devices so
+ *     notifications stop, and `requireActiveAccount` refuses it from then on.
+ *   - The deletion itself is lib/faithform/account-deletion.ts, run hourly by
+ *     the cron at /api/webhooks/accounts/deletion. It deletes the Supabase
+ *     Auth user (email and password), and the schema's foreign keys delete
+ *     everything under "What gets deleted" in the same transaction. The
+ *     request row is kept, with no link to the person (migration 0073).
+ *   - "What is kept" is the other half of those foreign keys: attendance,
+ *     check-in, People and giving records stay with the church, with the
+ *     account link removed. tests/policies/account-deletion-migration.test.ts
+ *     pins both lists against the migrations.
+ *   - One exception, stated under "If you use FaithForm to run a church": if
+ *     deleting the sign-in would also delete dashboard access or a church's
+ *     records (church_users, platform_admins, sermons, dashboard usage), the
+ *     app account and its data are deleted but the sign-in is kept, so the
+ *     church is not locked out.
+ *   - An emailed request: once the address is confirmed, queue it rather than
+ *     deleting the user in the Supabase dashboard, which skips the staff check
+ *     and would remove a church's admin or sermons along with them. In the
+ *     SQL editor, insert into visitor_account_requests (account_id, kind,
+ *     idempotency_key) the person's visitor_accounts.id, 'deletion', and any
+ *     unique key such as 'support-<date>'; the next hourly run finishes it.
  *   - The 30-day backup window assumes the Supabase plan's backup retention;
  *     confirm it.
  */
@@ -103,9 +116,9 @@ export default function AccountDeletionPage() {
         </li>
         <li>
           <strong>What we must keep.</strong> A record that you asked us to delete
-          your account, and limited information we need to prevent fraud or
-          abuse &mdash; such as a church&apos;s decision to block an account
-          &mdash; or to comply with the law.
+          your account and when we did it, which isn&apos;t connected to your
+          email address or anything else about you, and anything else the law
+          requires us to keep.
         </li>
       </ul>
 
@@ -126,6 +139,13 @@ export default function AccountDeletionPage() {
         This page is about personal FaithForm accounts. To remove a staff
         account or a church&apos;s information from FaithForm, email{" "}
         <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>.
+      </p>
+      <p>
+        If you sign in to the app with the same email address you use to help
+        run a church in FaithForm, deleting your account in the app deletes
+        everything listed above except your sign-in details, so your
+        church&apos;s FaithForm keeps working. Email us if you&apos;d like those
+        removed too.
       </p>
 
       <h2 id="more">More about your information</h2>
