@@ -6,7 +6,9 @@ plugins {
 
 android {
     namespace = "io.faithform.app.design"
-    compileSdk = 34
+    // Compiled against the same platform as `:app`, so a resource or API the
+    // app can see is one this module can see too.
+    compileSdk = 36
 
     defaultConfig {
         // 26 keeps the app on hardware a congregation plausibly still carries

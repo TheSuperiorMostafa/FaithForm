@@ -1,7 +1,7 @@
 # Single version catalog. Every module resolves from here, so an upgrade is one
 # edit and a lockable diff rather than a scavenger hunt across build files.
 [versions]
-agp = "8.7.3"
+agp = "8.13.2"
 kotlin = "2.0.21"
 coroutines = "1.9.0"
 serialization = "1.7.3"
