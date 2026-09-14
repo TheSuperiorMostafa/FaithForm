@@ -118,7 +118,11 @@ struct RootView: View {
                 }
             }
         }
-        .background(theme.palette.background)
+        // Every phase fills the screen on the page colour. `Group` takes each
+        // child's own size, so a short phase — the offline and failed screens —
+        // used to sit in a band of page colour with system white above and below.
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(theme.palette.background.ignoresSafeArea())
         .task { await model.load() }
         .onReceive(NotificationCenter.default.publisher(for: .faithformDeepLink)) { note in
             guard let url = note.userInfo?["url"] as? URL else { return }
