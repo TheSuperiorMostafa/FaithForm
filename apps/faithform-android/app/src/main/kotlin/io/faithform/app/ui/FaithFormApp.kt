@@ -13,7 +13,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material.icons.outlined.WifiOff
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -23,8 +22,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -40,6 +37,7 @@ import io.faithform.app.ui.account.DeleteAccountDialog
 import io.faithform.app.ui.account.DeletionRequestedNotice
 import io.faithform.app.ui.auth.AuthFlow
 import io.faithform.app.ui.auth.AuthViewModel
+import io.faithform.app.ui.brand.LaunchLoadingView
 import io.faithform.app.ui.discovery.EmptyState
 import io.faithform.app.ui.discovery.LocationProvider
 import io.faithform.app.ui.host.SessionScopeViewModel
@@ -122,6 +120,10 @@ fun FaithFormApp(
                     cameraPermission = cameraPermission,
                 )
             }
+        } else if (current is LaunchPhase.Loading) {
+            // Centred on the whole window, not inside the bars: that is where
+            // the system splash drew the same mark a frame earlier.
+            LaunchLoadingView()
         } else if (current is LaunchPhase.SignedOut) {
             // Edge to edge: the front door's backdrop runs behind the system
             // bars, and each auth screen pads its own content for them.
@@ -135,15 +137,7 @@ fun FaithFormApp(
         } else {
             Box(Modifier.fillMaxSize().safeDrawingPadding()) {
                 when (current) {
-                    is LaunchPhase.Loading -> Centered {
-                        CircularProgressIndicator(
-                            modifier = Modifier.semantics {
-                                contentDescription = "Loading your account"
-                            }
-                        )
-                    }
-
-                    is LaunchPhase.SignedOut -> Unit
+                    is LaunchPhase.Loading, is LaunchPhase.SignedOut -> Unit
 
                     is LaunchPhase.Onboarding -> FindChurchFlow(
                         appViewModel = viewModel,
@@ -229,14 +223,4 @@ private fun TroubleScreen(
                 .padding(top = FaithFormTokens.Spacing.xl)
         )
     }
-}
-
-@Composable
-private fun Centered(content: @Composable () -> Unit) {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally,
-        content = { content() }
-    )
 }

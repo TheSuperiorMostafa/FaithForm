@@ -4,4 +4,11 @@
          as the same object on both stores. It was brand navy while the
          foreground was a placeholder cross. -->
     <color name="ic_launcher_background">#FEFAF8</color>
+
+    <!-- The launch screen, before Compose draws anything: the tokens' page
+         background and contentPrimary, so the system splash and the first
+         frame are the same colour and the same F. values-night holds the dark
+         pair. Held equal to FaithFormTokens by LaunchScreenTest. -->
+    <color name="launch_background">#F8F7F4</color>
+    <color name="launch_mark_letter">#002D5F</color>
 </resources>

@@ -7,6 +7,9 @@ coroutines = "1.9.0"
 serialization = "1.7.3"
 compose-bom = "2024.10.01"
 activity-compose = "1.9.3"
+# The Android 12+ launch screen, back-ported to API 26: page colour and the mark
+# until the first frame, and nothing held on screen after it.
+core-splashscreen = "1.0.1"
 navigation-compose = "2.8.4"
 lifecycle = "2.8.7"
 datastore = "1.1.1"
@@ -58,6 +61,7 @@ compose-material-icons-extended = { module = "androidx.compose.material:material
 compose-foundation = { module = "androidx.compose.foundation:foundation" }
 
 activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity-compose" }
+core-splashscreen = { module = "androidx.core:core-splashscreen", version.ref = "core-splashscreen" }
 navigation-compose = { module = "androidx.navigation:navigation-compose", version.ref = "navigation-compose" }
 lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
 lifecycle-viewmodel-compose = { module = "androidx.lifecycle:lifecycle-viewmodel-compose", version.ref = "lifecycle" }
