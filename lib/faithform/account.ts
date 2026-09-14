@@ -7,6 +7,7 @@ import {
   consentSchema,
   visitorProfileSchema,
   churchSlugSchema,
+  sanitizeDisplayName,
 } from "@/lib/faithform/schemas";
 
 export type VisitorAccount = {
@@ -59,16 +60,46 @@ export async function requireUserId(supabase?: SupabaseClient): Promise<string> 
 }
 
 /**
+ * The name someone typed on the apps' sign-up screen, if they typed one.
+ *
+ * It travels as Auth user metadata because, with email confirmation on,
+ * sign-up returns no session to send a profile update with, and the
+ * confirmation link may be opened on another device entirely. Metadata is
+ * the person's own to edit, which is all the authority a display name needs,
+ * so it is treated as input: sanitized like one, and never trusted for more.
+ *
+ * A failed lookup is no name, not a failed account: the person can still set
+ * one from their profile.
+ */
+async function signUpDisplayName(
+  admin: SupabaseClient,
+  userId: string,
+): Promise<string | null> {
+  try {
+    const { data, error } = await admin.auth.admin.getUserById(userId);
+    if (error || !data?.user) return null;
+    return sanitizeDisplayName(data.user.user_metadata?.display_name);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Idempotent by construction: the unique index on user_id makes a concurrent
  * double-create collapse into one row, and the conflict path re-reads rather
  * than failing. Two devices signing in at once both end up with the same
  * account.
+ *
+ * A new row takes its display name from `defaults`, or else from the name
+ * given at sign-up. That lookup is an Auth call, so it happens only on the way
+ * to creating the row, never on the read every request makes.
  */
 export async function ensureVisitorAccount(
   userId: string,
   defaults?: { displayName?: string | null },
+  client?: SupabaseClient,
 ): Promise<VisitorAccount> {
-  const admin = createAdminClient();
+  const admin = client ?? createAdminClient();
 
   const existing = await admin
     .from("visitor_accounts")
@@ -78,11 +109,15 @@ export async function ensureVisitorAccount(
 
   if (existing.data) return mapAccount(existing.data);
 
+  const displayName =
+    sanitizeDisplayName(defaults?.displayName) ??
+    (await signUpDisplayName(admin, userId));
+
   const inserted = await admin
     .from("visitor_accounts")
     .insert({
       user_id: userId,
-      display_name: defaults?.displayName ?? null,
+      display_name: displayName,
     })
     .select(ACCOUNT_COLUMNS)
     .maybeSingle();
