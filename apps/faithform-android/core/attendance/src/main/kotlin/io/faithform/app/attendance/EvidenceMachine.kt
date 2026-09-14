@@ -256,6 +256,14 @@ data class LogicalAttempt(
      * nothing the device reports can shorten it.
      */
     val detectionId: String? = null,
+    /**
+     * The campus region the phone reported when this attempt opened.
+     *
+     * Sent with `detected` and again with `confirm`, so the server resolves
+     * and re-checks the service at that campus. An identifier the server
+     * issued in the configuration, never a position.
+     */
+    val regionId: String? = null,
 ) {
     fun isExpired(nowEpochMillis: Long): Boolean = nowEpochMillis >= expiresAtEpochMillis
 
@@ -298,12 +306,14 @@ data class LogicalAttempt(
             nowEpochMillis: Long,
             lifetimeMillis: Long = PENDING_ATTEMPT_LIFETIME_MILLIS,
             randomId: () -> String = ::newAttemptId,
+            regionId: String? = null,
         ) = LogicalAttempt(
             attemptId = randomId(),
             churchSlug = churchSlug,
             occurrenceId = occurrenceId,
             openedAtEpochMillis = nowEpochMillis,
             expiresAtEpochMillis = nowEpochMillis + lifetimeMillis,
+            regionId = regionId,
         )
 
         /**
@@ -339,11 +349,13 @@ data class QueuedSubmission(
         occurrenceId: String,
         attemptId: String? = null,
         detectionId: String? = null,
+        regionId: String? = null,
     ) = AttendanceEvidence(
         occurrenceId = occurrenceId,
         phase = kind,
         attemptId = attemptId,
         detectionId = detectionId,
+        regionId = regionId,
         observedAtEpochMillis = observedAtEpochMillis,
         accuracyMeters = accuracyMeters,
         dwellSeconds = dwellSeconds,

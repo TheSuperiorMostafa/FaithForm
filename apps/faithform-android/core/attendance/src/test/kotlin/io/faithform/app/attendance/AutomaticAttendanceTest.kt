@@ -106,7 +106,11 @@ class ScriptedSubmitter : AttendanceSubmitter {
     var occurrenceThrows: Exception? = null
     var answers: MutableList<Result<AttendanceOutcome>> = mutableListOf()
 
-    override suspend fun eligibleOccurrenceId(churchSlug: String): String? {
+    /** Every lookup, with the church and the region it named, in order. */
+    val lookups = mutableListOf<Pair<String, String?>>()
+
+    override suspend fun eligibleOccurrenceId(churchSlug: String, regionId: String?): String? {
+        lookups += churchSlug to regionId
         occurrenceThrows?.let { throw it }
         return occurrenceId
     }
@@ -117,7 +121,11 @@ class ScriptedSubmitter : AttendanceSubmitter {
     ): AttendanceOutcome {
         sent += evidence to idempotencyKey
         val answer = if (answers.size > 1) answers.removeAt(0) else answers.firstOrNull()
-        return (answer ?: Result.success(COUNTED)).getOrThrow()
+        val value = (answer ?: Result.success(COUNTED)).getOrThrow()
+        // The canned answers name "occ-1"; a real server names the occurrence
+        // it resolved, which is the one asked about unless a test says
+        // otherwise by naming a different one.
+        return if (value.occurrenceId == "occ-1") value.copy(occurrenceId = evidence.occurrenceId) else value
     }
 
     fun keys() = sent.map { it.second }
@@ -165,6 +173,11 @@ class MemoryStore : AttendanceAttemptStore {
 
     override suspend fun close(partition: CachePartition) {
         if (items.remove(partition.storageKey) != null) closes++
+    }
+
+    override suspend fun closeAll() {
+        closes += items.size
+        items.clear()
     }
 
     fun count() = items.size

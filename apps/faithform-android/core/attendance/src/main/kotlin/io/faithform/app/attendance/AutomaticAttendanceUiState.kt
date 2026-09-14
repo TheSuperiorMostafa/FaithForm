@@ -151,6 +151,12 @@ object AutomaticAttendanceResolver {
         if (!permissions.playServicesAvailable) {
             return AutomaticAttendanceStep.Blocked(AutomaticAttendanceBlocker.PlayServicesUnavailable)
         }
+
+        // Off is off. Someone who granted location for "churches near me" and
+        // never turned this on has not been blocked from anything, and must not
+        // be told they need to allow location all the time.
+        if (!settings.enabled) return AutomaticAttendanceStep.NotStarted
+
         if (!permissions.locationServicesEnabled) {
             return AutomaticAttendanceStep.Blocked(AutomaticAttendanceBlocker.LocationServicesOff)
         }

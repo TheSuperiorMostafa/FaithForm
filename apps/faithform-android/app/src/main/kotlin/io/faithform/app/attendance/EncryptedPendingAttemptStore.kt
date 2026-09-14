@@ -72,7 +72,7 @@ class EncryptedAttendanceAttemptStore(
      * would leave another account's coordinates on the device, which is exactly
      * what must not survive a sign-out.
      */
-    suspend fun closeAll() = mutex.withLock {
+    override suspend fun closeAll() = mutex.withLock {
         val editor = prefs.edit()
         for (existing in prefs.all.keys.filter { it.startsWith(PREFIX) }) {
             editor.remove(existing)

@@ -41,8 +41,17 @@ interface AttendanceSubmitter {
      * clock. The client never picks one from a cached window: a cached window
      * may be stale, and choosing locally would be the client deciding what it
      * is attending.
+     *
+     * [regionId] is the campus the phone reported, so a church with several
+     * campuses resolves the service at *that* campus. It carries no position,
+     * and this is called before any location reading is taken: outside a
+     * check-in window the answer is null, and nothing about where the phone is
+     * ever leaves it.
+     *
+     * @throws TerminalAttendanceFailure when this account may not attend here
+     *   at all — no relationship, blocked, left, or an inactive account.
      */
-    suspend fun eligibleOccurrenceId(churchSlug: String): String?
+    suspend fun eligibleOccurrenceId(churchSlug: String, regionId: String? = null): String?
 
     suspend fun submit(evidence: AttendanceEvidence, idempotencyKey: String): AttendanceOutcome
 }
@@ -79,6 +88,14 @@ interface AttendanceAttemptStore {
 
     /** Closes and purges. Called on every terminal outcome and on expiry. */
     suspend fun close(partition: CachePartition)
+
+    /**
+     * Closes every attempt in every partition.
+     *
+     * Turning the feature off and signing out must not leave another church's
+     * or another authorization version's coordinates behind.
+     */
+    suspend fun closeAll() {}
 }
 
 interface LocationSampling {
@@ -96,7 +113,16 @@ data class AutomaticAttendanceSettings(
     val enabled: Boolean = false,
     /** What the server last said its consent state was. */
     val serverConsent: String = "unset",
+    /** The church the person has selected. First among [churchSlugs]. */
     val churchSlug: String? = null,
+    /**
+     * Every church this person may be checked in at, in priority order.
+     *
+     * Consent is the account's, not a church's, so someone who belongs to two
+     * churches is watched for at both — within the platform's region limit,
+     * with the selected church first. Defaults to the one church.
+     */
+    val churchSlugs: List<String> = listOfNotNull(churchSlug),
 ) {
     /**
      * All three gates. Deliberately not [enabled] alone: an app toggle that
@@ -196,7 +222,11 @@ class AutomaticAttendanceCoordinator(
         accountId: String?,
         settings: AutomaticAttendanceSettings,
     ) {
-        if (this.partition?.storageKey != partition.storageKey || this.accountId != accountId) {
+        val previous = this.partition
+        if (previous == null ||
+            previous.copy(churchSlug = null).storageKey != partition.copy(churchSlug = null).storageKey ||
+            this.accountId != accountId
+        ) {
             // A different identity has different occurrences. Never carry the
             // suppression list across one.
             mutex.withLock {
@@ -209,7 +239,7 @@ class AutomaticAttendanceCoordinator(
         this.settings = settings
         reconciler.bind(
             partition = partition,
-            churchSlug = settings.churchSlug,
+            churchSlugs = settings.churchSlugs,
             enabled = settings.enabled && settings.serverConsent == "granted",
         )
     }
@@ -220,7 +250,7 @@ class AutomaticAttendanceCoordinator(
         val currentPartition = partition ?: return ReconcileOutcome.Idle
         reconciler.bind(
             partition = currentPartition,
-            churchSlug = settings.churchSlug,
+            churchSlugs = settings.churchSlugs,
             enabled = settings.enabled && settings.serverConsent == "granted",
         )
         return reconciler.reconcile(ReconcileTrigger.OptIn)
@@ -229,6 +259,42 @@ class AutomaticAttendanceCoordinator(
     /** The single funnel every lifecycle trigger goes through. */
     suspend fun reconcile(trigger: ReconcileTrigger): ReconcileOutcome =
         reconciler.reconcile(trigger)
+
+    /**
+     * Occurrences this device already knows were counted.
+     *
+     * Persisted by the app between processes. A geofence wake is usually a
+     * fresh process, and without this every re-registration while sitting in
+     * church would cost another round trip for an answer already given.
+     */
+    suspend fun settledOccurrenceIds(): List<String> = mutex.withLock { settledOccurrences.toList() }
+
+    /** Restores [settledOccurrenceIds] from a previous process. Bounded like the live set. */
+    suspend fun restoreSettled(occurrenceIds: Collection<String>) {
+        for (id in occurrenceIds) markSettled(id)
+    }
+
+    /** The partition an attempt at [churchSlug] lives in. */
+    private fun partitionFor(base: CachePartition, churchSlug: String): CachePartition =
+        base.copy(churchSlug = churchSlug)
+
+    /** Every church whose attempts this coordinator is responsible for. */
+    private fun attemptChurches(base: CachePartition): List<String> =
+        (settings.churchSlugs + listOfNotNull(settings.churchSlug, base.churchSlug)).distinct()
+
+    /**
+     * The open attempt at any bound church, with the partition it lives in.
+     *
+     * One at a time is the normal case: a person is in one building.
+     */
+    suspend fun openAttempt(): Pair<LogicalAttempt, CachePartition>? {
+        val base = partition ?: return null
+        for (church in attemptChurches(base)) {
+            val attemptPartition = partitionFor(base, church)
+            store.current(attemptPartition, clock())?.let { return it to attemptPartition }
+        }
+        return null
+    }
 
     /**
      * Turns the feature off and leaves nothing behind.
@@ -245,7 +311,10 @@ class AutomaticAttendanceCoordinator(
             policies.clear()
         }
         phase = EvidencePhase.Idle
-        partition?.let { store.close(it) }
+        partition?.let { base ->
+            store.close(base)
+            for (church in attemptChurches(base)) store.close(partitionFor(base, church))
+        }
         settings = settings.copy(enabled = false)
     }
 
@@ -256,12 +325,25 @@ class AutomaticAttendanceCoordinator(
      * broadcast, and a process relaunch after being killed all arrive here.
      */
     suspend fun handleRegionEntered(regionId: String): EvidencePhase {
-        val currentPartition = partition
+        val basePartition = partition
         val currentAccount = accountId
-        if (!settings.enabled || currentPartition == null || currentAccount == null) {
+        if (!settings.enabled || basePartition == null || currentAccount == null) {
             phase = EvidencePhase.Refused(EvidenceRefusal.ConsentRequired)
             return phase
         }
+
+        // A transition carries a region id and nothing else. Which church it
+        // belongs to comes from what was registered, never from the event.
+        val churchSlug = reconciler.churchFor(regionId)
+            ?: settings.churchSlug
+            ?: basePartition.churchSlug
+        if (churchSlug == null || churchSlug !in attemptChurches(basePartition)) {
+            // A region for a church this person is no longer bound to. The next
+            // reconciliation removes it; nothing is sent on its behalf.
+            phase = EvidencePhase.Refused(EvidenceRefusal.WrongChurch)
+            return phase
+        }
+        val currentPartition = partitionFor(basePartition, churchSlug)
 
         // Duplicate transitions are normal, not exceptional. Claimed inside the
         // lock, before anything suspends.
@@ -277,13 +359,24 @@ class AutomaticAttendanceCoordinator(
             // configuration. Waking is allowed; acting on it without
             // rechecking is not.
             phase = EvidencePhase.Reauthorizing(regionId)
-            val outcome = reconciler.reconcile(ReconcileTrigger.RegionEvent)
-            outcome.refusal?.let {
+            val outcome = reconciler.reconcile(ReconcileTrigger.RegionEvent, focusChurch = churchSlug)
+            outcome.refusalFor(churchSlug)?.let {
+                if (it == "configuration_unavailable") {
+                    // Offline is not a refusal. Nothing was opened, so the
+                    // caller retries the whole arrival when the network returns.
+                    phase = EvidencePhase.Retrying(null, 1, clock() + RetryPolicy.delayMillis(1))
+                    return phase
+                }
                 return fail(EvidenceRefusal.fromReconcile(it), currentPartition)
             }
+            lastConfigVersion = reconciler.configuration(churchSlug)?.configVersion ?: lastConfigVersion
 
+            val reportedRegion = regionId.takeIf { it.startsWith(REGION_ID_PREFIX) }
             val occurrenceId = try {
-                submitter.eligibleOccurrenceId(settings.churchSlug.orEmpty())
+                submitter.eligibleOccurrenceId(churchSlug, reportedRegion)
+            } catch (failure: TerminalAttendanceFailure) {
+                // Not a network problem: this account may not attend here.
+                return fail(failure.refusal, currentPartition)
             } catch (_: Exception) {
                 phase = EvidencePhase.Retrying(null, 1, clock() + RetryPolicy.delayMillis(1))
                 return phase
@@ -334,10 +427,11 @@ class AutomaticAttendanceCoordinator(
             // starting a second one with a different key.
             val attempt = store.openIfAbsent(
                 LogicalAttempt.open(
-                    churchSlug = settings.churchSlug.orEmpty(),
+                    churchSlug = churchSlug,
                     occurrenceId = occurrenceId,
                     nowEpochMillis = clock(),
                     randomId = newAttemptId,
+                    regionId = reportedRegion,
                 ),
                 currentPartition,
                 clock(),
@@ -351,7 +445,17 @@ class AutomaticAttendanceCoordinator(
         }
     }
 
-    /** Leaving before dwell completes abandons the intent. */
+    /**
+     * Leaving before the check-in completes abandons the intent.
+     *
+     * **Read from the stored attempt, not only from memory.** An exit usually
+     * arrives in a process started just for it, where the phase is `Idle`; an
+     * attempt waiting on a confirmation must still be closed, or someone who
+     * walked out would be asked whether they are at church from their car. An
+     * attempt holding a queued submission is left alone: that evidence was
+     * gathered after the dwell, while the person was there, and only the
+     * network kept it from being sent.
+     */
     suspend fun handleRegionExited(regionId: String) {
         // A verified exit is the strongest "something changed" signal there is:
         // the person actually left. Recorded for every occurrence being held,
@@ -362,15 +466,26 @@ class AutomaticAttendanceCoordinator(
             }
         }
 
+        val base = partition ?: return
+        val churchSlug = reconciler.churchFor(regionId) ?: settings.churchSlug ?: base.churchSlug
+        val churches = churchSlug?.let { listOf(it) } ?: attemptChurches(base)
+
+        var closed = false
+        for (church in churches) {
+            val attemptPartition = partitionFor(base, church)
+            val attempt = store.current(attemptPartition, clock()) ?: continue
+            if (attempt.queued == null) {
+                store.close(attemptPartition)
+                closed = true
+            }
+        }
+
         when (phase) {
             is EvidencePhase.Entered,
             is EvidencePhase.Reauthorizing,
             is EvidencePhase.AwaitingDwell,
-            -> {
-                phase = EvidencePhase.Abandoned
-                partition?.let { store.close(it) }
-            }
-            else -> Unit
+            -> phase = EvidencePhase.Abandoned
+            else -> if (closed) phase = EvidencePhase.Abandoned
         }
     }
 
@@ -397,25 +512,37 @@ class AutomaticAttendanceCoordinator(
             dwellSeconds = 0,
             observedAtEpochMillis = clock(),
             attemptId = attempt.attemptId,
+            // Which campus woke the phone, and against which configuration.
+            // The server records both on the detection and re-checks them if
+            // a confirmation names them; neither decides anything on its own.
+            regionId = attempt.regionId,
+            configVersion = lastConfigVersion,
         )
 
+        var awaiting = occurrenceId
         when (val result = send(detected, attempt, accountId, partition)) {
             is SendOutcome.Refusal -> return fail(result.reason, partition)
             SendOutcome.Transient -> return phase
             is SendOutcome.Answer -> {
                 when (result.value.outcome) {
                     "counted", "already_counted" -> return succeed(
-                        occurrenceId,
+                        result.value.occurrenceId ?: occurrenceId,
                         result.value.outcome == "already_counted",
                         partition,
+                        also = occurrenceId,
                     )
                     "pending_confirmation" -> {
+                        // The occurrence the *server* resolved. At a church
+                        // with several campuses it can differ from the one
+                        // asked about, and the confirmation must name it.
+                        awaiting = result.value.occurrenceId ?: occurrenceId
                         // **Persist when the server said we may come back.**
                         // Stored rather than held in memory because this wait
                         // spans exactly the window where the process is most
                         // likely to be killed.
                         store.update(
                             attempt.copy(
+                                occurrenceId = awaiting,
                                 confirmationNotBeforeEpochMillis =
                                     result.value.confirmationNotBeforeEpochMillis
                                         // An older server sends none; fall back
@@ -435,7 +562,7 @@ class AutomaticAttendanceCoordinator(
 
         // Nothing delays here: `confirmIfDue` runs on the next real execution
         // opportunity — an OS dwell transition, another entry, or a foreground.
-        phase = EvidencePhase.AwaitingDwell(occurrenceId, clock())
+        phase = EvidencePhase.AwaitingDwell(awaiting, clock())
         return phase
     }
 
@@ -449,10 +576,10 @@ class AutomaticAttendanceCoordinator(
      */
     suspend fun confirmIfDue(): EvidencePhase {
         if (!settings.enabled) return phase
-        val currentPartition = partition ?: return phase
+        partition ?: return phase
         accountId ?: return phase
 
-        val attempt = store.current(currentPartition, clock()) ?: return phase
+        val (attempt, _) = openAttempt() ?: return phase
         attempt.confirmationNotBeforeEpochMillis ?: return phase
 
         // Not yet. Sending now would be refused for insufficient dwell, which
@@ -489,7 +616,7 @@ class AutomaticAttendanceCoordinator(
      * `goAsync` receiver has roughly ten seconds regardless.
      */
     suspend fun confirmDwell(occurrenceId: String, dwellSeconds: Int): EvidencePhase {
-        val currentPartition = partition ?: return phase
+        val base = partition ?: return phase
         val currentAccount = accountId ?: return phase
         // **Deliberately not guarded on the in-memory phase.** After a process
         // restart the phase is `Idle` — that is the ordinary case for a
@@ -500,8 +627,18 @@ class AutomaticAttendanceCoordinator(
         // The same logical attempt the `detected` submission opened. If it has
         // gone — expired, or closed by a teardown — this confirmation has no
         // identity and must not invent one.
-        val attempt = store.current(currentPartition, clock())
-        if (attempt == null || attempt.occurrenceId != occurrenceId) {
+        var attempt: LogicalAttempt? = null
+        var currentPartition = base
+        for (church in attemptChurches(base)) {
+            val candidate = partitionFor(base, church)
+            val stored = store.current(candidate, clock()) ?: continue
+            if (stored.occurrenceId == occurrenceId) {
+                attempt = stored
+                currentPartition = candidate
+                break
+            }
+        }
+        if (attempt == null) {
             phase = EvidencePhase.Refused(EvidenceRefusal.Expired)
             return phase
         }
@@ -518,6 +655,8 @@ class AutomaticAttendanceCoordinator(
             dwellSeconds = dwellSeconds,
             observedAtEpochMillis = clock(),
             detectionId = attempt.detectionId,
+            // The same campus the detection named; the server re-checks it.
+            regionId = attempt.regionId,
         )
 
         return when (val result = send(confirm, attempt, currentAccount, currentPartition)) {
@@ -527,9 +666,10 @@ class AutomaticAttendanceCoordinator(
                 when (result.value.outcome) {
                     "counted", "already_counted" ->
                         return succeed(
-                            occurrenceId,
+                            result.value.occurrenceId ?: occurrenceId,
                             result.value.outcome == "already_counted",
                             currentPartition,
+                            also = occurrenceId,
                         )
                     // Dwell still not satisfied by the server's reckoning.
                     "pending_confirmation" ->
@@ -575,8 +715,15 @@ class AutomaticAttendanceCoordinator(
                 SendOutcome.Answer(result)
             }
         } catch (_: TransientAttendanceFailure) {
-            // Queued against the attempt, so the retry reuses this key.
-            store.update(attempt.copy(queued = QueuedSubmission.from(evidence)), partition)
+            // Queued against the attempt, so the retry reuses this key. The
+            // retry count survives, so a network that never returns ends in
+            // an honest expiry rather than an unbounded loop.
+            store.update(
+                attempt.copy(
+                    queued = QueuedSubmission.from(evidence, retries = attempt.queued?.retries ?: 0),
+                ),
+                partition,
+            )
             phase = EvidencePhase.Retrying(
                 evidence.occurrenceId, 1, clock() + RetryPolicy.delayMillis(1),
             )
@@ -596,11 +743,12 @@ class AutomaticAttendanceCoordinator(
      * recognises it rather than counting a second one.
      */
     suspend fun flushPending(): EvidencePhase {
-        val currentPartition = partition ?: return phase
+        partition ?: return phase
         val currentAccount = accountId ?: return phase
         if (!settings.enabled) return phase
 
-        val attempt = store.current(currentPartition, clock())
+        val open = openAttempt()
+        val attempt = open?.first
         if (attempt == null) {
             // The store purges an expired attempt the moment anything looks at
             // it — the coordinates are past their retention window. So "gone"
@@ -617,6 +765,7 @@ class AutomaticAttendanceCoordinator(
             return phase
         }
 
+        val currentPartition = open.second
         val queued = attempt.queued ?: return phase
 
         if (!RetryPolicy.shouldRetry(queued.retries, isTransient = true)) {
@@ -625,22 +774,48 @@ class AutomaticAttendanceCoordinator(
             return phase
         }
 
-        store.update(attempt.copy(queued = queued.withRetry()), currentPartition)
+        val retried = attempt.copy(queued = queued.withRetry())
+        store.update(retried, currentPartition)
 
         val evidence = queued.evidence(
             attempt.occurrenceId,
             attemptId = attempt.attemptId,
             detectionId = attempt.detectionId,
+            regionId = attempt.regionId,
         )
 
-        when (val result = send(evidence, attempt, currentAccount, currentPartition)) {
+        when (val result = send(evidence, retried, currentAccount, currentPartition)) {
             is SendOutcome.Answer -> {
-                if (result.value.outcome == "counted" || result.value.outcome == "already_counted") {
-                    return succeed(
-                        attempt.occurrenceId,
+                when (result.value.outcome) {
+                    "counted", "already_counted" -> return succeed(
+                        result.value.occurrenceId ?: attempt.occurrenceId,
                         result.value.outcome == "already_counted",
                         currentPartition,
+                        also = attempt.occurrenceId,
                     )
+                    "pending_confirmation" -> {
+                        // A `detected` that waited for a network is answered
+                        // exactly as it would have been at once: the server's
+                        // instant and its detection are kept, and the queued
+                        // submission is done. Dropping them here left the
+                        // attempt unconfirmable and resent the same evidence.
+                        val awaiting = result.value.occurrenceId ?: attempt.occurrenceId
+                        store.update(
+                            retried.copy(
+                                queued = null,
+                                occurrenceId = awaiting,
+                                confirmationNotBeforeEpochMillis =
+                                    result.value.confirmationNotBeforeEpochMillis
+                                        ?: retried.confirmationNotBeforeEpochMillis
+                                        ?: (clock() + FALLBACK_DWELL_MILLIS),
+                                detectionId = result.value.detectionId ?: retried.detectionId,
+                            ),
+                            currentPartition,
+                        )
+                        phase = EvidencePhase.AwaitingDwell(awaiting, clock())
+                        return phase
+                    }
+                    else -> return fail(EvidenceRefusal.Unknown, currentPartition)
                 }
             }
             is SendOutcome.Refusal -> return fail(result.reason, currentPartition)
@@ -654,11 +829,15 @@ class AutomaticAttendanceCoordinator(
         occurrenceId: String,
         alreadyCounted: Boolean,
         partition: CachePartition,
+        /** The occurrence that was asked about, when the server counted another. */
+        also: String? = null,
     ): EvidencePhase {
         phase = EvidencePhase.Counted(occurrenceId, alreadyCounted)
-        markSettled(occurrenceId)
-        mutex.withLock {
-            policies[occurrenceId] = (policies[occurrenceId] ?: AttemptPolicy()).settling()
+        for (id in listOfNotNull(also, occurrenceId).distinct()) {
+            markSettled(id)
+            mutex.withLock {
+                policies[id] = (policies[id] ?: AttemptPolicy()).settling()
+            }
         }
         store.close(partition)
         return phase
@@ -703,11 +882,27 @@ class AutomaticAttendanceCoordinator(
         store.close(partition)
 
         // A loss of authority is not just this event failing — the device has
-        // no business watching at all any more.
-        if (reason.requiresTeardown) {
+        // no business watching at all any more. Consent is the account's, so
+        // losing it stops everything; a refusal from one church, when others
+        // are still bound, only stops that church, and the reconciliation that
+        // produced it has already removed that church's regions.
+        if (reason.requiresTeardown &&
+            (reason in ACCOUNT_WIDE_REFUSALS || settings.churchSlugs.size <= 1)
+        ) {
             reconciler.teardown()
             settings = settings.copy(enabled = false)
         }
         return phase
+    }
+
+    companion object {
+        /** Every FaithForm region id starts with this; anything else is not ours to report. */
+        const val REGION_ID_PREFIX = "faithform.campus."
+
+        /** Refusals about the account rather than about one church. */
+        val ACCOUNT_WIDE_REFUSALS = setOf(
+            EvidenceRefusal.ConsentRequired,
+            EvidenceRefusal.ConsentRevoked,
+        )
     }
 }
