@@ -1,6 +1,8 @@
 import { Smartphone } from "lucide-react";
 
+import type { ActivePresentationVersion } from "@/lib/sermons/v1/presentation";
 import {
+  isPresentationShared,
   isSermonShared,
   SHARE_IN_APP_ANCHOR,
   sermonAudienceLabel,
@@ -16,12 +18,22 @@ import type { Sermon } from "@/types/sermon";
 export function SermonAppStatus({
   sermon,
   canShare,
+  presentation = null,
 }: {
   sermon: Sermon;
   canShare: boolean;
+  presentation?: ActivePresentationVersion | null;
 }) {
-  const shared = isSermonShared(sermon);
-  const audience = sermonAudienceLabel(sermon.mobile_visibility);
+  const notesShared = isSermonShared(sermon);
+  const slidesShared = Boolean(
+    presentation && isPresentationShared(presentation),
+  );
+  const shared = notesShared || slidesShared;
+  const audience = sermonAudienceLabel(
+    notesShared
+      ? sermon.mobile_visibility
+      : (presentation?.mobile_visibility ?? null),
+  );
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-card px-4 py-3 text-sm">

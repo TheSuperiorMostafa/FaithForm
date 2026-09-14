@@ -143,6 +143,11 @@ struct WatchTabView: View {
 
 // MARK: - Detail hosts
 
+private enum OnceModelLoading {
+    case detail
+    case slides
+}
+
 /// Builds a detail model once, the first time its screen appears.
 ///
 /// A model created in a view's initializer is created again on every render of
@@ -152,6 +157,7 @@ struct WatchTabView: View {
 private struct OnceModel<Model: AnyObject, Content: View>: View {
     let make: @MainActor () -> Model
     var onCreate: (@MainActor (Model) async -> Void)? = nil
+    var loading: OnceModelLoading = .detail
     @ViewBuilder let content: (Model) -> Content
 
     @State private var model: Model?
@@ -160,7 +166,20 @@ private struct OnceModel<Model: AnyObject, Content: View>: View {
         if let model {
             content(model)
         } else {
-            Color.clear.task {
+            // Same skeleton the destination will show while it fetches, so
+            // tapping a sermon is not a blank flash then a spinner.
+            Group {
+                switch loading {
+                case .detail:
+                    DetailSkeleton()
+                        .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
+                        .padding(.vertical, FaithFormTokens.Spacing.xl)
+                case .slides:
+                    SlideSkeleton()
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .task {
                 let made = make()
                 await onCreate?(made)
                 model = made
@@ -313,7 +332,10 @@ struct PresentationScreen: View {
     let presentationId: String
 
     var body: some View {
-        OnceModel(make: { features.presentationDetail(presentationId: presentationId) }) { model in
+        OnceModel(
+            make: { features.presentationDetail(presentationId: presentationId) },
+            loading: .slides
+        ) { model in
             PresentationViewer(model: model)
         }
     }

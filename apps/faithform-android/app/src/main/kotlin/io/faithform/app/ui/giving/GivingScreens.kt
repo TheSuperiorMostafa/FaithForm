@@ -32,6 +32,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
 import io.faithform.app.R
 import io.faithform.app.design.FaithFormTokens
+import io.faithform.app.ui.discovery.ContentSkeleton
 import io.faithform.app.design.LocalFaithFormTheme
 import io.faithform.app.giving.AmountProblem
 import io.faithform.app.giving.DonationPhase
@@ -70,7 +71,7 @@ fun GivingScreen(
 ) {
     when (val phase = state.phase) {
         GivingListPhase.Idle, GivingListPhase.Loading ->
-            Centered(modifier) { CircularProgressIndicator() }
+            ContentSkeleton(modifier = modifier.padding(FaithFormTokens.Spacing.lg))
 
         // The same answer a blocked visitor gets everywhere. Nothing about
         // giving, because there is nothing about this church to say.
@@ -442,7 +443,7 @@ private fun failureMessage(reason: GivingFailure): Int = when (reason) {
 @Composable
 fun GivingHistoryScreen(state: GivingScreenState, modifier: Modifier = Modifier) {
     if (state.historyLoading && state.history.isEmpty()) {
-        Centered(modifier) { CircularProgressIndicator() }
+        ContentSkeleton(modifier = modifier.padding(FaithFormTokens.Spacing.lg))
         return
     }
     if (state.history.isEmpty()) {

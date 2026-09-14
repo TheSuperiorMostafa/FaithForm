@@ -159,3 +159,21 @@ export function slidesShareReadiness(
 ): SermonShareReadiness {
   return presentationShareReadiness(sermon);
 }
+
+/**
+ * Notes and slides share as one action on the dashboard. Either being ready is
+ * enough to enable Share; the button then publishes whichever half can go out.
+ */
+export function appShareReadiness(
+  sermon: Parameters<typeof presentationShareReadiness>[0],
+): SermonShareReadiness {
+  const notes = sermonShareReadiness(sermon);
+  const slides = presentationShareReadiness(sermon);
+  if (notes.ready || slides.ready) return { ready: true };
+  return {
+    ready: false,
+    title: "Finish the lesson first",
+    message:
+      "Members see notes and slides together. Give the sermon a title and at least one scripture passage or lesson point.",
+  };
+}

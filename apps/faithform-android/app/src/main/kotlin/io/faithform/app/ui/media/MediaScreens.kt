@@ -1,7 +1,6 @@
 package io.faithform.app.ui.media
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,7 +19,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -28,6 +26,9 @@ import androidx.compose.ui.unit.dp
 import io.faithform.app.R
 import io.faithform.app.design.FaithFormTokens
 import io.faithform.app.ui.components.FaithFormSearchField
+import io.faithform.app.ui.discovery.ContentSkeleton
+import io.faithform.app.ui.discovery.DetailSkeleton
+import io.faithform.app.ui.discovery.SkeletonCard
 import io.faithform.app.media.MediaArchiveCard
 import io.faithform.app.media.MediaDetailState
 import io.faithform.app.media.MediaLiveCard
@@ -60,7 +61,7 @@ fun MediaScreen(
     ) {
         when (state.phase) {
             is MediaListPhase.Idle, is MediaListPhase.Loading -> item {
-                Loading()
+                ContentSkeleton()
             }
 
             is MediaListPhase.Blocked -> item {
@@ -139,7 +140,7 @@ fun MediaScreen(
                     }
                 }
 
-                if (state.isLoadingMore) item { Loading() }
+                if (state.isLoadingMore) item { SkeletonCard() }
             }
         }
     }
@@ -276,7 +277,7 @@ fun MediaDetailScreen(
                 }
             }
 
-            else -> Loading()
+            else -> DetailSkeleton()
         }
     }
 }
@@ -293,17 +294,6 @@ internal fun formatDuration(seconds: Int): String {
     val hours = seconds / 3600
     val minutes = (seconds % 3600) / 60
     return if (hours > 0) "${hours}h ${minutes}m" else "${maxOf(1, minutes)}m"
-}
-
-@Composable
-private fun Loading() {
-    val label = stringResource(R.string.media_loading)
-    Box(
-        modifier = Modifier.fillMaxWidth().clearAndSetSemantics { contentDescription = label },
-        contentAlignment = Alignment.Center,
-    ) {
-        CircularProgressIndicator()
-    }
 }
 
 @Composable

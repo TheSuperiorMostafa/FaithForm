@@ -107,7 +107,7 @@ public struct MediaArchiveList: View {
             VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
                 switch model.phase {
                 case .idle, .loading:
-                    ProgressView().accessibilityLabel(L.mediaLoading)
+                    ContentSkeleton()
 
                 case .blocked:
                     MediaMessage(
@@ -165,7 +165,7 @@ public struct MediaArchiveList: View {
                         }
 
                         if model.isLoadingMore {
-                            ProgressView().accessibilityLabel(L.mediaLoading)
+                            SkeletonCard()
                         }
                     }
                 }
@@ -236,7 +236,7 @@ public struct MediaDetailScreen: View {
             VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
                 switch model.phase {
                 case .loading:
-                    ProgressView().accessibilityLabel(L.mediaLoading)
+                    DetailSkeleton()
 
                 case .unavailable:
                     MediaMessage(

@@ -52,8 +52,7 @@ public struct GivingHomeView: View {
     public var body: some View {
         switch phase {
         case .idle, .loading:
-            ProgressView(L.givingLoading)
-                .frame(maxWidth: .infinity)
+            ContentSkeleton()
                 .padding(FaithFormTokens.Spacing.xl)
 
         case .blocked:
@@ -514,8 +513,7 @@ public struct GivingHistoryView: View {
 
     public var body: some View {
         if isLoading && items.isEmpty {
-            ProgressView(L.givingLoading)
-                .frame(maxWidth: .infinity)
+            ContentSkeleton()
                 .padding(FaithFormTokens.Spacing.xl)
         } else if items.isEmpty {
             EmptyStateView(title: L.givingHistoryTitle, explanation: L.givingHistoryEmpty, symbol: "heart")

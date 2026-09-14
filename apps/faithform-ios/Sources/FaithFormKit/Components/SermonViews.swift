@@ -32,7 +32,7 @@ public struct SermonListView: View {
             LazyVStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
                 switch model.phase {
                 case .idle, .loading:
-                    ProgressView().accessibilityLabel(L.mediaLoading)
+                    ContentSkeleton()
 
                 case .blocked:
                     // The whole list refused. Not "the church removed it" —
@@ -108,7 +108,7 @@ public struct SermonListView: View {
                         }
 
                         if model.isLoadingMore {
-                            ProgressView().accessibilityLabel(L.mediaLoading)
+                            SkeletonCard()
                         } else if model.loadMoreFailed {
                             SermonLoadMoreRetry {
                                 Task { await model.retryLoadMore() }
@@ -252,7 +252,7 @@ public struct SermonDetailView: View {
             VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
                 switch model.phase {
                 case .loading:
-                    ProgressView().accessibilityLabel(L.mediaLoading)
+                    DetailSkeleton()
 
                 case .unavailable:
                     SermonMessage(

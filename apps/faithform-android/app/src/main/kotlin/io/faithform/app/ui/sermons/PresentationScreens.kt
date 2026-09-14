@@ -15,7 +15,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -48,6 +47,9 @@ import io.faithform.app.sermons.PresentationDetailPhase
 import io.faithform.app.sermons.PresentationListPhase
 import io.faithform.app.sermons.PresentationScreenState
 import io.faithform.app.ui.components.FaithFormSearchField
+import io.faithform.app.ui.discovery.ContentSkeleton
+import io.faithform.app.ui.discovery.SkeletonCard
+import io.faithform.app.ui.discovery.SlideSkeleton
 
 /**
  * Slide-deck list and full-screen pager, mirroring iOS `PresentationListView`
@@ -71,7 +73,7 @@ fun PresentationListScreen(
 
     when (val phase = state.phase) {
         is PresentationListPhase.Idle, is PresentationListPhase.Loading ->
-            CircularProgressIndicator(modifier = Modifier.semantics {})
+            ContentSkeleton(modifier = modifier.padding(FaithFormTokens.Spacing.lg))
 
         is PresentationListPhase.Blocked ->
             PresentationMessage(
@@ -167,14 +169,7 @@ fun PresentationListScreen(
 
                         if (state.isLoadingMore) {
                             item(key = "loading-more") {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(FaithFormTokens.Spacing.md),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    CircularProgressIndicator()
-                                }
+                                SkeletonCard()
                             }
                         } else if (state.showsLoadMoreRetry) {
                             item(key = "load-more-retry") {
@@ -240,10 +235,7 @@ fun PresentationDetailScreen(
     modifier: Modifier = Modifier,
 ) {
     when (phase) {
-        is PresentationDetailPhase.Loading ->
-            Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
+        is PresentationDetailPhase.Loading -> SlideSkeleton(modifier)
 
         is PresentationDetailPhase.Unavailable ->
             PresentationMessage(

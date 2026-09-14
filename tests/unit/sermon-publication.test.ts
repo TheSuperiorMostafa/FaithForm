@@ -10,6 +10,7 @@ import {
   unpublishSermonFromFaithForm,
 } from "@/lib/sermons/v1/publication";
 import {
+  appShareReadiness,
   isSermonShared,
   sermonAudienceLabel,
   sermonShareReadiness,
@@ -367,4 +368,25 @@ test("share-rules stay browser-safe so the dashboard can import them", () => {
   const source = readFileSync("lib/sermons/v1/share-rules.ts", "utf8");
   assert.doesNotMatch(source, /from ["']node:crypto["']/);
   assert.doesNotMatch(source, /from ["']@\/lib\/sermons\/v1\/presentation-manifest["']/);
+});
+
+test("notes or slides being ready is enough to share the sermon in the app", () => {
+  assert.equal(
+    appShareReadiness({ title: "Grace", scripture_refs: ["Luke 15"], outline: null }).ready,
+    true,
+  );
+  assert.equal(
+    appShareReadiness({ title: "", scripture_refs: [], outline: null }).ready,
+    false,
+  );
+});
+
+test("the share card publishes notes and slides together", () => {
+  const source = readFileSync("components/sermon-builder/share-in-app-card.tsx", "utf8");
+  assert.match(source, /shareSermonInAppAction/);
+  assert.match(source, /sharePresentationInAppAction/);
+  assert.doesNotMatch(source, />Share notes</);
+  assert.doesNotMatch(source, /Publish slides to app/);
+  assert.doesNotMatch(source, /notes-audience/);
+  assert.doesNotMatch(source, /slides-audience/);
 });

@@ -5,7 +5,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -20,7 +19,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -49,6 +47,9 @@ import io.faithform.app.sermons.SermonScreenState
 import io.faithform.app.sermons.preachedDate
 import io.faithform.app.sermons.sermonMonthSections
 import io.faithform.app.ui.components.FaithFormSearchField
+import io.faithform.app.ui.discovery.ContentSkeleton
+import io.faithform.app.ui.discovery.DetailSkeleton
+import io.faithform.app.ui.discovery.SkeletonCard
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
@@ -82,8 +83,8 @@ fun SermonListScreen(
 
     when (val phase = state.phase) {
         is SermonListPhase.Idle, is SermonListPhase.Loading ->
-            CircularProgressIndicator(
-                modifier = Modifier.semantics {},
+            ContentSkeleton(
+                modifier = modifier.padding(FaithFormTokens.Spacing.lg),
             )
 
         // The church is not available to this account. Not "removed": that is
@@ -200,16 +201,7 @@ fun SermonListScreen(
 
                         if (state.isLoadingMore) {
                             item(key = "loading-more") {
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(FaithFormTokens.Spacing.md),
-                                    contentAlignment = Alignment.Center,
-                                ) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(FaithFormTokens.IconSize.sizeLarge),
-                                    )
-                                }
+                                SkeletonCard()
                             }
                         }
 
@@ -368,7 +360,8 @@ private fun rememberSermonDateFormats(): SermonDateFormats {
 @Composable
 fun SermonDetailScreen(phase: SermonDetailPhase, onRetry: () -> Unit) {
     when (phase) {
-        is SermonDetailPhase.Loading -> CircularProgressIndicator()
+        is SermonDetailPhase.Loading ->
+            DetailSkeleton(modifier = Modifier.padding(FaithFormTokens.Spacing.lg))
 
         is SermonDetailPhase.Unavailable ->
             SermonMessage(

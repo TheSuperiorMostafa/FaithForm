@@ -80,7 +80,11 @@ export default async function SermonEditorPage({
       </Link>
       {featuresEnabled && (
         <div className="mx-auto w-full max-w-3xl">
-          <SermonAppStatus sermon={sermon} canShare={canShare} />
+          <SermonAppStatus
+            sermon={sermon}
+            canShare={canShare}
+            presentation={presentation}
+          />
         </div>
       )}
       {isSimple ? (

@@ -25,7 +25,7 @@ public struct PresentationListView: View {
             LazyVStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
                 switch model.phase {
                 case .idle, .loading:
-                    ProgressView().accessibilityLabel(L.mediaLoading)
+                    ContentSkeleton()
 
                 case .blocked:
                     SermonMessage(
@@ -87,7 +87,7 @@ public struct PresentationListView: View {
                         }
 
                         if model.isLoadingMore {
-                            ProgressView().accessibilityLabel(L.mediaLoading)
+                            SkeletonCard()
                         } else if model.loadMoreFailed {
                             SermonLoadMoreRetry {
                                 Task { await model.retryLoadMore() }
@@ -155,9 +155,7 @@ public struct PresentationViewer: View {
         Group {
             switch model.phase {
             case .loading:
-                ProgressView()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .accessibilityLabel(L.mediaLoading)
+                SlideSkeleton()
 
             case .unavailable:
                 SermonMessage(
