@@ -97,10 +97,10 @@ fun FaithFormApp(
     // (loading, offline) leave the binding alone, so a retry does not throw
     // away a gift that is waiting for the server.
     when (current) {
-        is LaunchPhase.SignedOut -> remember(current) { sessionScope.bindTo(null) }
+        is LaunchPhase.SignedOut -> remember(current) { sessionScope.bindTo(null); current }
         is LaunchPhase.Ready -> {
             val key = viewModel.partition(null)?.let { "${it.accountId}|${it.authorizationVersion}" }
-            remember(key) { sessionScope.bindTo(key) }
+            remember(key) { sessionScope.bindTo(key); key }
         }
         else -> Unit
     }

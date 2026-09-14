@@ -1,12 +1,14 @@
 package io.faithform.app.media
 
 import android.content.Context
+import androidx.annotation.OptIn
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource
@@ -51,6 +53,11 @@ import kotlinx.coroutines.withContext
  * `PlaybackException` onto a `PlayerFailure`, is exercised through
  * [mapPlaybackError] by a Robolectric test.
  */
+// Media3 marks the data-source and media-source factory configuration used
+// here as unstable API. They are the documented way to attach request headers
+// and a data source, the version is pinned in the catalog, and a signature
+// change fails this file's compilation rather than behaviour at runtime.
+@OptIn(UnstableApi::class)
 class Media3PlayerAdapter(
     context: Context,
     /**
