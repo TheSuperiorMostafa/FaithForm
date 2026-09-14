@@ -147,10 +147,21 @@
             1.1, and there is no usage string to add for it anyway.
     -->
 
+    <!--
+        The launch screen is the loading screen's first frame: the same ground
+        and the same mark, at the same size and in the same place, so launch
+        hands over to `LaunchLoadingView` with nothing visibly changing. It used
+        to be a flash of AccentColor followed by a large spinner on a different
+        colour, which read as two separate loading screens.
+    -->
     <key>UILaunchScreen</key>
     <dict>
         <key>UIColorName</key>
-        <string>AccentColor</string>
+        <string>LaunchBackground</string>
+        <key>UIImageName</key>
+        <string>LaunchMark</string>
+        <key>UIImageRespectsSafeAreaInsets</key>
+        <false/>
     </dict>
     <key>UIApplicationSceneManifest</key>
     <dict>

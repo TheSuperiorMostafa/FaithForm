@@ -56,10 +56,7 @@ struct RootView: View {
         Group {
             switch model.state.phase {
             case .loading:
-                ProgressView()
-                    .controlSize(.large)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .accessibilityLabel(Text(L.loadingAccount))
+                LaunchLoadingView()
 
             case .signedOut:
                 // The front door: create an account, sign in, or recover a
