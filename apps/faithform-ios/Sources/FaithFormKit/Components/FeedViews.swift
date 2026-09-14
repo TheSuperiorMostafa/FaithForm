@@ -187,23 +187,31 @@ public struct HomeFeedView: View {
     private let churchName: String
     private let churchSlug: String
     private let onOpenItem: @MainActor (FeedItem) -> Void
+    /// Nil when this church's sermon notes are not reachable, and then no door
+    /// is drawn.
+    private let onOpenSermonNotes: (@MainActor () -> Void)?
 
     public init(
         model: FeedModel,
         churchName: String,
         churchSlug: String,
-        onOpenItem: @escaping @MainActor (FeedItem) -> Void
+        onOpenItem: @escaping @MainActor (FeedItem) -> Void,
+        onOpenSermonNotes: (@MainActor () -> Void)? = nil
     ) {
         self.model = model
         self.churchName = churchName
         self.churchSlug = churchSlug
         self.onOpenItem = onOpenItem
+        self.onOpenSermonNotes = onOpenSermonNotes
     }
 
     public var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
                 header
+                if let onOpenSermonNotes {
+                    SermonNotesEntryCard(action: onOpenSermonNotes)
+                }
                 content
             }
             .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)

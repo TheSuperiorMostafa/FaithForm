@@ -550,6 +550,17 @@ public enum L {
     public static var sermonsRetry: String {
         t("sermons_retry", "Try again")
     }
+    /// The list itself refused (blocked, or a church this account cannot see).
+    /// Not "the church removed it": that is only ever true of one sermon.
+    public static var sermonsBlockedBody: String {
+        t("sermons_blocked_body", "You can't read this church's sermon notes right now.")
+    }
+    public static var sermonsLoadMoreFailed: String {
+        t("sermons_load_more_failed", "More sermon notes couldn't load.")
+    }
+    public static var sermonsHomeEntryBody: String {
+        t("sermons_home_entry_body", "Outlines and discussion questions from past sermons.")
+    }
     public static var mediaPlay: String {
         t("media_play", "Play")
     }

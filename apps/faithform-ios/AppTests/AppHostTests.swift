@@ -142,6 +142,13 @@ struct AppCompositionTests {
         #expect(RootModel.tab(for: .sermonArchive(churchSlug: "grace")) == .watch)
     }
 
+    @Test("Home's sermon-notes card follows the same link a sermons URL does")
+    func homeSermonsEntry() throws {
+        let link = try #require(WatchTabView.sermonsLink(churchSlug: "grace"))
+        #expect(DeepLinkParser.parse(link) == .sermonArchive(churchSlug: "grace"))
+        #expect(RootModel.tab(for: .sermonArchive(churchSlug: "grace")) == .watch)
+    }
+
     @Test("the tab bar never needs a More tab")
     func atMostFiveTabs() {
         // An iPhone tab bar shows five. A sixth folds the last two into "More",

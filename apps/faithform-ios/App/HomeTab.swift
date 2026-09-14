@@ -73,7 +73,9 @@ struct HomeTabView: View {
                 model: features.feed,
                 churchName: church.churchName,
                 churchSlug: church.churchSlug,
-                onOpenItem: { path.append(.announcement($0)) }
+                onOpenItem: { path.append(.announcement($0)) },
+                // Notes otherwise hide behind Watch's segmented control.
+                onOpenSermonNotes: sermonNotesAction(churchSlug: church.churchSlug)
             )
             // Keyed by the container, so a church switch starts this church's
             // load rather than finishing the last one's.
@@ -95,6 +97,16 @@ struct HomeTabView: View {
             }
             .navigationTitle(L.homeTitle)
         }
+    }
+
+    /// Home's door to sermon notes: nil (no card) unless the registry allows
+    /// them for this church, and then the same link a `…/sermons` URL follows.
+    private func sermonNotesAction(churchSlug: String) -> (@MainActor () -> Void)? {
+        guard root.isAllowed(.sermonArchive(churchSlug: churchSlug)),
+              let link = WatchTabView.sermonsLink(churchSlug: churchSlug)
+        else { return nil }
+        let root = root
+        return { root.open(link) }
     }
 }
 

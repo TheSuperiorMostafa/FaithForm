@@ -102,6 +102,14 @@ struct WatchTabView: View {
         case .sermons: return showsSermons || !showsMedia ? .sermons : .media
         }
     }
+
+    /// The link Home's "Sermon notes" card follows.
+    ///
+    /// Through `RootModel.open` rather than setting the tab by hand, so the card
+    /// lands exactly where the link does — same registry answer, same section.
+    nonisolated static func sermonsLink(churchSlug: String) -> URL? {
+        URL(string: "\(DeepLinkParser.scheme)://church/\(churchSlug)/sermons")
+    }
 }
 
 // MARK: - Detail hosts
