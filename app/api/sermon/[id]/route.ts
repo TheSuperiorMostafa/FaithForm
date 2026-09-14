@@ -7,6 +7,7 @@ import {
 } from "@/lib/queries/sermons";
 import { createClient } from "@/lib/supabase/server";
 import { featureAccessDenied } from "@/lib/features/guard";
+import { parseSermonEditorPatch } from "@/lib/sermon-builder/sermon-patch";
 
 export async function PATCH(
   request: Request,
@@ -23,8 +24,12 @@ export async function PATCH(
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
 
-    const body = await request.json();
-    const updated = await updateSermon(id, body);
+    const body = await request.json().catch(() => null);
+    const parsed = parseSermonEditorPatch(body);
+    if (!parsed.ok) {
+      return NextResponse.json({ error: parsed.error }, { status: 400 });
+    }
+    const updated = await updateSermon(id, parsed.patch);
     return NextResponse.json({ sermon: updated });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Update failed";

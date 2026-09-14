@@ -8,6 +8,7 @@ import {
   getChurchAISettings,
   saveAsset,
   updateSermon,
+  verifySeriesAccess,
   verifySermonAccess,
 } from "@/lib/queries/sermons";
 import { createClient } from "@/lib/supabase/server";
@@ -90,6 +91,14 @@ export async function POST(request: Request) {
         title: title ?? undefined,
       });
     } else {
+      // A series id from the body is only a claim. The app shows a sermon's
+      // series title, so one from another church must not be attachable.
+      if (series_id) {
+        const series = await verifySeriesAccess(createClient(), series_id, auth.churchId);
+        if (!series) {
+          return NextResponse.json({ error: "Series not found" }, { status: 404 });
+        }
+      }
       sermon = await createSermon({
         churchId: auth.churchId,
         userId: auth.userId,
