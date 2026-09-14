@@ -91,7 +91,14 @@ export const campusSchema = z
     latitude: z.coerce.number().min(-90).max(90).optional().nullable(),
     longitude: z.coerce.number().min(-180).max(180).optional().nullable(),
     timezone: z.string().trim().min(1).max(64),
-    geofenceRadiusM: z.coerce.number().int().min(25).max(2000).default(150),
+    // The database holds the same bound (migration 0074). Below 50 m a region is
+    // inside GPS noise; above 500 m it reaches the neighbours.
+    geofenceRadiusM: z.coerce
+      .number()
+      .int()
+      .min(50, "Use a check-in radius of at least 50 metres.")
+      .max(500, "Use a check-in radius of at most 500 metres.")
+      .default(150),
     isActive: z.boolean().default(true),
     isPublic: z.boolean().default(true),
     isPrimary: z.boolean().default(false),

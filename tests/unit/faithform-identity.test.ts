@@ -174,22 +174,25 @@ test("out-of-range coordinates are rejected", () => {
 });
 
 test("geofence radius stays inside a sane band", () => {
-  assert.equal(
-    campusSchema.safeParse({ ...validCampus, geofenceRadiusM: 10 }).success,
-    false,
-  );
-  assert.equal(
-    campusSchema.safeParse({ ...validCampus, geofenceRadiusM: 5000 }).success,
-    false,
-  );
-  assert.equal(
-    campusSchema.safeParse({ ...validCampus, geofenceRadiusM: 25 }).success,
-    true,
-  );
-  assert.equal(
-    campusSchema.safeParse({ ...validCampus, geofenceRadiusM: 2000 }).success,
-    true,
-  );
+  // 50 to 500 m since migration 0074. Below 50 m a region sits inside ordinary
+  // GPS noise and fires unreliably; above 500 m it takes in the neighbours.
+  for (const [radius, accepted] of [
+    [10, false],
+    [25, false],
+    [49, false],
+    [50, true],
+    [150, true],
+    [500, true],
+    [501, false],
+    [2000, false],
+    [5000, false],
+  ] as const) {
+    assert.equal(
+      campusSchema.safeParse({ ...validCampus, geofenceRadiusM: radius }).success,
+      accepted,
+      `radius ${radius}`,
+    );
+  }
 });
 
 test("timezones are validated as real IANA zones, including DST-relevant ones", () => {

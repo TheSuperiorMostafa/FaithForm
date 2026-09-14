@@ -12,6 +12,7 @@ import {
   type Campus,
 } from "@/lib/faithform/campuses";
 import { updateDiscoverySettings } from "@/lib/faithform/discovery";
+import { syncChurchOccurrencesAfterChange } from "@/lib/attendance/v2/occurrences";
 import {
   issueInvitation,
   listInvitations,
@@ -67,6 +68,9 @@ export async function saveCampus(input: {
     const campus = input.campusId
       ? await updateCampus(churchId, input.campusId, input.values)
       : await createCampus(churchId, input.values);
+    // A campus's position, radius, time zone and main-campus flag are all part
+    // of how its upcoming services are judged.
+    await syncChurchOccurrencesAfterChange(churchId);
     revalidateSettings();
     return { ok: true, data: campus };
   } catch (error) {
@@ -80,6 +84,7 @@ export async function retireCampus(
   try {
     const { churchId } = await requireChurchAdmin();
     await deactivateCampus(churchId, campusId);
+    await syncChurchOccurrencesAfterChange(churchId);
     revalidateSettings();
     return { ok: true, data: null };
   } catch (error) {
