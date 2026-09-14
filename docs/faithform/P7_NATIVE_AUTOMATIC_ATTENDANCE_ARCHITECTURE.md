@@ -444,6 +444,51 @@ a church actually looks at. `sum(af.n)` instead. Additive `create or replace`;
 Found by an executable test, not by reading. The shape looks entirely
 reasonable.
 
+### Migration `0074`: a church can actually set it up
+
+Before this, no church using only the dashboard could get anyone counted
+automatically:
+
+| Defect | Fix |
+|---|---|
+| Service times saved from the website carry no campus, so every occurrence snapshotted **no position** and every attempt banded `unknown` | `attendance_effective_campus`: a church-wide service is held at the main campus (or the only one) |
+| Occurrences are generated 60 days ahead, so turning automatic check-in on, setting a location or widening the window **did nothing for up to two months** | `refresh_upcoming_service_occurrences` re-derives every occurrence whose check-in **has not opened**. One that has opened keeps its snapshot, per P6 |
+| A moved service time left its old occurrences beside the new ones; a deleted one left them scheduled | The same refresh retires them: deleted if unreferenced, else `cancelled` / `schedule_changed` |
+| Delete, re-add, delete of the same service time failed on `service_occurrences_manual_idx` | Schedule orphans leave that index, and the generator re-attaches them |
+| The generation cron processed the same first 25 churches forever | Rotates by id through every church, refreshing before generating |
+| Detections and check-in artifacts were never purged | The daily cleanup cron calls both purges |
+
+The radius is bounded **50–500 m** (was 25–2000), existing rows clamped. Setup
+lives at `/dashboard/attendance/setup`; every change is audited in
+`attendance_setup_events` and immediately refreshes upcoming occurrences.
+
+### The attempt now also checks, server-side
+
+- **Live switch.** A `geofence` attempt is refused `source_disabled` when the
+  church-level policy or the platform Attendance feature is off *now*, whatever
+  the snapshot says. Turning it off stops check-ins at once; turning it on
+  applies from the next occurrence whose check-in has not opened.
+- **Throttle.** 60 geofence submissions per account per 10 minutes, before any
+  read: `rejected` / `attempt_throttled` (mobile code `rate_limited`). The client
+  policy cannot reach it.
+- **Region.** When `regionId` (`faithform.campus.<uuid>`) names another campus
+  of the same church that has an open occurrence, the attempt lands there.
+  `GET /occurrence?regionId=` does the same lookup. The band is still computed
+  from that occurrence's own snapshot.
+- **Active account and relationship.** `/occurrence` and `/capability` need an
+  active account with a non-blocked, non-left relationship (`not_found`
+  otherwise). `/capability` reports `geofenceEnabled` from snapshot **and** live
+  switch.
+- **Outcome.** A replayed attempt the cleanup or a consent withdrawal marked
+  `expired` is returned as `rejected`, never as an outcome outside the contract.
+  `countedAt` is the fact's own instant.
+- **Consent withdrawal** (`denied`/`revoked`) deletes the account's detections
+  and closes its pending geofence attempts (`expired` / `consent_revoked`).
+  Counted facts are untouched. The response's `authorizationVersion` is the
+  post-bump value.
+
+No contract shape changed.
+
 ## Permission and consent are independent
 
 Both required, neither implies the other.
