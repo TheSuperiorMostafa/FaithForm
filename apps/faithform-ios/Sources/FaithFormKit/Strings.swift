@@ -30,10 +30,7 @@ public enum L {
     // MARK: - Onboarding
     public static var welcomeTitle: String { t("welcome_title", "Join your church") }
     public static var welcomeBody: String {
-        t(
-            "welcome_body",
-            "Start with the link your church sent you. Searching is available when a church lists itself."
-        )
+        t("welcome_body", "Start with the link your church sent you. Searching is available when a church lists itself.")
     }
     public static var findAChurch: String { t("find_a_church", "Find your church") }
     public static var haveInvitation: String { t("have_invitation", "I have a link") }
@@ -83,19 +80,13 @@ public enum L {
         t("join_pending_home_title", "Waiting for your church")
     }
     public static var joinPendingHomeBody: String {
-        t(
-            "join_pending_home_body",
-            "Your request to join is with the church. Someone on staff needs to accept you before you become a member in the app. You can still see what they publish for people who have added them."
-        )
+        t("join_pending_home_body", "Your request to join is with the church. Someone on staff needs to accept you before you become a member in the app. You can still see what they publish for people who have added them.")
     }
     public static var stateJoined: String { t("state_joined", "Member") }
     public static var stateLeft: String { t("state_left", "Not added") }
     public static var stateBlocked: String { t("state_blocked", "Unavailable") }
     public static var pendingExplainer: String {
-        t(
-            "pending_explainer",
-            "Your request is with the church. Waiting for someone on staff to accept you. You can still see what they publish for people who have added them."
-        )
+        t("pending_explainer", "Your request is with the church. Waiting for someone on staff to accept you. You can still see what they publish for people who have added them.")
     }
     public static var inviteOnlyExplainer: String {
         t("invite_only_explainer", "This church joins by invitation.")
@@ -650,6 +641,9 @@ public enum L {
     }
     public static var presentationsUnavailableBody: String {
         t("presentations_unavailable_body", "The church removed them. Nothing you did caused this.")
+    }
+    public static var presentationsLoadMoreFailed: String {
+        t("presentations_load_more_failed", "More slides couldn't load.")
     }
     public static var messagesNotesSegment: String {
         t("messages_notes_segment", "Notes")

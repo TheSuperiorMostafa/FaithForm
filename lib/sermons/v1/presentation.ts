@@ -7,8 +7,6 @@ import { resolveNumberedPassage } from "@/lib/sermon/passages";
 import {
   derivePresentationManifest,
   hashPresentationManifest,
-  isPresentationShared,
-  presentationShareReadiness,
   snapshotTheme,
   type PresentationManifest,
   type PresentationScripturePassage,
@@ -17,7 +15,11 @@ import {
   type SimplePassageInput,
 } from "@/lib/sermons/v1/presentation-manifest";
 import { humanPublicationError } from "@/lib/sermons/v1/publication";
-import type { SermonAudience } from "@/lib/sermons/v1/share-rules";
+import {
+  isPresentationShared,
+  presentationShareReadiness,
+  type SermonAudience,
+} from "@/lib/sermons/v1/share-rules";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Sermon } from "@/types/sermon";
 

@@ -362,3 +362,9 @@ test("shared means visible, first published, and not taken down", () => {
   assert.equal(isSermonShared({ mobile_visibility: "members", mobile_published_at: "x", mobile_unpublished_at: "y" }), false);
   assert.equal(isSermonShared({}), false);
 });
+
+test("share-rules stay browser-safe so the dashboard can import them", () => {
+  const source = readFileSync("lib/sermons/v1/share-rules.ts", "utf8");
+  assert.doesNotMatch(source, /from ["']node:crypto["']/);
+  assert.doesNotMatch(source, /from ["']@\/lib\/sermons\/v1\/presentation-manifest["']/);
+});

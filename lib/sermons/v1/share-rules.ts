@@ -1,18 +1,14 @@
 import { projectOutline } from "@/lib/sermons/v1/projection";
-import { presentationShareReadiness } from "@/lib/sermons/v1/presentation-manifest";
+import type { SermonContent, SermonOutline } from "@/types/sermon";
 
 /**
  * The rules for sharing a sermon in the FaithForm app, as pure functions.
  *
  * Used by the server action that publishes and by the dashboard card that
  * explains why it cannot yet, so the reason a pastor reads is the reason the
- * server applies.
+ * server applies. This file is imported by client components, so it must stay
+ * free of Node built-ins (`node:crypto` and the rest).
  */
-
-export {
-  isPresentationShared,
-  presentationShareReadiness,
-} from "@/lib/sermons/v1/presentation-manifest";
 
 export type SermonAudience = "public" | "followers" | "members";
 
@@ -107,6 +103,54 @@ export function sermonAudienceLabel(
     default:
       return null;
   }
+}
+
+/**
+ * Whether the app would show a slide deck worth opening.
+ *
+ * Mirrors the notes readiness idea: a real title plus something that becomes a
+ * page after the title slide (scripture, content points, or outline points).
+ */
+export function presentationShareReadiness(sermon: {
+  title?: string | null;
+  scripture_refs?: readonly string[] | null;
+  content?: SermonContent | null;
+  outline?: SermonOutline | null;
+  kind?: string | null;
+}): SermonShareReadiness {
+  const title = (sermon.title ?? "").trim();
+  const hasTitle = !PLACEHOLDER_TITLES.has(title.toLowerCase());
+  const hasScripture = (sermon.scripture_refs ?? []).some(
+    (reference) => typeof reference === "string" && reference.trim().length > 0,
+  );
+  const hasContentPoints = Boolean(sermon.content?.points?.some((p) => p.title?.trim()));
+  const hasOutlinePoints = Boolean(
+    sermon.outline?.points?.some((p) => p.title?.trim()),
+  );
+
+  if (hasTitle && (hasScripture || hasContentPoints || hasOutlinePoints)) {
+    return { ready: true };
+  }
+
+  return {
+    ready: false,
+    title: "Finish the slides first",
+    message:
+      "Members see a slide deck built from the title, scripture and lesson " +
+      "points — give the sermon a title and at least one scripture passage or point.",
+  };
+}
+
+export function isPresentationShared(row: {
+  mobile_visibility?: string | null;
+  published_at?: string | null;
+  unpublished_at?: string | null;
+}): boolean {
+  return (
+    (row.mobile_visibility ?? "none") !== "none" &&
+    Boolean(row.published_at) &&
+    !row.unpublished_at
+  );
 }
 
 /** Slides readiness for the share card — same function the publish path uses. */

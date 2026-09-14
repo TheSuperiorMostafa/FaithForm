@@ -174,6 +174,27 @@
     <string name="auto_attendance_recent_already">You were already checked in at %1$s</string>
     <string name="auto_attendance_checking">Checking you in…</string>
     <string name="auto_attendance_status_label">Automatic check-in status</string>
+    <string name="auto_attendance_saving">Saving your choice…</string>
+    <string name="auto_attendance_notification_title">Hear when you arrive</string>
+    <string name="auto_attendance_notification_body">FaithForm sends one notification when you arrive, so you can check in with a tap, and tells you once you are checked in. Your phone will ask you next.</string>
+    <string name="auto_attendance_prompt_title">Are you at %1$s?</string>
+    <string name="auto_attendance_prompt_body">Tap to check in.</string>
+    <string name="auto_attendance_prompt_action_check_in">Check in</string>
+    <string name="auto_attendance_checked_in_title">You\'re checked in at %1$s</string>
+    <string name="auto_attendance_not_checked_in_title">FaithForm couldn\'t check you in at %1$s</string>
+    <string name="auto_attendance_not_checked_in_body">You can still check in with the code on screen.</string>
+    <string name="auto_attendance_your_church">your church</string>
+    <string name="auto_attendance_pending_waiting_body">Stay a moment and FaithForm will ask you to confirm.</string>
+    <string name="auto_attendance_pending_automatic_body">Stay a moment and FaithForm will check you in.</string>
+    <string name="auto_attendance_next_service">Next service: %1$s</string>
+    <string name="auto_attendance_service_open">Check-in is open for %1$s</string>
+    <string name="auto_attendance_watching_churches">Watching for %1$s</string>
+    <string name="auto_attendance_not_at_this_church">Not available at %1$s</string>
+    <string name="auto_attendance_notifications_off_title">Notifications are off</string>
+    <string name="auto_attendance_notifications_off_body">FaithForm cannot ask you to confirm while the app is closed. Open FaithForm when you arrive to check in, or turn notifications on in Settings.</string>
+    <string name="auto_attendance_needs_permission_title">Location permission is not set up</string>
+    <string name="auto_attendance_needs_permission_body">Finish setting up so FaithForm can notice when you arrive.</string>
+    <string name="auto_attendance_continue_setup">Continue setup</string>
 
     <!-- Check-in scanner (Prompt 8) -->
     <string name="checkin_scan_title">Check in</string>
@@ -185,6 +206,7 @@
     <string name="checkin_scan_code_title">Enter the code on screen</string>
     <string name="checkin_scan_code_hint">Seven letters and numbers, shown beside the code.</string>
     <string name="checkin_scan_code_label">Check-in code</string>
+    <string name="checkin_code_invalid_characters">Codes never use the letters A, E, I, O, S, U or Z, or the numbers 0, 1, 2, 5, 6 or 8. Check the code on screen.</string>
     <string name="checkin_scan_code_submit">Check me in</string>
     <string name="checkin_scan_searching">Looking for a code…</string>
     <string name="checkin_scan_submitting">Checking you in…</string>

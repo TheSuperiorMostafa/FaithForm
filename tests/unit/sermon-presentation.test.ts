@@ -9,9 +9,9 @@ import {
   derivePresentationManifest,
   deriveSimpleManifestPages,
   hashPresentationManifest,
-  presentationShareReadiness,
   splitScriptureForSlides,
 } from "@/lib/sermons/v1/presentation-manifest";
+import { presentationShareReadiness } from "@/lib/sermons/v1/share-rules";
 import {
   publishPresentationToFaithForm,
   unpublishPresentationFromFaithForm,
