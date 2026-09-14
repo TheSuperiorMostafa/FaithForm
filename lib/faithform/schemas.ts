@@ -46,8 +46,34 @@ export function normalizePhone(value: string | null | undefined): string | null 
   return toE164(value);
 }
 
+/**
+ * The longest display name a profile may hold. The mobile contract's
+ * `UpdateProfileRequest` repeats the number, and the apps clamp the name they
+ * send as sign-up metadata to it.
+ */
+export const VISITOR_DISPLAY_NAME_MAX_LENGTH = 120;
+
+/**
+ * A display name from somewhere looser than the profile schema, such as the
+ * metadata a sign-up request carried, made into something the schema would
+ * accept: trimmed, clamped to the maximum, and null when nothing is left.
+ *
+ * The clamp counts UTF-16 units, as the schema's `max` does, and never keeps
+ * half of a surrogate pair.
+ */
+export function sanitizeDisplayName(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  let name = value.trim();
+  if (name.length > VISITOR_DISPLAY_NAME_MAX_LENGTH) {
+    name = name.slice(0, VISITOR_DISPLAY_NAME_MAX_LENGTH);
+    if (/[\uD800-\uDBFF]$/.test(name)) name = name.slice(0, -1);
+    name = name.trim();
+  }
+  return name.length > 0 ? name : null;
+}
+
 export const visitorProfileSchema = z.object({
-  displayName: z.string().trim().min(1).max(120).optional(),
+  displayName: z.string().trim().min(1).max(VISITOR_DISPLAY_NAME_MAX_LENGTH).optional(),
   avatarUrl: z.string().trim().url().max(2048).optional().nullable(),
   communicationPrefs: z.record(z.string(), z.boolean()).optional(),
   selectedChurchSlug: churchSlugSchema.optional().nullable(),
