@@ -80,6 +80,16 @@ class MediaPlaybackCoordinator(
     private var refreshing = false
     private var lastKnownDuration: Long? = null
 
+    /**
+     * Whether the one retry an `UNAVAILABLE` failure earns has been spent since
+     * the stream last became ready.
+     *
+     * Without it, a recording that is genuinely gone — a 404 that no capability
+     * will fix — looped forever: fail, renew, play, fail, renew, play, spending
+     * the server's playback rate limit and never telling the person anything.
+     */
+    private var retriedSinceReady = false
+
     fun currentState(): PlaybackSessionState = state
     fun currentSchedule(): CapabilitySchedule? = schedule
 
@@ -96,6 +106,7 @@ class MediaPlaybackCoordinator(
         partitionKey: String,
     ) {
         state = PlaybackSessionState.Preparing
+        retriedSinceReady = false
         this.churchSlug = churchSlug
         this.kind = kind
         this.mediaId = mediaId
@@ -176,6 +187,7 @@ class MediaPlaybackCoordinator(
         when (event) {
             is PlayerEvent.Buffering -> state = PlaybackSessionState.Buffering
             is PlayerEvent.ReadyToPlay -> {
+                retriedSinceReady = false
                 lastKnownDuration = event.durationMillis
                 state = PlaybackSessionState.Paused
             }
@@ -195,10 +207,13 @@ class MediaPlaybackCoordinator(
                 refreshIfNeeded()
             }
             is PlayerEvent.Failed -> {
-                if (event.failure == PlayerFailure.UNAVAILABLE) {
+                if (event.failure == PlayerFailure.UNAVAILABLE && !retriedSinceReady) {
                     // One retry through a fresh capability: an expired one looks
                     // exactly like a revoked one from the transport's point of
-                    // view, and only the server can tell them apart.
+                    // view, and only the server can tell them apart. One — a
+                    // second failure before the stream ever became ready means
+                    // the capability was not the problem.
+                    retriedSinceReady = true
                     if (refreshIfNeeded(force = true)) {
                         player.send(PlayerCommand.Play)
                         return
