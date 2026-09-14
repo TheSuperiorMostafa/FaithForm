@@ -6,6 +6,12 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { VisitorError } from "@/lib/faithform/errors";
 import { bumpPublicProfileVersion } from "@/lib/faithform/discovery";
 import { syncChurchOccurrences } from "@/lib/attendance/v2/occurrences";
+import {
+  CONSENT_COUNT_FLOOR,
+  GEOFENCE_RADIUS_BOUNDS,
+} from "@/lib/attendance/v2/setup-bounds";
+
+export { CONSENT_COUNT_FLOOR, GEOFENCE_RADIUS_BOUNDS };
 
 /**
  * A church's check-in setup: the church-wide attendance policy, where each
@@ -221,7 +227,6 @@ export async function saveChurchAttendancePolicy(input: {
 // Campus position
 // ---------------------------------------------------------------------------
 
-export const GEOFENCE_RADIUS_BOUNDS = { min: 50, max: 500, default: 150 } as const;
 
 export const campusCheckinLocationSchema = z
   .object({
@@ -514,7 +519,6 @@ export type AttendanceSetupState = {
   lastChangedAt: string | null;
 };
 
-export const CONSENT_COUNT_FLOOR = 5;
 
 /** Below the floor a count is withheld, so it cannot single a person out. */
 export function publishableOptInCount(count: number): number | null {

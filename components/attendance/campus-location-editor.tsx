@@ -10,13 +10,14 @@ import {
 } from "@/app/dashboard/attendance/setup/actions";
 import type { GeocodeMatch } from "@/lib/attendance/v2/geocode";
 import type { SetupCampus } from "@/lib/attendance/v2/setup";
+import { GEOFENCE_RADIUS_BOUNDS } from "@/lib/attendance/v2/setup-bounds";
 import { CampusRadiusMap } from "@/components/attendance/campus-radius-map";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
-const RADIUS_MIN = 50;
-const RADIUS_MAX = 500;
+const RADIUS_MIN = GEOFENCE_RADIUS_BOUNDS.min;
+const RADIUS_MAX = GEOFENCE_RADIUS_BOUNDS.max;
 const RADIUS_PRESETS = [
   { meters: 100, label: "Small building" },
   { meters: 150, label: "Church and parking" },

@@ -16,7 +16,7 @@ import type {
   SetupCampus,
   SetupUpcomingService,
 } from "@/lib/attendance/v2/setup";
-import { CONSENT_COUNT_FLOOR } from "@/lib/attendance/v2/setup";
+import { CONSENT_COUNT_FLOOR } from "@/lib/attendance/v2/setup-bounds";
 import { CampusLocationEditor } from "@/components/attendance/campus-location-editor";
 import { CampusRadiusMap } from "@/components/attendance/campus-radius-map";
 import { ServiceScheduleEditor } from "@/components/attendance/service-schedule-editor";
