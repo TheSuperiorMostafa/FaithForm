@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import UserNotifications
 @testable import FaithForm
 import FaithFormKit
 
@@ -205,6 +206,52 @@ struct AppCompositionTests {
         }
     }
 
+    @Test("automatic check-in watches the churches a person can still read, and no others")
+    func attendanceChurches() {
+        func relationship(_ slug: String, _ state: RelationshipState, readable: Bool) -> ChurchRelationship {
+            ChurchRelationship(
+                churchSlug: slug, churchName: slug.capitalized, logoUrl: nil, state: state,
+                joinPolicy: .open, joinedAt: nil, updatedAt: "2026-09-13T10:00:00Z",
+                canReadPublishedContent: readable
+            )
+        }
+        let bootstrap = Bootstrap(
+            profile: VisitorProfile(
+                status: .active, autoAttendanceConsent: .granted, communicationPrefs: [:],
+                selectedChurchSlug: nil, authorizationVersion: 3
+            ),
+            relationships: [
+                relationship("grace", .joined, readable: true),
+                relationship("hope", .following, readable: true),
+                relationship("left", .left, readable: false),
+                relationship("blocked", .blocked, readable: false),
+            ],
+            pendingRequests: [],
+            requiredTermsVersion: "1", requiredPrivacyVersion: "1",
+            enabledCapabilities: [], serverTime: "2026-09-13T10:00:00Z"
+        )
+        let churches = AppDependencies.attendanceChurches(in: bootstrap)
+        #expect(churches.map(\.slug) == ["grace", "hope"])
+        // The name travels with the slug so a background notification can say
+        // where, with no account loaded.
+        #expect(churches.first?.name == "Grace")
+    }
+
+    @Test("the arrival notification offers Check in and Not now, and the answer offers nothing")
+    func attendanceNotificationCategories() {
+        let categories = SystemAttendanceNotifier.categories()
+        let arrival = categories.first { $0.identifier == AttendanceNotificationContent.arrivalCategory }
+        #expect(arrival?.actions.map(\.identifier) == [
+            AttendanceNotificationContent.checkInAction,
+            AttendanceNotificationContent.notNowAction,
+        ])
+        // Neither button needs the phone unlocked for Not now, and neither is
+        // destructive: declining an arrival deletes nothing but that arrival.
+        #expect(arrival?.actions.allSatisfy { !$0.options.contains(.destructive) } == true)
+        let result = categories.first { $0.identifier == AttendanceNotificationContent.resultCategory }
+        #expect(result?.actions.isEmpty == true)
+    }
+
     @Test("a destination with no tab still resolves to nothing rather than to home")
     func unmappedDestination() {
         // Announcements is reachable by deep link and has no tab of its own.
@@ -236,16 +283,20 @@ struct AppBundleTests {
 
     @Test("only the justified usage descriptions are declared")
     func usageDescriptions() {
-        // A declared permission is a promise. Camera and when-in-use location
-        // name features that exist in 1.0 — QR check-in and churches near me;
-        // the absent ones name features that do not.
+        // A declared permission is a promise, and each of these names a 1.0
+        // feature: the camera for QR check-in, When In Use for churches near
+        // me and the first automatic check-in prompt, Always for automatic
+        // check-in itself — reachable from Check in and from Account.
         #expect(info["NSCameraUsageDescription"] != nil)
-        #expect(info["NSLocationWhenInUseUsageDescription"] != nil)
-        // The one exception, and it is never shown: the binary links
-        // `requestAlwaysAuthorization` through FaithFormKit's attendance
-        // adapter, and App Store Connect refuses an upload that references it
-        // without a purpose string (ITMS-90683). See Info.plist.
-        #expect(info["NSLocationAlwaysAndWhenInUseUsageDescription"] != nil)
+        let whenInUse = info["NSLocationWhenInUseUsageDescription"] as? String ?? ""
+        #expect(whenInUse.contains("churches near you"))
+        #expect(whenInUse.contains("automatic check-in"), "When In Use is now asked by automatic check-in too")
+        let always = info["NSLocationAlwaysAndWhenInUseUsageDescription"] as? String ?? ""
+        #expect(always.contains("even if the app is closed"))
+        #expect(always.contains("never where else you go"))
+        // Precise arrival cannot come from a temporary grant that ends when
+        // the app closes, so none is asked for. See Info.plist.
+        #expect(info["NSLocationTemporaryUsageDescriptionDictionary"] == nil)
 
         for absent in [
             // The pre-iOS 11 key. Nothing targets a system that reads it.
@@ -293,6 +344,17 @@ struct AppBundleTests {
             #expect(collected.contains(type), "\(type) is not declared")
         }
 
+        // Automatic check-in sends a fix with the person's session, so precise
+        // location is linked to them — for app functionality, never tracking.
+        let location = (manifest["NSPrivacyCollectedDataTypes"] as? [[String: Any]] ?? [])
+            .first { $0["NSPrivacyCollectedDataType"] as? String == "NSPrivacyCollectedDataTypePreciseLocation" }
+        #expect(location?["NSPrivacyCollectedDataTypeLinked"] as? Bool == true)
+        #expect(location?["NSPrivacyCollectedDataTypeTracking"] as? Bool == false)
+        #expect(
+            location?["NSPrivacyCollectedDataTypePurposes"] as? [String]
+                == ["NSPrivacyCollectedDataTypePurposeAppFunctionality"]
+        )
+
         // A Team ID placeholder and a build script are for the people building
         // the app, and used to be copied into it.
         for leftover in ["Local.xcconfig.example", "check-assets.sh"] {
@@ -310,10 +372,11 @@ struct AppBundleTests {
         #expect((info["FaithFormApplePayMerchantID"] as? String ?? "").isEmpty)
     }
 
-    @Test("no background mode is declared")
+    @Test("no background mode is declared, even with automatic check-in on")
     func backgroundModes() {
-        // Region monitoring wakes the app without one. Declaring `location`
-        // would enable the continuous updates this app deliberately does not do.
+        // Region monitoring relaunches the app for a crossing without one.
+        // Declaring `location` would enable the continuous updates this app
+        // deliberately does not do.
         #expect(info["UIBackgroundModes"] == nil)
     }
 

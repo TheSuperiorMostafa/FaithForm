@@ -71,23 +71,31 @@
         </dict>
 
         <!--
-            "Churches near me": one fix, sent once, used for that search.
+            Precise location, for two features. **Linked**, because one of
+            them is: a manifest has one entry per data type, and the stricter
+            answer is the true one.
 
-            **Not linked.** The search is sent without the person's session
-            (`authenticated: false` in DiscoveryModel), and the privacy policy
-            promises the location is not stored, logged, or connected to the
-            account. Declared at all — rather than left out as real-time
-            processing — because it is precise and it does leave the device,
-            and under-declaring a location is the worse mistake.
+            * Automatic check-in (linked). When a person who turned it on
+              arrives for a service, the attendance attempt sends one fix —
+              latitude, longitude and its accuracy — with their session, along
+              with the service id, the campus region id, the configuration
+              version and an attempt or detection id. The server compares the
+              fix with the campus, stores only a band (inside / near / far and
+              an accuracy band) and discards the coordinates; the counted
+              attendance holds no location. Nothing is sent for a drive past,
+              and no location history exists on the device — an unsent
+              arrival is kept in the Keychain for at most two hours.
+            * Churches near me (not linked on its own). One fix, sent once
+              without the session, used for that search and not stored.
 
-            Automatic check-in, which would send a location tied to an account,
-            is not reachable in 1.0. It must change this entry when it ships.
+            Not used for tracking: never shared, never combined with another
+            company's data, and there is no advertising identifier.
         -->
         <dict>
             <key>NSPrivacyCollectedDataType</key>
             <string>NSPrivacyCollectedDataTypePreciseLocation</string>
             <key>NSPrivacyCollectedDataTypeLinked</key>
-            <false/>
+            <true/>
             <key>NSPrivacyCollectedDataTypeTracking</key>
             <false/>
             <key>NSPrivacyCollectedDataTypePurposes</key>
@@ -134,8 +142,10 @@
         <!--
             Everything else a person does that a church can see: the churches
             they follow or join, invitations they accept, and check-ins from a
-            scanned or typed code (church, service, time and outcome — never a
-            photo). None of Apple's named categories fits these.
+            scanned or typed code or from automatic check-in (church, service,
+            time and outcome — never a photo, and for automatic check-in the
+            location is declared above). None of Apple's named categories fits
+            these.
         -->
         <dict>
             <key>NSPrivacyCollectedDataType</key>
