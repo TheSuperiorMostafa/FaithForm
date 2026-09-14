@@ -1,8 +1,20 @@
 <resources>
     <!-- A bare bridge theme. Colour, type and shape come from the canonical
-         tokens through Compose, so nothing is defined twice. -->
+         tokens through Compose, so nothing is defined twice. The window ground
+         is the page colour, so nothing lighter or darker shows between the
+         launch screen and the first frame. -->
     <style name="Theme.FaithForm" parent="android:Theme.Material.Light.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowBackground">@color/launch_background</item>
+    </style>
+
+    <!-- The launch screen: the page colour with the mark centred, until the
+         first frame is drawn and not a moment longer. `LaunchLoadingView` then
+         draws the same mark at the same size in the same place. -->
+    <style name="Theme.FaithForm.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/launch_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launch_mark</item>
+        <item name="postSplashScreenTheme">@style/Theme.FaithForm</item>
     </style>
 </resources>

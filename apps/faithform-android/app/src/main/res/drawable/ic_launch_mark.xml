@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The launch screen's icon: the same traced mark as ic_launcher_foreground,
+    with no box behind it, on the page colour.
+
+    The system draws a splash icon at 288dp for this 108dp canvas (a factor of
+    8/3). The group scales the 425-pixel-tall mark to 36 of the 108 units, so it
+    lands on screen at exactly 96dp tall - the height `LaunchLoadingView` draws
+    it at, centred on the same window centre - and the hand-over from system
+    splash to first frame moves nothing. Its farthest corner is under 24 units
+    from centre, well inside the 33-unit safe radius, so no mask clips it.
+
+    The F follows the theme through @color/launch_mark_letter (navy by day,
+    warm off-white at night, as `contentPrimary` does); the fold is gold in both.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Pivot at the mark's centre in the 1024 artwork (504.5, 489.5), scaled
+         by 36/425, then moved so that centre sits at (54, 54). -->
+    <group
+        android:pivotX="504.5"
+        android:pivotY="489.5"
+        android:scaleX="0.0847059"
+        android:scaleY="0.0847059"
+        android:translateX="-450.5"
+        android:translateY="-435.5">
+
+        <path
+            android:fillColor="@color/launch_mark_letter"
+            android:pathData="M409,277 L688,277 L688,373 L465,373 L418,420 L418,440 L595,440 L498,537 L418,537 L418,702 L321,702 L321,365 Z" />
+
+        <path android:pathData="M465,373 L688,373 L688,431 L421,698 L418,698 L418,537 L498,537 L595,440 L418,440 L418,420 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:type="linear"
+                    android:startX="553"
+                    android:startY="373"
+                    android:endX="553"
+                    android:endY="698"
+                    android:startColor="#FFEEC683"
+                    android:endColor="#FFB88A46" />
+            </aapt:attr>
+        </path>
+    </group>
+</vector>

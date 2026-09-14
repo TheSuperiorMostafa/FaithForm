@@ -7,6 +7,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import io.faithform.app.attendance.CameraPermissionRequester
@@ -91,6 +92,11 @@ class MainActivity : ComponentActivity() {
     private val cameraPermission = CameraPermissionRequester(this)
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Before `super.onCreate`, as the library requires: swaps the starting
+        // theme for `Theme.FaithForm`. No keep-on-screen condition — the splash
+        // leaves with the first frame, which is `LaunchLoadingView` drawing the
+        // same mark in the same place, never a wait on the network.
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 

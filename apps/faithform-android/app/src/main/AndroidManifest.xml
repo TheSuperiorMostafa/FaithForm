@@ -103,7 +103,7 @@
             android:exported="true"
             android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize"
-            android:theme="@style/Theme.FaithForm">
+            android:theme="@style/Theme.FaithForm.Starting">
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
