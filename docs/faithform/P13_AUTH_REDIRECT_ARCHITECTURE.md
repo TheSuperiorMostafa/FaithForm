@@ -56,10 +56,14 @@ protocol-relative `//host`, a backslash trick, or `faithform://…` all collapse
 ```
 FaithForm app: create account
   │  POST /auth/v1/signup?redirect_to=faithform%3A%2F%2Fauth%2Fcallback
-  │  body: { email, password, code_challenge, code_challenge_method: "s256" }
+  │  body: { email, password, code_challenge, code_challenge_method: "s256",
+  │          data: { display_name } }   (data only when a name was typed)
   │  ── verifier saved to Keychain / EncryptedSharedPreferences BEFORE the
   │     request leaves, because the person is about to switch to Mail and the
   │     process may not survive the trip
+  │  ── the name goes as user metadata, trimmed and clamped to the profile's
+  │     120-character maximum, because there is no session yet to send a
+  │     profile update with, and the link may be opened on another device
   ▼
 Supabase sends the confirmation email
   ▼
@@ -78,6 +82,9 @@ POST /auth/v1/token?grant_type=pkce { auth_code, code_verifier }
 Session adopted (stamped with this build's environment key), verifier cleared
   ▼
 GET /api/mobile/v1/account/bootstrap   → account, relationships, capabilities
+  │  ── the first authenticated call creates the visitor row, which takes its
+  │     display name from that metadata, sanitized again; the Auth lookup
+  │     happens only when the row is inserted
 GET /api/mobile/v1/onboarding          → the server decides the first screen
   ▼
 No church  → discovery / onboarding flow

@@ -89,7 +89,11 @@ public struct AuthFailure: Error, Sendable, Equatable {
 /// The seam feature models depend on, so a test can script outcomes without
 /// ever constructing a transport.
 public protocol SessionAuthenticating: Sendable {
-    func signUp(email: String, password: String) async throws -> SignUpOutcome
+    /// Creates an account. `displayName` is the name typed on the sign-up
+    /// screen, or nil. It travels with the request as user metadata, so the
+    /// profile gets it however the person finishes signing up, including by
+    /// confirming their email on another device.
+    func signUp(email: String, password: String, displayName: String?) async throws -> SignUpOutcome
     func signIn(email: String, password: String) async throws -> StoredSession
     func sendPasswordReset(email: String) async throws
     /// Exchanges the code a confirmation link carried for a session, using the
@@ -132,9 +136,20 @@ public struct SupabaseAuthClient: SessionAuthenticating {
 
     // MARK: - Calls
 
-    public func signUp(email: String, password: String) async throws -> SignUpOutcome {
-        var body = ["email": email, "password": password]
+    public func signUp(
+        email: String,
+        password: String,
+        displayName: String?
+    ) async throws -> SignUpOutcome {
+        var body = SignUpBody(email: email, password: password)
         var query: String?
+
+        // The name rides along as user metadata. With email confirmation on
+        // there is no session to send a profile update with, so this is the
+        // copy that survives until the account is first used.
+        if let name = Self.metadataDisplayName(displayName) {
+            body.data = .init(display_name: name)
+        }
 
         // PKCE: the confirmation email returns to this app's own callback with
         // a code only this device can spend. Configured together — a redirect
@@ -144,8 +159,8 @@ public struct SupabaseAuthClient: SessionAuthenticating {
             // Stored before the request leaves: the person is about to switch
             // to their mail client, and the app may not survive the trip.
             flowState.saveVerifier(verifier)
-            body["code_challenge"] = PKCE.challenge(for: verifier)
-            body["code_challenge_method"] = "s256"
+            body.code_challenge = PKCE.challenge(for: verifier)
+            body.code_challenge_method = "s256"
             let encoded = redirect.absoluteString.addingPercentEncoding(
                 withAllowedCharacters: .alphanumerics
             ) ?? redirect.absoluteString
@@ -291,10 +306,49 @@ public struct SupabaseAuthClient: SessionAuthenticating {
 
     // MARK: - Plumbing
 
-    private func post(
+    /// The longest display name a profile accepts: the server schema's
+    /// maximum, counted in UTF-16 units as the server counts them.
+    static let displayNameMaxLength = 120
+
+    /// The sign-up name as it is sent: trimmed, clamped to what the profile
+    /// allows without splitting a character, and nil when nothing is left.
+    /// Supabase caps metadata size, and the server clamps it again anyway.
+    static func metadataDisplayName(_ raw: String?) -> String? {
+        guard let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !trimmed.isEmpty
+        else { return nil }
+
+        var clamped = ""
+        var units = 0
+        for character in trimmed {
+            let width = character.utf16.count
+            if units + width > displayNameMaxLength { break }
+            clamped.append(character)
+            units += width
+        }
+        let result = clamped.trimmingCharacters(in: .whitespacesAndNewlines)
+        return result.isEmpty ? nil : result
+    }
+
+    /// Absent fields are left out of the JSON rather than sent as null, so a
+    /// build without PKCE, or a person who typed no name, sends exactly what
+    /// it did before either existed.
+    private struct SignUpBody: Encodable {
+        struct Metadata: Encodable {
+            let display_name: String
+        }
+
+        let email: String
+        let password: String
+        var code_challenge: String?
+        var code_challenge_method: String?
+        var data: Metadata?
+    }
+
+    private func post<Body: Encodable>(
         path: String,
         query: String? = nil,
-        body: [String: String]
+        body: Body
     ) async throws -> (Data, HTTPURLResponse) {
         var absolute = configuration.url.appendingPathComponent(path).absoluteString
         if let query { absolute += "?\(query)" }

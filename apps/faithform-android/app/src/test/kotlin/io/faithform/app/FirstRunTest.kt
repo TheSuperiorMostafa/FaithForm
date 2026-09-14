@@ -17,6 +17,9 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -382,17 +385,27 @@ class AuthViewModelTest {
     }
 
     private class AuthTransport(val responses: ArrayDeque<HttpResponse>) : HttpTransport {
+        val received = mutableListOf<HttpRequest>()
+
         override suspend fun perform(request: HttpRequest): HttpResponse {
+            received.add(request)
             if (responses.isEmpty()) throw java.io.IOException("no network")
             return responses.removeFirst()
         }
     }
 
     private fun client(vararg responses: HttpResponse) =
+        client(AuthTransport(ArrayDeque(responses.toList())))
+
+    private fun client(transport: AuthTransport) =
         io.faithform.app.network.SupabaseAuthClient(
             io.faithform.app.network.SupabaseAuthConfig("https://identity.example", "anon"),
-            AuthTransport(ArrayDeque(responses.toList()))
+            transport
         )
+
+    private fun signUpName(request: HttpRequest): String? =
+        Json.parseToJsonElement(request.body.orEmpty()).jsonObject["data"]
+            ?.jsonObject?.get("display_name")?.jsonPrimitive?.content
 
     @Test
     fun `a successful sign-in hands the session to the composition root`() {
@@ -451,6 +464,53 @@ class AuthViewModelTest {
         model.createAccount()
 
         assertEquals(AuthUiPhase.CheckEmail, model.phase.value)
+    }
+
+    @Test
+    fun `the typed name goes out with the sign-up even when confirmation comes first`() {
+        val transport = AuthTransport(
+            ArrayDeque(
+                listOf(HttpResponse(200, """{"id":"u","confirmation_sent_at":"2026-08-26T00:00:00Z"}""", emptyMap()))
+            )
+        )
+        val model = AuthViewModel(client(transport)) { _, _ ->
+            throw AssertionError("no session should be handed over")
+        }
+
+        model.updateName("  Sarah Okafor  ")
+        model.updateEmail("p@example.org")
+        model.updatePassword("pw123456")
+        model.createAccount()
+
+        // No session means no profile update from this device, so the sign-up
+        // request is the only thing that can carry the name to the server.
+        assertEquals(AuthUiPhase.CheckEmail, model.phase.value)
+        assertEquals("Sarah Okafor", signUpName(transport.received.single()))
+    }
+
+    @Test
+    fun `an immediate session hands over the same name the sign-up carried`() {
+        val transport = AuthTransport(
+            ArrayDeque(
+                listOf(
+                    HttpResponse(
+                        200,
+                        """{"access_token":"a","refresh_token":"r","expires_in":3600,"user":{"id":"u"}}""",
+                        emptyMap()
+                    )
+                )
+            )
+        )
+        var handedOver: String? = null
+        val model = AuthViewModel(client(transport)) { _, name -> handedOver = name }
+
+        model.updateName(" Sarah ")
+        model.updateEmail("p@example.org")
+        model.updatePassword("pw123456")
+        model.createAccount()
+
+        assertEquals("Sarah", handedOver)
+        assertEquals("Sarah", signUpName(transport.received.single()))
     }
 
     @Test

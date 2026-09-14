@@ -274,7 +274,7 @@ class ConfirmationCallbackTest {
             ),
             transport,
             verifierStore = store
-        ).signUp("p@example.org", "pw123456")
+        ).signUp("p@example.org", "pw123456", displayName = null)
         assertNotNull(store.verifier)
 
         // The process dies here. Launch two builds everything afresh, reading

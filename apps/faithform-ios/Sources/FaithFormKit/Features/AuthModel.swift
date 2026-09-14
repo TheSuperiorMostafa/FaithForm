@@ -92,10 +92,18 @@ public final class AuthModel {
         }
 
         phase = .working
+        // Sent with the sign-up itself as well as handed over below. With email
+        // confirmation on there is no session here, and the name reaches the
+        // profile only because the server reads it back from the account.
+        let displayName = trimmedName
         do {
-            switch try await auth.signUp(email: trimmedEmail, password: password) {
+            switch try await auth.signUp(
+                email: trimmedEmail,
+                password: password,
+                displayName: displayName
+            ) {
             case let .session(session):
-                await onAuthenticated(session, trimmedName)
+                await onAuthenticated(session, displayName)
                 phase = .idle
             case .confirmationRequired:
                 confirmationEmail = trimmedEmail
