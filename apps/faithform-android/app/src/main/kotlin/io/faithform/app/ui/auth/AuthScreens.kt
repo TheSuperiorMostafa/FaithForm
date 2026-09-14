@@ -1,6 +1,9 @@
 package io.faithform.app.ui.auth
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -8,11 +11,20 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
@@ -20,6 +32,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -29,13 +42,25 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
@@ -53,6 +78,10 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.outlined.MarkEmailUnread
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Church
+import androidx.compose.material.icons.outlined.Campaign
+import androidx.compose.material.icons.outlined.FavoriteBorder
+import androidx.compose.material.icons.outlined.QrCodeScanner
+import androidx.compose.material.icons.outlined.SmartDisplay
 import io.faithform.app.ConfirmationPhase
 import io.faithform.app.PendingChurchContext
 import io.faithform.app.R
@@ -60,6 +89,8 @@ import io.faithform.app.design.FaithFormTokens
 import io.faithform.app.design.LocalFaithFormTheme
 import io.faithform.app.ui.account.LegalLinks
 import io.faithform.app.ui.account.openWebLink
+import io.faithform.app.ui.brand.FaithFormMark
+import io.faithform.app.ui.brand.rememberReducedMotion
 
 /**
  * The signed-out journey: one landing screen, two doors.
@@ -81,6 +112,9 @@ fun AuthFlow(
     onClearChurchContext: (() -> Unit)? = null
 ) {
     var screen by rememberSaveable { mutableStateOf(AuthScreen.LANDING) }
+    // Held here rather than in the landing, which leaves composition whenever
+    // another screen is pushed: back from sign-in must not replay the entrance.
+    var landingEntrancePlayed by rememberSaveable { mutableStateOf(false) }
 
     fun move(to: AuthScreen) {
         viewModel.resetForNewScreen()
@@ -98,7 +132,9 @@ fun AuthFlow(
             churchContext = churchContext,
             onCreateAccount = { move(AuthScreen.CREATE_ACCOUNT) },
             onSignIn = { move(AuthScreen.SIGN_IN) },
-            onClearChurchContext = onClearChurchContext
+            onClearChurchContext = onClearChurchContext,
+            playEntrance = !landingEntrancePlayed,
+            onEntrancePlayed = { landingEntrancePlayed = true }
         )
         AuthScreen.CREATE_ACCOUNT -> CreateAccountScreen(
             viewModel = viewModel,
@@ -120,100 +156,376 @@ private fun LandingScreen(
     churchContext: PendingChurchContext?,
     onCreateAccount: () -> Unit,
     onSignIn: () -> Unit,
+    onClearChurchContext: (() -> Unit)?,
+    playEntrance: Boolean,
+    onEntrancePlayed: () -> Unit
+) {
+    val theme = LocalFaithFormTheme.current
+    val reduceMotion = rememberReducedMotion()
+
+    // The page fades in once. A return from a pushed screen must not replay
+    // it, so whether it has played is kept by `AuthFlow`, which stays composed
+    // while the landing comes and goes.
+    val entrance = remember { Animatable(if (playEntrance) 0f else 1f) }
+    LaunchedEffect(Unit) {
+        if (!playEntrance) return@LaunchedEffect
+        onEntrancePlayed()
+        entrance.animateTo(
+            targetValue = 1f,
+            animationSpec = tween(
+                if (reduceMotion) FaithFormTokens.Motion.REDUCED_MOTION_MS else FaithFormTokens.Motion.SLOW_MS,
+                easing = LinearOutSlowInEasing
+            )
+        )
+    }
+
+    Box(Modifier.fillMaxSize()) {
+        LandingBackdrop()
+
+        Column(Modifier.fillMaxSize()) {
+            // Scrolls only when it has to: a small phone, or a large font
+            // scale. On a phone where it all fits it sits still.
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .windowInsetsPadding(
+                        WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)
+                    )
+                    .padding(horizontal = FaithFormTokens.Layout.screenPaddingHorizontal)
+                    .padding(top = FaithFormTokens.Spacing.xl, bottom = FaithFormTokens.Spacing.lg)
+            ) {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.xl),
+                    modifier = Modifier
+                        .widthIn(max = FaithFormTokens.Layout.contentMaxWidth)
+                        .fillMaxWidth()
+                        .graphicsLayer {
+                            alpha = entrance.value
+                            translationY = if (reduceMotion) 0f
+                            else (1f - entrance.value) * FaithFormTokens.Spacing.md.toPx()
+                        }
+                ) {
+                    // A link that named a church replaces the product's promise
+                    // with that church. Someone who scanned a bulletin QR code
+                    // came for their church, not for FaithForm, and the front
+                    // door should say so — the mark stays, small, so they still
+                    // know whose app this is.
+                    if (churchContext != null) {
+                        Column(verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.lg)) {
+                            LandingLockup(markHeight = FaithFormTokens.IconSize.sizeHero)
+                            ChurchContextHeader(churchContext)
+                        }
+                    } else {
+                        Column(verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.lg)) {
+                            LandingLockup(markHeight = FaithFormTokens.Spacing.xxl)
+                            Column(verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.md)) {
+                                Text(
+                                    stringResource(R.string.landing_headline),
+                                    style = MaterialTheme.typography.displayLarge,
+                                    color = theme.palette.contentPrimary,
+                                    modifier = Modifier.semantics { heading() }
+                                )
+                                Text(
+                                    stringResource(R.string.sign_in_body),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = theme.palette.contentSecondary
+                                )
+                            }
+                        }
+                    }
+
+                    // The generic "you have an invitation" banner is redundant
+                    // once the header names the church the invitation is *for*.
+                    if (hasPendingInvitation && churchContext == null) {
+                        LandingCard {
+                            Text(
+                                stringResource(R.string.invitation_pending_banner),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = theme.palette.contentSecondary
+                            )
+                        }
+                    }
+
+                    // A confirmation link lands here, on the front door, before
+                    // any screen was chosen. Both of its states are visible in
+                    // place: the exchange in progress, and the sentence when it
+                    // could not finish. Above the feature list, so neither is
+                    // ever scrolled out of view.
+                    when (confirmationPhase) {
+                        is ConfirmationPhase.Working -> LandingCard {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                CircularProgressIndicator(
+                                    strokeWidth = 2.dp,
+                                    color = theme.mutedContent,
+                                    modifier = Modifier.size(FaithFormTokens.IconSize.sizeMedium)
+                                )
+                                Text(
+                                    stringResource(R.string.auth_confirming_email),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = theme.palette.contentSecondary
+                                )
+                            }
+                        }
+                        is ConfirmationPhase.Failed -> LandingCard {
+                            AuthErrorText(confirmationPhase.error)
+                        }
+                        is ConfirmationPhase.Idle -> Unit
+                    }
+
+                    LandingFeatures()
+                }
+            }
+
+            LandingActions(
+                churchContext = churchContext,
+                onCreateAccount = onCreateAccount,
+                onSignIn = onSignIn,
+                onClearChurchContext = onClearChurchContext
+            )
+        }
+    }
+}
+
+/**
+ * **The two doors never scroll away.** Whatever the font scale, create account
+ * and sign in are pinned where a thumb already is, and the page above scrolls
+ * beneath them.
+ */
+@Composable
+private fun LandingActions(
+    churchContext: PendingChurchContext?,
+    onCreateAccount: () -> Unit,
+    onSignIn: () -> Unit,
     onClearChurchContext: (() -> Unit)?
 ) {
     val theme = LocalFaithFormTheme.current
+    val context = LocalContext.current
 
     Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .fillMaxWidth()
+            // Solid, so text scrolling beneath the buttons never shows through
+            // them; the hairline says where the page ends and the doors begin.
+            // Drawn before the insets are applied, so it runs under the
+            // navigation bar.
+            .background(theme.palette.background)
+            .drawBehind {
+                drawRect(
+                    color = theme.palette.divider,
+                    size = Size(size.width, FaithFormTokens.BorderWidth.hairline.toPx())
+                )
+            }
+            .windowInsetsPadding(
+                WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom + WindowInsetsSides.Horizontal)
+            )
+            .padding(horizontal = FaithFormTokens.Layout.screenPaddingHorizontal)
+            .padding(top = FaithFormTokens.Spacing.base)
+    ) {
+        Column(
+            verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.md),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .widthIn(max = FaithFormTokens.Layout.contentMaxWidth)
+                .fillMaxWidth()
+        ) {
+            Button(
+                onClick = onCreateAccount,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = FaithFormTokens.TouchTarget.recommended)
+            ) { Text(stringResource(R.string.create_account)) }
+            OutlinedButton(
+                onClick = onSignIn,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = FaithFormTokens.TouchTarget.recommended)
+            ) { Text(stringResource(R.string.sign_in)) }
+            // A link can be forwarded, mistyped, or simply not meant for the
+            // person holding it. Disowning the church has to be one tap away,
+            // or the branding becomes a trap.
+            if (churchContext != null && onClearChurchContext != null) {
+                TextButton(onClick = onClearChurchContext, modifier = Modifier.fillMaxWidth()) {
+                    Text(stringResource(R.string.church_context_not_yours))
+                }
+            }
+
+            // The documents a person is about to agree to, readable before they
+            // tap either door rather than only on the form that asks for
+            // consent. Each opens in the browser, never in the app.
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.base, Alignment.CenterHorizontally),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = FaithFormTokens.TouchTarget.minimum)
+            ) {
+                for ((label, url) in listOf(
+                    R.string.privacy_policy to LegalLinks.PRIVACY_POLICY,
+                    R.string.terms_of_service to LegalLinks.TERMS,
+                )) {
+                    TextButton(
+                        onClick = { openWebLink(context, url) },
+                        colors = ButtonDefaults.textButtonColors(contentColor = theme.mutedContent)
+                    ) {
+                        Text(stringResource(label), style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The mark and the name, side by side.
+ *
+ * Read as one element: TalkBack hears "FaithForm" once, not a picture followed
+ * by the same word.
+ */
+@Composable
+private fun LandingLockup(markHeight: Dp) {
+    val theme = LocalFaithFormTheme.current
+    val name = stringResource(R.string.app_name)
+
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.md),
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier.clearAndSetSemantics { contentDescription = name }
+    ) {
+        FaithFormMark(Modifier.height(markHeight))
+        Text(name, style = MaterialTheme.typography.titleLarge, color = theme.palette.contentPrimary)
+    }
+}
+
+/**
+ * What the app does, in four lines.
+ *
+ * One row per tab a churchgoer actually gets in 1.0 — the home feed, watch and
+ * sermon notes, check-in, and giving — so the front door promises exactly the
+ * product behind it. No counts, no testimonials, nothing that could go stale or
+ * be untrue for a particular church.
+ */
+@Composable
+private fun LandingFeatures() {
+    val theme = LocalFaithFormTheme.current
+    val rows = listOf(
+        Triple(Icons.Outlined.Campaign, R.string.landing_feed_title, R.string.landing_feed_body),
+        Triple(Icons.Outlined.SmartDisplay, R.string.landing_watch_title, R.string.landing_watch_body),
+        Triple(Icons.Outlined.QrCodeScanner, R.string.landing_check_in_title, R.string.landing_check_in_body),
+        Triple(Icons.Outlined.FavoriteBorder, R.string.landing_give_title, R.string.landing_give_body),
+    )
+
+    LandingCard {
+        Column(verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.base)) {
+            for ((icon, title, detail) in rows) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.base),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .semantics(mergeDescendants = true) {}
+                ) {
+                    Box(
+                        contentAlignment = Alignment.Center,
+                        modifier = Modifier
+                            .size(FaithFormTokens.TouchTarget.minimum)
+                            .background(
+                                theme.palette.brandAccent.copy(alpha = 0.16f),
+                                RoundedCornerShape(FaithFormTokens.Radius.md)
+                            )
+                    ) {
+                        Icon(
+                            icon,
+                            contentDescription = null,
+                            tint = theme.palette.brandPrimary,
+                            modifier = Modifier.size(FaithFormTokens.IconSize.sizeMedium)
+                        )
+                    }
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.xs),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Text(
+                            stringResource(title),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = theme.palette.contentPrimary
+                        )
+                        Text(
+                            stringResource(detail),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = theme.palette.contentSecondary
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** The iPhone's `FaithFormCard`: the surface colour with a hairline edge. */
+@Composable
+private fun LandingCard(content: @Composable () -> Unit) {
+    val theme = LocalFaithFormTheme.current
+    val shape = RoundedCornerShape(FaithFormTokens.Radius.md)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(theme.palette.surface, shape)
+            .border(FaithFormTokens.BorderWidth.hairline, theme.palette.border, shape)
+            .padding(FaithFormTokens.Spacing.base)
+    ) { content() }
+}
+
+/**
+ * The ground behind the front door: the page colour, warmed at the top by the
+ * brand gold, with the mark set large and faint in the corner.
+ *
+ * Decoration only — hidden from TalkBack, edge to edge behind the system bars,
+ * and the watermark is dropped under increased contrast, where anything behind
+ * text should get out of the way.
+ */
+@Composable
+private fun LandingBackdrop() {
+    val theme = LocalFaithFormTheme.current
+
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .background(theme.palette.background)
-            .safeDrawingPadding()
-            .padding(FaithFormTokens.Layout.screenPaddingHorizontal),
-        verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.lg)
+            .clearAndSetSemantics {}
     ) {
-        Spacer(Modifier.heightIn(min = FaithFormTokens.Spacing.xxl))
-
-        // A link that named a church replaces the product's own name with it.
-        // Someone who scanned a bulletin QR code came for their church, not for
-        // FaithForm, and the front door should say so.
-        if (churchContext != null) {
-            ChurchContextHeader(churchContext)
-        } else {
-            Text(
-                stringResource(R.string.app_name),
-                style = MaterialTheme.typography.displayLarge,
-                color = theme.palette.contentPrimary
-            )
-            Text(
-                stringResource(R.string.sign_in_body),
-                style = MaterialTheme.typography.bodyLarge,
-                color = theme.palette.contentSecondary
-            )
-        }
-
-        // The generic "you have an invitation" banner is redundant once the
-        // header names the church the invitation is *for*.
-        if (hasPendingInvitation && churchContext == null) {
-            Text(
-                stringResource(R.string.invitation_pending_banner),
-                style = MaterialTheme.typography.bodyMedium,
-                color = theme.palette.contentSecondary,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(theme.palette.surface, RoundedCornerShape(FaithFormTokens.Radius.lg))
-                    .padding(FaithFormTokens.Spacing.base)
-            )
-        }
-
-        // A confirmation link lands here, on the front door, before any
-        // screen was chosen. Both of its states are visible in place: the
-        // exchange in progress, and the sentence when it could not finish.
-        when (confirmationPhase) {
-            is ConfirmationPhase.Working -> Text(
-                stringResource(R.string.auth_confirming_email),
-                style = MaterialTheme.typography.bodyMedium,
-                color = theme.palette.contentSecondary,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(theme.palette.surface, RoundedCornerShape(FaithFormTokens.Radius.lg))
-                    .padding(FaithFormTokens.Spacing.base)
-            )
-            is ConfirmationPhase.Failed -> Text(
-                stringResource(confirmationPhase.error.messageRes()),
-                style = MaterialTheme.typography.bodyMedium,
-                color = theme.palette.destructive,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(theme.palette.surface, RoundedCornerShape(FaithFormTokens.Radius.lg))
-                    .padding(FaithFormTokens.Spacing.base)
-            )
-            is ConfirmationPhase.Idle -> Unit
-        }
-
-        Spacer(Modifier.weight(1f))
-
-        Button(
-            onClick = onCreateAccount,
-            modifier = Modifier
+        Box(
+            Modifier
                 .fillMaxWidth()
-                .heightIn(min = FaithFormTokens.TouchTarget.recommended)
-        ) { Text(stringResource(R.string.create_account)) }
-        OutlinedButton(
-            onClick = onSignIn,
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = FaithFormTokens.TouchTarget.recommended)
-        ) { Text(stringResource(R.string.sign_in)) }
-        // A link can be forwarded, mistyped, or simply not meant for the person
-        // holding it. Disowning the church has to be one tap away, or the
-        // branding becomes a trap.
-        if (churchContext != null && onClearChurchContext != null) {
-            TextButton(onClick = onClearChurchContext, modifier = Modifier.fillMaxWidth()) {
-                Text(stringResource(R.string.church_context_not_yours))
-            }
+                .fillMaxHeight(0.5f)
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            theme.palette.brandAccent.copy(alpha = 0.14f),
+                            theme.palette.background.copy(alpha = 0f)
+                        )
+                    )
+                )
+        )
+        if (!theme.increaseContrast) {
+            // Large and faint behind the top of the page, so the brand fills
+            // the front door without competing with the headline over it.
+            FaithFormMark(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .offset(x = 96.dp, y = (-24).dp)
+                    .height(280.dp)
+                    .graphicsLayer {
+                        alpha = 0.05f
+                        rotationZ = -8f
+                    }
+            )
         }
-        Spacer(Modifier.heightIn(min = FaithFormTokens.Spacing.md))
     }
 }
 
