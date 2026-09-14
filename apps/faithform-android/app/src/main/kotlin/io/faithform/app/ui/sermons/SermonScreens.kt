@@ -15,6 +15,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.semantics
@@ -42,6 +43,9 @@ fun SermonListScreen(
     onOpen: (SermonListItem) -> Unit,
     onLoadMore: () -> Unit,
     onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+    /** False when a title bar above already says "Sermon notes". */
+    showTitle: Boolean = true,
 ) {
     val theme = LocalFaithFormTheme.current
 
@@ -75,16 +79,18 @@ fun SermonListScreen(
 
         is SermonListPhase.Loaded ->
             Column(
-                modifier = Modifier
+                modifier = modifier
                     .fillMaxSize()
                     .padding(FaithFormTokens.Spacing.lg),
                 verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.md),
             ) {
-                Text(
-                    stringResource(R.string.sermons_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = theme.palette.contentPrimary,
-                )
+                if (showTitle) {
+                    Text(
+                        stringResource(R.string.sermons_title),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = theme.palette.contentPrimary,
+                    )
+                }
 
                 OutlinedTextField(
                     value = state.searchTerm,
@@ -115,7 +121,7 @@ fun SermonListScreen(
                             if (item.sermonId == phase.items.lastOrNull()?.sermonId &&
                                 state.canLoadMore
                             ) {
-                                onLoadMore()
+                                LaunchedEffect(item.sermonId) { onLoadMore() }
                             }
                         }
                     }

@@ -17,6 +17,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -35,6 +36,7 @@ import io.faithform.app.design.LocalFaithFormTheme
 import io.faithform.app.ui.discovery.EmptyState
 import io.faithform.app.ui.discovery.SkeletonCard
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Church
 import androidx.compose.material.icons.outlined.SearchOff
 import androidx.compose.material.icons.outlined.WarningAmber
@@ -326,22 +328,28 @@ fun ChurchChooserScreen(
     phase: ChooserPhase,
     selectedSlug: String?,
     onSelect: (String) -> Unit,
-    onAddAnother: () -> Unit
+    onAddAnother: () -> Unit,
+    modifier: Modifier = Modifier,
+    showTitle: Boolean = true,
+    /** Actions about the selected church, drawn between the list and "add another". */
+    footer: @Composable () -> Unit = {}
 ) {
     val theme = LocalFaithFormTheme.current
 
     Column(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             .background(theme.palette.background)
             .padding(FaithFormTokens.Layout.screenPaddingHorizontal),
         verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.base)
     ) {
-        Text(
-            stringResource(R.string.choose_church_title),
-            style = MaterialTheme.typography.displayMedium,
-            color = theme.palette.contentPrimary
-        )
+        if (showTitle) {
+            Text(
+                stringResource(R.string.choose_church_title),
+                style = MaterialTheme.typography.displayMedium,
+                color = theme.palette.contentPrimary
+            )
+        }
 
         when (phase) {
             is ChooserPhase.Loading -> repeat(2) { SkeletonCard() }
@@ -371,6 +379,8 @@ fun ChurchChooserScreen(
                 icon = Icons.Outlined.WarningAmber,
             )
         }
+
+        footer()
 
         OutlinedButton(
             onClick = onAddAnother,
@@ -416,7 +426,13 @@ private fun ChooserRow(church: ChooserChurch, isSelected: Boolean, onSelect: () 
             Chip(stateLabel, isDanger = church.state == RelationshipState.BLOCKED)
         }
         if (isSelected) {
-            Text("✓", style = MaterialTheme.typography.titleLarge, color = theme.palette.brandAccent)
+            // Decorative: the row already carries `selected` in its merged
+            // semantics, so TalkBack announces the selection once, not twice.
+            Icon(
+                Icons.Outlined.CheckCircle,
+                contentDescription = null,
+                tint = theme.palette.brandAccent
+            )
         }
     }
 }

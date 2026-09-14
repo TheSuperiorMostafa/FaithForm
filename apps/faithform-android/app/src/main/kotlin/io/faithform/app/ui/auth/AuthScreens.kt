@@ -36,7 +36,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -52,6 +58,8 @@ import io.faithform.app.PendingChurchContext
 import io.faithform.app.R
 import io.faithform.app.design.FaithFormTokens
 import io.faithform.app.design.LocalFaithFormTheme
+import io.faithform.app.ui.account.LegalLinks
+import io.faithform.app.ui.account.openWebLink
 
 /**
  * The signed-out journey: one landing screen, two doors.
@@ -259,11 +267,7 @@ private fun CreateAccountScreen(
 
         (phase as? AuthUiPhase.Failed)?.let { AuthErrorText(it.error) }
 
-        Text(
-            stringResource(R.string.auth_terms_notice),
-            style = MaterialTheme.typography.labelSmall,
-            color = theme.mutedContent
-        )
+        TermsNotice()
 
         Button(
             onClick = viewModel::createAccount,
@@ -669,4 +673,49 @@ private fun CheckEmailScreen(viewModel: AuthViewModel, onSignIn: () -> Unit) {
             Text(stringResource(R.string.auth_check_email_change_address))
         }
     }
+}
+
+/**
+ * "By continuing, you agree to FaithForm's Terms of Service and Privacy
+ * Policy." — with both names as real links.
+ *
+ * A notice that names two documents a person cannot open is not agreement to
+ * anything; Google Play also expects the privacy policy to be reachable from the
+ * place data is first collected, which is this form. The links open in the
+ * browser, never in the app, and each is announced to TalkBack as a link.
+ */
+@Composable
+private fun TermsNotice() {
+    val theme = LocalFaithFormTheme.current
+    val context = LocalContext.current
+    val terms = stringResource(R.string.terms_of_service)
+    val privacy = stringResource(R.string.privacy_policy)
+    val sentence = stringResource(R.string.auth_terms_notice_linked, terms, privacy)
+    val linkStyle = TextLinkStyles(
+        style = SpanStyle(color = theme.palette.brandPrimary, textDecoration = TextDecoration.Underline)
+    )
+
+    // The two names are substituted into the sentence, so they appear in it
+    // verbatim whatever the language; their positions are where the links go.
+    val links = listOf(
+        Triple(sentence.indexOf(terms), terms, LegalLinks.TERMS),
+        Triple(sentence.indexOf(privacy), privacy, LegalLinks.PRIVACY_POLICY),
+    ).filter { it.first >= 0 }.sortedBy { it.first }
+
+    val text = buildAnnotatedString {
+        var cursor = 0
+        for ((start, label, url) in links) {
+            if (start < cursor) continue
+            append(sentence.substring(cursor, start))
+            withLink(LinkAnnotation.Url(url, linkStyle) { openWebLink(context, url) }) { append(label) }
+            cursor = start + label.length
+        }
+        append(sentence.substring(cursor))
+    }
+
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall,
+        color = theme.mutedContent
+    )
 }

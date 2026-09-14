@@ -3,6 +3,8 @@ package io.faithform.app.attendance
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
@@ -175,5 +177,42 @@ class CameraXScanner(
                 continuation.resume(resolved)
             }, ContextCompat.getMainExecutor(context))
         }
+    }
+}
+
+/**
+ * The camera dialog, registered on the Activity that will show it.
+ *
+ * Lives in this file on purpose: `Manifest.permission.CAMERA` may appear in
+ * exactly one production source, the scanner adapter, so that "only the scan
+ * button can raise a camera prompt" is a property of the source tree rather
+ * than of every screen remembering it (`tests/security/checkin-privacy.test.ts`).
+ * `MainActivity` constructs one — launchers must be registered before START —
+ * and hands it to the check-in screen, which is the only caller of [request].
+ *
+ * Activity-scoped, like the scanner it serves: the camera binds to a lifecycle
+ * owner, so a rotation rebuilds both. A dialog that was open during rotation is
+ * answered to the new Activity; the person taps "Scan the code" again and, the
+ * permission now decided, the camera starts.
+ */
+class CameraPermissionRequester(private val activity: ComponentActivity) {
+
+    private var pending: ((Boolean) -> Unit)? = null
+
+    private val launcher = activity.registerForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        pending?.invoke(granted)
+        pending = null
+    }
+
+    /** True when Android will still show the dialog after a refusal. */
+    fun canAskAgain(): Boolean =
+        activity.shouldShowRequestPermissionRationale(Manifest.permission.CAMERA)
+
+    suspend fun request(): Boolean = suspendCancellableCoroutine { continuation ->
+        pending = { granted -> if (continuation.isActive) continuation.resume(granted) }
+        continuation.invokeOnCancellation { pending = null }
+        launcher.launch(Manifest.permission.CAMERA)
     }
 }

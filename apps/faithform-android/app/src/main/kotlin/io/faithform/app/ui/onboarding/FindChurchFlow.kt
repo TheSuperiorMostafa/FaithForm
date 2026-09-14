@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -26,6 +27,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -65,6 +68,31 @@ private sealed interface FindChurchRoute {
     data object Education : FindChurchRoute
     data class Church(val slug: String) : FindChurchRoute
     data object Invitation : FindChurchRoute
+
+    companion object {
+        /** A route as a string, so it survives a configuration change and a process restore. */
+        val Saver: Saver<FindChurchRoute, String> = Saver(
+            save = { route ->
+                when (route) {
+                    Welcome -> "welcome"
+                    Search -> "search"
+                    Education -> "education"
+                    Invitation -> "invitation"
+                    is Church -> "church:${route.slug}"
+                }
+            },
+            restore = { saved ->
+                when {
+                    saved == "welcome" -> Welcome
+                    saved == "search" -> Search
+                    saved == "education" -> Education
+                    saved == "invitation" -> Invitation
+                    saved.startsWith("church:") -> Church(saved.removePrefix("church:"))
+                    else -> null
+                }
+            },
+        )
+    }
 }
 
 @Composable
@@ -74,11 +102,21 @@ fun FindChurchFlow(
     locationProvider: LocationProvider,
     showWelcome: Boolean,
     onSignOut: (() -> Unit)? = null,
+    /**
+     * Opens the account-deletion confirmation. Offered on the welcome screen
+     * because a person who signed up and found no church must still be able to
+     * delete the account without first joining one — Google Play requires
+     * deletion to be reachable from inside the app, not only from a tab.
+     */
+    onDeleteAccount: (() -> Unit)? = null,
     onExit: (() -> Unit)? = null
 ) {
     val start: FindChurchRoute =
         if (showWelcome) FindChurchRoute.Welcome else FindChurchRoute.Search
-    var route by remember { mutableStateOf(start) }
+    // Saved, not just remembered: rotating the phone on the location dialog
+    // used to drop the person back on the welcome screen, with the answer to
+    // the dialog they had just given going nowhere visible.
+    var route by rememberSaveable(stateSaver = FindChurchRoute.Saver) { mutableStateOf(start) }
     val scope = rememberCoroutineScope()
 
     val discovery: DiscoveryViewModel = viewModel(key = "find-church-discovery") {
@@ -126,14 +164,20 @@ fun FindChurchFlow(
                 onFindChurch = { route = FindChurchRoute.Search },
                 onHaveInvitation = { route = FindChurchRoute.Invitation }
             )
-            if (onSignOut != null) {
-                TextButton(
-                    onClick = onSignOut,
+            if (onSignOut != null || onDeleteAccount != null) {
+                Row(
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .safeDrawingPadding()
                         .padding(FaithFormTokens.Spacing.sm)
-                ) { Text(stringResource(R.string.sign_out)) }
+                ) {
+                    onSignOut?.let {
+                        TextButton(onClick = it) { Text(stringResource(R.string.sign_out)) }
+                    }
+                    onDeleteAccount?.let {
+                        TextButton(onClick = it) { Text(stringResource(R.string.delete_account)) }
+                    }
+                }
             }
         }
 

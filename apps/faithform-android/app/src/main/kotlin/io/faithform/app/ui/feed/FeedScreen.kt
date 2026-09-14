@@ -15,6 +15,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
@@ -50,12 +53,13 @@ fun HomeFeedScreen(
     phase: FeedPhase,
     churchName: String,
     onOpenItem: (FeedItem) -> Unit,
-    onReachedEnd: () -> Unit
+    onReachedEnd: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val theme = LocalFaithFormTheme.current
 
     LazyColumn(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxSize()
             .background(theme.palette.background)
             .padding(horizontal = FaithFormTokens.Layout.screenPaddingHorizontal),
@@ -79,7 +83,10 @@ fun HomeFeedScreen(
                 }
                 items(phase.items, key = { it.id }) { item ->
                     AnnouncementCard(item) { onOpenItem(item) }
-                    if (item.id == phase.items.lastOrNull()?.id) onReachedEnd()
+                    // Once per last item, not on every recomposition of it.
+                    if (item.id == phase.items.lastOrNull()?.id) {
+                        LaunchedEffect(item.id) { onReachedEnd() }
+                    }
                 }
             }
 
@@ -217,4 +224,41 @@ fun formatWhen(item: FeedItem): String {
     // Same day shows a time range; a multi-day event shows both dates.
     val endFormatter = if (startLocal.toLocalDate() == endLocal.toLocalDate()) timeOnly else full
     return "$startText – ${endFormatter.format(endLocal)}"
+}
+
+/**
+ * One announcement, in full.
+ *
+ * The card in the feed shows three lines of the body; this is the rest of it,
+ * with the when and the where in the church's own timezone. The poster keeps
+ * its reserved space, as on the card.
+ */
+@Composable
+fun AnnouncementDetailScreen(item: FeedItem, modifier: Modifier = Modifier) {
+    val theme = LocalFaithFormTheme.current
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(theme.palette.background)
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = FaithFormTokens.Layout.screenPaddingHorizontal),
+        verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.md)
+    ) {
+        if (item.posterUrl != null) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f)
+                    .clip(RoundedCornerShape(FaithFormTokens.Radius.lg))
+                    .background(theme.palette.surfaceSunken)
+                    .semantics { item.posterAltText?.let { contentDescription = it } }
+            ) {}
+        }
+        Text(item.title, style = MaterialTheme.typography.displayMedium, color = theme.palette.contentPrimary)
+        Text(formatWhen(item), style = MaterialTheme.typography.labelLarge, color = theme.palette.brandAccent)
+        item.location?.takeIf { it.isNotBlank() }?.let {
+            Text(it, style = MaterialTheme.typography.bodyMedium, color = theme.mutedContent)
+        }
+        Text(item.body, style = MaterialTheme.typography.bodyLarge, color = theme.palette.contentPrimary)
+    }
 }

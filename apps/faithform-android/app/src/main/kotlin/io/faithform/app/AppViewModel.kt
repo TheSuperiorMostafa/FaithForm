@@ -2,15 +2,25 @@ package io.faithform.app
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import io.faithform.app.contract.AccountActionRequest
+import io.faithform.app.contract.AccountRequest
+import io.faithform.app.contract.AccountRequestKind
 import io.faithform.app.contract.Bootstrap
 import io.faithform.app.contract.ChurchProfile
 import io.faithform.app.contract.InvitationPreview
 import io.faithform.app.contract.MobileErrorCode
 import io.faithform.app.contract.OnboardingState
+import io.faithform.app.contract.SelectChurchRequest
+import io.faithform.app.contract.SelectedChurch
+import io.faithform.app.host.HostNavigation
+import io.faithform.app.host.HostTab
 import io.faithform.app.navigation.AuthCallbackLink
 import io.faithform.app.navigation.DeepLinkParser
 import io.faithform.app.navigation.Destination
 import io.faithform.app.navigation.InvitationLink
+import io.faithform.app.navigation.RouteRegistry
+import io.faithform.app.storage.CachePartition
+import kotlinx.coroutines.flow.Flow
 import io.faithform.app.network.ApiClient
 import io.faithform.app.network.ApiException
 import io.faithform.app.network.AuthException
@@ -68,6 +78,28 @@ sealed interface ConfirmationPhase {
 }
 
 /**
+ * Where a request to delete the account stands.
+ *
+ * Google Play requires that an account can be deleted from inside the app, and
+ * the previous version of this flow deleted on a single tap, ignored what the
+ * server said, and signed the person out as though it had worked either way. A
+ * person whose request never reached FaithForm was told nothing and left
+ * believing their data was gone.
+ *
+ * So: nothing is sent until the person has read what happens and confirmed
+ * ([Confirming]); the local session is cleared only once the server has
+ * recorded the request; and a failure is shown in the dialog with the account
+ * still signed in, so they can try again.
+ */
+sealed interface DeletionPhase {
+    data object Idle : DeletionPhase
+    data object Confirming : DeletionPhase
+    data object Working : DeletionPhase
+    /** [message] is the server's own sentence when it gave one; null means it was never reached. */
+    data class Failed(val message: String?) : DeletionPhase
+}
+
+/**
  * A church identified *before* sign-in.
  *
  * This is what makes the signed-out screens say "Join Grace Community" over the
@@ -97,7 +129,18 @@ class AppViewModel(
     private val sessions: SessionGateway,
     private val cache: PartitionedCache,
     private val environmentKey: String,
-    private val auth: SupabaseAuthClient? = null
+    private val auth: SupabaseAuthClient? = null,
+    /**
+     * The same registry `MainActivity` builds, so a deep link and a tab are
+     * held to one set of rules. Defaults to the minimum a test needs.
+     */
+    val registry: RouteRegistry = RouteRegistry(),
+    /**
+     * Fires whenever any request discovers the session has ended — a 401 from
+     * any screen, or a refresh token the identity provider refused. Emitted by
+     * `ApiClient` through the container, collected once here.
+     */
+    sessionEnded: Flow<Unit>? = null
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<LaunchPhase>(LaunchPhase.Loading)
@@ -130,8 +173,46 @@ class AppViewModel(
     private val _churchContext = MutableStateFlow<PendingChurchContext?>(null)
     val churchContext: StateFlow<PendingChurchContext?> = _churchContext.asStateFlow()
 
+    /**
+     * The church the church-scoped tabs are about. Chosen by
+     * [HostNavigation.adoptSelection] after every bootstrap, and by the person
+     * from the Church tab.
+     */
+    private val _selectedChurchSlug = MutableStateFlow<String?>(null)
+    val selectedChurchSlug: StateFlow<String?> = _selectedChurchSlug.asStateFlow()
+
+    private val _selectedTab = MutableStateFlow(HostTab.HOME)
+    val selectedTab: StateFlow<HostTab> = _selectedTab.asStateFlow()
+
+    private val _deletion = MutableStateFlow<DeletionPhase>(DeletionPhase.Idle)
+    val deletion: StateFlow<DeletionPhase> = _deletion.asStateFlow()
+
+    /**
+     * True from the moment a deletion request is recorded until the person has
+     * read, on the sign-in screen, that they were signed out because of it.
+     */
+    private val _deletionRequested = MutableStateFlow(false)
+    val deletionRequested: StateFlow<Boolean> = _deletionRequested.asStateFlow()
+
+    fun dismissDeletionNotice() {
+        _deletionRequested.value = false
+    }
+
+    /**
+     * One idempotency key per confirmed deletion, kept across retries so a
+     * request whose response was lost joins the one the server already recorded
+     * instead of opening a second.
+     */
+    private var deletionKey: String? = null
+
     private var onboardingState: OnboardingState? = null
     private var pendingDestination: Destination? = null
+
+    init {
+        sessionEnded?.let { events ->
+            viewModelScope.launch { events.collect { handleSessionEnded() } }
+        }
+    }
 
     /**
      * One idempotency key per token, stable across retries of the same
@@ -144,6 +225,20 @@ class AppViewModel(
 
     fun load() {
         viewModelScope.launch { loadNow(quiet = false) }
+    }
+
+    private var started = false
+
+    /**
+     * The first load of this view model's life. An Activity recreated by a
+     * rotation calls this again and gets nothing: the state it needs is
+     * already here, and a second bootstrap would flash the spinner for no
+     * reason.
+     */
+    fun start() {
+        if (started) return
+        started = true
+        load()
     }
 
     /** Refreshes in place after something changed — a join, an accepted
@@ -180,10 +275,21 @@ class AppViewModel(
             // would be the worse failure.
             onboardingState = fetchOnboardingState()
 
-            _state.value = if (onboardingState?.needsOnboarding == true) {
-                LaunchPhase.Onboarding(bootstrap)
+            _selectedChurchSlug.value = HostNavigation.adoptSelection(
+                bootstrap = bootstrap,
+                serverPreference = onboardingState?.selectedChurchSlug
+                    ?: bootstrap.profile.selectedChurchSlug,
+                current = _selectedChurchSlug.value,
+            )?.churchSlug
+
+            if (onboardingState?.needsOnboarding == true) {
+                _state.value = LaunchPhase.Onboarding(bootstrap)
             } else {
-                LaunchPhase.Ready(bootstrap, isStale = false)
+                _state.value = LaunchPhase.Ready(bootstrap, isStale = false)
+                // A link that arrived before the app could act on it — at a
+                // cold start, or while signed out — is honoured now, through the
+                // same gates a tab passes.
+                consumePendingDestination()?.let { openDestination(it, bootstrap) }
             }
         } catch (error: ApiException) {
             _state.value = when {
@@ -307,7 +413,14 @@ class AppViewModel(
             return
         }
 
-        val destination = DeepLinkParser.parse(raw)
+        val destination = DeepLinkParser.parse(raw) ?: return
+
+        // Already home: act on it now. Otherwise it waits for the next Ready.
+        val ready = _state.value as? LaunchPhase.Ready
+        if (ready != null && sessions.current() != null) {
+            openDestination(destination, ready.bootstrap)
+            return
+        }
         pendingDestination = destination
 
         // Signed out, a church link still carries meaning: it says where the
@@ -316,6 +429,86 @@ class AppViewModel(
         if (destination is Destination.Church && sessions.current() == null) {
             viewModelScope.launch { resolveChurchContextFromSlug(destination.slug) }
         }
+    }
+
+    /**
+     * Goes where a link points, or nowhere.
+     *
+     * [HostNavigation.resolveLink] applies every gate; a link that fails any of
+     * them does nothing at all. One that passes selects its church first, so
+     * `faithform://church/grace/give` opens Give *for Grace*, not for whichever
+     * church happened to be selected.
+     */
+    private fun openDestination(destination: Destination, bootstrap: Bootstrap) {
+        val target = HostNavigation.resolveLink(destination, bootstrap, registry) ?: return
+        target.churchSlug?.let { _selectedChurchSlug.value = it }
+        _selectedTab.value = target.tab
+    }
+
+    fun selectTab(tab: HostTab) {
+        _selectedTab.value = tab
+    }
+
+    /**
+     * Chooses the church the church-scoped tabs are about.
+     *
+     * Only a church this account can read is selectable — a blocked or left
+     * row is shown so its absence is not mysterious, but it cannot be chosen.
+     * The choice applies at once and is then recorded on the server as the
+     * account's preference, so the same church is selected on the next device.
+     * That write is a preference, not authorization: if it fails nothing is
+     * undone, and every read still checks access on its own.
+     */
+    fun selectChurch(slug: String) {
+        val ready = _state.value as? LaunchPhase.Ready ?: return
+        val relationship = ready.bootstrap.relationships
+            .firstOrNull { it.churchSlug == slug && it.canReadPublishedContent } ?: return
+        if (_selectedChurchSlug.value == relationship.churchSlug) return
+        _selectedChurchSlug.value = relationship.churchSlug
+
+        viewModelScope.launch {
+            runCatching {
+                api.send(
+                    path = "api/mobile/v1/account/selected-church",
+                    serializer = MobileSuccess.serializer(SelectedChurch.serializer()),
+                    method = "PUT",
+                    body = json.encodeToString(
+                        SelectChurchRequest.serializer(),
+                        SelectChurchRequest(churchSlug = relationship.churchSlug)
+                    )
+                ).value
+            }.getOrNull()?.let { reply ->
+                // The server's authorization version is authoritative. If it
+                // moved, every partition cached under the old one is stale and
+                // must not be read again — so drop them and reload.
+                if (reply.authorizationVersion != ready.bootstrap.profile.authorizationVersion) {
+                    cache.purgeAllPrivate()
+                    loadNow(quiet = true)
+                }
+            }
+        }
+    }
+
+    /**
+     * The cache partition for [churchSlug] under the current account and
+     * authorization version, or null when there is no signed-in bootstrap.
+     * Every church-scoped feature reads and writes through this, which is what
+     * makes a switched church, a different account or a bumped version
+     * unreadable rather than merely hidden.
+     */
+    fun partition(churchSlug: String?): CachePartition? {
+        val bootstrap = when (val current = _state.value) {
+            is LaunchPhase.Ready -> current.bootstrap
+            is LaunchPhase.Onboarding -> current.bootstrap
+            else -> return null
+        }
+        val accountId = sessions.current()?.accountId ?: return null
+        return CachePartition(
+            environment = environmentKey,
+            accountId = accountId,
+            churchSlug = churchSlug,
+            authorizationVersion = bootstrap.profile.authorizationVersion
+        )
     }
 
     /**
@@ -528,39 +721,101 @@ class AppViewModel(
                 )
             }
 
-            sessions.purgeEverything()
-            cache.purgeAllPrivate()
-            onboardingState = null
-            _pendingInvitationToken.value = null
-            _churchContext.value = null
-            _invitationPhase.value = InvitationPhase.Idle
-            _state.value = LaunchPhase.SignedOut
+            clearLocal()
         }
     }
 
-    fun requestDeletion() {
+    /**
+     * The session ended somewhere else — a 401 from any screen, or a refresh
+     * token the identity provider refused.
+     *
+     * The same local clean-up as signing out, without the server call: there
+     * is no session left to sign out with. The person lands on the sign-in
+     * screen rather than on an offline state whose retry could never work.
+     */
+    private suspend fun handleSessionEnded() {
+        if (_state.value is LaunchPhase.SignedOut) return
+        clearLocal()
+    }
+
+    /** Everything this device holds for the account, gone — in every partition. */
+    private suspend fun clearLocal() {
+        sessions.purgeEverything()
+        cache.purgeAllPrivate()
+        onboardingState = null
+        pendingDestination = null
+        deletionKey = null
+        _selectedChurchSlug.value = null
+        _selectedTab.value = HostTab.HOME
+        _deletion.value = DeletionPhase.Idle
+        _pendingInvitationToken.value = null
+        _churchContext.value = null
+        _invitationPhase.value = InvitationPhase.Idle
+        _state.value = LaunchPhase.SignedOut
+    }
+
+    // -----------------------------------------------------------------------
+    // Account deletion
+    // -----------------------------------------------------------------------
+
+    /** Opens the confirmation. Nothing is sent. */
+    fun beginDeletion() {
+        if (_deletion.value !is DeletionPhase.Working) _deletion.value = DeletionPhase.Confirming
+    }
+
+    /** "Keep my account". A request already on its way cannot be recalled by a dialog. */
+    fun cancelDeletion() {
+        if (_deletion.value is DeletionPhase.Working) return
+        _deletion.value = DeletionPhase.Idle
+        deletionKey = null
+    }
+
+    /**
+     * Sends the deletion request, and signs out only once it is recorded.
+     *
+     * `POST api/mobile/v1/account/requests {"kind":"deletion"}` with an
+     * idempotency key that survives retries of this confirmation. On success
+     * the server marks the account `deletion_requested` and bumps its
+     * authorization version, so every cached projection everywhere is stale;
+     * this device then purges its session and every private partition.
+     *
+     * On failure the account stays signed in and the dialog says it was *not*
+     * deleted — the one thing a person must never be wrong about here.
+     */
+    fun confirmDeletion() {
+        if (_deletion.value is DeletionPhase.Working) return
+        val key = deletionKey ?: UUID.randomUUID().toString().also { deletionKey = it }
+        _deletion.value = DeletionPhase.Working
+
         viewModelScope.launch {
-            // The server command first, so the deletion request actually
-            // exists; then the local half — purging credentials and every
-            // private partition — which this method guarantees regardless.
-            @Serializable
-            data class RequestReply(val id: String? = null)
-            runCatching {
+            val failure: DeletionPhase.Failed? = try {
                 api.send(
                     path = "api/mobile/v1/account/requests",
-                    serializer = MobileSuccess.serializer(RequestReply.serializer()),
+                    serializer = MobileSuccess.serializer(AccountRequest.serializer()),
                     method = "POST",
                     body = json.encodeToString(
-                        kotlinx.serialization.json.JsonObject.serializer(),
-                        buildJsonObject { put("kind", "deletion") }
+                        AccountActionRequest.serializer(),
+                        AccountActionRequest(kind = AccountRequestKind.DELETION)
                     ),
-                    idempotencyKey = UUID.randomUUID().toString()
-                )
+                    idempotencyKey = key
+                ).value ?: throw ApiException.transport()
+                null
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (error: ApiException) {
+                DeletionPhase.Failed(if (error.retryable) null else error.displayMessage)
+            } catch (_: Exception) {
+                DeletionPhase.Failed(null)
             }
 
-            sessions.purgeEverything()
-            cache.purgeAllPrivate()
-            _state.value = LaunchPhase.SignedOut
+            if (failure != null) {
+                // A session the server has already ended is handled by the
+                // shell's sign-out path; everything else stays on screen.
+                if (_state.value !is LaunchPhase.SignedOut) _deletion.value = failure
+                return@launch
+            }
+            clearLocal()
+            _deletionRequested.value = true
         }
     }
 }

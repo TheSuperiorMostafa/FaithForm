@@ -13,7 +13,21 @@ import io.faithform.app.network.SupabaseAuthClient
 import io.faithform.app.network.SupabaseAuthConfig
 import io.faithform.app.FaithFormApplication
 import io.faithform.app.attendance.AutomaticAttendanceCoordinator
+import io.faithform.app.giving.EncryptedPendingDonationStore
+import io.faithform.app.giving.GivingClient
+import io.faithform.app.giving.PaymentSheetRequest
+import io.faithform.app.giving.PendingDonationStore
+import io.faithform.app.giving.SheetOutcome
+import io.faithform.app.host.ActivityResultRelay
+import io.faithform.app.media.InMemoryResumePositionStore
+import io.faithform.app.media.MediaClient
+import io.faithform.app.media.ResumePositionStore
+import io.faithform.app.network.ProjectionCache
+import io.faithform.app.sermons.SermonClient
 import io.faithform.app.storage.PartitionedCache
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 
 /**
  * Everything the app needs, built once.
@@ -117,15 +131,52 @@ class AppContainer(
         }
     )
 
+    /**
+     * Every request that discovers the session has ended reports it here, and
+     * the shell's view model collects it once — so no screen needs to know how
+     * to sign someone out.
+     */
+    private val sessionEndedEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val sessionEnded: SharedFlow<Unit> = sessionEndedEvents.asSharedFlow()
+
     val apiClient = ApiClient(
         environment = ApiEnvironment(environmentKey, apiOrigin),
         clientBuild = clientBuild,
         transport = transport,
-        tokens = sessionStore
+        tokens = sessionStore,
+        onSessionEnded = { sessionEndedEvents.tryEmit(Unit) }
     )
 
     /** Caches hold projections only. Credentials are never written here. */
     val cache = PartitionedCache()
+
+    /** The typed, ETag-carrying view of [cache] every feature client reads through. */
+    val projections = ProjectionCache(cache)
+
+    val mediaClient = MediaClient(apiClient, projections)
+    val sermonClient = SermonClient(apiClient, projections)
+    val givingClient = GivingClient(apiClient, projections)
+
+    /**
+     * Resume positions, for this process only. See `InMemoryResumePositionStore`
+     * for why nothing about viewing is written to disk in v1.
+     */
+    val resumePositions: ResumePositionStore = InMemoryResumePositionStore()
+
+    /**
+     * The one gift that may be mid-flight, kept in the encrypted store so it
+     * survives a process kill between "Give" and the server's answer — and is
+     * swept by sign-out's `purgeEverything` with everything else.
+     */
+    val pendingDonations: PendingDonationStore = EncryptedPendingDonationStore(secureStore)
+
+    /**
+     * Answers from system UI that outlive the Activity that raised it. Each
+     * Activity attaches its own launchers in `onCreate`; the view models hold
+     * these relays, never a launcher. See `ActivityResultRelay`.
+     */
+    val locationPermissions = ActivityResultRelay<Array<String>, Map<String, Boolean>>(unavailable = emptyMap())
+    val paymentSheets = ActivityResultRelay<PaymentSheetRequest, SheetOutcome>(unavailable = SheetOutcome.FAILED)
 
     /**
      * Automatic attendance, or null before the app has been opened once.
