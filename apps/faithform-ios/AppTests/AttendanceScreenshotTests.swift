@@ -15,7 +15,13 @@ import FaithFormKit
 @Suite("Automatic check-in screens", .serialized)
 struct AttendanceScreenshotTests {
     nonisolated static var enabled: Bool {
+        // Or a flag file the driving script drops into the app's temporary
+        // directory: `test-without-building` does not pass environment
+        // variables through to a hosted Swift Testing run.
         ProcessInfo.processInfo.environment["FAITHFORM_SCREENSHOTS"] == "1"
+            || FileManager.default.fileExists(
+                atPath: URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("faithform-screenshots.enabled").path
+            )
     }
 
     private let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("attendance-shots")
@@ -112,6 +118,49 @@ struct AttendanceScreenshotTests {
         )
     }
 
+    @Test("typing an unused character: the field shows what the model kept, and says why", .enabled(if: enabled))
+    func typedCodeField() async throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let model = CheckInScannerModel(
+            coordinator: CheckInScanCoordinator(camera: NoCamera(), submitter: NoSubmitter())
+        )
+        let window = try await show(
+            NavigationStack {
+                CheckInScannerScreen(model: model, onOpenSettings: {}, onDone: {})
+                    .navigationTitle(L.checkinScanTitle)
+                    .navigationBarTitleDisplayMode(.inline)
+            }
+        )
+        defer { window.isHidden = true }
+
+        let field = try #require(Self.textField(in: window), "no text field on the check-in screen")
+        field.becomeFirstResponder()
+        // One keystroke at a time, as a person types.
+        for character in "ABC1234" {
+            field.insertText(String(character))
+            try await Task.sleep(for: .milliseconds(150))
+        }
+        try await Task.sleep(for: .milliseconds(600))
+
+        #expect(model.typedCode == "BC34")
+        #expect(field.text == "BC34", "the field shows \(field.text ?? "nil"), the model kept BC34")
+        #expect(model.showsUnusedCharacterHint)
+        #expect(!model.canSubmitTypedCode)
+        field.resignFirstResponder()
+        try await Task.sleep(for: .milliseconds(400))
+        try snapshot(window, as: "11-typed-code-unused-characters")
+        try Data("field=\(field.text ?? "nil") model=\(model.typedCode) hint=\(model.showsUnusedCharacterHint)".utf8)
+            .write(to: directory.appendingPathComponent("11-typed-code-unused-characters.txt"))
+    }
+
+    private static func textField(in view: UIView) -> UITextField? {
+        if let field = view as? UITextField { return field }
+        for subview in view.subviews {
+            if let found = textField(in: subview) { return found }
+        }
+        return nil
+    }
+
     // MARK: -
 
     /// The status as the Check in tab shows it: its heading, under the title
@@ -139,6 +188,12 @@ struct AttendanceScreenshotTests {
     }
 
     private func render<V: View>(_ name: String, _ view: V) async throws {
+        let window = try await show(view)
+        defer { window.isHidden = true }
+        try snapshot(window, as: name)
+    }
+
+    private func show<V: View>(_ view: V) async throws -> UIWindow {
         let scene = try #require(
             UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first
         )
@@ -152,15 +207,31 @@ struct AttendanceScreenshotTests {
         )
         window.rootViewController = host
         window.makeKeyAndVisible()
-        defer { window.isHidden = true }
-
         try await Task.sleep(for: .milliseconds(900))
+        return window
+    }
 
+    private func snapshot(_ window: UIWindow, as name: String) throws {
         let renderer = UIGraphicsImageRenderer(bounds: window.bounds)
         let image = renderer.image { _ in
             window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
         }
         let data = try #require(image.pngData())
         try data.write(to: directory.appendingPathComponent("\(name).png"))
+    }
+}
+
+/// A camera that is never used: the typed field needs none.
+private actor NoCamera: QrScanningFacade {
+    func currentAuthorization() -> CameraAuthorization { .notDetermined }
+    func requestAccess() async -> CameraAuthorization { .denied }
+    func start(onCode: @Sendable @escaping (String) -> Void) async throws {}
+    func stop() async {}
+    func isAvailable() -> Bool { false }
+}
+
+private actor NoSubmitter: CheckInCodeSubmitting {
+    func submit(_ submission: CheckInSubmission, idempotencyKey: String) async throws -> AttendanceResult {
+        AttendanceResult(outcome: .rejected, message: "")
     }
 }
