@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { Smartphone } from "lucide-react";
 import { formatDistanceToNow } from "@/lib/format-date";
+import { isSermonShared, sermonAudienceLabel } from "@/lib/sermons/v1/share-rules";
 import { DeleteDraftButton } from "@/components/sermon-builder/delete-draft-button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
@@ -37,7 +39,16 @@ export function SermonList({ sermons }: { sermons: SermonListItem[] }) {
                   </p>
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-1">
-                  <div className="flex gap-1">
+                  <div className="flex flex-wrap justify-end gap-1">
+                    {isSermonShared(s) && (
+                      <Badge
+                        variant="info"
+                        title={`In the FaithForm app: ${sermonAudienceLabel(s.mobile_visibility) ?? ""}`}
+                      >
+                        <Smartphone className="mr-1 size-3.5" strokeWidth={2} aria-hidden />
+                        In the app · {sermonAudienceLabel(s.mobile_visibility, "short")}
+                      </Badge>
+                    )}
                     {(s.kind ?? "advanced") === "simple" && (
                       <Badge variant="outline">Slides</Badge>
                     )}
