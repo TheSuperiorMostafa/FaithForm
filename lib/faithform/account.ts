@@ -255,10 +255,40 @@ export async function recordConsent(
     throw new VisitorError("unavailable", "Could not save your choice.");
   }
 
-  // Withdrawing consent must reach a device that cached "allowed".
-  if (parsed.data.autoAttendanceConsent) {
-    await bumpAuthorizationVersion(account.id, admin);
+  if (!parsed.data.autoAttendanceConsent) {
+    return mapAccount(data);
   }
 
-  return mapAccount(data);
+  // Anything but a grant also removes the evidence already on its way. Open
+  // detections are deleted, so no dwell that began before the withdrawal is
+  // kept after it, and an attempt still waiting on dwell is closed. Attendance
+  // already counted is left exactly where it is.
+  //
+  // Not what enforces the withdrawal: every submission re-reads consent, and a
+  // confirmation is refused without it whatever detection it presents. This is
+  // the data minimisation on top, so a failure here does not undo the choice
+  // the person just made. Nothing is logged either way: a log line would be a
+  // record of who opted out. What a failed call leaves behind is bounded by the
+  // daily cleanup, which deletes every expired detection, and by the window
+  // closing on any attempt still pending.
+  if (parsed.data.autoAttendanceConsent !== "granted") {
+    await admin.rpc("withdraw_automatic_attendance_evidence", {
+      p_account_id: account.id,
+    });
+  }
+
+  // Withdrawing consent must reach a device that cached "allowed".
+  await bumpAuthorizationVersion(account.id, admin);
+
+  // Read back after the bump. The row selected above predates it, and
+  // returning that version told the phone to partition under a number the
+  // server had already moved past, so its next configuration fetch looked like
+  // another revocation.
+  const { data: current } = await admin
+    .from("visitor_accounts")
+    .select(ACCOUNT_COLUMNS)
+    .eq("id", account.id)
+    .maybeSingle();
+
+  return mapAccount(current ?? data);
 }
