@@ -3,6 +3,7 @@ import { logActivity } from "@/lib/activity/log";
 import { createClient } from "@/lib/supabase/server";
 import type { ChurchProfile } from "@/types/church-profile";
 import { buildSermonProfileContext } from "@/lib/ai/prompts";
+import { pickSermonUpdatableColumns } from "@/lib/sermon-builder/sermon-patch";
 import type {
   AIProvider,
   ChurchSettings,
@@ -210,8 +211,11 @@ export async function updateSermon(
   const existing = await getSermon(id);
   const supabase = db();
   const now = new Date().toISOString();
+  // Only known columns, whatever the caller passed: a typed signature is not a
+  // runtime guarantee, and a stray `church_id` or `mobile_visibility` here
+  // would move a sermon between churches or into the app.
   const dbPatch: Record<string, unknown> = {
-    ...patch,
+    ...pickSermonUpdatableColumns(patch as Record<string, unknown>),
     updated_at: now,
   };
 

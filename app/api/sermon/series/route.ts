@@ -8,7 +8,9 @@ import {
   createSeries,
   getChurchAISettings,
   updateSeries,
+  verifySeriesAccess,
 } from "@/lib/queries/sermons";
+import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -41,6 +43,12 @@ export async function POST(request: Request) {
         { error: "Title and theme are required" },
         { status: 400 },
       );
+    }
+
+    // Checked before the model call, not left to the update: a series id from
+    // another church should cost nothing and change nothing.
+    if (seriesId && !(await verifySeriesAccess(createClient(), seriesId, auth.churchId))) {
+      return NextResponse.json({ error: "Series not found" }, { status: 404 });
     }
 
     const settings = await getChurchAISettings(auth.churchId);
