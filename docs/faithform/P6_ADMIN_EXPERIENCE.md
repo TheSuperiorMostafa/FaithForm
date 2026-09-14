@@ -15,6 +15,13 @@ The new Services page is the authority for anything new.
 `attendance_policies`, layered church → campus → service. The most specific row
 wins, so a church can set a default and then say "except Wednesday evening".
 
+A church admin sets the church-level row, each campus's position and radius,
+and the weekly service times at `/dashboard/attendance/setup` (migration 0074;
+see `P7_NATIVE_AUTOMATIC_ATTENDANCE_ARCHITECTURE.md`). The dashboard offers
+narrower choices than the table allows: no wait or a stay of 1–15 minutes,
+accuracy 50–200 m, and a campus radius of 50–500 m. Nothing in the dashboard creates
+campus- or service-level rows.
+
 | Setting | Default | Bound |
 |---|---|---|
 | Manual | **on** | it is what the dashboard already does |
