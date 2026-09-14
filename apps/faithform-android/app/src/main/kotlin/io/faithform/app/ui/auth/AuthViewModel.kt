@@ -17,6 +17,7 @@ import kotlinx.coroutines.launch
  * the model runs under a plain JVM test.
  */
 enum class AuthUiError {
+    NAME_MISSING,
     EMAIL_INVALID,
     PASSWORD_MISSING,
     WEAK_PASSWORD,
@@ -122,6 +123,7 @@ class AuthViewModel(
     /** The one local rule worth having: don't send a request that cannot
      * possibly succeed. Everything subtler is the server's call. */
     private fun validate(forSignUp: Boolean): AuthUiError? {
+        if (forSignUp && _name.value.trim().isEmpty()) return AuthUiError.NAME_MISSING
         val email = trimmedEmail()
         if (email.isEmpty() || "@" !in email) return AuthUiError.EMAIL_INVALID
         if (_password.value.isEmpty()) return AuthUiError.PASSWORD_MISSING

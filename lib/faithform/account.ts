@@ -92,7 +92,8 @@ async function signUpDisplayName(
  *
  * A new row takes its display name from `defaults`, or else from the name
  * given at sign-up. That lookup is an Auth call, so it happens only on the way
- * to creating the row, never on the read every request makes.
+ * to creating the row — or once more when an existing row still has no name,
+ * so Account can heal profiles created before metadata was copied.
  */
 export async function ensureVisitorAccount(
   userId: string,
@@ -107,7 +108,27 @@ export async function ensureVisitorAccount(
     .eq("user_id", userId)
     .maybeSingle();
 
-  if (existing.data) return mapAccount(existing.data);
+  if (existing.data) {
+    const mapped = mapAccount(existing.data);
+    // A row created before sign-up metadata was copied can sit with a null
+    // name forever. Heal it once from Auth so Account shows who is signed in.
+    if (mapped.displayName) return mapped;
+
+    const healed =
+      sanitizeDisplayName(defaults?.displayName) ??
+      (await signUpDisplayName(admin, userId));
+    if (!healed) return mapped;
+
+    const updated = await admin
+      .from("visitor_accounts")
+      .update({ display_name: healed })
+      .eq("user_id", userId)
+      .select(ACCOUNT_COLUMNS)
+      .maybeSingle();
+
+    if (updated.data) return mapAccount(updated.data);
+    return { ...mapped, displayName: healed };
+  }
 
   const displayName =
     sanitizeDisplayName(defaults?.displayName) ??

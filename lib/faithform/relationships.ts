@@ -66,6 +66,25 @@ async function resolveChurchBySlug(
   };
 }
 
+async function resolveChurchById(
+  admin: SupabaseClient,
+  churchId: string,
+): Promise<ChurchContext | null> {
+  const { data } = await admin
+    .from("churches")
+    .select("id, join_policy, is_discoverable")
+    .eq("id", churchId)
+    .maybeSingle();
+
+  if (!data) return null;
+
+  return {
+    id: data.id as string,
+    joinPolicy: (data.join_policy as JoinPolicy) ?? "approval_required",
+    isDiscoverable: Boolean(data.is_discoverable),
+  };
+}
+
 async function loadRelationship(
   admin: SupabaseClient,
   accountId: string,
@@ -489,4 +508,37 @@ export async function getEffectiveRelationship(
   const admin = createAdminClient();
   const church = await resolveChurchBySlug(admin, churchSlug);
   return loadRelationship(admin, account.id, church.id);
+}
+
+/**
+ * Puts a dashboard staff member into their own church in the member app.
+ *
+ * Dashboard access (`church_users`) and the visitor relationship are
+ * deliberately separate tables — this is the one allowed bridge, and it only
+ * writes the visitor row. A church admin opening the app should see Home and
+ * the church tabs without having to search for, follow, or request to join a
+ * congregation they already run.
+ *
+ * A block still wins: staff who blocked this account as a visitor stay blocked.
+ */
+export async function admitStaffAsMember(
+  accountId: string,
+  churchId: string,
+  actorUserId: string,
+): Promise<Relationship | null> {
+  const admin = createAdminClient();
+  const church = await resolveChurchById(admin, churchId);
+  if (!church) return null;
+
+  const current = await loadRelationship(admin, accountId, churchId);
+  if (current?.state === "blocked") return current;
+
+  return applyTransition({
+    accountId,
+    church,
+    action: "admit_staff",
+    actorType: "system",
+    actorUserId,
+    reason: "dashboard staff",
+  });
 }

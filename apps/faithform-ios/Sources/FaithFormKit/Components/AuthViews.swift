@@ -1,22 +1,24 @@
 import SwiftUI
 
-/// The signed-out journey: one landing screen, two doors.
+/// The signed-out journey: one landing screen, then the doors that get someone in.
 ///
 /// The landing is the first thing anyone who downloads FaithForm sees, so it
 /// does the three jobs a front door has to: say whose app this is (the mark),
 /// what it promises (one sentence), and what it actually does (the four things a
-/// churchgoer gets in 1.0) — then gets out of the way. The primary door is
-/// creating an account, because the person most likely to be standing here has
-/// never used FaithForm before; both doors are pinned within thumb reach.
+/// churchgoer gets in 1.0) — then gets out of the way. Invite-first: the primary
+/// door is "I have a link", then create account, then sign in. Doors stay pinned
+/// within thumb reach.
 public struct AuthFlowView: View {
     public enum Route: Hashable, Sendable {
         case createAccount
         case signIn
         case resetPassword
+        case haveLink
     }
 
     @Environment(\.faithformTheme) private var theme
     @Bindable private var model: AuthModel
+    @Bindable private var onboarding: OnboardingModel
     @State private var path: [Route] = []
     /// The first frame fades the page in once. A return from a pushed screen
     /// must not replay it, so it is state rather than a transition.
@@ -27,11 +29,13 @@ public struct AuthFlowView: View {
 
     public init(
         model: AuthModel,
+        onboarding: OnboardingModel,
         hasPendingInvitation: Bool = false,
         churchContext: PendingChurchContext? = nil,
         onClearChurchContext: (@MainActor () -> Void)? = nil
     ) {
         self.model = model
+        self.onboarding = onboarding
         self.hasPendingInvitation = hasPendingInvitation
         self.churchContext = churchContext
         self.onClearChurchContext = onClearChurchContext
@@ -54,6 +58,10 @@ public struct AuthFlowView: View {
                         })
                     case .resetPassword:
                         ForgotPasswordView(model: model)
+                    case .haveLink:
+                        HaveLinkEntryView(onboarding: onboarding) {
+                            path = []
+                        }
                     }
                 }
         }
@@ -150,10 +158,21 @@ public struct AuthFlowView: View {
 
     private var landingActions: some View {
         VStack(spacing: FaithFormTokens.Spacing.md) {
-            Button(L.createAccount) { path.append(.createAccount) }
-                .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
-            Button(L.signIn) { path.append(.signIn) }
-                .buttonStyle(FaithFormButtonStyle(kind: .secondary, theme: theme))
+            // Invite-first: most churchgoers arrive with a link. Once a church
+            // is already named (or a token is held), jump straight to account doors.
+            if churchContext == nil, !hasPendingInvitation {
+                Button(L.haveInvitation) { path.append(.haveLink) }
+                    .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
+                Button(L.createAccount) { path.append(.createAccount) }
+                    .buttonStyle(FaithFormButtonStyle(kind: .secondary, theme: theme))
+                Button(L.signIn) { path.append(.signIn) }
+                    .buttonStyle(FaithFormButtonStyle(kind: .quiet, theme: theme))
+            } else {
+                Button(L.createAccount) { path.append(.createAccount) }
+                    .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
+                Button(L.signIn) { path.append(.signIn) }
+                    .buttonStyle(FaithFormButtonStyle(kind: .secondary, theme: theme))
+            }
             // A link can be forwarded, mistyped, or simply not meant for the
             // person holding it. Disowning the church has to be one tap away, or
             // the branding becomes a trap.
@@ -211,12 +230,10 @@ private struct LandingLockup: View {
     }
 }
 
-/// What the app does, in four lines.
+/// What the app does, in three lines.
 ///
-/// One row per tab a churchgoer actually gets in 1.0 — the home feed, watch and
-/// sermon notes, check-in, and giving — so the front door promises exactly the
-/// product behind it. No counts, no testimonials, nothing that could go stale or
-/// be untrue for a particular church.
+/// One composition: feed, services, and giving — enough to promise the product
+/// without a dense feature grid on the front door.
 private struct LandingFeatures: View {
     @Environment(\.faithformTheme) private var theme
 
@@ -231,7 +248,6 @@ private struct LandingFeatures: View {
         [
             Row(symbol: "megaphone", title: L.landingFeedTitle, detail: L.landingFeedBody),
             Row(symbol: "play.rectangle", title: L.landingWatchTitle, detail: L.landingWatchBody),
-            Row(symbol: "qrcode.viewfinder", title: L.landingCheckInTitle, detail: L.landingCheckInBody),
             Row(symbol: "heart", title: L.landingGiveTitle, detail: L.landingGiveBody),
         ]
     }
@@ -303,6 +319,53 @@ private struct LandingBackdrop: View {
     }
 }
 
+/// Shared chrome for every signed-out form: brand atmosphere stays visible so
+/// Create, Sign in, Have link, and Reset feel like FaithForm — not empty sheets.
+private struct AuthShell<Content: View>: View {
+    @Environment(\.faithformTheme) private var theme
+    let title: String
+    var subtitle: String? = nil
+    var churchContext: PendingChurchContext? = nil
+    @ViewBuilder var content: () -> Content
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
+                LandingLockup(markHeight: FaithFormTokens.IconSize.sizeLarge)
+
+                if let churchContext {
+                    ChurchContextHeader(context: churchContext)
+                }
+
+                VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.sm) {
+                    Text(title)
+                        .font(theme.font(FaithFormTokens.Text.displayMedium))
+                        .foregroundStyle(theme.palette.contentPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityAddTraits(.isHeader)
+                    if let subtitle, !subtitle.isEmpty {
+                        Text(subtitle)
+                            .font(theme.font(FaithFormTokens.Text.body))
+                            .foregroundStyle(theme.palette.contentSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                content()
+            }
+            .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
+            .padding(.top, FaithFormTokens.Spacing.lg)
+            .padding(.bottom, FaithFormTokens.Spacing.xl)
+            .frame(maxWidth: FaithFormTokens.Layout.contentMaxWidth, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .background { LandingBackdrop() }
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
+    }
+}
+
 /// Creating an account: name (optional), email, password. The agreement
 /// sentence sits above the button — the moment of consent is the moment of
 /// commitment, not a settings page later.
@@ -320,20 +383,21 @@ struct SignUpView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
-                if model.phase == .checkEmail {
+        Group {
+            if model.phase == .checkEmail {
+                AuthShell(title: L.authCheckEmailTitle, churchContext: churchContext) {
                     CheckEmailView(model: model, onSignIn: onSwitchToSignIn)
-                } else {
+                }
+            } else {
+                AuthShell(
+                    title: title,
+                    subtitle: L.authCreateBody,
+                    churchContext: churchContext
+                ) {
                     form
                 }
             }
-            .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
-            .padding(.vertical, FaithFormTokens.Spacing.lg)
-            .frame(maxWidth: FaithFormTokens.Layout.contentMaxWidth)
         }
-        .background(theme.palette.background.ignoresSafeArea())
-        .navigationTitle(model.phase == .checkEmail ? L.authCheckEmailTitle : title)
     }
 
     @ViewBuilder
@@ -356,9 +420,6 @@ struct SignUpView: View {
             AuthErrorText(message: message)
         }
 
-        // The two documents are links, not just names. A person agreeing to
-        // something should be one tap from reading it, and App Review checks
-        // that they are. SwiftUI opens them through `openURL`, in Safari.
         Text(LegalLinks.termsNotice())
             .font(theme.font(FaithFormTokens.Text.caption))
             .foregroundStyle(theme.mutedContent)
@@ -380,7 +441,7 @@ struct SignUpView: View {
     @ViewBuilder
     private func workingLabel(_ title: String) -> some View {
         if model.phase == .working {
-            ProgressView().tint(theme.palette.contentInverse)
+            ProgressView().tint(theme.palette.contentOnAccent)
         } else {
             Text(title)
         }
@@ -394,40 +455,33 @@ struct SignInView: View {
     let onForgotPassword: @MainActor () -> Void
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
-                AuthField(label: L.authEmailLabel, text: $model.email, content: .email)
-                AuthField(
-                    label: L.authPasswordLabel,
-                    text: $model.password,
-                    content: .password
-                )
+        AuthShell(title: L.authSignInTitle, subtitle: L.authSignInBody) {
+            AuthField(label: L.authEmailLabel, text: $model.email, content: .email)
+            AuthField(
+                label: L.authPasswordLabel,
+                text: $model.password,
+                content: .password
+            )
 
-                if case let .failed(message) = model.phase {
-                    AuthErrorText(message: message)
-                }
-
-                Button {
-                    Task { await model.signIn() }
-                } label: {
-                    if model.phase == .working {
-                        ProgressView().tint(theme.palette.contentInverse)
-                    } else {
-                        Text(L.signIn)
-                    }
-                }
-                .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
-                .disabled(model.phase == .working)
-
-                Button(L.authForgotPassword, action: onForgotPassword)
-                    .buttonStyle(FaithFormButtonStyle(kind: .quiet, theme: theme))
+            if case let .failed(message) = model.phase {
+                AuthErrorText(message: message)
             }
-            .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
-            .padding(.vertical, FaithFormTokens.Spacing.lg)
-            .frame(maxWidth: FaithFormTokens.Layout.contentMaxWidth)
+
+            Button {
+                Task { await model.signIn() }
+            } label: {
+                if model.phase == .working {
+                    ProgressView().tint(theme.palette.contentOnAccent)
+                } else {
+                    Text(L.signIn)
+                }
+            }
+            .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
+            .disabled(model.phase == .working)
+
+            Button(L.authForgotPassword, action: onForgotPassword)
+                .buttonStyle(FaithFormButtonStyle(kind: .quiet, theme: theme))
         }
-        .background(theme.palette.background.ignoresSafeArea())
-        .navigationTitle(L.authSignInTitle)
     }
 }
 
@@ -438,19 +492,19 @@ struct ForgotPasswordView: View {
     @Bindable var model: AuthModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
-            Text(L.authResetBody)
-                .font(theme.font(FaithFormTokens.Text.body))
-                .foregroundStyle(theme.palette.contentSecondary)
-                .fixedSize(horizontal: false, vertical: true)
-
+        AuthShell(title: L.authResetTitle, subtitle: L.authResetBody) {
             AuthField(label: L.authEmailLabel, text: $model.email, content: .email)
 
             if model.resetNoticeVisible {
-                Text(L.authResetSent)
-                    .font(theme.font(FaithFormTokens.Text.bodySmall))
-                    .foregroundStyle(theme.palette.contentSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                HStack(alignment: .top, spacing: FaithFormTokens.Spacing.sm) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundStyle(theme.palette.success)
+                    Text(L.authResetSent)
+                        .font(theme.font(FaithFormTokens.Text.bodySmall))
+                        .foregroundStyle(theme.palette.contentSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .accessibilityElement(children: .combine)
             }
 
             if case let .failed(message) = model.phase {
@@ -461,28 +515,21 @@ struct ForgotPasswordView: View {
                 Task { await model.sendReset() }
             } label: {
                 if model.phase == .working {
-                    ProgressView().tint(theme.palette.contentInverse)
+                    ProgressView().tint(theme.palette.contentOnAccent)
                 } else {
                     Text(L.authResetSend)
                 }
             }
             .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
             .disabled(model.phase == .working || model.resetNoticeVisible)
-
-            Spacer()
         }
-        .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
-        .padding(.vertical, FaithFormTokens.Spacing.lg)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(theme.palette.background.ignoresSafeArea())
-        .navigationTitle(L.authResetTitle)
     }
 }
 
 /// What a field holds, in platform-neutral terms. The iOS build maps this to
 /// content types and keyboards so autofill offers the right thing; the macOS
 /// test build compiles the same view with no UIKit in sight.
-enum AuthFieldContent {
+public enum AuthFieldContent {
     case name
     case email
     case password
@@ -493,18 +540,30 @@ enum AuthFieldContent {
 /// One labelled input, styled from tokens. Secure fields never autofill a
 /// stranger's saved password into the wrong box because content types are
 /// declared honestly.
-struct AuthField: View {
+public struct AuthField: View {
     @Environment(\.faithformTheme) private var theme
     let label: String
     var hint: String?
     @Binding var text: String
-    var content: AuthFieldContent = .plain
+    var content: AuthFieldContent
+
+    public init(
+        label: String,
+        hint: String? = nil,
+        text: Binding<String>,
+        content: AuthFieldContent = .plain
+    ) {
+        self.label = label
+        self.hint = hint
+        self._text = text
+        self.content = content
+    }
 
     private var isSecure: Bool {
         content == .password || content == .newPassword
     }
 
-    var body: some View {
+    public var body: some View {
         VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.xs) {
             Text(label)
                 .font(theme.font(FaithFormTokens.Text.label))
@@ -528,7 +587,7 @@ struct AuthField: View {
             // website's bordered fields, and lost its edge entirely on a card.
             .background(
                 RoundedRectangle(cornerRadius: FaithFormTokens.Radius.control, style: .continuous)
-                    .fill(theme.palette.background)
+                    .fill(theme.palette.surface)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: FaithFormTokens.Radius.control, style: .continuous)
@@ -576,16 +635,74 @@ extension View {
     }
 }
 
-struct AuthErrorText: View {
+public struct AuthErrorText: View {
     @Environment(\.faithformTheme) private var theme
     let message: String
 
-    var body: some View {
+    public init(message: String) {
+        self.message = message
+    }
+
+    public var body: some View {
         Text(message)
             .font(theme.font(FaithFormTokens.Text.bodySmall))
             .foregroundStyle(theme.palette.destructive)
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityAddTraits(.isStaticText)
+    }
+}
+
+/// Holding an invitation before sign-in: paste, name the church, then create
+/// or sign in on the branded landing. The token is not spent until a session
+/// exists — same path a deep link takes when the person is signed out.
+public struct HaveLinkEntryView: View {
+    @Environment(\.faithformTheme) private var theme
+    @Bindable private var onboarding: OnboardingModel
+    @State private var raw: String = ""
+    @State private var working = false
+    @State private var errorMessage: String?
+    private let onHeld: @MainActor () -> Void
+
+    public init(onboarding: OnboardingModel, onHeld: @escaping @MainActor () -> Void) {
+        self.onboarding = onboarding
+        self.onHeld = onHeld
+    }
+
+    public var body: some View {
+        AuthShell(title: L.invitationTitle, subtitle: L.invitationBody) {
+            AuthField(label: L.invitationFieldLabel, hint: L.invitationHint, text: $raw)
+
+            if let errorMessage {
+                AuthErrorText(message: errorMessage)
+            }
+
+            Button {
+                Task { await holdAndContinue() }
+            } label: {
+                if working {
+                    ProgressView().tint(theme.palette.contentOnAccent)
+                } else {
+                    Text(L.haveLinkContinue)
+                }
+            }
+            .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
+            .disabled(working || raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+    }
+
+    private func holdAndContinue() async {
+        working = true
+        errorMessage = nil
+        let token = onboarding.normalize(raw)
+        guard token.count >= 16, token.count <= 512 else {
+            errorMessage = L.invitationErrorInvalid
+            working = false
+            return
+        }
+        onboarding.hold(invitationToken: token)
+        await onboarding.resolveChurchContext(invitationToken: token)
+        working = false
+        onHeld()
     }
 }
 
@@ -727,10 +844,6 @@ struct CheckEmailView: View {
             icon
 
             VStack(spacing: FaithFormTokens.Spacing.sm) {
-                Text(L.authCheckEmailTitle)
-                    .font(theme.font(FaithFormTokens.Text.titleLarge))
-                    .foregroundStyle(theme.palette.contentPrimary)
-
                 Text(String(format: L.authCheckEmailSentTo, model.confirmationEmail))
                     .font(theme.font(FaithFormTokens.Text.body))
                     .foregroundStyle(theme.palette.contentSecondary)
@@ -754,7 +867,7 @@ struct CheckEmailView: View {
             if model.resendNoticeVisible {
                 Label(L.authCheckEmailResent, systemImage: "checkmark.circle.fill")
                     .font(theme.font(FaithFormTokens.Text.bodySmall))
-                    .foregroundStyle(theme.palette.successContent)
+                    .foregroundStyle(theme.palette.success)
             }
 
             if let resendError = model.resendError {
@@ -764,7 +877,6 @@ struct CheckEmailView: View {
             actions
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, FaithFormTokens.Spacing.lg)
     }
 
     private var icon: some View {
@@ -774,6 +886,9 @@ struct CheckEmailView: View {
             let side = FaithFormTokens.IconSize.sizeHero + FaithFormTokens.Spacing.xl * 2
             Circle()
                 .fill(theme.palette.surface)
+                .overlay(
+                    Circle().strokeBorder(theme.palette.border, lineWidth: FaithFormTokens.BorderWidth.hairline)
+                )
                 .frame(width: side, height: side)
             Image(systemName: "envelope.badge")
                 .font(.system(size: FaithFormTokens.IconSize.sizeHero))

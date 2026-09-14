@@ -93,6 +93,23 @@ test("no FaithForm module ever writes church_users", () => {
   }
 });
 
+test("bootstrap reads church_users so dashboard staff see their church in the app", () => {
+  const accountService = read("lib/mobile/v1/account-service.ts");
+  const sync = accountService.slice(
+    accountService.indexOf("async function syncStaffChurchesIntoApp"),
+    accountService.indexOf("export async function getBootstrap"),
+  );
+  assert.match(sync, /from\("church_users"\)/);
+  assert.match(sync, /select\("church_id"\)/);
+  assert.match(sync, /admitStaffAsMember/);
+  assert.doesNotMatch(sync, /\.insert\(/);
+  assert.doesNotMatch(sync, /\.update\(/);
+  assert.doesNotMatch(sync, /\.upsert\(/);
+  assert.match(accountService, /await syncStaffChurchesIntoApp/);
+  assert.doesNotMatch(relationships, /from\("church_users"\)/);
+  assert.match(relationships, /export async function admitStaffAsMember/);
+});
+
 test("no FaithForm module creates, merges or deletes a People record", () => {
   for (const [name, source] of [
     ["claims", claims],

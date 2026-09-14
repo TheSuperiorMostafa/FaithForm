@@ -5,13 +5,13 @@
     <string name="app_name">FaithForm</string>
     <string name="loading_account">Loading your account</string>
     <string name="sign_in_title">Sign in to continue</string>
-    <string name="sign_in_body">FaithForm keeps your churches, your giving and your check-ins in one place.</string>
+    <string name="sign_in_body">Your church\'s app — start with a link, or create an account.</string>
     <!-- The front door's promise and the four things a churchgoer can do in 1.0. Each names a real tab. -->
     <string name="landing_headline">Your church, all week long</string>
     <string name="landing_feed_title">Stay in the loop</string>
     <string name="landing_feed_body">News and events from your church, as soon as they\'re shared.</string>
-    <string name="landing_watch_title">Services, live and past</string>
-    <string name="landing_watch_body">Join live, catch up on past services, or read the message.</string>
+    <string name="landing_watch_title">Services &amp; messages</string>
+    <string name="landing_watch_body">Join live, catch up, check in, or read the message.</string>
     <string name="landing_check_in_title">Check in with a scan</string>
     <string name="landing_check_in_body">Scan the code at church. No cards or clipboards.</string>
     <string name="landing_give_title">Give securely</string>
@@ -20,6 +20,9 @@
     <string name="no_churches_title">No churches yet</string>
     <string name="no_churches_body">When you add or join a church, it will appear here.</string>
     <string name="account">Account</string>
+    <string name="your_account">Your account</string>
+    <string name="account_add_name_hint">Add the name your church should see.</string>
+    <string name="account_save_name">Save name</string>
     <string name="sign_out">Sign out</string>
     <string name="delete_account">Delete my account</string>
     <string name="delete_account_hint">Removes your FaithForm profile. Your church keeps its own records.</string>
@@ -50,10 +53,11 @@
     <!-- Keys mirror apps/faithform-ios/Sources/FaithFormKit/Strings.swift.
          scripts/verify-localization-parity.mjs fails if either side
          gains a key the other lacks. -->
-    <string name="welcome_title">Find your church</string>
-    <string name="welcome_body">Use the link your church sent you. If they asked you to search, you can do that here too.</string>
+    <string name="welcome_title">Join your church</string>
+    <string name="welcome_body">Start with the link your church sent you. Searching is available when a church lists itself.</string>
     <string name="find_a_church">Find your church</string>
     <string name="have_invitation">I have a link</string>
+    <string name="have_link_continue">Continue</string>
     <string name="enter_invitation_code">Paste your invitation link</string>
     <string name="search_placeholder">Church name, city, or postal code</string>
     <string name="churches_near_me">Churches Near Me</string>
@@ -343,7 +347,9 @@
     <string name="create_account">Create Account</string>
     <string name="sign_in">Sign In</string>
     <string name="auth_create_title">Create your account</string>
+    <string name="auth_create_body">A few details and you\'re in with your church.</string>
     <string name="auth_sign_in_title">Sign in</string>
+    <string name="auth_sign_in_body">Welcome back to your church.</string>
     <string name="auth_name_label">Your name</string>
     <string name="auth_name_hint">Shown to your church when you join.</string>
     <string name="auth_email_label">Email</string>
@@ -354,7 +360,7 @@
     <string name="auth_terms_notice_linked">By continuing, you agree to FaithForm\'s %1$s and %2$s.</string>
     <string name="auth_forgot_password">Forgot password?</string>
     <string name="auth_reset_title">Reset your password</string>
-    <string name="auth_reset_body">Enter your email and we\'ll send you a link to set a new one.</string>
+    <string name="auth_reset_body">We\'ll email a link so you can choose a new password.</string>
     <string name="auth_reset_send">Email me a reset link</string>
     <string name="auth_reset_sent">If that email has an account, a reset link is on its way.</string>
     <string name="auth_check_email_title">Check your email</string>
@@ -372,6 +378,7 @@
     <string name="church_context_join_title">Join %1$s</string>
     <string name="church_context_not_yours">Not your church?</string>
     <string name="auth_error_email_invalid">Enter a valid email address.</string>
+    <string name="auth_error_name_missing">Enter your name.</string>
     <string name="auth_error_password_missing">Enter your password.</string>
     <string name="auth_error_invalid_credentials">Email or password is incorrect.</string>
     <string name="auth_error_account_exists">That email already has an account. Sign in instead.</string>
@@ -386,8 +393,9 @@
     <string name="auth_error_link_invalid">That confirmation link isn\'t valid. Sign in with your email and password, or create your account again for a fresh link.</string>
 
     <!-- Invitations -->
-    <string name="invitation_title">Join with your church\'s link</string>
-    <string name="invitation_body">Paste the link or code your church sent you.</string>
+    <string name="invitation_title">I have a link</string>
+    <string name="invitation_body">Paste the invitation your church sent you.</string>
+    <string name="invitation_hint">From your church\'s email or bulletin.</string>
     <string name="invitation_field_label">Invitation link or code</string>
     <string name="invitation_joining">Joining…</string>
     <string name="invitation_pending_banner">You have an invitation waiting. Create an account or sign in to use it.</string>

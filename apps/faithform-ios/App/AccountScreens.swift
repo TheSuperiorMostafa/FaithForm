@@ -128,9 +128,17 @@ struct AccountView: View {
     /// it offers nothing that would lead to a location prompt.
     var showsAutomaticCheckIn = false
 
+    @State private var draftName = ""
+    @State private var savingName = false
+    @State private var nameSaveFailed = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.xl) {
             identityHeader
+
+            if displayName == nil {
+                nameEditor
+            }
 
             if showsAutomaticCheckIn {
                 VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.sm) {
@@ -155,13 +163,16 @@ struct AccountView: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .onAppear {
+            if draftName.isEmpty { draftName = displayName ?? "" }
+        }
     }
 
     private var identityHeader: some View {
         HStack(spacing: FaithFormTokens.Spacing.base) {
             accountAvatar
             VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.xs) {
-                Text(displayName ?? L.appName)
+                Text(displayName ?? L.yourAccount)
                     .font(theme.font(FaithFormTokens.Text.displayMedium))
                     .foregroundStyle(theme.palette.contentPrimary)
                 if dependencies.allowsDebugControls {
@@ -172,6 +183,35 @@ struct AccountView: View {
             }
         }
         .accessibilityElement(children: .combine)
+    }
+
+    private var nameEditor: some View {
+        VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.sm) {
+            Text(L.accountAddNameHint)
+                .font(theme.font(FaithFormTokens.Text.bodySmall))
+                .foregroundStyle(theme.palette.contentSecondary)
+            AuthField(label: L.authNameLabel, text: $draftName, content: .name)
+            if nameSaveFailed {
+                AuthErrorText(message: L.errorTitle)
+            }
+            Button {
+                Task {
+                    savingName = true
+                    nameSaveFailed = false
+                    let ok = await root.updateDisplayName(draftName)
+                    savingName = false
+                    if !ok { nameSaveFailed = true }
+                }
+            } label: {
+                if savingName {
+                    ProgressView().tint(theme.palette.contentOnAccent)
+                } else {
+                    Text(L.accountSaveName)
+                }
+            }
+            .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
+            .disabled(savingName || draftName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
     }
 
     private var accountAvatar: some View {
@@ -199,14 +239,19 @@ struct AccountView: View {
     private var initialsAvatar: some View {
         ZStack {
             theme.palette.surfaceSunken
-            Text(initials)
-                .font(theme.font(FaithFormTokens.Text.titleMedium))
-                .foregroundStyle(theme.palette.brandPrimary)
+            if let displayName, !displayName.isEmpty {
+                Text(initials(from: displayName))
+                    .font(theme.font(FaithFormTokens.Text.titleMedium))
+                    .foregroundStyle(theme.palette.brandPrimary)
+            } else {
+                Image(systemName: "person.fill")
+                    .font(.system(size: FaithFormTokens.IconSize.sizeLarge))
+                    .foregroundStyle(theme.palette.brandPrimary)
+            }
         }
     }
 
-    private var initials: String {
-        let name = displayName ?? L.appName
+    private func initials(from name: String) -> String {
         let parts = name.split(separator: " ").prefix(2)
         let letters = parts.compactMap { $0.first.map(String.init) }
         return letters.isEmpty ? String(name.prefix(1)).uppercased() : letters.joined().uppercased()

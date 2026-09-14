@@ -73,6 +73,9 @@ public final class AuthModel {
     /// The one local rule worth having: don't send a request that cannot
     /// possibly succeed. Everything subtler is the server's call.
     private func validate(forSignUp: Bool) -> String? {
+        if forSignUp, trimmedName == nil {
+            return L.authErrorNameMissing
+        }
         if trimmedEmail.isEmpty || !trimmedEmail.contains("@") {
             return L.authErrorEmailInvalid
         }

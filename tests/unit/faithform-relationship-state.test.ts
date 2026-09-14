@@ -192,6 +192,14 @@ test("repeating a command that already produced the current state is idempotent"
     ...staff,
   });
   assert.equal(block.ok && block.idempotent, true);
+
+  const admit = decideTransition({
+    action: "admit_staff",
+    from: "joined",
+    joinPolicy: "invite_only",
+    actorType: "system",
+  });
+  assert.equal(admit.ok && admit.idempotent, true);
 });
 
 test("someone who left can follow again but is not silently re-joined", () => {
@@ -223,6 +231,37 @@ test("staff may revoke an active membership and the visitor may leave", () => {
   assert.equal(leave.ok && leave.to, "left");
 });
 
+test("dashboard staff are admitted as members in the app without an invitation", () => {
+  const system = { actorType: "system" as const };
+  for (const from of [null, "following", "pending", "left"] as const) {
+    const decision = decideTransition({
+      action: "admit_staff",
+      from,
+      joinPolicy: "invite_only",
+      ...system,
+    });
+    assert.equal(decision.ok, true, String(from));
+    assert.equal(decision.ok && decision.to, "joined", String(from));
+  }
+
+  const visitorAdmit = decideTransition({
+    action: "admit_staff",
+    from: null,
+    joinPolicy: "open",
+    ...visitor,
+  });
+  assert.equal(visitorAdmit.ok, false);
+
+  const blocked = decideTransition({
+    action: "admit_staff",
+    from: "blocked",
+    joinPolicy: "open",
+    ...system,
+  });
+  assert.equal(blocked.ok, false);
+  assert.equal(!blocked.ok && blocked.code, "blocked");
+});
+
 test("every state is reachable and no transition produces an unknown state", () => {
   const produced = new Set<RelationshipState>();
   const froms: (RelationshipState | null)[] = [null, ...RELATIONSHIP_STATES];
@@ -233,6 +272,7 @@ test("every state is reachable and no transition produces an unknown state", () 
       "unfollow",
       "request_join",
       "accept_invitation",
+      "admit_staff",
       "approve",
       "reject",
       "leave",

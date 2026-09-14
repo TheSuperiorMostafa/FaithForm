@@ -80,7 +80,6 @@ import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.Church
 import androidx.compose.material.icons.outlined.Campaign
 import androidx.compose.material.icons.outlined.FavoriteBorder
-import androidx.compose.material.icons.outlined.QrCodeScanner
 import androidx.compose.material.icons.outlined.SmartDisplay
 import io.faithform.app.ConfirmationPhase
 import io.faithform.app.PendingChurchContext
@@ -94,15 +93,15 @@ import io.faithform.app.ui.brand.FaithFormMark
 import io.faithform.app.ui.brand.rememberReducedMotion
 
 /**
- * The signed-out journey: one landing screen, two doors.
+ * The signed-out journey: one landing screen, then the doors that get someone in.
  *
  * Same editorial shape as `WelcomeScreen` — a confident sentence, generous
- * space, and only the actions a person can actually take. The primary door is
- * creating an account, because the person most likely to be standing here has
- * never used FaithForm before. Mirrors the SwiftUI `AuthFlowView` state for
- * state, with Android-native navigation: system back pops the flow.
+ * space, and only the actions a person can actually take. Invite-first: the
+ * primary door is "I have a link", then create account, then sign in. Mirrors
+ * the SwiftUI `AuthFlowView` state for state, with Android-native navigation:
+ * system back pops the flow.
  */
-private enum class AuthScreen { LANDING, CREATE_ACCOUNT, SIGN_IN, RESET }
+private enum class AuthScreen { LANDING, CREATE_ACCOUNT, SIGN_IN, RESET, HAVE_LINK }
 
 @Composable
 fun AuthFlow(
@@ -110,7 +109,8 @@ fun AuthFlow(
     hasPendingInvitation: Boolean,
     confirmationPhase: ConfirmationPhase = ConfirmationPhase.Idle,
     churchContext: PendingChurchContext? = null,
-    onClearChurchContext: (() -> Unit)? = null
+    onClearChurchContext: (() -> Unit)? = null,
+    onHoldInvitation: ((raw: String, onDone: (ok: Boolean) -> Unit) -> Unit)? = null,
 ) {
     var screen by rememberSaveable { mutableStateOf(AuthScreen.LANDING) }
     // Held here rather than in the landing, which leaves composition whenever
@@ -123,7 +123,12 @@ fun AuthFlow(
     }
 
     BackHandler(enabled = screen != AuthScreen.LANDING) {
-        move(if (screen == AuthScreen.RESET) AuthScreen.SIGN_IN else AuthScreen.LANDING)
+        move(
+            when (screen) {
+                AuthScreen.RESET -> AuthScreen.SIGN_IN
+                else -> AuthScreen.LANDING
+            }
+        )
     }
 
     when (screen) {
@@ -131,6 +136,7 @@ fun AuthFlow(
             hasPendingInvitation = hasPendingInvitation,
             confirmationPhase = confirmationPhase,
             churchContext = churchContext,
+            onHaveLink = { move(AuthScreen.HAVE_LINK) },
             onCreateAccount = { move(AuthScreen.CREATE_ACCOUNT) },
             onSignIn = { move(AuthScreen.SIGN_IN) },
             onClearChurchContext = onClearChurchContext,
@@ -147,6 +153,10 @@ fun AuthFlow(
             onForgotPassword = { move(AuthScreen.RESET) }
         )
         AuthScreen.RESET -> ResetPasswordScreen(viewModel)
+        AuthScreen.HAVE_LINK -> HaveLinkEntryScreen(
+            onHoldInvitation = onHoldInvitation,
+            onHeld = { move(AuthScreen.LANDING) }
+        )
     }
 }
 
@@ -155,6 +165,7 @@ private fun LandingScreen(
     hasPendingInvitation: Boolean,
     confirmationPhase: ConfirmationPhase,
     churchContext: PendingChurchContext?,
+    onHaveLink: () -> Unit,
     onCreateAccount: () -> Unit,
     onSignIn: () -> Unit,
     onClearChurchContext: (() -> Unit)?,
@@ -285,6 +296,8 @@ private fun LandingScreen(
 
             LandingActions(
                 churchContext = churchContext,
+                hasPendingInvitation = hasPendingInvitation,
+                onHaveLink = onHaveLink,
                 onCreateAccount = onCreateAccount,
                 onSignIn = onSignIn,
                 onClearChurchContext = onClearChurchContext
@@ -294,19 +307,22 @@ private fun LandingScreen(
 }
 
 /**
- * **The two doors never scroll away.** Whatever the font scale, create account
- * and sign in are pinned where a thumb already is, and the page above scrolls
+ * **The doors never scroll away.** Whatever the font scale, invite / create /
+ * sign in stay pinned where a thumb already is, and the page above scrolls
  * beneath them.
  */
 @Composable
 private fun LandingActions(
     churchContext: PendingChurchContext?,
+    hasPendingInvitation: Boolean,
+    onHaveLink: () -> Unit,
     onCreateAccount: () -> Unit,
     onSignIn: () -> Unit,
     onClearChurchContext: (() -> Unit)?
 ) {
     val theme = LocalFaithFormTheme.current
     val context = LocalContext.current
+    val showInviteDoor = churchContext == null && !hasPendingInvitation
 
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -336,18 +352,37 @@ private fun LandingActions(
                 .widthIn(max = FaithFormTokens.Layout.contentMaxWidth)
                 .fillMaxWidth()
         ) {
-            Button(
-                onClick = onCreateAccount,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = FaithFormTokens.TouchTarget.recommended)
-            ) { Text(stringResource(R.string.create_account)) }
-            OutlinedButton(
-                onClick = onSignIn,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = FaithFormTokens.TouchTarget.recommended)
-            ) { Text(stringResource(R.string.sign_in)) }
+            if (showInviteDoor) {
+                Button(
+                    onClick = onHaveLink,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = FaithFormTokens.TouchTarget.recommended)
+                ) { Text(stringResource(R.string.have_invitation)) }
+                OutlinedButton(
+                    onClick = onCreateAccount,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = FaithFormTokens.TouchTarget.recommended)
+                ) { Text(stringResource(R.string.create_account)) }
+                TextButton(
+                    onClick = onSignIn,
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text(stringResource(R.string.sign_in)) }
+            } else {
+                Button(
+                    onClick = onCreateAccount,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = FaithFormTokens.TouchTarget.recommended)
+                ) { Text(stringResource(R.string.create_account)) }
+                OutlinedButton(
+                    onClick = onSignIn,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = FaithFormTokens.TouchTarget.recommended)
+                ) { Text(stringResource(R.string.sign_in)) }
+            }
             // A link can be forwarded, mistyped, or simply not meant for the
             // person holding it. Disowning the church has to be one tap away,
             // or the branding becomes a trap.
@@ -384,6 +419,72 @@ private fun LandingActions(
 }
 
 /**
+ * Holding an invitation before sign-in: paste, name the church, then create
+ * or sign in on the branded landing. The token is not spent until a session
+ * exists — same path a deep link takes when the person is signed out.
+ */
+@Composable
+private fun HaveLinkEntryScreen(
+    onHoldInvitation: ((raw: String, onDone: (ok: Boolean) -> Unit) -> Unit)?,
+    onHeld: () -> Unit,
+) {
+    val theme = LocalFaithFormTheme.current
+    var raw by rememberSaveable { mutableStateOf("") }
+    var working by remember { mutableStateOf(false) }
+    var errorMessage by remember { mutableStateOf<String?>(null) }
+    val invalidMessage = stringResource(R.string.invitation_error_invalid)
+
+    AuthScaffold(
+        title = stringResource(R.string.invitation_title),
+        subtitle = stringResource(R.string.invitation_body),
+    ) {
+        AuthTextField(
+            value = raw,
+            onValueChange = {
+                raw = it
+                errorMessage = null
+            },
+            label = stringResource(R.string.invitation_field_label),
+            hint = stringResource(R.string.invitation_hint),
+        )
+
+        errorMessage?.let {
+            Text(it, color = theme.palette.destructive, style = MaterialTheme.typography.bodyMedium)
+        }
+
+        Button(
+            onClick = {
+                val holder = onHoldInvitation
+                if (holder == null) {
+                    onHeld()
+                    return@Button
+                }
+                working = true
+                errorMessage = null
+                holder(raw) { ok ->
+                    working = false
+                    if (ok) onHeld() else errorMessage = invalidMessage
+                }
+            },
+            enabled = !working && raw.isNotBlank(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = FaithFormTokens.TouchTarget.recommended)
+        ) {
+            if (working) {
+                CircularProgressIndicator(
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(FaithFormTokens.IconSize.sizeMedium)
+                )
+            } else {
+                Text(stringResource(R.string.have_link_continue))
+            }
+        }
+    }
+}
+
+/**
  * The mark and the name, side by side.
  *
  * Read as one element: TalkBack hears "FaithForm" once, not a picture followed
@@ -405,12 +506,10 @@ private fun LandingLockup(markHeight: Dp) {
 }
 
 /**
- * What the app does, in four lines.
+ * What the app does, in three lines.
  *
- * One row per tab a churchgoer actually gets in 1.0 — the home feed, watch and
- * sermon notes, check-in, and giving — so the front door promises exactly the
- * product behind it. No counts, no testimonials, nothing that could go stale or
- * be untrue for a particular church.
+ * One composition: feed, services, and giving — enough to promise the product
+ * without a dense feature grid on the front door.
  */
 @Composable
 private fun LandingFeatures() {
@@ -418,7 +517,6 @@ private fun LandingFeatures() {
     val rows = listOf(
         Triple(Icons.Outlined.Campaign, R.string.landing_feed_title, R.string.landing_feed_body),
         Triple(Icons.Outlined.SmartDisplay, R.string.landing_watch_title, R.string.landing_watch_body),
-        Triple(Icons.Outlined.QrCodeScanner, R.string.landing_check_in_title, R.string.landing_check_in_body),
         Triple(Icons.Outlined.FavoriteBorder, R.string.landing_give_title, R.string.landing_give_body),
     )
 
@@ -551,7 +649,12 @@ private fun CreateAccountScreen(
         else -> stringResource(R.string.auth_create_title)
     }
 
-    AuthScaffold(title = title) {
+    AuthScaffold(
+        title = title,
+        subtitle = if (phase is AuthUiPhase.CheckEmail) null
+        else stringResource(R.string.auth_create_body),
+        churchContext = churchContext.takeUnless { phase is AuthUiPhase.CheckEmail },
+    ) {
         if (phase is AuthUiPhase.CheckEmail) {
             CheckEmailScreen(viewModel = viewModel, onSignIn = onSwitchToSignIn)
             return@AuthScaffold
@@ -590,7 +693,11 @@ private fun CreateAccountScreen(
                 .heightIn(min = FaithFormTokens.TouchTarget.recommended)
         ) {
             if (phase == AuthUiPhase.Working) {
-                CircularProgressIndicator(modifier = Modifier.heightIn(max = FaithFormTokens.Spacing.lg))
+                CircularProgressIndicator(
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(FaithFormTokens.IconSize.sizeMedium)
+                )
             } else {
                 Text(stringResource(R.string.create_account))
             }
@@ -608,7 +715,10 @@ private fun SignInScreen(viewModel: AuthViewModel, onForgotPassword: () -> Unit)
     val email by viewModel.email.collectAsStateWithLifecycle()
     val password by viewModel.password.collectAsStateWithLifecycle()
 
-    AuthScaffold(title = stringResource(R.string.auth_sign_in_title)) {
+    AuthScaffold(
+        title = stringResource(R.string.auth_sign_in_title),
+        subtitle = stringResource(R.string.auth_sign_in_body),
+    ) {
         AuthTextField(
             value = email,
             onValueChange = viewModel::updateEmail,
@@ -633,7 +743,11 @@ private fun SignInScreen(viewModel: AuthViewModel, onForgotPassword: () -> Unit)
                 .heightIn(min = FaithFormTokens.TouchTarget.recommended)
         ) {
             if (phase == AuthUiPhase.Working) {
-                CircularProgressIndicator(modifier = Modifier.heightIn(max = FaithFormTokens.Spacing.lg))
+                CircularProgressIndicator(
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(FaithFormTokens.IconSize.sizeMedium)
+                )
             } else {
                 Text(stringResource(R.string.sign_in))
             }
@@ -652,13 +766,10 @@ private fun ResetPasswordScreen(viewModel: AuthViewModel) {
     val email by viewModel.email.collectAsStateWithLifecycle()
     val noticeVisible by viewModel.resetNoticeVisible.collectAsStateWithLifecycle()
 
-    AuthScaffold(title = stringResource(R.string.auth_reset_title)) {
-        Text(
-            stringResource(R.string.auth_reset_body),
-            style = MaterialTheme.typography.bodyLarge,
-            color = theme.palette.contentSecondary
-        )
-
+    AuthScaffold(
+        title = stringResource(R.string.auth_reset_title),
+        subtitle = stringResource(R.string.auth_reset_body),
+    ) {
         AuthTextField(
             value = email,
             onValueChange = viewModel::updateEmail,
@@ -667,11 +778,22 @@ private fun ResetPasswordScreen(viewModel: AuthViewModel) {
         )
 
         if (noticeVisible) {
-            Text(
-                stringResource(R.string.auth_reset_sent),
-                style = MaterialTheme.typography.bodyMedium,
-                color = theme.palette.contentSecondary
-            )
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm),
+                verticalAlignment = Alignment.Top,
+            ) {
+                Icon(
+                    Icons.Filled.CheckCircle,
+                    contentDescription = null,
+                    tint = theme.palette.success,
+                    modifier = Modifier.size(FaithFormTokens.IconSize.sizeMedium)
+                )
+                Text(
+                    stringResource(R.string.auth_reset_sent),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = theme.palette.contentSecondary
+                )
+            }
         }
 
         (phase as? AuthUiPhase.Failed)?.let { AuthErrorText(it.error) }
@@ -684,7 +806,11 @@ private fun ResetPasswordScreen(viewModel: AuthViewModel) {
                 .heightIn(min = FaithFormTokens.TouchTarget.recommended)
         ) {
             if (phase == AuthUiPhase.Working) {
-                CircularProgressIndicator(modifier = Modifier.heightIn(max = FaithFormTokens.Spacing.lg))
+                CircularProgressIndicator(
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    modifier = Modifier.size(FaithFormTokens.IconSize.sizeMedium)
+                )
             } else {
                 Text(stringResource(R.string.auth_reset_send))
             }
@@ -692,26 +818,49 @@ private fun ResetPasswordScreen(viewModel: AuthViewModel) {
     }
 }
 
+/**
+ * Shared chrome for every signed-out form: brand atmosphere stays visible so
+ * Create, Sign in, Have link, and Reset feel like FaithForm — not empty sheets.
+ */
 @Composable
-private fun AuthScaffold(title: String, content: @Composable () -> Unit) {
+private fun AuthScaffold(
+    title: String,
+    subtitle: String? = null,
+    churchContext: PendingChurchContext? = null,
+    content: @Composable () -> Unit,
+) {
     val theme = LocalFaithFormTheme.current
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(theme.palette.background)
-            .safeDrawingPadding()
-            .verticalScroll(rememberScrollState())
-            .padding(FaithFormTokens.Layout.screenPaddingHorizontal),
-        verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.lg)
-    ) {
-        Spacer(Modifier.heightIn(min = FaithFormTokens.Spacing.lg))
-        Text(
-            title,
-            style = MaterialTheme.typography.displayMedium,
-            color = theme.palette.contentPrimary
-        )
-        content()
-        Spacer(Modifier.heightIn(min = FaithFormTokens.Spacing.xl))
+    Box(modifier = Modifier.fillMaxSize()) {
+        LandingBackdrop()
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .safeDrawingPadding()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = FaithFormTokens.Layout.screenPaddingHorizontal)
+                .padding(top = FaithFormTokens.Spacing.lg, bottom = FaithFormTokens.Spacing.xl)
+                .widthIn(max = FaithFormTokens.Layout.contentMaxWidth),
+            verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.lg)
+        ) {
+            LandingLockup(markHeight = FaithFormTokens.IconSize.sizeLarge)
+            churchContext?.let { ChurchContextHeader(it) }
+            Column(verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm)) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.displayMedium,
+                    color = theme.palette.contentPrimary,
+                    modifier = Modifier.semantics { heading() }
+                )
+                if (!subtitle.isNullOrBlank()) {
+                    Text(
+                        subtitle,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = theme.palette.contentSecondary
+                    )
+                }
+            }
+            content()
+        }
     }
 }
 
@@ -725,6 +874,7 @@ private fun AuthTextField(
     isPassword: Boolean = false
 ) {
     val theme = LocalFaithFormTheme.current
+    val shape = RoundedCornerShape(FaithFormTokens.Radius.control)
     Column(verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.xs)) {
         Text(
             label,
@@ -738,16 +888,19 @@ private fun AuthTextField(
             keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
             visualTransformation = if (isPassword) PasswordVisualTransformation()
             else androidx.compose.ui.text.input.VisualTransformation.None,
-            shape = RoundedCornerShape(FaithFormTokens.Radius.md),
+            shape = shape,
             colors = TextFieldDefaults.colors(
-                focusedContainerColor = theme.palette.surfaceSunken,
-                unfocusedContainerColor = theme.palette.surfaceSunken,
-                focusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent,
-                unfocusedIndicatorColor = androidx.compose.ui.graphics.Color.Transparent
+                focusedContainerColor = theme.palette.surface,
+                unfocusedContainerColor = theme.palette.surface,
+                disabledContainerColor = theme.palette.surface,
+                focusedIndicatorColor = theme.palette.brandAccent,
+                unfocusedIndicatorColor = theme.palette.border,
+                cursorColor = theme.palette.brandPrimary,
             ),
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = FaithFormTokens.TouchTarget.recommended)
+                .border(theme.borderWidth, theme.palette.border, shape)
         )
         hint?.let {
             Text(it, style = MaterialTheme.typography.labelSmall, color = theme.mutedContent)
@@ -766,6 +919,7 @@ private fun AuthErrorText(error: AuthUiError) {
 }
 
 internal fun AuthUiError.messageRes(): Int = when (this) {
+    AuthUiError.NAME_MISSING -> R.string.auth_error_name_missing
     AuthUiError.EMAIL_INVALID -> R.string.auth_error_email_invalid
     AuthUiError.PASSWORD_MISSING -> R.string.auth_error_password_missing
     AuthUiError.WEAK_PASSWORD -> R.string.auth_error_weak_password
@@ -856,6 +1010,7 @@ private fun CheckEmailScreen(viewModel: AuthViewModel, onSignIn: () -> Unit) {
                 // plus two steps of padding on each side.
                 .size(FaithFormTokens.IconSize.sizeHero + FaithFormTokens.Spacing.xl * 2)
                 .background(theme.palette.surface, CircleShape)
+                .border(theme.borderWidth, theme.palette.border, CircleShape)
         ) {
             Icon(
                 Icons.Outlined.MarkEmailUnread,
@@ -869,11 +1024,6 @@ private fun CheckEmailScreen(viewModel: AuthViewModel, onSignIn: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm)
         ) {
-            Text(
-                stringResource(R.string.auth_check_email_title),
-                style = MaterialTheme.typography.titleLarge,
-                color = theme.palette.contentPrimary
-            )
             Text(
                 stringResource(R.string.auth_check_email_sent_to, address),
                 style = MaterialTheme.typography.bodyLarge,
@@ -903,13 +1053,13 @@ private fun CheckEmailScreen(viewModel: AuthViewModel, onSignIn: () -> Unit) {
                 Icon(
                     Icons.Filled.CheckCircle,
                     contentDescription = null,
-                    tint = theme.palette.successContent,
+                    tint = theme.palette.success,
                     modifier = Modifier.size(FaithFormTokens.IconSize.sizeSmall)
                 )
                 Text(
                     stringResource(R.string.auth_check_email_resent),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = theme.palette.successContent
+                    color = theme.palette.success
                 )
             }
         }

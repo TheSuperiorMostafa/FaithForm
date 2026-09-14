@@ -390,6 +390,35 @@ class AppViewModel(
     }
 
     /**
+     * Sets the visitor display name from Account, then refreshes bootstrap so
+     * the header shows the name that was just saved.
+     */
+    fun updateDisplayName(raw: String, onDone: (Boolean) -> Unit = {}) {
+        val trimmed = raw.trim()
+        if (trimmed.isEmpty()) {
+            onDone(false)
+            return
+        }
+        viewModelScope.launch {
+            @Serializable
+            data class ProfileReply(val displayName: String? = null)
+            val ok = runCatching {
+                api.send(
+                    path = "api/mobile/v1/account/profile",
+                    serializer = MobileSuccess.serializer(ProfileReply.serializer()),
+                    method = "PATCH",
+                    body = json.encodeToString(
+                        kotlinx.serialization.json.JsonObject.serializer(),
+                        buildJsonObject { put("displayName", trimmed) }
+                    )
+                )
+            }.isSuccess
+            if (ok) loadNow(quiet = true)
+            onDone(ok)
+        }
+    }
+
+    /**
      * Parsed and authorized before anything is mutated. An invitation is a
      * credential, not a destination: signed out it is held for after sign-in,
      * signed in it is redeemed on the spot. Every other link is an unknown or
@@ -608,6 +637,23 @@ class AppViewModel(
     fun acceptInvitation(raw: String) {
         viewModelScope.launch {
             if (acceptInvitationNow(normalizeInvitation(raw))) loadNow(quiet = true)
+        }
+    }
+
+    /**
+     * Holds an invitation for after sign-in and names the church on the front
+     * door. Same path a deep link takes when the person is signed out.
+     */
+    fun holdInvitationLink(raw: String, onDone: (ok: Boolean) -> Unit) {
+        viewModelScope.launch {
+            val token = normalizeInvitation(raw)
+            if (token.length < 16 || token.length > 512) {
+                onDone(false)
+                return@launch
+            }
+            _pendingInvitationToken.value = token
+            resolveChurchContextFromInvitation(token)
+            onDone(true)
         }
     }
 

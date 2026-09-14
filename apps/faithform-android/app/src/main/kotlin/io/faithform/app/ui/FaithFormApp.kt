@@ -132,7 +132,10 @@ fun FaithFormApp(
                 hasPendingInvitation = pendingInvitation != null,
                 confirmationPhase = confirmationPhase,
                 churchContext = churchContext,
-                onClearChurchContext = viewModel::clearChurchContext
+                onClearChurchContext = viewModel::clearChurchContext,
+                onHoldInvitation = { raw, onDone ->
+                    viewModel.holdInvitationLink(raw, onDone)
+                }
             )
         } else {
             Box(Modifier.fillMaxSize().safeDrawingPadding()) {

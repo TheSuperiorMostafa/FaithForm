@@ -23,6 +23,7 @@ export const RELATIONSHIP_ACTIONS = [
   "unfollow",
   "request_join",
   "accept_invitation",
+  "admit_staff",
   "approve",
   "reject",
   "leave",
@@ -44,6 +45,9 @@ const ACTOR_RULES: Record<RelationshipAction, ActorType[]> = {
   unfollow: ["visitor"],
   request_join: ["visitor"],
   accept_invitation: ["visitor"],
+  // Dashboard staff using the member app. Never the reverse: this cannot
+  // write `church_users`.
+  admit_staff: ["system"],
   approve: ["staff"],
   reject: ["staff"],
   leave: ["visitor"],
@@ -63,6 +67,7 @@ const TRANSITIONS: Record<RelationshipAction, { from: From[]; to: RelationshipSt
   unfollow: { from: ["following"], to: "left" },
   request_join: { from: [null, "following", "left", "pending"], to: "pending" },
   accept_invitation: { from: [null, "following", "left", "pending"], to: "joined" },
+  admit_staff: { from: [null, "following", "left", "pending", "joined"], to: "joined" },
   approve: { from: ["pending"], to: "joined" },
   reject: { from: ["pending"], to: "left" },
   leave: { from: ["following", "pending", "joined"], to: "left" },
@@ -113,7 +118,12 @@ export function decideTransition(request: TransitionRequest): TransitionDecision
   // Re-issuing a command that already produced the current state is a success,
   // not a conflict: a retried request over a flaky connection must not fail.
   if (from === rule.to && from !== null) {
-    if (action === "follow" || action === "request_join" || action === "block") {
+    if (
+      action === "follow" ||
+      action === "request_join" ||
+      action === "admit_staff" ||
+      action === "block"
+    ) {
       return { ok: true, to: rule.to, idempotent: true };
     }
   }

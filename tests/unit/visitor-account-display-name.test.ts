@@ -53,6 +53,7 @@ class FakeAdmin {
 
 class FakeQuery implements PromiseLike<{ data: Row | null; error: null }> {
   private values: Row | null = null;
+  private patch: Row | null = null;
   private userId: unknown;
 
   constructor(private readonly db: FakeAdmin) {}
@@ -62,6 +63,10 @@ class FakeQuery implements PromiseLike<{ data: Row | null; error: null }> {
   }
   insert(values: Row) {
     this.values = values;
+    return this;
+  }
+  update(values: Row) {
+    this.patch = values;
     return this;
   }
   eq(column: string, value: unknown) {
@@ -93,6 +98,12 @@ class FakeQuery implements PromiseLike<{ data: Row | null; error: null }> {
       };
       this.db.inserts.push(this.values);
       this.db.rows.push(row);
+      return { data: row, error: null };
+    }
+    if (this.patch) {
+      const row = this.db.rows.find((candidate) => candidate.user_id === this.userId);
+      if (!row) return { data: null, error: null };
+      Object.assign(row, this.patch);
       return { data: row, error: null };
     }
     return {
@@ -142,8 +153,41 @@ test("a blank name from the caller still falls back to the sign-up name", async 
   assert.equal(account.displayName, "Sarah");
 });
 
-test("an existing account is returned without asking Auth anything", async () => {
+test("an existing named account is returned without asking Auth anything", async () => {
   const admin = withMetadata({ display_name: "Someone Else" });
+  admin.rows.push({
+    id: "account-1",
+    user_id: USER_ID,
+    display_name: "Already Set",
+    status: "active",
+  });
+
+  const account = await ensureVisitorAccount(USER_ID, undefined, admin.client());
+
+  assert.equal(account.displayName, "Already Set");
+  assert.deepEqual(admin.userLookups, []);
+  assert.deepEqual(admin.inserts, []);
+});
+
+test("an existing account with no name is healed from Auth metadata", async () => {
+  const admin = withMetadata({ display_name: "  Sarah Okafor  " });
+  admin.rows.push({
+    id: "account-1",
+    user_id: USER_ID,
+    display_name: null,
+    status: "active",
+  });
+
+  const account = await ensureVisitorAccount(USER_ID, undefined, admin.client());
+
+  assert.equal(account.displayName, "Sarah Okafor");
+  assert.deepEqual(admin.userLookups, [USER_ID]);
+  assert.deepEqual(admin.inserts, []);
+  assert.equal(admin.rows[0]?.display_name, "Sarah Okafor");
+});
+
+test("an existing nameless account stays empty when Auth has no name either", async () => {
+  const admin = withMetadata(undefined);
   admin.rows.push({
     id: "account-1",
     user_id: USER_ID,
@@ -154,7 +198,7 @@ test("an existing account is returned without asking Auth anything", async () =>
   const account = await ensureVisitorAccount(USER_ID, undefined, admin.client());
 
   assert.equal(account.displayName, null);
-  assert.deepEqual(admin.userLookups, []);
+  assert.deepEqual(admin.userLookups, [USER_ID]);
   assert.deepEqual(admin.inserts, []);
 });
 

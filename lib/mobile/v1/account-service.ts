@@ -14,6 +14,7 @@ import {
   requestAccountAction,
 } from "@/lib/faithform/account-lifecycle";
 import { grantsPublishedContentAccess } from "@/lib/faithform/relationship-state";
+import { admitStaffAsMember } from "@/lib/faithform/relationships";
 import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/legal/policy-versions";
 import { retireInstallationsForAccount } from "@/lib/faithform/push/installations";
 import type {
@@ -139,6 +140,40 @@ async function loadSelectedChurchSlug(
 }
 
 /**
+ * Dashboard staff belong in their church in the member app too.
+ *
+ * `church_users` is never written here — only read — so a pastor who already
+ * runs the dashboard is not asked to search for, follow, or request to join
+ * a congregation they are already in. Failures are swallowed: a missing staff
+ * link must not take down bootstrap for a regular visitor.
+ */
+async function syncStaffChurchesIntoApp(
+  admin: ReturnType<typeof createAdminClient>,
+  account: VisitorAccount,
+  userId: string,
+): Promise<void> {
+  const { data, error } = await admin
+    .from("church_users")
+    .select("church_id")
+    .eq("user_id", userId)
+    .limit(50);
+
+  if (error || !data?.length) return;
+
+  const churchIds = [
+    ...new Set(
+      data
+        .map((row) => row.church_id as string | null)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+
+  await Promise.allSettled(
+    churchIds.map((churchId) => admitStaffAsMember(account.id, churchId, userId)),
+  );
+}
+
+/**
  * Everything the app needs on launch.
  *
  * Creating the account here is what makes first launch work: a brand-new
@@ -148,6 +183,8 @@ async function loadSelectedChurchSlug(
 export async function getBootstrap(userId: string): Promise<Bootstrap> {
   const account = await ensureVisitorAccount(userId);
   const admin = createAdminClient();
+
+  await syncStaffChurchesIntoApp(admin, account, userId);
 
   const [{ data: rows }, requests, selectedChurchSlug] = await Promise.all([
     admin

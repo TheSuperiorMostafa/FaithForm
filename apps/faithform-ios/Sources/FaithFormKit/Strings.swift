@@ -28,12 +28,16 @@ public enum L {
     public static var appName: String { t("app_name", "FaithForm") }
 
     // MARK: - Onboarding
-    public static var welcomeTitle: String { t("welcome_title", "Find your church") }
+    public static var welcomeTitle: String { t("welcome_title", "Join your church") }
     public static var welcomeBody: String {
-        t("welcome_body", "Use the link your church sent you. If they asked you to search, you can do that here too.")
+        t(
+            "welcome_body",
+            "Start with the link your church sent you. Searching is available when a church lists itself."
+        )
     }
     public static var findAChurch: String { t("find_a_church", "Find your church") }
     public static var haveInvitation: String { t("have_invitation", "I have a link") }
+    public static var haveLinkContinue: String { t("have_link_continue", "Continue") }
     public static var enterInvitationCode: String {
         t("enter_invitation_code", "Paste your invitation link")
     }
@@ -138,6 +142,11 @@ public enum L {
 
     // MARK: - Account
     public static var account: String { t("account", "Account") }
+    public static var yourAccount: String { t("your_account", "Your account") }
+    public static var accountAddNameHint: String {
+        t("account_add_name_hint", "Add the name your church should see.")
+    }
+    public static var accountSaveName: String { t("account_save_name", "Save name") }
     public static var yourChurches: String { t("your_churches", "Your churches") }
     public static var noChurchesTitle: String { t("no_churches_title", "No churches yet") }
     public static var noChurchesBody: String {
@@ -176,22 +185,22 @@ public enum L {
     }
     public static var signInTitle: String { t("sign_in_title", "Sign in to continue") }
     public static var signInBody: String {
-        t("sign_in_body", "FaithForm keeps your churches, your giving and your check-ins in one place.")
+        t("sign_in_body", "Your church's app — start with a link, or create an account.")
     }
 
     // MARK: - Landing
     //
-    // The front door's promise and the four things a churchgoer can actually do
-    // in 1.0. Each names a real tab — nothing here describes a feature the app
-    // does not ship.
+    // The front door's promise and three things a churchgoer can actually do
+    // in 1.0. Each names a real surface — nothing here describes a feature the
+    // app does not ship.
     public static var landingHeadline: String { t("landing_headline", "Your church, all week long") }
     public static var landingFeedTitle: String { t("landing_feed_title", "Stay in the loop") }
     public static var landingFeedBody: String {
         t("landing_feed_body", "News and events from your church, as soon as they're shared.")
     }
-    public static var landingWatchTitle: String { t("landing_watch_title", "Services, live and past") }
+    public static var landingWatchTitle: String { t("landing_watch_title", "Services & messages") }
     public static var landingWatchBody: String {
-        t("landing_watch_body", "Join live, catch up on past services, or read the message.")
+        t("landing_watch_body", "Join live, catch up, check in, or read the message.")
     }
     public static var landingCheckInTitle: String { t("landing_check_in_title", "Check in with a scan") }
     public static var landingCheckInBody: String {
@@ -928,7 +937,13 @@ public enum L {
     public static var authCreateTitle: String {
         t("auth_create_title", "Create your account")
     }
+    public static var authCreateBody: String {
+        t("auth_create_body", "A few details and you're in with your church.")
+    }
     public static var authSignInTitle: String { t("auth_sign_in_title", "Sign in") }
+    public static var authSignInBody: String {
+        t("auth_sign_in_body", "Welcome back to your church.")
+    }
     public static var authNameLabel: String { t("auth_name_label", "Your name") }
     public static var authNameHint: String {
         t("auth_name_hint", "Shown to your church when you join.")
@@ -954,7 +969,7 @@ public enum L {
         t("auth_reset_title", "Reset your password")
     }
     public static var authResetBody: String {
-        t("auth_reset_body", "Enter your email and we'll send you a link to set a new one.")
+        t("auth_reset_body", "We'll email a link so you can choose a new password.")
     }
     public static var authResetSend: String {
         t("auth_reset_send", "Email me a reset link")
@@ -988,6 +1003,9 @@ public enum L {
     }
     public static var authErrorEmailInvalid: String {
         t("auth_error_email_invalid", "Enter a valid email address.")
+    }
+    public static var authErrorNameMissing: String {
+        t("auth_error_name_missing", "Enter your name.")
     }
     public static var authErrorPasswordMissing: String {
         t("auth_error_password_missing", "Enter your password.")
@@ -1029,10 +1047,13 @@ public enum L {
     // MARK: - Invitations
 
     public static var invitationTitle: String {
-        t("invitation_title", "Join with your church's link")
+        t("invitation_title", "I have a link")
     }
     public static var invitationBody: String {
-        t("invitation_body", "Paste the link or code your church sent you.")
+        t("invitation_body", "Paste the invitation your church sent you.")
+    }
+    public static var invitationHint: String {
+        t("invitation_hint", "From your church's email or bulletin.")
     }
     public static var invitationFieldLabel: String {
         t("invitation_field_label", "Invitation link or code")

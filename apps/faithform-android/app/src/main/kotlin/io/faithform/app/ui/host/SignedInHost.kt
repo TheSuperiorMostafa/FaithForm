@@ -198,6 +198,7 @@ fun SignedInHost(
                                     showsAutomaticCheckIn = showsAuto,
                                     automaticCheckInEnabled = container.automaticAttendance?.settings?.enabled == true,
                                     onOpenAutomaticCheckIn = { showAutoCheckIn = true },
+                                    onUpdateDisplayName = viewModel::updateDisplayName,
                                 )
                             }
                         }

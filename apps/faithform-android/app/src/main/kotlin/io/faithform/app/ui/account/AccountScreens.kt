@@ -25,6 +25,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.LocationOn
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -34,7 +35,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TextField
+import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -44,6 +51,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import io.faithform.app.DeletionPhase
@@ -98,10 +106,15 @@ fun AccountTab(
     showsAutomaticCheckIn: Boolean = false,
     automaticCheckInEnabled: Boolean = false,
     onOpenAutomaticCheckIn: (() -> Unit)? = null,
+    onUpdateDisplayName: ((String, (Boolean) -> Unit) -> Unit)? = null,
 ) {
     val theme = LocalFaithFormTheme.current
-    val name = bootstrap.profile.displayName ?: stringResource(R.string.account)
+    val displayName = bootstrap.profile.displayName
+    val title = displayName ?: stringResource(R.string.your_account)
     val avatarSize = FaithFormTokens.TouchTarget.recommended + FaithFormTokens.Spacing.base
+    var draftName by remember(displayName) { mutableStateOf(displayName.orEmpty()) }
+    var savingName by remember { mutableStateOf(false) }
+    var nameSaveFailed by remember { mutableStateOf(false) }
 
     Column(
         modifier = modifier
@@ -142,17 +155,24 @@ fun AccountTab(
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize(),
                     )
-                } else {
+                } else if (!displayName.isNullOrBlank()) {
                     Text(
-                        accountInitials(name),
+                        accountInitials(displayName),
                         style = MaterialTheme.typography.titleMedium,
                         color = theme.palette.brandPrimary,
+                    )
+                } else {
+                    Icon(
+                        Icons.Outlined.Person,
+                        contentDescription = null,
+                        tint = theme.palette.brandPrimary,
+                        modifier = Modifier.size(FaithFormTokens.IconSize.sizeLarge),
                     )
                 }
             }
             Column(verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.xs)) {
                 Text(
-                    text = name,
+                    text = title,
                     style = MaterialTheme.typography.displayMedium,
                     color = theme.palette.contentPrimary,
                 )
@@ -162,6 +182,81 @@ fun AccountTab(
                         style = MaterialTheme.typography.bodyMedium,
                         color = theme.palette.destructive,
                     )
+                }
+            }
+        }
+
+        if (displayName.isNullOrBlank() && onUpdateDisplayName != null) {
+            val shape = RoundedCornerShape(FaithFormTokens.Radius.control)
+            Column(verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm)) {
+                Text(
+                    stringResource(R.string.account_add_name_hint),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = theme.palette.contentSecondary,
+                )
+                Column(verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.xs)) {
+                    Text(
+                        stringResource(R.string.auth_name_label),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = theme.mutedContent,
+                    )
+                    TextField(
+                        value = draftName,
+                        onValueChange = {
+                            draftName = it
+                            nameSaveFailed = false
+                        },
+                        singleLine = true,
+                        shape = shape,
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = theme.palette.surface,
+                            unfocusedContainerColor = theme.palette.surface,
+                            disabledContainerColor = theme.palette.surface,
+                            focusedIndicatorColor = theme.palette.brandAccent,
+                            unfocusedIndicatorColor = theme.palette.border,
+                            cursorColor = theme.palette.brandPrimary,
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = FaithFormTokens.TouchTarget.recommended)
+                            .border(theme.borderWidth, theme.palette.border, shape),
+                    )
+                }
+                if (nameSaveFailed) {
+                    Text(
+                        stringResource(R.string.error_title),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = theme.palette.destructive,
+                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                    )
+                }
+                Button(
+                    onClick = {
+                        savingName = true
+                        nameSaveFailed = false
+                        onUpdateDisplayName(draftName) { ok ->
+                            savingName = false
+                            if (!ok) nameSaveFailed = true
+                        }
+                    },
+                    enabled = !savingName && draftName.trim().isNotEmpty(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = theme.palette.brandAccent,
+                        contentColor = theme.palette.contentOnAccent,
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = FaithFormTokens.TouchTarget.recommended),
+                ) {
+                    if (savingName) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(FaithFormTokens.IconSize.sizeMedium),
+                            color = theme.palette.contentOnAccent,
+                            strokeWidth = 2.dp,
+                        )
+                    } else {
+                        Text(stringResource(R.string.account_save_name))
+                    }
                 }
             }
         }

@@ -96,6 +96,28 @@ final class RootModel {
         await load()
     }
 
+    /// Sets the visitor display name from Account, then refreshes bootstrap so
+    /// the header shows the name that was just saved.
+    @discardableResult
+    func updateDisplayName(_ raw: String) async -> Bool {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        struct ProfileUpdate: Encodable, Sendable { let displayName: String }
+        struct ProfileReply: Decodable, Sendable { let displayName: String? }
+        do {
+            _ = try await dependencies.api.send(
+                "api/mobile/v1/account/profile",
+                method: .patch,
+                body: ProfileUpdate(displayName: trimmed),
+                as: ProfileReply.self
+            )
+            await load(quiet: true)
+            return true
+        } catch {
+            return false
+        }
+    }
+
     func load() async { await load(quiet: false) }
 
     /// `quiet` refreshes in place after something changed — a join, an accepted

@@ -198,6 +198,9 @@ public struct DiscoveryView: View {
             TextField(L.searchPlaceholder, text: $model.query)
                 .font(theme.font(FaithFormTokens.Text.body))
                 .submitLabel(.search)
+                .onChange(of: model.query) { _, _ in
+                    model.queryDidChange()
+                }
                 .onSubmit { Task { await model.search() } }
                 .accessibilityLabel(Text(L.searchPlaceholder))
         }

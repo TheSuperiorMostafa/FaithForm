@@ -72,16 +72,61 @@ public final class DiscoveryModel {
 
     private let api: APIClient
     private let location: LocationProviding
+    /// Typing schedules a search; a newer keystroke cancels the previous one.
+    private var liveSearchTask: Task<Void, Never>?
+    private var searchGeneration = 0
+    private var loadedQuery: String?
+
+    /// How long to wait after the last keystroke before searching. Matches the
+    /// sermon-archive debounce so discovery feels the same as Notes search.
+    public static let searchDebounceNanoseconds: UInt64 = 300_000_000
 
     public init(api: APIClient, location: LocationProviding) {
         self.api = api
         self.location = location
     }
 
-    /// Manual search. Deliberately requires no location permission at all —
-    /// someone who declines location must still be able to find their church.
-    public func search() async {
+    /// Called as the person types. Debounces and cancels in-flight requests so
+    /// results appear while searching without hammering the API.
+    public func queryDidChange() {
+        liveSearchTask?.cancel()
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.isEmpty {
+            loadedQuery = nil
+            phase = .idle
+            return
+        }
+        if trimmed == loadedQuery, case .results = phase { return }
+
+        liveSearchTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: Self.searchDebounceNanoseconds)
+            guard !Task.isCancelled else { return }
+            await self?.performSearch(immediate: false)
+        }
+    }
+
+    /// Manual search (keyboard submit). Deliberately requires no location
+    /// permission at all — someone who declines location must still be able to
+    /// find their church.
+    public func search() async {
+        liveSearchTask?.cancel()
+        await performSearch(immediate: true)
+    }
+
+    private func performSearch(immediate: Bool) async {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Live typing with nothing left goes idle. An explicit submit (or the
+        // "denied location → fall back to search" path) may still ask the API
+        // with an empty query for a default list.
+        if trimmed.isEmpty, !immediate {
+            loadedQuery = nil
+            phase = .idle
+            return
+        }
+        if !immediate, trimmed == loadedQuery, case .results = phase { return }
+
+        searchGeneration &+= 1
+        let mine = searchGeneration
         phase = .searching
 
         do {
@@ -91,11 +136,17 @@ public final class DiscoveryModel {
                 authenticated: false,
                 as: DiscoveryPage.self
             )
+            guard mine == searchGeneration else { return }
             let items = response.value?.items ?? []
+            loadedQuery = trimmed
             phase = items.isEmpty ? .empty : .results(items, usedLocation: false)
         } catch let error as APIError {
+            guard mine == searchGeneration else { return }
+            loadedQuery = nil
             phase = error.retryable ? .offline : .failed(error.displayMessage)
         } catch {
+            guard mine == searchGeneration else { return }
+            loadedQuery = nil
             phase = .offline
         }
     }
@@ -110,6 +161,7 @@ public final class DiscoveryModel {
 
     /// Called from the education screen's affirmative action.
     public func confirmNearby() async {
+        liveSearchTask?.cancel()
         let status = await location.requestWhenInUseAuthorization()
         locationAuthorization = status
 
@@ -120,6 +172,8 @@ public final class DiscoveryModel {
             return
         }
 
+        searchGeneration &+= 1
+        let mine = searchGeneration
         phase = .searching
         do {
             let fix = try await location.currentCoordinate()
@@ -136,11 +190,15 @@ public final class DiscoveryModel {
                 authenticated: false,
                 as: DiscoveryPage.self
             )
+            guard mine == searchGeneration else { return }
+            loadedQuery = nil
             let items = response.value?.items ?? []
             phase = items.isEmpty ? .empty : .results(items, usedLocation: true)
         } catch let error as APIError {
+            guard mine == searchGeneration else { return }
             phase = error.retryable ? .offline : .failed(error.displayMessage)
         } catch {
+            guard mine == searchGeneration else { return }
             phase = .offline
         }
     }
