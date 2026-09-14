@@ -57,6 +57,10 @@ export const ATTENDANCE_REASONS = [
   // where the person needs to know that waiting helps, and it reveals nothing
   // about any code.
   "code_throttled",
+  // Too many automatic check-in attempts from one account. A phone following
+  // the client's own backoff never reaches it; it bounds what a misbehaving or
+  // scripted client can make the server compute and write.
+  "attempt_throttled",
   "kiosk_unauthorized",
   // A kiosk that locked itself after sitting idle. A staff instruction, not a
   // failure.
@@ -125,6 +129,7 @@ const REASON_TO_MOBILE: Record<AttendanceReason, string> = {
   // code from a stale one, which is the point.
   short_code_invalid: "invitation_expired",
   code_throttled: "rate_limited",
+  attempt_throttled: "rate_limited",
   kiosk_unauthorized: "unauthenticated",
   kiosk_locked: "unauthenticated",
   // A conflict rather than a forbidden: nothing is wrong with the caller, the
@@ -215,6 +220,8 @@ export function displayMessageFor(reason: AttendanceReason): string {
       return "That code didn't work — check the screen and try again.";
     case "code_throttled":
       return "Too many tries. Wait a moment and try again.";
+    case "attempt_throttled":
+      return "Too many check-in attempts. We'll try again in a few minutes.";
     case "kiosk_unauthorized":
       return "This kiosk isn't set up.";
     case "kiosk_locked":

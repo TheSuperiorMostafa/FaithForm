@@ -1,12 +1,15 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { VisitorError } from "@/lib/faithform/errors";
-import { getVisitorAccount } from "@/lib/faithform/account";
+import { getVisitorAccount, requireActiveAccount } from "@/lib/faithform/account";
 import {
   hasAutomaticAttendanceConsent,
   recordAttendance,
   resolveSelfCheckInMember,
 } from "@/lib/attendance/v2/check-in";
-import { findOpenOccurrence } from "@/lib/attendance/v2/occurrences";
+import {
+  campusIdFromRegionId,
+  findOpenOccurrence,
+} from "@/lib/attendance/v2/occurrences";
 import { getMemberHistory } from "@/lib/attendance/v2/roster";
 import {
   recordScan,
@@ -16,7 +19,13 @@ import {
 } from "@/lib/attendance/v2/checkin-session";
 import { checkRateLimit } from "@/lib/security/rate-limit";
 import { bandForAttempt } from "@/lib/attendance/v2/distance";
-import { displayMessageFor, type AttendanceReason } from "@/lib/attendance/v2/results";
+import { isAutomaticAttendanceLive } from "@/lib/attendance/v2/geofence-config";
+import {
+  ATTENDANCE_OUTCOMES,
+  displayMessageFor,
+  type AttendanceOutcome,
+  type AttendanceReason,
+} from "@/lib/attendance/v2/results";
 
 /**
  * The mobile attendance surface.
@@ -37,9 +46,52 @@ async function resolveChurchId(slug: string): Promise<string> {
   return data.id as string;
 }
 
-export async function getEligibleOccurrence(userId: string, churchSlug: string) {
-  const churchId = await resolveChurchId(churchSlug);
-  const occurrence = await findOpenOccurrence(churchId);
+/**
+ * The church in the path, for an active account that has a relationship with it.
+ *
+ * A church's service times are not secret, but which church an account can ask
+ * about is still a relationship question: an account a church blocked, or one
+ * that left, or one that never followed it, gets the same "not found" as a slug
+ * that does not exist, so the answer reveals nothing about either.
+ */
+async function resolveRelatedChurch(
+  userId: string,
+  slug: string,
+): Promise<{ churchId: string; account: Awaited<ReturnType<typeof requireActiveAccount>> }> {
+  const account = await requireActiveAccount(userId);
+  const churchId = await resolveChurchId(slug);
+
+  const { data: relationship } = await createAdminClient()
+    .from("visitor_church_relationships")
+    .select("state")
+    .eq("account_id", account.id)
+    .eq("church_id", churchId)
+    .maybeSingle();
+
+  if (!relationship || relationship.state === "blocked" || relationship.state === "left") {
+    throw new VisitorError("church_not_found", "Church not found.");
+  }
+
+  return { churchId, account };
+}
+
+/**
+ * The occurrence a check-in would land on right now.
+ *
+ * `regionId` is optional and additive: a phone that knows which OS region it
+ * entered sends it, and at a church with several campuses it is handed the
+ * service at *that* campus rather than whichever campus's service started most
+ * recently. A client that omits it gets exactly the earlier behaviour.
+ */
+export async function getEligibleOccurrence(
+  userId: string,
+  churchSlug: string,
+  options?: { regionId?: string | null },
+) {
+  const { churchId } = await resolveRelatedChurch(userId, churchSlug);
+  const occurrence = await findOpenOccurrence(churchId, {
+    campusId: campusIdFromRegionId(options?.regionId),
+  });
   if (!occurrence) return null;
 
   return {
@@ -65,9 +117,7 @@ export async function getEligibleOccurrence(userId: string, churchSlug: string) 
  * and the client only reports what it observed.
  */
 export async function getAttendanceCapability(userId: string, churchSlug: string) {
-  const churchId = await resolveChurchId(churchSlug);
-  const account = await getVisitorAccount(userId);
-  if (!account) throw new VisitorError("account_missing", "No visitor account.");
+  const { churchId, account } = await resolveRelatedChurch(userId, churchSlug);
 
   const occurrence = await findOpenOccurrence(churchId);
   if (!occurrence) return null;
@@ -85,10 +135,14 @@ export async function getAttendanceCapability(userId: string, churchSlug: string
 
   const link = await resolveSelfCheckInMember(account.id, churchId);
   const consent = await hasAutomaticAttendanceConsent(account.id);
+  // The snapshot says how this service is judged; the live switch says whether
+  // automatic check-in is still on at all. Both have to hold, exactly as they
+  // do when the attempt is submitted.
+  const automaticLive = Boolean(sources.geofence) && (await isAutomaticAttendanceLive(churchId));
 
   return {
     occurrenceId: occurrence.id,
-    geofenceEnabled: Boolean(sources.geofence),
+    geofenceEnabled: automaticLive,
     qrEnabled: Boolean(sources.qr),
     manualEnabled: Boolean(sources.manual),
     requiresConfirmation: Boolean(snapshot.requiresConfirmation ?? true),
@@ -98,7 +152,7 @@ export async function getAttendanceCapability(userId: string, churchSlug: string
     autoAttendanceConsent: account.autoAttendanceConsent,
     // Every precondition, evaluated once so the client does not have to.
     canAttemptAutomatically:
-      Boolean(sources.geofence) && link.ok && consent && occurrence.status !== "cancelled",
+      automaticLive && link.ok && consent && occurrence.status !== "cancelled",
   };
 }
 
@@ -180,10 +234,19 @@ export async function submitAttempt(
   idempotencyKey: string,
   input: AttemptInput,
 ) {
-  const account = await getVisitorAccount(userId);
-  if (!account) throw new VisitorError("account_missing", "No visitor account.");
+  // Active only. An account whose deletion was requested, or that was
+  // deactivated, stops being checked in at that moment, the same way it stops
+  // receiving notifications and loses its geofence configuration.
+  const account = await requireActiveAccount(userId);
 
   const admin = createAdminClient();
+
+  // Bounded before anything is read or written. A phone following the client
+  // backoff (a bucket of 12 refilling at one a minute, two calls per attempt)
+  // stays well inside this; a scripted client probing positions does not.
+  if (input.source === "geofence" && (await throttleAutomaticAttempt(account.id))) {
+    return reject("attempt_throttled", input.occurrenceId ?? null);
+  }
 
   // -----------------------------------------------------------------------
   // A code decides which service this is.
@@ -214,18 +277,24 @@ export async function submitAttempt(
 
   if (!occurrenceId) return reject("occurrence_not_found", null);
 
-  const { data: occurrence } = await admin
-    .from("service_occurrences")
-    .select("id, church_id, policy_snapshot, campus_latitude, campus_longitude, geofence_radius_m")
-    .eq("id", occurrenceId)
-    .maybeSingle();
+  const loadOccurrence = async (id: string) =>
+    (
+      await admin
+        .from("service_occurrences")
+        .select(
+          "id, church_id, campus_id, policy_snapshot, campus_latitude, campus_longitude, geofence_radius_m",
+        )
+        .eq("id", id)
+        .maybeSingle()
+    ).data;
+
+  let occurrence = await loadOccurrence(occurrenceId);
 
   if (!occurrence) {
     return reject("occurrence_not_found", null);
   }
 
   const churchId = occurrence.church_id as string;
-  const snapshot = (occurrence.policy_snapshot as Record<string, unknown>) ?? {};
 
   // The People link is the gate. No link, no attendance — whatever the device
   // observed and whatever relationship exists.
@@ -240,7 +309,48 @@ export async function submitAttempt(
         occurrenceId,
       );
     }
+
+    // And the church must still have it switched on. The snapshot records how
+    // this service is judged; it cannot keep a feature running that the church
+    // or the platform has since turned off.
+    if (!(await isAutomaticAttendanceLive(churchId, admin))) {
+      return reject("source_disabled", occurrenceId);
+    }
+
+    // -----------------------------------------------------------------------
+    // The service at the campus the phone is actually at.
+    //
+    // A client asks `/occurrence` which service is open, and before `regionId`
+    // was accepted there that answer ignored campus: at a church with two
+    // campuses holding services at the same hour, a phone at one was handed
+    // the other's service, banded against the other building, and refused as
+    // outside. So when the region the OS reported names a different campus of
+    // this church, and that campus has a service open right now, the attempt
+    // lands there. The region is the phone's claim and nothing more: the band
+    // is still computed against that service's own snapshotted position, so
+    // naming a campus you are not at gains nothing.
+    // -----------------------------------------------------------------------
+    const regionCampusId = campusIdFromRegionId(input.regionId);
+    if (
+      regionCampusId &&
+      occurrence.campus_id &&
+      (occurrence.campus_id as string) !== regionCampusId
+    ) {
+      const atRegion = await findOpenOccurrence(churchId, {
+        campusId: regionCampusId,
+        client: admin,
+      });
+      if (atRegion && atRegion.campusId === regionCampusId && atRegion.id !== occurrenceId) {
+        const reloaded = await loadOccurrence(atRegion.id);
+        if (reloaded && reloaded.church_id === churchId) {
+          occurrence = reloaded;
+          occurrenceId = atRegion.id;
+        }
+      }
+    }
   }
+
+  const snapshot = (occurrence.policy_snapshot as Record<string, unknown>) ?? {};
 
   // -----------------------------------------------------------------------
   // Record which code was used. **Audit only.**
@@ -371,22 +481,85 @@ export async function submitAttempt(
     admin,
   );
 
+  const outcome = contractOutcome(result.outcome);
+
   const countedAt =
-    result.outcome === "counted" || result.outcome === "already_counted"
-      ? new Date().toISOString()
+    outcome === "counted" || outcome === "already_counted"
+      ? await factCountedAt(admin, result.factId)
       : null;
 
   return {
-    outcome: result.outcome,
+    outcome,
     message: displayMessageFor(result.reason),
     occurrenceId: result.occurrenceId,
     countedAt,
     // Scheduling information for the client, and nothing more: the server
     // enforces the same deadline again on the confirmation.
     confirmationNotBefore:
-      result.outcome === "pending_confirmation" ? confirmationNotBefore : null,
-    detectionId: result.outcome === "pending_confirmation" ? detectionId : null,
+      outcome === "pending_confirmation" ? confirmationNotBefore : null,
+    detectionId: outcome === "pending_confirmation" ? detectionId : null,
   };
+}
+
+/**
+ * An outcome the mobile contract can carry.
+ *
+ * `record_attendance` replays a stored attempt's status verbatim for a repeated
+ * idempotency key, and an attempt can be `expired`: the cleanup job expires one
+ * left waiting on dwell after its window closed, and withdrawing consent closes
+ * one too. `expired` is not in the contract's outcome enum, so a phone retrying
+ * that key would have received a body it cannot decode. It is a refusal, and it
+ * is reported as one.
+ */
+export function contractOutcome(outcome: string): AttendanceOutcome {
+  return (ATTENDANCE_OUTCOMES as readonly string[]).includes(outcome)
+    ? (outcome as AttendanceOutcome)
+    : "rejected";
+}
+
+/**
+ * When the person was actually counted.
+ *
+ * "Already counted" means someone was counted earlier, by this phone, a greeter
+ * or a scan, and reporting the moment of this request as when would be wrong.
+ */
+async function factCountedAt(
+  admin: ReturnType<typeof createAdminClient>,
+  factId: string | null,
+): Promise<string> {
+  if (factId) {
+    const { data: fact } = await admin
+      .from("attendance_facts")
+      .select("counted_at")
+      .eq("id", factId)
+      .maybeSingle();
+    if (fact?.counted_at) return new Date(fact.counted_at as string).toISOString();
+  }
+  return new Date().toISOString();
+}
+
+/**
+ * How many automatic check-in submissions an account may make.
+ *
+ * Sixty per ten minutes. The clients' own policy (a token bucket of twelve
+ * refilling at one a minute, with an exponential cooldown) cannot exceed about
+ * twenty-two attempts, forty-four requests with confirmations, in any ten
+ * minutes, so an honest phone never meets this. What it bounds is a client that
+ * ignores that policy: every accepted `detected` writes a detection, and every
+ * submission is a distance computation.
+ *
+ * Keyed by account alone, never by position or occurrence, so the limiter
+ * stores nothing about where anyone was. Fails closed, like every other use of
+ * `checkRateLimit`.
+ */
+const AUTOMATIC_ATTEMPT_BUDGET = { limit: 60, windowMs: 10 * 60 * 1000 };
+
+async function throttleAutomaticAttempt(accountId: string): Promise<boolean> {
+  const result = await checkRateLimit(
+    `attendance:geofence:${accountId}`,
+    AUTOMATIC_ATTEMPT_BUDGET,
+  );
+  return !result.ok;
 }
 
 /**

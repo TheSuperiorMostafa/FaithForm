@@ -8,10 +8,20 @@ export const dynamic = "force-dynamic";
  *
  * Resolved server-side from the clock. Returning null is a normal answer —
  * outside a check-in window there is nothing to attend.
+ *
+ * `?regionId=faithform.campus.<uuid>` is optional: the OS region a phone
+ * entered, exactly as the geofence configuration issued it. At a church with
+ * several campuses it selects the service at that campus. It names a place the
+ * church publishes, not a person, and it cannot select another church's
+ * service because the lookup is scoped to the church in the path.
  */
 export const GET = authenticatedRoute(
   { cache: "private-no-store" },
-  async ({ userId, params }) => ({
-    data: { occurrence: await getEligibleOccurrence(userId, params.slug) },
+  async ({ userId, request, params }) => ({
+    data: {
+      occurrence: await getEligibleOccurrence(userId, params.slug, {
+        regionId: new URL(request.url).searchParams.get("regionId")?.slice(0, 200) ?? null,
+      }),
+    },
   }),
 );

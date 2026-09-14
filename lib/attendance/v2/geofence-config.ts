@@ -1,6 +1,9 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 import { createAdminClient } from "@/lib/supabase/admin";
 import { VisitorError } from "@/lib/faithform/errors";
 import { getVisitorAccount } from "@/lib/faithform/account";
+import { isChurchFeatureEnabled } from "@/lib/features/access";
 import {
   hasAutomaticAttendanceConsent,
   resolveSelfCheckInMember,
@@ -228,8 +231,16 @@ export async function buildGeofenceConfiguration(
     .select("id, name, latitude, longitude, geofence_radius_m, is_active, is_public")
     .eq("church_id", churchId)
     .eq("is_active", true)
+    // Filtered here as well as below. Filtering hidden campuses only after the
+    // limit let them use up places in it, so a church with many hidden
+    // campuses could be told it had none.
+    .eq("is_public", true)
     .not("latitude", "is", null)
     .not("longitude", "is", null)
+    // Ordered, so which twenty is the same on every request and on both
+    // platforms. An unordered limit let the database pick a different set from
+    // one refresh to the next, which the clients would read as moved regions.
+    .order("id", { ascending: true })
     // Both platforms cap how many regions an app may register; a church with
     // more campuses than this needs a proximity strategy the clients own.
     .limit(20);
@@ -257,6 +268,12 @@ export async function buildGeofenceConfiguration(
     return { ok: false, reason: "geofence_disabled" };
   }
 
+  // A platform admin switching Attendance off for the church switches this off
+  // too. The church's own toggle above is not the only way it can stop.
+  if (!(await isChurchFeatureEnabled(churchId, "attendance"))) {
+    return { ok: false, reason: "geofence_disabled" };
+  }
+
   // Upcoming windows only, and bounded. A client does not need the whole year.
   const horizon = new Date(now);
   horizon.setUTCDate(horizon.getUTCDate() + 7);
@@ -268,6 +285,10 @@ export async function buildGeofenceConfiguration(
     )
     .eq("church_id", churchId)
     .in("status", ["scheduled", "active"])
+    // Only services that will accept an automatic check-in. A window whose own
+    // snapshot has automatic check-in off would send phones to ask a question
+    // the server has already answered no.
+    .eq("policy_snapshot->sources->>geofence", "true")
     .gte("checkin_closes_at_utc", now.toISOString())
     .lte("starts_at_utc", horizon.toISOString())
     .order("starts_at_utc", { ascending: true })
@@ -336,4 +357,31 @@ export function refusalMessage(reason: GeofenceConfigRefusal): string {
     default:
       return "This church is not available to you right now.";
   }
+}
+
+/**
+ * Whether the church takes automatic check-ins **right now**.
+ *
+ * An occurrence's snapshot decides how a service is judged, but switching the
+ * feature off has to stop automatic check-ins at once, including at a service
+ * whose check-in is already open. So a submission is refused when either the
+ * church's own setting or the platform-level Attendance feature is off,
+ * whatever the snapshot says. Turning it on takes effect from the next service
+ * whose check-in has not opened, which is when that snapshot is refreshed.
+ */
+export async function isAutomaticAttendanceLive(
+  churchId: string,
+  client?: SupabaseClient,
+): Promise<boolean> {
+  const admin = client ?? createAdminClient();
+  const { data: policy } = await admin
+    .from("attendance_policies")
+    .select("geofence_enabled")
+    .eq("church_id", churchId)
+    .is("campus_id", null)
+    .is("service_time_id", null)
+    .maybeSingle();
+
+  if (!policy?.geofence_enabled) return false;
+  return isChurchFeatureEnabled(churchId, "attendance");
 }
