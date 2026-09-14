@@ -31,6 +31,20 @@ import {
  *
  *   Nearby search coordinates are used once and discarded: lib/faithform/nearby.ts
  *   Automatic check-in keeps a band, never coordinates: lib/mobile/v1/attendance-service.ts
+ *   Nothing is sent outside a check-in window: on a region event both apps ask
+ *     /attendance/{slug}/occurrence (which carries no location) and stop when it is null
+ *     (AutomaticAttendance.swift / AutomaticAttendance.kt). Keep that true in the apps.
+ *   The arrival record (attendance_detections) expires in 2 hours and is purged by the
+ *     daily cleanup cron: migration 0074, lib/attendance/v2/jobs.ts
+ *   Turning it off deletes pending arrivals: withdraw_automatic_attendance_evidence (0074),
+ *     called from recordConsent in lib/faithform/account.ts
+ *   The Android mock-location flag is the `mockLocationReported` attempt field
+ *
+ * The automatic check-in section was made more specific in September 2026 without
+ * moving PRIVACY_VERSION: it describes the same collection (a location on arrival,
+ * with the app closed, for check-in only), the same purpose and the same sharing the
+ * 2026-08-01 text already disclosed. Moving the version would ask every person on
+ * both apps to accept again for a clarification.
  *   The scanner decodes on-device and uploads no image: AVFoundationScanner.swift, CameraXScanner.kt
  *   No card data reaches FaithForm: tests/security/giving-privacy.test.ts
  *   No analytics, advertising or tracking SDKs in either app: Package.swift, libs.versions.toml
@@ -97,19 +111,68 @@ export default function PrivacyPolicyPage() {
         </li>
         <li>
           <strong>Automatic check-in.</strong> If your church offers automatic
-          check-in and you turn it on, the app asks for your permission first,
-          and your device asks for location access &mdash; including access
-          while the app is closed, so you can be checked in when you arrive.
-          Your phone&apos;s operating system notices when you arrive at a place
-          your church has set up. The app then sends your location and how
-          accurate it is to our servers to confirm you&apos;re at church during a
-          service. We use the location to work that out and then discard it. We
-          keep only the result &mdash; for example, that you were inside or near
-          the church&apos;s check-in area, how accurate the reading was, and how
-          long you were there &mdash; never your coordinates. We don&apos;t
-          track where else you go, and your church never sees your location.
-          You can turn automatic check-in off in the app or in your device
-          settings at any time.
+          check-in and you turn it on, the app explains what it does and asks
+          for your permission first, and then your device asks for location
+          access, including access while the app is closed, so you can be
+          checked in when you arrive. See{" "}
+          <a href="#automatic-check-in">Automatic check-in</a> below for
+          exactly what it uses, sends and keeps.
+        </li>
+      </ul>
+
+      <h3 id="automatic-check-in">Automatic check-in</h3>
+      <p>
+        Automatic check-in is optional. It is off unless you turn it on, the app
+        works fully without it, and you can still check in by scanning or typing
+        your church&apos;s check-in code, or be marked present by church staff,
+        wherever your church offers those.
+      </p>
+      <ul>
+        <li>
+          <strong>What your phone watches for.</strong> Only your arrival at the
+          locations your church has set up for check-in, such as the circle
+          around its building. Your phone&apos;s operating system does the
+          watching; the app doesn&apos;t follow your movements or record where
+          you go.
+        </li>
+        <li>
+          <strong>When anything is sent.</strong> Only when you arrive during a
+          service&apos;s check-in window, which your church sets around its
+          service times. Arriving at any other time, or being anywhere else,
+          sends no location to us.
+        </li>
+        <li>
+          <strong>What is sent.</strong> When you arrive during a check-in
+          window, the app sends your location at that moment, how accurate it
+          is, the time, which service and which of your church&apos;s locations
+          it is for, and, on Android, whether your phone reported the location
+          as simulated. It can send this more than once during one arrival: a
+          few minutes later to confirm you stayed, or again if a reading
+          wasn&apos;t precise enough.
+        </li>
+        <li>
+          <strong>What is kept.</strong> We use your location to work out
+          whether you were at church and then discard it. We never store your
+          coordinates. We keep the result: whether you were inside or near the
+          check-in area, how accurate the reading was, how long you had been
+          there, and whether you were checked in, as part of your church&apos;s
+          attendance records. So that we can confirm you stayed, we also keep a
+          short record that you arrived at that church location and when; it
+          stops being usable after two hours and is
+          deleted automatically within about a day.
+        </li>
+        <li>
+          <strong>Who sees it.</strong> Your church sees that you attended a
+          service and that you were checked in automatically. Your church never
+          sees your location, and no one else does either.
+        </li>
+        <li>
+          <strong>Turning it off.</strong> Turn automatic check-in off in the
+          app at any time, or remove the app&apos;s location access in your
+          device settings. When you turn it off in the app, it stops watching for
+          your arrival and we delete any arrival that was still waiting to be
+          confirmed. Check-ins that were already counted stay part of your
+          church&apos;s attendance records.
         </li>
       </ul>
 
@@ -235,14 +298,14 @@ export default function PrivacyPolicyPage() {
       <h2 id="retention">How long we keep information</h2>
       <ul>
         <li>We keep your account information for as long as your account is open. When you delete your account, we delete it as described on our <Link href={LEGAL_PATHS.accountDeletion}>account deletion page</Link>.</li>
-        <li>Location sent for a nearby search or an automatic check-in is not kept at all; only the check-in result described above is stored.</li>
+        <li>Location sent for a nearby search or an automatic check-in is not kept at all; only the check-in result described above is stored. The short record of an arrival waiting to be confirmed is deleted within about a day, or straight away if you turn automatic check-in off.</li>
         <li>Check-in and giving records are part of your church&apos;s records. They are kept for as long as the church needs them, including to meet its financial record-keeping obligations, and Stripe keeps payment records as the law requires.</li>
         <li>Technical logs are kept by our hosting providers for a limited period, and copies of deleted information can remain in encrypted backups until those backups expire.</li>
       </ul>
 
       <h2 id="choices">Your choices and rights</h2>
       <ul>
-        <li><strong>Location.</strong> Turn automatic check-in off in the app, or change location permission in your device settings. Nearby search is optional.</li>
+        <li><strong>Location.</strong> Automatic check-in and nearby search are both optional. Turn automatic check-in off in the app, or change location permission in your device settings; you can still check in with your church&apos;s code or be marked present by staff.</li>
         <li><strong>Camera.</strong> Deny camera access and type check-in codes instead.</li>
         <li><strong>Notifications.</strong> Change them in the app or turn them off in your device settings.</li>
         <li><strong>Your profile.</strong> Update your name and preferences in the app.</li>

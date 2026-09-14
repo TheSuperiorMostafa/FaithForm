@@ -89,20 +89,24 @@ export default function AccountDeletionPage() {
         <li>Your church connections: the churches you follow or joined, requests to join, and invitations. Churches will no longer see you as a follower or member in FaithForm.</li>
         <li>The link between your account and any church&apos;s own record of you.</li>
         <li>Your notification settings and your devices&apos; notification tokens.</li>
-        <li>Your automatic check-in setting.</li>
+        <li>Your automatic check-in setting, and any automatic check-in that was still waiting to be confirmed.</li>
       </ul>
       <p>
         FaithForm never stores your location history or photos, so there are
-        none to delete.
+        none to delete. Automatic check-in never keeps your coordinates; see our{" "}
+        <Link href={`${LEGAL_PATHS.privacy}#automatic-check-in`}>Privacy Policy</Link>{" "}
+        for what it does keep.
       </p>
 
       <h2 id="kept">What is kept, and why</h2>
       <ul>
         <li>
           <strong>Your church&apos;s own records.</strong> If a church added you to
-          its member directory or recorded your attendance, those records belong
-          to the church. Deleting your FaithForm account doesn&apos;t delete them;
-          contact the church if you&apos;d like them changed or removed.
+          its member directory or recorded your attendance, including check-ins
+          made by scanning a code or automatically, those records belong to the
+          church. Deleting your FaithForm account doesn&apos;t delete them, and
+          they are no longer connected to a FaithForm account; contact the church
+          if you&apos;d like them changed or removed.
         </li>
         <li>
           <strong>Records of your gifts.</strong> A gift is a financial record of
