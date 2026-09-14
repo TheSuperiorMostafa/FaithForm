@@ -34,6 +34,8 @@ class ApiCheckInSubmitter(
         val body = json.encodeToString(
             ScanAttemptBody.serializer(),
             ScanAttemptBody(
+                source = "qr",
+                phase = "confirm",
                 qrToken = submission.qrToken,
                 shortCode = submission.shortCode,
                 scanAttemptId = submission.scanAttemptId,
@@ -83,8 +85,10 @@ class ApiCheckInSubmitter(
  */
 @Serializable
 private data class ScanAttemptBody(
-    val source: String = "qr",
-    val phase: String = "confirm",
+    // No defaults on these two: the encoder omits a property equal to its
+    // default, and the server requires `source`.
+    val source: String,
+    val phase: String,
     val qrToken: String? = null,
     val shortCode: String? = null,
     val scanAttemptId: String,
