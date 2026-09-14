@@ -7,13 +7,16 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import io.faithform.app.attendance.CameraPermissionRequester
 import io.faithform.app.design.FaithFormTheme
+import io.faithform.app.giving.StripePaymentSheetAdapter
 import io.faithform.app.navigation.RouteRegistry
+import io.faithform.app.session.AppContainer
 import io.faithform.app.ui.FaithFormApp
 import io.faithform.app.ui.UnconfiguredScreen
 import io.faithform.app.ui.discovery.AndroidLocationProvider
-import kotlin.coroutines.resume
-import kotlinx.coroutines.suspendCancellableCoroutine
 
 /**
  * The single activity.
@@ -21,6 +24,21 @@ import kotlinx.coroutines.suspendCancellableCoroutine
  * `singleTask` plus `onNewIntent` is the Android-native way to receive a deep
  * link into a running app; this is deliberately not modelled on the iOS
  * lifecycle, which handles the same situation differently.
+ *
+ * ## What survives a rotation, and what does not
+ *
+ * This class is rebuilt on every configuration change. Anything that must
+ * outlive that — the shell's state, a sign-in in progress, a gift waiting for
+ * the server — lives in a ViewModel or in the application container, and is
+ * *fetched* here, never constructed here. The previous version built
+ * `AppViewModel` directly in `onCreate`: after one rotation the screen observed
+ * a brand-new view model while the retained sign-in form still reported to the
+ * old one, so signing in after rotating left the person on the sign-in screen.
+ *
+ * What does belong to one Activity instance is registered here and bound to
+ * app-scoped relays: the location permission launcher, the camera permission
+ * launcher, and Stripe's payment sheet. Each must be registered before the
+ * Activity starts, and each is replaced, not leaked, by the next instance.
  */
 class MainActivity : ComponentActivity() {
 
@@ -54,32 +72,23 @@ class MainActivity : ComponentActivity() {
     private var appViewModel: AppViewModel? = null
 
     /**
-     * The one runtime dialog discovery can raise, owned by the Activity
-     * because launchers must be registered before START. The provider awaits
-     * the person's answer through [pendingPermissionReply].
+     * The one runtime dialog discovery can raise. Registered on this instance;
+     * the discovery view model reaches it only through
+     * `container.locationPermissions`, so a rotation mid-dialog still answers
+     * the request that raised it.
      */
-    private var pendingPermissionReply: ((Map<String, Boolean>) -> Unit)? = null
-
     private val locationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { grants ->
-        pendingPermissionReply?.invoke(grants)
-        pendingPermissionReply = null
+        (application as FaithFormApplication).container?.locationPermissions?.deliver(grants)
     }
 
-    private suspend fun requestLocationPermissions(): Map<String, Boolean> =
-        suspendCancellableCoroutine { continuation ->
-            pendingPermissionReply = { grants ->
-                if (continuation.isActive) continuation.resume(grants)
-            }
-            continuation.invokeOnCancellation { pendingPermissionReply = null }
-            locationPermissionLauncher.launch(
-                arrayOf(
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_COARSE_LOCATION
-                )
-            )
-        }
+    private val launchLocationDialog: (Array<String>) -> Unit = { permissions ->
+        locationPermissionLauncher.launch(permissions)
+    }
+
+    /** Registered before START, like every launcher. Used only by the check-in tab. */
+    private val cameraPermission = CameraPermissionRequester(this)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -105,22 +114,37 @@ class MainActivity : ComponentActivity() {
             return
         }
 
-        val viewModel = AppViewModel(
-            api = container.apiClient,
-            sessions = container.sessionStore,
-            cache = container.cache,
-            environmentKey = container.environmentKey,
-            auth = container.authClient
-        )
+        container.locationPermissions.attach(launchLocationDialog)
+        // Stripe's sheet registers its own launcher and attaches itself to
+        // `container.paymentSheets`; it detaches when this instance is destroyed.
+        StripePaymentSheetAdapter(this, container.paymentSheets)
+
+        // Retained across configuration changes. The factory runs once per
+        // Activity *lifetime*, not once per `onCreate`.
+        val viewModel = ViewModelProvider(this, AppViewModelFactory(container, registry))[AppViewModel::class.java]
         appViewModel = viewModel
+
+        // App-scoped: holds the application context and the relay, never this
+        // Activity, so the discovery view model that keeps it cannot leak one.
         val locationProvider = AndroidLocationProvider(
             context = applicationContext,
-            requestPermissions = ::requestLocationPermissions
+            requestPermissions = {
+                container.locationPermissions.request(
+                    arrayOf(
+                        Manifest.permission.ACCESS_FINE_LOCATION,
+                        Manifest.permission.ACCESS_COARSE_LOCATION
+                    )
+                )
+            }
         )
 
         // A link that arrives with a cold start is handled the same way as one
-        // that arrives later: parsed, authorized, then acted on.
-        intent?.dataString?.let(viewModel::handleDeepLink)
+        // that arrives later: parsed, authorized, then acted on. A recreated
+        // Activity re-delivers the same intent, which is why this runs only
+        // for a genuinely new launch.
+        if (savedInstanceState == null) {
+            intent?.dataString?.let(viewModel::handleDeepLink)
+        }
 
         setContent {
             FaithFormTheme {
@@ -128,12 +152,18 @@ class MainActivity : ComponentActivity() {
                     viewModel = viewModel,
                     container = container,
                     locationProvider = locationProvider,
-                    registry = registry
+                    cameraPermission = cameraPermission
                 )
             }
         }
 
-        viewModel.load()
+        // The first load of this view model, not of every rotation.
+        viewModel.start()
+    }
+
+    override fun onDestroy() {
+        (application as FaithFormApplication).container?.locationPermissions?.detach(launchLocationDialog)
+        super.onDestroy()
     }
 
     /**
@@ -144,5 +174,31 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         intent.dataString?.let { appViewModel?.handleDeepLink(it) }
+    }
+}
+
+/**
+ * Builds the shell's view model from the container, once per Activity lifetime.
+ *
+ * The session-ended stream is wired here, so a 401 from any screen — or a
+ * refresh token the identity provider refused — signs the person out through
+ * the same path, whichever screen discovered it.
+ */
+class AppViewModelFactory(
+    private val container: AppContainer,
+    private val registry: RouteRegistry,
+) : ViewModelProvider.Factory {
+    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+        require(modelClass.isAssignableFrom(AppViewModel::class.java)) { "unknown view model $modelClass" }
+        @Suppress("UNCHECKED_CAST")
+        return AppViewModel(
+            api = container.apiClient,
+            sessions = container.sessionStore,
+            cache = container.cache,
+            environmentKey = container.environmentKey,
+            auth = container.authClient,
+            registry = registry,
+            sessionEnded = container.sessionEnded,
+        ) as T
     }
 }

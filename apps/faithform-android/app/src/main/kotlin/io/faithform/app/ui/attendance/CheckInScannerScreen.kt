@@ -77,6 +77,17 @@ fun CheckInScannerScreen(
             style = MaterialTheme.typography.bodySmall,
         )
 
+        if (state.phase is ScanPhase.RequestingPermission) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            ) {
+                CircularProgressIndicator(modifier = Modifier.size(20.dp))
+                Text(stringResource(R.string.checkin_scan_searching))
+            }
+        }
+
         if (state.isScanning) {
             preview()
             Row(

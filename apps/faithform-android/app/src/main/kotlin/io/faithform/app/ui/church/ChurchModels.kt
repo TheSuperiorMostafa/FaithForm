@@ -105,3 +105,29 @@ data class SwitchResult(val selectedSlug: String?, val partition: CachePartition
  */
 fun ChooserChurch.isSelectable(): Boolean =
     state != RelationshipState.BLOCKED && state != RelationshipState.LEFT
+
+/**
+ * The Church tab's chooser, from the bootstrap the shell already holds.
+ *
+ * Bootstrap is refreshed after every join, follow, leave and invitation, and
+ * carries the same fields the chooser route would — so the tab draws from it
+ * rather than making a second request that could disagree with the tabs.
+ * Selection is still decided server-side-first by `canReadPublishedContent` in
+ * `AppViewModel.selectChurch`; a row shown here is not authorization.
+ */
+fun chooserPhaseFor(relationships: List<io.faithform.app.contract.ChurchRelationship>): ChooserPhase {
+    if (relationships.isEmpty()) return ChooserPhase.Empty
+    return ChooserPhase.Loaded(
+        relationships.map { relationship ->
+            ChooserChurch(
+                slug = relationship.churchSlug,
+                name = relationship.churchName,
+                logoUrl = relationship.logoUrl,
+                // The truthful state, always: a pending request reads as
+                // pending. Whether a tap selects it is decided by the server's
+                // `canReadPublishedContent`, not by this label.
+                state = relationship.state,
+            )
+        }
+    )
+}

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Strings with no iOS counterpart, by nature rather than by omission.
+
+    Every shared user-facing string lives in strings.xml, whose keys are held in
+    lockstep with apps/faithform-ios/Sources/FaithFormKit/Strings.swift by
+    scripts/verify-localization-parity.mjs (which reads strings.xml only). These
+    two describe things iOS provides itself, so a mirrored key there would be a
+    string nothing could ever show — the same reasoning as that script's
+    PLATFORM_ONLY list for notification channels:
+
+      * nav_back - SwiftUI's navigation bar supplies its own localized back
+        button; a Compose top bar needs an accessibility label for its arrow.
+      * legal_link_unavailable - an iPhone always has Safari. An Android phone
+        can have no browser at all, and a link that does nothing must say why.
+-->
+<resources>
+    <string name="nav_back">Back</string>
+    <string name="legal_link_unavailable">No app on this phone can open that link.</string>
+</resources>

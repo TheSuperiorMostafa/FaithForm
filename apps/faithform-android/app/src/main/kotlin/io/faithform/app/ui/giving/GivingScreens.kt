@@ -1,5 +1,6 @@
 package io.faithform.app.ui.giving
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -11,6 +12,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -30,6 +32,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
 import io.faithform.app.R
 import io.faithform.app.design.FaithFormTokens
+import io.faithform.app.design.LocalFaithFormTheme
 import io.faithform.app.giving.AmountProblem
 import io.faithform.app.giving.DonationPhase
 import io.faithform.app.giving.GivingEmptyReason
@@ -40,6 +43,7 @@ import io.faithform.app.giving.HistoryLabel
 import io.faithform.app.giving.formatGivingAmount
 import io.faithform.app.giving.historyLabel
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import io.faithform.app.ui.discovery.EmptyState
 
@@ -115,6 +119,7 @@ private fun Loaded(
     onHistory: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val theme = LocalFaithFormTheme.current
     // Three genuinely different empties, said differently. A church with no funds
     // has not opened any; a church that cannot charge has not finished setting
     // up. Telling a person "nothing here" for both would make one of them look
@@ -165,14 +170,26 @@ private fun Loaded(
                     // A selection is a *semantic* state, not a colour. A ring
                     // nobody can see is not a selection.
                     .selectable(selected = selected, onClick = { onSelectFund(fund.fundId) }),
+                // ...and a selection only TalkBack knows about is not one
+                // either: the chosen fund is also outlined and ticked.
+                border = if (selected) BorderStroke(FaithFormTokens.BorderWidth.emphasis, theme.palette.brandAccent) else null,
             ) {
-                Column(
-                    modifier = Modifier.padding(FaithFormTokens.Spacing.md),
-                    verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm),
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(FaithFormTokens.Spacing.md),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(fund.title, style = MaterialTheme.typography.titleMedium)
-                    fund.description?.takeIf { it.isNotBlank() }?.let {
-                        Text(it, style = MaterialTheme.typography.bodySmall)
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm),
+                    ) {
+                        Text(fund.title, style = MaterialTheme.typography.titleMedium)
+                        fund.description?.takeIf { it.isNotBlank() }?.let {
+                            Text(it, style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                    if (selected) {
+                        Icon(Icons.Outlined.CheckCircle, contentDescription = null, tint = theme.palette.brandAccent)
                     }
                 }
             }
