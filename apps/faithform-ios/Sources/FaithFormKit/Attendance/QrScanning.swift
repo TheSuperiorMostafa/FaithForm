@@ -126,6 +126,39 @@ public enum ShortCodeEntry {
     public static func isComplete(_ input: String) -> Bool {
         normalise(input).count == length
     }
+
+    /// Whether the input has a letter or number no code ever contains — an O,
+    /// a 0, an I or a 1 read off a screen.
+    ///
+    /// Spaces, dashes and other separators are not counted: dropping those is
+    /// what a person expects, and saying nothing about them is right.
+    public static func containsUnusedCharacters(_ input: String) -> Bool {
+        input.uppercased().contains { character in
+            (character.isLetter || character.isNumber) && !alphabet.contains(character)
+        }
+    }
+
+    /// Whether the "codes never use…" hint shows after an edit.
+    ///
+    /// It appears the moment an unused character is typed — the field has
+    /// already dropped it, so without a word the person would see their
+    /// keystroke vanish — and stays until the field is emptied or holds a whole
+    /// code, rather than flashing away on the next keystroke.
+    public static func showsUnusedCharacterHint(afterEditing input: String, wasShowing: Bool) -> Bool {
+        if containsUnusedCharacters(input) { return true }
+        guard wasShowing else { return false }
+        let normalised = normalise(input)
+        return !normalised.isEmpty && normalised.count < length
+    }
+
+    /// The letters and numbers codes never use, for the hint's wording.
+    public static var unusedLetters: [Character] {
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ".filter { !alphabet.contains($0) }.map { $0 }
+    }
+
+    public static var unusedDigits: [Character] {
+        "0123456789".filter { !alphabet.contains($0) }.map { $0 }
+    }
 }
 
 // MARK: - The scan session

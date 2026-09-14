@@ -24,6 +24,27 @@ public final class CheckInScannerModel {
         }
     }
 
+    /// "Codes never use…", under the field, after someone typed a character
+    /// that no code contains.
+    public private(set) var showsUnusedCharacterHint = false
+
+    /// What the text field reports as the person types.
+    ///
+    /// Returns what the field must now display. **The field has to be told**:
+    /// a SwiftUI `TextField` bound straight to `typedCode` kept showing
+    /// "ABC1234" while this model had already normalised it to "BC34", so the
+    /// button stayed disabled under a code that looked complete, and tapping it
+    /// did nothing at all.
+    @discardableResult
+    public func editTypedCode(_ input: String) -> String {
+        showsUnusedCharacterHint = ShortCodeEntry.showsUnusedCharacterHint(
+            afterEditing: input,
+            wasShowing: showsUnusedCharacterHint
+        )
+        typedCode = input
+        return typedCode
+    }
+
     private let coordinator: CheckInScanCoordinator
 
     public init(coordinator: CheckInScanCoordinator) {
@@ -56,6 +77,7 @@ public final class CheckInScannerModel {
             // A spent code is cleared from the field. Leaving it on screen
             // invites a second attempt that can only be refused.
             typedCode = ""
+            showsUnusedCharacterHint = false
         }
     }
 
@@ -67,6 +89,7 @@ public final class CheckInScannerModel {
     public func reset() async {
         await coordinator.stopScanning()
         typedCode = ""
+        showsUnusedCharacterHint = false
         phase = await coordinator.currentPhase()
     }
 
