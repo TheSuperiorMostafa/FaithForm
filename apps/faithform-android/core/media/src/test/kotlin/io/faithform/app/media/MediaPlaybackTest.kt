@@ -243,6 +243,35 @@ class RevocationTest {
     }
 
     @Test
+    fun `a stream that is still unavailable after its retry fails instead of looping`() = runBlocking {
+        val granter = FakeGranter()
+        val player = FakePlayer()
+        val session = coordinator(granter = granter, player = player)
+        session.start("grace", MediaPlaybackKind.RECORDING, "gone", PARTITION_A)
+
+        // A recording that is simply not there: every load answers 404, and a
+        // fresh capability changes nothing.
+        repeat(5) { session.handle(PlayerEvent.Failed(PlayerFailure.UNAVAILABLE)) }
+
+        assertEquals("the failure renewed more than once", 2, granter.calls.size)
+        assertEquals(PlaybackSessionState.Failed(PlayerFailure.UNAVAILABLE), session.currentState())
+    }
+
+    @Test
+    fun `a stream that became ready earns its retry again`() = runBlocking {
+        val granter = FakeGranter()
+        val session = coordinator(granter = granter)
+        session.start("grace", MediaPlaybackKind.RECORDING, "r1", PARTITION_A)
+
+        session.handle(PlayerEvent.Failed(PlayerFailure.UNAVAILABLE))
+        session.handle(PlayerEvent.ReadyToPlay(durationMillis = 1_000_000))
+        session.handle(PlayerEvent.Failed(PlayerFailure.UNAVAILABLE))
+
+        // Two separate expiries, an hour apart, each renewed.
+        assertEquals(3, granter.calls.size)
+    }
+
+    @Test
     fun `a network failure is not retried as though it were a revocation`() = runBlocking {
         val granter = FakeGranter()
         val session = coordinator(granter = granter)

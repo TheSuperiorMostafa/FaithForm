@@ -7,6 +7,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
+import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
@@ -29,8 +30,8 @@ import kotlinx.coroutines.withContext
  * range. So the capability travels in an `Authorization` header and never in a
  * URL, a browser history, a proxy log, or a screenshot.
  *
- * The properties map is mutable and swapped in place by
- * [PlayerCommand.UpdateCapability], which is what lets a refresh land without
+ * [PlayerCommand.UpdateCapability] hands the renewed header to the factory's
+ * shared request properties, which is what lets a refresh land without
  * interrupting playback.
  *
  * ## What is deliberately absent
@@ -52,9 +53,19 @@ import kotlinx.coroutines.withContext
  */
 class Media3PlayerAdapter(
     context: Context,
-    private val playerFactory: (Context) -> ExoPlayer = { ctx ->
+    /**
+     * Builds the player **around [dataSourceFactory]**.
+     *
+     * This used to build `DefaultMediaSourceFactory(context)`, which creates a
+     * data source of its own — so the header-carrying factory below was never
+     * used, no request ever carried the capability, and every recording and
+     * live stream would have been refused by the delivery route. Found by
+     * playing against a local server and watching the requests arrive without
+     * an `Authorization` header.
+     */
+    private val playerFactory: (Context, DataSource.Factory) -> ExoPlayer = { ctx, dataSource ->
         ExoPlayer.Builder(ctx)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(ctx))
+            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSource))
             .build()
     },
 ) : MediaPlayerFacade {
@@ -101,14 +112,17 @@ class Media3PlayerAdapter(
     override suspend fun send(command: PlayerCommand): Unit = withContext(Dispatchers.Main) {
         when (command) {
             is PlayerCommand.Load -> load(command.request)
-            is PlayerCommand.Play -> {
-                player?.play()
-                handler?.invoke(PlayerEvent.Playing)
+            is PlayerCommand.Play -> player?.let { current ->
+                // After an error the player sits idle with its item still set;
+                // playing again means loading again, through whatever
+                // capability the coordinator has just renewed.
+                if (current.playbackState == Player.STATE_IDLE && current.mediaItemCount > 0) current.prepare()
+                current.play()
+                // No synthetic "playing" here: `onIsPlayingChanged` reports
+                // what the player actually does, and a stream that fails to
+                // load must not read as playing in the meantime.
             }
-            is PlayerCommand.Pause -> {
-                player?.pause()
-                handler?.invoke(PlayerEvent.Paused)
-            }
+            is PlayerCommand.Pause -> player?.pause()
             is PlayerCommand.Seek ->
                 player?.seekTo(startOffsetMillis + maxOf(0, command.millis))
             is PlayerCommand.Stop -> {
@@ -119,7 +133,36 @@ class Media3PlayerAdapter(
         }
     }
 
-    internal fun setCapability(capability: String) = headers.set(capability)
+    internal fun setCapability(capability: String) {
+        headers.set(capability)
+        // Media3 copies the map it is given into the factory's shared request
+        // properties rather than reading it live, so a renewed capability is
+        // handed over again. Every data source the factory created reads those
+        // shared properties on its next request — the playlist refresh, the
+        // next segment — without the player being rebuilt.
+        dataSourceFactory.setDefaultRequestProperties(headers.mutableView())
+    }
+
+    /**
+     * The player a `PlayerView` renders, or null before anything was loaded.
+     *
+     * Exposed for the video surface only. Commands still go through [send], so
+     * nothing a screen does to the view can bypass the coordinator's decisions.
+     */
+    val videoPlayer: Player? get() = player
+
+    /**
+     * Releases the player immediately, on the calling (main) thread.
+     *
+     * For the one moment [send] cannot be used: a view model being cleared,
+     * whose coroutine scope is already cancelled. Leaving the player alive
+     * there would keep a decoder, a network connection and audio focus held
+     * for a screen that no longer exists.
+     */
+    fun release() {
+        player?.release()
+        player = null
+    }
 
     internal fun currentRequestProperties(): Map<String, String> = headers.snapshot()
 
@@ -127,7 +170,7 @@ class Media3PlayerAdapter(
         startOffsetMillis = request.startOffsetMillis
         setCapability(request.capability)
 
-        val instance = player ?: playerFactory(appContext).also { created ->
+        val instance = player ?: playerFactory(appContext, dataSourceFactory).also { created ->
             created.setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)
@@ -185,6 +228,16 @@ class Media3PlayerAdapter(
                 Player.STATE_ENDED -> handler?.invoke(PlayerEvent.Ended)
                 else -> Unit
             }
+        }
+
+        /**
+         * Playing and paused as the player actually is, not as last commanded.
+         * `READY` arrives before `isPlaying` turns true, so a play requested
+         * while buffering would otherwise read as paused once the stream is
+         * ready — with the sermon audibly playing.
+         */
+        override fun onIsPlayingChanged(isPlaying: Boolean) {
+            handler?.invoke(if (isPlaying) PlayerEvent.Playing else PlayerEvent.Paused)
         }
 
         override fun onPlayerError(error: PlaybackException) {
