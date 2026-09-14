@@ -49,6 +49,11 @@ public struct FaithFormButtonStyle: ButtonStyle {
             .opacity(configuration.isPressed ? 0.88 : 1)
             .scaleEffect(configuration.isPressed ? 0.985 : 1)
             .animation(theme.animation(FaithFormTokens.Motion.fast), value: configuration.isPressed)
+            // A disabled button has to look it. Without this, `.disabled(true)`
+            // left every button exactly as gold as an active one, so "Check me
+            // in" with an incomplete code, or "Create Account" mid-request, read
+            // as tappable and then did nothing.
+            .modifier(DimmedWhenDisabled())
             .contentShape(Rectangle())
     }
 
@@ -105,6 +110,20 @@ public struct FaithFormButtonStyle: ButtonStyle {
 /// Kept as a `LabelStyle` rather than a bespoke button view so every existing
 /// `Button("…")` call site is unchanged and only the ones that adopt `Label`
 /// gain an icon.
+/// Reads `isEnabled` from inside the button, which a `ButtonStyle` cannot do
+/// directly.
+///
+/// Opacity rather than a grey fill, so every kind — primary, secondary, quiet,
+/// destructive — dims the same way and still reads as itself. VoiceOver already
+/// announces "dimmed" for a disabled button; this is the sighted half.
+private struct DimmedWhenDisabled: ViewModifier {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func body(content: Content) -> some View {
+        content.opacity(isEnabled ? 1 : 0.45)
+    }
+}
+
 struct FaithFormButtonLabelStyle: LabelStyle {
     func makeBody(configuration: Configuration) -> some View {
         HStack(spacing: FaithFormTokens.Spacing.sm) {
