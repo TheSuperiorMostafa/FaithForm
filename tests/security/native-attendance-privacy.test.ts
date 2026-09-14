@@ -363,8 +363,14 @@ test("the manifest declares the permissions this app needs and no more", () => {
 
   // An exact list, so a permission added by anyone — including a library's
   // merged manifest — has to be argued for here rather than appearing quietly.
+  //
+  // Version 1 ships without automatic check-in and without push, so background
+  // location, boot-completed and notifications are gone with them: Play reviews
+  // a declared background-location permission as a promise of a feature, and
+  // there is none behind it yet. They come back in the change that wires those
+  // features, and this list changes in the same commit.
   assert.deepEqual(declared, [
-    "ACCESS_BACKGROUND_LOCATION",
+    // Churches near me, foreground only, after the education screen.
     "ACCESS_COARSE_LOCATION",
     "ACCESS_FINE_LOCATION",
     "ACCESS_NETWORK_STATE",
@@ -373,8 +379,6 @@ test("the manifest declares the permissions this app needs and no more", () => {
     // adapters can reach a permission request at all.
     "CAMERA",
     "INTERNET",
-    "POST_NOTIFICATIONS",
-    "RECEIVE_BOOT_COMPLETED",
   ]);
 });
 
@@ -396,22 +400,30 @@ test("the camera is optional hardware, so a device without one can still install
 });
 
 test("the geofence receiver is not exported", () => {
-  const manifest = readFileSync(
-    "apps/faithform-android/app/src/main/AndroidManifest.xml",
-    "utf8",
+  const manifest = stripComments(
+    readFileSync("apps/faithform-android/app/src/main/AndroidManifest.xml", "utf8"),
+    "AndroidManifest.xml",
   );
-  const receiver = manifest.slice(
-    manifest.indexOf("GeofenceBroadcastReceiver"),
-    manifest.indexOf("BootAndUpdateReceiver"),
-  );
-  // Only the system and Play services may deliver a transition. An exported
-  // receiver would let any app on the device forge one.
-  assert.match(receiver, /android:exported="false"/);
 
-  // The boot receiver must be exported to hear BOOT_COMPLETED, but is guarded
-  // by the permission only the system holds.
-  const boot = manifest.slice(manifest.indexOf("BootAndUpdateReceiver"));
-  assert.match(boot, /android:permission="android\.permission\.RECEIVE_BOOT_COMPLETED"/);
+  // Version 1 registers no attendance receivers at all — automatic check-in is
+  // not wired, so nothing may be woken by a transition or by boot. The rules
+  // below still bind the moment either is declared again.
+  if (manifest.includes("GeofenceBroadcastReceiver")) {
+    const receiver = manifest.slice(
+      manifest.indexOf("GeofenceBroadcastReceiver"),
+      manifest.indexOf("BootAndUpdateReceiver"),
+    );
+    // Only the system and Play services may deliver a transition. An exported
+    // receiver would let any app on the device forge one.
+    assert.match(receiver, /android:exported="false"/);
+  }
+
+  if (manifest.includes("BootAndUpdateReceiver")) {
+    // The boot receiver must be exported to hear BOOT_COMPLETED, but is guarded
+    // by the permission only the system holds.
+    const boot = manifest.slice(manifest.indexOf("BootAndUpdateReceiver"));
+    assert.match(boot, /android:permission="android\.permission\.RECEIVE_BOOT_COMPLETED"/);
+  }
 });
 
 test("the PendingIntent is mutable-with-an-explicit-component, as the API requires", () => {

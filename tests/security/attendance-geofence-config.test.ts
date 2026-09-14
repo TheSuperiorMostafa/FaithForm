@@ -734,9 +734,12 @@ test("the adapters are thin — no decisions leaked into them", () => {
   }
 });
 
-test("background location is declared once, in the manifest, and nowhere else", () => {
-  // It is a real permission this feature genuinely needs, so it is declared —
-  // but only in the manifest and in the permission check that reads it back.
+test("background location is named only by its unwired checker", () => {
+  // Automatic check-in genuinely needs it, but version 1 does not ship that
+  // feature, so the manifest no longer declares it (Play reviews a declared
+  // background-location permission as a promise of a feature). The permission
+  // check that reads it back stays, unreachable, for the change that wires the
+  // feature — which puts the manifest back in this list.
   const files = nativeSourceFiles("apps").filter((file) => {
     // Production only: the Robolectric suite grants and revokes this
     // permission in order to assert the app handles both, which necessarily
@@ -753,9 +756,8 @@ test("background location is declared once, in the manifest, and nowhere else", 
   assert.deepEqual(
     files.sort(),
     [
-      "apps/faithform-android/app/src/main/AndroidManifest.xml",
       "apps/faithform-android/app/src/main/kotlin/io/faithform/app/attendance/PlayServicesGeofencing.kt",
     ],
-    "background location must not spread beyond the manifest and its checker",
+    "background location must not spread beyond its checker",
   );
 });
