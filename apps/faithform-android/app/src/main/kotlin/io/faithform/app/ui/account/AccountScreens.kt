@@ -86,6 +86,7 @@ fun AccountTab(
     onSignOut: () -> Unit,
     onDeleteAccount: () -> Unit,
     modifier: Modifier = Modifier,
+    settings: @Composable () -> Unit = {},
 ) {
     val theme = LocalFaithFormTheme.current
 
@@ -121,6 +122,10 @@ fun AccountTab(
                 )
             }
         }
+
+        // Settings that belong to this account on this phone — automatic
+        // check-in today. Supplied by the host, so this screen holds no feature.
+        settings()
 
         LegalLinksSection()
 

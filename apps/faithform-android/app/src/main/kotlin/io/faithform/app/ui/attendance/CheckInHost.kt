@@ -51,6 +51,7 @@ fun CheckInTab(
     api: ApiClient,
     cameraPermission: CameraPermissionRequester,
     modifier: Modifier = Modifier,
+    header: @Composable () -> Unit = {},
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -106,6 +107,7 @@ fun CheckInTab(
         },
         onTryAgain = { phase = ScanPhase.Idle },
         modifier = modifier,
+        header = header,
         preview = {
             AndroidView(
                 factory = { viewContext ->

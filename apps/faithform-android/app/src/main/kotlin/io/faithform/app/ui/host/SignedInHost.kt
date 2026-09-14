@@ -22,8 +22,18 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.compose.LifecycleStartEffect
+import androidx.lifecycle.viewmodel.compose.viewModel
+import io.faithform.app.ui.attendance.AutomaticAttendanceFlow
+import io.faithform.app.ui.attendance.AutomaticAttendanceModel
+import io.faithform.app.ui.attendance.AutomaticAttendanceSummaryCard
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -89,6 +99,28 @@ fun SignedInHost(
     val partition = viewModel.partition(selectedSlug)
     val tabStates = rememberSaveableStateHolder()
 
+    // Automatic check-in. Scoped to this session like every feature model, and
+    // told about every bootstrap, church switch and return to the foreground —
+    // the lifecycle triggers that reconcile what the phone is watching. None
+    // of them asks for a permission; only the screens do, after a tap.
+    val context = LocalContext.current
+    val automatic: AutomaticAttendanceModel = viewModel(key = "automatic-attendance") {
+        AutomaticAttendanceModel(
+            context = context.applicationContext,
+            runtime = container.automaticAttendance,
+            notificationDialog = container.notificationPermission,
+            environmentKey = container.environmentKey,
+            accountId = { container.sessionStore.current()?.accountId },
+            onAuthorizationChanged = viewModel::reloadQuietly,
+        )
+    }
+    var automaticOpen by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(bootstrap, selectedSlug) { automatic.onShell(bootstrap, selectedSlug) }
+    LifecycleStartEffect(automatic) {
+        automatic.onForeground()
+        onStopOrDispose { }
+    }
+
     Scaffold(
         containerColor = theme.palette.background,
         bottomBar = {
@@ -142,12 +174,30 @@ fun SignedInHost(
                         partition = partition,
                     )
 
-                    HostTab.CHECK_IN -> TabScreen(title = stringResource(R.string.checkin_scan_title)) { content ->
-                        CheckInTab(
-                            api = container.apiClient,
-                            cameraPermission = cameraPermission,
-                            modifier = content,
-                        )
+                    HostTab.CHECK_IN -> if (automaticOpen) {
+                        TabScreen(
+                            title = stringResource(R.string.auto_attendance_title),
+                            onBack = {
+                                automaticOpen = false
+                                automatic.leaveSetup()
+                            },
+                        ) { content ->
+                            AutomaticAttendanceFlow(model = automatic, modifier = content)
+                        }
+                    } else {
+                        TabScreen(title = stringResource(R.string.checkin_scan_title)) { content ->
+                            CheckInTab(
+                                api = container.apiClient,
+                                cameraPermission = cameraPermission,
+                                modifier = content,
+                                header = {
+                                    AutomaticAttendanceSummaryCard(
+                                        model = automatic,
+                                        onOpen = { automaticOpen = true },
+                                    )
+                                },
+                            )
+                        }
                     }
 
                     HostTab.WATCH -> if (church != null && partition != null) {
@@ -175,6 +225,18 @@ fun SignedInHost(
                             onSignOut = viewModel::signOut,
                             onDeleteAccount = viewModel::beginDeletion,
                             modifier = content,
+                            settings = {
+                                // Only where the Check in tab exists to open it in.
+                                if (HostTab.CHECK_IN in tabs) {
+                                    AutomaticAttendanceSummaryCard(
+                                        model = automatic,
+                                        onOpen = {
+                                            automaticOpen = true
+                                            viewModel.selectTab(HostTab.CHECK_IN)
+                                        },
+                                    )
+                                }
+                            },
                         )
                     }
                 }

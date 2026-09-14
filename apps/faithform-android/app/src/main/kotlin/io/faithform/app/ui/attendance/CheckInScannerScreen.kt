@@ -56,6 +56,7 @@ fun CheckInScannerScreen(
     onTryAgain: () -> Unit,
     modifier: Modifier = Modifier,
     preview: @Composable () -> Unit = {},
+    header: @Composable () -> Unit = {},
 ) {
     Column(
         modifier = modifier
@@ -64,6 +65,10 @@ fun CheckInScannerScreen(
             .padding(FaithFormTokens.Spacing.lg),
         verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.lg),
     ) {
+        // Automatic check-in's summary, when the tab has one. The scanner
+        // below is unchanged by it and works whether or not it is on.
+        header()
+
         Text(
             text = stringResource(R.string.checkin_scan_intro_title),
             style = MaterialTheme.typography.headlineMedium,
