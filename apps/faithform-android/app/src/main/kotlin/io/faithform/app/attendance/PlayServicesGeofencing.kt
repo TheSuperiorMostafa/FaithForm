@@ -1,5 +1,6 @@
 package io.faithform.app.attendance
 
+import android.annotation.SuppressLint
 import android.Manifest
 import android.app.PendingIntent
 import android.content.Context
@@ -61,7 +62,16 @@ interface GeofencingFacade {
     }
 }
 
-/** The production façade. One call each, and no decisions. */
+/**
+ * The production façade. One call each, and no decisions.
+ *
+ * The location permission is checked before this is ever reached, by the region
+ * monitor that owns the permission sequence; a façade that re-checked it would
+ * be a second copy of that rule. Lint cannot see across that boundary, hence
+ * the suppression. Nothing reaches this class in v1 at all: automatic
+ * attendance is not offered and its receivers are not registered.
+ */
+@SuppressLint("MissingPermission")
 class PlayServicesGeofencingFacade(context: Context) : GeofencingFacade {
     private val client: GeofencingClient = LocationServices.getGeofencingClient(context)
 
