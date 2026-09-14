@@ -60,6 +60,9 @@ public protocol CoreLocationFacade: AnyObject, Sendable {
 
     func startMonitoring(for region: CLRegion)
     func stopMonitoring(for region: CLRegion)
+    /// Asks whether the device is inside a region now. The answer arrives on
+    /// `locationManager(_:didDetermineState:for:)`; no position is read.
+    func requestState(for region: CLRegion)
 }
 
 /// The production façade. One line per call, and no decisions.
@@ -116,6 +119,19 @@ public final class SystemCoreLocationFacade: CoreLocationFacade, @unchecked Send
 
     public func startMonitoring(for region: CLRegion) { manager.startMonitoring(for: region) }
     public func stopMonitoring(for region: CLRegion) { manager.stopMonitoring(for: region) }
+    public func requestState(for region: CLRegion) { manager.requestState(for: region) }
+}
+
+/// What the OS said about a region.
+public enum RegionTransition: Equatable, Sendable {
+    /// Crossed in.
+    case entered
+    /// Crossed out.
+    case exited
+    /// Asked, and the device is inside.
+    case inside
+    /// Asked, and the device is outside.
+    case outside
 }
 
 public actor CoreLocationAdapter: NSObject, LocationAuthorizing, LocationSampling, RegionMonitoring {
@@ -128,23 +144,44 @@ public actor CoreLocationAdapter: NSObject, LocationAuthorizing, LocationSamplin
     private var authorizationWaiters: [CheckedContinuation<LocationAuthorization, Never>] = []
     private var locationWaiters: [CheckedContinuation<LocationSample?, Never>] = []
 
+    /// Region events that arrived before anyone was listening.
+    ///
+    /// **Why this exists.** When iOS relaunches the app in the background for
+    /// a boundary crossing, it delivers the event as soon as a delegate is set
+    /// — which is here, during app launch, before the rest of the app has
+    /// loaded the account and attached a handler. An event dropped in that gap
+    /// is an arrival nobody ever hears about. Bounded, and emptied the moment a
+    /// handler attaches.
+    private var undelivered: [(String, RegionTransition)] = []
+    private var onRegion: (@Sendable (String, RegionTransition) async -> Void)?
+    private var onAuthorizationChange: (@Sendable (LocationAuthorization) async -> Void)?
+
+    /// Attaches the delegate **synchronously**, on the thread that creates the
+    /// adapter.
+    ///
+    /// It used to attach on the next actor hop. Core Location relaunches an app
+    /// for a region event and hands the event to whatever delegate exists; the
+    /// adapter is built in `App.init`, and doing the wiring inside the
+    /// initializer is what makes "set up the delegate before launch finishes"
+    /// true rather than likely.
     public init(facade: any CoreLocationFacade = SystemCoreLocationFacade()) {
+        let bridge = Bridge()
         self.manager = facade
-        self.bridge = Bridge()
+        self.bridge = bridge
         super.init()
-        Task { await self.attach() }
-    }
-
-    /// Attaches synchronously, for a test that needs the delegate wired before
-    /// the first callback rather than on the next actor hop.
-    public func attachNow() { attach() }
-
-    private func attach() {
         bridge.owner = self
-        manager.setDelegate(bridge)
+        facade.setDelegate(bridge)
         // Region monitoring does not need a fine desired accuracy — the OS
         // decides how to satisfy the region — but the one-shot confirmation
         // fix does, because the server bands it.
+        facade.setDesiredAccuracy(kCLLocationAccuracyNearestTenMeters)
+    }
+
+    /// Kept for tests written against the asynchronous attach. The initializer
+    /// attaches now, so this only re-asserts the same wiring.
+    public func attachNow() {
+        bridge.owner = self
+        manager.setDelegate(bridge)
         manager.setDesiredAccuracy(kCLLocationAccuracyNearestTenMeters)
     }
 
@@ -176,6 +213,7 @@ public actor CoreLocationAdapter: NSObject, LocationAuthorizing, LocationSamplin
 
         return await withCheckedContinuation { continuation in
             authorizationWaiters.append(continuation)
+            watchPrompt()
             manager.requestWhenInUseAuthorization()
         }
     }
@@ -191,8 +229,29 @@ public actor CoreLocationAdapter: NSObject, LocationAuthorizing, LocationSamplin
 
         return await withCheckedContinuation { continuation in
             authorizationWaiters.append(continuation)
+            watchPrompt()
             manager.requestAlwaysAuthorization()
         }
+    }
+
+    /// Resumes a request whose answer will never come as a callback.
+    ///
+    /// iOS shows the upgrade to Always **once**. Asked again, it shows nothing
+    /// and — because the status did not change — calls no delegate method, so
+    /// a request that only waited for the callback hung the opt-in flow on a
+    /// spinner forever. "Keep Only While Using" is the same: no change, no
+    /// callback.
+    ///
+    /// So the prompt's presentation is watched instead. If the app does not
+    /// resign active shortly after the request, no prompt appeared; if it did,
+    /// the answer is read once the app is active again. Either way the waiter
+    /// resumes with whatever the status now is.
+    private func watchPrompt() {
+        #if canImport(UIKit) && os(iOS)
+        PromptPresentationWatch.start { [weak self] in
+            Task { await self?.resumeAuthorizationWaiters(allowUndetermined: true) }
+        }
+        #endif
     }
 
     // MARK: - LocationSampling
@@ -271,21 +330,69 @@ public actor CoreLocationAdapter: NSObject, LocationAuthorizing, LocationSamplin
         }
     }
 
+    public func requestStateForMonitoredRegions() {
+        for region in manager.monitoredRegions where region is CLCircularRegion {
+            manager.requestState(for: region)
+        }
+    }
+
     // MARK: - Events
 
-    /// Where region events are delivered. Set by the app layer.
-    private var onRegionEvent: (@Sendable (String, Bool) async -> Void)?
-
-    public func setRegionEventHandler(_ handler: @escaping @Sendable (String, Bool) async -> Void) {
-        onRegionEvent = handler
+    /// Where region events are delivered, with the kind of transition. Set by
+    /// the app layer; anything that arrived first is delivered now, in order.
+    public func setRegionHandler(
+        _ handler: @escaping @Sendable (String, RegionTransition) async -> Void
+    ) async {
+        onRegion = handler
+        let backlog = undelivered
+        undelivered = []
+        for (identifier, transition) in backlog {
+            await handler(identifier, transition)
+        }
     }
 
-    fileprivate func deliver(regionIdentifier: String, entered: Bool) async {
-        await onRegionEvent?(regionIdentifier, entered)
+    /// Entries and exits only, as a Boolean. State answers are not crossings,
+    /// so they are not reported here.
+    public func setRegionEventHandler(
+        _ handler: @escaping @Sendable (String, Bool) async -> Void
+    ) async {
+        await setRegionHandler { identifier, transition in
+            switch transition {
+            case .entered: await handler(identifier, true)
+            case .exited: await handler(identifier, false)
+            case .inside, .outside: break
+            }
+        }
     }
 
-    fileprivate func resumeAuthorizationWaiters() {
+    /// Told whenever the person changes the permission — in Settings, in a
+    /// prompt, or by turning Precise Location off — so the screen and the
+    /// monitored set follow without waiting for the next launch.
+    public func setAuthorizationChangeHandler(
+        _ handler: @escaping @Sendable (LocationAuthorization) async -> Void
+    ) {
+        onAuthorizationChange = handler
+    }
+
+    fileprivate func deliver(regionIdentifier: String, transition: RegionTransition) async {
+        guard let onRegion else {
+            if undelivered.count < 40 { undelivered.append((regionIdentifier, transition)) }
+            return
+        }
+        await onRegion(regionIdentifier, transition)
+    }
+
+    fileprivate func authorizationDidChange() async {
+        resumeAuthorizationWaiters(allowUndetermined: false)
+        await onAuthorizationChange?(currentAuthorization())
+    }
+
+    /// `allowUndetermined` is false for the delegate callback: iOS reports the
+    /// current status when a delegate is first set, and `notDetermined` then is
+    /// not the answer to a prompt that is still on screen.
+    fileprivate func resumeAuthorizationWaiters(allowUndetermined: Bool) {
         let status = currentAuthorization()
+        guard allowUndetermined || status != .notDetermined else { return }
         let waiting = authorizationWaiters
         authorizationWaiters = []
         for continuation in waiting { continuation.resume(returning: status) }
@@ -304,7 +411,7 @@ public actor CoreLocationAdapter: NSObject, LocationAuthorizing, LocationSamplin
 
         func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
             guard let owner else { return }
-            Task { await owner.resumeAuthorizationWaiters() }
+            Task { await owner.authorizationDidChange() }
         }
 
         // `CLRegion` is not `Sendable`, so the identifier is read here and the
@@ -315,13 +422,31 @@ public actor CoreLocationAdapter: NSObject, LocationAuthorizing, LocationSamplin
         func locationManager(_ manager: CLLocationManager, didEnterRegion region: CLRegion) {
             guard let owner else { return }
             let identifier = region.identifier
-            Task { await owner.deliver(regionIdentifier: identifier, entered: true) }
+            Task { await owner.deliver(regionIdentifier: identifier, transition: .entered) }
         }
 
         func locationManager(_ manager: CLLocationManager, didExitRegion region: CLRegion) {
             guard let owner else { return }
             let identifier = region.identifier
-            Task { await owner.deliver(regionIdentifier: identifier, entered: false) }
+            Task { await owner.deliver(regionIdentifier: identifier, transition: .exited) }
+        }
+
+        func locationManager(
+            _ manager: CLLocationManager,
+            didDetermineState state: CLRegionState,
+            for region: CLRegion
+        ) {
+            guard let owner else { return }
+            let identifier = region.identifier
+            let transition: RegionTransition
+            switch state {
+            case .inside: transition = .inside
+            case .outside: transition = .outside
+            // Unknown says nothing, and acting on nothing would be a guess.
+            case .unknown: return
+            @unknown default: return
+            }
+            Task { await owner.deliver(regionIdentifier: identifier, transition: transition) }
         }
 
         func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
@@ -353,6 +478,85 @@ public actor CoreLocationAdapter: NSObject, LocationAuthorizing, LocationSamplin
         }
     }
 }
+
+#if canImport(UIKit) && os(iOS)
+/// Watches whether a permission prompt actually appeared, and when it went.
+///
+/// Presentation only — it reads no status and decides nothing. The adapter
+/// reads the status itself once this says the prompt is gone or never came.
+final class PromptPresentationWatch: @unchecked Sendable {
+    private let lock = NSLock()
+    private var tokens: [NSObjectProtocol] = []
+    private var resigned = false
+    private var finished = false
+    private let onSettled: @Sendable () -> Void
+
+    private init(onSettled: @escaping @Sendable () -> Void) {
+        self.onSettled = onSettled
+    }
+
+    /// How long to wait for a prompt to take the screen before concluding
+    /// none will.
+    static let presentationGrace: TimeInterval = 3
+    /// How long after the app is active again to let the status callback land
+    /// first, so the common case resumes from the callback itself.
+    static let answerGrace: TimeInterval = 0.6
+
+    /// `UIApplication`'s notification names, by value. The constants are
+    /// main-actor isolated and this is observed from the adapter's own actor;
+    /// the strings are the same ones UIKit posts.
+    static let willResignActive = Notification.Name("UIApplicationWillResignActiveNotification")
+    static let didBecomeActive = Notification.Name("UIApplicationDidBecomeActiveNotification")
+
+    static func start(onSettled: @escaping @Sendable () -> Void) {
+        let watch = PromptPresentationWatch(onSettled: onSettled)
+        let center = NotificationCenter.default
+        // Registered before the request is issued, so a prompt that appears
+        // immediately cannot be missed.
+        let resign = center.addObserver(
+            forName: willResignActive, object: nil, queue: nil
+        ) { _ in watch.markResigned() }
+        let active = center.addObserver(
+            forName: didBecomeActive, object: nil, queue: nil
+        ) { _ in watch.becameActive() }
+        watch.hold([resign, active])
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + presentationGrace) {
+            watch.finishIfNeverPresented()
+        }
+    }
+
+    private func hold(_ observers: [NSObjectProtocol]) {
+        lock.lock(); tokens = observers; lock.unlock()
+    }
+
+    private func markResigned() {
+        lock.lock(); resigned = true; lock.unlock()
+    }
+
+    private func becameActive() {
+        lock.lock(); let wasResigned = resigned; lock.unlock()
+        guard wasResigned else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.answerGrace) { self.finish() }
+    }
+
+    private func finishIfNeverPresented() {
+        lock.lock(); let wasResigned = resigned; lock.unlock()
+        if !wasResigned { finish() }
+    }
+
+    private func finish() {
+        lock.lock()
+        guard !finished else { lock.unlock(); return }
+        finished = true
+        let observers = tokens
+        tokens = []
+        lock.unlock()
+        for token in observers { NotificationCenter.default.removeObserver(token) }
+        onSettled()
+    }
+}
+#endif
 
 // MARK: - Discovery's one-shot provider
 

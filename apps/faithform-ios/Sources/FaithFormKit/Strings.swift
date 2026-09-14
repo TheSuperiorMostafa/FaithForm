@@ -360,6 +360,75 @@ public enum L {
     public static var autoAttendanceStatusLabel: String {
         t("auto_attendance_status_label", "Automatic check-in status")
     }
+    public static var autoAttendanceSaving: String {
+        t("auto_attendance_saving", "Saving your choice…")
+    }
+    public static var autoAttendanceNotificationTitle: String {
+        t("auto_attendance_notification_title", "Hear when you arrive")
+    }
+    public static var autoAttendanceNotificationBody: String {
+        t("auto_attendance_notification_body", "FaithForm sends one notification when you arrive, so you can check in with a tap, and tells you once you are checked in. Your phone will ask you next.")
+    }
+    public static var autoAttendancePromptTitle: String {
+        t("auto_attendance_prompt_title", "Are you at %@?")
+    }
+    public static var autoAttendancePromptBody: String {
+        t("auto_attendance_prompt_body", "Tap to check in.")
+    }
+    public static var autoAttendancePromptActionCheckIn: String {
+        t("auto_attendance_prompt_action_check_in", "Check in")
+    }
+    public static var autoAttendanceCheckedInTitle: String {
+        t("auto_attendance_checked_in_title", "You're checked in at %@")
+    }
+    public static var autoAttendanceNotCheckedInTitle: String {
+        t("auto_attendance_not_checked_in_title", "FaithForm couldn't check you in at %@")
+    }
+    public static var autoAttendanceNotCheckedInBody: String {
+        t("auto_attendance_not_checked_in_body", "You can still check in with the code on screen.")
+    }
+    public static var autoAttendanceYourChurch: String {
+        t("auto_attendance_your_church", "your church")
+    }
+    public static var autoAttendancePendingWaitingBody: String {
+        t("auto_attendance_pending_waiting_body", "Stay a moment and FaithForm will ask you to confirm.")
+    }
+    public static var autoAttendancePendingAutomaticBody: String {
+        t("auto_attendance_pending_automatic_body", "Stay a moment and FaithForm will check you in.")
+    }
+    public static var autoAttendanceNextService: String {
+        t("auto_attendance_next_service", "Next service: %@")
+    }
+    public static var autoAttendanceServiceOpen: String {
+        t("auto_attendance_service_open", "Check-in is open for %@")
+    }
+    public static var autoAttendanceWatchingChurches: String {
+        t("auto_attendance_watching_churches", "Watching for %@")
+    }
+    public static var autoAttendanceNotAtThisChurch: String {
+        t("auto_attendance_not_at_this_church", "Not available at %@")
+    }
+    public static var autoAttendanceNotificationsOffTitle: String {
+        t("auto_attendance_notifications_off_title", "Notifications are off")
+    }
+    public static var autoAttendanceNotificationsOffBody: String {
+        t("auto_attendance_notifications_off_body", "FaithForm cannot ask you to confirm while the app is closed. Open FaithForm when you arrive to check in, or turn notifications on in Settings.")
+    }
+    public static var autoAttendanceNeedsPermissionTitle: String {
+        t("auto_attendance_needs_permission_title", "Location permission is not set up")
+    }
+    public static var autoAttendanceNeedsPermissionBody: String {
+        t("auto_attendance_needs_permission_body", "Finish setting up so FaithForm can notice when you arrive.")
+    }
+    public static var autoAttendanceContinueSetup: String {
+        t("auto_attendance_continue_setup", "Continue setup")
+    }
+    public static var autoAttendanceOn: String {
+        t("auto_attendance_on", "On")
+    }
+    public static var autoAttendanceOff: String {
+        t("auto_attendance_off", "Off")
+    }
 
     // MARK: - States
     public static var loadingAccount: String { t("loading_account", "Loading your account") }
