@@ -35,6 +35,8 @@ private final class ScriptedAuth: SessionAuthenticating, @unchecked Sendable {
     var resetError: Error?
     private(set) var resetRequests: [String] = []
     private(set) var confirmationCodes: [String] = []
+    /// The display name each sign-up carried, in order.
+    private(set) var signUpNames: [String?] = []
 
     init(
         signUp: Result<SignUpOutcome, Error> = .failure(AuthFailure(kind: .other, message: "unused")),
@@ -46,8 +48,9 @@ private final class ScriptedAuth: SessionAuthenticating, @unchecked Sendable {
         confirmationResult = confirmation
     }
 
-    func signUp(email: String, password: String) async throws -> SignUpOutcome {
-        try signUpResult.get()
+    func signUp(email: String, password: String, displayName: String?) async throws -> SignUpOutcome {
+        signUpNames.append(displayName)
+        return try signUpResult.get()
     }
 
     func signIn(email: String, password: String) async throws -> StoredSession {
@@ -130,7 +133,7 @@ struct SupabaseAuthClientTests {
         let transport = StubTransport([.init(status: 200, body: sessionJSON())])
         let client = SupabaseAuthClient(configuration: authConfig(), transport: transport)
 
-        let outcome = try await client.signUp(email: "p@example.org", password: "pw123456")
+        let outcome = try await client.signUp(email: "p@example.org", password: "pw123456", displayName: nil)
 
         guard case let .session(session) = outcome else {
             Issue.record("expected a session")
@@ -145,7 +148,7 @@ struct SupabaseAuthClientTests {
         let transport = StubTransport([.init(status: 200, body: body)])
         let client = SupabaseAuthClient(configuration: authConfig(), transport: transport)
 
-        let outcome = try await client.signUp(email: "p@example.org", password: "pw123456")
+        let outcome = try await client.signUp(email: "p@example.org", password: "pw123456", displayName: nil)
         #expect(outcome == .confirmationRequired)
     }
 
@@ -155,7 +158,7 @@ struct SupabaseAuthClientTests {
         let client = SupabaseAuthClient(configuration: authConfig(), transport: transport)
 
         do {
-            _ = try await client.signUp(email: "p@example.org", password: "pw123456")
+            _ = try await client.signUp(email: "p@example.org", password: "pw123456", displayName: nil)
             Issue.record("expected a failure")
         } catch let failure as AuthFailure {
             #expect(failure.kind == .accountExists)
@@ -163,6 +166,68 @@ struct SupabaseAuthClientTests {
         } catch {
             Issue.record("unexpected error type")
         }
+    }
+
+    private func signUpBody(of request: URLRequest?) throws -> [String: Any] {
+        let body = try #require(request?.httpBody)
+        return try #require(try JSONSerialization.jsonObject(with: body) as? [String: Any])
+    }
+
+    @Test("signup carries the typed name as user metadata, trimmed")
+    func signUpSendsNameAsMetadata() async throws {
+        let body = Data("{\"id\":\"account-1\"}".utf8)
+        let transport = StubTransport([.init(status: 200, body: body)])
+        let client = SupabaseAuthClient(configuration: authConfig(), transport: transport)
+
+        _ = try await client.signUp(
+            email: "p@example.org",
+            password: "pw123456",
+            displayName: "  Sarah Okafor \n"
+        )
+
+        let sent = try signUpBody(of: await transport.received.first)
+        #expect(sent["email"] as? String == "p@example.org")
+        #expect(sent["password"] as? String == "pw123456")
+        let metadata = try #require(sent["data"] as? [String: Any])
+        #expect(metadata["display_name"] as? String == "Sarah Okafor")
+        #expect(metadata.count == 1)
+    }
+
+    @Test("signup with no name, or only spaces, sends no metadata at all")
+    func signUpWithoutNameSendsNoMetadata() async throws {
+        for name in [nil, "", "   "] as [String?] {
+            let body = Data("{\"id\":\"account-1\"}".utf8)
+            let transport = StubTransport([.init(status: 200, body: body)])
+            let client = SupabaseAuthClient(configuration: authConfig(), transport: transport)
+
+            _ = try await client.signUp(email: "p@example.org", password: "pw123456", displayName: name)
+
+            let sent = try signUpBody(of: await transport.received.first)
+            #expect(sent["data"] == nil, "name: \(String(describing: name))")
+            #expect(Set(sent.keys) == ["email", "password"])
+        }
+    }
+
+    @Test("an overlong name is clamped to the profile's maximum without splitting a character")
+    func signUpClampsName() {
+        let max = SupabaseAuthClient.displayNameMaxLength
+        #expect(max == 120)
+
+        let long = String(repeating: "A", count: 500)
+        #expect(SupabaseAuthClient.metadataDisplayName(long) == String(repeating: "A", count: max))
+
+        // An emoji is two UTF-16 units: one short of the limit, it cannot fit.
+        let emoji = String(repeating: "a", count: max - 1) + "\u{1F600}"
+        let clamped = SupabaseAuthClient.metadataDisplayName(emoji)
+        #expect(clamped == String(repeating: "a", count: max - 1))
+
+        // A clamp that ends on a space does not keep it.
+        let spaced = String(repeating: "a", count: max - 1) + " b"
+        #expect(SupabaseAuthClient.metadataDisplayName(spaced) == String(repeating: "a", count: max - 1))
+
+        #expect(SupabaseAuthClient.metadataDisplayName(" Sarah ") == "Sarah")
+        #expect(SupabaseAuthClient.metadataDisplayName("  ") == nil)
+        #expect(SupabaseAuthClient.metadataDisplayName(nil) == nil)
     }
 
     @Test("429 maps to rateLimited")
@@ -253,6 +318,7 @@ struct AuthModelTests {
         await model.createAccount()
 
         #expect(receivedName == "Sarah Okafor")
+        #expect(auth.signUpNames == ["Sarah Okafor"])
     }
 
     @Test("confirmation-required lands on checkEmail, not on an error")
@@ -267,6 +333,37 @@ struct AuthModelTests {
         await model.createAccount()
 
         #expect(model.phase == .checkEmail)
+    }
+
+    @Test("the typed name goes out with the sign-up even when confirmation comes first")
+    func signUpSendsNameBeforeConfirmation() async {
+        let auth = ScriptedAuth(signUp: .success(.confirmationRequired))
+        let model = AuthModel(auth: auth) { _, _ in
+            Issue.record("no session should be handed over")
+        }
+        model.name = "  Sarah Okafor  "
+        model.email = "p@example.org"
+        model.password = "pw123456"
+
+        await model.createAccount()
+
+        // No session means no profile update from this device, so the sign-up
+        // request is the only thing that can carry the name to the server.
+        #expect(auth.signUpNames == ["Sarah Okafor"])
+        #expect(model.phase == .checkEmail)
+    }
+
+    @Test("a blank name is sent as no name")
+    func signUpBlankName() async {
+        let auth = ScriptedAuth(signUp: .success(.confirmationRequired))
+        let model = AuthModel(auth: auth) { _, _ in }
+        model.name = "   "
+        model.email = "p@example.org"
+        model.password = "pw123456"
+
+        await model.createAccount()
+
+        #expect(auth.signUpNames == [nil])
     }
 
     @Test("an empty form never reaches the network")

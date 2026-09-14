@@ -140,11 +140,15 @@ class AuthViewModel(
         }
 
         _phase.value = AuthUiPhase.Working
+        // Sent with the sign-up itself as well as handed over below. With email
+        // confirmation on there is no session here, and the name reaches the
+        // profile only because the server reads it back from the account.
+        val displayName = _name.value.trim().ifEmpty { null }
         viewModelScope.launch {
             try {
-                when (val outcome = client.signUp(trimmedEmail(), _password.value)) {
+                when (val outcome = client.signUp(trimmedEmail(), _password.value, displayName)) {
                     is SignUpOutcome.Session -> {
-                        onAuthenticated(outcome.session, _name.value.trim().ifEmpty { null })
+                        onAuthenticated(outcome.session, displayName)
                         _phase.value = AuthUiPhase.Idle
                     }
                     is SignUpOutcome.ConfirmationRequired -> {

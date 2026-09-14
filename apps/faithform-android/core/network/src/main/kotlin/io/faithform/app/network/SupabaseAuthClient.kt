@@ -128,11 +128,20 @@ class SupabaseAuthClient(
     private data class Credentials(val email: String, val password: String)
 
     @Serializable
-    private data class PkceCredentials(
+    private data class SignUpMetadata(val display_name: String)
+
+    /**
+     * Absent fields are left out of the JSON rather than sent as null (the
+     * encoder does not encode defaults), so a build without PKCE, or a person
+     * who typed no name, sends exactly what it did before either existed.
+     */
+    @Serializable
+    private data class SignUpRequest(
         val email: String,
         val password: String,
-        val code_challenge: String,
-        val code_challenge_method: String
+        val code_challenge: String? = null,
+        val code_challenge_method: String? = null,
+        val data: SignUpMetadata? = null
     )
 
     @Serializable
@@ -171,9 +180,17 @@ class SupabaseAuthClient(
         val error_description: String? = null
     )
 
-    suspend fun signUp(email: String, password: String): SignUpOutcome {
+    /**
+     * Creates an account. [displayName] is the name typed on the sign-up
+     * screen, or null. It travels with the request as user metadata: with
+     * email confirmation on there is no session to send a profile update
+     * with, and the server gives the stored name to the profile when the
+     * account is first used, on whichever device that happens.
+     */
+    suspend fun signUp(email: String, password: String, displayName: String?): SignUpOutcome {
         val redirect = config.signUpRedirect
         val store = verifierStore
+        val metadata = metadataDisplayName(displayName)?.let { SignUpMetadata(display_name = it) }
 
         // PKCE: the confirmation email returns to this app's own callback with
         // a code only this device can spend. Configured together — a redirect
@@ -187,19 +204,23 @@ class SupabaseAuthClient(
                 "auth/v1/signup",
                 query = "redirect_to=" + urlEncode(redirect),
                 body = json.encodeToString(
-                    PkceCredentials.serializer(),
-                    PkceCredentials(
+                    SignUpRequest.serializer(),
+                    SignUpRequest(
                         email = email,
                         password = password,
                         code_challenge = Pkce.challenge(verifier),
-                        code_challenge_method = "s256"
+                        code_challenge_method = "s256",
+                        data = metadata
                     )
                 )
             )
         } else {
             post(
                 "auth/v1/signup",
-                body = json.encodeToString(Credentials.serializer(), Credentials(email, password))
+                body = json.encodeToString(
+                    SignUpRequest.serializer(),
+                    SignUpRequest(email = email, password = password, data = metadata)
+                )
             )
         }
         if (response.status !in 200..299) throw failure(response)
@@ -395,4 +416,26 @@ class SupabaseAuthClient(
 
     private fun urlEncode(value: String): String =
         java.net.URLEncoder.encode(value, Charsets.UTF_8.name())
+
+    companion object {
+        /** The longest display name a profile accepts: the server schema's
+         * maximum, counted in UTF-16 units as both it and [String.length] do. */
+        const val DISPLAY_NAME_MAX_LENGTH = 120
+
+        /**
+         * The sign-up name as it is sent: trimmed, clamped to what the profile
+         * allows without keeping half of a surrogate pair, and null when
+         * nothing is left. Supabase caps metadata size, and the server clamps
+         * it again anyway.
+         */
+        fun metadataDisplayName(raw: String?): String? {
+            var name = raw?.trim().orEmpty()
+            if (name.length > DISPLAY_NAME_MAX_LENGTH) {
+                name = name.take(DISPLAY_NAME_MAX_LENGTH)
+                if (name.last().isHighSurrogate()) name = name.dropLast(1)
+                name = name.trim()
+            }
+            return name.ifEmpty { null }
+        }
+    }
 }

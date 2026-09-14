@@ -1,9 +1,14 @@
 package io.faithform.app.network
 
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
@@ -87,7 +92,7 @@ class SupabaseAuthClientTest {
         val transport = ScriptedTransport(mutableListOf(HttpResponse(200, sessionBody(), emptyMap())))
         val client = SupabaseAuthClient(config(), transport)
 
-        val outcome = client.signUp("p@example.org", "pw123456")
+        val outcome = client.signUp("p@example.org", "pw123456", displayName = null)
 
         assertTrue(outcome is SignUpOutcome.Session)
         assertEquals("account-1", (outcome as SignUpOutcome.Session).session.accountId)
@@ -99,7 +104,7 @@ class SupabaseAuthClientTest {
         val transport = ScriptedTransport(mutableListOf(HttpResponse(200, body, emptyMap())))
         val client = SupabaseAuthClient(config(), transport)
 
-        assertEquals(SignUpOutcome.ConfirmationRequired, client.signUp("p@example.org", "pw123456"))
+        assertEquals(SignUpOutcome.ConfirmationRequired, client.signUp("p@example.org", "pw123456", displayName = null))
     }
 
     @Test
@@ -110,11 +115,61 @@ class SupabaseAuthClientTest {
         val client = SupabaseAuthClient(config(), transport)
 
         try {
-            client.signUp("p@example.org", "pw123456")
+            client.signUp("p@example.org", "pw123456", displayName = null)
             fail("expected a failure")
         } catch (error: AuthException) {
             assertEquals(AuthException.Kind.ACCOUNT_EXISTS, error.kind)
         }
+    }
+
+    private fun sentBody(request: HttpRequest): JsonObject =
+        Json.parseToJsonElement(request.body.orEmpty()).jsonObject
+
+    @Test
+    fun `signup carries the typed name as user metadata, trimmed`() = runTest {
+        val transport = ScriptedTransport(mutableListOf(HttpResponse(200, """{"id":"a"}""", emptyMap())))
+        val client = SupabaseAuthClient(config(), transport)
+
+        client.signUp("p@example.org", "pw123456", displayName = "  Sarah Okafor \n")
+
+        val body = sentBody(transport.received.single())
+        assertEquals("p@example.org", body["email"]?.jsonPrimitive?.content)
+        assertEquals("pw123456", body["password"]?.jsonPrimitive?.content)
+        val metadata = body["data"]?.jsonObject
+        assertEquals("Sarah Okafor", metadata?.get("display_name")?.jsonPrimitive?.content)
+        assertEquals(setOf("display_name"), metadata?.keys)
+    }
+
+    @Test
+    fun `signup with no name, or only spaces, sends no metadata at all`() = runTest {
+        for (name in listOf(null, "", "   ")) {
+            val transport = ScriptedTransport(mutableListOf(HttpResponse(200, """{"id":"a"}""", emptyMap())))
+            val client = SupabaseAuthClient(config(), transport)
+
+            client.signUp("p@example.org", "pw123456", displayName = name)
+
+            val body = sentBody(transport.received.single())
+            assertEquals("name: $name", setOf("email", "password"), body.keys)
+        }
+    }
+
+    @Test
+    fun `an overlong name is clamped to the profile's maximum without splitting a character`() {
+        val max = SupabaseAuthClient.DISPLAY_NAME_MAX_LENGTH
+        assertEquals(120, max)
+
+        assertEquals("A".repeat(max), SupabaseAuthClient.metadataDisplayName("A".repeat(500)))
+
+        // An emoji is two UTF-16 units: one short of the limit, it cannot fit.
+        val emoji = "a".repeat(max - 1) + "😀"
+        assertEquals("a".repeat(max - 1), SupabaseAuthClient.metadataDisplayName(emoji))
+
+        // A clamp that ends on a space does not keep it.
+        assertEquals("a".repeat(max - 1), SupabaseAuthClient.metadataDisplayName("a".repeat(max - 1) + " b"))
+
+        assertEquals("Sarah", SupabaseAuthClient.metadataDisplayName(" Sarah "))
+        assertNull(SupabaseAuthClient.metadataDisplayName("  "))
+        assertNull(SupabaseAuthClient.metadataDisplayName(null))
     }
 
     @Test

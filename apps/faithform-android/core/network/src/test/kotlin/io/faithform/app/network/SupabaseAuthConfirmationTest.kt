@@ -74,7 +74,7 @@ class SupabaseAuthConfirmationTest {
         val store = MemoryVerifierStore()
         val client = SupabaseAuthClient(pkceConfig(), transport, verifierStore = store)
 
-        val outcome = client.signUp("p@example.org", "pw123456")
+        val outcome = client.signUp("p@example.org", "pw123456", displayName = null)
         assertTrue(outcome is SignUpOutcome.ConfirmationRequired)
 
         val request = transport.received.single()
@@ -91,12 +91,30 @@ class SupabaseAuthConfirmationTest {
     }
 
     @Test
+    fun `a name travels as metadata beside the challenge, so it outlives the confirmation`() = runTest {
+        val transport = ConfirmationTransport(mutableListOf(HttpResponse(200, """{"id":"a"}""", emptyMap())))
+        val store = MemoryVerifierStore()
+        val client = SupabaseAuthClient(pkceConfig(), transport, verifierStore = store)
+
+        val outcome = client.signUp("p@example.org", "pw123456", displayName = "Sarah Okafor")
+        assertTrue(outcome is SignUpOutcome.ConfirmationRequired)
+
+        val request = transport.received.single()
+        assertEquals(Pkce.challenge(store.verifier!!), bodyField(request, "code_challenge"))
+        assertEquals("s256", bodyField(request, "code_challenge_method"))
+        val metadata = Json.parseToJsonElement(request.body.orEmpty()).jsonObject["data"]?.jsonObject
+        assertEquals("Sarah Okafor", metadata?.get("display_name")?.jsonPrimitive?.content)
+        // The name is never put in the URL, where logs would keep it.
+        assertFalse(request.url.contains("Sarah"))
+    }
+
+    @Test
     fun `the verifier is stored before the request leaves`() = runTest {
         val transport = ConfirmationTransport(mutableListOf()) // network fails
         val store = MemoryVerifierStore()
         val client = SupabaseAuthClient(pkceConfig(), transport, verifierStore = store)
 
-        runCatching { client.signUp("p@example.org", "pw123456") }
+        runCatching { client.signUp("p@example.org", "pw123456", displayName = null) }
         assertNotNull(store.verifier)
     }
 
@@ -109,7 +127,7 @@ class SupabaseAuthConfirmationTest {
             verifierStore = MemoryVerifierStore()
         )
 
-        client.signUp("p@example.org", "pw123456")
+        client.signUp("p@example.org", "pw123456", displayName = null)
 
         val request = transport.received.single()
         assertFalse(request.url.contains("redirect_to"))

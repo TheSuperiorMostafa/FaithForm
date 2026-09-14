@@ -150,7 +150,7 @@ struct SupabaseAuthConfirmationTests {
             flowState: store
         )
 
-        let outcome = try await client.signUp(email: "p@example.org", password: "pw123456")
+        let outcome = try await client.signUp(email: "p@example.org", password: "pw123456", displayName: nil)
         #expect(outcome == .confirmationRequired)
 
         let request = await transport.received.first
@@ -167,6 +167,37 @@ struct SupabaseAuthConfirmationTests {
         #expect(!url.contains(verifier))
     }
 
+    @Test("a name travels as metadata beside the challenge, so it outlives the confirmation")
+    func signUpCarriesNameWithChallenge() async throws {
+        let transport = StubTransport([.init(status: 200, body: Data("{\"id\":\"account-1\"}".utf8))])
+        let store = MemoryFlowStore()
+        let client = SupabaseAuthClient(
+            configuration: pkceConfig(),
+            transport: transport,
+            flowState: store
+        )
+
+        let outcome = try await client.signUp(
+            email: "p@example.org",
+            password: "pw123456",
+            displayName: "Sarah Okafor"
+        )
+        #expect(outcome == .confirmationRequired)
+
+        let request = await transport.received.first
+        let data = try #require(request?.httpBody)
+        let body = try #require(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let verifier = try #require(store.loadVerifier())
+        #expect(body["code_challenge"] as? String == PKCE.challenge(for: verifier))
+        #expect(body["code_challenge_method"] as? String == "s256")
+        let metadata = try #require(body["data"] as? [String: Any])
+        #expect(metadata["display_name"] as? String == "Sarah Okafor")
+        // The name is never put in the URL, where logs would keep it.
+        let url = request?.url?.absoluteString ?? ""
+        #expect(url.contains("auth/v1/signup"))
+        #expect(!url.contains("Sarah"))
+    }
+
     @Test("the verifier is stored before the request leaves, surviving a mid-flow kill")
     func verifierStoredBeforeNetwork() async {
         let transport = StubTransport([]) // network fails
@@ -177,7 +208,7 @@ struct SupabaseAuthConfirmationTests {
             flowState: store
         )
 
-        _ = try? await client.signUp(email: "p@example.org", password: "pw123456")
+        _ = try? await client.signUp(email: "p@example.org", password: "pw123456", displayName: nil)
         #expect(store.loadVerifier() != nil)
     }
 
@@ -190,7 +221,7 @@ struct SupabaseAuthConfirmationTests {
             flowState: MemoryFlowStore()
         )
 
-        _ = try await client.signUp(email: "p@example.org", password: "pw123456")
+        _ = try await client.signUp(email: "p@example.org", password: "pw123456", displayName: nil)
 
         let request = await transport.received.first
         let requestURL = request?.url?.absoluteString ?? ""
@@ -305,7 +336,7 @@ struct AuthModelConfirmationTests {
 
         init(_ results: [Result<StoredSession, Error>]) { self.results = results }
 
-        func signUp(email: String, password: String) async throws -> SignUpOutcome {
+        func signUp(email: String, password: String, displayName: String?) async throws -> SignUpOutcome {
             .confirmationRequired
         }
         func signIn(email: String, password: String) async throws -> StoredSession {
@@ -473,7 +504,7 @@ struct ConfirmationRestartTests {
             transport: signUpTransport,
             flowState: SecureAuthFlowStore(store: keychain, environmentKey: "development")
         )
-        let outcome = try await signUpClient.signUp(email: "p@example.org", password: "pw123456")
+        let outcome = try await signUpClient.signUp(email: "p@example.org", password: "pw123456", displayName: nil)
         #expect(outcome == .confirmationRequired)
 
         // The process dies here. Launch two builds everything afresh, reading
