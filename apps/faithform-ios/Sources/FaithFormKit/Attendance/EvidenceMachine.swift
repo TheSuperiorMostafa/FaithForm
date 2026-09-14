@@ -228,7 +228,7 @@ public struct LogicalAttempt: Codable, Equatable, Sendable {
     /// 128 bits of randomness. Not derived from anything about the person.
     public let attemptId: String
     public let churchSlug: String
-    public let occurrenceId: String
+    public var occurrenceId: String
     public let openedAt: Date
     /// Bounded by the same retention rule as the evidence it carries.
     public let expiresAt: Date

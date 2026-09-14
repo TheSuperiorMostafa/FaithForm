@@ -128,6 +128,14 @@ actor ScriptedSubmitter: AttendanceSubmitting {
     /// Answers, consumed in order. The last one repeats.
     var answers: [Result<AttendanceResult, Error>] = []
 
+    /// The region named on each occurrence read.
+    private(set) var occurrenceRegions: [String?] = []
+
+    func eligibleOccurrenceId(churchSlug: String, regionId: String?) async throws -> String? {
+        occurrenceRegions.append(regionId)
+        return try await eligibleOccurrenceId(churchSlug: churchSlug)
+    }
+
     func eligibleOccurrenceId(churchSlug: String) async throws -> String? {
         occurrenceReads += 1
         if let occurrenceError { throw occurrenceError }

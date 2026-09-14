@@ -16,8 +16,15 @@ public actor APIAttendanceSubmitter: AttendanceSubmitting {
     }
 
     public func eligibleOccurrenceId(churchSlug: String) async throws -> String? {
+        try await eligibleOccurrenceId(churchSlug: churchSlug, regionId: nil)
+    }
+
+    /// Names the campus region entered, so a church with several campuses
+    /// answers for the door the person came through.
+    public func eligibleOccurrenceId(churchSlug: String, regionId: String?) async throws -> String? {
         let response = try await api.send(
             "api/mobile/v1/attendance/\(churchSlug)/occurrence",
+            query: regionId.map { ["regionId": $0] } ?? [:],
             as: OccurrenceReply.self
         )
         return response.value?.occurrence?.occurrenceId
