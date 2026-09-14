@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import test from "node:test";
 
 import { PRIVACY_VERSION } from "@/lib/legal/policy-versions";
@@ -95,6 +95,27 @@ test("the campus map uses public OpenStreetMap tiles with attribution and no API
   }
   // Nothing in the Next config restricts image sources, so plain <img> tiles load.
   assert.doesNotMatch(read("next.config.mjs"), /img-src/);
+});
+
+test("the attendance client components import no server module values", () => {
+  // `checkin-setup.tsx` once imported a constant from `lib/attendance/v2/setup.ts`,
+  // which reaches the service-role client and `next/headers`. Typecheck and the
+  // tests passed; only `next build` refused it. Types are erased, server actions
+  // are references, and these modules are dependency-free.
+  const CLIENT_SAFE = new Set(["@/lib/maps/web-mercator", "@/lib/attendance/v2/setup-bounds", "@/lib/utils"]);
+  const dir = "components/attendance";
+  const files = readdirSync(dir).filter((file) => file.endsWith(".tsx"));
+  assert.ok(files.length >= 6);
+
+  for (const file of files) {
+    const source = read(`${dir}/${file}`);
+    if (!source.startsWith('"use client"')) continue;
+    for (const match of source.matchAll(/^import (?!type )[^;]*?from "(@\/lib\/[^"]+)";/gm)) {
+      assert.ok(CLIENT_SAFE.has(match[1]), `${file} imports a value from ${match[1]}`);
+    }
+  }
+
+  assert.doesNotMatch(read("lib/attendance/v2/setup-bounds.ts"), /^import /m);
 });
 
 test("Services and Check-in setup are reachable from the Attendance tabs", () => {
