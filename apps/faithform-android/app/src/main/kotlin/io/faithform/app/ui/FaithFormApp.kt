@@ -61,9 +61,10 @@ import io.faithform.app.ui.onboarding.FindChurchFlow
  *
  * ## Insets
  *
- * Every phase except Ready is padded for the system bars and the keyboard at
- * this level, over a background that runs edge to edge. Ready's scaffold does
- * its own, around the bottom bar.
+ * Every phase except Ready and signed out is padded for the system bars and the
+ * keyboard at this level, over a background that runs edge to edge. Ready's
+ * scaffold does its own, around the bottom bar; the auth screens do their own,
+ * so the front door's backdrop can run behind the bars.
  */
 @Composable
 fun FaithFormApp(
@@ -121,6 +122,16 @@ fun FaithFormApp(
                     cameraPermission = cameraPermission,
                 )
             }
+        } else if (current is LaunchPhase.SignedOut) {
+            // Edge to edge: the front door's backdrop runs behind the system
+            // bars, and each auth screen pads its own content for them.
+            AuthFlow(
+                viewModel = authViewModel,
+                hasPendingInvitation = pendingInvitation != null,
+                confirmationPhase = confirmationPhase,
+                churchContext = churchContext,
+                onClearChurchContext = viewModel::clearChurchContext
+            )
         } else {
             Box(Modifier.fillMaxSize().safeDrawingPadding()) {
                 when (current) {
@@ -132,13 +143,7 @@ fun FaithFormApp(
                         )
                     }
 
-                    is LaunchPhase.SignedOut -> AuthFlow(
-                        viewModel = authViewModel,
-                        hasPendingInvitation = pendingInvitation != null,
-                        confirmationPhase = confirmationPhase,
-                        churchContext = churchContext,
-                        onClearChurchContext = viewModel::clearChurchContext
-                    )
+                    is LaunchPhase.SignedOut -> Unit
 
                     is LaunchPhase.Onboarding -> FindChurchFlow(
                         appViewModel = viewModel,
