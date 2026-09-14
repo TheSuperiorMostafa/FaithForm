@@ -128,6 +128,9 @@ fun SignedInHost(
                         projections = container.projections,
                         church = church,
                         partition = partition,
+                        onOpenSermons = selectedSlug
+                            ?.takeIf { HostNavigation.sermonsAllowed(bootstrap, it, viewModel.registry) }
+                            ?.let { slug -> { viewModel.openSermons(slug) } },
                     )
 
                     HostTab.CHURCH -> ChurchTab(

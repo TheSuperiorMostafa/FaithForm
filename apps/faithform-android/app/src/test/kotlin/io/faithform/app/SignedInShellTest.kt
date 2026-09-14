@@ -26,6 +26,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -313,6 +314,57 @@ class SignedInShellTest {
         model.handleDeepLink("faithform://church/stranger/give")
         assertEquals(HostTab.WATCH, model.selectedTab.value)
         assertEquals("hope", model.selectedChurchSlug.value)
+    }
+
+    @Test
+    fun `a sermons link selects its church and asks the Church tab for sermon notes`() = runTest {
+        val model = ready()
+        model.handleDeepLink("faithform://church/hope/sermons")
+        assertEquals(HostTab.CHURCH, model.selectedTab.value)
+        assertEquals("hope", model.selectedChurchSlug.value)
+        assertTrue("the link only opened the Church tab", model.sermonsRequested.value)
+
+        // The tab shows them once; the request is then spent.
+        model.consumeSermonsRequest()
+        assertFalse(model.sermonsRequested.value)
+
+        // Any other link, or a tab chosen by hand, is not a request for notes.
+        model.handleDeepLink("faithform://church/grace/sermons")
+        model.selectTab(HostTab.HOME)
+        assertFalse(model.sermonsRequested.value)
+        model.handleDeepLink("faithform://church/hope/watch")
+        assertFalse(model.sermonsRequested.value)
+    }
+
+    @Test
+    fun `a sermons link that arrived at a cold start opens sermon notes once home loads`() = runTest {
+        server.on("account/bootstrap", HttpResponse(200, bootstrapBody(bootstrap(relationships = listOf(relationship("grace"), relationship("hope")))), emptyMap()))
+        server.on("onboarding", HttpResponse(200, onboarding("grace"), emptyMap()))
+        val model = model()
+
+        model.handleDeepLink("faithform://church/hope/sermons")
+        assertFalse(model.sermonsRequested.value)
+        model.load()
+
+        assertEquals(HostTab.CHURCH, model.selectedTab.value)
+        assertEquals("hope", model.selectedChurchSlug.value)
+        assertTrue(model.sermonsRequested.value)
+    }
+
+    @Test
+    fun `sermon notes open from Home only through the gates a link passes`() = runTest {
+        val model = ready()
+        model.openSermons("grace")
+        assertEquals(HostTab.CHURCH, model.selectedTab.value)
+        assertTrue(model.sermonsRequested.value)
+
+        val withoutSermons = ready(bootstrap(capabilities = bootstrap().enabledCapabilities - "sermons"))
+        withoutSermons.openSermons("grace")
+        assertEquals(HostTab.HOME, withoutSermons.selectedTab.value)
+        assertFalse(withoutSermons.sermonsRequested.value)
+
+        model.signOut()
+        assertFalse("a request outlived the session", model.sermonsRequested.value)
     }
 
     @Test

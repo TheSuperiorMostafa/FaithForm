@@ -84,6 +84,17 @@ object HostNavigation {
         }
     }
 
+    /**
+     * Whether the selected church's sermon notes may open: the one gate the
+     * Church tab's button, the entry on Home and a `…/sermons` link all pass.
+     */
+    fun sermonsAllowed(
+        bootstrap: Bootstrap,
+        selectedChurchSlug: String?,
+        registry: RouteRegistry,
+    ): Boolean = selectedChurchSlug != null &&
+        registry.resolve(Destination.SermonArchive(selectedChurchSlug), snapshot(bootstrap)) is RouteResolution.Allowed
+
     /** Re-scopes a church-scoped destination to [slug]; anything else is unchanged. */
     fun scoped(destination: Destination, slug: String?): Destination {
         slug ?: return destination
@@ -98,7 +109,10 @@ object HostNavigation {
         }
     }
 
-    /** Which tab a destination lands on. Announcements have no tab; sermons open from Church. */
+    /**
+     * Which tab a destination lands on. Announcements have no tab; sermons open
+     * inside Church, which `AppViewModel.sermonsRequested` asks it to do.
+     */
     fun tabFor(destination: Destination): HostTab? = when (destination) {
         is Destination.Home -> HostTab.HOME
         is Destination.ChurchDiscovery, is Destination.Church, is Destination.SermonArchive -> HostTab.CHURCH

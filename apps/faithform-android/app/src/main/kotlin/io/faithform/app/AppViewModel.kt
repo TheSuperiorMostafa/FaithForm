@@ -184,6 +184,15 @@ class AppViewModel(
     private val _selectedTab = MutableStateFlow(HostTab.HOME)
     val selectedTab: StateFlow<HostTab> = _selectedTab.asStateFlow()
 
+    /**
+     * True while a request to show sermon notes waits for the Church tab — set
+     * by a `faithform://church/<slug>/sermons` link or the entry on Home, after
+     * the church is selected, and consumed once by the tab. The Church tab's
+     * own sub-page is UI state, so this is how anything outside it asks.
+     */
+    private val _sermonsRequested = MutableStateFlow(false)
+    val sermonsRequested: StateFlow<Boolean> = _sermonsRequested.asStateFlow()
+
     private val _deletion = MutableStateFlow<DeletionPhase>(DeletionPhase.Idle)
     val deletion: StateFlow<DeletionPhase> = _deletion.asStateFlow()
 
@@ -443,10 +452,27 @@ class AppViewModel(
         val target = HostNavigation.resolveLink(destination, bootstrap, registry) ?: return
         target.churchSlug?.let { _selectedChurchSlug.value = it }
         _selectedTab.value = target.tab
+        _sermonsRequested.value = target.destination is Destination.SermonArchive
     }
 
     fun selectTab(tab: HostTab) {
         _selectedTab.value = tab
+        // A tab chosen by hand is not a request to open anything inside it.
+        _sermonsRequested.value = false
+    }
+
+    /**
+     * Opens [slug]'s sermon notes from outside the Church tab, through exactly
+     * the gates a `…/sermons` link passes.
+     */
+    fun openSermons(slug: String) {
+        val ready = _state.value as? LaunchPhase.Ready ?: return
+        openDestination(Destination.SermonArchive(slug), ready.bootstrap)
+    }
+
+    /** The Church tab has shown sermon notes; the request is spent. */
+    fun consumeSermonsRequest() {
+        _sermonsRequested.value = false
     }
 
     /**
@@ -747,6 +773,7 @@ class AppViewModel(
         deletionKey = null
         _selectedChurchSlug.value = null
         _selectedTab.value = HostTab.HOME
+        _sermonsRequested.value = false
         _deletion.value = DeletionPhase.Idle
         _pendingInvitationToken.value = null
         _churchContext.value = null

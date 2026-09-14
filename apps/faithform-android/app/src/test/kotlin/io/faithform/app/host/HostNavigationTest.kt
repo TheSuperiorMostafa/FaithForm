@@ -14,6 +14,7 @@ import io.faithform.app.ui.church.ChooserPhase
 import io.faithform.app.ui.church.chooserPhaseFor
 import io.faithform.app.ui.church.isSelectable
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -174,6 +175,35 @@ class DeepLinkTargetTest {
         assertEquals(HostTab.WATCH, target("faithform://church/grace/watch")?.tab)
         assertEquals(HostTab.CHECK_IN, target("faithform://church/grace/check-in")?.tab)
         assertEquals(HostTab.CHURCH, target("faithform://church/grace/sermons")?.tab)
+    }
+
+    @Test
+    fun `a sermons link lands on Church and keeps its destination, so the tab can open sermon notes`() {
+        assertEquals(
+            LinkTarget(HostTab.CHURCH, "hope", Destination.SermonArchive("hope")),
+            target("faithform://church/hope/sermons"),
+        )
+    }
+
+    @Test
+    fun `sermon notes open from anywhere only for a church the registry allows them for`() {
+        assertTrue(HostNavigation.sermonsAllowed(two, "grace", shippedRegistry))
+        assertFalse(HostNavigation.sermonsAllowed(two, null, shippedRegistry))
+        assertFalse(HostNavigation.sermonsAllowed(two, "stranger", shippedRegistry))
+        assertFalse(
+            HostNavigation.sermonsAllowed(
+                bootstrap(capabilities = bootstrap().enabledCapabilities - "sermons"),
+                "grace",
+                shippedRegistry,
+            ),
+        )
+        assertFalse(
+            HostNavigation.sermonsAllowed(
+                bootstrap(relationships = listOf(relationship("grace", RelationshipState.BLOCKED))),
+                "grace",
+                shippedRegistry,
+            ),
+        )
     }
 
     @Test
