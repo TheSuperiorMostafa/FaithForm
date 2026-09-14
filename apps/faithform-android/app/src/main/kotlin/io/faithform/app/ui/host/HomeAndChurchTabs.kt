@@ -1,21 +1,13 @@
 package io.faithform.app.ui.host
 
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Church
-import androidx.compose.material.icons.automirrored.outlined.MenuBook
-import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.size
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -23,12 +15,9 @@ import io.faithform.app.AppViewModel
 import io.faithform.app.R
 import io.faithform.app.contract.Bootstrap
 import io.faithform.app.contract.ChurchRelationship
-import io.faithform.app.design.FaithFormTokens
 import io.faithform.app.network.ApiClient
 import io.faithform.app.network.ProjectionCache
 import io.faithform.app.session.AppContainer
-import io.faithform.app.sermons.SermonDetailModel
-import io.faithform.app.sermons.SermonListModel
 import io.faithform.app.storage.CachePartition
 import io.faithform.app.ui.church.ChurchChooserScreen
 import io.faithform.app.ui.church.chooserPhaseFor
@@ -39,9 +28,7 @@ import io.faithform.app.ui.feed.FeedModel
 import io.faithform.app.ui.feed.FeedPhase
 import io.faithform.app.ui.feed.HomeFeedScreen
 import io.faithform.app.ui.onboarding.FindChurchFlow
-import io.faithform.app.ui.sermons.SermonDetailScreen
 import io.faithform.app.ui.sermons.SermonHomeEntry
-import io.faithform.app.ui.sermons.SermonListScreen
 
 /**
  * Home: what the selected church has published, newest and pinned first.
@@ -56,7 +43,7 @@ fun HomeTab(
     church: ChurchRelationship?,
     partition: CachePartition?,
     modifier: Modifier = Modifier,
-    /** Opens the church's sermon notes; null when they may not open for it. */
+    /** Opens the church's messages on Services; null when they may not open. */
     onOpenSermons: (() -> Unit)? = null,
 ) {
     if (church == null || partition == null) {
@@ -98,17 +85,15 @@ fun HomeTab(
     }
 }
 
-private enum class ChurchRoute { ROOT, FIND, SERMONS }
+private enum class ChurchRoute { ROOT, FIND }
 
 /**
- * Church: which church the other tabs are about, finding another, and that
- * church's sermon notes.
+ * Church: which church the other tabs are about, and finding another.
  *
  * Rows are the account's relationships from bootstrap; tapping a readable one
  * selects it for every church-scoped tab. "Add another church" runs the same
- * find-a-church flow as first run, without the welcome. Sermon notes appear
- * only when the route registry allows them for the selected church — the same
- * gate a deep link to them passes.
+ * find-a-church flow as first run, without the welcome. Messages live under
+ * Services, not here.
  */
 @Composable
 fun ChurchTab(
@@ -121,24 +106,6 @@ fun ChurchTab(
     modifier: Modifier = Modifier,
 ) {
     var route by rememberSaveable { mutableStateOf(ChurchRoute.ROOT) }
-    var sermonId by rememberSaveable(partition?.storageKey) { mutableStateOf<String?>(null) }
-
-    val sermonsAllowed = io.faithform.app.host.HostNavigation.sermonsAllowed(
-        bootstrap,
-        selectedSlug,
-        appViewModel.registry,
-    )
-
-    // A `…/sermons` link or the entry on Home asks for sermon notes; the
-    // registry gate below still decides whether they show.
-    val sermonsRequested by appViewModel.sermonsRequested.collectAsStateWithLifecycle()
-    LaunchedEffect(sermonsRequested) {
-        if (sermonsRequested) {
-            route = ChurchRoute.SERMONS
-            sermonId = null
-            appViewModel.consumeSermonsRequest()
-        }
-    }
 
     when {
         route == ChurchRoute.FIND -> TabScreen(
@@ -157,18 +124,6 @@ fun ChurchTab(
             }
         }
 
-        route == ChurchRoute.SERMONS && sermonsAllowed && selectedSlug != null && partition != null ->
-            SermonsRoute(
-                container = container,
-                churchSlug = selectedSlug,
-                partition = partition,
-                sermonId = sermonId,
-                onOpen = { sermonId = it },
-                onCloseSermon = { sermonId = null },
-                onClose = { route = ChurchRoute.ROOT },
-                modifier = modifier,
-            )
-
         else -> TabScreen(title = stringResource(R.string.tab_church), modifier = modifier) { content ->
             ChurchChooserScreen(
                 phase = chooserPhaseFor(bootstrap.relationships),
@@ -177,76 +132,7 @@ fun ChurchTab(
                 onAddAnother = { route = ChurchRoute.FIND },
                 modifier = content,
                 showTitle = false,
-                footer = {
-                    if (sermonsAllowed) {
-                        OutlinedButton(
-                            onClick = { route = ChurchRoute.SERMONS },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .heightIn(min = FaithFormTokens.TouchTarget.recommended),
-                        ) {
-                            Icon(
-                                Icons.AutoMirrored.Outlined.MenuBook,
-                                contentDescription = null,
-                                modifier = Modifier.size(FaithFormTokens.IconSize.sizeMedium),
-                            )
-                            Spacer(Modifier.size(FaithFormTokens.Spacing.sm))
-                            Text(stringResource(R.string.sermons_title))
-                        }
-                    }
-                },
             )
         }
-    }
-}
-
-@Composable
-private fun SermonsRoute(
-    container: AppContainer,
-    churchSlug: String,
-    partition: CachePartition,
-    sermonId: String?,
-    onOpen: (String) -> Unit,
-    onCloseSermon: () -> Unit,
-    onClose: () -> Unit,
-    modifier: Modifier,
-) {
-    if (sermonId != null) {
-        val detail = rememberSessionModel("sermon|${partition.storageKey}|$sermonId") {
-            SermonDetailModel(container.sermonClient, churchSlug, sermonId, partition)
-        }
-        LaunchedEffect(detail) { detail.launchOnce("load") { load() } }
-        val phase by detail.value.phase.collectAsStateWithLifecycle()
-        TabScreen(title = stringResource(R.string.sermons_title), onBack = onCloseSermon, modifier = modifier) { content ->
-            androidx.compose.foundation.layout.Box(content) {
-                SermonDetailScreen(phase = phase, onRetry = { detail.launch { load() } })
-            }
-        }
-        return
-    }
-
-    val list = rememberSessionModel("sermons|${partition.storageKey}") {
-        SermonListModel(container.sermonClient, churchSlug, partition)
-    }
-    // Models live for the session, so every entry — including coming back
-    // from a sermon — asks the model whether its list has gone stale.
-    LaunchedEffect(list) {
-        list.launchOnce("search") { observeSearch() }
-        list.launch { refreshIfStale() }
-    }
-    val state by list.value.state.collectAsStateWithLifecycle()
-
-    TabScreen(title = stringResource(R.string.sermons_title), onBack = onClose, modifier = modifier) { content ->
-        SermonListScreen(
-            state = state,
-            onSearch = { term -> list.value.search(term) },
-            onOpen = { onOpen(it.sermonId) },
-            onLoadMore = { list.launch { loadMore() } },
-            onRetryLoadMore = { list.launch { retryLoadMore() } },
-            onRefresh = { list.launch { refresh() } },
-            onRetry = { list.launch { refresh() } },
-            modifier = content,
-            showTitle = false,
-        )
     }
 }

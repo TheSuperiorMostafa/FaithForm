@@ -87,6 +87,7 @@ import io.faithform.app.PendingChurchContext
 import io.faithform.app.R
 import io.faithform.app.design.FaithFormTokens
 import io.faithform.app.design.LocalFaithFormTheme
+import io.faithform.app.ui.church.ChurchAvatar
 import io.faithform.app.ui.account.LegalLinks
 import io.faithform.app.ui.account.openWebLink
 import io.faithform.app.ui.brand.FaithFormMark
@@ -781,11 +782,6 @@ internal fun AuthUiError.messageRes(): Int = when (this) {
 
 /**
  * The church a link named, at the top of the signed-out screens.
- *
- * The logo is deliberately *not* fetched: this app has no image pipeline at
- * all, and adding one for a 48dp glyph would be a dependency in exchange for a
- * detail. The name is what carries the recognition, and the glyph is honest
- * about being a placeholder rather than a broken image.
  */
 @Composable
 private fun ChurchContextHeader(context: PendingChurchContext) {
@@ -796,24 +792,11 @@ private fun ChurchContextHeader(context: PendingChurchContext) {
             horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.base),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Box(
-                contentAlignment = Alignment.Center,
-                modifier = Modifier
-                    .size(FaithFormTokens.TouchTarget.recommended + FaithFormTokens.Spacing.base)
-                    .background(theme.palette.surface, RoundedCornerShape(FaithFormTokens.Radius.lg))
-                    .border(
-                        FaithFormTokens.BorderWidth.hairline,
-                        theme.palette.border,
-                        RoundedCornerShape(FaithFormTokens.Radius.lg)
-                    )
-            ) {
-                Icon(
-                    Icons.Outlined.Church,
-                    contentDescription = null,
-                    tint = theme.palette.brandPrimary,
-                    modifier = Modifier.size(FaithFormTokens.IconSize.sizeLarge)
-                )
-            }
+            ChurchAvatar(
+                logoUrl = context.logoUrl,
+                name = context.churchName,
+                size = FaithFormTokens.TouchTarget.recommended + FaithFormTokens.Spacing.base,
+            )
             Column(verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.xs)) {
                 Text(
                     stringResource(

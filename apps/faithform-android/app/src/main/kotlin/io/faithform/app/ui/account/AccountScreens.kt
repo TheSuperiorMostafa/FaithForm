@@ -7,19 +7,24 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -32,11 +37,15 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import io.faithform.app.DeletionPhase
 import io.faithform.app.R
 import io.faithform.app.contract.AccountStatus
@@ -78,7 +87,7 @@ fun openWebLink(context: Context, url: String) {
 }
 
 /**
- * The Account tab: who is signed in, the policies, and the two ways to leave.
+ * The Account tab: who is signed in, preferences, policies, and the two ways to leave.
  */
 @Composable
 fun AccountTab(
@@ -86,8 +95,13 @@ fun AccountTab(
     onSignOut: () -> Unit,
     onDeleteAccount: () -> Unit,
     modifier: Modifier = Modifier,
+    showsAutomaticCheckIn: Boolean = false,
+    automaticCheckInEnabled: Boolean = false,
+    onOpenAutomaticCheckIn: (() -> Unit)? = null,
 ) {
     val theme = LocalFaithFormTheme.current
+    val name = bootstrap.profile.displayName ?: stringResource(R.string.account)
+    val avatarSize = FaithFormTokens.TouchTarget.recommended + FaithFormTokens.Spacing.base
 
     Column(
         modifier = modifier
@@ -98,34 +112,117 @@ fun AccountTab(
                 vertical = FaithFormTokens.Layout.screenPaddingVertical,
             )
             .widthIn(max = FaithFormTokens.Layout.contentMaxWidth),
-        verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.lg),
+        verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.xl),
     ) {
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .background(theme.palette.surface, RoundedCornerShape(FaithFormTokens.Radius.lg))
                 .border(theme.borderWidth, theme.palette.border, RoundedCornerShape(FaithFormTokens.Radius.lg))
                 .padding(FaithFormTokens.Spacing.base),
-            verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.xs),
+            horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.base),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(
-                text = bootstrap.profile.displayName ?: stringResource(R.string.account),
-                style = MaterialTheme.typography.displayMedium,
-                color = theme.palette.contentPrimary,
-            )
-            if (bootstrap.profile.status == AccountStatus.DELETION_REQUESTED) {
+            Box(
+                modifier = Modifier
+                    .size(avatarSize)
+                    .clip(CircleShape)
+                    .background(theme.palette.surfaceSunken)
+                    .border(theme.borderWidth, theme.palette.border, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                val avatarUrl = bootstrap.profile.avatarUrl
+                if (!avatarUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(avatarUrl)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                } else {
+                    Text(
+                        accountInitials(name),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = theme.palette.brandPrimary,
+                    )
+                }
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.xs)) {
                 Text(
-                    stringResource(R.string.delete_account_requested_title),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = theme.palette.destructive,
+                    text = name,
+                    style = MaterialTheme.typography.displayMedium,
+                    color = theme.palette.contentPrimary,
                 )
+                if (bootstrap.profile.status == AccountStatus.DELETION_REQUESTED) {
+                    Text(
+                        stringResource(R.string.delete_account_requested_title),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = theme.palette.destructive,
+                    )
+                }
             }
         }
 
-        LegalLinksSection()
+        if (showsAutomaticCheckIn && onOpenAutomaticCheckIn != null) {
+            Column(verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm)) {
+                Text(
+                    stringResource(R.string.preferences_section),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = theme.mutedContent,
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(theme.palette.surface, RoundedCornerShape(FaithFormTokens.Radius.lg))
+                        .border(theme.borderWidth, theme.palette.border, RoundedCornerShape(FaithFormTokens.Radius.lg))
+                        .clickable(onClick = onOpenAutomaticCheckIn)
+                        .padding(FaithFormTokens.Spacing.base)
+                        .heightIn(min = FaithFormTokens.TouchTarget.recommended),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.md),
+                ) {
+                    Icon(
+                        Icons.Outlined.LocationOn,
+                        contentDescription = null,
+                        tint = theme.palette.brandPrimary,
+                    )
+                    Text(
+                        stringResource(R.string.auto_attendance_title),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = theme.palette.contentPrimary,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        stringResource(
+                            if (automaticCheckInEnabled) R.string.auto_attendance_on
+                            else R.string.auto_attendance_off,
+                        ),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = theme.palette.contentSecondary,
+                    )
+                }
+            }
+        }
+
+        Column(verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm)) {
+            Text(
+                stringResource(R.string.legal_section),
+                style = MaterialTheme.typography.labelLarge,
+                color = theme.mutedContent,
+            )
+            LegalLinksSection()
+        }
 
         AccountExitActions(onSignOut = onSignOut, onDeleteAccount = onDeleteAccount)
     }
+}
+
+private fun accountInitials(name: String): String {
+    val parts = name.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }.take(2)
+    return if (parts.isEmpty()) "?" else parts.mapNotNull { it.firstOrNull()?.uppercaseChar() }.joinToString("")
 }
 
 /** Privacy Policy, Terms of Service, and how deletion works — each opening in the browser. */

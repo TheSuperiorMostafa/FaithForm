@@ -105,26 +105,30 @@ public struct ChurchResultCard: View {
     public var body: some View {
         Button(action: onOpen) {
             FaithFormCard {
-                VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.xs) {
-                    Text(church.name)
-                        .font(theme.font(FaithFormTokens.Text.titleMedium))
-                        .foregroundStyle(theme.palette.contentPrimary)
+                HStack(alignment: .top, spacing: FaithFormTokens.Spacing.base) {
+                    ChurchAvatar(logoUrl: church.logoUrl, name: church.name)
 
-                    if let summary = church.publicSummary, !summary.isEmpty {
-                        Text(summary)
-                            .font(theme.font(FaithFormTokens.Text.bodySmall))
-                            .foregroundStyle(theme.palette.contentSecondary)
-                            .lineLimit(2)
-                    }
+                    VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.xs) {
+                        Text(church.name)
+                            .font(theme.font(FaithFormTokens.Text.titleMedium))
+                            .foregroundStyle(theme.palette.contentPrimary)
 
-                    HStack(spacing: FaithFormTokens.Spacing.sm) {
-                        if let place = placeLine {
-                            Text(place)
-                                .font(theme.font(FaithFormTokens.Text.caption))
-                                .foregroundStyle(theme.mutedContent)
+                        if let summary = church.publicSummary, !summary.isEmpty {
+                            Text(summary)
+                                .font(theme.font(FaithFormTokens.Text.bodySmall))
+                                .foregroundStyle(theme.palette.contentSecondary)
+                                .lineLimit(2)
                         }
-                        if let distance = church.distanceKm {
-                            StatusChip(String(format: L.distanceAway, String(format: "%.1f", distance)))
+
+                        HStack(spacing: FaithFormTokens.Spacing.sm) {
+                            if let place = placeLine {
+                                Text(place)
+                                    .font(theme.font(FaithFormTokens.Text.caption))
+                                    .foregroundStyle(theme.mutedContent)
+                            }
+                            if let distance = church.distanceKm {
+                                StatusChip(String(format: L.distanceAway, String(format: "%.1f", distance)))
+                            }
                         }
                     }
                 }

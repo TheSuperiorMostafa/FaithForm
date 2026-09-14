@@ -67,6 +67,22 @@
     <string>$(FAITHFORM_APPLE_PAY_MERCHANT_ID_IN_APP)</string>
 
     <!--
+        Local-network HTTP. Release still talks HTTPS to faithform.io; this
+        exception does not weaken that. It is what lets a Debug build on a
+        physical iPhone reach a laptop running `pnpm dev:device` at a LAN
+        address. Debug.xcconfig also sets NSAllowsArbitraryLoads so a raw
+        RFC 1918 IP is not still blocked on some iOS versions.
+
+        Deliberately not NSAllowsArbitraryLoads here: that key in a store
+        binary is a review question, and Release does not need it.
+    -->
+    <key>NSAppTransportSecurity</key>
+    <dict>
+        <key>NSAllowsLocalNetworking</key>
+        <true/>
+    </dict>
+
+    <!--
         Deep links.
 
         A custom scheme only. `https` App Links need a verified

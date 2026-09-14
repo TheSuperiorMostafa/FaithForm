@@ -24,7 +24,6 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -49,6 +48,7 @@ import io.faithform.app.sermons.SermonListPhase
 import io.faithform.app.sermons.SermonScreenState
 import io.faithform.app.sermons.preachedDate
 import io.faithform.app.sermons.sermonMonthSections
+import io.faithform.app.ui.components.FaithFormSearchField
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
@@ -129,12 +129,11 @@ fun SermonListScreen(
                     )
                 }
 
-                OutlinedTextField(
+                FaithFormSearchField(
                     value = state.searchTerm,
                     onValueChange = onSearch,
-                    label = { Text(stringResource(R.string.sermons_search_label)) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
+                    placeholder = stringResource(R.string.sermons_search_label),
+                    onSearch = { onSearch(state.searchTerm) },
                 )
 
                 if (phase.isStale) {

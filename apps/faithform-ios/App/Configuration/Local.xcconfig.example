@@ -19,6 +19,14 @@ DEVELOPMENT_TEAM = YOUR_TEAM_ID
 FAITHFORM_DEV_SUPABASE_URL = https:/$()/your-project-ref.supabase.co
 FAITHFORM_DEV_SUPABASE_ANON_KEY = your-publishable-key
 
+// Where a Debug build loads the account after sign-up. The simulator default
+// is http://localhost:3000. A physical iPhone cannot use that: localhost is
+// the phone, and even a LAN address needs `pnpm dev:device` plus the Debug
+// ATS exception. Point at a reachable HTTPS origin, or at this Mac's LAN IP.
+// Debug includes this file last so these lines win over the simulator default.
+FAITHFORM_API_ORIGIN = https:/$()/faithform.io
+// FAITHFORM_API_ORIGIN = http:/$()/192.168.x.x:3000
+
 // Only on the machine that archives App Store and TestFlight builds, and only
 // once the signing team's profile carries the Apple Pay capability for
 // merchant.io.faithform.app. Anywhere else it makes signing fail. See

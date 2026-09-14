@@ -24,6 +24,7 @@ import io.faithform.app.media.MediaClient
 import io.faithform.app.media.ResumePositionStore
 import io.faithform.app.network.ProjectionCache
 import io.faithform.app.sermons.SermonClient
+import io.faithform.app.sermons.PresentationClient
 import io.faithform.app.storage.PartitionedCache
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -155,6 +156,7 @@ class AppContainer(
 
     val mediaClient = MediaClient(apiClient, projections)
     val sermonClient = SermonClient(apiClient, projections)
+    val presentationClient = PresentationClient(apiClient, projections)
     val givingClient = GivingClient(apiClient, projections)
 
     /**

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -126,6 +127,11 @@ private fun Identity(profile: ChurchProfile) {
             contentDescription = description
         }
     ) {
+        ChurchHero(
+            coverImageUrl = profile.coverImageUrl,
+            logoUrl = profile.logoUrl,
+            name = profile.name,
+        )
         Text(
             profile.name,
             style = MaterialTheme.typography.displayLarge,
@@ -414,6 +420,8 @@ private fun ChooserRow(church: ChooserChurch, isSelected: Boolean, onSelect: () 
             },
         verticalAlignment = Alignment.CenterVertically
     ) {
+        ChurchAvatar(logoUrl = church.logoUrl, name = church.name)
+        Spacer(Modifier.size(FaithFormTokens.Spacing.base))
         Column(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.xs)

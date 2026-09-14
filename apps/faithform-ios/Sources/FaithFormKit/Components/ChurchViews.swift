@@ -68,6 +68,12 @@ public struct ChurchProfileView: View {
 
     private func identity(_ profile: ChurchProfile) -> some View {
         VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.sm) {
+            ChurchHero(
+                coverImageUrl: profile.coverImageUrl,
+                logoUrl: profile.logoUrl,
+                name: profile.name
+            )
+
             Text(profile.name)
                 .font(theme.font(FaithFormTokens.Text.displayLarge))
                 .foregroundStyle(theme.palette.contentPrimary)
@@ -325,7 +331,8 @@ public struct ChurchChooserView: View {
             }
         } label: {
             FaithFormCard {
-                HStack {
+                HStack(spacing: FaithFormTokens.Spacing.base) {
+                    ChurchAvatar(logoUrl: church.logoUrl, name: church.name)
                     VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.xs) {
                         Text(church.name)
                             .font(theme.font(FaithFormTokens.Text.titleMedium))

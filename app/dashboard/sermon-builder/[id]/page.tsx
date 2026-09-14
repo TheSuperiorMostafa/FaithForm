@@ -8,8 +8,13 @@ import { ShareInAppCard } from "@/components/sermon-builder/share-in-app-card";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentChurchId } from "@/lib/auth/current-church";
 import { getChurchAuth } from "@/lib/auth/church";
+import {
+  canAccessFeature,
+  getFeatureAccess,
+} from "@/lib/features/access";
 import { getSlideThemeById } from "@/lib/queries/slide-themes";
 import { getLatestAsset, getSermon } from "@/lib/queries/sermons";
+import { getActivePresentationVersion } from "@/lib/sermons/v1/presentation";
 import type { DiscussionQuestion } from "@/types/sermon";
 
 export const dynamic = "force-dynamic";
@@ -50,6 +55,20 @@ export default async function SermonEditorPage({
   const auth = await getChurchAuth();
   const canShare = Boolean(auth?.isAdmin && auth.churchId === churchId);
 
+  const access = await getFeatureAccess();
+  const featuresEnabled = Boolean(
+    access &&
+      canAccessFeature(access, "sermon_builder") &&
+      canAccessFeature(access, "member_app"),
+  );
+
+  const presentation = featuresEnabled
+    ? await getActivePresentationVersion({
+        churchId,
+        sermonId: sermon.id,
+      })
+    : null;
+
   return (
     <div className="flex flex-col gap-4">
       <Link
@@ -59,9 +78,11 @@ export default async function SermonEditorPage({
         <ArrowLeft className="size-4" />
         Back to sermons
       </Link>
-      <div className="mx-auto w-full max-w-3xl">
-        <SermonAppStatus sermon={sermon} canShare={canShare} />
-      </div>
+      {featuresEnabled && (
+        <div className="mx-auto w-full max-w-3xl">
+          <SermonAppStatus sermon={sermon} canShare={canShare} />
+        </div>
+      )}
       {isSimple ? (
         <SimpleSermonDetail
           sermon={sermon}
@@ -72,7 +93,12 @@ export default async function SermonEditorPage({
         <SermonEditor sermon={sermon} />
       )}
       <div className="mx-auto w-full max-w-3xl">
-        <ShareInAppCard sermon={sermon} canShare={canShare} />
+        <ShareInAppCard
+          sermon={sermon}
+          canShare={canShare}
+          featuresEnabled={featuresEnabled}
+          presentation={presentation}
+        />
       </div>
     </div>
   );

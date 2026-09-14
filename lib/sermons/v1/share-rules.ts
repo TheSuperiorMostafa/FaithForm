@@ -1,4 +1,5 @@
 import { projectOutline } from "@/lib/sermons/v1/projection";
+import { presentationShareReadiness } from "@/lib/sermons/v1/presentation-manifest";
 
 /**
  * The rules for sharing a sermon in the FaithForm app, as pure functions.
@@ -7,6 +8,11 @@ import { projectOutline } from "@/lib/sermons/v1/projection";
  * explains why it cannot yet, so the reason a pastor reads is the reason the
  * server applies.
  */
+
+export {
+  isPresentationShared,
+  presentationShareReadiness,
+} from "@/lib/sermons/v1/presentation-manifest";
 
 export type SermonAudience = "public" | "followers" | "members";
 
@@ -99,4 +105,11 @@ export function sermonAudienceLabel(
     default:
       return null;
   }
+}
+
+/** Slides readiness for the share card — same function the publish path uses. */
+export function slidesShareReadiness(
+  sermon: Parameters<typeof presentationShareReadiness>[0],
+): SermonShareReadiness {
+  return presentationShareReadiness(sermon);
 }

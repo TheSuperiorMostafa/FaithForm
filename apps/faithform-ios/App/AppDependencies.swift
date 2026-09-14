@@ -16,6 +16,7 @@ final class AppDependencies {
     let session: SessionManager
     let media: MediaClient
     let sermons: SermonClient
+    let presentations: PresentationClient
     let giving: GivingClient
     /// The Keychain, under this app's one service. Everything that must
     /// survive a kill and vanish on sign-out lives here — the session, the PKCE
@@ -85,6 +86,7 @@ final class AppDependencies {
         self.cache = PartitionedCache()
         self.media = MediaClient(api: api, cache: cache)
         self.sermons = SermonClient(api: api, cache: cache)
+        self.presentations = PresentationClient(api: api, cache: cache)
         self.giving = GivingClient(api: api, cache: cache)
         self.resumePositions = KeychainResumePositionStore(store: secureStore)
 

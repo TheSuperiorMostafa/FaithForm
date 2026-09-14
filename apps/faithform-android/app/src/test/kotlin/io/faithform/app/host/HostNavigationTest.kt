@@ -86,7 +86,6 @@ class HostTabsTest {
     fun `a capability the server withholds removes exactly its tab`() {
         for ((capability, tab) in listOf(
             "attendance" to HostTab.CHECK_IN,
-            "watch" to HostTab.WATCH,
             "giving" to HostTab.GIVE,
             "discovery" to HostTab.CHURCH,
         )) {
@@ -95,6 +94,11 @@ class HostTabsTest {
             assertTrue("$tab survived without $capability", tab !in tabs)
             assertEquals("$capability removed more than its tab", 5, tabs.size)
         }
+        // Services stays when only watch is off, because messages (sermons) still resolve.
+        val withoutWatch = bootstrap(capabilities = bootstrap().enabledCapabilities - "watch")
+        assertTrue(HostTab.WATCH in HostNavigation.availableTabs(withoutWatch, "grace", shippedRegistry))
+        val withoutBoth = bootstrap(capabilities = bootstrap().enabledCapabilities - "watch" - "sermons")
+        assertTrue(HostTab.WATCH !in HostNavigation.availableTabs(withoutBoth, "grace", shippedRegistry))
     }
 
     @Test
@@ -174,13 +178,13 @@ class DeepLinkTargetTest {
         assertEquals(LinkTarget(HostTab.GIVE, "hope", Destination.Give("hope")), target("faithform://church/hope/give"))
         assertEquals(HostTab.WATCH, target("faithform://church/grace/watch")?.tab)
         assertEquals(HostTab.CHECK_IN, target("faithform://church/grace/check-in")?.tab)
-        assertEquals(HostTab.CHURCH, target("faithform://church/grace/sermons")?.tab)
+        assertEquals(HostTab.WATCH, target("faithform://church/grace/sermons")?.tab)
     }
 
     @Test
-    fun `a sermons link lands on Church and keeps its destination, so the tab can open sermon notes`() {
+    fun `a sermons link lands on Services and keeps its destination, so the tab can open messages`() {
         assertEquals(
-            LinkTarget(HostTab.CHURCH, "hope", Destination.SermonArchive("hope")),
+            LinkTarget(HostTab.WATCH, "hope", Destination.SermonArchive("hope")),
             target("faithform://church/hope/sermons"),
         )
     }

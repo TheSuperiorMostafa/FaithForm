@@ -77,11 +77,14 @@ struct AppEnvironmentTests {
             }
         }
         // A developer pointing a simulator at a laptop is the one case where it
-        // is legitimate.
-        if case .unconfigured = AppEnvironmentLoader.load(
-            from: info(key: "development", origin: "http://localhost:3000")
-        ) {
-            Issue.record("development refused localhost")
+        // is legitimate. A physical iPhone cannot use localhost — that is the
+        // phone itself — so a LAN address has to be accepted the same way.
+        for origin in ["http://localhost:3000", "http://192.168.1.62:3000"] {
+            if case .unconfigured = AppEnvironmentLoader.load(
+                from: info(key: "development", origin: origin)
+            ) {
+                Issue.record("development refused \(origin)")
+            }
         }
     }
 
@@ -370,6 +373,18 @@ struct AppBundleTests {
         // church's gift would otherwise open a sheet this build cannot pay with.
         #expect(info["FaithFormApplePayMerchantID"] != nil, "the key is missing from Info.plist")
         #expect((info["FaithFormApplePayMerchantID"] as? String ?? "").isEmpty)
+    }
+
+    @Test("debug can load a laptop over local HTTP")
+    func localNetworking() {
+        // A physical iPhone talking to `pnpm dev:device` is cleartext on the
+        // LAN. Release still uses HTTPS; this exception is local-network only
+        // in Info.plist, with Debug.xcconfig adding arbitrary loads so a raw
+        // RFC 1918 IP is not still blocked.
+        let ats = info["NSAppTransportSecurity"] as? [String: Any] ?? [:]
+        let local = ats["NSAllowsLocalNetworking"] as? Bool == true
+        let arbitrary = ats["NSAllowsArbitraryLoads"] as? Bool == true
+        #expect(local || arbitrary)
     }
 
     @Test("no background mode is declared, even with automatic check-in on")

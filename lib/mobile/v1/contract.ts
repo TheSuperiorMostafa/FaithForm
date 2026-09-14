@@ -962,6 +962,108 @@ export const sermonDetailSchema = z
   .meta({ id: "SermonDetail" });
 
 /**
+ * Published sermon presentation archive (AD-008 / Prompt 10).
+ *
+ * Semantic slide pages only — never the live manuscript. Image/PDF renditions
+ * are optional and may be empty while native apps render text from `pages`.
+ */
+export const presentationPageKindSchema = z.enum([
+  "title",
+  "scripture",
+  "point",
+  "application",
+  "closing",
+]);
+
+export const presentationPageSchema = z
+  .object({
+    id: z.string(),
+    kind: presentationPageKindSchema,
+    title: z.string().optional(),
+    body: z.string().optional(),
+    scripture: z.string().optional(),
+    readingOrder: z.array(z.string()),
+  })
+  .meta({ id: "PresentationPage" });
+
+export const presentationListItemSchema = z
+  .object({
+    presentationId: z.string(),
+    sermonId: z.string(),
+    version: z.number().int(),
+    title: z.string(),
+    publishedAt: instant,
+    pageCount: z.number().int(),
+    contentHash: z.string(),
+    scriptureRefs: z.array(z.string()),
+    seriesName: z.string().nullable(),
+    churchSlug,
+    churchName: z.string(),
+    churchTimezone: z.string(),
+  })
+  .meta({ id: "PresentationListItem" });
+
+export const presentationPageResponseSchema = z
+  .object({
+    items: z.array(presentationListItemSchema),
+    nextCursor: z.string().nullable(),
+    presentationVersion: z.number().int(),
+  })
+  .meta({ id: "PresentationPageResponse" });
+
+export const presentationThemeFieldsSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    backgroundType: z.enum(["solid", "image"]),
+    bg: z.string().nullable(),
+    bgCss: z.string(),
+    text: z.string(),
+    accent: z.string(),
+    fontHead: z.string(),
+    fontBody: z.string(),
+    italicRef: z.boolean(),
+    textShadow: z.boolean(),
+    imageUrl: z.string().nullable(),
+  })
+  .meta({ id: "PresentationTheme" });
+
+export const presentationSlideRenditionSchema = z
+  .object({
+    pageId: z.string(),
+    imagePath: z.string().optional(),
+    imageUrl: z.string().optional(),
+  })
+  .meta({ id: "PresentationSlideRendition" });
+
+export const presentationRenditionsSchema = z
+  .object({
+    slides: z.array(presentationSlideRenditionSchema),
+    pdfPath: z.string().optional(),
+  })
+  .meta({ id: "PresentationRenditions" });
+
+export const presentationDetailSchema = z
+  .object({
+    presentationId: z.string(),
+    sermonId: z.string(),
+    version: z.number().int(),
+    title: z.string(),
+    publishedAt: instant,
+    pageCount: z.number().int(),
+    contentHash: z.string(),
+    scriptureRefs: z.array(z.string()),
+    seriesName: z.string().nullable(),
+    churchSlug,
+    churchName: z.string(),
+    churchTimezone: z.string(),
+    pages: z.array(presentationPageSchema),
+    theme: presentationThemeFieldsSchema.nullable(),
+    renditions: presentationRenditionsSchema,
+  })
+  .meta({ id: "PresentationDetail" });
+
+/**
  * Permission to watch one thing, for a few minutes.
  *
  * `deliveryUrl` carries **no** credential. The capability travels in an
@@ -1226,6 +1328,13 @@ export const CONTRACT_SCHEMAS = {
   SermonOutline: sermonOutlineSchema,
   SermonQuestion: sermonQuestionSchema,
   SermonDetail: sermonDetailSchema,
+  PresentationPage: presentationPageSchema,
+  PresentationListItem: presentationListItemSchema,
+  PresentationPageResponse: presentationPageResponseSchema,
+  PresentationTheme: presentationThemeFieldsSchema,
+  PresentationSlideRendition: presentationSlideRenditionSchema,
+  PresentationRenditions: presentationRenditionsSchema,
+  PresentationDetail: presentationDetailSchema,
   PlaybackGrant: playbackGrantSchema,
   PlaybackGrantRequest: playbackGrantRequestSchema,
   GivingFund: givingFundSchema,

@@ -10,8 +10,8 @@
     <string name="landing_headline">Your church, all week long</string>
     <string name="landing_feed_title">Stay in the loop</string>
     <string name="landing_feed_body">News and events from your church, as soon as they\'re shared.</string>
-    <string name="landing_watch_title">Watch and catch up</string>
-    <string name="landing_watch_body">Join services live, or go back to past sermons and notes.</string>
+    <string name="landing_watch_title">Services, live and past</string>
+    <string name="landing_watch_body">Join live, catch up on past services, or read the message.</string>
     <string name="landing_check_in_title">Check in with a scan</string>
     <string name="landing_check_in_body">Scan the code at church. No cards or clipboards.</string>
     <string name="landing_give_title">Give securely</string>
@@ -114,7 +114,11 @@
     <string name="notification_settings_hint">Open Settings</string>
     <string name="notifications_on">Updates are on</string>
     <!-- Automatic attendance (Prompt 7) -->
+    <string name="preferences_section">Preferences</string>
+    <string name="legal_section">Legal</string>
     <string name="auto_attendance_title">Automatic check-in</string>
+    <string name="auto_attendance_on">On</string>
+    <string name="auto_attendance_off">Off</string>
     <string name="auto_attendance_intro_title">Let your church know you were there</string>
     <string name="auto_attendance_intro_body">When you arrive for a service, FaithForm can check you in without you doing anything. Your church sees that you attended — nothing about where else you go.</string>
     <string name="auto_attendance_privacy_title">What FaithForm does with your location</string>
@@ -191,7 +195,7 @@
     <string name="checkin_scan_done">Done</string>
 
     <!-- Media (Prompt 9) -->
-    <string name="media_tab_title">Watch</string>
+    <string name="media_tab_title">Live &amp; past</string>
     <string name="media_live_now_badge">Live now</string>
     <string name="media_live_upcoming">Starting soon</string>
     <string name="media_live_ended">Today\'s service has ended</string>
@@ -210,10 +214,10 @@
     <string name="media_blocked_title">This church is not available to you</string>
 
     <!-- Sermon notes -->
-    <string name="sermons_title">Sermon notes</string>
+    <string name="sermons_title">Messages</string>
     <string name="sermons_empty">No sermon notes have been shared yet.</string>
     <string name="sermons_empty_search">Nothing matches that.</string>
-    <string name="sermons_search_label">Search sermon notes</string>
+    <string name="sermons_search_label">Search messages</string>
     <string name="sermons_offline_title">FaithForm could not reach the server</string>
     <string name="sermons_offline_body">Check your connection and try again.</string>
     <string name="sermons_unavailable_title">This is no longer available</string>
@@ -227,6 +231,24 @@
     <string name="sermons_blocked_body">You can\'t read this church\'s sermon notes right now.</string>
     <string name="sermons_load_more_failed">More sermon notes couldn\'t load.</string>
     <string name="sermons_home_entry_body">Outlines and discussion questions from past sermons.</string>
+
+    <!-- Presentation slides (Messages → Slides) -->
+    <string name="messages_notes_segment">Notes</string>
+    <string name="messages_slides_segment">Slides</string>
+    <string name="presentations_title">Slides</string>
+    <string name="presentations_search_label">Search slides</string>
+    <string name="presentations_empty">No slides have been published yet.</string>
+    <string name="presentations_empty_search">Nothing matches that.</string>
+    <string name="presentations_page_count">%d slides</string>
+    <string name="presentations_retry">Try again</string>
+    <string name="presentations_offline_title">FaithForm could not reach the server</string>
+    <string name="presentations_offline_body">Check your connection and try again.</string>
+    <string name="presentations_blocked_title">This church is not available to you</string>
+    <string name="presentations_blocked_body">You can\'t open slides for this church right now.</string>
+    <string name="presentations_unavailable_title">These slides are no longer available</string>
+    <string name="presentations_unavailable_body">The church removed them. Nothing you did caused this.</string>
+    <string name="presentations_load_more_failed">More slides couldn\'t load.</string>
+
     <string name="media_play">Play</string>
     <string name="media_pause">Pause</string>
     <string name="media_buffering">Buffering…</string>
@@ -303,7 +325,7 @@
     <string name="tab_home">Home</string>
     <string name="tab_church">Church</string>
     <string name="tab_check_in">Check in</string>
-    <string name="tab_watch">Watch</string>
+    <string name="tab_watch">Services</string>
     <string name="tab_give">Give</string>
     <string name="tab_account">Account</string>
     <string name="home_subtitle">Everything your church has shared with you.</string>
@@ -311,7 +333,7 @@
     <string name="no_church_body">Find your church to see what they\'ve shared.</string>
     <string name="church_no_access">You can\'t see this church\'s posts right now.</string>
     <string name="check_in_entry_body">Scan the code your church puts on the screen, or type the short code.</string>
-    <string name="media_entry_body">Watch live, or catch up on a service you missed.</string>
+    <string name="media_entry_body">Join live, catch up on a past service, or open the message.</string>
     <string name="not_configured_title">FaithForm isn\'t set up</string>
     <string name="not_configured_body">This copy of the app hasn\'t been pointed at a server yet. Nothing you did caused this.</string>
 

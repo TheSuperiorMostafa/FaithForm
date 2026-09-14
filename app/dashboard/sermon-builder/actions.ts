@@ -15,6 +15,10 @@ import {
   verifySermonAccess,
 } from "@/lib/queries/sermons";
 import {
+  publishPresentationToFaithForm,
+  unpublishPresentationFromFaithForm,
+} from "@/lib/sermons/v1/presentation";
+import {
   publishSermonToFaithForm,
   unpublishSermonFromFaithForm,
 } from "@/lib/sermons/v1/publication";
@@ -102,6 +106,9 @@ export async function deleteSeriesAction(
 const APP_UPDATE_FAILED =
   "We couldn't update the FaithForm app just now. Please try again.";
 
+const MEMBER_APP_OFF =
+  "The Member App is switched off for this church, so nothing can be shared there.";
+
 /**
  * Shares a sermon's notes in the FaithForm app, or updates how it is shared.
  *
@@ -125,6 +132,9 @@ export async function shareSermonInAppAction(input: {
 
     const denied = await featureActionError("sermon_builder");
     if (denied) return { error: denied };
+
+    const appDenied = await featureActionError("member_app");
+    if (appDenied) return { error: MEMBER_APP_OFF };
 
     const supabase = createClient();
     const sermon = await verifySermonAccess(supabase, input.sermonId, auth.churchId);
@@ -196,6 +206,97 @@ export async function unshareSermonInAppAction(
     return {};
   } catch (e) {
     console.error("[sermon-builder] unshare failed", e);
+    return { error: APP_UPDATE_FAILED };
+  }
+}
+
+/**
+ * Publishes an immutable slide deck version to the FaithForm app.
+ *
+ * Requires Sermon Builder and Member App. Re-publishing inserts a new version
+ * and retires the previous one — drafts never mutate a published snapshot.
+ */
+export async function sharePresentationInAppAction(input: {
+  sermonId: string;
+  visibility: "public" | "followers" | "members";
+}): Promise<{ error?: string; presentationId?: string; version?: number }> {
+  try {
+    const auth = await requireChurchAuth();
+    if (!auth.isAdmin) {
+      return { error: ONLY_ADMINS_CAN_SHARE };
+    }
+
+    const denied = await featureActionError("sermon_builder");
+    if (denied) return { error: denied };
+
+    const appDenied = await featureActionError("member_app");
+    if (appDenied) return { error: MEMBER_APP_OFF };
+
+    const supabase = createClient();
+    const sermon = await verifySermonAccess(supabase, input.sermonId, auth.churchId);
+    if (!sermon) return { error: "Sermon not found" };
+
+    const result = await publishPresentationToFaithForm({
+      churchId: auth.churchId,
+      sermonId: input.sermonId,
+      visibility: input.visibility,
+    });
+
+    if (!result.ok) return { error: result.error };
+
+    if (result.markedPublished) {
+      await logActivity({
+        churchId: auth.churchId,
+        automationType: "Sermon Published",
+        taskName: sermon.title,
+        triggerSource: `sermon_module:publish:${input.sermonId}`,
+      });
+    }
+
+    revalidatePath("/dashboard/sermon-builder");
+    revalidatePath(`/dashboard/sermon-builder/${input.sermonId}`);
+    return {
+      presentationId:
+        result.state.status === "published"
+          ? result.state.presentationId
+          : undefined,
+      version:
+        result.state.status === "published" ? result.state.version : undefined,
+    };
+  } catch (e) {
+    console.error("[sermon-builder] presentation share failed", e);
+    return { error: APP_UPDATE_FAILED };
+  }
+}
+
+/**
+ * Removes published slides from the app. Not gated on feature flags — taking
+ * content down must always remain possible.
+ */
+export async function unsharePresentationInAppAction(
+  sermonId: string,
+): Promise<{ error?: string }> {
+  try {
+    const auth = await requireChurchAuth();
+    if (!auth.isAdmin) {
+      return { error: ONLY_ADMINS_CAN_SHARE };
+    }
+
+    const supabase = createClient();
+    const sermon = await verifySermonAccess(supabase, sermonId, auth.churchId);
+    if (!sermon) return { error: "Sermon not found" };
+
+    const result = await unpublishPresentationFromFaithForm({
+      churchId: auth.churchId,
+      sermonId,
+    });
+    if (!result.ok) return { error: result.error };
+
+    revalidatePath("/dashboard/sermon-builder");
+    revalidatePath(`/dashboard/sermon-builder/${sermonId}`);
+    return {};
+  } catch (e) {
+    console.error("[sermon-builder] presentation unshare failed", e);
     return { error: APP_UPDATE_FAILED };
   }
 }

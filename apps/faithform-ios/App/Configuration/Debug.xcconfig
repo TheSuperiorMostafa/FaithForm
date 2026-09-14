@@ -3,10 +3,26 @@
 FAITHFORM_BUNDLE_ID_SUFFIX = .debug
 FAITHFORM_ENVIRONMENT_KEY = development
 
-// A simulator reaches the host machine on localhost. A device does not, and a
-// developer pointing a device at a laptop sets this to that laptop's LAN
-// address for the duration.
+// Simulator default. A physical iPhone cannot reach this Mac on localhost —
+// that address is the phone itself — so a device run overrides it from
+// Local.xcconfig (gitignored). That file is included again at the bottom of
+// this config so its FAITHFORM_API_ORIGIN wins over the default below.
+//
+//   FAITHFORM_API_ORIGIN = https:/$()/faithform.io
+//   FAITHFORM_API_ORIGIN = http:/$()/192.168.x.x:3000
+//
+// The LAN form also needs `pnpm dev:device` and the Debug ATS exception.
+//
+// Do not write `$(VAR:default=http://…)` — the colon in `http:` ends the
+// `:default=` value early and concatenates leftovers onto a Local URL
+// (`https://faithform.io/localhost:3000)`).
 FAITHFORM_API_ORIGIN = http:/$()/localhost:3000
+
+// Cleartext to a laptop on the LAN is how a physical iPhone reaches a local
+// Next server. Staging and Release never set this; they talk HTTPS only, and
+// NSAllowsLocalNetworking in Info.plist is the only ATS exception they carry.
+INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsArbitraryLoads = YES
+INFOPLIST_KEY_NSAppTransportSecurity_NSAllowsLocalNetworking = YES
 
 // Debug affordances are compiled in here and nowhere else.
 FAITHFORM_ALLOW_DEBUG_CONTROLS = YES
@@ -24,3 +40,8 @@ FAITHFORM_APPLE_PAY_MERCHANT_ID =
 // that no identity provider is configured.
 FAITHFORM_SUPABASE_URL = $(FAITHFORM_DEV_SUPABASE_URL)
 FAITHFORM_SUPABASE_ANON_KEY = $(FAITHFORM_DEV_SUPABASE_ANON_KEY)
+
+// Last so a device origin / team id in Local wins over the simulator defaults
+// above. Base already includes it once for shared keys; this second pass is
+// what makes FAITHFORM_API_ORIGIN overridable without a broken `:default=`.
+#include? "Local.xcconfig"

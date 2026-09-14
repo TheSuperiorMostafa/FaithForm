@@ -13,8 +13,8 @@ import io.faithform.app.navigation.SessionSnapshot
  *
  * One case per destination that has a screen, in the order iOS shows them —
  * `RootTab` in `apps/faithform-ios/App/RootView.swift`. Deliberately not one
- * case per [Destination]: announcements and the sermon archive are destinations
- * without tabs of their own (sermon notes open from the Church tab).
+ * case per [Destination]: announcements have no tab of their own; sermon notes
+ * open inside Services (Watch) beside live and past recordings.
  */
 enum class HostTab {
     HOME, CHURCH, CHECK_IN, WATCH, GIVE, ACCOUNT;
@@ -72,6 +72,9 @@ object HostNavigation {
      * remove the tab on the next pass — which is why the list is computed, never
      * stored. A church-scoped tab with no church selected resolves to "no
      * relationship" and does not appear.
+     *
+     * Services (Watch) holds recordings and messages — worth a tab if either
+     * capability resolves, matching iOS `RootModel.availableTabs`.
      */
     fun availableTabs(
         bootstrap: Bootstrap,
@@ -80,13 +83,21 @@ object HostNavigation {
     ): List<HostTab> {
         val session = snapshot(bootstrap)
         return HostTab.entries.filter { tab ->
-            registry.resolve(scoped(tab.destination, selectedChurchSlug), session) is RouteResolution.Allowed
+            when (tab) {
+                HostTab.WATCH -> {
+                    val media = registry.resolve(scoped(tab.destination, selectedChurchSlug), session) is RouteResolution.Allowed
+                    val sermons = sermonsAllowed(bootstrap, selectedChurchSlug, registry)
+                    media || sermons
+                }
+                else -> registry.resolve(scoped(tab.destination, selectedChurchSlug), session) is RouteResolution.Allowed
+            }
         }
     }
 
     /**
-     * Whether the selected church's sermon notes may open: the one gate the
-     * Church tab's button, the entry on Home and a `…/sermons` link all pass.
+     * Whether the selected church's messages may open: the one gate the
+     * Services tab's Messages half, the entry on Home and a `…/sermons` link
+     * all pass.
      */
     fun sermonsAllowed(
         bootstrap: Bootstrap,
@@ -94,6 +105,14 @@ object HostNavigation {
         registry: RouteRegistry,
     ): Boolean = selectedChurchSlug != null &&
         registry.resolve(Destination.SermonArchive(selectedChurchSlug), snapshot(bootstrap)) is RouteResolution.Allowed
+
+    /** Whether live/past media may open for the selected church. */
+    fun mediaAllowed(
+        bootstrap: Bootstrap,
+        selectedChurchSlug: String?,
+        registry: RouteRegistry,
+    ): Boolean = selectedChurchSlug != null &&
+        registry.resolve(Destination.Watch(selectedChurchSlug), snapshot(bootstrap)) is RouteResolution.Allowed
 
     /** Re-scopes a church-scoped destination to [slug]; anything else is unchanged. */
     fun scoped(destination: Destination, slug: String?): Destination {
@@ -111,11 +130,12 @@ object HostNavigation {
 
     /**
      * Which tab a destination lands on. Announcements have no tab; sermons open
-     * inside Church, which `AppViewModel.sermonsRequested` asks it to do.
+     * inside Services, which `AppViewModel.sermonsRequested` asks it to do.
      */
     fun tabFor(destination: Destination): HostTab? = when (destination) {
         is Destination.Home -> HostTab.HOME
-        is Destination.ChurchDiscovery, is Destination.Church, is Destination.SermonArchive -> HostTab.CHURCH
+        is Destination.ChurchDiscovery, is Destination.Church -> HostTab.CHURCH
+        is Destination.SermonArchive -> HostTab.WATCH
         is Destination.CheckIn -> HostTab.CHECK_IN
         is Destination.Watch -> HostTab.WATCH
         is Destination.Give -> HostTab.GIVE
@@ -165,6 +185,21 @@ object HostNavigation {
         if (registry.resolve(destination, snapshot(bootstrap)) !is RouteResolution.Allowed) return null
         val tab = tabFor(destination) ?: return null
         return LinkTarget(tab = tab, churchSlug = church?.churchSlug, destination = destination)
+    }
+
+    /**
+     * Which half of Services to show, given what the registry allows.
+     *
+     * Returns true for the Messages half, false for Live & past. Matches iOS
+     * `WatchTabView.effectiveSection`.
+     */
+    fun showMessagesSection(
+        requestedSermons: Boolean,
+        showsMedia: Boolean,
+        showsSermons: Boolean,
+    ): Boolean = when {
+        requestedSermons -> showsSermons || !showsMedia
+        else -> !(showsMedia || !showsSermons)
     }
 }
 

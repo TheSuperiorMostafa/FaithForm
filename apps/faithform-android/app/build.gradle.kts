@@ -280,6 +280,7 @@ dependencies {
     implementation(libs.datastore.preferences)
     implementation(libs.security.crypto)
     implementation(libs.okhttp)
+    implementation(libs.coil.compose)
     // Geofencing only. No Maps, no Ads, no Analytics, no Play Integrity.
     implementation(libs.play.services.location)
     // Camera frames for QR check-in, and nothing more: no `camera-video`, no

@@ -105,7 +105,7 @@ because the two things they *mean* are worth stating separately.
 | | Debug | Staging | Release |
 | --- | --- | --- | --- |
 | Bundle id | `…faithform.debug` | `…faithform.staging` | `…faithform` |
-| Origin | `http://localhost:3000` | **empty** | **empty** |
+| Origin | `http://localhost:3000`, overridable via `FAITHFORM_API_ORIGIN` in Local | **empty** | **empty** |
 | Environment key | `development` | `staging` | `production` |
 | Debug controls | on | off | off |
 
@@ -220,8 +220,18 @@ Then:
    team, with **Automatically manage signing** ticked. If not, set them here —
    the project bakes in neither.
 3. Point the build somewhere the phone can reach. `localhost` in
-   `Debug.xcconfig` is the **phone's own** loopback, not your laptop: use the
-   laptop's LAN address (`http://192.168.x.x:3000`) or a staging URL.
+   `Debug.xcconfig` is the **phone's own** loopback, not your laptop. Set
+   `FAITHFORM_API_ORIGIN` in `Local.xcconfig` — Debug includes that file
+   again at the end so the value wins. (Do not use
+   `$(VAR:default=http://…)` for this: the colon in `http:` breaks xcconfig
+   `:default=` and produces a mangled origin.) Two working options:
+
+   - The same HTTPS origin the store build uses (`https://faithform.io`), if
+     the identity provider in `FAITHFORM_DEV_SUPABASE_URL` is that project.
+   - This Mac's LAN address (`http://192.168.x.x:3000`) **and**
+     `pnpm dev:device`. Ordinary `pnpm dev` listens only on localhost, which
+     the phone cannot reach; Debug allows that one cleartext case.
+
 4. Connect the iPhone, choose it as the destination, press Run.
 5. On the phone: **Settings → General → VPN & Device Management** → trust your
    developer certificate. A free-account build stops working after seven days.

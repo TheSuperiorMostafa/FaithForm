@@ -1309,6 +1309,115 @@ data class SermonDetail(
  * which is what lets a released client keep working when the server adds one.
  */
 @Serializable
+data class PresentationPage(
+    val id: String,
+    val kind: String,
+    val title: String? = null,
+    val body: String? = null,
+    val scripture: String? = null,
+    val readingOrder: List<String>
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class PresentationListItem(
+    val presentationId: String,
+    val sermonId: String,
+    val version: Int,
+    val title: String,
+    val publishedAt: String,
+    val pageCount: Int,
+    val contentHash: String,
+    val scriptureRefs: List<String>,
+    val seriesName: String? = null,
+    val churchSlug: String,
+    val churchName: String,
+    val churchTimezone: String
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class PresentationPageResponse(
+    val items: List<PresentationListItem>,
+    val nextCursor: String? = null,
+    val presentationVersion: Int
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class PresentationTheme(
+    val id: String,
+    val name: String,
+    val backgroundType: String,
+    val bg: String? = null,
+    val bgCss: String,
+    val text: String,
+    val accent: String,
+    val fontHead: String,
+    val fontBody: String,
+    val italicRef: Boolean,
+    val textShadow: Boolean,
+    val imageUrl: String? = null
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class PresentationSlideRendition(
+    val pageId: String,
+    val imagePath: String? = null,
+    val imageUrl: String? = null
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class PresentationRenditions(
+    val slides: List<PresentationSlideRendition>,
+    val pdfPath: String? = null
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class PresentationDetail(
+    val presentationId: String,
+    val sermonId: String,
+    val version: Int,
+    val title: String,
+    val publishedAt: String,
+    val pageCount: Int,
+    val contentHash: String,
+    val scriptureRefs: List<String>,
+    val seriesName: String? = null,
+    val churchSlug: String,
+    val churchName: String,
+    val churchTimezone: String,
+    val pages: List<PresentationPage>,
+    val theme: PresentationTheme? = null,
+    val renditions: PresentationRenditions
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
 data class PlaybackGrant(
     val capability: String,
     val expiresAt: String,

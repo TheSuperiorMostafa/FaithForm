@@ -14,7 +14,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -28,6 +27,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import io.faithform.app.R
 import io.faithform.app.design.FaithFormTokens
+import io.faithform.app.ui.components.FaithFormSearchField
 import io.faithform.app.media.MediaArchiveCard
 import io.faithform.app.media.MediaDetailState
 import io.faithform.app.media.MediaLiveCard
@@ -103,12 +103,11 @@ fun MediaScreen(
                 }
 
                 item {
-                    OutlinedTextField(
+                    FaithFormSearchField(
                         value = state.searchTerm,
                         onValueChange = onSearchChange,
-                        label = { Text(stringResource(R.string.media_search_label)) },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
+                        placeholder = stringResource(R.string.media_search_label),
+                        onSearch = { onSearchChange(state.searchTerm) },
                     )
                 }
 

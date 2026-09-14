@@ -2286,6 +2286,228 @@ public struct SermonDetail: Codable, Hashable, Sendable {
 
 /// Unknown additive fields are ignored by Codable, which is what lets a
 /// released client keep working when the server adds one.
+public struct PresentationPage: Codable, Hashable, Sendable {
+    public let id: String
+    public let kind: String
+    public let title: String?
+    public let body: String?
+    public let scripture: String?
+    public let readingOrder: [String]
+
+    public init(
+        id: String,
+        kind: String,
+        title: String? = nil,
+        body: String? = nil,
+        scripture: String? = nil,
+        readingOrder: [String]
+    ) {
+        self.id = id
+        self.kind = kind
+        self.title = title
+        self.body = body
+        self.scripture = scripture
+        self.readingOrder = readingOrder
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct PresentationListItem: Codable, Hashable, Sendable {
+    public let presentationId: String
+    public let sermonId: String
+    public let version: Int
+    public let title: String
+    public let publishedAt: String
+    public let pageCount: Int
+    public let contentHash: String
+    public let scriptureRefs: [String]
+    public let seriesName: String?
+    public let churchSlug: String
+    public let churchName: String
+    public let churchTimezone: String
+
+    public init(
+        presentationId: String,
+        sermonId: String,
+        version: Int,
+        title: String,
+        publishedAt: String,
+        pageCount: Int,
+        contentHash: String,
+        scriptureRefs: [String],
+        seriesName: String? = nil,
+        churchSlug: String,
+        churchName: String,
+        churchTimezone: String
+    ) {
+        self.presentationId = presentationId
+        self.sermonId = sermonId
+        self.version = version
+        self.title = title
+        self.publishedAt = publishedAt
+        self.pageCount = pageCount
+        self.contentHash = contentHash
+        self.scriptureRefs = scriptureRefs
+        self.seriesName = seriesName
+        self.churchSlug = churchSlug
+        self.churchName = churchName
+        self.churchTimezone = churchTimezone
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct PresentationPageResponse: Codable, Hashable, Sendable {
+    public let items: [PresentationListItem]
+    public let nextCursor: String?
+    public let presentationVersion: Int
+
+    public init(
+        items: [PresentationListItem],
+        nextCursor: String? = nil,
+        presentationVersion: Int
+    ) {
+        self.items = items
+        self.nextCursor = nextCursor
+        self.presentationVersion = presentationVersion
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct PresentationTheme: Codable, Hashable, Sendable {
+    public let id: String
+    public let name: String
+    public let backgroundType: String
+    public let bg: String?
+    public let bgCss: String
+    public let text: String
+    public let accent: String
+    public let fontHead: String
+    public let fontBody: String
+    public let italicRef: Bool
+    public let textShadow: Bool
+    public let imageUrl: String?
+
+    public init(
+        id: String,
+        name: String,
+        backgroundType: String,
+        bg: String? = nil,
+        bgCss: String,
+        text: String,
+        accent: String,
+        fontHead: String,
+        fontBody: String,
+        italicRef: Bool,
+        textShadow: Bool,
+        imageUrl: String? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.backgroundType = backgroundType
+        self.bg = bg
+        self.bgCss = bgCss
+        self.text = text
+        self.accent = accent
+        self.fontHead = fontHead
+        self.fontBody = fontBody
+        self.italicRef = italicRef
+        self.textShadow = textShadow
+        self.imageUrl = imageUrl
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct PresentationSlideRendition: Codable, Hashable, Sendable {
+    public let pageId: String
+    public let imagePath: String?
+    public let imageUrl: String?
+
+    public init(
+        pageId: String,
+        imagePath: String? = nil,
+        imageUrl: String? = nil
+    ) {
+        self.pageId = pageId
+        self.imagePath = imagePath
+        self.imageUrl = imageUrl
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct PresentationRenditions: Codable, Hashable, Sendable {
+    public let slides: [PresentationSlideRendition]
+    public let pdfPath: String?
+
+    public init(
+        slides: [PresentationSlideRendition],
+        pdfPath: String? = nil
+    ) {
+        self.slides = slides
+        self.pdfPath = pdfPath
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct PresentationDetail: Codable, Hashable, Sendable {
+    public let presentationId: String
+    public let sermonId: String
+    public let version: Int
+    public let title: String
+    public let publishedAt: String
+    public let pageCount: Int
+    public let contentHash: String
+    public let scriptureRefs: [String]
+    public let seriesName: String?
+    public let churchSlug: String
+    public let churchName: String
+    public let churchTimezone: String
+    public let pages: [PresentationPage]
+    public let theme: PresentationTheme?
+    public let renditions: PresentationRenditions
+
+    public init(
+        presentationId: String,
+        sermonId: String,
+        version: Int,
+        title: String,
+        publishedAt: String,
+        pageCount: Int,
+        contentHash: String,
+        scriptureRefs: [String],
+        seriesName: String? = nil,
+        churchSlug: String,
+        churchName: String,
+        churchTimezone: String,
+        pages: [PresentationPage],
+        theme: PresentationTheme? = nil,
+        renditions: PresentationRenditions
+    ) {
+        self.presentationId = presentationId
+        self.sermonId = sermonId
+        self.version = version
+        self.title = title
+        self.publishedAt = publishedAt
+        self.pageCount = pageCount
+        self.contentHash = contentHash
+        self.scriptureRefs = scriptureRefs
+        self.seriesName = seriesName
+        self.churchSlug = churchSlug
+        self.churchName = churchName
+        self.churchTimezone = churchTimezone
+        self.pages = pages
+        self.theme = theme
+        self.renditions = renditions
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
 public struct PlaybackGrant: Codable, Hashable, Sendable {
     public let capability: String
     public let expiresAt: String

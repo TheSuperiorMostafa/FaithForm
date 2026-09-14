@@ -20,6 +20,7 @@ struct AccountTabView: View {
                         dependencies: dependencies,
                         root: root,
                         displayName: bootstrap.profile.displayName,
+                        avatarUrl: bootstrap.profile.avatarUrl,
                         showsAutomaticCheckIn: !AppDependencies.attendanceChurches(in: bootstrap).isEmpty
                     )
                     .padding(FaithFormTokens.Spacing.lg)
@@ -122,39 +123,93 @@ struct AccountView: View {
     let dependencies: AppDependencies
     let root: RootModel
     let displayName: String?
+    var avatarUrl: String? = nil
     /// Only with a church to be checked in at. The first-run flow has none, so
     /// it offers nothing that would lead to a location prompt.
     var showsAutomaticCheckIn = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
+        VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.xl) {
+            identityHeader
+
+            if showsAutomaticCheckIn {
+                VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.sm) {
+                    Text(L.preferencesSection)
+                        .font(theme.font(FaithFormTokens.Text.label))
+                        .foregroundStyle(theme.mutedContent)
+                    AutomaticCheckInRow(model: dependencies.attendanceModel)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.sm) {
+                Text(L.legalSection)
+                    .font(theme.font(FaithFormTokens.Text.label))
+                    .foregroundStyle(theme.mutedContent)
+                LegalLinksView()
+            }
+
+            VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.md) {
+                Button(L.signOut) { Task { await root.signOut() } }
+                    .buttonStyle(FaithFormButtonStyle(kind: .secondary, theme: theme))
+                AccountDeletionControl(root: root)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var identityHeader: some View {
+        HStack(spacing: FaithFormTokens.Spacing.base) {
+            accountAvatar
             VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.xs) {
                 Text(displayName ?? L.appName)
-                    .font(theme.font(FaithFormTokens.Text.displayLarge))
+                    .font(theme.font(FaithFormTokens.Text.displayMedium))
                     .foregroundStyle(theme.palette.contentPrimary)
-                // Which environment this build points at — for the people
-                // testing one. A development build compiles debug controls in;
-                // a build going to a church never does, and a congregation has
-                // no use for the word "production" under their name.
                 if dependencies.allowsDebugControls {
                     Text(dependencies.environment.key)
                         .font(theme.font(FaithFormTokens.Text.caption))
                         .foregroundStyle(theme.palette.contentSecondary)
                 }
             }
-
-            if showsAutomaticCheckIn {
-                AutomaticCheckInRow(model: dependencies.attendanceModel)
-            }
-
-            Button(L.signOut) { Task { await root.signOut() } }
-                .buttonStyle(FaithFormButtonStyle(kind: .secondary, theme: theme))
-
-            AccountDeletionControl(root: root)
-
-            LegalLinksView()
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var accountAvatar: some View {
+        let size = FaithFormTokens.TouchTarget.recommended + FaithFormTokens.Spacing.base
+        return Group {
+            if let avatarUrl, let url = URL(string: avatarUrl) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case let .success(image):
+                        image.resizable().scaledToFill()
+                    default:
+                        initialsAvatar
+                    }
+                }
+            } else {
+                initialsAvatar
+            }
+        }
+        .frame(width: size, height: size)
+        .clipShape(Circle())
+        .overlay(Circle().strokeBorder(theme.palette.border, lineWidth: 1))
+        .accessibilityHidden(true)
+    }
+
+    private var initialsAvatar: some View {
+        ZStack {
+            theme.palette.surfaceSunken
+            Text(initials)
+                .font(theme.font(FaithFormTokens.Text.titleMedium))
+                .foregroundStyle(theme.palette.brandPrimary)
+        }
+    }
+
+    private var initials: String {
+        let name = displayName ?? L.appName
+        let parts = name.split(separator: " ").prefix(2)
+        let letters = parts.compactMap { $0.first.map(String.init) }
+        return letters.isEmpty ? String(name.prefix(1)).uppercased() : letters.joined().uppercased()
     }
 }
 

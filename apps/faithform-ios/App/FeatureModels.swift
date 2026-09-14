@@ -72,6 +72,12 @@ final class ChurchFeatures {
         partition: partition
     )
 
+    private(set) lazy var presentations = PresentationModel(
+        client: dependencies.presentations,
+        churchSlug: churchSlug,
+        partition: partition
+    )
+
     /// One player per church, shared by whichever recording or live service is
     /// open. Only one can be on screen at a time, and a second `AVPlayer` would
     /// be a second audio source competing for the same speaker.
@@ -153,6 +159,15 @@ final class ChurchFeatures {
             client: dependencies.sermons,
             churchSlug: churchSlug,
             sermonId: sermonId,
+            partition: partition
+        )
+    }
+
+    func presentationDetail(presentationId: String) -> PresentationDetailModel {
+        PresentationDetailModel(
+            client: dependencies.presentations,
+            churchSlug: churchSlug,
+            presentationId: presentationId,
             partition: partition
         )
     }

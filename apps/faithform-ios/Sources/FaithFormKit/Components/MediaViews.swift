@@ -137,10 +137,11 @@ public struct MediaArchiveList: View {
                         .font(theme.font(FaithFormTokens.Text.titleMedium))
                         .foregroundStyle(theme.palette.contentPrimary)
 
-                    TextField(L.mediaSearchLabel, text: $model.searchTerm)
-                        .textFieldStyle(.roundedBorder)
-                        .accessibilityLabel(L.mediaSearchLabel)
-                        .onSubmit { Task { await model.search(model.searchTerm) } }
+                    FaithFormSearchField(
+                        placeholder: L.mediaSearchLabel,
+                        text: $model.searchTerm,
+                        onSubmit: { Task { await model.search(model.searchTerm) } }
+                    )
 
                     if items.isEmpty {
                         Text(

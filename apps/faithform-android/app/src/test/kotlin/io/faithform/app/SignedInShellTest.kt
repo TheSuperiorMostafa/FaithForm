@@ -317,12 +317,12 @@ class SignedInShellTest {
     }
 
     @Test
-    fun `a sermons link selects its church and asks the Church tab for sermon notes`() = runTest {
+    fun `a sermons link selects its church and asks Services for messages`() = runTest {
         val model = ready()
         model.handleDeepLink("faithform://church/hope/sermons")
-        assertEquals(HostTab.CHURCH, model.selectedTab.value)
+        assertEquals(HostTab.WATCH, model.selectedTab.value)
         assertEquals("hope", model.selectedChurchSlug.value)
-        assertTrue("the link only opened the Church tab", model.sermonsRequested.value)
+        assertTrue("the link only opened the Services tab", model.sermonsRequested.value)
 
         // The tab shows them once; the request is then spent.
         model.consumeSermonsRequest()
@@ -337,7 +337,7 @@ class SignedInShellTest {
     }
 
     @Test
-    fun `a sermons link that arrived at a cold start opens sermon notes once home loads`() = runTest {
+    fun `a sermons link that arrived at a cold start opens messages once home loads`() = runTest {
         server.on("account/bootstrap", HttpResponse(200, bootstrapBody(bootstrap(relationships = listOf(relationship("grace"), relationship("hope")))), emptyMap()))
         server.on("onboarding", HttpResponse(200, onboarding("grace"), emptyMap()))
         val model = model()
@@ -346,7 +346,7 @@ class SignedInShellTest {
         assertFalse(model.sermonsRequested.value)
         model.load()
 
-        assertEquals(HostTab.CHURCH, model.selectedTab.value)
+        assertEquals(HostTab.WATCH, model.selectedTab.value)
         assertEquals("hope", model.selectedChurchSlug.value)
         assertTrue(model.sermonsRequested.value)
     }
@@ -355,7 +355,7 @@ class SignedInShellTest {
     fun `sermon notes open from Home only through the gates a link passes`() = runTest {
         val model = ready()
         model.openSermons("grace")
-        assertEquals(HostTab.CHURCH, model.selectedTab.value)
+        assertEquals(HostTab.WATCH, model.selectedTab.value)
         assertTrue(model.sermonsRequested.value)
 
         val withoutSermons = ready(bootstrap(capabilities = bootstrap().enabledCapabilities - "sermons"))

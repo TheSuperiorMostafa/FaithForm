@@ -13,13 +13,16 @@ public struct SermonListView: View {
     @Environment(\.faithformTheme) private var theme
     private let model: SermonModel
     private let onOpen: @MainActor (SermonListItem) -> Void
+    private let showTitle: Bool
 
     public init(
         model: SermonModel,
-        onOpen: @escaping @MainActor (SermonListItem) -> Void
+        onOpen: @escaping @MainActor (SermonListItem) -> Void,
+        showTitle: Bool = true
     ) {
         self.model = model
         self.onOpen = onOpen
+        self.showTitle = showTitle
     }
 
     public var body: some View {
@@ -58,21 +61,18 @@ public struct SermonListView: View {
                     }
 
                 case let .loaded(items, _):
-                    Text(L.sermonsTitle)
-                        .font(theme.font(FaithFormTokens.Text.titleMedium))
-                        .foregroundStyle(theme.palette.contentPrimary)
+                    if showTitle {
+                        Text(L.sermonsTitle)
+                            .font(theme.font(FaithFormTokens.Text.titleMedium))
+                            .foregroundStyle(theme.palette.contentPrimary)
+                    }
 
-                    TextField(L.sermonsSearchLabel, text: Bindable(model).searchTerm)
-                        .textFieldStyle(.roundedBorder)
-                        .accessibilityLabel(L.sermonsSearchLabel)
-                        .submitLabel(.search)
-                        .onSubmit { Task { await model.search(model.searchTerm) } }
-                        .onChange(of: model.searchTerm) { _, newValue in
-                            // Emptying the box is the way back to every sermon.
-                            if newValue.isEmpty {
-                                Task { await model.searchTextChanged() }
-                            }
-                        }
+                    FaithFormSearchField(
+                        placeholder: L.sermonsSearchLabel,
+                        text: Bindable(model).searchTerm,
+                        onSubmit: { Task { await model.search(model.searchTerm) } },
+                        onClear: { Task { await model.searchTextChanged() } }
+                    )
 
                     if items.isEmpty {
                         // Two different empties: a church that has published

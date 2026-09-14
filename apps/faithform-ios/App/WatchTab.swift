@@ -1,18 +1,23 @@
 import SwiftUI
 import FaithFormKit
 
-/// Which half of the Watch tab is showing.
+/// Which half of the Services tab is showing.
 ///
 /// Held by `RootModel` rather than by the tab, so a `faithform://church/x/sermons`
-/// link can land on sermon notes rather than on the videos beside them.
+/// link can land on messages rather than on the videos beside them.
 enum WatchSection: Hashable {
     case media
     case sermons
 }
 
-/// Watch: live and past services, and the sermon notes that go with them.
+enum MessagesKind: Hashable {
+    case notes
+    case slides
+}
+
+/// Services: live and past services, and the messages (notes/slides) that go with them.
 ///
-/// ## Why sermons are here rather than a tab of their own
+/// ## Why messages are here rather than a tab of their own
 ///
 /// A sixth tab would push Account into "More" (see `HomeTabView`), and notes
 /// are the companion to the recordings, not a separate place: someone looking
@@ -25,6 +30,7 @@ struct WatchTabView: View {
         case recording(mediaId: String)
         case live(LiveMedia)
         case sermon(sermonId: String)
+        case presentation(presentationId: String)
     }
 
     @Environment(\.faithformTheme) private var theme
@@ -33,6 +39,7 @@ struct WatchTabView: View {
     let isStale: Bool
 
     @State private var path: [Route] = []
+    @State private var messagesKind: MessagesKind = .notes
 
     var body: some View {
         let showsMedia = root.isAllowed(.watch(churchSlug: features.churchSlug))
@@ -65,10 +72,30 @@ struct WatchTabView: View {
                         onWatchLive: { path.append(.live($0)) }
                     )
                 case .sermons:
-                    SermonListView(
-                        model: features.sermons,
-                        onOpen: { path.append(.sermon(sermonId: $0.sermonId)) }
-                    )
+                    VStack(spacing: 0) {
+                        Picker(L.sermonsTitle, selection: $messagesKind) {
+                            Text(L.messagesNotesSegment).tag(MessagesKind.notes)
+                            Text(L.messagesSlidesSegment).tag(MessagesKind.slides)
+                        }
+                        .pickerStyle(.segmented)
+                        .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
+                        .padding(.bottom, FaithFormTokens.Spacing.sm)
+
+                        switch messagesKind {
+                        case .notes:
+                            SermonListView(
+                                model: features.sermons,
+                                onOpen: { path.append(.sermon(sermonId: $0.sermonId)) },
+                                showTitle: false
+                            )
+                        case .slides:
+                            PresentationListView(
+                                model: features.presentations,
+                                onOpen: { path.append(.presentation(presentationId: $0.presentationId)) },
+                                showTitle: false
+                            )
+                        }
+                    }
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -82,6 +109,8 @@ struct WatchTabView: View {
                     LiveServiceScreen(features: features, live: live)
                 case let .sermon(sermonId):
                     SermonScreen(features: features, sermonId: sermonId)
+                case let .presentation(presentationId):
+                    PresentationScreen(features: features, presentationId: presentationId)
                 }
             }
         }
@@ -103,7 +132,7 @@ struct WatchTabView: View {
         }
     }
 
-    /// The link Home's "Sermon notes" card follows.
+    /// The link Home's "Messages" card follows.
     ///
     /// Through `RootModel.open` rather than setting the tab by hand, so the card
     /// lands exactly where the link does — same registry answer, same section.
@@ -274,6 +303,18 @@ struct SermonScreen: View {
         OnceModel(make: { features.sermonDetail(sermonId: sermonId) }) { model in
             SermonDetailView(model: model)
                 .navigationBarTitleDisplayMode(.inline)
+        }
+    }
+}
+
+/// One published slide deck.
+struct PresentationScreen: View {
+    let features: ChurchFeatures
+    let presentationId: String
+
+    var body: some View {
+        OnceModel(make: { features.presentationDetail(presentationId: presentationId) }) { model in
+            PresentationViewer(model: model)
         }
     }
 }

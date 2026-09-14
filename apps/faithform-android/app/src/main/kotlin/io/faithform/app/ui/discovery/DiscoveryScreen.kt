@@ -246,23 +246,34 @@ private fun ChurchResultCard(church: DiscoveredChurch, onOpen: () -> Unit) {
             .semantics(mergeDescendants = true) { contentDescription = description },
         verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.xs)
     ) {
-        Text(church.name, style = MaterialTheme.typography.titleMedium, color = theme.palette.contentPrimary)
-        church.publicSummary?.takeIf { it.isNotBlank() }?.let {
-            Text(it, style = MaterialTheme.typography.bodyMedium, color = theme.palette.contentSecondary, maxLines = 2)
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm)) {
-            if (place.isNotBlank()) {
-                Text(place, style = MaterialTheme.typography.labelSmall, color = theme.mutedContent)
-            }
-            distance?.let {
-                Text(
-                    it,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = theme.palette.contentSecondary,
-                    modifier = Modifier
-                        .background(theme.palette.surfaceSunken, RoundedCornerShape(FaithFormTokens.Radius.pill))
-                        .padding(horizontal = FaithFormTokens.Spacing.sm, vertical = FaithFormTokens.Spacing.xs)
-                )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.base),
+            verticalAlignment = Alignment.Top,
+        ) {
+            io.faithform.app.ui.church.ChurchAvatar(logoUrl = church.logoUrl, name = church.name)
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.xs),
+            ) {
+                Text(church.name, style = MaterialTheme.typography.titleMedium, color = theme.palette.contentPrimary)
+                church.publicSummary?.takeIf { it.isNotBlank() }?.let {
+                    Text(it, style = MaterialTheme.typography.bodyMedium, color = theme.palette.contentSecondary, maxLines = 2)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm)) {
+                    if (place.isNotBlank()) {
+                        Text(place, style = MaterialTheme.typography.labelSmall, color = theme.mutedContent)
+                    }
+                    distance?.let {
+                        Text(
+                            it,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = theme.palette.contentSecondary,
+                            modifier = Modifier
+                                .background(theme.palette.surfaceSunken, RoundedCornerShape(FaithFormTokens.Radius.pill))
+                                .padding(horizontal = FaithFormTokens.Spacing.sm, vertical = FaithFormTokens.Spacing.xs)
+                        )
+                    }
+                }
             }
         }
     }

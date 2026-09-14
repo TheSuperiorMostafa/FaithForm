@@ -4388,6 +4388,608 @@
         }
       }
     },
+    "PresentationPage": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "title",
+            "scripture",
+            "point",
+            "application",
+            "closing"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string"
+        },
+        "scripture": {
+          "type": "string"
+        },
+        "readingOrder": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "readingOrder"
+      ],
+      "additionalProperties": false
+    },
+    "PresentationListItem": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "presentationId": {
+          "type": "string"
+        },
+        "sermonId": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "title": {
+          "type": "string"
+        },
+        "publishedAt": {
+          "type": "string",
+          "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+        },
+        "pageCount": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "contentHash": {
+          "type": "string"
+        },
+        "scriptureRefs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "seriesName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "churchSlug": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "churchName": {
+          "type": "string"
+        },
+        "churchTimezone": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "presentationId",
+        "sermonId",
+        "version",
+        "title",
+        "publishedAt",
+        "pageCount",
+        "contentHash",
+        "scriptureRefs",
+        "seriesName",
+        "churchSlug",
+        "churchName",
+        "churchTimezone"
+      ],
+      "additionalProperties": false
+    },
+    "PresentationPageResponse": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PresentationListItem"
+          }
+        },
+        "nextCursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "presentationVersion": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor",
+        "presentationVersion"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "PresentationListItem": {
+          "type": "object",
+          "properties": {
+            "presentationId": {
+              "type": "string"
+            },
+            "sermonId": {
+              "type": "string"
+            },
+            "version": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "title": {
+              "type": "string"
+            },
+            "publishedAt": {
+              "type": "string",
+              "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+            },
+            "pageCount": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "contentHash": {
+              "type": "string"
+            },
+            "scriptureRefs": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "seriesName": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "churchSlug": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "churchName": {
+              "type": "string"
+            },
+            "churchTimezone": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "presentationId",
+            "sermonId",
+            "version",
+            "title",
+            "publishedAt",
+            "pageCount",
+            "contentHash",
+            "scriptureRefs",
+            "seriesName",
+            "churchSlug",
+            "churchName",
+            "churchTimezone"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "PresentationTheme": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "backgroundType": {
+          "type": "string",
+          "enum": [
+            "solid",
+            "image"
+          ]
+        },
+        "bg": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "bgCss": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "accent": {
+          "type": "string"
+        },
+        "fontHead": {
+          "type": "string"
+        },
+        "fontBody": {
+          "type": "string"
+        },
+        "italicRef": {
+          "type": "boolean"
+        },
+        "textShadow": {
+          "type": "boolean"
+        },
+        "imageUrl": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "backgroundType",
+        "bg",
+        "bgCss",
+        "text",
+        "accent",
+        "fontHead",
+        "fontBody",
+        "italicRef",
+        "textShadow",
+        "imageUrl"
+      ],
+      "additionalProperties": false
+    },
+    "PresentationSlideRendition": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "pageId": {
+          "type": "string"
+        },
+        "imagePath": {
+          "type": "string"
+        },
+        "imageUrl": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "pageId"
+      ],
+      "additionalProperties": false
+    },
+    "PresentationRenditions": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "slides": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PresentationSlideRendition"
+          }
+        },
+        "pdfPath": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "slides"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "PresentationSlideRendition": {
+          "type": "object",
+          "properties": {
+            "pageId": {
+              "type": "string"
+            },
+            "imagePath": {
+              "type": "string"
+            },
+            "imageUrl": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "pageId"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "PresentationDetail": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "presentationId": {
+          "type": "string"
+        },
+        "sermonId": {
+          "type": "string"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "title": {
+          "type": "string"
+        },
+        "publishedAt": {
+          "type": "string",
+          "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+        },
+        "pageCount": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "contentHash": {
+          "type": "string"
+        },
+        "scriptureRefs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "seriesName": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "churchSlug": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "churchName": {
+          "type": "string"
+        },
+        "churchTimezone": {
+          "type": "string"
+        },
+        "pages": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PresentationPage"
+          }
+        },
+        "theme": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PresentationTheme"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "renditions": {
+          "$ref": "#/$defs/PresentationRenditions"
+        }
+      },
+      "required": [
+        "presentationId",
+        "sermonId",
+        "version",
+        "title",
+        "publishedAt",
+        "pageCount",
+        "contentHash",
+        "scriptureRefs",
+        "seriesName",
+        "churchSlug",
+        "churchName",
+        "churchTimezone",
+        "pages",
+        "theme",
+        "renditions"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "PresentationPage": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "title",
+                "scripture",
+                "point",
+                "application",
+                "closing"
+              ]
+            },
+            "title": {
+              "type": "string"
+            },
+            "body": {
+              "type": "string"
+            },
+            "scripture": {
+              "type": "string"
+            },
+            "readingOrder": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          "required": [
+            "id",
+            "kind",
+            "readingOrder"
+          ],
+          "additionalProperties": false
+        },
+        "PresentationTheme": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "backgroundType": {
+              "type": "string",
+              "enum": [
+                "solid",
+                "image"
+              ]
+            },
+            "bg": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "bgCss": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "accent": {
+              "type": "string"
+            },
+            "fontHead": {
+              "type": "string"
+            },
+            "fontBody": {
+              "type": "string"
+            },
+            "italicRef": {
+              "type": "boolean"
+            },
+            "textShadow": {
+              "type": "boolean"
+            },
+            "imageUrl": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "backgroundType",
+            "bg",
+            "bgCss",
+            "text",
+            "accent",
+            "fontHead",
+            "fontBody",
+            "italicRef",
+            "textShadow",
+            "imageUrl"
+          ],
+          "additionalProperties": false
+        },
+        "PresentationRenditions": {
+          "type": "object",
+          "properties": {
+            "slides": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/PresentationSlideRendition"
+              }
+            },
+            "pdfPath": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "slides"
+          ],
+          "additionalProperties": false
+        },
+        "PresentationSlideRendition": {
+          "type": "object",
+          "properties": {
+            "pageId": {
+              "type": "string"
+            },
+            "imagePath": {
+              "type": "string"
+            },
+            "imageUrl": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "pageId"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
     "PlaybackGrant": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "object",

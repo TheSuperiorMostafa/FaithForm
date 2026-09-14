@@ -23,7 +23,10 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -41,6 +44,7 @@ import io.faithform.app.host.HostNavigation
 import io.faithform.app.host.HostTab
 import io.faithform.app.session.AppContainer
 import io.faithform.app.ui.account.AccountTab
+import io.faithform.app.ui.attendance.AutomaticAttendanceIntroScreen
 import io.faithform.app.ui.attendance.CheckInTab
 import io.faithform.app.ui.discovery.LocationProvider
 import io.faithform.app.ui.giving.GiveTab
@@ -152,8 +156,9 @@ fun SignedInHost(
 
                     HostTab.WATCH -> if (church != null && partition != null) {
                         WatchTab(
-                            client = container.mediaClient,
-                            resumePositions = container.resumePositions,
+                            appViewModel = viewModel,
+                            container = container,
+                            bootstrap = bootstrap,
                             churchSlug = church.churchSlug,
                             partition = partition,
                         )
@@ -169,13 +174,33 @@ fun SignedInHost(
                         )
                     }
 
-                    HostTab.ACCOUNT -> TabScreen(title = stringResource(R.string.tab_account)) { content ->
-                        AccountTab(
-                            bootstrap = bootstrap,
-                            onSignOut = viewModel::signOut,
-                            onDeleteAccount = viewModel::beginDeletion,
-                            modifier = content,
-                        )
+                    HostTab.ACCOUNT -> {
+                        var showAutoCheckIn by rememberSaveable { mutableStateOf(false) }
+                        val showsAuto =
+                            "attendance" in bootstrap.enabledCapabilities && selectedSlug != null
+                        if (showAutoCheckIn && showsAuto) {
+                            TabScreen(
+                                title = stringResource(R.string.auto_attendance_title),
+                                onBack = { showAutoCheckIn = false },
+                            ) { _ ->
+                                AutomaticAttendanceIntroScreen(
+                                    onContinue = { showAutoCheckIn = false },
+                                    onNotNow = { showAutoCheckIn = false },
+                                )
+                            }
+                        } else {
+                            TabScreen(title = stringResource(R.string.tab_account)) { content ->
+                                AccountTab(
+                                    bootstrap = bootstrap,
+                                    onSignOut = viewModel::signOut,
+                                    onDeleteAccount = viewModel::beginDeletion,
+                                    modifier = content,
+                                    showsAutomaticCheckIn = showsAuto,
+                                    automaticCheckInEnabled = container.automaticAttendance?.settings?.enabled == true,
+                                    onOpenAutomaticCheckIn = { showAutoCheckIn = true },
+                                )
+                            }
+                        }
                     }
                 }
             }

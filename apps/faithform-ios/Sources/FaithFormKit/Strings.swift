@@ -177,9 +177,9 @@ public enum L {
     public static var landingFeedBody: String {
         t("landing_feed_body", "News and events from your church, as soon as they're shared.")
     }
-    public static var landingWatchTitle: String { t("landing_watch_title", "Watch and catch up") }
+    public static var landingWatchTitle: String { t("landing_watch_title", "Services, live and past") }
     public static var landingWatchBody: String {
-        t("landing_watch_body", "Join services live, or go back to past sermons and notes.")
+        t("landing_watch_body", "Join live, catch up on past services, or read the message.")
     }
     public static var landingCheckInTitle: String { t("landing_check_in_title", "Check in with a scan") }
     public static var landingCheckInBody: String {
@@ -529,7 +529,7 @@ public enum L {
 
     // MARK: - Media
     public static var mediaTabTitle: String {
-        t("media_tab_title", "Watch")
+        t("media_tab_title", "Live & past")
     }
     public static var mediaLiveNowBadge: String {
         t("media_live_now_badge", "Live now")
@@ -583,7 +583,7 @@ public enum L {
     // MARK: - Sermon notes
 
     public static var sermonsTitle: String {
-        t("sermons_title", "Sermon notes")
+        t("sermons_title", "Messages")
     }
     public static var sermonsEmpty: String {
         t("sermons_empty", "No sermon notes have been shared yet.")
@@ -592,7 +592,49 @@ public enum L {
         t("sermons_empty_search", "Nothing matches that.")
     }
     public static var sermonsSearchLabel: String {
-        t("sermons_search_label", "Search sermon notes")
+        t("sermons_search_label", "Search messages")
+    }
+    public static var presentationsTitle: String {
+        t("presentations_title", "Slides")
+    }
+    public static var presentationsSearchLabel: String {
+        t("presentations_search_label", "Search slides")
+    }
+    public static var presentationsEmpty: String {
+        t("presentations_empty", "No slides have been published yet.")
+    }
+    public static var presentationsEmptySearch: String {
+        t("presentations_empty_search", "Nothing matches that.")
+    }
+    public static var presentationsPageCount: String {
+        t("presentations_page_count", "%d slides")
+    }
+    public static var presentationsRetry: String {
+        t("presentations_retry", "Try again")
+    }
+    public static var presentationsOfflineTitle: String {
+        t("presentations_offline_title", "FaithForm could not reach the server")
+    }
+    public static var presentationsOfflineBody: String {
+        t("presentations_offline_body", "Check your connection and try again.")
+    }
+    public static var presentationsBlockedTitle: String {
+        t("presentations_blocked_title", "This church is not available to you")
+    }
+    public static var presentationsBlockedBody: String {
+        t("presentations_blocked_body", "You can't open slides for this church right now.")
+    }
+    public static var presentationsUnavailableTitle: String {
+        t("presentations_unavailable_title", "These slides are no longer available")
+    }
+    public static var presentationsUnavailableBody: String {
+        t("presentations_unavailable_body", "The church removed them. Nothing you did caused this.")
+    }
+    public static var messagesNotesSegment: String {
+        t("messages_notes_segment", "Notes")
+    }
+    public static var messagesSlidesSegment: String {
+        t("messages_slides_segment", "Slides")
     }
     public static var sermonsOfflineTitle: String {
         t("sermons_offline_title", "FaithForm could not reach the server")
@@ -828,13 +870,19 @@ public enum L {
         t("tab_check_in", "Check in")
     }
     public static var tabWatch: String {
-        t("tab_watch", "Watch")
+        t("tab_watch", "Services")
     }
     public static var tabGive: String {
         t("tab_give", "Give")
     }
     public static var tabAccount: String {
         t("tab_account", "Account")
+    }
+    public static var preferencesSection: String {
+        t("preferences_section", "Preferences")
+    }
+    public static var legalSection: String {
+        t("legal_section", "Legal")
     }
     public static var homeSubtitle: String {
         t("home_subtitle", "Everything your church has shared with you.")
@@ -852,7 +900,7 @@ public enum L {
         t("check_in_entry_body", "Scan the code your church puts on the screen, or type the short code.")
     }
     public static var mediaEntryBody: String {
-        t("media_entry_body", "Watch live, or catch up on a service you missed.")
+        t("media_entry_body", "Join live, catch up on a past service, or open the message.")
     }
     public static var notConfiguredTitle: String {
         t("not_configured_title", "FaithForm isn't set up")

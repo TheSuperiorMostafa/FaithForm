@@ -117,7 +117,8 @@ export const FEATURES: FeatureDefinition[] = [
   {
     key: "sermon_builder",
     label: "Sermon Builder",
-    description: "AI sermon outlines, series planning, slides, and exports.",
+    description:
+      "AI sermon outlines, series planning, slides, and exports. Publishing notes or slides to the FaithForm app also requires Member App.",
     href: "/dashboard/sermon-builder",
     icon: BookOpen,
     routes: ["/dashboard/sermon-builder"],
@@ -172,12 +173,12 @@ export const FEATURES: FeatureDefinition[] = [
     key: "member_app",
     label: "Member App",
     description:
-      "The church's presence in the FaithForm app: discovery, join requests, and invitation links.",
+      "The church's presence in the FaithForm app: discovery, join requests, invitation links, and the ability to publish content (notes, slides, media) to the app.",
     href: "/dashboard/app",
     icon: Smartphone,
     routes: ["/dashboard/app"],
     publicImpact:
-      "Delists the church from search and Nearby in the member app, and stops new members joining or following. People already connected keep the app and its content.",
+      "Delists the church from search and Nearby in the member app, and stops new members joining or following. People already connected keep the app and its content. Staff lose Publish to app controls until Member App is on again.",
   },
 ];
 

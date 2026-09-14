@@ -300,7 +300,10 @@ test("unsharing is not gated on the Sermon Builder feature", () => {
   // Removing notes from phones only ever reduces exposure, and a church whose
   // feature was switched off is the one that most needs to be able to.
   const source = readFileSync("app/dashboard/sermon-builder/actions.ts", "utf8");
-  const unshare = source.slice(source.indexOf("export async function unshareSermonInAppAction"));
+  const unshare = source.slice(
+    source.indexOf("export async function unshareSermonInAppAction"),
+    source.indexOf("export async function sharePresentationInAppAction"),
+  );
   assert.ok(unshare.length > 0);
   assert.doesNotMatch(unshare, /featureActionError/);
   assert.match(unshare, /auth\.isAdmin/);
