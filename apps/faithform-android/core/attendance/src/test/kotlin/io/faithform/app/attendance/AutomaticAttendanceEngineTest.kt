@@ -838,7 +838,7 @@ class TurnOffTest {
         h.on()
 
         assertTrue(ReconcileTrigger.WindowBoundary to opens in h.scheduler.reconciles)
-        val next = h.engine.nextService()
+        val next = h.engine.upcoming()
         assertEquals(opens, next?.checkInOpensAtEpochMillis)
         assertFalse(next!!.checkInOpen)
     }

@@ -206,6 +206,10 @@ class AppManifestTest {
             "android.permission.INTERNET",
             "android.permission.CAMERA",
             "android.permission.ACCESS_FINE_LOCATION",
+            // Automatic check-in.
+            "android.permission.ACCESS_BACKGROUND_LOCATION",
+            "android.permission.RECEIVE_BOOT_COMPLETED",
+            "android.permission.POST_NOTIFICATIONS",
         )) {
             assertTrue("$required is missing", manifest.contains(required))
         }
@@ -220,13 +224,11 @@ class AppManifestTest {
             "ACTIVITY_RECOGNITION",
             "AD_ID",
             "QUERY_ALL_PACKAGES",
-            // Features that exist in source and are not in v1: automatic
-            // attendance (background location, boot re-registration) and push.
-            "ACCESS_BACKGROUND_LOCATION",
-            "RECEIVE_BOOT_COMPLETED",
-            "POST_NOTIFICATIONS",
         )) {
-            assertFalse("$absent is declared and nothing needs it", manifest.contains(absent))
+            // An element marked `tools:node="remove"` is the opposite of a
+            // declaration: it strips what a library would otherwise merge in.
+            val declared = manifest.replace(Regex("<[^<>]*tools:node=\"remove\"[^<>]*/>"), "")
+            assertFalse("$absent is declared and nothing needs it", declared.contains(absent))
         }
     }
 
@@ -242,10 +244,26 @@ class AppManifestTest {
     }
 
     @Test
-    fun `no receiver can be reached by another app, because v1 registers none`() {
-        // Automatic attendance is not in v1, so nothing that could be woken by
-        // a broadcast is declared. Its receivers return with the feature.
-        assertFalse(manifest.contains("<receiver"))
+    fun `only the boot receiver is exported, and only the system can reach it`() {
+        val receivers = Regex("<receiver[\\s\\S]*?(?:/>|</receiver>)").findAll(manifest).map { it.value }.toList()
+        assertEquals(5, receivers.size)
+        for (receiver in receivers) {
+            if (receiver.contains("BootAndUpdateReceiver")) {
+                assertTrue(receiver.contains("android:exported=\"true\""))
+                assertTrue(receiver.contains("android:permission=\"android.permission.RECEIVE_BOOT_COMPLETED\""))
+            } else {
+                assertTrue("exported: $receiver", receiver.contains("android:exported=\"false\""))
+            }
+        }
+    }
+
+    @Test
+    fun `WorkManager's foreground service and its permission are removed`() {
+        assertTrue(manifest.contains("androidx.work.impl.foreground.SystemForegroundService"))
+        val service = manifest.substringAfter("androidx.work.impl.foreground.SystemForegroundService").substringBefore("/>")
+        assertTrue(service.contains("tools:node=\"remove\""))
+        val permission = manifest.substringAfter("android.permission.FOREGROUND_SERVICE\"").substringBefore("/>")
+        assertTrue(permission.contains("tools:node=\"remove\""))
     }
 
     @Test

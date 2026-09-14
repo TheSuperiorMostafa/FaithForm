@@ -108,6 +108,7 @@ class EncryptedAttendanceAttemptStore(
         put("expiresAt", attempt.expiresAtEpochMillis)
         put("confirmNotBefore", attempt.confirmationNotBeforeEpochMillis ?: JSONObject.NULL)
         put("detectionId", attempt.detectionId ?: JSONObject.NULL)
+        put("regionId", attempt.regionId ?: JSONObject.NULL)
         put(
             "queued",
             attempt.queued?.let { queued ->
@@ -133,6 +134,8 @@ class EncryptedAttendanceAttemptStore(
         confirmationNotBeforeEpochMillis =
             if (json.isNull("confirmNotBefore")) null else json.getLong("confirmNotBefore"),
         detectionId = if (json.isNull("detectionId")) null else json.getString("detectionId"),
+        // Absent from an attempt stored by an earlier build.
+        regionId = if (!json.has("regionId") || json.isNull("regionId")) null else json.getString("regionId"),
         queued = json.optJSONObject("queued")?.let { queued ->
             QueuedSubmission(
                 kind = queued.getString("kind"),

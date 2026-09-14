@@ -584,7 +584,7 @@ class AutomaticAttendanceEngine(
     }
 
     /** The next service at any church being watched, from the configurations. */
-    fun nextService(): NextService? {
+    fun upcoming(): NextService? {
         val now = clock()
         val current = _record.value
         return current.churches.mapNotNull { church ->

@@ -12,7 +12,8 @@ import io.faithform.app.network.OkHttpExchange
 import io.faithform.app.network.SupabaseAuthClient
 import io.faithform.app.network.SupabaseAuthConfig
 import io.faithform.app.FaithFormApplication
-import io.faithform.app.attendance.AutomaticAttendanceCoordinator
+import io.faithform.app.attendance.AttendanceWakeups
+import io.faithform.app.attendance.AutomaticAttendanceRuntime
 import io.faithform.app.giving.EncryptedPendingDonationStore
 import io.faithform.app.giving.GivingClient
 import io.faithform.app.giving.PaymentSheetRequest
@@ -46,6 +47,9 @@ class AppContainer(
     supabaseUrl: String = "",
     supabaseAnonKey: String = ""
 ) {
+    /** Kept for what is built later, lazily; never an Activity. */
+    private val appContext: Context = context.applicationContext ?: context
+
     /**
      * Keystore-backed. The master key is hardware-protected where the device
      * offers it, and the token never appears in an ordinary preference file.
@@ -179,15 +183,41 @@ class AppContainer(
     val paymentSheets = ActivityResultRelay<PaymentSheetRequest, SheetOutcome>(unavailable = SheetOutcome.FAILED)
 
     /**
-     * Automatic attendance, or null before the app has been opened once.
-     *
-     * Built lazily and assigned by the app layer rather than in the constructor,
-     * because a broadcast receiver can wake the process before any screen has
-     * run — and constructing the whole feature eagerly for every unrelated
-     * receiver would be work the device did not need to do.
+     * The notification permission dialog (Android 13+), for automatic
+     * check-in's confirmations. Attached by each Activity like the others, and
+     * asked only from the notification education screen.
+     */
+    val notificationPermission = ActivityResultRelay<String, Boolean>(unavailable = false)
+
+    /**
+     * `shouldShowRequestPermissionRationale` from the attached Activity, or
+     * null in the background — where nothing may be requested anyway.
      */
     @Volatile
-    var automaticAttendance: AutomaticAttendanceCoordinator? = null
+    var permissionRationale: ((String) -> Boolean)? = null
+
+    /**
+     * Automatic attendance.
+     *
+     * Built on first use rather than in the constructor: a broadcast receiver
+     * or a worker can start the process before any screen has run, and an
+     * account that never turned the feature on should not pay for building it
+     * on every launch.
+     */
+    val automaticAttendance: AutomaticAttendanceRuntime by lazy {
+        AutomaticAttendanceRuntime(
+            context = appContext,
+            api = apiClient,
+            secureStore = secureStore,
+            sessions = sessionStore,
+            environmentKey = environmentKey,
+            locationDialogs = locationPermissions,
+            rationale = { permissionRationale },
+        )
+    }
+
+    /** What receivers call. Holds nothing until a broadcast needs it. */
+    val attendanceWakeups: AttendanceWakeups by lazy { AttendanceWakeups({ automaticAttendance }) }
 
     companion object {
         /**
@@ -207,6 +237,6 @@ class AppContainer(
          * an unconfigured build was never going to check anyone in anyway.
          */
         fun from(context: Context): AppContainer? =
-            (context.applicationContext as FaithFormApplication).container
+            (context.applicationContext as? FaithFormApplication)?.container
     }
 }

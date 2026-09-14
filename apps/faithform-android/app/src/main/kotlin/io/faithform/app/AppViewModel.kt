@@ -140,7 +140,14 @@ class AppViewModel(
      * any screen, or a refresh token the identity provider refused. Emitted by
      * `ApiClient` through the container, collected once here.
      */
-    sessionEnded: Flow<Unit>? = null
+    sessionEnded: Flow<Unit>? = null,
+    /**
+     * What else must stop when this account leaves the device — today,
+     * automatic check-in: its regions, its scheduled work, its notifications.
+     * Run before the session is purged, and never allowed to keep someone
+     * signed in if it fails.
+     */
+    private val onSignedOut: suspend () -> Unit = {},
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<LaunchPhase>(LaunchPhase.Loading)
@@ -766,6 +773,15 @@ class AppViewModel(
 
     /** Everything this device holds for the account, gone — in every partition. */
     private suspend fun clearLocal() {
+        try {
+            onSignedOut()
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            // Sign-out is not negotiable. What could not be stopped here is
+            // stopped on the next launch, which finds no session and tears
+            // down anything left registered for the old one.
+        }
         sessions.purgeEverything()
         cache.purgeAllPrivate()
         onboardingState = null

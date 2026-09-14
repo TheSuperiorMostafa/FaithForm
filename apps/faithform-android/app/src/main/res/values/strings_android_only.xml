@@ -5,16 +5,41 @@
     Every shared user-facing string lives in strings.xml, whose keys are held in
     lockstep with apps/faithform-ios/Sources/FaithFormKit/Strings.swift by
     scripts/verify-localization-parity.mjs (which reads strings.xml only). These
-    two describe things iOS provides itself, so a mirrored key there would be a
-    string nothing could ever show — the same reasoning as that script's
-    PLATFORM_ONLY list for notification channels:
+    describe things iOS provides itself, or that only exist on Android, so a
+    mirrored key there would be a string nothing could ever show — the same
+    reasoning as that script's PLATFORM_ONLY list for notification channels:
 
       * nav_back - SwiftUI's navigation bar supplies its own localized back
         button; a Compose top bar needs an accessibility label for its arrow.
       * legal_link_unavailable - an iPhone always has Safari. An Android phone
         can have no browser at all, and a link that does nothing must say why.
+      * auto_attendance_disclosure_* - Google Play's prominent disclosure for
+        background location, shown immediately before the request. Apple's
+        equivalent is the purpose string in Info.plist, shown by the system.
+      * auto_attendance_settings_* and the Play services / location-settings
+        actions - Android 11+ grants "Allow all the time" only on a Settings
+        page, Play services can be missing or outdated, and location can be
+        switched off from a screen an app may open. iOS has none of these.
+      * channel_attendance_* - iOS has no notification channels.
 -->
 <resources>
     <string name="nav_back">Back</string>
     <string name="legal_link_unavailable">No app on this phone can open that link.</string>
+
+    <!-- Automatic check-in: Google Play prominent disclosure for background location -->
+    <string name="auto_attendance_disclosure_title">Allow location in the background</string>
+    <string name="auto_attendance_disclosure_body">FaithForm collects your precise location to check you in automatically when you arrive at church for a service, even when the app is closed or not in use.</string>
+    <string name="auto_attendance_disclosure_point_use">Your location is read only after you have stayed at your church while check-in for a service is open. FaithForm never tracks where you go.</string>
+    <string name="auto_attendance_disclosure_point_share">Your location is not shared with anyone, including your church, and is never used for advertising.</string>
+    <string name="auto_attendance_disclosure_point_off">You can turn this off at any time in FaithForm or in Settings.</string>
+    <string name="auto_attendance_disclosure_decline">No thanks</string>
+    <string name="auto_attendance_settings_hint">On the next screen, choose “%1$s”.</string>
+    <string name="auto_attendance_settings_hint_default">On the next screen, choose “Allow all the time”.</string>
+    <string name="auto_attendance_allow_all_the_time">Allow all the time</string>
+    <string name="auto_attendance_location_settings_action">Turn on location</string>
+    <string name="auto_attendance_play_services_action">Update Google Play services</string>
+
+    <!-- Automatic check-in: notification channel -->
+    <string name="channel_attendance_name">Check-in</string>
+    <string name="channel_attendance_description">Tells you when you\'ve been checked in at church, and asks you to confirm when your church wants you to.</string>
 </resources>

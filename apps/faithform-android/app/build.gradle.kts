@@ -282,6 +282,12 @@ dependencies {
     implementation(libs.okhttp)
     // Geofencing only. No Maps, no Ads, no Analytics, no Play Integrity.
     implementation(libs.play.services.location)
+    // One-time, uniquely named background work for automatic attendance —
+    // submission with a network constraint and backoff, a confirmation at the
+    // server's instant, and re-registration at a check-in window boundary.
+    // Its foreground service and FOREGROUND_SERVICE permission are removed in
+    // the manifest: nothing here ever runs as a foreground service.
+    implementation(libs.work.runtime.ktx)
     // Camera frames for QR check-in, and nothing more: no `camera-video`, no
     // `camera-extensions`, and no `ImageCapture` use case anywhere. The
     // decoding itself is in `:core:attendance`, on the JVM, where it is tested
@@ -318,6 +324,9 @@ dependencies {
     // adapter, the three receivers, the encrypted store and the manifest are
     // all exercised by `gradlew :app:testDebugUnitTest` with no emulator.
     testImplementation(libs.robolectric)
+    // A synchronous WorkManager for Robolectric, so the receivers' scheduling
+    // is asserted against real enqueued work rather than a description of it.
+    testImplementation(libs.work.testing)
     testImplementation(libs.androidx.test.core)
     // The encoder, so a Robolectric test can render a real QR into the exact
     // luminance plane CameraX hands over — padded row stride and all — and

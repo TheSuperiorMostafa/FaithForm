@@ -91,6 +91,24 @@ class MainActivity : ComponentActivity() {
     /** Registered before START, like every launcher. Used only by the check-in tab. */
     private val cameraPermission = CameraPermissionRequester(this)
 
+    /**
+     * The Android 13+ notification dialog, raised only from automatic
+     * check-in's notification screen, after its explanation and a tap.
+     */
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        (application as FaithFormApplication).container?.notificationPermission?.deliver(granted)
+    }
+
+    private val launchNotificationDialog: (String) -> Unit = { permission ->
+        notificationPermissionLauncher.launch(permission)
+    }
+
+    private val rationale: (String) -> Boolean = { permission ->
+        shouldShowRequestPermissionRationale(permission)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // Before `super.onCreate`, as the library requires: swaps the starting
         // theme for `Theme.FaithForm`. No keep-on-screen condition — the splash
@@ -121,6 +139,8 @@ class MainActivity : ComponentActivity() {
         }
 
         container.locationPermissions.attach(launchLocationDialog)
+        container.notificationPermission.attach(launchNotificationDialog)
+        container.permissionRationale = rationale
         // Stripe's sheet registers its own launcher and attaches itself to
         // `container.paymentSheets`; it detaches when this instance is destroyed.
         StripePaymentSheetAdapter(this, container.paymentSheets)
@@ -168,7 +188,10 @@ class MainActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        (application as FaithFormApplication).container?.locationPermissions?.detach(launchLocationDialog)
+        val container = (application as FaithFormApplication).container
+        container?.locationPermissions?.detach(launchLocationDialog)
+        container?.notificationPermission?.detach(launchNotificationDialog)
+        if (container?.permissionRationale === rationale) container.permissionRationale = null
         super.onDestroy()
     }
 
@@ -205,6 +228,7 @@ class AppViewModelFactory(
             auth = container.authClient,
             registry = registry,
             sessionEnded = container.sessionEnded,
+            onSignedOut = { container.automaticAttendance.signOut() },
         ) as T
     }
 }

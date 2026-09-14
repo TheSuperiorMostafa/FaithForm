@@ -1,33 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <!--
-        Version one declares what version one uses, and nothing it does not.
-
-        A declared permission is a promise on the Play listing and in the Data
-        safety form, whether or not any code ever asks for it. So three that
-        belong to features which are built but not shipped in v1 are not here:
-
-          * POST_NOTIFICATIONS - push arrives in v1.1. Declaring it now would
-            list notifications on the store page for an app that sends none.
-          * ACCESS_BACKGROUND_LOCATION - automatic (geofence) attendance is out
-            of scope for v1. Background location is also the one permission
-            Google Play reviews by hand and requires a video and a declaration
-            for; asking reviewers to approve a feature nobody can reach would
-            be asking them to approve a promise.
-          * RECEIVE_BOOT_COMPLETED - existed only to re-register geofences
-            after a reboot.
-
-        The geofence code still compiles and is still tested, but no receiver
-        for it is registered below, so nothing can wake it. Turning automatic
-        attendance on is a manifest change, reviewed as one.
+        Every permission here names a feature a person can reach in 1.0, and
+        each runtime permission is asked for only after its explanation and a
+        tap - never at launch.
 
         Deliberately absent in every version, and asserted by the manifest tests:
 
-          * No FOREGROUND_SERVICE of any type. There is no permanent service.
+          * No FOREGROUND_SERVICE of any type. There is no permanent service;
+            WorkManager's own foreground service and its permission are removed
+            below, because nothing here ever runs as one.
           * No ACTIVITY_RECOGNITION, no advertising id, no analytics permission.
     -->
 
@@ -42,6 +29,37 @@
     -->
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
+    <!--
+        Automatic check-in.
+
+        A person who turns it on is checked in when they arrive at their church
+        for a service, even when the app is closed. The system watches the
+        campus boundary and wakes a receiver; the app reads one location only
+        after the phone has stayed and the server says a service is open.
+
+          * ACCESS_BACKGROUND_LOCATION - without it Android delivers no geofence
+            transition while the app is closed, and the feature never fires.
+            Requested only after the prominent disclosure screen, which names
+            the data, the purpose and that it is not shared. On Android 11+ the
+            request opens Settings, where the person chooses "Allow all the
+            time". COARSE and FINE above are its prerequisites.
+          * RECEIVE_BOOT_COMPLETED - geofences do not survive a reboot and are
+            registered again. WorkManager needs it too, to restore scheduled
+            work.
+          * POST_NOTIFICATIONS - "You're checked in" and, for a church that
+            asks, "Are you at church?". Requested on Android 13+ from its own
+            explanation screen, after the feature is on.
+          * WAKE_LOCK - WorkManager holds one only while a check-in is being
+            sent. It is a normal permission and shows nothing to the person.
+    -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission
+        android:name="android.permission.FOREGROUND_SERVICE"
+        tools:node="remove" />
 
     <!--
         QR check-in.
@@ -83,6 +101,12 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.APP_EMAIL" />
         </intent>
+        <!--
+            Google Play services, and only it: clearing its data silently drops
+            every geofence, and the broadcast that says so is filtered out for a
+            package this app cannot see.
+        -->
+        <package android:name="com.google.android.gms" />
     </queries>
 
     <application
@@ -126,15 +150,79 @@
         </activity>
 
         <!--
-            No receivers are registered in v1.
+            Geofence transitions.
 
-            `GeofenceBroadcastReceiver`, `BootAndUpdateReceiver` and
-            `PackageReplacedReceiver` exist in source for automatic attendance,
-            which v1 does not ship. When it does, they come back here exactly
-            as they were: the geofence receiver `exported="false"` so only the
-            system and Play services can deliver a transition, and the boot
-            receiver guarded by the RECEIVE_BOOT_COMPLETED permission only the
-            system holds.
+            android:exported="false" is the security boundary: only the system
+            and Play services may deliver to it, and no other app can forge a
+            transition. The PendingIntent that targets it is created with
+            FLAG_MUTABLE (required from API 31, and by the geofencing API, which
+            fills in the transition extras) plus an explicit component, so it
+            cannot be redirected elsewhere.
+
+            android:directBootAware is deliberately absent: this receiver needs
+            the encrypted store, which is unavailable before first unlock.
         -->
+        <receiver
+            android:name=".attendance.GeofenceBroadcastReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
+        <!--
+            Re-registration after a reboot.
+
+            Geofences are not restored after a device reboot - the app must
+            listen for BOOT_COMPLETED and register them again. Exported only
+            because nothing else hears BOOT_COMPLETED, and guarded by
+            RECEIVE_BOOT_COMPLETED, which only the system holds.
+        -->
+        <receiver
+            android:name=".attendance.BootAndUpdateReceiver"
+            android:enabled="true"
+            android:exported="true"
+            android:permission="android.permission.RECEIVE_BOOT_COMPLETED">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Re-registration after this app is updated. The broadcast is system-only. -->
+        <receiver
+            android:name=".attendance.PackageReplacedReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Re-registration after Google Play services' data is cleared. System-only. -->
+        <receiver
+            android:name=".attendance.GeofencingResetReceiver"
+            android:enabled="true"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.PACKAGE_DATA_CLEARED" />
+                <data android:scheme="package" android:ssp="com.google.android.gms" />
+            </intent-filter>
+        </receiver>
+
+        <!--
+            The "Check in" button on "Are you at church?". Reached only through
+            this app's own immutable PendingIntent, which names it explicitly.
+        -->
+        <receiver
+            android:name=".attendance.AttendanceNotificationReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
+        <!--
+            WorkManager's foreground service, removed. Check-in work is
+            one-time, never expedited and never promoted to a foreground
+            service, so the service could only ever be dead weight - and a
+            declared foreground service is a question in Play review.
+        -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            tools:node="remove" />
     </application>
 </manifest>

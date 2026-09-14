@@ -7,12 +7,8 @@ import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.google.android.gms.location.Geofence
+import com.google.android.gms.location.GeofenceStatusCodes
 import com.google.android.gms.location.GeofencingEvent
-import io.faithform.app.session.AppContainer
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
@@ -27,14 +23,13 @@ import org.json.JSONObject
  * decides whether a transition means attendance happens server-side, after a
  * fresh authorization check.
  *
- * **`goAsync` and its limit.** A broadcast receiver's `onReceive` runs on the
- * main thread and must return promptly; `goAsync` buys roughly ten seconds of
- * background execution. The evidence flow — refresh configuration, resolve the
- * occurrence, take a fix, submit — will not always fit. That is not a bug to
- * paper over: when it does not fit, the attempt is left in the encrypted
- * pending queue and retried on next foreground. Holding the receiver open
- * longer is not available, and starting a foreground service to do it would be
- * exactly the continuous-location shape this feature avoids.
+ * **It does almost nothing, on purpose.** `onReceive` runs on the main thread
+ * and `goAsync` buys about ten seconds; a check-in — configuration, occurrence,
+ * one fix, one request — does not always fit, and a fix alone may take fifteen.
+ * So the transition is written to the encrypted inbox and handed to one-time
+ * work, which may run for minutes, wait for a network and retry with backoff.
+ * Nothing about the transition goes into the work request itself: WorkManager's
+ * database is not encrypted, and a region id with "dwell" is where a person was.
  */
 class GeofenceBroadcastReceiver : BroadcastReceiver() {
 
@@ -45,61 +40,40 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
         if (event.hasError()) {
             // Deliberately not logged. `GeofenceStatusCodes` messages can carry
             // request ids, and a region id plus an error is a location fact.
+            //
+            // "Not available" is the one error with a remedy: the system has
+            // dropped every registration — location was switched off, or Play
+            // services' data was cleared — and they must be registered again
+            // once that is possible.
+            if (event.errorCode == GeofenceStatusCodes.GEOFENCE_NOT_AVAILABLE) {
+                AttendanceWakeups.from(context)?.reconcileSoon(ReconcileTrigger.ServicesReset)
+            }
             return
         }
 
-        val transition = event.geofenceTransition
+        val kind = kindOf(event.geofenceTransition) ?: return
         val identifiers = event.triggeringGeofences
             ?.mapNotNull { it.requestId }
             ?.filter { it.startsWith(REGION_PREFIX) }
             .orEmpty()
-
         if (identifiers.isEmpty()) return
 
+        val wakeups = AttendanceWakeups.from(context) ?: return
         val pending = goAsync()
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-
-        scope.launch {
-            try {
-                // A transition arriving in an unconfigured build has nowhere to go.
-                val coordinator = AppContainer.from(context)?.automaticAttendance
-                    ?: return@launch
-
-                when (transition) {
-                    Geofence.GEOFENCE_TRANSITION_ENTER -> {
-                        // One call regardless of how many regions triggered:
-                        // two overlapping campuses of the same church are still
-                        // one arrival, and the coordinator is single-flight.
-                        coordinator.handleRegionEntered(identifiers.first())
-                        // An entry is also a legitimate execution opportunity
-                        // for a *previous* attempt whose dwell has since
-                        // elapsed. Cheap when there is nothing due.
-                        coordinator.confirmIfDue()
-                    }
-
-                    // **The dwell transition is the confirmation.**
-                    //
-                    // Registered only when the church's policy asks for one, and
-                    // this is what it buys: a real system callback saying the
-                    // device stayed, rather than a wait that depends on some
-                    // other wake happening to arrive. The coordinator still
-                    // refuses to confirm before the server's own instant, so a
-                    // dwell delivered early is harmless.
-                    Geofence.GEOFENCE_TRANSITION_DWELL ->
-                        coordinator.confirmIfDue()
-
-                    Geofence.GEOFENCE_TRANSITION_EXIT ->
-                        coordinator.handleRegionExited(identifiers.first())
-                }
-            } finally {
-                pending.finish()
-            }
-        }
+        wakeups.recordTransition(kind, identifiers) { pending.finish() }
     }
 
     companion object {
         const val ACTION_TRANSITION = "io.faithform.app.GEOFENCE_TRANSITION"
-        const val REGION_PREFIX = "faithform.campus."
+        const val REGION_PREFIX = AutomaticAttendanceCoordinator.REGION_ID_PREFIX
+
+        /** The Play services transition constant, as the model names it. */
+        fun kindOf(transition: Int): TransitionKind? = when (transition) {
+            Geofence.GEOFENCE_TRANSITION_ENTER -> TransitionKind.Enter
+            Geofence.GEOFENCE_TRANSITION_DWELL -> TransitionKind.Dwell
+            Geofence.GEOFENCE_TRANSITION_EXIT -> TransitionKind.Exit
+            else -> null
+        }
     }
 }
 
@@ -107,30 +81,23 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
  * Re-registers after a reboot.
  *
  * Geofences do **not** survive a device restart — the app must listen for
- * `BOOT_COMPLETED` and register them again. (They *are* restored after a Play
- * services upgrade, so that case needs nothing.)
+ * `BOOT_COMPLETED` and register them again. The reconciliation forces a
+ * configuration refresh rather than trusting a cached one: access may have been
+ * revoked while the device was off, and silently re-registering regions for a
+ * church the person has left would be exactly the fail-open this design
+ * refuses. It waits for a network for the same reason, and retries until it
+ * has one.
  *
- * The reconciliation forces a configuration refresh rather than trusting a
- * cached one: access may have been revoked while the device was off, and
- * silently re-registering regions for a church the person has left would be
- * exactly the fail-open this design refuses.
+ * Exported, because only an exported receiver hears `BOOT_COMPLETED` — and
+ * guarded in the manifest by `RECEIVE_BOOT_COMPLETED`, which only the system
+ * holds, so no app can forge a reboot. Not direct-boot aware: the encrypted
+ * store is unavailable before first unlock, so `LOCKED_BOOT_COMPLETED` would
+ * arrive with nothing it could read.
  */
 class BootAndUpdateReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        when (intent.action) {
-            Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_LOCKED_BOOT_COMPLETED -> Unit
-            else -> return
-        }
-
-        val pending = goAsync()
-        CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
-            try {
-                AppContainer.from(context)?.automaticAttendance
-                    ?.reconcile(ReconcileTrigger.BootOrUpdate)
-            } finally {
-                pending.finish()
-            }
-        }
+        if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
+        AttendanceWakeups.from(context)?.reconcileSoon(ReconcileTrigger.BootOrUpdate)
     }
 }
 
@@ -143,21 +110,40 @@ class BootAndUpdateReceiver : BroadcastReceiver() {
  *
  * Note what is *not* handled here: a force-stop. Android delivers no broadcast
  * for it and clears the app's geofences; nothing runs again until the person
- * opens the app. That is documented honestly rather than worked around.
+ * opens the app, which re-registers everything on launch.
  */
 class PackageReplacedReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
+        AttendanceWakeups.from(context)?.reconcileSoon(ReconcileTrigger.BootOrUpdate)
+    }
+}
 
-        val pending = goAsync()
-        CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
-            try {
-                AppContainer.from(context)?.automaticAttendance
-                    ?.reconcile(ReconcileTrigger.BootOrUpdate)
-            } finally {
-                pending.finish()
-            }
-        }
+/**
+ * Re-registers after Google Play services' data is cleared.
+ *
+ * Clearing it removes every app's geofences without telling any of them. The
+ * broadcast is one of the few implicit ones a manifest receiver still gets on
+ * Android 8+, and is delivered for a package this app can see — hence the one
+ * `<queries>` entry for Play services.
+ *
+ * Location being switched off is the other way every registration is lost.
+ * That arrives as `GEOFENCE_NOT_AVAILABLE` on the transition receiver, and
+ * the fences come back on the next launch or the next check-in window,
+ * whichever is first — there is no manifest broadcast for location coming
+ * back on, and nothing here polls for it.
+ *
+ * Not exported: the broadcast comes from the system.
+ */
+class GeofencingResetReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action != Intent.ACTION_PACKAGE_DATA_CLEARED) return
+        if (intent.data?.schemeSpecificPart != PLAY_SERVICES_PACKAGE) return
+        AttendanceWakeups.from(context)?.reconcileSoon(ReconcileTrigger.ServicesReset)
+    }
+
+    companion object {
+        const val PLAY_SERVICES_PACKAGE = "com.google.android.gms"
     }
 }
 
@@ -172,7 +158,11 @@ class PackageReplacedReceiver : BroadcastReceiver() {
  *
  * The mirror is an efficiency aid, never a source of authority: a reboot clears
  * the system's geofences without updating it, which is why boot reconciliation
- * ignores it entirely and re-registers everything.
+ * re-registers everything whatever it says.
+ *
+ * It records the loitering delay and the church as well as the circle. Both are
+ * part of a region's identity, and a mirror that dropped the delay made every
+ * foreground look like a policy change and re-register every region.
  */
 internal class RegionMirror(private val prefs: SharedPreferences) {
     private val mutex = Mutex()
@@ -217,7 +207,7 @@ internal class RegionMirror(private val prefs: SharedPreferences) {
         write(read().filterNot { it.identifier in identifiers })
     }
 
-    suspend fun clear() = mutex.withLock { prefs.edit().remove(KEY).apply() }
+    suspend fun clear() = mutex.withLock { prefs.edit().remove(KEY).commit(); Unit }
 
     private fun read(): Set<MonitoredRegion> {
         val raw = prefs.getString(KEY, null) ?: return emptySet()
@@ -230,6 +220,8 @@ internal class RegionMirror(private val prefs: SharedPreferences) {
                     latitude = item.getDouble("lat"),
                     longitude = item.getDouble("lon"),
                     radiusMeters = item.getDouble("r").toFloat(),
+                    loiteringDelayMillis = item.optInt("loiter", 0),
+                    churchSlug = if (item.isNull("church") || !item.has("church")) null else item.getString("church"),
                 )
             }.toSet()
         }.getOrDefault(emptySet())
@@ -243,10 +235,11 @@ internal class RegionMirror(private val prefs: SharedPreferences) {
                     .put("id", region.identifier)
                     .put("lat", region.latitude)
                     .put("lon", region.longitude)
-                    .put("r", region.radiusMeters.toDouble()),
+                    .put("r", region.radiusMeters.toDouble())
+                    .put("loiter", region.loiteringDelayMillis)
+                    .put("church", region.churchSlug ?: JSONObject.NULL),
             )
         }
-        prefs.edit().putString(KEY, array.toString()).apply()
+        prefs.edit().putString(KEY, array.toString()).commit()
     }
-
 }

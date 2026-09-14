@@ -58,15 +58,13 @@ class ManifestAndReceiverTest {
             .sorted()
 
         // Read from the *merged* manifest, so a permission pulled in by a
-        // library — Play services, say — would fail this too.
-        //
-        // The v1 list. Background location, boot-completed and notifications
-        // belong to automatic attendance and push, which v1 does not ship; a
-        // permission declared for an unreachable feature is still a promise on
-        // the Play listing and a question in review.
+        // library — Play services, WorkManager — would fail this too.
         assertEquals(
             listOf(
-                // Nearby churches, foreground only.
+                // Automatic check-in, requested only after the prominent
+                // disclosure; on Android 11+ granted in Settings.
+                "android.permission.ACCESS_BACKGROUND_LOCATION",
+                // Nearby churches, and automatic check-in's prerequisites.
                 "android.permission.ACCESS_COARSE_LOCATION",
                 "android.permission.ACCESS_FINE_LOCATION",
                 "android.permission.ACCESS_NETWORK_STATE",
@@ -75,28 +73,15 @@ class ManifestAndReceiverTest {
                 // nothing else can reach `requestPermission`.
                 "android.permission.CAMERA",
                 "android.permission.INTERNET",
+                // "You're checked in" and "Are you at church?", Android 13+.
+                "android.permission.POST_NOTIFICATIONS",
+                // Geofences do not survive a reboot; WorkManager's jobs need it too.
+                "android.permission.RECEIVE_BOOT_COMPLETED",
+                // WorkManager, only while a check-in is being sent.
+                "android.permission.WAKE_LOCK",
             ),
             declared,
         )
-    }
-
-    @Test
-    fun `v1 declares no background location, boot or notification permission`() {
-        val declared = context.packageManager
-            .getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS)
-            .requestedPermissions.orEmpty().toSet()
-
-        for (deferred in listOf(
-            // Automatic attendance is out of scope for v1, and background
-            // location is reviewed by hand on Play with a declaration and a
-            // video. It must not reach the listing ahead of the feature.
-            "android.permission.ACCESS_BACKGROUND_LOCATION",
-            "android.permission.RECEIVE_BOOT_COMPLETED",
-            // Push is v1.1.
-            "android.permission.POST_NOTIFICATIONS",
-        )) {
-            assertFalse("$deferred is declared in v1", deferred in declared)
-        }
     }
 
     @Test
@@ -138,45 +123,96 @@ class ManifestAndReceiverTest {
         )
     }
 
+    @Test
+    fun `WorkManager's foreground service is removed, not merely unused`() {
+        val services = context.packageManager
+            .getPackageInfo(context.packageName, PackageManager.GET_SERVICES)
+            .services.orEmpty()
+            .map { it.name }
+
+        // Check-in work is one-time and never expedited, so nothing could start
+        // it — and a declared foreground service is a question in Play review.
+        assertFalse(services.toString(), "androidx.work.impl.foreground.SystemForegroundService" in services)
+    }
+
     // -----------------------------------------------------------------------
-    // Receiver registration
+    // Receiver registration and export state
     // -----------------------------------------------------------------------
 
-    /**
-     * v1 registers no receiver at all.
-     *
-     * The geofence, boot and package-replaced receivers still exist in source —
-     * they are tested directly below and by `AndroidAdapterTest` — but nothing
-     * in the manifest points at them, so no broadcast can wake the automatic
-     * attendance code in a build that does not offer it. When the feature
-     * ships, these assertions flip back to the exported-state checks they
-     * replaced: geofence `exported=false`, boot guarded by the system-only
-     * permission.
-     */
     @Test
-    fun `no receiver is registered in the v1 manifest`() {
-        val receivers = context.packageManager
-            .getPackageInfo(context.packageName, PackageManager.GET_RECEIVERS)
-            .receivers.orEmpty()
+    fun `the geofence receiver is registered and not exported`() {
+        val info = context.packageManager.getReceiverInfo(
+            ComponentName(context, GeofenceBroadcastReceiver::class.java),
+            0,
+        )
+        assertNotNull(info)
+        // Only the system and Play services may deliver a transition. An
+        // exported receiver would let any app on the device forge one.
+        assertFalse("the geofence receiver is exported", info.exported)
+        assertTrue(info.enabled)
+    }
+
+    @Test
+    fun `the boot receiver is exported but guarded by a system-only permission`() {
+        val info = context.packageManager.getReceiverInfo(
+            ComponentName(context, BootAndUpdateReceiver::class.java),
+            0,
+        )
+        // It must be exported to hear BOOT_COMPLETED at all...
+        assertTrue(info.exported)
+        // ...so the guard is the permission, which only the system holds.
+        assertEquals("android.permission.RECEIVE_BOOT_COMPLETED", info.permission)
+    }
+
+    @Test
+    fun `every other attendance receiver is not exported`() {
+        for (receiver in listOf(
+            PackageReplacedReceiver::class.java,
+            GeofencingResetReceiver::class.java,
+            AttendanceNotificationReceiver::class.java,
+        )) {
+            val info = context.packageManager.getReceiverInfo(ComponentName(context, receiver), 0)
+            assertFalse("${receiver.simpleName} is exported", info.exported)
+        }
+    }
+
+    @Test
+    fun `the boot receiver actually resolves for BOOT_COMPLETED`() {
+        // Declaring the receiver is not the same as it being reachable: a typo
+        // in the intent filter produces a receiver that never fires, and
+        // nothing else would catch that.
+        val matches = context.packageManager.queryBroadcastReceivers(Intent(Intent.ACTION_BOOT_COMPLETED), 0)
         assertTrue(
-            "registered receivers: ${receivers.map { it.name }}",
-            receivers.none { it.name.startsWith("io.faithform.app") },
+            "BOOT_COMPLETED resolves to: ${matches.map { it.activityInfo.name }}",
+            matches.any { it.activityInfo.name == BootAndUpdateReceiver::class.java.name },
         )
     }
 
     @Test
-    fun `a reboot or an app update wakes nothing`() {
-        for (action in listOf(
-            Intent.ACTION_BOOT_COMPLETED,
-            Intent.ACTION_LOCKED_BOOT_COMPLETED,
-            Intent.ACTION_MY_PACKAGE_REPLACED,
-        )) {
-            val matches = context.packageManager.queryBroadcastReceivers(Intent(action), 0)
-            assertTrue(
-                "$action resolves to: ${matches.map { it.activityInfo.name }}",
-                matches.none { it.activityInfo.packageName == context.packageName },
-            )
-        }
+    fun `the package-replaced receiver resolves for MY_PACKAGE_REPLACED`() {
+        val matches = context.packageManager.queryBroadcastReceivers(Intent(Intent.ACTION_MY_PACKAGE_REPLACED), 0)
+        assertTrue(matches.any { it.activityInfo.name == PackageReplacedReceiver::class.java.name })
+    }
+
+    @Test
+    fun `clearing Play services data resolves to the reset receiver, and no other package does`() {
+        val gms = context.packageManager.queryBroadcastReceivers(
+            Intent(Intent.ACTION_PACKAGE_DATA_CLEARED, android.net.Uri.parse("package:com.google.android.gms")),
+            0,
+        )
+        assertTrue(gms.any { it.activityInfo.name == GeofencingResetReceiver::class.java.name })
+
+        val other = context.packageManager.queryBroadcastReceivers(
+            Intent(Intent.ACTION_PACKAGE_DATA_CLEARED, android.net.Uri.parse("package:com.example.other")),
+            0,
+        )
+        assertTrue(other.none { it.activityInfo.name == GeofencingResetReceiver::class.java.name })
+    }
+
+    @Test
+    fun `nothing wakes on a locked boot, before the encrypted store can be read`() {
+        val matches = context.packageManager.queryBroadcastReceivers(Intent(Intent.ACTION_LOCKED_BOOT_COMPLETED), 0)
+        assertTrue(matches.none { it.activityInfo.packageName == context.packageName })
     }
 
     // -----------------------------------------------------------------------

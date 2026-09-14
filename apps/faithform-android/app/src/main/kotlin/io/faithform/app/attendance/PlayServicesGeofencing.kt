@@ -73,7 +73,7 @@ interface GeofencingFacade {
  */
 @SuppressLint("MissingPermission")
 class PlayServicesGeofencingFacade(context: Context) : GeofencingFacade {
-    private val client: GeofencingClient = LocationServices.getGeofencingClient(context)
+    private val client: GeofencingClient by lazy { LocationServices.getGeofencingClient(context) }
 
     override suspend fun addGeofences(
         request: GeofencingRequest,
@@ -167,9 +167,11 @@ class PlayServicesRegionMonitoring(
      * the mirror and re-registers everything: correctness does not depend on
      * the mirror being right, only efficiency does.
      */
-    private val mirror = mirrorPreferences
-        ?.let { RegionMirror(it) }
-        ?: RegionMirror.encrypted(context)
+    // Opened on first use, off the main thread: the Keystore-backed file costs
+    // a few milliseconds, and the Check in tab should not pay them to render.
+    private val mirror by lazy {
+        mirrorPreferences?.let { RegionMirror(it) } ?: RegionMirror.encrypted(context)
+    }
 
     override suspend fun monitoredRegions(): Set<MonitoredRegion> = mirror.load()
 
@@ -202,11 +204,9 @@ class PlayServicesRegionMonitoring(
     internal fun buildRequest(regions: List<MonitoredRegion>): GeofencingRequest {
         val geofences = regions.map { region ->
             val transitions = if (region.loiteringDelayMillis > 0) {
-                // **The OS dwell transition, when the church's policy asks for
-                // one.** Play services can tell us the device stayed, which iOS
-                // cannot, and using it means the confirmation arrives on a real
-                // system callback instead of waiting for the next arbitrary
-                // wake.
+                // **The OS dwell transition.** Play services can tell us the
+                // device stayed, which iOS cannot, and the dwell is what starts
+                // a check-in: nothing is sent for someone who only passed by.
                 //
                 // The delay comes from authoritative configuration, and it is
                 // part of the region's identity — so a policy edit changes
@@ -217,8 +217,9 @@ class PlayServicesRegionMonitoring(
                     Geofence.GEOFENCE_TRANSITION_EXIT or
                     Geofence.GEOFENCE_TRANSITION_DWELL
             } else {
-                // The church requires no confirmation, so a dwell would only
-                // delay a check-in it chose to make immediate.
+                // No delay was configured for this region, so there is no
+                // dwell to report. The reconciler never produces one; kept so
+                // the adapter translates whatever it is given.
                 Geofence.GEOFENCE_TRANSITION_ENTER or Geofence.GEOFENCE_TRANSITION_EXIT
             }
 
@@ -240,11 +241,21 @@ class PlayServicesRegionMonitoring(
                 .build()
         }
 
+        val dwells = regions.any { it.loiteringDelayMillis > 0 }
         return GeofencingRequest.Builder()
-            // Fires immediately if the device is *already* inside when the
-            // region is registered — the common case: someone turns the feature
-            // on while sitting in the building.
-            .setInitialTrigger(GeofencingRequest.INITIAL_TRIGGER_ENTER)
+            // Fires if the device is *already* inside when the region is
+            // registered — the common case: someone turns the feature on while
+            // sitting in the building, or a check-in window opens while they
+            // are already in their seat and the regions are re-registered for
+            // it. With a dwell registered, the dwell is reported too, after
+            // the loitering delay, which is what starts a check-in.
+            .setInitialTrigger(
+                if (dwells) {
+                    GeofencingRequest.INITIAL_TRIGGER_ENTER or GeofencingRequest.INITIAL_TRIGGER_DWELL
+                } else {
+                    GeofencingRequest.INITIAL_TRIGGER_ENTER
+                },
+            )
             .addGeofences(geofences)
             .build()
     }
@@ -344,6 +355,16 @@ class AndroidLocationPermissions(
                 ConnectionResult.SUCCESS
         }.getOrDefault(false)
     },
+    /**
+     * Whether a permission has been requested from this install before.
+     *
+     * Android gives no direct "don't ask again" signal: a permission that was
+     * never requested and one that was permanently declined both read as not
+     * granted with no rationale. Only knowing a request was made tells them
+     * apart. Null means no history is available, and neither is reported as
+     * permanent.
+     */
+    private val history: PermissionRequestHistory? = null,
 ) : LocationPermissions {
 
     /** Raises the system dialogs. Implemented by the activity. */
@@ -363,6 +384,8 @@ class AndroidLocationPermissions(
             coarse -> ForegroundLocationPermission.Coarse
             requester?.shouldShowRationale(Manifest.permission.ACCESS_FINE_LOCATION) == true ->
                 ForegroundLocationPermission.Denied
+            history?.hasRequested(Manifest.permission.ACCESS_FINE_LOCATION) == true ->
+                ForegroundLocationPermission.PermanentlyDenied
             else -> ForegroundLocationPermission.NotRequested
         }
 
@@ -371,6 +394,11 @@ class AndroidLocationPermissions(
             granted(Manifest.permission.ACCESS_BACKGROUND_LOCATION) ->
                 BackgroundLocationPermission.Granted
             requester?.shouldShowRationale(Manifest.permission.ACCESS_BACKGROUND_LOCATION) == true ->
+                BackgroundLocationPermission.Denied
+            // Asked before and still not granted. On API 30+ the request is a
+            // trip to Settings, which the system stops offering after the
+            // person declines there, so only the Settings button remains.
+            history?.hasRequested(Manifest.permission.ACCESS_BACKGROUND_LOCATION) == true ->
                 BackgroundLocationPermission.Denied
             else -> BackgroundLocationPermission.NotRequested
         }
@@ -385,30 +413,52 @@ class AndroidLocationPermissions(
     }
 
     override suspend fun requestForeground(): LocationPermissionState {
-        requester?.request(
+        val asker = requester ?: return current()
+        asker.request(
             arrayOf(
                 Manifest.permission.ACCESS_FINE_LOCATION,
                 Manifest.permission.ACCESS_COARSE_LOCATION,
             ),
         )
+        history?.markRequested(Manifest.permission.ACCESS_FINE_LOCATION)
         return current()
     }
 
     /**
-     * Requests background location where the platform allows it.
+     * Requests background location.
      *
-     * On API 30+ this deliberately does nothing: the runtime dialog has no
-     * "Allow all the time" option, so calling `requestPermissions` shows
-     * nothing and the person is left staring at an unchanged screen. The UI
-     * sends them to Settings instead, which is the only route that works.
+     * * **API 29** shows a dialog that offers "Allow all the time".
+     * * **API 30+** has no such option in any dialog. The same request instead
+     *   takes the person to this app's location permission page in Settings,
+     *   and the answer arrives when they come back. The screen before it — the
+     *   prominent disclosure — says so, and names the option to choose using
+     *   the system's own label ([backgroundOptionLabel]).
+     * * **Below 29** there is nothing to request.
+     *
+     * Never called without foreground location already granted: Android
+     * ignores a background request that arrives first.
      */
     override suspend fun requestBackground(): LocationPermissionState {
         val state = current()
-        if (state.strategy == BackgroundRequestStrategy.RuntimeDialog) {
-            requester?.request(arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION))
-        }
+        val asker = requester ?: return state
+        if (state.strategy == BackgroundRequestStrategy.ImpliedByForeground) return state
+        if (state.foreground != ForegroundLocationPermission.Fine) return state
+        asker.request(arrayOf(Manifest.permission.ACCESS_BACKGROUND_LOCATION))
+        history?.markRequested(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
         return current()
     }
+
+    /**
+     * The words Settings uses for "Allow all the time", in the person's
+     * language, from the system itself — so the guidance cannot drift from
+     * what is actually on the screen. Null below API 30.
+     */
+    fun backgroundOptionLabel(): String? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && sdkInt >= Build.VERSION_CODES.R) {
+            runCatching { context.packageManager.backgroundPermissionOptionLabel.toString() }.getOrNull()
+        } else {
+            null
+        }
 
     private fun granted(permission: String) =
         ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED

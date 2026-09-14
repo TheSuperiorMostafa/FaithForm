@@ -369,4 +369,39 @@
     <string name="invitation_pending_banner">You have an invitation waiting. Create an account or sign in to use it.</string>
     <string name="invitation_error_invalid">That invitation isn\'t valid. Check the link and try again.</string>
     <string name="invitation_error_expired">This invitation has expired. Ask your church for a new one.</string>
+
+    <!-- Automatic check-in, version 1.0: status, confirmation and notifications -->
+    <string name="auto_attendance_state_on">On</string>
+    <string name="auto_attendance_state_off">Off</string>
+    <string name="auto_attendance_state_attention">Needs attention</string>
+    <string name="auto_attendance_watching_church">Watching for %1$s</string>
+    <string name="auto_attendance_watching_churches">Watching for %1$s and %2$d more</string>
+    <string name="auto_attendance_question_title">Are you at %1$s?</string>
+    <string name="auto_attendance_question_body">Your church asks you to confirm. Tap Check in and FaithForm will check your location once.</string>
+    <string name="auto_attendance_question_body_service">%1$s. Tap Check in to confirm you\'re there.</string>
+    <string name="auto_attendance_check_in">Check in</string>
+    <string name="auto_attendance_counted_title">You\'re checked in at %1$s</string>
+    <string name="auto_attendance_counted_body">Your church can see that you were at the service.</string>
+    <string name="auto_attendance_notify_public">You have a check-in update.</string>
+    <string name="auto_attendance_next_title">Next service</string>
+    <string name="auto_attendance_next_service">%1$s at %2$s</string>
+    <string name="auto_attendance_next_opens">Check-in opens %1$s</string>
+    <string name="auto_attendance_next_open_now">Check-in is open now</string>
+    <string name="auto_attendance_health_title">What automatic check-in needs</string>
+    <string name="auto_attendance_health_precise">Precise location</string>
+    <string name="auto_attendance_health_background">Location all the time</string>
+    <string name="auto_attendance_health_services">Location turned on</string>
+    <string name="auto_attendance_health_notifications">Notifications</string>
+    <string name="auto_attendance_health_ok">Allowed</string>
+    <string name="auto_attendance_health_needed">Needed</string>
+    <string name="auto_attendance_health_off">Off</string>
+    <string name="auto_attendance_notifications_title">Know when you\'re checked in</string>
+    <string name="auto_attendance_notifications_body">FaithForm can tell you when you\'ve been checked in, and ask you to confirm when your church wants you to. Nothing else is sent this way.</string>
+    <string name="auto_attendance_notifications_allow">Allow notifications</string>
+    <string name="auto_attendance_notifications_off_body">Notifications are off, so FaithForm can\'t ask you to confirm that you\'re at church. You can turn them on in Settings.</string>
+    <string name="auto_attendance_turn_off_title">Turn off automatic check-in?</string>
+    <string name="auto_attendance_turn_off_body">FaithForm will stop watching for your church on this phone, delete anything waiting to be sent, and record that you no longer want to be checked in automatically.</string>
+    <string name="auto_attendance_turn_on_failed">FaithForm couldn\'t turn this on. Check your connection and try again.</string>
+    <string name="auto_attendance_allow_location">Allow location</string>
+    <string name="auto_attendance_precise_action">Use precise location</string>
 </resources>

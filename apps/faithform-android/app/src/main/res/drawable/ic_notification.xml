@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The status-bar icon for check-in notifications: the traced FaithForm mark,
+    cropped to its own bounds (x 321-688, y 277-702 of the 1024 icon grid) and
+    in a single colour, because the status bar keeps only alpha. The fold is
+    drawn at 60% so the two shapes stay distinct at 24dp, exactly as the
+    themed launcher icon does.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="425"
+    android:viewportHeight="425">
+
+    <group android:translateX="-292" android:translateY="-277">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M409,277 L688,277 L688,373 L465,373 L418,420 L418,440 L595,440 L498,537 L418,537 L418,702 L321,702 L321,365 Z" />
+
+        <path
+            android:fillColor="#99FFFFFF"
+            android:pathData="M465,373 L688,373 L688,431 L421,698 L418,698 L418,537 L498,537 L595,440 L418,440 L418,420 Z" />
+    </group>
+</vector>
