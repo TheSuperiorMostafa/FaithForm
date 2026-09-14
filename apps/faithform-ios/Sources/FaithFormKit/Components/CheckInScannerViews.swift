@@ -22,15 +22,21 @@ public struct CheckInScannerScreen: View {
 
     private let onOpenSettings: @MainActor () -> Void
     private let onDone: @MainActor () -> Void
+    private let footer: AnyView?
 
+    /// `footer` is placed below the scanner whenever no scan is running — the
+    /// host puts automatic check-in there, beside the manual way in rather
+    /// than instead of it.
     public init(
         model: CheckInScannerModel,
         onOpenSettings: @escaping @MainActor () -> Void,
-        onDone: @escaping @MainActor () -> Void
+        onDone: @escaping @MainActor () -> Void,
+        footer: AnyView? = nil
     ) {
         self.model = model
         self.onOpenSettings = onOpenSettings
         self.onDone = onDone
+        self.footer = footer
     }
 
     public var body: some View {
@@ -53,6 +59,10 @@ public struct CheckInScannerScreen: View {
                     blockCard
                     typedEntry
                 }
+
+                if let footer, !CheckInScannerScreen.isBusy(model.phase) {
+                    footer
+                }
             }
             .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
             .padding(.vertical, FaithFormTokens.Spacing.xl)
@@ -61,6 +71,14 @@ public struct CheckInScannerScreen: View {
         // Releases the camera when the screen goes away. A scanner left running
         // behind another screen is a camera indicator nobody can explain.
         .onDisappear { Task { await model.stopScanning() } }
+    }
+
+    /// Scanning or sending: nothing else competes for the screen.
+    static func isBusy(_ phase: ScanPhase) -> Bool {
+        switch phase {
+        case .scanning, .submitting: return true
+        default: return false
+        }
     }
 
     private var header: some View {

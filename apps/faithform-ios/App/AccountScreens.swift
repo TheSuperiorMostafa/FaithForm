@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import FaithFormKit
 
 // MARK: - Account tab
@@ -15,14 +16,99 @@ struct AccountTabView: View {
             VStack(spacing: 0) {
                 if isStale { OfflineBanner(message: L.offlineCached) }
                 ScrollView {
-                    AccountView(dependencies: dependencies, root: root, displayName: bootstrap.profile.displayName)
-                        .padding(FaithFormTokens.Spacing.lg)
+                    AccountView(
+                        dependencies: dependencies,
+                        root: root,
+                        displayName: bootstrap.profile.displayName,
+                        showsAutomaticCheckIn: !AppDependencies.attendanceChurches(in: bootstrap).isEmpty
+                    )
+                    .padding(FaithFormTokens.Spacing.lg)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(theme.palette.background)
             .navigationTitle(L.tabAccount)
+            .navigationDestination(for: AccountRoute.self) { route in
+                switch route {
+                case .automaticCheckIn:
+                    AutomaticCheckInScreen(
+                        model: dependencies.attendanceModel,
+                        church: root.selectedChurch.map {
+                            AttendanceChurch(slug: $0.churchSlug, name: $0.churchName)
+                        }
+                    )
+                }
+            }
         }
+    }
+}
+
+enum AccountRoute: Hashable {
+    case automaticCheckIn
+}
+
+/// Automatic check-in, from Account: the whole journey on one pushed page.
+///
+/// Setup steps replace the status in place and end back on it, so there is no
+/// sheet to lose track of. Nothing is requested until a button on the page is
+/// tapped.
+struct AutomaticCheckInScreen: View {
+    @Environment(\.faithformTheme) private var theme
+    @Environment(\.openURL) private var openURL
+    @Environment(\.dismiss) private var dismiss
+    let model: AutomaticAttendanceModel
+    let church: AttendanceChurch?
+
+    var body: some View {
+        AutomaticAttendanceFlowView(
+            model: model,
+            onOpenSettings: {
+                if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+            },
+            onClose: { dismiss() }
+        )
+        .navigationTitle(L.autoAttendanceTitle)
+        .navigationBarTitleDisplayMode(.inline)
+        .task {
+            await model.select(church: church)
+            await model.refresh()
+        }
+        // Leaving part-way is "Not now" on that step.
+        .onDisappear {
+            if model.step.isSetup, !model.isWorking { Task { await model.notNow() } }
+        }
+    }
+}
+
+/// The Account row: what automatic check-in is doing, one tap from its page.
+private struct AutomaticCheckInRow: View {
+    @Environment(\.faithformTheme) private var theme
+    let model: AutomaticAttendanceModel
+
+    var body: some View {
+        NavigationLink(value: AccountRoute.automaticCheckIn) {
+            HStack(spacing: FaithFormTokens.Spacing.md) {
+                Image(systemName: "location.circle")
+                    .font(.system(size: FaithFormTokens.IconSize.sizeMedium))
+                    .foregroundStyle(theme.palette.brandPrimary)
+                    .accessibilityHidden(true)
+                Text(L.autoAttendanceTitle)
+                    .font(theme.font(FaithFormTokens.Text.body))
+                    .foregroundStyle(theme.palette.contentPrimary)
+                Spacer(minLength: FaithFormTokens.Spacing.md)
+                StatusChip(
+                    model.isEnabled ? L.autoAttendanceOn : L.autoAttendanceOff,
+                    tone: model.isEnabled ? (model.step == .ready ? .success : .warning) : .neutral
+                )
+                Image(systemName: "chevron.right")
+                    .foregroundStyle(theme.palette.contentSecondary)
+                    .accessibilityHidden(true)
+            }
+            .frame(minHeight: FaithFormTokens.TouchTarget.recommended)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .task { await model.refresh() }
     }
 }
 
@@ -36,6 +122,9 @@ struct AccountView: View {
     let dependencies: AppDependencies
     let root: RootModel
     let displayName: String?
+    /// Only with a church to be checked in at. The first-run flow has none, so
+    /// it offers nothing that would lead to a location prompt.
+    var showsAutomaticCheckIn = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
@@ -52,6 +141,10 @@ struct AccountView: View {
                         .font(theme.font(FaithFormTokens.Text.caption))
                         .foregroundStyle(theme.palette.contentSecondary)
                 }
+            }
+
+            if showsAutomaticCheckIn {
+                AutomaticCheckInRow(model: dependencies.attendanceModel)
             }
 
             Button(L.signOut) { Task { await root.signOut() } }
