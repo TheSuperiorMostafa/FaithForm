@@ -1,6 +1,19 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { VisitorError } from "@/lib/faithform/errors";
+import { isChurchFeatureEnabled } from "@/lib/features/access";
 import { resolveRelationshipState } from "@/lib/mobile/v1/discovery-service";
+import {
+  projectOutline,
+  projectQuestions,
+  type SermonOutlineDto,
+  type SermonQuestionDto,
+} from "@/lib/sermons/v1/projection";
+
+export type {
+  SermonOutlineDto,
+  SermonPointDto,
+  SermonQuestionDto,
+} from "@/lib/sermons/v1/projection";
 
 /**
  * The FaithForm sermon surface: the notes a church chose to hand out.
@@ -13,47 +26,65 @@ import { resolveRelationshipState } from "@/lib/mobile/v1/discovery-service";
  * discussion questions, which exist to be handed out.
  *
  * As with media, every filter is re-applied on every call and the projections
- * live in SQL (`mobile_sermon_*`, migration 0068), so a filter cannot be
- * forgotten at a second call site.
+ * live in SQL (`mobile_sermon_*`, migrations 0068 and 0075), so a filter cannot
+ * be forgotten at a second call site.
+ *
+ * ## Failures are failures
+ *
+ * A projection that errors — most often a database that has not run the
+ * migration, so the function does not exist — is reported as `unavailable`,
+ * never as an empty page. An empty page reads as "your church has shared no
+ * sermon notes", which is a claim about the church, and a false one.
  */
 
 const NOT_FOUND = "church_not_found" as const;
+const UNAVAILABLE_MESSAGE = "Sermon notes are unavailable right now.";
 
-async function requireChurchSlug(slug: string): Promise<void> {
+type RpcError = { code?: string | null; message?: string | null };
+
+function unavailable(where: string, error: RpcError): never {
+  console.error(
+    `[sermons/v1] ${where} failed:`,
+    error.code ?? "",
+    error.message ?? "",
+  );
+  throw new VisitorError("unavailable", UNAVAILABLE_MESSAGE);
+}
+
+async function requireChurch(slug: string): Promise<{ id: string }> {
   const admin = createAdminClient();
-  const { data } = await admin
+  const { data, error } = await admin
     .from("churches")
     .select("id")
     .eq("slug", slug)
     .maybeSingle();
+  if (error) unavailable("church lookup", error);
   // A hidden church, an unknown slug and a blocked visitor must be one answer.
   if (!data) throw new VisitorError(NOT_FOUND, "Church not found.");
+  return { id: data.id as string };
 }
 
-export type SermonPointDto = {
-  title: string;
-  summary: string;
-  scripture: string | null;
-};
-
-export type SermonOutlineDto = {
-  intro: string | null;
-  points: SermonPointDto[];
-  application: string | null;
-  closing: string | null;
-};
-
-export type SermonQuestionDto = {
-  category: string;
-  question: string;
-};
+/**
+ * Sermon notes are a Sermon Builder output. When a church no longer has the
+ * Sermon Builder, its dashboard section — and with it the button to take a
+ * sermon out of the app — is locked, so the app stops showing them too rather
+ * than leaving notes nobody can manage. Switching the feature back on restores
+ * exactly what was shared.
+ */
+async function sermonsEnabledFor(churchId: string): Promise<boolean> {
+  return isChurchFeatureEnabled(churchId, "sermon_builder");
+}
 
 export type SermonListItemDto = {
   sermonId: string;
   title: string;
   summary: string | null;
+  /** When it was first shared, as an RFC 3339 UTC instant. */
   publishedAt: string;
-  /** The day it was preached, when the church recorded one. */
+  /**
+   * The day it was preached: the date recorded when sharing, else the sermon's
+   * own date in the builder. The list is ordered by this.
+   */
   preachedOn: string | null;
   scriptureRefs: string[];
   seriesName: string | null;
@@ -68,75 +99,15 @@ export type SermonDetailDto = SermonListItemDto & {
   discussionQuestions: SermonQuestionDto[];
 };
 
-function text(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
-
 /**
- * Reads the outline through an explicit allowlist.
- *
- * The column is free-form JSONB written by a generator, so "return what is
- * there" would mean shipping whatever a future prompt happens to add to it.
- * Only these four fields — and only `title`, `summary` and `scripture` within a
- * point — ever reach a phone.
+ * PostgREST returns `timestamptz` as `2026-09-13T14:03:22.123456+00:00`. The
+ * contract promises a UTC instant ending in `Z`, and a strict client parser
+ * rejects the other form, so it is normalised here once.
  */
-function projectOutline(raw: unknown): SermonOutlineDto | null {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
-  const source = raw as Record<string, unknown>;
-
-  const points = Array.isArray(source.points)
-    ? source.points.flatMap((entry): SermonPointDto[] => {
-        if (!entry || typeof entry !== "object") return [];
-        const point = entry as Record<string, unknown>;
-        const title = text(point.title);
-        // A point with no heading is a formatting artefact, not a point.
-        if (!title) return [];
-        return [
-          {
-            title,
-            summary: text(point.summary) ?? text(point.body) ?? "",
-            scripture: text(point.scripture),
-          },
-        ];
-      })
-    : [];
-
-  const intro = text(source.intro);
-  const application = text(source.application);
-  const closing = text(source.closing);
-
-  // An outline that survived the allowlist with nothing in it is not an
-  // outline; returning null lets the app show its "notes only" state rather
-  // than an empty scaffold.
-  if (!intro && !application && !closing && points.length === 0) return null;
-
-  return { intro, points, application, closing };
-}
-
-/**
- * Discussion questions as the builder stores them: `{ questions: [...] }`, or a
- * bare array from an older asset. Anything else is treated as absent.
- */
-function projectQuestions(raw: unknown): SermonQuestionDto[] {
-  const list = Array.isArray(raw)
-    ? raw
-    : raw && typeof raw === "object" && Array.isArray((raw as Record<string, unknown>).questions)
-      ? ((raw as Record<string, unknown>).questions as unknown[])
-      : [];
-
-  return list.flatMap((entry): SermonQuestionDto[] => {
-    if (typeof entry === "string") {
-      const question = text(entry);
-      return question ? [{ category: "general", question }] : [];
-    }
-    if (!entry || typeof entry !== "object") return [];
-    const row = entry as Record<string, unknown>;
-    const question = text(row.question);
-    if (!question) return [];
-    return [{ category: text(row.category) ?? "general", question }];
-  });
+function utcInstant(value: unknown): string {
+  if (typeof value !== "string") return String(value ?? "");
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toISOString();
 }
 
 function projectListItem(
@@ -147,7 +118,7 @@ function projectListItem(
     sermonId: row.id as string,
     title: row.title as string,
     summary: (row.summary as string | null) ?? null,
-    publishedAt: row.published_at as string,
+    publishedAt: utcInstant(row.published_at),
     preachedOn: (row.preached_on as string | null) ?? null,
     scriptureRefs: (row.scripture_refs as string[] | null) ?? [],
     seriesName: (row.series_name as string | null) ?? null,
@@ -163,14 +134,16 @@ async function sermonVersion(
   relationshipState: string | null,
 ): Promise<number> {
   const admin = createAdminClient();
-  const { data } = await admin.rpc("mobile_sermon_version", {
+  const { data, error } = await admin.rpc("mobile_sermon_version", {
     p_church_slug: churchSlug,
     p_relationship_state: relationshipState,
   });
+  if (error) unavailable("mobile_sermon_version", error);
   return Number(data ?? 0);
 }
 
-export type SermonCursor = { publishedAt: string; id: string };
+/** A position in the history: the sort date, then the first-shared instant. */
+export type SermonCursor = { preachedOn: string; publishedAt: string; id: string };
 
 export async function getSermonArchivePage(input: {
   userId: string | null;
@@ -183,27 +156,34 @@ export async function getSermonArchivePage(input: {
   nextCursor: SermonCursor | null;
   version: number;
 }> {
-  await requireChurchSlug(input.churchSlug);
+  const church = await requireChurch(input.churchSlug);
   const relationshipState = await resolveRelationshipState(
     input.userId,
     input.churchSlug,
   );
 
+  if (!(await sermonsEnabledFor(church.id))) {
+    return { items: [], nextCursor: null, version: 0 };
+  }
+
   const admin = createAdminClient();
   // One more than the page, so "is there another page" needs no second query.
+  // The SQL cap is the largest page plus this one row (migration 0075).
   const overfetch = input.limit + 1;
 
-  const [{ data }, version] = await Promise.all([
+  const [{ data, error }, version] = await Promise.all([
     admin.rpc("mobile_sermon_archive", {
       p_church_slug: input.churchSlug,
       p_relationship_state: relationshipState,
       p_query: input.query,
+      p_cursor_preached: input.cursor?.preachedOn ?? null,
       p_cursor_published: input.cursor?.publishedAt ?? null,
       p_cursor_id: input.cursor?.id ?? null,
       p_limit: overfetch,
     }),
     sermonVersion(input.churchSlug, relationshipState),
   ]);
+  if (error) unavailable("mobile_sermon_archive", error);
 
   const rows = (data ?? []) as Record<string, unknown>[];
   const page = rows.slice(0, input.limit);
@@ -215,7 +195,11 @@ export async function getSermonArchivePage(input: {
     nextCursor:
       rows.length > input.limit && last
         ? {
-            publishedAt: last.cursor_published as string,
+            preachedOn: String(last.cursor_preached),
+            // Kept exactly as the database wrote it: the cursor goes straight
+            // back into a comparison, and a reformatted instant could lose
+            // the microseconds that separate two rows.
+            publishedAt: String(last.cursor_published),
             id: last.cursor_id as string,
           }
         : null,
@@ -234,18 +218,21 @@ export async function getSermonDetail(input: {
   churchSlug: string;
   sermonId: string;
 }): Promise<SermonDetailDto | null> {
-  await requireChurchSlug(input.churchSlug);
+  const church = await requireChurch(input.churchSlug);
   const relationshipState = await resolveRelationshipState(
     input.userId,
     input.churchSlug,
   );
 
+  if (!(await sermonsEnabledFor(church.id))) return null;
+
   const admin = createAdminClient();
-  const { data } = await admin.rpc("mobile_sermon_detail", {
+  const { data, error } = await admin.rpc("mobile_sermon_detail", {
     p_church_slug: input.churchSlug,
     p_relationship_state: relationshipState,
     p_sermon_id: input.sermonId,
   });
+  if (error) unavailable("mobile_sermon_detail", error);
 
   const row = ((data ?? []) as Record<string, unknown>[])[0];
   if (!row) return null;
@@ -264,4 +251,4 @@ export async function getSermonDetail(input: {
  * decide what of a preacher's working document a congregation can read — so
  * they are tested directly rather than through a database round trip.
  */
-export const __testing = { projectOutline, projectQuestions };
+export const __testing = { projectOutline, projectQuestions, utcInstant };

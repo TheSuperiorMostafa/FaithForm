@@ -1,7 +1,8 @@
 import { MobileError } from "@/lib/mobile/v1/errors";
 import { mobileNotModified } from "@/lib/mobile/v1/envelope";
 import { optionalAuthRoute } from "@/lib/mobile/v1/handler";
-import { computeEtag, etagMatches } from "@/lib/mobile/v1/protocol";
+import { etagMatches } from "@/lib/mobile/v1/protocol";
+import { sermonDetailEtag } from "@/lib/sermons/v1/etag";
 import { getSermonDetail } from "@/lib/sermons/v1/sermon-service";
 
 export const dynamic = "force-dynamic";
@@ -32,23 +33,9 @@ export const GET = optionalAuthRoute(
       throw new MobileError("not_found", "That sermon is not available.");
     }
 
-    const etag = computeEtag({
-      id: detail.sermonId,
-      version: detail.publicationVersion,
-      fields: [
-        detail.title,
-        detail.summary ?? "",
-        detail.publishedAt,
-        detail.preachedOn ?? "",
-        detail.seriesName ?? "",
-        detail.scriptureRefs.join("|"),
-        // The body is part of the validator: a preacher correcting an outline
-        // after publishing must not leave a stale copy on a phone.
-        JSON.stringify(detail.outline ?? {}),
-        String(detail.discussionQuestions.length),
-      ],
-      scope: userId ? "member" : "anonymous",
-    });
+    // Over the whole body: a preacher correcting an outline or a discussion
+    // question after sharing must not leave a stale copy on a phone.
+    const etag = sermonDetailEtag(detail, userId ? "member" : "anonymous");
 
     if (etagMatches(request.headers.get("if-none-match"), etag)) {
       return mobileNotModified({ requestId, cache: "private-revalidate", etag });
