@@ -1,6 +1,16 @@
 "use client";
 
 import { useMemo, useRef, useState, useTransition } from "react";
+import Link from "next/link";
+import {
+  History,
+  MapPin,
+  PenLine,
+  QrCode,
+  Tablet,
+  UserCheck,
+  type LucideIcon,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -10,6 +20,7 @@ import {
   markMemberPresent,
   markRosterPresent,
   refreshOccurrenceHorizon,
+  type ServiceMethodCounts,
 } from "@/app/dashboard/attendance/services/actions";
 import type { ServiceOccurrence } from "@/lib/attendance/v2/occurrences";
 import type { RosterEntry } from "@/lib/attendance/v2/roster";
@@ -23,6 +34,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { CheckinDisplayPanel } from "@/components/attendance/checkin-display-panel";
+import { cn } from "@/lib/utils";
 
 /**
  * The occurrence board.
@@ -30,16 +42,75 @@ import { CheckinDisplayPanel } from "@/components/attendance/checkin-display-pan
  * Replaces the Sunday-only picker: a service is whatever the church actually
  * scheduled, on any day, at any campus, and several on one day are several
  * entries rather than one batch.
+ *
+ * How each person was counted is shown in words and with its own icon, never
+ * by colour alone: an automatic check-in, a scanned code, a welcome-desk kiosk
+ * and a greeter's mark are different evidence, and a church reviewing a
+ * service should be able to tell them apart at a glance.
  */
 
-const SOURCE_LABELS: Record<string, string> = {
-  manual: "Marked",
-  admin: "Corrected",
-  geofence: "Automatic",
-  qr: "Scanned",
-  kiosk: "Kiosk",
-  legacy: "Recorded",
+type MethodStyle = { label: string; icon: LucideIcon; className: string };
+
+const METHODS: Record<string, MethodStyle> = {
+  geofence: {
+    label: "Automatic",
+    icon: MapPin,
+    className: "bg-sky-100 text-sky-800 dark:bg-sky-500/15 dark:text-sky-300",
+  },
+  qr: {
+    label: "Scanned",
+    icon: QrCode,
+    className: "bg-violet-100 text-violet-800 dark:bg-violet-500/15 dark:text-violet-300",
+  },
+  kiosk: {
+    label: "Kiosk",
+    icon: Tablet,
+    className: "bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300",
+  },
+  manual: {
+    label: "Marked",
+    icon: UserCheck,
+    className: "bg-emerald-100 text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300",
+  },
+  admin: {
+    label: "Corrected",
+    icon: PenLine,
+    className: "bg-muted text-muted-foreground",
+  },
+  legacy: {
+    label: "Recorded",
+    icon: History,
+    className: "bg-muted text-muted-foreground",
+  },
 };
+
+/** Display order for summaries: the methods a church most wants to compare first. */
+const METHOD_ORDER = ["geofence", "qr", "kiosk", "manual", "admin", "legacy"];
+
+function MethodBadge({ source }: { source: string | null }) {
+  const style = METHODS[source ?? ""];
+  if (!style) {
+    return <span className="text-xs text-muted-foreground">Present</span>;
+  }
+  const Icon = style.icon;
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold",
+        style.className,
+      )}
+    >
+      <Icon className="size-3" strokeWidth={2} aria-hidden />
+      {style.label}
+    </span>
+  );
+}
+
+function methodSummary(bySource: Record<string, number>): string {
+  return METHOD_ORDER.filter((key) => (bySource[key] ?? 0) > 0)
+    .map((key) => `${bySource[key]} ${METHODS[key].label.toLowerCase()}`)
+    .join(" · ");
+}
 
 function formatWhen(occurrence: ServiceOccurrence): string {
   // Always the service's own zone — a staff member in another timezone must
@@ -54,17 +125,32 @@ function formatWhen(occurrence: ServiceOccurrence): string {
   }).format(new Date(occurrence.startsAtUtc));
 }
 
+function isOpenNow(occurrence: ServiceOccurrence, now: number): boolean {
+  return (
+    occurrence.status !== "cancelled" &&
+    Date.parse(occurrence.checkinOpensAtUtc) <= now &&
+    now <= Date.parse(occurrence.checkinClosesAtUtc)
+  );
+}
+
 export function ServiceOccurrencesBoard({
-  occurrences,
+  upcoming,
+  recent,
+  counts,
   isAdmin,
 }: {
-  occurrences: ServiceOccurrence[];
+  upcoming: ServiceOccurrence[];
+  recent: ServiceOccurrence[];
+  counts: Record<string, ServiceMethodCounts>;
   isAdmin: boolean;
 }) {
   const [pending, startTransition] = useTransition();
   const [selected, setSelected] = useState<ServiceOccurrence | null>(null);
   const [roster, setRoster] = useState<RosterEntry[]>([]);
   const [search, setSearch] = useState("");
+  // Read once per render of the list; the badge is a hint, and the server
+  // decides whether check-in is really open.
+  const [now] = useState(() => Date.now());
 
   /**
    * Batch keys, held per submission intent rather than per click.
@@ -97,6 +183,15 @@ export function ServiceOccurrencesBoard({
   }, [roster, search]);
 
   const presentCount = roster.filter((entry) => entry.status === "active").length;
+
+  const rosterBySource = useMemo(() => {
+    const tally: Record<string, number> = {};
+    for (const entry of roster) {
+      if (entry.status !== "active" || !entry.source) continue;
+      tally[entry.source] = (tally[entry.source] ?? 0) + 1;
+    }
+    return tally;
+  }, [roster]);
 
   const mark = (occurrenceId: string, memberId: string) => {
     startTransition(async () => {
@@ -171,16 +266,62 @@ export function ServiceOccurrencesBoard({
     startTransition(async () => {
       const result = await refreshOccurrenceHorizon();
       if (result.ok) {
-        toast.success(
-          result.data.created > 0
-            ? `${result.data.created} services added.`
-            : "Services are up to date.",
-        );
+        const changed = result.data.created + result.data.refreshed + result.data.retired;
+        toast.success(changed > 0 ? "Services updated from your schedule." : "Services are up to date.");
       } else {
         toast.error(result.message);
       }
     });
   };
+
+  const renderRow = (occurrence: ServiceOccurrence) => {
+    const summary = counts[occurrence.id];
+    const openNow = isOpenNow(occurrence, now);
+    return (
+      <button
+        key={occurrence.id}
+        type="button"
+        onClick={() => openRoster(occurrence)}
+        className={`flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4 text-left transition-colors ${
+          selected?.id === occurrence.id
+            ? "border-accent bg-accent/5"
+            : "border-border bg-background hover:border-accent/50"
+        }`}
+      >
+        <div className="flex flex-col">
+          <span className="text-sm font-semibold text-foreground">
+            {occurrence.label}
+            {occurrence.status === "cancelled" && (
+              <span className="ml-2 rounded bg-destructive/10 px-1.5 py-0.5 text-[11px] font-semibold text-destructive">
+                Cancelled
+              </span>
+            )}
+            {openNow && (
+              <span className="ml-2 rounded bg-accent/15 px-1.5 py-0.5 text-[11px] font-semibold text-accent">
+                Check-in open
+              </span>
+            )}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            {formatWhen(occurrence)}
+            {occurrence.campusName ? ` · ${occurrence.campusName}` : ""}
+          </span>
+        </div>
+        {summary && summary.counted > 0 ? (
+          <span className="flex flex-col items-end text-right">
+            <span className="text-sm font-semibold text-foreground">
+              {summary.counted} present
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {methodSummary(summary.bySource)}
+            </span>
+          </span>
+        ) : null}
+      </button>
+    );
+  };
+
+  const nothing = upcoming.length === 0 && recent.length === 0;
 
   return (
     <div className="flex w-full flex-col gap-5">
@@ -190,7 +331,8 @@ export function ServiceOccurrencesBoard({
             Services
           </h1>
           <p className="text-sm text-muted-foreground">
-            Every service you hold, on any day. Pick one to mark who came.
+            Every service you hold, on any day. Pick one to see who came and how
+            they checked in.
           </p>
         </div>
         <Button variant="outline" onClick={refreshHorizon} disabled={pending}>
@@ -198,51 +340,41 @@ export function ServiceOccurrencesBoard({
         </Button>
       </div>
 
-      {occurrences.length === 0 && (
+      {nothing && (
         <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base">No services yet</CardTitle>
             <CardDescription>
-              Add your service times under Settings, then refresh from schedule.
+              Add your weekly service times in{" "}
+              <Link
+                href="/dashboard/attendance/setup"
+                className="font-semibold text-accent hover:underline"
+              >
+                Check-in setup
+              </Link>
+              , and your services appear here.
             </CardDescription>
           </CardHeader>
         </Card>
       )}
 
-      <div className="flex flex-col gap-3">
-        {occurrences.map((occurrence) => (
-          <button
-            key={occurrence.id}
-            type="button"
-            onClick={() => openRoster(occurrence)}
-            className={`flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4 text-left transition-colors ${
-              selected?.id === occurrence.id
-                ? "border-accent bg-accent/5"
-                : "border-border bg-background hover:border-accent/50"
-            }`}
-          >
-            <div className="flex flex-col">
-              <span className="text-sm font-semibold text-foreground">
-                {occurrence.label}
-                {occurrence.status === "cancelled" && (
-                  <span className="ml-2 rounded bg-destructive/10 px-1.5 py-0.5 text-[11px] font-semibold text-destructive">
-                    Cancelled
-                  </span>
-                )}
-                {occurrence.status === "active" && (
-                  <span className="ml-2 rounded bg-accent/15 px-1.5 py-0.5 text-[11px] font-semibold text-accent">
-                    Open now
-                  </span>
-                )}
-              </span>
-              <span className="text-xs text-muted-foreground">
-                {formatWhen(occurrence)}
-                {occurrence.campusName ? ` · ${occurrence.campusName}` : ""}
-              </span>
-            </div>
-          </button>
-        ))}
-      </div>
+      {upcoming.length > 0 && (
+        <section className="flex flex-col gap-3" aria-labelledby="services-upcoming">
+          <h2 id="services-upcoming" className="text-sm font-semibold text-muted-foreground">
+            Open and coming up
+          </h2>
+          {upcoming.map(renderRow)}
+        </section>
+      )}
+
+      {recent.length > 0 && (
+        <section className="flex flex-col gap-3" aria-labelledby="services-recent">
+          <h2 id="services-recent" className="text-sm font-semibold text-muted-foreground">
+            Recent
+          </h2>
+          {recent.map(renderRow)}
+        </section>
+      )}
 
       {selected && (
         <Card>
@@ -250,7 +382,12 @@ export function ServiceOccurrencesBoard({
             <CardTitle className="text-base">
               {selected.label} — {presentCount} present
             </CardTitle>
-            <CardDescription>{formatWhen(selected)}</CardDescription>
+            <CardDescription>
+              {formatWhen(selected)}
+              {presentCount > 0 && methodSummary(rosterBySource)
+                ? ` · ${methodSummary(rosterBySource)}`
+                : ""}
+            </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             {selected.status !== "cancelled" && (
@@ -301,17 +438,15 @@ export function ServiceOccurrencesBoard({
                   key={entry.memberId}
                   className="flex flex-wrap items-center justify-between gap-2 py-2.5"
                 >
-                  <div className="flex flex-col">
+                  <div className="flex flex-col gap-1">
                     <span className="text-sm font-medium text-foreground">
                       {entry.firstName} {entry.lastName}
                     </span>
-                    {entry.status && (
-                      <span className="text-xs text-muted-foreground">
-                        {entry.status === "reversed"
-                          ? "Removed"
-                          : SOURCE_LABELS[entry.source ?? ""] ?? "Present"}
-                      </span>
-                    )}
+                    {entry.status === "reversed" ? (
+                      <span className="text-xs text-muted-foreground">Removed</span>
+                    ) : entry.status === "active" ? (
+                      <MethodBadge source={entry.source} />
+                    ) : null}
                   </div>
 
                   <div className="flex gap-2">

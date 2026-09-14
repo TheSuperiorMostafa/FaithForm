@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, useTransition } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 
 import {
@@ -151,6 +152,18 @@ export function CheckinDisplayPanel({
         )}
       </div>
 
+      {state && !state.qrEnabled ? (
+        <p className="rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+          Scanning a code is turned off for this service, so phones will be told
+          this kind of check-in isn&rsquo;t on. Turn on &ldquo;Scan a code&rdquo;
+          in{" "}
+          <Link href="/dashboard/attendance/setup" className="font-semibold underline">
+            Check-in setup
+          </Link>
+          . It applies to services whose check-in hasn&rsquo;t opened yet.
+        </p>
+      ) : null}
+
       {pairing ? (
         <PairingCallout
           code={pairing.code}
@@ -190,6 +203,17 @@ export function CheckinDisplayPanel({
               Set up a check-in station
             </Button>
           </div>
+
+          {state && !state.kioskEnabled ? (
+            <p className="text-xs text-muted-foreground">
+              Check-in stations are turned off for this service. Turn on
+              &ldquo;Welcome desk kiosk&rdquo; in{" "}
+              <Link href="/dashboard/attendance/setup" className="font-semibold text-accent hover:underline">
+                Check-in setup
+              </Link>{" "}
+              before setting one up.
+            </p>
+          ) : null}
 
           {kioskCode ? (
             <PairingCallout

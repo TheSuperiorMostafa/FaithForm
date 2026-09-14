@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { ServiceOccurrencesBoard } from "@/components/attendance/service-occurrences-board";
-import { getOccurrences } from "@/app/dashboard/attendance/services/actions";
+import { getServicesBoard } from "@/app/dashboard/attendance/services/actions";
 import { getChurchAuth } from "@/lib/auth/church";
 
 export const dynamic = "force-dynamic";
@@ -10,9 +10,14 @@ export default async function ServicesPage() {
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");
 
-  const occurrences = await getOccurrences();
+  const board = await getServicesBoard();
 
   return (
-    <ServiceOccurrencesBoard occurrences={occurrences} isAdmin={auth.isAdmin} />
+    <ServiceOccurrencesBoard
+      upcoming={board.upcoming}
+      recent={board.recent}
+      counts={board.counts}
+      isAdmin={auth.isAdmin}
+    />
   );
 }

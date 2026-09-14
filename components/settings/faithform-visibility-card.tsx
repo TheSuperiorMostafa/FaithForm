@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 
 import {
@@ -239,8 +240,15 @@ export function FaithFormVisibilityCard({
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Campuses</CardTitle>
           <CardDescription>
-            Where your church meets. Coordinates are stored for automatic
-            check-in later; nothing here tracks anyone today.
+            Where your church meets. To place a campus on the map and set the
+            area where people are checked in automatically, use{" "}
+            <Link
+              href="/dashboard/attendance/setup#locations"
+              className="font-semibold text-accent hover:underline"
+            >
+              Check-in setup
+            </Link>
+            . A hidden campus is never used for automatic check-in.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
@@ -361,7 +369,7 @@ export function FaithFormVisibilityCard({
                     }
                   />
                 </Field>
-                <Field label="Check-in radius (metres)" hint="25–2000, used later">
+                <Field label="Check-in radius (metres)" hint="50 to 500; 150 suits most churches">
                   <Input
                     value={draft.geofenceRadiusM}
                     inputMode="numeric"

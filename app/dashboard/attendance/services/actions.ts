@@ -11,8 +11,9 @@ import { fail, toVisitorResult, type VisitorResult } from "@/lib/faithform/error
 import {
   cancelOccurrence,
   createManualOccurrence,
-  generateOccurrences,
+  listBoardOccurrences,
   listOccurrences,
+  syncChurchOccurrences,
   type ServiceOccurrence,
 } from "@/lib/attendance/v2/occurrences";
 import {
@@ -82,6 +83,50 @@ export async function getOccurrences(input?: {
     nextCursor: null,
   }));
   return page.items;
+}
+
+export type ServiceMethodCounts = {
+  counted: number;
+  /** Active facts by how they were counted: geofence, qr, kiosk, manual, admin, legacy. */
+  bySource: Record<string, number>;
+};
+
+export type ServicesBoardData = {
+  upcoming: ServiceOccurrence[];
+  recent: ServiceOccurrence[];
+  counts: Record<string, ServiceMethodCounts>;
+};
+
+/**
+ * The Services board: open and upcoming services, recent ones, and for each
+ * how many were counted and by which method. Counted in SQL by
+ * `attendance_report`, never by loading facts.
+ */
+export async function getServicesBoard(): Promise<ServicesBoardData> {
+  const empty: ServicesBoardData = { upcoming: [], recent: [], counts: {} };
+  try {
+    const { churchId } = await requireAttendanceStaff();
+    const { upcoming, recent } = await listBoardOccurrences(churchId);
+
+    const all = [...upcoming, ...recent];
+    if (all.length === 0) return { ...empty, upcoming, recent };
+
+    const starts = all.map((occurrence) => Date.parse(occurrence.startsAtUtc));
+    const report = await getAttendanceReport({
+      churchId,
+      from: new Date(Math.min(...starts)).toISOString(),
+      // Exclusive upper bound, so one millisecond past the latest start.
+      to: new Date(Math.max(...starts) + 1).toISOString(),
+    }).catch(() => []);
+
+    const counts: Record<string, ServiceMethodCounts> = {};
+    for (const row of report) {
+      counts[row.occurrenceId] = { counted: row.counted, bySource: row.bySource };
+    }
+    return { upcoming, recent, counts };
+  } catch {
+    return empty;
+  }
 }
 
 export async function getOccurrenceRoster(
@@ -200,21 +245,19 @@ export async function cancelService(input: {
   }
 }
 
-/** Materializes the horizon on demand, for a church that just added a schedule. */
+/**
+ * Brings upcoming services in line with the church's schedule and setup, and
+ * materializes the horizon, on demand.
+ *
+ * Refresh as well as generate: a service time that moved from 10:00 to 10:30
+ * must replace its future services, not add a second set beside them.
+ */
 export async function refreshOccurrenceHorizon(): Promise<
-  VisitorResult<{ created: number; skipped: number }>
+  VisitorResult<{ created: number; skipped: number; refreshed: number; retired: number }>
 > {
   try {
     const { churchId } = await requireAttendanceStaff();
-    const from = new Date();
-    const to = new Date();
-    to.setUTCDate(to.getUTCDate() + 60);
-
-    const result = await generateOccurrences(
-      churchId,
-      from.toISOString().slice(0, 10),
-      to.toISOString().slice(0, 10),
-    );
+    const result = await syncChurchOccurrences(churchId);
     revalidateAttendance();
     return { ok: true, data: result };
   } catch (error) {
@@ -242,6 +285,13 @@ export type CheckinDisplayState = {
   expiresAt: string | null;
   /** False when no signing key is configured, so the button explains itself. */
   signingConfigured: boolean;
+  /**
+   * Whether this service accepts a scanned code and a welcome-desk kiosk, from
+   * its own policy snapshot. A display started for a service with scanning off
+   * shows codes every phone is refused for, so the panel says so first.
+   */
+  qrEnabled: boolean;
+  kioskEnabled: boolean;
 };
 
 export async function getCheckinDisplayState(
@@ -249,8 +299,18 @@ export async function getCheckinDisplayState(
 ): Promise<VisitorResult<CheckinDisplayState>> {
   try {
     const { churchId } = await requireAttendanceStaff();
-    const session = await getActiveSession({ occurrenceId, churchId });
+    const [session, { data: occurrence }] = await Promise.all([
+      getActiveSession({ occurrenceId, churchId }),
+      createAdminClient()
+        .from("service_occurrences")
+        .select("policy_snapshot")
+        .eq("id", occurrenceId)
+        .eq("church_id", churchId)
+        .maybeSingle(),
+    ]);
     const signing = checkinSigningStatus();
+    const sources =
+      (occurrence?.policy_snapshot as { sources?: Record<string, boolean> } | null)?.sources ?? {};
 
     return {
       ok: true,
@@ -259,6 +319,8 @@ export async function getCheckinDisplayState(
         rotationSeconds: session?.rotationSeconds ?? 30,
         expiresAt: session?.expiresAt ?? null,
         signingConfigured: signing.configured,
+        qrEnabled: Boolean(sources.qr),
+        kioskEnabled: Boolean(sources.kiosk),
       },
     };
   } catch (error) {
