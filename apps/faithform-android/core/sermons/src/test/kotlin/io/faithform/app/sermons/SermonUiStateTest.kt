@@ -64,6 +64,20 @@ class SermonUiStateTest {
     }
 
     @Test
+    fun `a failed page is offered as a retry and never re-requested on its own`() {
+        val failed = SermonScreenState(
+            phase = SermonListPhase.Loaded(listOf(item("a"))),
+            hasMore = true,
+            loadMoreFailed = true,
+        )
+        assertFalse(failed.canLoadMore)
+        assertTrue(failed.showsLoadMoreRetry)
+        // Retrying hides the offer while the page is on its way.
+        assertFalse(failed.copy(isLoadingMore = true).showsLoadMoreRetry)
+        assertFalse(SermonScreenState(phase = SermonListPhase.Offline, loadMoreFailed = true).showsLoadMoreRetry)
+    }
+
+    @Test
     fun `not_found is indistinguishable from blocked, by design`() {
         // The server answers the same for a hidden church, an unknown slug and
         // a blocked visitor. A client that told them apart would be an oracle.

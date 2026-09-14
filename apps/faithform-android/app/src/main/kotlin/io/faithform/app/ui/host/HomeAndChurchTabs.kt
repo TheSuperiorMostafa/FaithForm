@@ -24,8 +24,6 @@ import io.faithform.app.R
 import io.faithform.app.contract.Bootstrap
 import io.faithform.app.contract.ChurchRelationship
 import io.faithform.app.design.FaithFormTokens
-import io.faithform.app.navigation.Destination
-import io.faithform.app.navigation.RouteResolution
 import io.faithform.app.network.ApiClient
 import io.faithform.app.network.ProjectionCache
 import io.faithform.app.session.AppContainer
@@ -42,6 +40,7 @@ import io.faithform.app.ui.feed.FeedPhase
 import io.faithform.app.ui.feed.HomeFeedScreen
 import io.faithform.app.ui.onboarding.FindChurchFlow
 import io.faithform.app.ui.sermons.SermonDetailScreen
+import io.faithform.app.ui.sermons.SermonHomeEntry
 import io.faithform.app.ui.sermons.SermonListScreen
 
 /**
@@ -57,6 +56,8 @@ fun HomeTab(
     church: ChurchRelationship?,
     partition: CachePartition?,
     modifier: Modifier = Modifier,
+    /** Opens the church's sermon notes; null when they may not open for it. */
+    onOpenSermons: (() -> Unit)? = null,
 ) {
     if (church == null || partition == null) {
         TabScreen(title = stringResource(R.string.tab_home), modifier = modifier) { content ->
@@ -92,6 +93,7 @@ fun HomeTab(
             onOpenItem = { openedId = it.id },
             onReachedEnd = { feed.launch { loadMore() } },
             modifier = content,
+            header = onOpenSermons?.let { open -> @Composable { SermonHomeEntry(onOpen = open) } },
         )
     }
 }
@@ -121,10 +123,22 @@ fun ChurchTab(
     var route by rememberSaveable { mutableStateOf(ChurchRoute.ROOT) }
     var sermonId by rememberSaveable(partition?.storageKey) { mutableStateOf<String?>(null) }
 
-    val sermonsAllowed = selectedSlug != null && appViewModel.registry.resolve(
-        Destination.SermonArchive(selectedSlug),
-        io.faithform.app.host.HostNavigation.snapshot(bootstrap),
-    ) is RouteResolution.Allowed
+    val sermonsAllowed = io.faithform.app.host.HostNavigation.sermonsAllowed(
+        bootstrap,
+        selectedSlug,
+        appViewModel.registry,
+    )
+
+    // A `…/sermons` link or the entry on Home asks for sermon notes; the
+    // registry gate below still decides whether they show.
+    val sermonsRequested by appViewModel.sermonsRequested.collectAsStateWithLifecycle()
+    LaunchedEffect(sermonsRequested) {
+        if (sermonsRequested) {
+            route = ChurchRoute.SERMONS
+            sermonId = null
+            appViewModel.consumeSermonsRequest()
+        }
+    }
 
     when {
         route == ChurchRoute.FIND -> TabScreen(
@@ -143,7 +157,7 @@ fun ChurchTab(
             }
         }
 
-        route == ChurchRoute.SERMONS && sermonsAllowed && partition != null ->
+        route == ChurchRoute.SERMONS && sermonsAllowed && selectedSlug != null && partition != null ->
             SermonsRoute(
                 container = container,
                 churchSlug = selectedSlug,
@@ -214,18 +228,22 @@ private fun SermonsRoute(
     val list = rememberSessionModel("sermons|${partition.storageKey}") {
         SermonListModel(container.sermonClient, churchSlug, partition)
     }
-    LaunchedEffect(list) { list.launchOnce("load") { load() } }
+    // Models live for the session, so every entry — including coming back
+    // from a sermon — asks the model whether its list has gone stale.
+    LaunchedEffect(list) {
+        list.launchOnce("search") { observeSearch() }
+        list.launch { refreshIfStale() }
+    }
     val state by list.value.state.collectAsStateWithLifecycle()
 
     TabScreen(title = stringResource(R.string.sermons_title), onBack = onClose, modifier = modifier) { content ->
         SermonListScreen(
             state = state,
-            onSearch = { term ->
-                list.value.updateSearchTerm(term)
-                list.launch { search(term) }
-            },
+            onSearch = { term -> list.value.search(term) },
             onOpen = { onOpen(it.sermonId) },
             onLoadMore = { list.launch { loadMore() } },
+            onRetryLoadMore = { list.launch { retryLoadMore() } },
+            onRefresh = { list.launch { refresh() } },
             onRetry = { list.launch { refresh() } },
             modifier = content,
             showTitle = false,

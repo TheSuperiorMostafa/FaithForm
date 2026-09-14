@@ -54,7 +54,9 @@ fun HomeFeedScreen(
     churchName: String,
     onOpenItem: (FeedItem) -> Unit,
     onReachedEnd: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** Shown under the church's name, above the feed — the way into its sermon notes. */
+    header: (@Composable () -> Unit)? = null
 ) {
     val theme = LocalFaithFormTheme.current
 
@@ -72,6 +74,10 @@ fun HomeFeedScreen(
                 color = theme.palette.contentPrimary,
                 modifier = Modifier.padding(top = FaithFormTokens.Spacing.base)
             )
+        }
+
+        if (header != null) {
+            item(key = "header") { header() }
         }
 
         when (phase) {

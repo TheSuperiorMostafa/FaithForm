@@ -1,23 +1,43 @@
 package io.faithform.app.ui.sermons
 
+import android.text.format.DateFormat
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import io.faithform.app.R
 import io.faithform.app.contract.SermonDetail
@@ -27,21 +47,32 @@ import io.faithform.app.design.LocalFaithFormTheme
 import io.faithform.app.sermons.SermonDetailPhase
 import io.faithform.app.sermons.SermonListPhase
 import io.faithform.app.sermons.SermonScreenState
+import io.faithform.app.sermons.preachedDate
+import io.faithform.app.sermons.sermonMonthSections
+import java.time.LocalDate
+import java.time.YearMonth
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
+import java.util.Locale
 
 /**
  * The sermon-notes screens.
  *
  * Every decision about *what* to show — which empty state, whether another page
- * may be asked for, what a failure means — lives in `:core:sermons` and is
- * tested there. These Composables only draw the answer.
+ * may be asked for, what a failure means, which day a sermon is dated by and
+ * which month it is filed under — lives in `:core:sermons` and is tested there.
+ * These Composables only draw the answer, in the reader's own locale.
  */
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SermonListScreen(
     state: SermonScreenState,
     onSearch: (String) -> Unit,
     onOpen: (SermonListItem) -> Unit,
     onLoadMore: () -> Unit,
+    onRetryLoadMore: () -> Unit,
+    onRefresh: () -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
     /** False when a title bar above already says "Sermon notes". */
@@ -55,10 +86,12 @@ fun SermonListScreen(
                 modifier = Modifier.semantics {},
             )
 
+        // The church is not available to this account. Not "removed": that is
+        // what a single sermon taken down says, and nothing was.
         is SermonListPhase.Blocked ->
             SermonMessage(
                 title = stringResource(R.string.media_blocked_title),
-                body = stringResource(R.string.sermons_unavailable_body),
+                body = stringResource(R.string.sermons_blocked_body),
             )
 
         is SermonListPhase.Offline ->
@@ -77,7 +110,11 @@ fun SermonListScreen(
                 onAction = onRetry,
             )
 
-        is SermonListPhase.Loaded ->
+        is SermonListPhase.Loaded -> {
+            val sections = remember(phase.items) { sermonMonthSections(phase.items) }
+            val lastId = phase.items.lastOrNull()?.sermonId
+            val dates = rememberSermonDateFormats()
+
             Column(
                 modifier = modifier
                     .fillMaxSize()
@@ -96,42 +133,181 @@ fun SermonListScreen(
                     value = state.searchTerm,
                     onValueChange = onSearch,
                     label = { Text(stringResource(R.string.sermons_search_label)) },
+                    singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
 
-                if (state.showsEmptyState) {
-                    // Two different empties, and they do not read the same.
+                if (phase.isStale) {
+                    // A refresh could not reach the server; what was already
+                    // read stays readable, and says so.
                     Text(
-                        stringResource(
-                            if (state.emptyIsSearch) {
-                                R.string.sermons_empty_search
-                            } else {
-                                R.string.sermons_empty
-                            },
-                        ),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = theme.palette.contentSecondary,
+                        stringResource(R.string.offline_cached),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = theme.palette.warningContent,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(theme.palette.warning, RoundedCornerShape(FaithFormTokens.Radius.md))
+                            .padding(FaithFormTokens.Spacing.sm),
                     )
-                } else {
+                }
+
+                PullToRefreshBox(
+                    isRefreshing = state.isRefreshing,
+                    onRefresh = onRefresh,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                ) {
+                    // Always a scrolling list, even when empty, so an empty
+                    // archive can still be pulled to refresh.
                     LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm),
                     ) {
-                        items(phase.items, key = { it.sermonId }) { item ->
-                            SermonCard(item = item, onClick = { onOpen(item) })
-                            if (item.sermonId == phase.items.lastOrNull()?.sermonId &&
-                                state.canLoadMore
-                            ) {
-                                LaunchedEffect(item.sermonId) { onLoadMore() }
+                        if (state.showsEmptyState) {
+                            // Two different empties, and they do not read the same.
+                            item(key = "empty") {
+                                Text(
+                                    stringResource(
+                                        if (state.emptyIsSearch) {
+                                            R.string.sermons_empty_search
+                                        } else {
+                                            R.string.sermons_empty
+                                        },
+                                    ),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = theme.palette.contentSecondary,
+                                )
+                            }
+                        }
+
+                        for (section in sections) {
+                            section.month?.let { month ->
+                                item(key = section.key, contentType = "month") {
+                                    SermonMonthHeader(dates.month(month))
+                                }
+                            }
+                            items(section.items, key = { it.sermonId }, contentType = { "sermon" }) { item ->
+                                SermonCard(
+                                    item = item,
+                                    dateText = item.preachedDate?.let(dates::short),
+                                    onClick = { onOpen(item) },
+                                )
+                                if (item.sermonId == lastId && state.canLoadMore) {
+                                    LaunchedEffect(item.sermonId) { onLoadMore() }
+                                }
+                            }
+                        }
+
+                        if (state.isLoadingMore) {
+                            item(key = "loading-more") {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(FaithFormTokens.Spacing.md),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(FaithFormTokens.IconSize.sizeLarge),
+                                    )
+                                }
+                            }
+                        }
+
+                        if (state.showsLoadMoreRetry) {
+                            item(key = "load-more-failed") {
+                                SermonLoadMoreRetry(onRetry = onRetryLoadMore)
                             }
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * The way into a church's sermon notes from its Home. Shown only when the
+ * route registry allows them for that church; the caller decides.
+ */
+@Composable
+fun SermonHomeEntry(onOpen: () -> Unit, modifier: Modifier = Modifier) {
+    val theme = LocalFaithFormTheme.current
+    val shape = RoundedCornerShape(FaithFormTokens.Radius.lg)
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = FaithFormTokens.TouchTarget.recommended)
+            .clip(shape)
+            .background(theme.palette.surface)
+            .border(theme.borderWidth, theme.palette.border, shape)
+            .clickable(role = Role.Button, onClick = onOpen)
+            .padding(FaithFormTokens.Spacing.base)
+            .semantics(mergeDescendants = true) {},
+        horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.md),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            Icons.AutoMirrored.Outlined.MenuBook,
+            contentDescription = null,
+            tint = theme.palette.brandPrimary,
+            modifier = Modifier.size(FaithFormTokens.IconSize.sizeLarge),
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.xs)) {
+            Text(
+                stringResource(R.string.sermons_title),
+                style = MaterialTheme.typography.titleMedium,
+                color = theme.palette.contentPrimary,
+            )
+            Text(
+                stringResource(R.string.sermons_home_entry_body),
+                style = MaterialTheme.typography.bodySmall,
+                color = theme.palette.contentSecondary,
+            )
+        }
     }
 }
 
 @Composable
-private fun SermonCard(item: SermonListItem, onClick: () -> Unit) {
+private fun SermonMonthHeader(text: String) {
+    val theme = LocalFaithFormTheme.current
+    Text(
+        text,
+        style = MaterialTheme.typography.titleSmall,
+        color = theme.palette.contentSecondary,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = FaithFormTokens.Spacing.sm)
+            .semantics { heading() },
+    )
+}
+
+@Composable
+private fun SermonLoadMoreRetry(onRetry: () -> Unit) {
+    val theme = LocalFaithFormTheme.current
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = FaithFormTokens.Spacing.sm),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.xs),
+    ) {
+        Text(
+            stringResource(R.string.sermons_load_more_failed),
+            style = MaterialTheme.typography.bodyMedium,
+            color = theme.palette.contentSecondary,
+        )
+        TextButton(
+            onClick = onRetry,
+            modifier = Modifier.heightIn(min = FaithFormTokens.TouchTarget.recommended),
+        ) {
+            Text(stringResource(R.string.sermons_retry))
+        }
+    }
+}
+
+@Composable
+private fun SermonCard(item: SermonListItem, dateText: String?, onClick: () -> Unit) {
     val theme = LocalFaithFormTheme.current
     Column(
         modifier = Modifier
@@ -141,8 +317,13 @@ private fun SermonCard(item: SermonListItem, onClick: () -> Unit) {
             .semantics(mergeDescendants = true) {},
         verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.xs),
     ) {
-        item.seriesName?.takeIf { it.isNotBlank() }?.let {
-            Text(it, style = MaterialTheme.typography.labelSmall, color = theme.palette.contentSecondary)
+        val overline = listOfNotNull(dateText, item.seriesName?.takeIf { it.isNotBlank() })
+        if (overline.isNotEmpty()) {
+            Text(
+                overline.joinToString(" · "),
+                style = MaterialTheme.typography.labelSmall,
+                color = theme.palette.contentSecondary,
+            )
         }
         Text(item.title, style = MaterialTheme.typography.titleSmall, color = theme.palette.contentPrimary)
         item.summary?.takeIf { it.isNotBlank() }?.let {
@@ -161,6 +342,28 @@ private fun SermonCard(item: SermonListItem, onClick: () -> Unit) {
             )
         }
     }
+}
+
+/** Dates in the reader's locale: a row's day, a detail's day, a month heading. */
+private class SermonDateFormats(locale: Locale) {
+    private val shortDate = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale)
+    private val longDate = DateTimeFormatter.ofLocalizedDate(FormatStyle.LONG).withLocale(locale)
+
+    // "September 2026" in English, "2026年9月" in Japanese: the locale's own
+    // month-and-year skeleton, not an English pattern with the words translated.
+    private val monthYear = runCatching {
+        DateTimeFormatter.ofPattern(DateFormat.getBestDateTimePattern(locale, "yMMMM"), locale)
+    }.getOrElse { DateTimeFormatter.ofPattern("LLLL yyyy", locale) }
+
+    fun short(date: LocalDate): String = shortDate.format(date)
+    fun long(date: LocalDate): String = longDate.format(date)
+    fun month(month: YearMonth): String = monthYear.format(month)
+}
+
+@Composable
+private fun rememberSermonDateFormats(): SermonDateFormats {
+    val locale = LocalConfiguration.current.locales[0]
+    return remember(locale) { SermonDateFormats(locale) }
 }
 
 @Composable
@@ -191,6 +394,7 @@ fun SermonDetailScreen(phase: SermonDetailPhase, onRetry: () -> Unit) {
 @Composable
 private fun SermonBody(detail: SermonDetail) {
     val theme = LocalFaithFormTheme.current
+    val dates = rememberSermonDateFormats()
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -202,6 +406,11 @@ private fun SermonBody(detail: SermonDetail) {
             Text(it, style = MaterialTheme.typography.labelSmall, color = theme.palette.contentSecondary)
         }
         Text(detail.title, style = MaterialTheme.typography.titleLarge, color = theme.palette.contentPrimary)
+        // The day it was preached, or published when the church recorded none:
+        // the same day the archive files it under.
+        detail.preachedDate?.let {
+            Text(dates.long(it), style = MaterialTheme.typography.labelLarge, color = theme.palette.contentSecondary)
+        }
 
         detail.summary?.takeIf { it.isNotBlank() }?.let {
             Text(it, style = MaterialTheme.typography.bodyMedium, color = theme.palette.contentSecondary)
