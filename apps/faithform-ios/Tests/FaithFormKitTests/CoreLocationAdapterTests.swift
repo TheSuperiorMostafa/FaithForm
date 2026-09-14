@@ -107,6 +107,10 @@ final class FakeCoreLocation: CoreLocationFacade, @unchecked Sendable {
         }
     }
 
+    func requestState(for region: CLRegion) {
+        mutate { $0._calls.append("requestState:\(region.identifier)") }
+    }
+
     private func notifyAuthorizationChanged() {
         delegate?.locationManagerDidChangeAuthorization?(CLLocationManager())
     }

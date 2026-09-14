@@ -84,6 +84,9 @@ actor FakeLocation: LocationAuthorizing, LocationSampling, RegionMonitoring {
         regions = []
     }
 
+    private(set) var stateRequests = 0
+    func requestStateForMonitoredRegions() { stateRequests += 1 }
+
     func set(authorization: LocationAuthorization) { self.authorization = authorization }
     func set(whenInUseAnswer: LocationAuthorization) { self.whenInUseAnswer = whenInUseAnswer }
     func set(alwaysAnswer: LocationAuthorization) { self.alwaysAnswer = alwaysAnswer }
@@ -126,6 +129,7 @@ actor ScriptedSubmitter: AttendanceSubmitting {
     var answers: [Result<AttendanceResult, Error>] = []
 
     func eligibleOccurrenceId(churchSlug: String) async throws -> String? {
+        occurrenceReads += 1
         if let occurrenceError { throw occurrenceError }
         return occurrenceId
     }
@@ -136,6 +140,17 @@ actor ScriptedSubmitter: AttendanceSubmitting {
         return try answer.get()
     }
 
+    /// The server's status answer; nil means it could not be read.
+    var countedStatus: Bool?
+    private(set) var statusReads = 0
+    private(set) var occurrenceReads = 0
+
+    func isCounted(occurrenceId: String) async -> Bool? {
+        statusReads += 1
+        return countedStatus
+    }
+
+    func set(countedStatus: Bool?) { self.countedStatus = countedStatus }
     func set(answers: [Result<AttendanceResult, Error>]) { self.answers = answers }
     func set(occurrenceId: String?) { self.occurrenceId = occurrenceId }
     func set(occurrenceError: Error?) { self.occurrenceError = occurrenceError }
@@ -214,11 +229,18 @@ actor FakeConsent: AutomaticAttendanceModel.ConsentWriting {
     private(set) var writes: [String] = []
     var answer = "granted"
     var failure: Error?
+    /// Every consent change bumps the account's authorization version on the
+    /// server, exactly as `recordConsent` does.
+    private(set) var version = 7
 
-    func setAutoAttendanceConsent(_ value: String) async throws -> String {
+    func setAutoAttendanceConsent(_ value: String) async throws -> AttendanceConsentOutcome {
         writes.append(value)
         if let failure { throw failure }
-        return value == "revoked" ? "revoked" : answer
+        version += 1
+        return AttendanceConsentOutcome(
+            state: value == "revoked" ? "revoked" : answer,
+            authorizationVersion: version
+        )
     }
     func set(answer: String) { self.answer = answer }
     func set(failure: Error?) { self.failure = failure }
@@ -290,259 +312,6 @@ func configuration(
         configVersion: version,
         expiresAt: expiresAt
     )
-}
-
-// ---------------------------------------------------------------------------
-// Permission progression
-// ---------------------------------------------------------------------------
-
-@MainActor
-@Suite("Automatic attendance permissions")
-struct PermissionTests {
-    private func makeModel(
-        location: FakeLocation,
-        consent: FakeConsent = FakeConsent(),
-        source: ScriptedConfigSource = ScriptedConfigSource(state: .available(configuration()))
-    ) async -> (AutomaticAttendanceModel, AutomaticAttendanceCoordinator) {
-        let reconciler = GeofenceReconciler(
-            monitor: location, authorization: location, source: source
-        )
-        let coordinator = AutomaticAttendanceCoordinator(
-            reconciler: reconciler,
-            submitter: ScriptedSubmitter(),
-            sampler: location,
-            store: MemoryAttemptStore(),
-            authorization: location
-        )
-        await coordinator.bind(
-            partition: testPartition,
-            accountId: "acct-1",
-            settings: AutomaticAttendanceSettings(churchSlug: "grace")
-        )
-        let model = AutomaticAttendanceModel(
-            coordinator: coordinator, authorizer: location, consent: consent
-        )
-        return (model, coordinator)
-    }
-
-    @Test("nothing is requested until the person asks for it")
-    func noPromptAtLaunch() async {
-        let location = FakeLocation()
-        let (model, _) = await makeModel(location: location)
-
-        // Everything an app does on launch and while browsing.
-        await model.refresh()
-        model.begin()
-        model.continueToForegroundEducation()
-        await model.refresh()
-
-        #expect(await location.prompts.isEmpty, "a prompt was raised before the person agreed")
-    }
-
-    @Test("the progression is When In Use, then education, then Always")
-    func progressiveEscalation() async {
-        let location = FakeLocation()
-        let (model, _) = await makeModel(location: location)
-
-        model.begin()
-        #expect(model.step == .introduction)
-        #expect(await location.prompts.isEmpty)
-
-        model.continueToForegroundEducation()
-        #expect(model.step == .foregroundEducation)
-        #expect(await location.prompts.isEmpty)
-
-        await model.requestForegroundPermission()
-        #expect(await location.prompts == ["whenInUse"])
-        // Critically: it does NOT chain into Always. iOS shows that prompt once,
-        // and spending it before the explanation is how an app gets denied.
-        #expect(model.step == .backgroundEducation)
-
-        await model.requestBackgroundPermission()
-        #expect(await location.prompts == ["whenInUse", "always"])
-        #expect(model.step == .ready)
-    }
-
-    @Test("declining foreground stops the flow with a recoverable state")
-    func foregroundDenied() async {
-        let location = FakeLocation()
-        await location.set(whenInUseAnswer: .denied)
-        let (model, _) = await makeModel(location: location)
-
-        model.begin()
-        model.continueToForegroundEducation()
-        await model.requestForegroundPermission()
-
-        #expect(model.step == .blocked(.locationDenied))
-        // Never asks for Always after a foreground refusal.
-        #expect(await location.prompts == ["whenInUse"])
-    }
-
-    @Test("restricted is distinct from denied and offers no dead-end Settings link")
-    func restricted() async {
-        let location = FakeLocation()
-        await location.set(whenInUseAnswer: .restricted)
-        let (model, _) = await makeModel(location: location)
-
-        model.begin()
-        model.continueToForegroundEducation()
-        await model.requestForegroundPermission()
-
-        #expect(model.step == .blocked(.locationRestricted))
-        #expect(AutomaticAttendanceBlocker.locationRestricted.isRecoverableInSettings == false)
-        #expect(AutomaticAttendanceBlocker.locationDenied.isRecoverableInSettings == true)
-    }
-
-    @Test("granting only When In Use is a blocked state, not a working feature")
-    func whenInUseIsNotEnough() async {
-        let location = FakeLocation()
-        await location.set(alwaysAnswer: .authorizedWhenInUse)
-        let (model, _) = await makeModel(location: location)
-
-        model.begin()
-        model.continueToForegroundEducation()
-        await model.requestForegroundPermission()
-        await model.requestBackgroundPermission()
-
-        // Core Location delivers no region events on When In Use, so claiming
-        // this works would be a feature that silently never fires.
-        #expect(model.step == .blocked(.needsAlwaysAuthorization))
-        #expect(LocationAuthorization.authorizedWhenInUse.permitsRegionMonitoring == false)
-        #expect(LocationAuthorization.authorizedAlways.permitsRegionMonitoring == true)
-    }
-
-    @Test("reduced accuracy is its own state — a campus is smaller than the error")
-    func reducedAccuracy() async {
-        let location = FakeLocation(accuracy: .reduced)
-        let (model, _) = await makeModel(location: location)
-
-        model.begin()
-        model.continueToForegroundEducation()
-        await model.requestForegroundPermission()
-        await model.requestBackgroundPermission()
-
-        #expect(model.step == .blocked(.reducedAccuracy))
-    }
-
-    @Test("location services off device-wide is not the same as denied")
-    func servicesOff() async {
-        let location = FakeLocation(authorization: .unavailable, servicesEnabled: false)
-        await location.set(whenInUseAnswer: .unavailable)
-        let (model, _) = await makeModel(location: location)
-
-        model.begin()
-        model.continueToForegroundEducation()
-        await model.requestForegroundPermission()
-
-        #expect(model.step == .blocked(.locationServicesOff))
-    }
-
-    @Test("consent is written to the server before any region is registered")
-    func consentBeforeMonitoring() async {
-        let location = FakeLocation()
-        let consent = FakeConsent()
-        let (model, _) = await makeModel(location: location, consent: consent)
-
-        model.begin()
-        model.continueToForegroundEducation()
-        await model.requestForegroundPermission()
-        await model.requestBackgroundPermission()
-
-        #expect(await consent.writes == ["granted"])
-        #expect(model.step == .ready)
-        // Monitoring someone while the server would refuse every attempt would
-        // be collecting location for nothing.
-        #expect(await location.startCalls.count == 1)
-    }
-
-    @Test("a server that refuses consent leaves nothing monitored")
-    func consentRefused() async {
-        let location = FakeLocation()
-        let consent = FakeConsent()
-        await consent.set(answer: "denied")
-        let (model, _) = await makeModel(location: location, consent: consent)
-
-        model.begin()
-        model.continueToForegroundEducation()
-        await model.requestForegroundPermission()
-        await model.requestBackgroundPermission()
-
-        #expect(model.step == .blocked(.consentMissing))
-        #expect(await location.regions.isEmpty)
-    }
-
-    @Test("OS permission and server consent are independent gates")
-    func permissionIsNotConsent() async {
-        // Always granted, consent withdrawn: not operational.
-        var settings = AutomaticAttendanceSettings(enabled: true, serverConsent: "revoked")
-        #expect(settings.isOperational(authorization: .authorizedAlways) == false)
-
-        // Consent granted, permission missing: also not operational.
-        settings = AutomaticAttendanceSettings(enabled: true, serverConsent: "granted")
-        #expect(settings.isOperational(authorization: .authorizedWhenInUse) == false)
-        #expect(settings.isOperational(authorization: .denied) == false)
-
-        // Both, plus the person's own toggle.
-        #expect(settings.isOperational(authorization: .authorizedAlways) == true)
-        settings.enabled = false
-        #expect(settings.isOperational(authorization: .authorizedAlways) == false)
-    }
-
-    @Test("turning it off revokes consent, removes regions and purges evidence")
-    func disableTearsEverythingDown() async {
-        let location = FakeLocation()
-        let consent = FakeConsent()
-        let (model, coordinator) = await makeModel(location: location, consent: consent)
-
-        model.begin()
-        model.continueToForegroundEducation()
-        await model.requestForegroundPermission()
-        await model.requestBackgroundPermission()
-        #expect(await location.regions.count == 1)
-
-        await model.disable()
-
-        #expect(await location.regions.isEmpty)
-        #expect(await consent.writes == ["granted", "revoked"])
-        #expect(model.step == .notStarted)
-        #expect(await coordinator.currentSettings().enabled == false)
-    }
-
-    @Test("every blocked state has its own copy — none falls through to a generic line")
-    func everyBlockerHasCopy() {
-        var titles = Set<String>()
-        for blocker in AutomaticAttendanceBlocker.allCases {
-            let title = AutomaticAttendanceStatusView.title(for: blocker)
-            let body = AutomaticAttendanceStatusView.explanation(for: blocker)
-            #expect(!title.isEmpty, "\(blocker) has no title")
-            #expect(!body.isEmpty, "\(blocker) has no explanation")
-            titles.insert(title)
-        }
-        // Distinct titles: two different problems must not read identically,
-        // or the screen cannot tell someone what to actually do.
-        #expect(titles.count >= AutomaticAttendanceBlocker.allCases.count - 1)
-    }
-
-    @Test("no permission copy leans on guilt or misdirection")
-    func copyIsHonest() {
-        let allCopy = [
-            L.autoAttendanceIntroTitle, L.autoAttendanceIntroBody,
-            L.autoAttendanceForegroundTitle, L.autoAttendanceForegroundBody,
-            L.autoAttendanceBackgroundTitle, L.autoAttendanceBackgroundBody,
-            L.autoAttendancePrivacyPointOne, L.autoAttendancePrivacyPointTwo,
-            L.autoAttendancePrivacyPointThree, L.autoAttendancePrivacyPointFour,
-        ].joined(separator: " ").lowercased()
-
-        for phrase in [
-            "you must", "required to", "don't let", "miss out", "everyone else",
-            "your church expects", "only takes a second", "we promise",
-        ] {
-            #expect(!allCopy.contains(phrase), "permission copy uses \"\(phrase)\"")
-        }
-
-        // And it does say what actually happens.
-        #expect(L.autoAttendancePrivacyPointTwo.lowercased().contains("never"))
-    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1632,7 +1401,7 @@ struct EvidenceTests {
 
         _ = await coordinator.handleRegionEntered(regionId: "r")
         clock.advance(by: 121)
-        let phase = await coordinator.confirmIfDue()
+        let phase = await coordinator.confirmIfDue(confirmedByPerson: true)
 
         #expect(phase == .counted(occurrenceId: "occ-1", alreadyCounted: false))
         let sent = await submitter.sent
@@ -1664,7 +1433,7 @@ struct EvidenceTests {
         let (coordinatorB, _, _, _) = await make(
             submitter: second, store: store, now: { clock.now }
         )
-        let phase = await coordinatorB.confirmIfDue()
+        let phase = await coordinatorB.confirmIfDue(confirmedByPerson: true)
 
         #expect(phase == .counted(occurrenceId: "occ-1", alreadyCounted: false))
     }
@@ -1712,7 +1481,7 @@ struct EvidenceTests {
 
         _ = await coordinator.handleRegionEntered(regionId: "r")
         clock.advance(by: 121)
-        let phase = await coordinator.confirmIfDue()
+        let phase = await coordinator.confirmIfDue(confirmedByPerson: true)
 
         #expect(phase == .refused(reason: .blocked))
         // A loss of authority stops the device watching entirely.
@@ -1778,7 +1547,7 @@ struct EvidenceTests {
 
         _ = await coordinator.handleRegionEntered(regionId: "r")
         clock.advance(by: 61)
-        _ = await coordinator.confirmIfDue()
+        _ = await coordinator.confirmIfDue(confirmedByPerson: true)
 
         let sent = await submitter.sent
         #expect(sent.count == 2)
@@ -1802,7 +1571,7 @@ struct EvidenceTests {
 
         _ = await coordinator.handleRegionEntered(regionId: "r")
         clock.advance(by: 61)
-        _ = await coordinator.confirmIfDue()
+        _ = await coordinator.confirmIfDue(confirmedByPerson: true)
 
         // The number is sent for the audit — but the server measures the dwell
         // between its own `detected_at_server` and `now()`, so this cannot

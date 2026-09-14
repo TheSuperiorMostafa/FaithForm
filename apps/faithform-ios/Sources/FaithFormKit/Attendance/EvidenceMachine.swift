@@ -102,6 +102,15 @@ public enum EvidenceRefusal: String, Equatable, Sendable, CaseIterable {
         }
     }
 
+    /// Whether the loss is the account's rather than one church's.
+    ///
+    /// Consent is recorded on the account, so withdrawing it stops every
+    /// church. A People link, a block or a church switching the feature off is
+    /// that church's alone, and must not stop the others being watched.
+    public var isAccountWide: Bool {
+        self == .consentRequired || self == .consentRevoked
+    }
+
     public init(serverReason: String) {
         self = EvidenceRefusal(rawValue: serverReason) ?? .unknown
     }
@@ -242,6 +251,47 @@ public struct LogicalAttempt: Codable, Equatable, Sendable {
     /// window where the process is most likely to be killed.
     public var detectionId: String?
 
+    // MARK: Arrival — everything below is optional, so an attempt written by
+    // an earlier build still decodes. None of it is a position.
+
+    /// The region the arrival was seen in. An exit from *this* region abandons
+    /// the attempt; an exit from another campus of the same church does not.
+    public var regionId: String?
+
+    /// Whether the church asks the person to confirm, or checks them in on its
+    /// own once they have stayed. Nil on an attempt from an earlier build,
+    /// which only ever ran the confirmation flow.
+    public var mode: ArrivalMode?
+
+    /// **Automatic mode only**: the earliest instant this device will submit
+    /// anything for the arrival — the local dwell, or the moment check-in
+    /// opens for someone who arrived early.
+    ///
+    /// Nothing is sent before it. A person who drives past the building sends
+    /// no coordinate at all, because the exit closes the attempt first.
+    public var submitNotBefore: Date?
+
+    /// When the person said yes — a tap on the notification or on the
+    /// in-app button. A church that asks for confirmation is never answered on
+    /// the person's behalf, so a pending attempt without this is not confirmed
+    /// whatever the clock says.
+    public var personConfirmedAt: Date?
+
+    /// The configuration the arrival was judged against. Sent with the
+    /// evidence so the server can bind the detection to it.
+    public var configVersion: Int?
+
+    /// The occurrence id came from the configuration's upcoming windows, not
+    /// from the server's "open now" answer: the person arrived before check-in
+    /// opened. The server still resolves the real occurrence before anything
+    /// is submitted, and this hint is replaced if it differs.
+    public var awaitingWindow: Bool?
+
+    /// When to ask, when that is not simply `submitNotBefore`: a confirmation
+    /// arrival held for an opening window is asked once a dwell could have
+    /// passed after it opens, not the moment it opens.
+    public var askAt: Date?
+
     public init(
         attemptId: String,
         churchSlug: String,
@@ -250,7 +300,13 @@ public struct LogicalAttempt: Codable, Equatable, Sendable {
         expiresAt: Date,
         queued: QueuedSubmission? = nil,
         confirmationNotBefore: Date? = nil,
-        detectionId: String? = nil
+        detectionId: String? = nil,
+        regionId: String? = nil,
+        mode: ArrivalMode? = nil,
+        submitNotBefore: Date? = nil,
+        personConfirmedAt: Date? = nil,
+        configVersion: Int? = nil,
+        awaitingWindow: Bool? = nil
     ) {
         self.confirmationNotBefore = confirmationNotBefore
         self.detectionId = detectionId
@@ -260,9 +316,43 @@ public struct LogicalAttempt: Codable, Equatable, Sendable {
         self.openedAt = openedAt
         self.expiresAt = expiresAt
         self.queued = queued
+        self.regionId = regionId
+        self.mode = mode
+        self.submitNotBefore = submitNotBefore
+        self.personConfirmedAt = personConfirmedAt
+        self.configVersion = configVersion
+        self.awaitingWindow = awaitingWindow
     }
 
     public func isExpired(now: Date) -> Bool { now >= expiresAt }
+
+    /// Whether this is an arrival still waiting for its first submission.
+    public var isAwaitingArrivalSubmission: Bool {
+        submitNotBefore != nil && detectionId == nil && queued == nil
+    }
+
+    /// Whether the arrival may be submitted now: its local wait has passed and
+    /// nothing has gone to the server yet.
+    public func maySubmitArrival(now: Date) -> Bool {
+        guard isAwaitingArrivalSubmission, let submitNotBefore else { return false }
+        return now >= submitNotBefore && !isExpired(now: now)
+    }
+
+    /// Whether the church's policy still needs a yes from the person before
+    /// anything more is sent. False for automatic arrivals.
+    public var needsPersonConfirmation: Bool {
+        (mode ?? .confirmation) == .confirmation && personConfirmedAt == nil
+    }
+
+    /// When the person should be asked, if they need to be asked at all.
+    ///
+    /// For a confirmation the server's own instant; for an automatic arrival
+    /// the moment it becomes submittable, as a fallback for when iOS gives the
+    /// app no execution time of its own then.
+    public var promptAt: Date? {
+        if detectionId != nil { return confirmationNotBefore }
+        return askAt ?? submitNotBefore
+    }
 
     /// Whether a confirmation may be attempted now.
     ///
@@ -299,6 +389,9 @@ public struct LogicalAttempt: Codable, Equatable, Sendable {
         occurrenceId: String,
         now: Date,
         lifetime: TimeInterval = pendingAttemptLifetime,
+        regionId: String? = nil,
+        mode: ArrivalMode? = nil,
+        configVersion: Int? = nil,
         randomId: () -> String = { LogicalAttempt.newAttemptId() }
     ) -> LogicalAttempt {
         LogicalAttempt(
@@ -306,7 +399,10 @@ public struct LogicalAttempt: Codable, Equatable, Sendable {
             churchSlug: churchSlug,
             occurrenceId: occurrenceId,
             openedAt: now,
-            expiresAt: now.addingTimeInterval(lifetime)
+            expiresAt: now.addingTimeInterval(lifetime),
+            regionId: regionId,
+            mode: mode,
+            configVersion: configVersion
         )
     }
 
@@ -363,13 +459,20 @@ public struct QueuedSubmission: Codable, Equatable, Sendable {
     public func evidence(
         occurrenceId: String,
         attemptId: String? = nil,
-        detectionId: String? = nil
+        detectionId: String? = nil,
+        regionId: String? = nil,
+        configVersion: Int? = nil
     ) -> AttendanceEvidence {
         AttendanceEvidence(
             occurrenceId: occurrenceId, phase: kind, observedAt: observedAt,
             accuracyMeters: accuracyMeters, dwellSeconds: dwellSeconds,
             latitude: latitude, longitude: longitude,
-            attemptId: attemptId, detectionId: detectionId
+            // `detected` names the workflow; `confirm` names the detection.
+            // Each carries only the identity its own command reads.
+            attemptId: kind == "detected" ? attemptId : nil,
+            detectionId: kind == "confirm" ? detectionId : nil,
+            regionId: regionId,
+            configVersion: configVersion
         )
     }
 
