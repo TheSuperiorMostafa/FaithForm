@@ -15,21 +15,36 @@ import { getFeatureAccess } from "@/lib/features/access";
  * Marking a service is volunteer work; deciding who gets a check-in text is the
  * pastor's. They are granted separately (`attendance` / `attendance_follow_up`),
  * so this layout only checks that the member holds at least one of them — each
- * tab's own layout gates its half. The tab strip lists only what they can open,
- * which means someone with a single grant sees no tabs at all.
+ * tab's own layout gates its half. The tab strip lists only what they can open:
+ * Attendance brings the weekly page, Services and Check-in setup, and someone
+ * holding only Follow-up sees no tabs at all.
  */
-const TAB_FOR_FEATURE = {
-  attendance: {
-    label: "Attendance",
-    href: "/dashboard/attendance",
-    match: "exact",
-  },
-  attendance_follow_up: {
-    label: "Follow-up",
-    href: "/dashboard/attendance/follow-up",
-    match: "prefix",
-  },
-} satisfies Record<"attendance" | "attendance_follow_up", SectionLinkTab>;
+const TABS_FOR_FEATURE = {
+  attendance: [
+    {
+      label: "Weekly",
+      href: "/dashboard/attendance",
+      match: "exact",
+    },
+    {
+      label: "Services",
+      href: "/dashboard/attendance/services",
+      match: "prefix",
+    },
+    {
+      label: "Check-in setup",
+      href: "/dashboard/attendance/setup",
+      match: "prefix",
+    },
+  ],
+  attendance_follow_up: [
+    {
+      label: "Follow-up",
+      href: "/dashboard/attendance/follow-up",
+      match: "prefix",
+    },
+  ],
+} satisfies Record<"attendance" | "attendance_follow_up", SectionLinkTab[]>;
 
 export default async function AttendanceLayout({
   children,
@@ -40,7 +55,7 @@ export default async function AttendanceLayout({
 
   const tabs = (["attendance", "attendance_follow_up"] as const)
     .filter((key) => access?.allowed.includes(key))
-    .map((key) => TAB_FOR_FEATURE[key]);
+    .flatMap((key) => TABS_FOR_FEATURE[key]);
 
   if (tabs.length === 0) {
     // Same shape as FeatureGate's locked state — a member who hits one of
@@ -76,7 +91,7 @@ export default async function AttendanceLayout({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-2xl flex-col gap-5">
+    <div className="mx-auto flex w-full max-w-3xl flex-col gap-5">
       {tabs.length > 1 && <SectionLinkTabs tabs={tabs} />}
       {children}
     </div>
