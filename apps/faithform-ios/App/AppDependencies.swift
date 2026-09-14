@@ -148,7 +148,7 @@ final class AppDependencies {
     /// Every church this account may be checked in at: the ones it can still
     /// read. A church with no confirmed People link refuses for itself and is
     /// simply not watched.
-    static func attendanceChurches(in bootstrap: Bootstrap) -> [AttendanceChurch] {
+    nonisolated static func attendanceChurches(in bootstrap: Bootstrap) -> [AttendanceChurch] {
         bootstrap.relationships
             .filter { $0.canReadPublishedContent && $0.state != .blocked && $0.state != .left }
             .map { AttendanceChurch(slug: $0.churchSlug, name: $0.churchName) }
