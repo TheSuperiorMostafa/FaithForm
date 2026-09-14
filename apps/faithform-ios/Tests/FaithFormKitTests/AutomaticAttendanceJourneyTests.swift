@@ -1267,6 +1267,123 @@ struct ArrivalTests {
         #expect(await stack.store.count() == 0, "outside did not abandon")
     }
 
+    @Test("the campus entered is named when asking which service is open")
+    func regionNamedOnOccurrence() async {
+        let submitter = ScriptedSubmitter()
+        await submitter.set(answers: [.success(pendingUntil(journeyStart.addingTimeInterval(120)))])
+        let stack = AttendanceStack.make(submitter: submitter)
+        await stack.switchedOn()
+
+        _ = await stack.coordinator.handleRegionEntered(regionId: campus)
+
+        #expect(await submitter.occurrenceRegions == [campus])
+        #expect(await submitter.sent.first?.evidence.regionId == campus)
+    }
+
+    @Test("outside a check-in window no position is read, so none can be sent")
+    func noFixOutsideWindow() async {
+        let submitter = ScriptedSubmitter()
+        await submitter.set(occurrenceId: nil)
+        for requiresConfirmation in [true, false] {
+            let stack = AttendanceStack.make(
+                states: ["grace": .available(churchConfiguration("grace", requiresConfirmation: requiresConfirmation))],
+                submitter: submitter
+            )
+            await stack.switchedOn()
+            _ = await stack.coordinator.handleRegionEntered(regionId: campus)
+            #expect(!(await stack.location.prompts.contains("oneShot")), "a fix was read with no window open")
+            #expect(await submitter.sent.isEmpty)
+        }
+    }
+
+    @Test("confirm presents the occurrence the server returned, not the one this device named")
+    func confirmUsesReturnedOccurrence() async {
+        let submitter = ScriptedSubmitter()
+        let pendingAtOtherCampus = AttendanceResult(
+            outcome: .pendingConfirmation, message: "m", occurrenceId: "occ-north", countedAt: nil,
+            confirmationNotBefore: FaithFormInstant.format(journeyStart.addingTimeInterval(60)), detectionId: "det-n"
+        )
+        await submitter.set(answers: [.success(pendingAtOtherCampus), .success(counted)])
+        let stack = AttendanceStack.make(submitter: submitter)
+        await stack.switchedOn()
+
+        _ = await stack.coordinator.handleRegionEntered(regionId: campus)
+        stack.clock.advance(by: 90)
+        await stack.service.handleNotification(.checkIn(churchSlug: "grace", opensApp: false))
+
+        let sent = await submitter.sent
+        #expect(sent.map(\.evidence.occurrenceId) == ["occ-1", "occ-north"])
+        #expect(sent.last?.evidence.detectionId == "det-n")
+        #expect(sent.last?.evidence.regionId == campus)
+    }
+
+    @Test("a yes given after the window closed sends nothing, and says so")
+    func windowClosedBeforeConfirm() async {
+        let submitter = ScriptedSubmitter()
+        await submitter.set(answers: [.success(pendingUntil(journeyStart.addingTimeInterval(60), detectionId: "det-1"))])
+        let stack = AttendanceStack.make(submitter: submitter)
+        await stack.switchedOn()
+        _ = await stack.coordinator.handleRegionEntered(regionId: campus)
+        let fixesBefore = await stack.location.prompts.filter { $0 == "oneShot" }.count
+
+        stack.clock.advance(by: 2 * 60 * 60 - 60)
+        await submitter.set(occurrenceId: nil)
+        await stack.service.handleNotification(.checkIn(churchSlug: "grace", opensApp: false))
+
+        #expect(await submitter.phases() == ["detected"])
+        #expect(await stack.location.prompts.filter { $0 == "oneShot" }.count == fixesBefore)
+        #expect(await stack.store.count() == 0)
+        #expect(await stack.notifier.notCheckedIn == ["grace"])
+    }
+
+    @Test("a queued submission is dropped, unsent, once its window has closed")
+    func queuedAfterWindow() async {
+        let submitter = ScriptedSubmitter()
+        await submitter.set(answers: [.failure(APIError.offline)])
+        let stack = AttendanceStack.make(submitter: submitter)
+        await stack.switchedOn()
+        _ = await stack.coordinator.handleRegionEntered(regionId: campus)
+        #expect(await stack.store.peek(partition("grace"))?.queued != nil)
+
+        await submitter.set(occurrenceId: nil)
+        await submitter.set(answers: [.success(counted)])
+        _ = await stack.coordinator.flushPending()
+
+        #expect(await submitter.sent.count == 1, "a queued position was sent after the window closed")
+        #expect(await stack.store.count() == 0)
+    }
+
+    @Test("occurrence errors: a church that no longer knows the person stops being watched; an inactive account stops everything")
+    func occurrenceErrors() async {
+        let states: [String: GeofenceConfigurationState] = [
+            "grace": .available(churchConfiguration("grace")),
+            "hope": .available(churchConfiguration("hope")),
+        ]
+        let left = ScriptedSubmitter()
+        await left.set(occurrenceError: APIError(code: .notFound, message: "Church not found."))
+        let one = AttendanceStack.make(states: states, submitter: left)
+        await one.switchedOn([grace, hope])
+        _ = await one.coordinator.handleRegionEntered(regionId: "faithform.campus.hope-main")
+        #expect(await one.location.regions.map(\.identifier) == ["faithform.campus.grace-main"])
+        #expect(await one.coordinator.currentSettings().enabled)
+
+        let inactive = ScriptedSubmitter()
+        await inactive.set(occurrenceError: APIError(code: .accountInactive, message: "Inactive."))
+        let two = AttendanceStack.make(states: states, submitter: inactive)
+        await two.switchedOn([grace, hope])
+        _ = await two.coordinator.handleRegionEntered(regionId: "faithform.campus.hope-main")
+        #expect(await two.location.regions.isEmpty)
+        #expect(await two.coordinator.currentSettings().enabled == false)
+
+        // Offline is neither.
+        let offline = ScriptedSubmitter()
+        await offline.set(occurrenceError: APIError.offline)
+        let three = AttendanceStack.make(states: states, submitter: offline)
+        await three.switchedOn([grace, hope])
+        _ = await three.coordinator.handleRegionEntered(regionId: "faithform.campus.hope-main")
+        #expect(await three.location.regions.count == 2)
+    }
+
     @Test("a church's own refusal stops watching that church, not the other")
     func churchRefusalExcludesOnlyThatChurch() async {
         let submitter = ScriptedSubmitter()

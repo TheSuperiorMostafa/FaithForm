@@ -11,6 +11,14 @@ public protocol AttendanceSubmitting: Actor {
     /// is attending.
     func eligibleOccurrenceId(churchSlug: String) async throws -> String?
 
+    /// The same, for the campus the person is at. At a church with several
+    /// campuses the open service depends on which door they came through, so
+    /// the region entered is named. Carries no location.
+    ///
+    /// **Always asked before a position is read**, and a nil answer ends the
+    /// flow: nothing is sent outside a check-in window.
+    func eligibleOccurrenceId(churchSlug: String, regionId: String?) async throws -> String?
+
     func submit(
         _ evidence: AttendanceEvidence,
         idempotencyKey: String
@@ -29,6 +37,10 @@ public protocol AttendanceSubmitting: Actor {
 
 extension AttendanceSubmitting {
     public func isCounted(occurrenceId: String) async -> Bool? { nil }
+
+    public func eligibleOccurrenceId(churchSlug: String, regionId: String?) async throws -> String? {
+        try await eligibleOccurrenceId(churchSlug: churchSlug)
+    }
 }
 
 /// Where the open logical attempt lives.
@@ -416,13 +428,17 @@ public actor AutomaticAttendanceCoordinator {
         if let version = configuration?.configVersion { lastConfigVersion = version }
         let mode = configuration.map(ArrivalPolicy.mode(for:)) ?? .confirmation
 
-        // The server picks the occurrence, from its own clock.
+        // The server picks the occurrence, from its own clock, for the campus
+        // entered. Asked before any position is read.
         let occurrenceId: String?
-        do {
-            occurrenceId = try await submitter.eligibleOccurrenceId(churchSlug: church)
-        } catch {
+        switch await resolveOccurrence(church: church, regionId: regionId) {
+        case .open(let id): occurrenceId = id
+        case .closed: occurrenceId = nil
+        case .unreachable:
             phase = .retrying(occurrenceId: nil, attempt: 1, nextAttemptAt: nextRetry(1))
             return phase
+        case .refused(let reason, let accountWide):
+            return await fail(reason, church: accountWide ? nil : church)
         }
 
         guard let occurrenceId else {
@@ -789,11 +805,14 @@ public actor AutomaticAttendanceCoordinator {
         }
 
         let occurrenceId: String?
-        do {
-            occurrenceId = try await submitter.eligibleOccurrenceId(churchSlug: church)
-        } catch {
+        switch await resolveOccurrence(church: church, regionId: arrival.regionId) {
+        case .open(let id): occurrenceId = id
+        case .closed: occurrenceId = nil
+        case .unreachable:
             phase = .retrying(occurrenceId: arrival.occurrenceId, attempt: 1, nextAttemptAt: nextRetry(1))
             return phase
+        case .refused(let reason, let accountWide):
+            return await fail(reason, church: accountWide ? nil : church)
         }
 
         guard let occurrenceId else {
@@ -939,6 +958,10 @@ public actor AutomaticAttendanceCoordinator {
                 // identity the server will accept, so it is persisted as
                 // carefully as the deadline is.
                 awaiting.detectionId = result.detectionId
+                // The occurrence the server opened the detection against. At a
+                // church with several campuses it can differ from the one this
+                // device named, and `confirm` must present the server's.
+                awaiting.occurrenceId = result.occurrenceId ?? awaiting.occurrenceId
                 // The server wants a confirmation, whatever this device
                 // expected: the person will be asked.
                 awaiting.mode = .confirmation
@@ -1020,6 +1043,29 @@ public actor AutomaticAttendanceCoordinator {
         guard let (attempt, scoped) = found else {
             phase = .refused(reason: .expired)
             return phase
+        }
+
+        // Still inside a check-in window? Asked before the position is read, so
+        // a yes given after the service has closed sends nothing.
+        switch await resolveOccurrence(church: attempt.churchSlug, regionId: attempt.regionId) {
+        case .open:
+            break
+        case .closed:
+            return await fail(.windowClosed, church: attempt.churchSlug)
+        case .unreachable:
+            // Nothing is read or sent. The yes is already stored; asking again
+            // shortly is the next opportunity.
+            if attempt.personConfirmedAt != nil {
+                await notifier?.scheduleArrivalPrompt(
+                    churchSlug: attempt.churchSlug,
+                    churchName: name(of: attempt.churchSlug),
+                    at: now().addingTimeInterval(60)
+                )
+            }
+            phase = .retrying(occurrenceId: occurrenceId, attempt: 1, nextAttemptAt: nextRetry(1))
+            return phase
+        case .refused(let reason, let accountWide):
+            return await fail(reason, church: accountWide ? nil : attempt.churchSlug)
         }
 
         phase = .confirming(occurrenceId: occurrenceId)
@@ -1195,6 +1241,21 @@ public actor AutomaticAttendanceCoordinator {
             return phase
         }
 
+        // A position captured in a window is not sent once that window has
+        // closed — the server would refuse it anyway — so the queue is checked
+        // against the server's clock first.
+        switch await resolveOccurrence(church: attempt.churchSlug, regionId: attempt.regionId) {
+        case .open:
+            break
+        case .closed:
+            return await fail(.windowClosed, church: attempt.churchSlug)
+        case .unreachable:
+            // Still offline. Nothing sent, and no retry spent.
+            return phase
+        case .refused(let reason, let accountWide):
+            return await fail(reason, church: accountWide ? nil : attempt.churchSlug)
+        }
+
         var counting = attempt
         counting.queued = queued.withRetry()
         await store.update(counting, partition: scoped)
@@ -1224,11 +1285,12 @@ public actor AutomaticAttendanceCoordinator {
                 awaiting.confirmationNotBefore = result.confirmationNotBefore.flatMap(FaithFormInstant.parse)
                     ?? now().addingTimeInterval(fallbackDwellSeconds)
                 awaiting.detectionId = result.detectionId
+                awaiting.occurrenceId = result.occurrenceId ?? awaiting.occurrenceId
                 awaiting.mode = .confirmation
                 awaiting.submitNotBefore = nil
                 await store.update(awaiting, partition: scoped)
                 await schedulePromptIfAhead(awaiting)
-                phase = .awaitingDwell(occurrenceId: attempt.occurrenceId, since: now())
+                phase = .awaitingDwell(occurrenceId: awaiting.occurrenceId, since: now())
             default:
                 return await fail(.unknown, church: attempt.churchSlug)
             }
@@ -1268,6 +1330,12 @@ public actor AutomaticAttendanceCoordinator {
         if let church, let scoped = scopedPartition(church) {
             closed = await store.current(partition: scoped, now: now())
             await store.close(partition: scoped)
+        } else if reason.requiresTeardown {
+            // An account-wide loss: no church's arrival survives it.
+            for other in knownChurches {
+                if let scoped = scopedPartition(other) { await store.close(partition: scoped) }
+                await notifier?.cancelArrivalPrompt(churchSlug: other)
+            }
         }
 
         // The occurrence is *not* settled: only a count settles it. The refusal
@@ -1310,6 +1378,39 @@ public actor AutomaticAttendanceCoordinator {
 
         log.event("attendance_refused")
         return phase
+    }
+
+    private enum OccurrenceAnswer {
+        case open(String)
+        /// No check-in window is open for that campus. Not an error.
+        case closed
+        /// Offline, or the server is having a moment.
+        case unreachable
+        /// The server will not serve this account at this church — or at all.
+        case refused(EvidenceRefusal, accountWide: Bool)
+    }
+
+    /// `GET attendance/{slug}/occurrence?regionId=`, read into what the flow
+    /// does next. Carries no location, and every flow asks it before reading
+    /// one.
+    private func resolveOccurrence(church: String, regionId: String?) async -> OccurrenceAnswer {
+        do {
+            guard let id = try await submitter.eligibleOccurrenceId(churchSlug: church, regionId: regionId) else {
+                return .closed
+            }
+            return .open(id)
+        } catch let error as APIError {
+            switch error.code {
+            // No relationship with this church any more, or blocked, or left.
+            case .notFound, .forbidden: return .refused(.notEnrolled, accountWide: false)
+            case .blocked: return .refused(.blocked, accountWide: false)
+            // The account itself is inactive: nothing may be watched anywhere.
+            case .accountInactive: return .refused(.notEnrolled, accountWide: true)
+            default: return .unreachable
+            }
+        } catch {
+            return .unreachable
+        }
     }
 
     private func abandon(church: String) async -> EvidencePhase {
