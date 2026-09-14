@@ -15,6 +15,7 @@ import io.faithform.app.AppViewModel
 import io.faithform.app.R
 import io.faithform.app.contract.Bootstrap
 import io.faithform.app.contract.ChurchRelationship
+import io.faithform.app.contract.RelationshipState
 import io.faithform.app.network.ApiClient
 import io.faithform.app.network.ProjectionCache
 import io.faithform.app.session.AppContainer
@@ -80,6 +81,7 @@ fun HomeTab(
             onOpenItem = { openedId = it.id },
             onReachedEnd = { feed.launch { loadMore() } },
             modifier = content,
+            isJoinPending = church.state == RelationshipState.PENDING,
             header = onOpenSermons?.let { open -> @Composable { SermonHomeEntry(onOpen = open) } },
         )
     }

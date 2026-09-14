@@ -30,10 +30,10 @@ public enum L {
     // MARK: - Onboarding
     public static var welcomeTitle: String { t("welcome_title", "Find your church") }
     public static var welcomeBody: String {
-        t("welcome_body", "Follow the churches you belong to, and keep what matters in one place.")
+        t("welcome_body", "Use the link your church sent you. If they asked you to search, you can do that here too.")
     }
-    public static var findAChurch: String { t("find_a_church", "Find a Church") }
-    public static var haveInvitation: String { t("have_invitation", "I Have an Invitation") }
+    public static var findAChurch: String { t("find_a_church", "Find your church") }
+    public static var haveInvitation: String { t("have_invitation", "I have a link") }
     public static var enterInvitationCode: String {
         t("enter_invitation_code", "Paste your invitation link")
     }
@@ -67,19 +67,31 @@ public enum L {
     }
 
     // MARK: - Relationship
-    public static var followChurch: String { t("follow_church", "Follow") }
-    public static var followingChurch: String { t("following_church", "Following") }
+    public static var followChurch: String { t("follow_church", "Add this church") }
+    public static var followingChurch: String { t("following_church", "Added") }
     public static var requestToJoin: String { t("request_to_join", "Request to Join") }
     public static var joinChurch: String { t("join_church", "Join") }
     public static var acceptInvitation: String { t("accept_invitation", "Accept Invitation") }
     public static var leaveChurch: String { t("leave_church", "Leave") }
-    public static var stateFollowing: String { t("state_following", "Following") }
+    public static var stateFollowing: String { t("state_following", "Added") }
     public static var statePending: String { t("state_pending", "Request pending") }
+    public static var joinPendingHomeTitle: String {
+        t("join_pending_home_title", "Waiting for your church")
+    }
+    public static var joinPendingHomeBody: String {
+        t(
+            "join_pending_home_body",
+            "Your request to join is with the church. Someone on staff needs to accept you before you become a member in the app. You can still see what they publish for people who have added them."
+        )
+    }
     public static var stateJoined: String { t("state_joined", "Member") }
-    public static var stateLeft: String { t("state_left", "Not following") }
+    public static var stateLeft: String { t("state_left", "Not added") }
     public static var stateBlocked: String { t("state_blocked", "Unavailable") }
     public static var pendingExplainer: String {
-        t("pending_explainer", "Your request is with the church. You can still follow what they publish.")
+        t(
+            "pending_explainer",
+            "Your request is with the church. Waiting for someone on staff to accept you. You can still see what they publish for people who have added them."
+        )
     }
     public static var inviteOnlyExplainer: String {
         t("invite_only_explainer", "This church joins by invitation.")
@@ -129,7 +141,7 @@ public enum L {
     public static var yourChurches: String { t("your_churches", "Your churches") }
     public static var noChurchesTitle: String { t("no_churches_title", "No churches yet") }
     public static var noChurchesBody: String {
-        t("no_churches_body", "When you follow or join a church, it will appear here.")
+        t("no_churches_body", "When you add or join a church, it will appear here.")
     }
     public static var signOut: String { t("sign_out", "Sign out") }
     public static var deleteAccount: String { t("delete_account", "Delete my account") }
@@ -891,7 +903,7 @@ public enum L {
         t("no_church_title", "No church yet")
     }
     public static var noChurchBody: String {
-        t("no_church_body", "Find your church to see what they've shared.")
+        t("no_church_body", "Add your church to see what they have shared.")
     }
     public static var churchNoAccess: String {
         t("church_no_access", "You can't see this church's posts right now.")
@@ -1017,10 +1029,10 @@ public enum L {
     // MARK: - Invitations
 
     public static var invitationTitle: String {
-        t("invitation_title", "Join by invitation")
+        t("invitation_title", "Join with your church's link")
     }
     public static var invitationBody: String {
-        t("invitation_body", "Paste the invitation link or code your church sent you.")
+        t("invitation_body", "Paste the link or code your church sent you.")
     }
     public static var invitationFieldLabel: String {
         t("invitation_field_label", "Invitation link or code")

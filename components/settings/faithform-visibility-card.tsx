@@ -157,21 +157,22 @@ export function FaithFormVisibilityCard({
     <div className="flex flex-col gap-4">
       <Card>
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Find us in the app</CardTitle>
+          <CardTitle className="text-base">How people find you in the app</CardTitle>
           <CardDescription>
-            Controls whether people using FaithForm can search for your church
-            and follow what you publish. Off by default.
+            Prefer invitation links for your congregation. Turn search listing
+            on only if you want people to add your church without a link. Off by
+            default.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-5">
           <div className="flex items-start justify-between gap-4 rounded-lg border border-border bg-background p-4">
             <div className="flex flex-col gap-1">
               <Label htmlFor="faithform-discoverable" className="text-sm font-semibold">
-                List this church publicly
+                List this church in search
               </Label>
               <p className="text-xs text-muted-foreground">
                 {slug
-                  ? `Visitors will find you at ${slug}.`
+                  ? `People can search for you at ${slug} without an invitation link.`
                   : "Set a public web address for this church before listing it."}
               </p>
             </div>

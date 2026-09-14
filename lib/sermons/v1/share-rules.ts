@@ -88,9 +88,9 @@ export function isSermonShared(sermon: {
  * Who can read a shared sermon, in words that are true of the apps.
  *
  * Both apps only open a church's sermon notes for a signed-in account that
- * follows or has joined that church, so "public" reaches exactly the same
+ * has added or joined that church, so "public" reaches exactly the same
  * people as "followers" there. Calling it "Anyone" promised a reach it does not
- * have; both read as followers.
+ * have; both read as people who added the church.
  */
 export function sermonAudienceLabel(
   visibility: string | null | undefined,
@@ -99,7 +99,9 @@ export function sermonAudienceLabel(
   switch (visibility) {
     case "public":
     case "followers":
-      return form === "long" ? "Anyone who follows your church" : "Followers";
+      return form === "long"
+        ? "Anyone who has added your church"
+        : "Added";
     case "members":
       return "Members only";
     default:

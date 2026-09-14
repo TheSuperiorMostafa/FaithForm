@@ -5,6 +5,7 @@ import {
   decideTransition,
   grantsDashboardAccess,
   grantsPublishedContentAccess,
+  publishedContentAccessState,
   RELATIONSHIP_STATES,
   type JoinPolicy,
   type RelationshipState,
@@ -19,12 +20,20 @@ test("no visitor relationship state ever grants dashboard access", () => {
   }
 });
 
-test("only following and joined see what a church publishes", () => {
+test("following, pending, and joined see what a church publishes to followers", () => {
   assert.equal(grantsPublishedContentAccess("following"), true);
+  assert.equal(grantsPublishedContentAccess("pending"), true);
   assert.equal(grantsPublishedContentAccess("joined"), true);
-  assert.equal(grantsPublishedContentAccess("pending"), false);
   assert.equal(grantsPublishedContentAccess("left"), false);
   assert.equal(grantsPublishedContentAccess("blocked"), false);
+});
+
+test("pending maps to following for content RPC visibility checks", () => {
+  assert.equal(publishedContentAccessState("pending"), "following");
+  assert.equal(publishedContentAccessState("following"), "following");
+  assert.equal(publishedContentAccessState("joined"), "joined");
+  assert.equal(publishedContentAccessState("blocked"), "blocked");
+  assert.equal(publishedContentAccessState(null), null);
 });
 
 test("following an open or approval-required church is immediate", () => {

@@ -48,7 +48,7 @@ import { Textarea } from "@/components/ui/textarea";
 const VISIBILITY_LABELS = {
   none: "Not in FaithForm",
   public: "Everyone",
-  followers: "Followers and members",
+  followers: "People who added this church, and members",
   members: "Members only",
 } as const;
 

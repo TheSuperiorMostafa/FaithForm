@@ -55,6 +55,7 @@ fun HomeFeedScreen(
     onOpenItem: (FeedItem) -> Unit,
     onReachedEnd: () -> Unit,
     modifier: Modifier = Modifier,
+    isJoinPending: Boolean = false,
     /** Shown under the church's name, above the feed — the way into its sermon notes. */
     header: (@Composable () -> Unit)? = null
 ) {
@@ -74,6 +75,12 @@ fun HomeFeedScreen(
                 color = theme.palette.contentPrimary,
                 modifier = Modifier.padding(top = FaithFormTokens.Spacing.base)
             )
+        }
+
+        if (isJoinPending) {
+            item(key = "join-pending") {
+                JoinPendingBanner()
+            }
         }
 
         if (header != null) {
@@ -209,6 +216,29 @@ private fun OfflineBanner(message: String) {
             .background(theme.palette.warning, RoundedCornerShape(FaithFormTokens.Radius.md))
             .padding(FaithFormTokens.Spacing.md)
     )
+}
+
+@Composable
+private fun JoinPendingBanner() {
+    val theme = LocalFaithFormTheme.current
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(theme.palette.warning, RoundedCornerShape(FaithFormTokens.Radius.md))
+            .padding(FaithFormTokens.Spacing.md),
+        verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm),
+    ) {
+        Text(
+            stringResource(R.string.join_pending_home_title),
+            style = MaterialTheme.typography.titleMedium,
+            color = theme.palette.warningContent,
+        )
+        Text(
+            stringResource(R.string.join_pending_home_body),
+            style = MaterialTheme.typography.bodyMedium,
+            color = theme.palette.warningContent,
+        )
+    }
 }
 
 /**

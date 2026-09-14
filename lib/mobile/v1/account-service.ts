@@ -67,7 +67,7 @@ export const ENABLED_CAPABILITIES = [
   // this on opens a screen rather than a blank page. A church still sees
   // nothing until it publishes a sermon: visibility defaults to 'none'.
   // Presentation archive (Prompt 10) reuses this capability; native viewers
-  // land in a later phase.
+  // live under Services → Messages → Slides.
   "sermons",
 ] as const;
 

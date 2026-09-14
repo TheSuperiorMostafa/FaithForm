@@ -73,6 +73,7 @@ struct HomeTabView: View {
                 model: features.feed,
                 churchName: church.churchName,
                 churchSlug: church.churchSlug,
+                isJoinPending: church.state == .pending,
                 onOpenItem: { path.append(.announcement($0)) },
                 // Notes otherwise hide behind Watch's segmented control.
                 onOpenSermonNotes: sermonNotesAction(churchSlug: church.churchSlug)

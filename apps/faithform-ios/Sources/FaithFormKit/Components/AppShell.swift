@@ -120,7 +120,11 @@ public struct AppShellView: View {
                                 .foregroundStyle(theme.palette.contentPrimary)
                             StatusChip(
                                 relationshipText(relationship.state),
-                                tone: relationship.state == .blocked ? .danger : .neutral
+                                tone: relationship.state == .blocked
+                                    ? .danger
+                                    : relationship.state == .pending
+                                      ? .warning
+                                      : .neutral
                             )
                         }
                     }

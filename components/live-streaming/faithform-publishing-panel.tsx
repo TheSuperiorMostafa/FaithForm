@@ -70,7 +70,7 @@ const STATE_LABELS: Record<string, { label: string; tone: "live" | "on" | "off" 
 
 const VISIBILITIES = [
   { value: "public", label: "Anyone using FaithForm" },
-  { value: "followers", label: "People following this church" },
+  { value: "followers", label: "People who added this church" },
   { value: "members", label: "People who have joined" },
 ] as const;
 

@@ -55,8 +55,8 @@ export default async function MemberAppPage() {
           Member App
         </h1>
         <p className="text-sm text-muted-foreground">
-          How your church shows up in the FaithForm app — who can find you, who
-          can join, and the invitations that let someone in.
+          Your people&apos;s app for this church — invitation links first,
+          optional search listing, join requests, and what you publish.
         </p>
       </div>
 

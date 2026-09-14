@@ -5,7 +5,7 @@ import {
   getAnnouncementFeed,
   type FeedCursor,
 } from "@/lib/faithform/announcements-feed";
-import { resolveRelationshipState } from "@/lib/mobile/v1/discovery-service";
+import { resolvePublishedContentRelationshipState } from "@/lib/mobile/v1/discovery-service";
 import type { FeedItemDto } from "@/lib/mobile/v1/contract";
 
 /**
@@ -71,7 +71,7 @@ export async function getFeedPage(input: {
   const church = await loadChurchContext(input.churchSlug);
   if (!church) throw new VisitorError("church_not_found", "Church not found.");
 
-  const relationshipState = await resolveRelationshipState(
+  const relationshipState = await resolvePublishedContentRelationshipState(
     input.userId,
     input.churchSlug,
   );
@@ -105,7 +105,7 @@ export async function getFeedItem(input: {
   const church = await loadChurchContext(input.churchSlug);
   if (!church) return null;
 
-  const relationshipState = await resolveRelationshipState(
+  const relationshipState = await resolvePublishedContentRelationshipState(
     input.userId,
     input.churchSlug,
   );

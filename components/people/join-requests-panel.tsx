@@ -5,6 +5,7 @@ import { toast } from "sonner";
 
 import { decideVisitorRelationship } from "@/app/dashboard/people/claim-actions";
 import type { ChurchRelationshipRow } from "@/lib/faithform/staff-relationships";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -28,8 +29,7 @@ function formatDate(value: string | null): string | null {
  *
  * These are join requests against an approval-required policy. Approving makes
  * someone a member *in the app* — feed access at member visibility, nothing
- * more. Declining returns them to "left"; they can still follow what the
- * church publishes publicly.
+ * more. Declining returns them to "left"; they can still add the church again.
  */
 export function JoinRequestsPanel({
   requests,
@@ -58,8 +58,8 @@ export function JoinRequestsPanel({
           Requests to join ({requests.length})
         </CardTitle>
         <CardDescription>
-          Someone using the app asked to join your church. Approving admits
-          them as a member in the app; it never grants dashboard access.
+          These people asked to join your church in the app. They are waiting
+          on staff approval — not active members until you approve.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
@@ -70,10 +70,13 @@ export function JoinRequestsPanel({
               key={request.accountId}
               className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-background px-4 py-3"
             >
-              <div className="flex min-w-0 flex-col">
-                <span className="truncate text-sm font-semibold text-foreground">
-                  {request.displayName ?? "Someone from the app"}
-                </span>
+              <div className="flex min-w-0 flex-col gap-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="truncate text-sm font-semibold text-foreground">
+                    {request.displayName ?? "Someone from the app"}
+                  </span>
+                  <Badge variant="outline">Pending approval</Badge>
+                </div>
                 {asked && (
                   <span className="text-xs text-muted-foreground">
                     Asked {asked}

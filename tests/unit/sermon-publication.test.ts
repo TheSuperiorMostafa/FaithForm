@@ -346,8 +346,8 @@ test("any other write failure is a plain retry message", () => {
 test("audience labels promise only what the apps do", () => {
   // Both apps require a signed-in follower before opening sermon notes, so a
   // "public" sermon is not readable by "anyone".
-  assert.equal(sermonAudienceLabel("public"), "Anyone who follows your church");
-  assert.equal(sermonAudienceLabel("followers"), "Anyone who follows your church");
+  assert.equal(sermonAudienceLabel("public"), "Anyone who has added your church");
+  assert.equal(sermonAudienceLabel("followers"), "Anyone who has added your church");
   assert.equal(sermonAudienceLabel("members"), "Members only");
   assert.equal(sermonAudienceLabel("none"), null);
   for (const visibility of ["public", "followers", "members"]) {

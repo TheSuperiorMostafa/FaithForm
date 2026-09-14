@@ -33,7 +33,7 @@ type Audience = "followers" | "members";
 const AUDIENCES: Array<{ value: Audience; hint: string }> = [
   {
     value: "followers",
-    hint: "Everyone who follows your church in the FaithForm app, including members.",
+    hint: "Everyone who has added your church in the FaithForm app, including members.",
   },
   {
     value: "members",

@@ -39,11 +39,11 @@ function formatDate(value: string): string {
   });
 }
 
-function statusOf(invitation: InvitationSummary): "active" | "used up" | "expired" | "withdrawn" {
+function statusOf(invitation: InvitationSummary): "open" | "used up" | "expired" | "withdrawn" {
   if (invitation.revokedAt) return "withdrawn";
   if (invitation.usedCount >= invitation.maxUses) return "used up";
   if (new Date(invitation.expiresAt).getTime() < Date.now()) return "expired";
-  return "active";
+  return "open";
 }
 
 /**
@@ -218,14 +218,14 @@ export function VisitorInvitationsCard({
                     <span
                       className={cn(
                         "rounded-full px-2.5 py-0.5 text-xs font-semibold",
-                        status === "active"
+                        status === "open"
                           ? "bg-accent/15 text-foreground"
                           : "bg-muted text-muted-foreground",
                       )}
                     >
                       {status}
                     </span>
-                    {isAdmin && status === "active" && (
+                    {isAdmin && status === "open" && (
                       <Button
                         size="sm"
                         variant="outline"

@@ -1,7 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { VisitorError } from "@/lib/faithform/errors";
 import { getVisitorAccount } from "@/lib/faithform/account";
-import { resolveRelationshipState } from "@/lib/mobile/v1/discovery-service";
+import { resolvePublishedContentRelationshipState } from "@/lib/mobile/v1/discovery-service";
 import {
   issueMediaCapability,
   mediaPlaybackConfigured,
@@ -74,7 +74,7 @@ export async function getLiveMedia(input: {
   churchSlug: string;
 }): Promise<{ live: LiveMediaDto | null; version: number }> {
   await requireChurchSlug(input.churchSlug);
-  const relationshipState = await resolveRelationshipState(input.userId, input.churchSlug);
+  const relationshipState = await resolvePublishedContentRelationshipState(input.userId, input.churchSlug);
 
   const admin = createAdminClient();
   const [{ data }, version] = await Promise.all([
@@ -137,7 +137,7 @@ export async function getArchivePage(input: {
   query: string | null;
 }): Promise<{ items: ArchiveItemDto[]; nextCursor: ArchiveCursor | null; version: number }> {
   await requireChurchSlug(input.churchSlug);
-  const relationshipState = await resolveRelationshipState(input.userId, input.churchSlug);
+  const relationshipState = await resolvePublishedContentRelationshipState(input.userId, input.churchSlug);
 
   const admin = createAdminClient();
   // One more than the page, so "is there another page" needs no second query
@@ -213,7 +213,7 @@ export async function getMediaDetail(input: {
   mediaId: string;
 }): Promise<MediaDetailDto | null> {
   await requireChurchSlug(input.churchSlug);
-  const relationshipState = await resolveRelationshipState(input.userId, input.churchSlug);
+  const relationshipState = await resolvePublishedContentRelationshipState(input.userId, input.churchSlug);
 
   const admin = createAdminClient();
   const { data } = await admin.rpc("mobile_media_detail", {
@@ -333,7 +333,7 @@ export async function grantPlayback(input: {
   const account = await getVisitorAccount(input.userId);
   if (!account) throw new VisitorError("account_missing", "No visitor account.");
 
-  const relationshipState = await resolveRelationshipState(input.userId, input.churchSlug);
+  const relationshipState = await resolvePublishedContentRelationshipState(input.userId, input.churchSlug);
 
   const admin = createAdminClient();
   const { data, error } = await admin.rpc("mobile_media_playback_grant", {
@@ -452,7 +452,7 @@ export async function authorizeDelivery(input: {
     .maybeSingle();
   if (!account || account.status !== "active") return null;
 
-  const relationshipState = await resolveRelationshipState(
+  const relationshipState = await resolvePublishedContentRelationshipState(
     account.user_id as string,
     input.churchSlug,
   );

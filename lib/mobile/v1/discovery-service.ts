@@ -4,6 +4,7 @@ import { getVisitorAccount, ensureVisitorAccount } from "@/lib/faithform/account
 import { discoverChurches, getPublicChurchProfile } from "@/lib/faithform/discovery";
 import { findNearbyChurches } from "@/lib/faithform/nearby";
 import type { RelationshipState } from "@/lib/faithform/relationship-state";
+import { publishedContentAccessState } from "@/lib/faithform/relationship-state";
 import type {
   ChurchProfileDto,
   DiscoveredChurchDto,
@@ -157,6 +158,18 @@ export async function resolveRelationshipState(
     .maybeSingle();
 
   return (data?.state as RelationshipState | null) ?? null;
+}
+
+/**
+ * Relationship state for content RPCs. Pending join keeps follower-level access.
+ */
+export async function resolvePublishedContentRelationshipState(
+  userId: string | null,
+  churchSlug: string,
+): Promise<RelationshipState | null> {
+  return publishedContentAccessState(
+    await resolveRelationshipState(userId, churchSlug),
+  );
 }
 
 export async function getChurchProfile(

@@ -173,12 +173,12 @@ export const FEATURES: FeatureDefinition[] = [
     key: "member_app",
     label: "Member App",
     description:
-      "The church's presence in the FaithForm app: discovery, join requests, invitation links, and the ability to publish content (notes, slides, media) to the app.",
+      "Your church's presence in the FaithForm app for your people: invitation links, optional search listing, join requests, and publishing notes, slides, and media.",
     href: "/dashboard/app",
     icon: Smartphone,
     routes: ["/dashboard/app"],
     publicImpact:
-      "Delists the church from search and Nearby in the member app, and stops new members joining or following. People already connected keep the app and its content. Staff lose Publish to app controls until Member App is on again.",
+      "Hides invitation links and search listing, and stops new people from joining or adding the church. People already connected keep the app and its content. Staff lose Publish to app controls until Member App is on again.",
   },
 ];
 

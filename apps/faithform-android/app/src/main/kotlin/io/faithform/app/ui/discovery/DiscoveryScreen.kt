@@ -49,8 +49,8 @@ import androidx.compose.material.icons.outlined.WifiOff
 /**
  * The welcome screen someone sees with no church yet.
  *
- * Two doors and nothing else — the same information hierarchy as the SwiftUI
- * WelcomeView, rendered with Android-native components.
+ * Invitation first — FaithForm is the church's app for their people.
+ * Search stays available as a secondary door when a church has turned listing on.
  */
 @Composable
 fun WelcomeScreen(onFindChurch: () -> Unit, onHaveInvitation: () -> Unit) {
@@ -75,20 +75,6 @@ fun WelcomeScreen(onFindChurch: () -> Unit, onHaveInvitation: () -> Unit) {
         )
         Spacer(Modifier.weight(1f))
         Button(
-            onClick = onFindChurch,
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = FaithFormTokens.TouchTarget.recommended)
-        ) {
-            Icon(
-                Icons.Outlined.Search,
-                contentDescription = null,
-                modifier = Modifier.size(FaithFormTokens.IconSize.sizeMedium)
-            )
-            Spacer(Modifier.size(FaithFormTokens.Spacing.sm))
-            Text(stringResource(R.string.find_a_church))
-        }
-        OutlinedButton(
             onClick = onHaveInvitation,
             modifier = Modifier
                 .fillMaxWidth()
@@ -101,6 +87,20 @@ fun WelcomeScreen(onFindChurch: () -> Unit, onHaveInvitation: () -> Unit) {
             )
             Spacer(Modifier.size(FaithFormTokens.Spacing.sm))
             Text(stringResource(R.string.have_invitation))
+        }
+        OutlinedButton(
+            onClick = onFindChurch,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = FaithFormTokens.TouchTarget.recommended)
+        ) {
+            Icon(
+                Icons.Outlined.Search,
+                contentDescription = null,
+                modifier = Modifier.size(FaithFormTokens.IconSize.sizeMedium)
+            )
+            Spacer(Modifier.size(FaithFormTokens.Spacing.sm))
+            Text(stringResource(R.string.find_a_church))
         }
     }
 }

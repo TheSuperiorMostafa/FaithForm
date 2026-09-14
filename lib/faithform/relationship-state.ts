@@ -162,7 +162,23 @@ export function decideTransition(request: TransitionRequest): TransitionDecision
 
 /** States that let a visitor read what a church publishes for followers. */
 export function grantsPublishedContentAccess(state: RelationshipState): boolean {
-  return state === "following" || state === "joined";
+  // Pending join keeps follower-level access (P5): waiting on approval must not
+  // blank Home or hide posts the person already had as a follower.
+  return state === "following" || state === "pending" || state === "joined";
+}
+
+/**
+ * Relationship state to pass into content RPCs (`followers` visibility checks).
+ *
+ * SQL treats `following` | `joined` as follower access. Map `pending` to
+ * `following` so a join request does not drop the feed, media, or sermons.
+ * Members-only content still requires a real `joined` state.
+ */
+export function publishedContentAccessState(
+  state: RelationshipState | null,
+): RelationshipState | null {
+  if (state === "pending") return "following";
+  return state;
 }
 
 /**

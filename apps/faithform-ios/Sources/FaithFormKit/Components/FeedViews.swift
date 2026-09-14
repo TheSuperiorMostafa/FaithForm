@@ -186,6 +186,7 @@ public struct HomeFeedView: View {
     private let model: FeedModel
     private let churchName: String
     private let churchSlug: String
+    private let isJoinPending: Bool
     private let onOpenItem: @MainActor (FeedItem) -> Void
     /// Nil when this church's sermon notes are not reachable, and then no door
     /// is drawn.
@@ -195,12 +196,14 @@ public struct HomeFeedView: View {
         model: FeedModel,
         churchName: String,
         churchSlug: String,
+        isJoinPending: Bool = false,
         onOpenItem: @escaping @MainActor (FeedItem) -> Void,
         onOpenSermonNotes: (@MainActor () -> Void)? = nil
     ) {
         self.model = model
         self.churchName = churchName
         self.churchSlug = churchSlug
+        self.isJoinPending = isJoinPending
         self.onOpenItem = onOpenItem
         self.onOpenSermonNotes = onOpenSermonNotes
     }
@@ -209,6 +212,9 @@ public struct HomeFeedView: View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
                 header
+                if isJoinPending {
+                    JoinPendingBanner()
+                }
                 if let onOpenSermonNotes {
                     SermonNotesEntryCard(action: onOpenSermonNotes)
                 }

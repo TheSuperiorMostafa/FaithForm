@@ -2,8 +2,9 @@ import SwiftUI
 
 /// The welcome screen someone sees with no church yet.
 ///
-/// Two doors and nothing else. Editorial rather than dense: one confident
-/// sentence, generous space, and the two things a person can actually do.
+/// Invitation first — FaithForm is the church's app for their people.
+/// Search stays available as a secondary door when a church has turned
+/// listing on.
 public struct WelcomeView: View {
     @Environment(\.faithformTheme) private var theme
     private let onFindChurch: @MainActor () -> Void
@@ -34,12 +35,12 @@ public struct WelcomeView: View {
             Spacer()
 
             VStack(spacing: FaithFormTokens.Spacing.md) {
-                Button(action: onFindChurch) {
-                    Label(L.findAChurch, systemImage: "magnifyingglass")
-                }
-                    .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
                 Button(action: onHaveInvitation) {
                     Label(L.haveInvitation, systemImage: "envelope.open")
+                }
+                    .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
+                Button(action: onFindChurch) {
+                    Label(L.findAChurch, systemImage: "magnifyingglass")
                 }
                     .buttonStyle(FaithFormButtonStyle(kind: .secondary, theme: theme))
             }

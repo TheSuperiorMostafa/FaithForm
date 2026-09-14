@@ -187,20 +187,28 @@ public struct PresentationViewer: View {
                 .padding(FaithFormTokens.Spacing.xl)
 
             case let .loaded(detail):
-                TabView {
-                    ForEach(Array(detail.pages.enumerated()), id: \.element.id) { index, page in
-                        SlidePageView(
-                            page: page,
-                            theme: detail.theme,
-                            index: index,
-                            total: detail.pages.count
-                        )
+                if detail.pages.isEmpty {
+                    SermonMessage(
+                        title: L.presentationsEmpty,
+                        message: ""
+                    )
+                    .padding(FaithFormTokens.Spacing.xl)
+                } else {
+                    TabView {
+                        ForEach(Array(detail.pages.enumerated()), id: \.element.id) { index, page in
+                            SlidePageView(
+                                page: page,
+                                theme: detail.theme,
+                                index: index,
+                                total: detail.pages.count
+                            )
+                        }
                     }
+                    .tabViewStyle(.page(indexDisplayMode: .automatic))
+                    .background(slideBackground(detail.theme))
+                    .navigationTitle(detail.title)
+                    .navigationBarTitleDisplayMode(.inline)
                 }
-                .tabViewStyle(.page(indexDisplayMode: .automatic))
-                .background(slideBackground(detail.theme))
-                .navigationTitle(detail.title)
-                .navigationBarTitleDisplayMode(.inline)
             }
         }
         .task { await model.load() }
@@ -266,10 +274,21 @@ private struct SlidePageView: View {
     }
 
     private var accessibilityReading: String {
-        let parts = page.readingOrder.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-        if !parts.isEmpty { return parts.joined(separator: ". ") }
+        let ordered = page.readingOrder.compactMap { key -> String? in
+            switch key {
+            case "title": return page.title
+            case "scripture": return page.scripture
+            case "body": return page.body
+            default: return nil
+            }
+        }
+        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty }
+
+        if !ordered.isEmpty { return ordered.joined(separator: ". ") }
         return [page.title, page.scripture, page.body]
             .compactMap { $0 }
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .joined(separator: ". ")
     }

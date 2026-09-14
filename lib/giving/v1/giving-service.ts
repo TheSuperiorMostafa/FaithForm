@@ -3,7 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { VisitorError } from "@/lib/faithform/errors";
 import { getVisitorAccount } from "@/lib/faithform/account";
 import { isChurchFeatureEnabled } from "@/lib/features/access";
-import { resolveRelationshipState } from "@/lib/mobile/v1/discovery-service";
+import { resolvePublishedContentRelationshipState } from "@/lib/mobile/v1/discovery-service";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { givingChannelsFor, type GivingChannels } from "@/lib/giving/v1/giving-channels";
 import {
@@ -184,7 +184,7 @@ export async function getGivingHome(input: {
     };
   }
 
-  const relationshipState = await resolveRelationshipState(input.userId, input.churchSlug);
+  const relationshipState = await resolvePublishedContentRelationshipState(input.userId, input.churchSlug);
 
   const { data } = await db.rpc("mobile_giving_funds", {
     p_church_slug: input.churchSlug,
@@ -318,7 +318,7 @@ export async function startDonation(
     };
   }
 
-  const relationshipState = await resolveRelationshipState(input.userId, input.churchSlug);
+  const relationshipState = await resolvePublishedContentRelationshipState(input.userId, input.churchSlug);
   if (relationshipState === "blocked") {
     // The same answer a blocked caller gets everywhere: the church is simply
     // not there. Refusing with a distinct reason would confirm the block.

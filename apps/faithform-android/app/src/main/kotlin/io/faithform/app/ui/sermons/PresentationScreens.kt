@@ -321,6 +321,14 @@ private fun SlidePage(
         null
     }
     val reading = page.readingOrder
+        .mapNotNull { key ->
+            when (key.trim()) {
+                "title" -> page.title
+                "scripture" -> page.scripture
+                "body" -> page.body
+                else -> null
+            }
+        }
         .map { it.trim() }
         .filter { it.isNotEmpty() }
         .ifEmpty {

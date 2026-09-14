@@ -18,7 +18,7 @@
     <string name="landing_give_body">Support your church from your phone, with a receipt for every gift.</string>
     <string name="your_churches">Your churches</string>
     <string name="no_churches_title">No churches yet</string>
-    <string name="no_churches_body">When you follow or join a church, it will appear here.</string>
+    <string name="no_churches_body">When you add or join a church, it will appear here.</string>
     <string name="account">Account</string>
     <string name="sign_out">Sign out</string>
     <string name="delete_account">Delete my account</string>
@@ -39,19 +39,21 @@
     <string name="error_title">Something went wrong</string>
     <string name="error_load_failed_body">You\'re signed in, but your account couldn\'t be loaded. This is usually temporary — try again in a moment.</string>
     <string name="try_again">Try again</string>
-    <string name="state_following">Following</string>
+    <string name="state_following">Added</string>
     <string name="state_pending">Request pending</string>
+    <string name="join_pending_home_title">Waiting for your church</string>
+    <string name="join_pending_home_body">Your request to join is with the church. Someone on staff needs to accept you before you become a member in the app. You can still see what they publish for people who have added them.</string>
     <string name="state_joined">Member</string>
-    <string name="state_left">Not following</string>
+    <string name="state_left">Not added</string>
     <string name="state_blocked">Unavailable</string>
 
     <!-- Keys mirror apps/faithform-ios/Sources/FaithFormKit/Strings.swift.
          scripts/verify-localization-parity.mjs fails if either side
          gains a key the other lacks. -->
     <string name="welcome_title">Find your church</string>
-    <string name="welcome_body">Follow the churches you belong to, and keep what matters in one place.</string>
-    <string name="find_a_church">Find a Church</string>
-    <string name="have_invitation">I Have an Invitation</string>
+    <string name="welcome_body">Use the link your church sent you. If they asked you to search, you can do that here too.</string>
+    <string name="find_a_church">Find your church</string>
+    <string name="have_invitation">I have a link</string>
     <string name="enter_invitation_code">Paste your invitation link</string>
     <string name="search_placeholder">Church name, city, or postal code</string>
     <string name="churches_near_me">Churches Near Me</string>
@@ -65,13 +67,13 @@
     <string name="location_skip">Search by name instead</string>
     <string name="location_denied_title">Location is off</string>
     <string name="location_denied_body">You can still find your church by name, city, or postal code.</string>
-    <string name="follow_church">Follow</string>
-    <string name="following_church">Following</string>
+    <string name="follow_church">Add this church</string>
+    <string name="following_church">Added</string>
     <string name="request_to_join">Request to Join</string>
     <string name="join_church">Join</string>
     <string name="accept_invitation">Accept Invitation</string>
     <string name="leave_church">Leave</string>
-    <string name="pending_explainer">Your request is with the church. You can still follow what they publish.</string>
+    <string name="pending_explainer">Your request is with the church. Waiting for someone on staff to accept you. You can still see what they publish for people who have added them.</string>
     <string name="invite_only_explainer">This church joins by invitation.</string>
     <string name="add_another_church">Add another church</string>
     <string name="switch_church">Switch church</string>
@@ -330,7 +332,7 @@
     <string name="tab_account">Account</string>
     <string name="home_subtitle">Everything your church has shared with you.</string>
     <string name="no_church_title">No church yet</string>
-    <string name="no_church_body">Find your church to see what they\'ve shared.</string>
+    <string name="no_church_body">Add your church to see what they have shared.</string>
     <string name="church_no_access">You can\'t see this church\'s posts right now.</string>
     <string name="check_in_entry_body">Scan the code your church puts on the screen, or type the short code.</string>
     <string name="media_entry_body">Join live, catch up on a past service, or open the message.</string>
@@ -384,8 +386,8 @@
     <string name="auth_error_link_invalid">That confirmation link isn\'t valid. Sign in with your email and password, or create your account again for a fresh link.</string>
 
     <!-- Invitations -->
-    <string name="invitation_title">Join by invitation</string>
-    <string name="invitation_body">Paste the invitation link or code your church sent you.</string>
+    <string name="invitation_title">Join with your church\'s link</string>
+    <string name="invitation_body">Paste the link or code your church sent you.</string>
     <string name="invitation_field_label">Invitation link or code</string>
     <string name="invitation_joining">Joining…</string>
     <string name="invitation_pending_banner">You have an invitation waiting. Create an account or sign in to use it.</string>

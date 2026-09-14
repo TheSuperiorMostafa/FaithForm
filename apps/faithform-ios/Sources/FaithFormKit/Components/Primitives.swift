@@ -280,3 +280,32 @@ public struct OfflineBanner: View {
         .accessibilityLabel(Text(message))
     }
 }
+
+/// Shown on Home while a join request is waiting on church staff.
+public struct JoinPendingBanner: View {
+    @Environment(\.faithformTheme) private var theme
+
+    public init() {}
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.sm) {
+            HStack(spacing: FaithFormTokens.Spacing.sm) {
+                Image(systemName: "hourglass")
+                    .font(.system(size: FaithFormTokens.IconSize.sizeSmall))
+                Text(L.joinPendingHomeTitle)
+                    .font(theme.font(FaithFormTokens.Text.titleMedium))
+            }
+            Text(L.joinPendingHomeBody)
+                .font(theme.font(FaithFormTokens.Text.bodySmall))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .foregroundStyle(theme.palette.warningContent)
+        .padding(FaithFormTokens.Spacing.md)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: FaithFormTokens.Radius.md, style: .continuous)
+                .fill(theme.palette.warning)
+        )
+        .accessibilityElement(children: .combine)
+    }
+}

@@ -1,7 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { VisitorError } from "@/lib/faithform/errors";
 import { isChurchFeatureEnabled } from "@/lib/features/access";
-import { resolveRelationshipState } from "@/lib/mobile/v1/discovery-service";
+import { resolvePublishedContentRelationshipState } from "@/lib/mobile/v1/discovery-service";
 import {
   projectOutline,
   projectQuestions,
@@ -157,7 +157,7 @@ export async function getSermonArchivePage(input: {
   version: number;
 }> {
   const church = await requireChurch(input.churchSlug);
-  const relationshipState = await resolveRelationshipState(
+  const relationshipState = await resolvePublishedContentRelationshipState(
     input.userId,
     input.churchSlug,
   );
@@ -219,7 +219,7 @@ export async function getSermonDetail(input: {
   sermonId: string;
 }): Promise<SermonDetailDto | null> {
   const church = await requireChurch(input.churchSlug);
-  const relationshipState = await resolveRelationshipState(
+  const relationshipState = await resolvePublishedContentRelationshipState(
     input.userId,
     input.churchSlug,
   );
