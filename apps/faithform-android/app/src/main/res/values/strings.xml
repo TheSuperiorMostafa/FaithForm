@@ -224,6 +224,9 @@
     <string name="sermons_application_label">Taking it home</string>
     <string name="sermons_notes_only">This sermon was shared without an outline.</string>
     <string name="sermons_retry">Try again</string>
+    <string name="sermons_blocked_body">You can\'t read this church\'s sermon notes right now.</string>
+    <string name="sermons_load_more_failed">More sermon notes couldn\'t load.</string>
+    <string name="sermons_home_entry_body">Outlines and discussion questions from past sermons.</string>
     <string name="media_play">Play</string>
     <string name="media_pause">Pause</string>
     <string name="media_buffering">Buffering…</string>
