@@ -37,6 +37,7 @@ import FaithFormKit
 /// screens start from their own models, never the previous church's rows.
 struct RootView: View {
     @Environment(\.faithformTheme) private var theme
+    @Environment(\.scenePhase) private var scenePhase
     private let dependencies: AppDependencies
     @State private var model: RootModel
     @State private var discovery: DiscoveryModel
@@ -124,6 +125,19 @@ struct RootView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(theme.palette.background.ignoresSafeArea())
         .task { await model.load() }
+        // Coming back to FaithForm is an execution opportunity automatic
+        // check-in uses: regions are reconciled, the OS is asked whether the
+        // device is inside one, and anything due is sent. It is also when a
+        // permission changed in Settings shows up on screen.
+        .onChange(of: scenePhase) { _, phase in
+            guard phase == .active else { return }
+            let attendance = dependencies.attendance
+            let attendanceModel = dependencies.attendanceModel
+            Task {
+                await attendance.foreground()
+                await attendanceModel.refresh()
+            }
+        }
         .onReceive(NotificationCenter.default.publisher(for: .faithformDeepLink)) { note in
             guard let url = note.userInfo?["url"] as? URL else { return }
             model.open(url)
@@ -192,7 +206,12 @@ struct RootView: View {
     private func churchScreen(for tab: RootTab, features: ChurchFeatures, isStale: Bool) -> some View {
         switch tab {
         case .checkIn:
-            CheckInTabView(root: model, features: features, isStale: isStale)
+            CheckInTabView(
+                root: model,
+                features: features,
+                attendance: dependencies.attendanceModel,
+                isStale: isStale
+            )
         case .watch:
             WatchTabView(root: model, features: features, isStale: isStale)
         case .give:

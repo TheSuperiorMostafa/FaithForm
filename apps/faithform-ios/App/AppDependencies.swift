@@ -1,4 +1,5 @@
 import Foundation
+import UserNotifications
 import FaithFormKit
 
 /// The object graph, built once at launch.
@@ -33,6 +34,23 @@ final class AppDependencies {
     /// configured — the sign-in screen still renders, and submitting explains
     /// what is missing instead of spinning.
     let auth: SessionAuthenticating?
+
+    // MARK: Automatic check-in
+
+    /// The one `CLLocationManager` automatic check-in uses, with its delegate
+    /// set **here, during `App.init`**.
+    ///
+    /// When iOS relaunches the app in the background for a region crossing, it
+    /// hands the event to whatever delegate exists as launch finishes. Building
+    /// the adapter anywhere later — in a view, in the first account load —
+    /// would be an arrival delivered to nobody. The adapter holds anything that
+    /// arrives before the handler below is attached.
+    let location: CoreLocationAdapter
+    let attendanceConfiguration: APIGeofenceConfigurationSource
+    let attendanceNotifier: SystemAttendanceNotifier
+    let attendance: AutomaticAttendanceService
+    let attendanceModel: AutomaticAttendanceModel
+    let attendanceNotificationResponder: AttendanceNotificationResponder
 
     init(
         environment: APIEnvironment,
@@ -69,6 +87,71 @@ final class AppDependencies {
         self.sermons = SermonClient(api: api, cache: cache)
         self.giving = GivingClient(api: api, cache: cache)
         self.resumePositions = KeychainResumePositionStore(store: secureStore)
+
+        let location = CoreLocationAdapter()
+        let configuration = APIGeofenceConfigurationSource(api: api)
+        let notifier = SystemAttendanceNotifier()
+        let reconciler = GeofenceReconciler(
+            monitor: location,
+            authorization: location,
+            source: configuration
+        )
+        let coordinator = AutomaticAttendanceCoordinator(
+            reconciler: reconciler,
+            submitter: APIAttendanceSubmitter(api: api),
+            sampler: location,
+            // The Keychain, under the same service as the session, so sign-out's
+            // `deleteAll` takes any unsent evidence with it.
+            store: KeychainAttemptStore(secureStore: secureStore),
+            authorization: location,
+            notifier: notifier
+        )
+        let service = AutomaticAttendanceService(
+            coordinator: coordinator,
+            reconciler: reconciler,
+            settingsStore: KeychainAutomaticAttendanceSettingsStore(secureStore: secureStore),
+            environment: environment.key
+        )
+        let model = AutomaticAttendanceModel(
+            service: service,
+            authorizer: location,
+            consent: APIAttendanceConsent(api: api),
+            notifications: notifier,
+            history: APIAttendanceHistory(api: api)
+        )
+        self.location = location
+        self.attendanceConfiguration = configuration
+        self.attendanceNotifier = notifier
+        self.attendance = service
+        self.attendanceModel = model
+        // Set as the notification centre's delegate now, for the same reason
+        // the location delegate is: a tap on "Check in" can launch the app.
+        self.attendanceNotificationResponder = AttendanceNotificationResponder(service: service)
+        UNUserNotificationCenter.current().delegate = attendanceNotificationResponder
+
+        Task {
+            // Order matters. What this device last knew is read first, then the
+            // handler attaches and receives anything iOS delivered during launch,
+            // and only then does anything touch the network.
+            await service.prepare()
+            await service.setChangeHandler { await model.refresh() }
+            await location.setAuthorizationChangeHandler { _ in
+                await service.permissionChanged()
+            }
+            await location.setRegionHandler { identifier, transition in
+                await service.handleRegion(identifier: identifier, transition: transition)
+            }
+            await service.start()
+        }
+    }
+
+    /// Every church this account may be checked in at: the ones it can still
+    /// read. A church with no confirmed People link refuses for itself and is
+    /// simply not watched.
+    static func attendanceChurches(in bootstrap: Bootstrap) -> [AttendanceChurch] {
+        bootstrap.relationships
+            .filter { $0.canReadPublishedContent && $0.state != .blocked && $0.state != .left }
+            .map { AttendanceChurch(slug: $0.churchSlug, name: $0.churchName) }
     }
 
     /// The registry for the capabilities the server currently reports.

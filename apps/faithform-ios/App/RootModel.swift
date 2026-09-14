@@ -130,6 +130,25 @@ final class RootModel {
 
             state.apply(.ready(bootstrap, isStale: false))
             adoptSelection(bootstrap)
+
+            // Automatic check-in follows the account: who is signed in, which
+            // churches they belong to, and whether consent still holds — which
+            // may have been withdrawn on the website or another phone. Not
+            // awaited: nothing on screen waits for regions to be registered.
+            if let accountId {
+                let attendance = dependencies.attendance
+                let version = bootstrap.profile.authorizationVersion
+                let consent = bootstrap.profile.autoAttendanceConsent.rawValue
+                let churches = AppDependencies.attendanceChurches(in: bootstrap)
+                Task {
+                    await attendance.updateAccount(
+                        accountId: accountId,
+                        authorizationVersion: version,
+                        serverConsent: consent,
+                        churches: churches
+                    )
+                }
+            }
         } catch let error as APIError {
             // Typed code and correlation id only — never the message, a token,
             // or anything else a person or provider wrote.
@@ -382,6 +401,11 @@ final class RootModel {
             as: SignOutReply.self
         )
 
+        // Automatic check-in stops before anything else: every region, any
+        // unsent arrival, every pending notification and the stored choice. A
+        // region left registered would wake the app for someone signed out.
+        await dependencies.attendance.signedOut()
+        await dependencies.attendanceConfiguration.purge()
         await dependencies.cache.purgeAll()
         await dependencies.session.purgeEverything()
         lastBootstrap = nil
