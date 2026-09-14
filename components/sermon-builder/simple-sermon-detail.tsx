@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { SlideTheme } from "@/lib/sermon-builder/slide-theme-shared";
 import { getTheme } from "@/lib/sermon-builder/themes";
+import { LESSON_ANCHOR } from "@/lib/sermons/v1/share-rules";
 import type {
   DiscussionQuestion,
   Sermon,
@@ -162,13 +163,16 @@ export function SimpleSermonDetail({
         </CardContent>
       </Card>
 
-      <CreateLessonPanel
-        sermonId={sermon.id}
-        sermonTitle={sermon.title}
-        scriptureRefs={sermon.scripture_refs}
-        outline={(sermon.outline as SermonOutline | null) ?? null}
-        questions={questions}
-      />
+      {/* The share card's "Create the lesson" links here. */}
+      <div id={LESSON_ANCHOR} className="scroll-mt-24">
+        <CreateLessonPanel
+          sermonId={sermon.id}
+          sermonTitle={sermon.title}
+          scriptureRefs={sermon.scripture_refs}
+          outline={(sermon.outline as SermonOutline | null) ?? null}
+          questions={questions}
+        />
+      </div>
 
       <p className="text-sm text-muted-foreground">
         <Link

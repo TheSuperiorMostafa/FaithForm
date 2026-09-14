@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { logActivity } from "@/lib/activity/log";
 import { getChapterForTranslation } from "@/lib/bible/chapter";
 import { getBooks } from "@/lib/bible/api";
 import { getBooksTranslationId } from "@/lib/bible/translations";
@@ -17,6 +18,7 @@ import {
   publishSermonToFaithForm,
   unpublishSermonFromFaithForm,
 } from "@/lib/sermons/v1/publication";
+import { ONLY_ADMINS_CAN_SHARE } from "@/lib/sermons/v1/share-rules";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -97,13 +99,17 @@ export async function deleteSeriesAction(
   }
 }
 
+const APP_UPDATE_FAILED =
+  "We couldn't update the FaithForm app just now. Please try again.";
+
 /**
- * Shares a finished sermon's notes in the member app.
+ * Shares a sermon's notes in the FaithForm app, or updates how it is shared.
  *
  * Church admins only, and deliberately not the sermon's own author: putting
  * something in front of a congregation is a publishing decision, not an
  * authoring one. What members see is a projection — the outline and the
  * discussion questions — never the manuscript or the preacher's style notes.
+ * Sharing is also what marks the sermon published in the builder.
  */
 export async function shareSermonInAppAction(input: {
   sermonId: string;
@@ -114,7 +120,7 @@ export async function shareSermonInAppAction(input: {
   try {
     const auth = await requireChurchAuth();
     if (!auth.isAdmin) {
-      return { error: "Only church admins can share sermons in the app." };
+      return { error: ONLY_ADMINS_CAN_SHARE };
     }
 
     const denied = await featureActionError("sermon_builder");
@@ -134,6 +140,17 @@ export async function shareSermonInAppAction(input: {
 
     if (!result.ok) return { error: result.error };
 
+    if (result.markedPublished) {
+      // The same entry `updateSermon` writes for "Mark published", so the
+      // activity feed and hours saved count a shared sermon exactly once.
+      await logActivity({
+        churchId: auth.churchId,
+        automationType: "Sermon Published",
+        taskName: sermon.title,
+        triggerSource: `sermon_module:publish:${input.sermonId}`,
+      });
+    }
+
     revalidatePath("/dashboard/sermon-builder");
     revalidatePath(`/dashboard/sermon-builder/${input.sermonId}`);
     return {
@@ -141,24 +158,28 @@ export async function shareSermonInAppAction(input: {
         result.state.status === "published" ? result.state.publishedAt : undefined,
     };
   } catch (e) {
-    return {
-      error: e instanceof Error ? e.message : "Could not share the sermon",
-    };
+    console.error("[sermon-builder] share failed", e);
+    return { error: APP_UPDATE_FAILED };
   }
 }
 
-/** Takes a sermon back out of the member app. */
+/**
+ * Takes a sermon back out of the FaithForm app.
+ *
+ * Not gated on the Sermon Builder feature. Removing something from a
+ * congregation's phones only ever reduces what is exposed, and an account whose
+ * feature was switched off is exactly the one that must still be able to. (The
+ * mobile service also stops serving sermon notes while the feature is off —
+ * the two are independent on purpose.)
+ */
 export async function unshareSermonInAppAction(
   sermonId: string,
 ): Promise<{ error?: string }> {
   try {
     const auth = await requireChurchAuth();
     if (!auth.isAdmin) {
-      return { error: "Only church admins can change what the app shows." };
+      return { error: ONLY_ADMINS_CAN_SHARE };
     }
-
-    const denied = await featureActionError("sermon_builder");
-    if (denied) return { error: denied };
 
     const supabase = createClient();
     const sermon = await verifySermonAccess(supabase, sermonId, auth.churchId);
@@ -174,8 +195,7 @@ export async function unshareSermonInAppAction(
     revalidatePath(`/dashboard/sermon-builder/${sermonId}`);
     return {};
   } catch (e) {
-    return {
-      error: e instanceof Error ? e.message : "Could not update the sermon",
-    };
+    console.error("[sermon-builder] unshare failed", e);
+    return { error: APP_UPDATE_FAILED };
   }
 }

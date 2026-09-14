@@ -81,12 +81,20 @@ export type SermonListItem = Pick<
   | "kind"
   | "status"
   | "updated_at"
+  | "mobile_visibility"
+  | "mobile_published_at"
+  | "mobile_unpublished_at"
 >;
 
 export type ListSermonsResult = {
   rows: SermonListItem[];
   total: number;
 };
+
+const SERMON_LIST_COLUMNS =
+  "id, title, sermon_date, topic, scripture_refs, kind, status, updated_at";
+const SERMON_LIST_APP_COLUMNS =
+  "mobile_visibility, mobile_published_at, mobile_unpublished_at";
 
 export async function listSermons(
   churchId: string,
@@ -98,19 +106,27 @@ export async function listSermons(
   const to = from + pageSize - 1;
 
   const supabase = db();
-  const { data, error, count } = await supabase
-    .from("sermons")
-    .select(
-      "id, title, sermon_date, topic, scripture_refs, kind, status, updated_at",
-      { count: "exact" },
-    )
-    .eq("church_id", churchId)
-    .order("updated_at", { ascending: false })
-    .range(from, to);
+  const query = (columns: string) =>
+    supabase
+      .from("sermons")
+      .select(columns, { count: "exact" })
+      .eq("church_id", churchId)
+      .order("updated_at", { ascending: false })
+      .range(from, to);
+
+  let { data, error, count } = await query(
+    `${SERMON_LIST_COLUMNS}, ${SERMON_LIST_APP_COLUMNS}`,
+  );
+
+  // A database without migration 0068 has no app columns. The list still
+  // works; it just cannot say what is in the app.
+  if (error && /mobile_/i.test(error.message)) {
+    ({ data, error, count } = await query(SERMON_LIST_COLUMNS));
+  }
 
   if (error) throw error;
   return {
-    rows: (data ?? []) as SermonListItem[],
+    rows: (data ?? []) as unknown as SermonListItem[],
     total: count ?? 0,
   };
 }
