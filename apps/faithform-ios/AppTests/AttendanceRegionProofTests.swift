@@ -20,7 +20,13 @@ import FaithFormKit
 @Suite("Automatic check-in on the simulator", .serialized)
 struct AttendanceRegionProofTests {
     nonisolated static var enabled: Bool {
+        // Or a flag file the driving script drops into the app's temporary
+        // directory: `test-without-building` does not pass environment
+        // variables through to a hosted Swift Testing run.
         ProcessInfo.processInfo.environment["FAITHFORM_REGION_PROOF"] == "1"
+            || FileManager.default.fileExists(
+                atPath: URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("faithform-region-proof.enabled").path
+            )
     }
 
     /// Apple Park, which the simulator ships routes around.
@@ -32,6 +38,9 @@ struct AttendanceRegionProofTests {
     func briefPassThenStay() async throws {
         let log = ProofLog()
         let handshake = try Handshake()
+        // Let the host app's own launch finish first: with nothing stored, it
+        // removes every monitored region, and it must not remove this test's.
+        try await Task.sleep(for: .seconds(5))
         let clock = OffsetClock()
         let server = ProofServer(clock: clock, campus: Self.campus, regionId: Self.regionId, churchSlug: Self.churchSlug)
         let api = APIClient(
@@ -51,7 +60,20 @@ struct AttendanceRegionProofTests {
 
         let secure = KeychainStore(service: "io.faithform.attendance-proof")
         try? secure.deleteAll()
-        let store = KeychainAttemptStore(secureStore: secure)
+        // A build with signing switched off — which is how the gate builds —
+        // has no Keychain on the simulator: every write fails. The Keychain
+        // store's own behaviour is covered by `swift test`; here an in-memory
+        // store stands in when it must, and the report says which ran.
+        let keychainWorks = (try? secure.write(Data([1]), for: "probe")) != nil
+            && ((try? secure.read("probe")) ?? nil) != nil
+        try? secure.delete("probe")
+        let store: any AttendanceAttemptStoring = keychainWorks
+            ? KeychainAttemptStore(secureStore: secure)
+            : ProofMemoryAttemptStore()
+        let settingsStore: any AutomaticAttendanceSettingsStoring = keychainWorks
+            ? KeychainAutomaticAttendanceSettingsStore(secureStore: secure)
+            : ProofMemorySettingsStore()
+        await log.note("attempt store: \(keychainWorks ? "Keychain" : "memory (no Keychain in an unsigned simulator build)")")
         let notifier = ProofNotifier()
         let reconciler = GeofenceReconciler(
             monitor: location, authorization: location,
@@ -69,7 +91,7 @@ struct AttendanceRegionProofTests {
         let service = AutomaticAttendanceService(
             coordinator: coordinator,
             reconciler: reconciler,
-            settingsStore: KeychainAutomaticAttendanceSettingsStore(secureStore: secure),
+            settingsStore: settingsStore,
             environment: "proof"
         )
         await location.setRegionHandler { identifier, transition in
@@ -86,17 +108,32 @@ struct AttendanceRegionProofTests {
         )
         let outcome = await service.enable()
         #expect(outcome.monitoring == 1)
+        // Core Location updates its monitored set a moment after the call.
+        var waits = 0
+        while waits < 40, await location.monitoredRegions().isEmpty {
+            waits += 1
+            try await Task.sleep(for: .milliseconds(250))
+        }
         #expect(await location.monitoredRegions().map(\.identifier) == [Self.regionId])
         await log.note("monitoring \(Self.regionId), radius 150 m")
 
         // ---- A brief pass: in, and straight back out. ---------------------
+        var since = Date()
         try await handshake.request("inside-1")
-        try await log.waitFor(Self.regionId, [.entered, .inside])
+        try await log.waitFor(Self.regionId, [.entered, .inside], since: since)
+        // The event is logged before the service has finished with it.
+        var polls = 0
+        while polls < 40, await store.current(partition: Self.partition, now: clock.now) == nil {
+            polls += 1
+            try await Task.sleep(for: .milliseconds(250))
+        }
         #expect(await server.attempts().isEmpty, "an arrival was submitted on entry")
         #expect(await store.current(partition: Self.partition, now: clock.now) != nil, "the arrival was not held")
+        await log.note("brief pass: arrival held, 0 attempts on entry")
 
+        since = Date()
         try await handshake.request("outside-1")
-        try await log.waitFor(Self.regionId, [.exited, .outside])
+        try await log.waitFor(Self.regionId, [.exited, .outside], since: since)
         // Give the exit a moment to reach the Keychain.
         try await Task.sleep(for: .seconds(1))
         #expect(await store.current(partition: Self.partition, now: clock.now) == nil, "the exit did not abandon the arrival")
@@ -109,8 +146,11 @@ struct AttendanceRegionProofTests {
         await log.note("brief pass: 0 attempts")
 
         // ---- A stay: in, and still there after the dwell. ----------------
+        since = Date()
         try await handshake.request("inside-2")
-        try await log.waitFor(Self.regionId, [.entered, .inside], after: 1)
+        try await log.waitFor(Self.regionId, [.entered, .inside], since: since)
+        // Both the crossing and the state answer arrive; let them settle.
+        try await Task.sleep(for: .seconds(2))
         #expect(await server.attempts().isEmpty, "submitted before the dwell")
 
         clock.advance(by: 121)
@@ -132,6 +172,8 @@ struct AttendanceRegionProofTests {
             #expect(body.json[forbidden] == nil, "the attempt carried \(forbidden)")
         }
         #expect(await notifier.checkedIn == [Self.churchSlug])
+        let asked = await server.regionsAskedAbout()
+        #expect(!asked.isEmpty && asked.allSatisfy { $0 == Self.regionId }, "the occurrence was not asked for the campus entered")
         await log.note("stay: 1 attempt, keys \(body.json.keys.sorted().joined(separator: ","))")
 
         // Every later opportunity, and the OS saying "inside" again, sends
@@ -145,6 +187,11 @@ struct AttendanceRegionProofTests {
 
         // ---- Signing out leaves nothing registered. ----------------------
         await service.signedOut()
+        waits = 0
+        while waits < 40, !(await location.monitoredRegions().isEmpty) {
+            waits += 1
+            try await Task.sleep(for: .milliseconds(250))
+        }
         #expect(await location.monitoredRegions().isEmpty)
         try? secure.deleteAll()
         await log.note("signed out: 0 regions")
@@ -160,6 +207,43 @@ struct AttendanceRegionProofTests {
 }
 
 // MARK: - Stand-ins
+
+actor ProofMemoryAttemptStore: AttendanceAttemptStoring {
+    private var items: [String: LogicalAttempt] = [:]
+
+    func current(partition: CachePartition, now: Date) async -> LogicalAttempt? {
+        guard let attempt = items[partition.storageKey] else { return nil }
+        if attempt.isExpired(now: now) {
+            items[partition.storageKey] = nil
+            return nil
+        }
+        return attempt
+    }
+
+    func openIfAbsent(_ candidate: LogicalAttempt, partition: CachePartition, now: Date) async -> LogicalAttempt {
+        if let existing = await current(partition: partition, now: now),
+           existing.covers(churchSlug: candidate.churchSlug, occurrenceId: candidate.occurrenceId, now: now) {
+            return existing
+        }
+        items[partition.storageKey] = candidate
+        return candidate
+    }
+
+    func update(_ attempt: LogicalAttempt, partition: CachePartition) async {
+        items[partition.storageKey] = attempt
+    }
+
+    func close(partition: CachePartition) async {
+        items[partition.storageKey] = nil
+    }
+}
+
+actor ProofMemorySettingsStore: AutomaticAttendanceSettingsStoring {
+    private var stored: StoredAutomaticAttendance?
+    func load(environment: String) async -> StoredAutomaticAttendance? { stored }
+    func save(_ stored: StoredAutomaticAttendance) async { self.stored = stored }
+    func clear(environment: String) async { stored = nil }
+}
 
 /// The test's clock: real time, plus whatever the test has skipped.
 final class OffsetClock: @unchecked Sendable {
@@ -208,6 +292,9 @@ actor ProofServer: HTTPTransport {
     private let regionId: String
     private let churchSlug: String
     private var recorded: [Attempt] = []
+    private var occurrenceRegions: [String?] = []
+
+    func regionsAskedAbout() -> [String?] { occurrenceRegions }
 
     init(clock: OffsetClock, campus: (latitude: Double, longitude: Double), regionId: String, churchSlug: String) {
         self.clock = clock
@@ -239,6 +326,10 @@ actor ProofServer: HTTPTransport {
             {"configuration":{"churchSlug":"\(churchSlug)","regions":[{"regionId":"\(regionId)","campusName":"Main","latitude":\(campus.latitude),"longitude":\(campus.longitude),"radiusMeters":150}],"windows":[{"occurrenceId":"\(Self.occurrenceId)","label":"Sunday Service","startsAt":"\(instant(600))","endsAt":"\(instant(4200))","checkinOpensAt":"\(instant(-1200))","checkinClosesAt":"\(instant(7200))","timezone":"America/Los_Angeles"}],"sources":{"geofence":true,"qr":true,"manual":true},"requiresConfirmation":false,"minDwellSeconds":120,"maxLocationAccuracyM":100,"configVersion":1001,"expiresAt":"\(instant(900))"},"refusalReason":null,"message":null}
             """
         case ("GET", "/api/mobile/v1/attendance/\(churchSlug)/occurrence"):
+            occurrenceRegions.append(
+                URLComponents(url: url, resolvingAgainstBaseURL: false)?
+                    .queryItems?.first(where: { $0.name == "regionId" })?.value
+            )
             data = """
             {"occurrence":{"occurrenceId":"\(Self.occurrenceId)","label":"Sunday Service","churchSlug":"\(churchSlug)","campusName":"Main","localServiceDate":"2026-09-13","timezone":"America/Los_Angeles","startsAt":"\(instant(600))","endsAt":"\(instant(4200))","checkinOpensAt":"\(instant(-1200))","checkinClosesAt":"\(instant(7200))","status":"scheduled"}}
             """
@@ -276,17 +367,18 @@ actor ProofLog {
     func note(_ line: String) { notes.append(line) }
     func lines() -> [String] { notes }
 
-    /// Waits for the `index`-th (zero-based) delivery of any of `transitions`.
+    /// Waits for a delivery of any of `transitions` at or after `since`.
     func waitFor(
         _ identifier: String,
         _ transitions: [RegionTransition],
-        after index: Int = 0,
+        since: Date,
         timeout: TimeInterval = 180
     ) async throws {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
-            let matching = events.filter { $0.0 == identifier && transitions.contains($0.1) }
-            if matching.count > index { return }
+            if events.contains(where: { $0.0 == identifier && transitions.contains($0.1) && $0.2 >= since }) {
+                return
+            }
             try await Task.sleep(for: .milliseconds(250))
         }
         throw ProofError.timedOut("\(transitions) for \(identifier)")
