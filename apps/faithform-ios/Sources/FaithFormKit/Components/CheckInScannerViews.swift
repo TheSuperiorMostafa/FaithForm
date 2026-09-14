@@ -23,6 +23,8 @@ public struct CheckInScannerScreen: View {
     private let onOpenSettings: @MainActor () -> Void
     private let onDone: @MainActor () -> Void
     private let footer: AnyView?
+    /// What the code field shows. Kept in step with `model.typedCode` both ways.
+    @State private var codeText = ""
 
     /// `footer` is placed below the scanner whenever no scan is running — the
     /// host puts automatic check-in there, beside the manual way in rather
@@ -114,10 +116,30 @@ public struct CheckInScannerScreen: View {
                     .font(theme.font(FaithFormTokens.Text.caption))
                     .foregroundStyle(theme.palette.contentSecondary)
 
-                TextField(L.checkinScanCodeLabel, text: $model.typedCode)
+                // Bound to local text, not to the model: the model normalises
+                // as the person types, and a field bound straight to it went on
+                // showing what was typed rather than what the model kept.
+                TextField(L.checkinScanCodeLabel, text: $codeText)
                     .font(theme.font(FaithFormTokens.Text.displayLarge))
                     .checkInCodeFieldStyling()
                     .accessibilityLabel(L.checkinScanCodeLabel)
+                    .onAppear { codeText = model.typedCode }
+                    .onChange(of: codeText) { _, typed in
+                        let kept = model.editTypedCode(typed)
+                        if kept != typed { codeText = kept }
+                    }
+                    // Cleared by the model after a check-in or a reset.
+                    .onChange(of: model.typedCode) { _, kept in
+                        if kept != codeText { codeText = kept }
+                    }
+
+                if model.showsUnusedCharacterHint {
+                    Text(L.checkinCodeInvalidCharacters)
+                        .font(theme.font(FaithFormTokens.Text.caption))
+                        .foregroundStyle(theme.palette.contentPrimary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("checkin-code-unused-characters")
+                }
 
                 Button(L.checkinScanCodeSubmit) {
                     Task { await model.submitTypedCode() }

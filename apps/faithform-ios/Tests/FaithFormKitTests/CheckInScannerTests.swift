@@ -631,6 +631,81 @@ struct CheckInScannerModelTests {
         #expect(!model.canSubmitTypedCode)
     }
 
+    @Test("the field is told what the model kept, so display and model cannot drift")
+    func editReturnsWhatWasKept() {
+        let model = CheckInScannerModel(
+            coordinator: makeCoordinator(camera: FakeCamera(), submitter: FakeCodeSubmitter())
+        )
+
+        // The reported bug: "ABC1234" stayed on screen while the model held "BC34".
+        #expect(model.editTypedCode("ABC1234") == "BC34")
+        #expect(model.typedCode == "BC34")
+        #expect(!model.canSubmitTypedCode)
+        #expect(model.showsUnusedCharacterHint)
+
+        #expect(model.editTypedCode("bcd-4g7j") == "BCD4G7J")
+        #expect(model.canSubmitTypedCode)
+    }
+
+    @Test("the unused-character hint appears on an O or a 1, stays while typing, and goes with a whole code")
+    func unusedCharacterHint() {
+        let model = CheckInScannerModel(
+            coordinator: makeCoordinator(camera: FakeCamera(), submitter: FakeCodeSubmitter())
+        )
+
+        // Separators are silently dropped and earn no hint.
+        model.editTypedCode("bcd-4 ")
+        #expect(!model.showsUnusedCharacterHint)
+
+        // A letter no code uses.
+        model.editTypedCode("BCD4O")
+        #expect(model.showsUnusedCharacterHint)
+        // It does not flash away on the next valid keystroke…
+        model.editTypedCode("BCD4G")
+        #expect(model.showsUnusedCharacterHint)
+        // …but goes once the code is whole…
+        model.editTypedCode("BCD4G7J")
+        #expect(!model.showsUnusedCharacterHint)
+        // …or the field is emptied. A lone unused character still earns it,
+        // though nothing is left in the field.
+        model.editTypedCode("1")
+        #expect(model.typedCode.isEmpty)
+        #expect(model.showsUnusedCharacterHint)
+        model.editTypedCode("")
+        #expect(!model.showsUnusedCharacterHint)
+    }
+
+    @Test("the decision behind the hint")
+    func hintDecision() {
+        for character in ["A", "E", "I", "O", "S", "U", "Z", "0", "1", "2", "5", "6", "8", "a", "o"] {
+            #expect(ShortCodeEntry.containsUnusedCharacters("BC" + character), "\(character)")
+        }
+        for input in ["BCDFGHJ", "bcd fgh", "B-C-D", "", "3479"] {
+            #expect(!ShortCodeEntry.containsUnusedCharacters(input), "\(input)")
+        }
+        #expect(ShortCodeEntry.showsUnusedCharacterHint(afterEditing: "BC", wasShowing: true))
+        #expect(!ShortCodeEntry.showsUnusedCharacterHint(afterEditing: "BC", wasShowing: false))
+        #expect(!ShortCodeEntry.showsUnusedCharacterHint(afterEditing: "", wasShowing: true))
+        #expect(!ShortCodeEntry.showsUnusedCharacterHint(afterEditing: "BCDFGHJ", wasShowing: true))
+    }
+
+    @Test("the hint names exactly the letters and numbers codes leave out")
+    func hintWordingMatchesAlphabet() {
+        let hint = L.checkinCodeInvalidCharacters
+        #expect(ShortCodeEntry.unusedLetters == ["A", "E", "I", "O", "S", "U", "Z"])
+        #expect(ShortCodeEntry.unusedDigits == ["0", "1", "2", "5", "6", "8"])
+        for character in ShortCodeEntry.unusedLetters + ShortCodeEntry.unusedDigits {
+            #expect(hint.contains(" \(character)"), "the hint does not name \(character)")
+        }
+        // And names nothing a code does use.
+        let named = hint.split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+            .filter { $0.count == 1 }
+            .compactMap(\.first)
+        for character in named where character.isUppercase || character.isNumber {
+            #expect(!ShortCodeEntry.alphabet.contains(character), "the hint names \(character), which codes use")
+        }
+    }
+
     @Test("the field never grows past a code")
     func boundsLength() {
         let model = CheckInScannerModel(

@@ -479,6 +479,11 @@ public enum L {
     public static var checkinScanCodeLabel: String {
         t("checkin_scan_code_label", "Check-in code")
     }
+    /// Must name exactly the letters and numbers `ShortCodeEntry.alphabet`
+    /// leaves out — a test holds the two together.
+    public static var checkinCodeInvalidCharacters: String {
+        t("checkin_code_invalid_characters", "Codes never use the letters A, E, I, O, S, U or Z, or the numbers 0, 1, 2, 5, 6 or 8. Check the code on screen.")
+    }
     public static var checkinScanCodeSubmit: String {
         t("checkin_scan_code_submit", "Check me in")
     }
