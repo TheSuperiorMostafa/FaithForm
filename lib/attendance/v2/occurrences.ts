@@ -89,12 +89,83 @@ export async function generateOccurrences(
 }
 
 /**
+ * Brings a church's upcoming services in line with its current setup, then
+ * fills the horizon.
+ *
+ * `refresh_upcoming_service_occurrences` re-derives every occurrence whose
+ * check-in has not opened yet (policy snapshot, check-in window, campus and
+ * position), and retires the ones a changed or deleted service time no longer
+ * produces. Generation then creates whatever is missing. Refresh runs first so
+ * a service moved from 10:00 to 10:30 is replaced rather than joined.
+ *
+ * Called after every setup change a church makes, and by the generation cron,
+ * so a change made anywhere (including the SQL editor) is picked up without a
+ * button. Both halves are idempotent.
+ */
+export async function syncChurchOccurrences(
+  churchId: string,
+  options?: { client?: SupabaseClient; now?: Date; horizonDays?: number },
+): Promise<{ refreshed: number; retired: number; created: number; skipped: number }> {
+  const admin = options?.client ?? createAdminClient();
+  const now = options?.now ?? new Date();
+
+  const { data, error } = await admin.rpc("refresh_upcoming_service_occurrences", {
+    p_church_id: churchId,
+    p_now: now.toISOString(),
+  });
+  if (error) throw new VisitorError("unavailable", "Could not refresh services.");
+  const row = ((data ?? []) as Record<string, unknown>[])[0];
+
+  // From yesterday in UTC, so a service later today anywhere west of UTC is
+  // still inside the horizon.
+  const from = new Date(now);
+  from.setUTCDate(from.getUTCDate() - 1);
+  const to = new Date(now);
+  to.setUTCDate(to.getUTCDate() + (options?.horizonDays ?? 60));
+
+  const generated = await generateOccurrences(
+    churchId,
+    from.toISOString().slice(0, 10),
+    to.toISOString().slice(0, 10),
+    admin,
+  );
+
+  return {
+    refreshed: Number(row?.refreshed ?? 0),
+    retired: Number(row?.retired ?? 0),
+    ...generated,
+  };
+}
+
+/**
+ * `syncChurchOccurrences` for a caller whose own save has already succeeded:
+ * the website editor saving service times, or a campus being edited.
+ *
+ * A failure here must not turn a saved change into an error message, and it
+ * does not need to: the generation cron runs the same sync for every church
+ * in rotation, so a missed one is picked up there.
+ */
+export async function syncChurchOccurrencesAfterChange(churchId: string): Promise<void> {
+  try {
+    await syncChurchOccurrences(churchId);
+  } catch {
+    // Deliberately silent; see above.
+  }
+}
+
+/**
  * The occurrence a check-in would land on right now.
  *
  * Resolved server-side from the clock and the church, never supplied by a
- * client. When two services overlap — which a church can legitimately
- * configure — the one that started most recently wins, because that is the one
+ * client. When two services overlap (which a church can legitimately
+ * configure) the one that started most recently wins, because that is the one
  * someone walking in is attending.
+ *
+ * With a campus, a service at that campus wins; a church-wide service with no
+ * campus recorded is the fallback. Two campuses holding services at the same
+ * hour is the ordinary multi-site Sunday, and without the campus a phone at
+ * one would be handed the other's service and banded against the wrong
+ * building.
  */
 export async function findOpenOccurrence(
   churchId: string,
@@ -103,20 +174,43 @@ export async function findOpenOccurrence(
   const admin = options?.client ?? createAdminClient();
   const now = (options?.now ?? new Date()).toISOString();
 
-  let query = admin
-    .from("service_occurrences")
-    .select(OCCURRENCE_COLUMNS)
-    .eq("church_id", churchId)
-    .in("status", ["scheduled", "active"])
-    .lte("checkin_opens_at_utc", now)
-    .gte("checkin_closes_at_utc", now)
-    .order("starts_at_utc", { ascending: false })
-    .limit(1);
+  const open = () =>
+    admin
+      .from("service_occurrences")
+      .select(OCCURRENCE_COLUMNS)
+      .eq("church_id", churchId)
+      .in("status", ["scheduled", "active"])
+      .lte("checkin_opens_at_utc", now)
+      .gte("checkin_closes_at_utc", now)
+      .order("starts_at_utc", { ascending: false })
+      .limit(1);
 
-  if (options?.campusId) query = query.eq("campus_id", options.campusId);
+  if (!options?.campusId) {
+    const { data } = await open().maybeSingle();
+    return data ? mapOccurrence(data as Record<string, unknown>) : null;
+  }
 
-  const { data } = await query.maybeSingle();
-  return data ? mapOccurrence(data as Record<string, unknown>) : null;
+  const { data: atCampus } = await open().eq("campus_id", options.campusId).maybeSingle();
+  if (atCampus) return mapOccurrence(atCampus as Record<string, unknown>);
+
+  const { data: churchWide } = await open().is("campus_id", null).maybeSingle();
+  return churchWide ? mapOccurrence(churchWide as Record<string, unknown>) : null;
+}
+
+/**
+ * The campus an OS region id names, or null.
+ *
+ * Region ids are minted by the geofence configuration as
+ * `faithform.campus.<uuid>`. Anything else is not a region this server issued,
+ * and is treated as no region at all rather than as an error.
+ */
+export function campusIdFromRegionId(regionId: string | null | undefined): string | null {
+  if (!regionId) return null;
+  const match =
+    /^faithform\.campus\.([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.exec(
+      regionId.trim(),
+    );
+  return match ? match[1].toLowerCase() : null;
 }
 
 export const occurrencePageSchema = z.object({
@@ -165,6 +259,50 @@ export async function listOccurrences(
       hasMore && last
         ? { start: last.starts_at_utc as string, id: last.id as string }
         : null,
+  };
+}
+
+/**
+ * What the Services board shows: what is open or coming up, soonest first,
+ * and what has already happened, latest first.
+ *
+ * The board used to list every occurrence newest-first, and occurrences are
+ * generated sixty days ahead, so its first page was services two months away
+ * and today's service was not on it.
+ */
+export async function listBoardOccurrences(
+  churchId: string,
+  options?: { now?: Date; client?: SupabaseClient; upcomingLimit?: number; recentLimit?: number },
+): Promise<{ upcoming: ServiceOccurrence[]; recent: ServiceOccurrence[] }> {
+  const admin = options?.client ?? createAdminClient();
+  const now = (options?.now ?? new Date()).toISOString();
+
+  const [upcoming, recent] = await Promise.all([
+    admin
+      .from("service_occurrences")
+      .select(OCCURRENCE_COLUMNS)
+      .eq("church_id", churchId)
+      .gte("checkin_closes_at_utc", now)
+      .order("starts_at_utc", { ascending: true })
+      .order("id", { ascending: true })
+      .limit(Math.min(options?.upcomingLimit ?? 8, 50)),
+    admin
+      .from("service_occurrences")
+      .select(OCCURRENCE_COLUMNS)
+      .eq("church_id", churchId)
+      .lt("checkin_closes_at_utc", now)
+      .order("starts_at_utc", { ascending: false })
+      .order("id", { ascending: false })
+      .limit(Math.min(options?.recentLimit ?? 20, 50)),
+  ]);
+
+  if (upcoming.error || recent.error) {
+    throw new VisitorError("unavailable", "Could not load services.");
+  }
+
+  return {
+    upcoming: ((upcoming.data ?? []) as Record<string, unknown>[]).map(mapOccurrence),
+    recent: ((recent.data ?? []) as Record<string, unknown>[]).map(mapOccurrence),
   };
 }
 

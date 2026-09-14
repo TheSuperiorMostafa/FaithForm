@@ -6,6 +6,7 @@ import { z } from "zod";
 import { requireSuperAdmin } from "@/lib/auth/superadmin";
 import { normalizeHexColor } from "@/lib/giving/branding";
 import { syncRetellAgent } from "@/lib/integrations/retell";
+import { syncChurchOccurrencesAfterChange } from "@/lib/attendance/v2/occurrences";
 import {
   getChurchProfile,
   upsertChurchProfile,
@@ -165,6 +166,10 @@ export async function saveChurchProfile(
     } catch (syncError) {
       console.error("Church profile saved but Retell sync failed:", syncError);
     }
+
+    // Service times and the church's time zone decide when upcoming services
+    // are and when check-in opens for them.
+    await syncChurchOccurrencesAfterChange(churchId);
 
     revalidatePath(`/admin/churches/${churchId}`);
     // The church's own pages read identity, hours and staff from the profile.

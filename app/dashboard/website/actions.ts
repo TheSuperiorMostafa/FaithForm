@@ -24,6 +24,7 @@ import {
 } from "@/lib/sites/resolve";
 import { buildSiteProfile, getSiteBundle } from "@/lib/sites/queries";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { syncChurchOccurrencesAfterChange } from "@/lib/attendance/v2/occurrences";
 
 /**
  * Mutations for the Website section.
@@ -807,6 +808,10 @@ export async function saveSiteDetails(
     console.error("[website] details save failed:", error);
     return fail("Those details could not be saved.");
   }
+
+  // Service times drive attendance too: a moved or deleted service must
+  // replace its upcoming services rather than leave them standing.
+  await syncChurchOccurrencesAfterChange(auth.churchId);
 
   // Rows with a blank name are skipped on the way in, so the saved rows line
   // up one-for-one with the non-blank submitted rows, in order.

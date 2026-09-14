@@ -38,6 +38,7 @@ const files = [
   "supabase/migrations/0062_faithful_media_object_identity.sql",
   "supabase/migrations/0063_faithful_giving.sql",
   "supabase/migrations/0064_dashboard_hot_path_indexes.sql",
+  "supabase/migrations/0074_automatic_attendance_setup.sql",
 ];
 
 try {
@@ -62,6 +63,7 @@ const result = spawnSync(
     "tests/database/media-publication.test.ts",
     "tests/database/giving.test.ts",
     "tests/database/query-plans.test.ts",
+    "tests/database/automatic-attendance-setup.test.ts",
   ],
   { stdio: "inherit", env: process.env },
 );
