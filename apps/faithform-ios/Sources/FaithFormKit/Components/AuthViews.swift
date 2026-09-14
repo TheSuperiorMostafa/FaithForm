@@ -2,10 +2,12 @@ import SwiftUI
 
 /// The signed-out journey: one landing screen, two doors.
 ///
-/// Same editorial shape as `WelcomeView` — a confident sentence, generous
-/// space, and only the actions a person can actually take. The primary door is
+/// The landing is the first thing anyone who downloads FaithForm sees, so it
+/// does the three jobs a front door has to: say whose app this is (the mark),
+/// what it promises (one sentence), and what it actually does (the four things a
+/// churchgoer gets in 1.0) — then gets out of the way. The primary door is
 /// creating an account, because the person most likely to be standing here has
-/// never used FaithForm before.
+/// never used FaithForm before; both doors are pinned within thumb reach.
 public struct AuthFlowView: View {
     public enum Route: Hashable, Sendable {
         case createAccount
@@ -16,6 +18,9 @@ public struct AuthFlowView: View {
     @Environment(\.faithformTheme) private var theme
     @Bindable private var model: AuthModel
     @State private var path: [Route] = []
+    /// The first frame fades the page in once. A return from a pushed screen
+    /// must not replay it, so it is state rather than a transition.
+    @State private var hasAppeared = false
     private let hasPendingInvitation: Bool
     private let churchContext: PendingChurchContext?
     private let onClearChurchContext: (@MainActor () -> Void)?
@@ -58,76 +63,243 @@ public struct AuthFlowView: View {
     }
 
     private var landing: some View {
-        VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
-            Spacer(minLength: FaithFormTokens.Spacing.xxl)
-
-            // A link that named a church replaces the product's own name with
-            // it. Someone who scanned a bulletin QR code came for their church,
-            // not for FaithForm, and the front door should say so.
-            if let churchContext {
-                ChurchContextHeader(context: churchContext)
-            } else {
-                VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.md) {
-                    Text(L.appName)
-                        .font(theme.font(FaithFormTokens.Text.displayLarge))
-                        .foregroundStyle(theme.palette.contentPrimary)
-                    Text(L.signInBody)
-                        .font(theme.font(FaithFormTokens.Text.body))
-                        .foregroundStyle(theme.palette.contentSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-
-            // The generic "you have an invitation" banner is redundant once the
-            // header names the church the invitation is *for*.
-            if hasPendingInvitation, churchContext == nil {
-                FaithFormCard {
-                    Text(L.invitationPendingBanner)
-                        .font(theme.font(FaithFormTokens.Text.bodySmall))
-                        .foregroundStyle(theme.palette.contentSecondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-
-            // A confirmation link lands here, on the front door, before any
-            // screen was chosen. Both of its states are visible in place: the
-            // exchange in progress, and the sentence when it could not finish.
-            if model.phase == .confirmingEmail {
-                FaithFormCard {
-                    HStack(spacing: FaithFormTokens.Spacing.sm) {
-                        ProgressView()
-                        Text(L.authConfirmingEmail)
-                            .font(theme.font(FaithFormTokens.Text.bodySmall))
-                            .foregroundStyle(theme.palette.contentSecondary)
+        ScrollView {
+            VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.xl) {
+                // A link that named a church replaces the product's promise with
+                // that church. Someone who scanned a bulletin QR code came for
+                // their church, not for FaithForm, and the front door should say
+                // so — the mark stays, small, so they still know whose app this is.
+                if let churchContext {
+                    VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
+                        LandingLockup(markHeight: FaithFormTokens.IconSize.sizeHero)
+                        ChurchContextHeader(context: churchContext)
+                    }
+                } else {
+                    VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
+                        LandingLockup(markHeight: FaithFormTokens.Spacing.xxl)
+                        VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.md) {
+                            Text(L.landingHeadline)
+                                .font(theme.font(FaithFormTokens.Text.displayLarge))
+                                .foregroundStyle(theme.palette.contentPrimary)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityAddTraits(.isHeader)
+                            Text(L.signInBody)
+                                .font(theme.font(FaithFormTokens.Text.body))
+                                .foregroundStyle(theme.palette.contentSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                 }
-            }
-            if case let .failed(message) = model.phase {
-                FaithFormCard {
-                    AuthErrorText(message: message)
+
+                // The generic "you have an invitation" banner is redundant once
+                // the header names the church the invitation is *for*.
+                if hasPendingInvitation, churchContext == nil {
+                    FaithFormCard {
+                        Text(L.invitationPendingBanner)
+                            .font(theme.font(FaithFormTokens.Text.bodySmall))
+                            .foregroundStyle(theme.palette.contentSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                 }
+
+                // A confirmation link lands here, on the front door, before any
+                // screen was chosen. Both of its states are visible in place: the
+                // exchange in progress, and the sentence when it could not finish.
+                // Above the feature list, so neither is ever scrolled out of view.
+                if model.phase == .confirmingEmail {
+                    FaithFormCard {
+                        HStack(spacing: FaithFormTokens.Spacing.sm) {
+                            ProgressView()
+                            Text(L.authConfirmingEmail)
+                                .font(theme.font(FaithFormTokens.Text.bodySmall))
+                                .foregroundStyle(theme.palette.contentSecondary)
+                        }
+                    }
+                }
+                if case let .failed(message) = model.phase {
+                    FaithFormCard {
+                        AuthErrorText(message: message)
+                    }
+                }
+
+                LandingFeatures()
+            }
+            .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
+            .padding(.top, FaithFormTokens.Spacing.xl)
+            .padding(.bottom, FaithFormTokens.Spacing.lg)
+            .frame(maxWidth: FaithFormTokens.Layout.contentMaxWidth, alignment: .leading)
+            .frame(maxWidth: .infinity)
+            .opacity(hasAppeared ? 1 : 0)
+            .offset(y: hasAppeared || theme.reduceMotion ? 0 : FaithFormTokens.Spacing.md)
+        }
+        // Scrolls only when it has to: a small phone, or a large Dynamic Type
+        // size. On a phone where it all fits it sits still.
+        .scrollBounceBehavior(.basedOnSize)
+        // **The two doors never scroll away.** Whatever the text size, create
+        // account and sign in are pinned where a thumb already is, and the page
+        // above scrolls beneath them.
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            landingActions
+        }
+        .background { LandingBackdrop() }
+        .onAppear {
+            guard !hasAppeared else { return }
+            withAnimation(theme.animation(FaithFormTokens.Motion.slow)) { hasAppeared = true }
+        }
+    }
+
+    private var landingActions: some View {
+        VStack(spacing: FaithFormTokens.Spacing.md) {
+            Button(L.createAccount) { path.append(.createAccount) }
+                .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
+            Button(L.signIn) { path.append(.signIn) }
+                .buttonStyle(FaithFormButtonStyle(kind: .secondary, theme: theme))
+            // A link can be forwarded, mistyped, or simply not meant for the
+            // person holding it. Disowning the church has to be one tap away, or
+            // the branding becomes a trap.
+            if churchContext != nil, let onClearChurchContext {
+                Button(L.churchContextNotYours, action: onClearChurchContext)
+                    .buttonStyle(FaithFormButtonStyle(kind: .quiet, theme: theme))
             }
 
-            Spacer()
+            // The documents a person is about to agree to, readable before they
+            // tap either door rather than only on the form that asks for consent.
+            HStack(spacing: FaithFormTokens.Spacing.base) {
+                Link(L.privacyPolicy, destination: LegalLinks.privacyPolicy)
+                Link(L.termsOfService, destination: LegalLinks.termsOfService)
+            }
+            .font(theme.font(FaithFormTokens.Text.caption))
+            .tint(theme.mutedContent)
+            .frame(minHeight: FaithFormTokens.TouchTarget.minimum)
+        }
+        .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
+        .padding(.top, FaithFormTokens.Spacing.base)
+        .frame(maxWidth: FaithFormTokens.Layout.contentMaxWidth)
+        .frame(maxWidth: .infinity)
+        .background {
+            // Solid, so text scrolling beneath the buttons never shows through
+            // them; the hairline says where the page ends and the doors begin.
+            theme.palette.background
+                .overlay(alignment: .top) {
+                    Rectangle()
+                        .fill(theme.palette.divider)
+                        .frame(height: FaithFormTokens.BorderWidth.hairline)
+                }
+                .ignoresSafeArea(edges: .bottom)
+        }
+    }
+}
 
-            VStack(spacing: FaithFormTokens.Spacing.md) {
-                Button(L.createAccount) { path.append(.createAccount) }
-                    .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
-                Button(L.signIn) { path.append(.signIn) }
-                    .buttonStyle(FaithFormButtonStyle(kind: .secondary, theme: theme))
-                // A link can be forwarded, mistyped, or simply not meant for
-                // the person holding it. Disowning the church has to be one tap
-                // away, or the branding becomes a trap.
-                if churchContext != nil, let onClearChurchContext {
-                    Button(L.churchContextNotYours, action: onClearChurchContext)
-                        .buttonStyle(FaithFormButtonStyle(kind: .quiet, theme: theme))
+/// The mark and the name, side by side.
+///
+/// Read as one element: VoiceOver hears "FaithForm" once, not a picture
+/// followed by the same word.
+private struct LandingLockup: View {
+    @Environment(\.faithformTheme) private var theme
+    let markHeight: CGFloat
+
+    var body: some View {
+        HStack(spacing: FaithFormTokens.Spacing.md) {
+            FaithFormMark()
+                .frame(height: markHeight)
+            Text(L.appName)
+                .font(theme.font(FaithFormTokens.Text.titleLarge))
+                .foregroundStyle(theme.palette.contentPrimary)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text(L.appName))
+    }
+}
+
+/// What the app does, in four lines.
+///
+/// One row per tab a churchgoer actually gets in 1.0 — the home feed, watch and
+/// sermon notes, check-in, and giving — so the front door promises exactly the
+/// product behind it. No counts, no testimonials, nothing that could go stale or
+/// be untrue for a particular church.
+private struct LandingFeatures: View {
+    @Environment(\.faithformTheme) private var theme
+
+    private struct Row: Identifiable {
+        let symbol: String
+        let title: String
+        let detail: String
+        var id: String { symbol }
+    }
+
+    private var rows: [Row] {
+        [
+            Row(symbol: "megaphone", title: L.landingFeedTitle, detail: L.landingFeedBody),
+            Row(symbol: "play.rectangle", title: L.landingWatchTitle, detail: L.landingWatchBody),
+            Row(symbol: "qrcode.viewfinder", title: L.landingCheckInTitle, detail: L.landingCheckInBody),
+            Row(symbol: "heart", title: L.landingGiveTitle, detail: L.landingGiveBody),
+        ]
+    }
+
+    var body: some View {
+        FaithFormCard {
+            VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.base) {
+                ForEach(rows) { row in
+                    HStack(alignment: .top, spacing: FaithFormTokens.Spacing.base) {
+                        Image(systemName: row.symbol)
+                            .font(.system(size: FaithFormTokens.IconSize.sizeMedium, weight: .semibold))
+                            .foregroundStyle(theme.palette.brandPrimary)
+                            .frame(
+                                width: FaithFormTokens.TouchTarget.minimum,
+                                height: FaithFormTokens.TouchTarget.minimum
+                            )
+                            .background(
+                                RoundedRectangle(cornerRadius: FaithFormTokens.Radius.md, style: .continuous)
+                                    .fill(theme.palette.brandAccent.opacity(0.16))
+                            )
+                            .accessibilityHidden(true)
+
+                        VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.xs) {
+                            Text(row.title)
+                                .font(theme.font(FaithFormTokens.Text.titleMedium))
+                                .foregroundStyle(theme.palette.contentPrimary)
+                            Text(row.detail)
+                                .font(theme.font(FaithFormTokens.Text.bodySmall))
+                                .foregroundStyle(theme.palette.contentSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .accessibilityElement(children: .combine)
                 }
             }
         }
-        .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
-        .padding(.bottom, FaithFormTokens.Spacing.xl)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .background(theme.palette.background.ignoresSafeArea())
+    }
+}
+
+/// The ground behind the front door: the page colour, warmed at the top by the
+/// brand gold, with the mark set large and faint in the corner.
+///
+/// Decoration only — hidden from VoiceOver, and the watermark is dropped under
+/// Increase Contrast, where anything behind text should get out of the way.
+private struct LandingBackdrop: View {
+    @Environment(\.faithformTheme) private var theme
+
+    var body: some View {
+        ZStack(alignment: .topTrailing) {
+            theme.palette.background
+            LinearGradient(
+                colors: [theme.palette.brandAccent.opacity(0.14), theme.palette.background.opacity(0)],
+                startPoint: .top,
+                endPoint: .center
+            )
+            if !theme.increaseContrast {
+                // Large and faint behind the top of the page, so the brand fills
+                // the front door without competing with the headline over it.
+                FaithFormMark()
+                    .frame(height: 280)
+                    .opacity(0.05)
+                    .rotationEffect(.degrees(-8))
+                    .offset(x: 96, y: -24)
+            }
+        }
+        .ignoresSafeArea()
+        .accessibilityHidden(true)
     }
 }
 

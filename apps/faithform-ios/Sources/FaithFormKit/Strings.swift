@@ -167,6 +167,29 @@ public enum L {
         t("sign_in_body", "FaithForm keeps your churches, your giving and your check-ins in one place.")
     }
 
+    // MARK: - Landing
+    //
+    // The front door's promise and the four things a churchgoer can actually do
+    // in 1.0. Each names a real tab — nothing here describes a feature the app
+    // does not ship.
+    public static var landingHeadline: String { t("landing_headline", "Your church, all week long") }
+    public static var landingFeedTitle: String { t("landing_feed_title", "Stay in the loop") }
+    public static var landingFeedBody: String {
+        t("landing_feed_body", "News and events from your church, as soon as they're shared.")
+    }
+    public static var landingWatchTitle: String { t("landing_watch_title", "Watch and catch up") }
+    public static var landingWatchBody: String {
+        t("landing_watch_body", "Join services live, or go back to past sermons and notes.")
+    }
+    public static var landingCheckInTitle: String { t("landing_check_in_title", "Check in with a scan") }
+    public static var landingCheckInBody: String {
+        t("landing_check_in_body", "Scan the code at church. No cards or clipboards.")
+    }
+    public static var landingGiveTitle: String { t("landing_give_title", "Give securely") }
+    public static var landingGiveBody: String {
+        t("landing_give_body", "Support your church from your phone, with a receipt for every gift.")
+    }
+
     // MARK: - Church profile
     public static var whereWeMeet: String { t("where_we_meet", "Where we meet") }
     public static var mainCampus: String { t("main_campus", "Main") }

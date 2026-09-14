@@ -6,6 +6,16 @@
     <string name="loading_account">Loading your account</string>
     <string name="sign_in_title">Sign in to continue</string>
     <string name="sign_in_body">FaithForm keeps your churches, your giving and your check-ins in one place.</string>
+    <!-- The front door's promise and the four things a churchgoer can do in 1.0. Each names a real tab. -->
+    <string name="landing_headline">Your church, all week long</string>
+    <string name="landing_feed_title">Stay in the loop</string>
+    <string name="landing_feed_body">News and events from your church, as soon as they\'re shared.</string>
+    <string name="landing_watch_title">Watch and catch up</string>
+    <string name="landing_watch_body">Join services live, or go back to past sermons and notes.</string>
+    <string name="landing_check_in_title">Check in with a scan</string>
+    <string name="landing_check_in_body">Scan the code at church. No cards or clipboards.</string>
+    <string name="landing_give_title">Give securely</string>
+    <string name="landing_give_body">Support your church from your phone, with a receipt for every gift.</string>
     <string name="your_churches">Your churches</string>
     <string name="no_churches_title">No churches yet</string>
     <string name="no_churches_body">When you follow or join a church, it will appear here.</string>
