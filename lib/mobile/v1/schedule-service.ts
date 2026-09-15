@@ -69,7 +69,7 @@ export async function getScheduleWindow(input: {
   const from = new Date(input.from);
   const to = new Date(input.to);
   if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || to <= from) {
-    throw new VisitorError("validation", "Invalid schedule window.");
+    throw new VisitorError("invalid_input", "Invalid schedule window.");
   }
 
   const relationshipState = await resolvePublishedContentRelationshipState(

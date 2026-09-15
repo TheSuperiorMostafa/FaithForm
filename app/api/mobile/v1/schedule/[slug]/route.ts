@@ -20,7 +20,7 @@ export const GET = optionalAuthRoute(
     const to = url.searchParams.get("to");
 
     if (!from || !to) {
-      throw new VisitorError("validation", "from and to are required.");
+      throw new VisitorError("invalid_input", "from and to are required.");
     }
 
     const page = await getScheduleWindow({
