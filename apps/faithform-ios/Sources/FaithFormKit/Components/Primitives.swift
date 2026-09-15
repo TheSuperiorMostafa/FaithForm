@@ -105,7 +105,35 @@ public struct FaithFormButtonStyle: ButtonStyle {
     }
 }
 
-/// Icon beside title, at the web's proportions.
+/// Button and status copy that is still working, without a spinner.
+///
+/// The label stays so the layout does not jump. A shallow pulse says the app
+/// is busy; Reduce Motion keeps it still.
+public struct FaithFormWorkingLabel: View {
+    @Environment(\.faithformTheme) private var theme
+    let title: String
+    let working: Bool
+    @State private var pulse = false
+
+    public init(_ title: String, working: Bool) {
+        self.title = title
+        self.working = working
+    }
+
+    public var body: some View {
+        Text(title)
+            .opacity(pulse && working && !theme.reduceMotion ? 0.55 : 1)
+            .animation(
+                working && !theme.reduceMotion
+                    ? .easeInOut(duration: 0.9).repeatForever(autoreverses: true)
+                    : nil,
+                value: pulse
+            )
+            .onAppear { pulse = working }
+            .onChange(of: working) { _, isWorking in pulse = isWorking }
+            .accessibilityAddTraits(working ? .updatesFrequently : [])
+    }
+}
 ///
 /// Kept as a `LabelStyle` rather than a bespoke button view so every existing
 /// `Button("…")` call site is unchanged and only the ones that adopt `Label`
@@ -243,10 +271,13 @@ public struct EmptyStateView: View {
                 Text(title)
                     .font(theme.font(FaithFormTokens.Text.titleMedium))
                     .foregroundStyle(theme.palette.contentPrimary)
-                Text(explanation)
-                    .font(theme.font(FaithFormTokens.Text.bodySmall))
-                    .foregroundStyle(theme.palette.contentSecondary)
                     .multilineTextAlignment(.center)
+                if !explanation.isEmpty {
+                    Text(explanation)
+                        .font(theme.font(FaithFormTokens.Text.bodySmall))
+                        .foregroundStyle(theme.palette.contentSecondary)
+                        .multilineTextAlignment(.center)
+                }
             }
         }
         .frame(maxWidth: .infinity)

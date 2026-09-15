@@ -51,6 +51,9 @@ class MediaClient(
             partition = partition,
         )
 
+    suspend fun cachedLive(churchSlug: String, partition: CachePartition) =
+        cache.load("media.live.$churchSlug", partition, LiveMediaResponse.serializer())
+
     suspend fun archive(
         churchSlug: String,
         query: String?,
@@ -73,6 +76,9 @@ class MediaClient(
         )
     }
 
+    suspend fun cachedArchive(churchSlug: String, partition: CachePartition) =
+        cache.load("media.archive.$churchSlug", partition, MediaPage.serializer())
+
     suspend fun detail(churchSlug: String, mediaId: String, partition: CachePartition): MediaDetail =
         cache.revalidate(
             api = api,
@@ -81,6 +87,9 @@ class MediaClient(
             name = "media.detail.$churchSlug.$mediaId",
             partition = partition,
         )
+
+    suspend fun cachedDetail(churchSlug: String, mediaId: String, partition: CachePartition) =
+        cache.load("media.detail.$churchSlug.$mediaId", partition, MediaDetail.serializer())
 
     /**
      * Asks for permission to watch.

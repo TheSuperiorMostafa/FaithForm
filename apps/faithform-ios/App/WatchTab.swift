@@ -1,30 +1,22 @@
 import SwiftUI
 import FaithFormKit
 
-/// Which half of the Services tab is showing.
+/// Which pane of the Services tab is showing.
 ///
 /// Held by `RootModel` rather than by the tab, so a `faithform://church/x/sermons`
-/// link can land on messages rather than on the videos beside them.
+/// link can land on sermons rather than on the recordings beside them.
 enum WatchSection: Hashable {
     case media
     case sermons
-}
-
-enum MessagesKind: Hashable {
-    case notes
     case slides
 }
 
-/// Services: live and past services, and the messages (notes/slides) that go with them.
+/// Services: live and past recordings, sermons, and slides.
 ///
-/// ## Why messages are here rather than a tab of their own
+/// ## Why these share a tab
 ///
-/// A sixth tab would push Account into "More" (see `HomeTabView`), and notes
-/// are the companion to the recordings, not a separate place: someone looking
-/// for last Sunday's message is choosing between watching it and reading it.
-/// A segmented control says exactly that — and it only appears when **both**
-/// halves resolve through the registry. A church with notes switched off gets
-/// the videos and no control; a server with only notes on gets the notes alone.
+/// A sixth tab would push Account into "More" (see `HomeTabView`). Watch and
+/// sermons are two ways into the same Sunday, so they sit here as one row.
 struct WatchTabView: View {
     enum Route: Hashable {
         case recording(mediaId: String)
@@ -39,7 +31,6 @@ struct WatchTabView: View {
     let isStale: Bool
 
     @State private var path: [Route] = []
-    @State private var messagesKind: MessagesKind = .notes
 
     var body: some View {
         let showsMedia = root.isAllowed(.watch(churchSlug: features.churchSlug))
@@ -49,13 +40,17 @@ struct WatchTabView: View {
             showsMedia: showsMedia,
             showsSermons: showsSermons
         )
+        let watchSelection = Binding(
+            get: { section },
+            set: { root.watchSection = $0 }
+        )
 
         NavigationStack(path: $path) {
             VStack(spacing: 0) {
                 if isStale { OfflineBanner(message: L.offlineCached) }
 
                 if showsMedia && showsSermons {
-                    Picker(L.tabWatch, selection: Bindable(root).watchSection) {
+                    Picker(L.tabWatch, selection: watchSelection) {
                         Text(L.mediaTabTitle).tag(WatchSection.media)
                         Text(L.sermonsTitle).tag(WatchSection.sermons)
                     }
@@ -71,31 +66,14 @@ struct WatchTabView: View {
                         onOpen: { path.append(.recording(mediaId: $0.mediaId)) },
                         onWatchLive: { path.append(.live($0)) }
                     )
-                case .sermons:
-                    VStack(spacing: 0) {
-                        Picker(L.sermonsTitle, selection: $messagesKind) {
-                            Text(L.messagesNotesSegment).tag(MessagesKind.notes)
-                            Text(L.messagesSlidesSegment).tag(MessagesKind.slides)
-                        }
-                        .pickerStyle(.segmented)
-                        .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
-                        .padding(.bottom, FaithFormTokens.Spacing.sm)
-
-                        switch messagesKind {
-                        case .notes:
-                            SermonListView(
-                                model: features.sermons,
-                                onOpen: { path.append(.sermon(sermonId: $0.sermonId)) },
-                                showTitle: false
-                            )
-                        case .slides:
-                            PresentationListView(
-                                model: features.presentations,
-                                onOpen: { path.append(.presentation(presentationId: $0.presentationId)) },
-                                showTitle: false
-                            )
-                        }
-                    }
+                case .sermons, .slides:
+                    SermonListView(
+                        model: features.sermons,
+                        presentations: features.presentations,
+                        onOpenNotes: { path.append(.sermon(sermonId: $0)) },
+                        onOpenSlides: { path.append(.presentation(presentationId: $0)) },
+                        showTitle: false
+                    )
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -116,26 +94,32 @@ struct WatchTabView: View {
         }
     }
 
-    /// The section to draw, given what the registry allows.
+    /// The pane to draw, given what the registry allows.
     ///
-    /// A requested section that is switched off falls back to the one that is
-    /// on, so a stale choice — or a deep link to notes a church has since
-    /// turned off — never opens an empty half.
+    /// A requested pane that is switched off falls back to one that is on, so a
+    /// stale choice — or a deep link to sermons a church has since turned off —
+    /// never opens an empty half.
     nonisolated static func effectiveSection(
         requested: WatchSection,
         showsMedia: Bool,
         showsSermons: Bool
     ) -> WatchSection {
         switch requested {
-        case .media: return showsMedia || !showsSermons ? .media : .sermons
-        case .sermons: return showsSermons || !showsMedia ? .sermons : .media
+        case .media:
+            return showsMedia || !showsSermons ? .media : .sermons
+        case .sermons:
+            return showsSermons || !showsMedia ? .sermons : .media
+        case .slides:
+            if showsSermons { return .sermons }
+            return showsMedia ? .media : .sermons
         }
     }
 
-    /// The link Home's "Messages" card follows.
+    /// The link a `…/sermons` URL follows.
     ///
-    /// Through `RootModel.open` rather than setting the tab by hand, so the card
-    /// lands exactly where the link does — same registry answer, same section.
+    /// Through `RootModel.open` rather than setting the tab by hand, so the
+    /// destination lands exactly where the link does — same registry answer,
+    /// same pane.
     nonisolated static func sermonsLink(churchSlug: String) -> URL? {
         URL(string: "\(DeepLinkParser.scheme)://church/\(churchSlug)/sermons")
     }
@@ -278,13 +262,9 @@ private struct LiveServiceDetails: View {
 
             switch model.playback {
             case .preparing, .buffering:
-                HStack(spacing: FaithFormTokens.Spacing.sm) {
-                    ProgressView()
-                    Text(L.mediaBuffering)
-                        .font(theme.font(FaithFormTokens.Text.body))
-                        .foregroundStyle(theme.palette.contentSecondary)
-                }
-                .accessibilityElement(children: .combine)
+                FaithFormWorkingLabel(L.mediaBuffering, working: true)
+                    .font(theme.font(FaithFormTokens.Text.body))
+                    .foregroundStyle(theme.palette.contentSecondary)
             case .playing:
                 Button(L.mediaPause) { Task { await model.pause() } }
                     .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))

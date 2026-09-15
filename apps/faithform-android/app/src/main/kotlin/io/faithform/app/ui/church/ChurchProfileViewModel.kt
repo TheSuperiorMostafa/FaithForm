@@ -7,6 +7,9 @@ import io.faithform.app.contract.MobileErrorCode
 import io.faithform.app.network.ApiClient
 import io.faithform.app.network.ApiException
 import io.faithform.app.network.MobileSuccess
+import io.faithform.app.network.ProjectionCache
+import io.faithform.app.storage.CachePartition
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,10 +22,16 @@ import kotlinx.serialization.Serializable
  * Mirrors the iOS `ChurchProfileModel` — same states, same rule that a reply
  * is never trusted as the new truth: after any action the profile is
  * re-fetched so what is shown is what the server would serve.
+ *
+ * Cached first, so a church the person has already opened does not flash
+ * a skeleton while the network confirms it.
  */
 class ChurchProfileViewModel(
     private val api: ApiClient,
-    private val slug: String
+    private val cache: ProjectionCache,
+    private val slug: String,
+    private val partition: CachePartition,
+    private val clock: () -> Long = System::currentTimeMillis,
 ) : ViewModel() {
 
     private val _phase = MutableStateFlow<ChurchProfilePhase>(ChurchProfilePhase.Loading)
@@ -33,6 +42,8 @@ class ChurchProfileViewModel(
 
     private val _actionError = MutableStateFlow<String?>(null)
     val actionError: StateFlow<String?> = _actionError.asStateFlow()
+
+    private var etag: String? = null
 
     @Serializable
     private data class RelationshipReply(
@@ -45,12 +56,25 @@ class ChurchProfileViewModel(
     }
 
     private suspend fun refresh() {
+        cache.load(cacheName, partition, ChurchProfile.serializer())?.let { cached ->
+            if (cached.isDisplayable(clock())) {
+                etag = cached.etag
+                _phase.value = ChurchProfilePhase.Loaded(cached.value)
+            }
+        }
         try {
             val response = api.send(
                 path = "api/mobile/v1/churches/$slug/profile",
-                serializer = MobileSuccess.serializer(ChurchProfile.serializer())
+                serializer = MobileSuccess.serializer(ChurchProfile.serializer()),
+                ifNoneMatch = etag,
             )
-            response.value?.let { _phase.value = ChurchProfilePhase.Loaded(it) }
+            if (response.notModified) return
+            val profile = response.value ?: return
+            etag = response.etag
+            cache.store(cacheName, partition, ChurchProfile.serializer(), profile, response.etag)
+            _phase.value = ChurchProfilePhase.Loaded(profile)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (error: ApiException) {
             _phase.value = when {
                 // A hidden church and an unknown slug are indistinguishable by
@@ -63,6 +87,8 @@ class ChurchProfileViewModel(
             _phase.value = keepLoadedOr(ChurchProfilePhase.Offline)
         }
     }
+
+    private val cacheName get() = "profile-$slug"
 
     private fun keepLoadedOr(fallback: ChurchProfilePhase): ChurchProfilePhase =
         _phase.value as? ChurchProfilePhase.Loaded ?: fallback

@@ -20,6 +20,11 @@ public enum MediaListPhase: Equatable, Sendable {
         if case let .loaded(live, _, _) = self { return live }
         return nil
     }
+
+    public var isStale: Bool {
+        if case let .loaded(_, _, stale) = self { return stale }
+        return false
+    }
 }
 
 /// The church's media: what is on now, and everything published before.
@@ -40,15 +45,26 @@ public final class MediaModel {
     private let client: MediaClient
     private let churchSlug: String
     private let partition: CachePartition
+    private let now: () -> Date
+    private var lastLoadedAt: Date?
 
-    public init(client: MediaClient, churchSlug: String, partition: CachePartition) {
+    public static let staleAfter: TimeInterval = 5 * 60
+
+    public init(
+        client: MediaClient,
+        churchSlug: String,
+        partition: CachePartition,
+        now: @escaping () -> Date = Date.init
+    ) {
         self.client = client
         self.churchSlug = churchSlug
         self.partition = partition
+        self.now = now
     }
 
     public func load() async {
-        if case .idle = phase { phase = .loading }
+        if shouldSkipReload { return }
+        await paintCachedIfIdle()
         await reload()
     }
 
@@ -63,6 +79,27 @@ public final class MediaModel {
         await reload()
     }
 
+    private func paintCachedIfIdle() async {
+        guard case .idle = phase else { return }
+        guard searchTerm.isEmpty,
+              let archive = await client.cachedArchive(churchSlug: churchSlug, partition: partition),
+              archive.isDisplayable(now: now())
+        else {
+            phase = .loading
+            return
+        }
+        let live = await client.cachedLive(churchSlug: churchSlug, partition: partition)
+        let liveValue = live.flatMap { $0.isDisplayable(now: now()) ? $0.value.live : nil }
+        let archiveStale = archive.freshness(now: now(), ttl: 300) != .fresh
+        let liveStale = live.map { $0.freshness(now: now(), ttl: 300) != .fresh } ?? false
+        nextCursor = archive.value.nextCursor
+        phase = .loaded(
+            live: liveValue,
+            items: archive.value.items,
+            isStale: archiveStale || liveStale
+        )
+    }
+
     private func reload() async {
         do {
             async let liveTask = client.live(churchSlug: churchSlug, partition: partition)
@@ -75,11 +112,11 @@ public final class MediaModel {
 
             let (live, archive) = try await (liveTask, archiveTask)
             nextCursor = archive.nextCursor
+            lastLoadedAt = now()
             phase = .loaded(live: live.live, items: archive.items, isStale: false)
-        } catch let error as APIError {
-            phase = mapped(error)
         } catch {
-            phase = .offline
+            if error.isCancellation { return }
+            phase = mapped(error)
         }
     }
 
@@ -100,6 +137,7 @@ public final class MediaModel {
                 phase = .loaded(live: live, items: existing + page.items, isStale: stale)
             }
         } catch {
+            if error.isCancellation { return }
             // A failed page keeps what is already on screen. Replacing a list
             // with an error because its *second* page failed loses the person's
             // place for no reason.
@@ -112,22 +150,36 @@ public final class MediaModel {
     /// dropped, not merely hidden.
     public func invalidate() async {
         nextCursor = nil
+        lastLoadedAt = nil
         phase = .idle
     }
 
-    private func mapped(_ error: APIError) -> MediaListPhase {
-        switch error.code {
-        case .blocked, .forbidden:
-            return .blocked
-        case .unavailable, .internalError:
-            return .offline
-        case .notFound:
-            // A hidden church, an unknown slug and a blocked visitor are one
-            // answer server-side, so the client cannot and must not guess.
-            return .blocked
-        default:
-            return .failed(error.message)
+    private var shouldSkipReload: Bool {
+        guard case let .loaded(_, _, stale) = phase, !stale, let lastLoadedAt else { return false }
+        return now().timeIntervalSince(lastLoadedAt) < Self.staleAfter
+    }
+
+    private func mapped(_ error: Error) -> MediaListPhase {
+        if let api = error as? APIError {
+            switch api.code {
+            case .blocked, .forbidden, .notFound:
+                // A hidden church, an unknown slug and a blocked visitor are one
+                // answer server-side, so the client cannot and must not guess.
+                return .blocked
+            case .unavailable, .internalError:
+                return keepLoadedOrOffline()
+            default:
+                return .failed(api.message)
+            }
         }
+        return keepLoadedOrOffline()
+    }
+
+    private func keepLoadedOrOffline() -> MediaListPhase {
+        if case let .loaded(live, items, _) = phase {
+            return .loaded(live: live, items: items, isStale: true)
+        }
+        return .offline
     }
 }
 
@@ -168,6 +220,13 @@ public final class MediaDetailModel {
 
     public func load() async {
         do {
+            if let cached = await client.cachedDetail(
+                churchSlug: churchSlug,
+                mediaId: mediaId,
+                partition: partition
+            ), cached.isDisplayable() {
+                phase = .loaded(cached.value)
+            }
             phase = .loaded(
                 try await client.detail(
                     churchSlug: churchSlug,
@@ -180,6 +239,8 @@ public final class MediaDetailModel {
             // and without implying the person did something wrong.
             phase = .unavailable
         } catch {
+            if error.isCancellation { return }
+            if case .loaded = phase { return }
             phase = .offline
         }
     }

@@ -5,7 +5,9 @@ import io.faithform.app.contract.PresentationPageResponse
 import io.faithform.app.network.ApiClient
 import io.faithform.app.network.ApiException
 import io.faithform.app.network.ProjectionCache
+import io.faithform.app.storage.CacheEntry
 import io.faithform.app.storage.CachePartition
+import io.faithform.app.storage.Freshness
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.cancellation.CancellationException
@@ -51,6 +53,13 @@ class PresentationClient(
         )
     }
 
+    suspend fun cachedArchive(churchSlug: String, partition: CachePartition) =
+        cache.load(
+            "presentations.archive.$churchSlug",
+            partition,
+            PresentationPageResponse.serializer(),
+        )
+
     suspend fun detail(
         churchSlug: String,
         presentationId: String,
@@ -63,6 +72,16 @@ class PresentationClient(
             name = "presentations.detail.$churchSlug.$presentationId",
             partition = partition,
         )
+
+    suspend fun cachedDetail(
+        churchSlug: String,
+        presentationId: String,
+        partition: CachePartition,
+    ) = cache.load(
+        "presentations.detail.$churchSlug.$presentationId",
+        partition,
+        PresentationDetail.serializer(),
+    )
 }
 
 /**
@@ -90,9 +109,30 @@ class PresentationListModel(
 
     suspend fun load() {
         if (_state.value.phase is PresentationListPhase.Idle) {
-            _state.update { it.copy(phase = PresentationListPhase.Loading) }
+            paintCachedOrLoading()
         }
         reload(_state.value.searchTerm)
+    }
+
+    private suspend fun paintCachedOrLoading() {
+        val cached = client.cachedArchive(churchSlug, partition)
+        val now = clock()
+        if (cached != null && cached.isDisplayable(now) && _state.value.searchTerm.isBlank()) {
+            nextCursor = cached.value.nextCursor
+            loadedQuery = ""
+            _state.update {
+                it.copy(
+                    phase = PresentationListPhase.Loaded(
+                        cached.value.items,
+                        isStale = cached.freshness(now, CacheEntry.PROJECTION_TTL_MILLIS) !is Freshness.Fresh,
+                    ),
+                    hasMore = cached.value.nextCursor != null,
+                    loadMoreFailed = false,
+                )
+            }
+        } else {
+            _state.update { it.copy(phase = PresentationListPhase.Loading) }
+        }
     }
 
     suspend fun refresh() {
@@ -232,14 +272,26 @@ class PresentationDetailModel(
     val phase: StateFlow<PresentationDetailPhase> = _phase.asStateFlow()
 
     suspend fun load() {
+        val now = System.currentTimeMillis()
+        client.cachedDetail(churchSlug, presentationId, partition)?.let { cached ->
+            if (cached.isDisplayable(now)) {
+                _phase.value = PresentationDetailPhase.Loaded(cached.value)
+            }
+        }
         _phase.value = try {
             PresentationDetailPhase.Loaded(client.detail(churchSlug, presentationId, partition))
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: ApiException) {
-            presentationDetailPhaseFor(error.code.wire, error.displayMessage)
+            keepDetailOr(presentationDetailPhaseFor(error.code.wire, error.displayMessage))
         } catch (_: Exception) {
-            PresentationDetailPhase.Offline
+            keepDetailOr(PresentationDetailPhase.Offline)
         }
     }
+
+    private fun keepDetailOr(fallback: PresentationDetailPhase): PresentationDetailPhase =
+        when (fallback) {
+            PresentationDetailPhase.Unavailable -> fallback
+            else -> _phase.value as? PresentationDetailPhase.Loaded ?: fallback
+        }
 }

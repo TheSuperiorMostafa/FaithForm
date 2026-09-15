@@ -125,6 +125,80 @@ struct CacheTests {
         #expect(await cache.load(Payload.self, name: "item-0", partition: partition()) == nil)
         #expect(await cache.load(Payload.self, name: "item-4", partition: partition()) != nil)
     }
+
+    @Test("a disk-backed cache survives a new instance")
+    func diskRoundTrip() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("faithform-cache-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let first = PartitionedCache(directory: directory)
+        try await first.store(entry("mine"), name: "bootstrap", partition: partition())
+
+        let second = PartitionedCache(directory: directory)
+        #expect(await second.load(Payload.self, name: "bootstrap", partition: partition())?.value.value == "mine")
+        #expect(await second.load(Payload.self, name: "bootstrap", partition: partition(account: "account-2")) == nil)
+    }
+
+    @Test("purging an account also drops its files")
+    func diskPurge() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("faithform-cache-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let cache = PartitionedCache(directory: directory)
+        try await cache.store(entry("mine"), name: "feed", partition: partition())
+        await cache.purgeAccount(environment: "production", accountId: "account-1")
+
+        let reread = PartitionedCache(directory: directory)
+        #expect(await reread.load(Payload.self, name: "feed", partition: partition()) == nil)
+    }
+}
+
+@Suite("Account snapshot")
+struct AccountSnapshotTests {
+    private func bootstrap() throws -> Bootstrap {
+        try JSONDecoder.faithform
+            .decode(MobileSuccess<Bootstrap>.self, from: Fixtures.data("bootstrap-first-run"))
+            .data
+    }
+
+    @Test("a snapshot is fresh for five minutes and showable for two weeks")
+    func freshness() throws {
+        let bootstrap = try bootstrap()
+        let now = Date()
+        let fresh = AccountSnapshot(bootstrap: bootstrap, onboarding: nil, storedAt: now.addingTimeInterval(-60))
+        #expect(fresh.isFresh)
+        #expect(fresh.isDisplayable(now: now))
+
+        let stale = AccountSnapshot(bootstrap: bootstrap, onboarding: nil, storedAt: now.addingTimeInterval(-3_600))
+        #expect(!stale.isFresh)
+        #expect(stale.isDisplayable(now: now))
+
+        let expired = AccountSnapshot(
+            bootstrap: bootstrap,
+            onboarding: nil,
+            storedAt: now.addingTimeInterval(-15 * 24 * 60 * 60)
+        )
+        #expect(!expired.isDisplayable(now: now))
+    }
+
+    @Test("the file store round-trips a displayable snapshot")
+    func roundTrip() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("faithform-snap-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let store = AccountSnapshotStore(directory: directory)
+        let snapshot = AccountSnapshot(bootstrap: try bootstrap(), onboarding: nil)
+        store.store(snapshot, environment: "production", accountId: "account-1")
+
+        #expect(store.load(environment: "production", accountId: "account-1") != nil)
+        #expect(store.load(environment: "production", accountId: "account-2") == nil)
+
+        store.purge(environment: "production", accountId: "account-1")
+        #expect(store.load(environment: "production", accountId: "account-1") == nil)
+    }
 }
 
 @Suite("Deep links and routing")

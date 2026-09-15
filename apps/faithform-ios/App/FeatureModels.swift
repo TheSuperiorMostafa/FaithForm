@@ -57,6 +57,7 @@ final class ChurchFeatures {
     // MARK: - Home
 
     private(set) lazy var feed = FeedModel(api: dependencies.api, cache: dependencies.cache)
+    private(set) lazy var schedule = ScheduleModel(api: dependencies.api, cache: dependencies.cache)
 
     // MARK: - Watch
 

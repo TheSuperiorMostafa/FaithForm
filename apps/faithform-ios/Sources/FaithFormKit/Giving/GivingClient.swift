@@ -48,6 +48,13 @@ public actor GivingClient {
         return value
     }
 
+    public func cachedHome(
+        churchSlug: String,
+        partition: CachePartition
+    ) async -> CacheEntry<GivingHome>? {
+        await cache.load(GivingHome.self, name: "giving.funds.\(churchSlug)", partition: partition)
+    }
+
     // MARK: - Giving
 
     /// Starts, or resumes, one logical donation.

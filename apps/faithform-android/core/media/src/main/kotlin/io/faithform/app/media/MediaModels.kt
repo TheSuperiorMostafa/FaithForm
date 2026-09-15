@@ -5,7 +5,9 @@ import io.faithform.app.contract.LiveMedia
 import io.faithform.app.contract.MediaDetail
 import io.faithform.app.contract.MobileErrorCode
 import io.faithform.app.network.ApiException
+import io.faithform.app.storage.CacheEntry
 import io.faithform.app.storage.CachePartition
+import io.faithform.app.storage.Freshness
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -31,6 +33,7 @@ class MediaListModel(
     private val client: MediaClient,
     private val churchSlug: String,
     private val partition: CachePartition,
+    private val clock: () -> Long = System::currentTimeMillis,
 ) {
     private val _state = MutableStateFlow(MediaScreenState())
     val state: StateFlow<MediaScreenState> = _state.asStateFlow()
@@ -41,9 +44,31 @@ class MediaListModel(
     /** First load. A second call while a list is showing refreshes in place. */
     suspend fun load() {
         if (_state.value.phase is MediaListPhase.Idle) {
-            _state.update { it.copy(phase = MediaListPhase.Loading) }
+            paintCachedOrLoading()
         }
         reload()
+    }
+
+    private suspend fun paintCachedOrLoading() {
+        val archive = client.cachedArchive(churchSlug, partition)
+        val now = clock()
+        if (archive != null && archive.isDisplayable(now)) {
+            val live = client.cachedLive(churchSlug, partition)
+            nextCursor = archive.value.nextCursor
+            _state.update {
+                it.copy(
+                    phase = MediaListPhase.Loaded(
+                        live = live?.takeIf { entry -> entry.isDisplayable(now) }?.value?.live?.toCard(),
+                        items = archive.value.items.map(ArchiveItem::toCard),
+                        isStale = archive.freshness(now, CacheEntry.PROJECTION_TTL_MILLIS) !is Freshness.Fresh,
+                    ),
+                    hasMore = archive.value.nextCursor != null,
+                    isLoadingMore = false,
+                )
+            }
+        } else {
+            _state.update { it.copy(phase = MediaListPhase.Loading) }
+        }
     }
 
     suspend fun refresh() = reload()
@@ -193,6 +218,14 @@ class MediaDetailModel(
 
     suspend fun load() {
         if (kind == MediaPlaybackKind.LIVE) return
+        val now = System.currentTimeMillis()
+        client.cachedDetail(churchSlug, mediaId, partition)?.let { cached ->
+            if (cached.isDisplayable(now)) {
+                _state.update {
+                    it.copy(detail = cached.value.toCard(), isUnavailable = false, isOffline = false)
+                }
+            }
+        }
         try {
             val detail = client.detail(churchSlug, mediaId, partition)
             _state.update { it.copy(detail = detail.toCard(), isUnavailable = false, isOffline = false) }

@@ -1,11 +1,16 @@
 package io.faithform.app
 
+import io.faithform.app.contract.Bootstrap
+import io.faithform.app.contract.OnboardingState
 import io.faithform.app.network.ApiClient
 import io.faithform.app.network.ApiEnvironment
+import io.faithform.app.network.FaithFormJson
 import io.faithform.app.network.HttpRequest
 import io.faithform.app.network.HttpResponse
 import io.faithform.app.network.HttpTransport
 import io.faithform.app.network.SupabaseSession
+import io.faithform.app.session.AccountSnapshot
+import io.faithform.app.session.AccountSnapshotStore
 import io.faithform.app.session.SessionGateway
 import io.faithform.app.session.StoredSession
 import io.faithform.app.storage.PartitionedCache
@@ -27,6 +32,8 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.io.File
+import java.util.UUID
 
 /**
  * The complete first-run path, from a fresh install to a working home — every
@@ -111,7 +118,7 @@ class FirstRunTest {
         Dispatchers.resetMain()
     }
 
-    private fun viewModel(): AppViewModel = AppViewModel(
+    private fun viewModel(snapshots: AccountSnapshotStore = AccountSnapshotStore()): AppViewModel = AppViewModel(
         api = ApiClient(
             environment = ApiEnvironment("development", "https://api.example"),
             clientBuild = 1,
@@ -120,8 +127,25 @@ class FirstRunTest {
         ),
         sessions = sessions,
         cache = PartitionedCache(),
-        environmentKey = "development"
+        environmentKey = "development",
+        snapshots = snapshots,
     )
+
+    private fun snapshotStore(bootstrap: String = bootstrapJson(), onboarding: String = onboardingJson(false)): AccountSnapshotStore {
+        val directory = File(System.getProperty("java.io.tmpdir"), "ff-snap-${UUID.randomUUID()}")
+        directory.mkdirs()
+        val store = AccountSnapshotStore(directory)
+        store.store(
+            AccountSnapshot(
+                bootstrap = FaithFormJson.decodeFromString(Bootstrap.serializer(), bootstrap),
+                onboarding = FaithFormJson.decodeFromString(OnboardingState.serializer(), onboarding),
+                storedAtMillis = System.currentTimeMillis(),
+            ),
+            "development",
+            "account-1",
+        )
+        return store
+    }
 
     @Test
     fun `a fresh install is signed out, with no network attempted`() = runTest {
@@ -130,6 +154,32 @@ class FirstRunTest {
 
         assertEquals(LaunchPhase.SignedOut, model.state.value)
         assertTrue(transport.received.isEmpty())
+    }
+
+    @Test
+    fun `a returning visit restores home before the network answers`() = runTest {
+        sessions.session = session()
+        val model = viewModel(snapshotStore())
+
+        assertTrue(model.state.value is LaunchPhase.Ready)
+        assertTrue(transport.received.isEmpty())
+
+        transport.queue.add(HttpResponse(200, envelope(bootstrapJson()), emptyMap()))
+        transport.queue.add(HttpResponse(200, envelope(onboardingJson(needsOnboarding = false)), emptyMap()))
+        model.load()
+
+        assertTrue(model.state.value is LaunchPhase.Ready)
+        assertEquals(false, (model.state.value as LaunchPhase.Ready).isStale)
+    }
+
+    @Test
+    fun `no network with a snapshot stays on home`() = runTest {
+        sessions.session = session()
+        val model = viewModel(snapshotStore())
+        model.load()
+
+        val ready = model.state.value as LaunchPhase.Ready
+        assertTrue(ready.isStale)
     }
 
     @Test
@@ -450,6 +500,10 @@ class AuthViewModelTest {
         model.updateEmail("p@example.org")
         model.updatePassword("short")
         model.createAccount()
+        assertEquals(AuthUiPhase.Failed(AuthUiError.NAME_MISSING), model.phase.value)
+
+        model.updateName("Sarah")
+        model.createAccount()
         assertEquals(AuthUiPhase.Failed(AuthUiError.WEAK_PASSWORD), model.phase.value)
     }
 
@@ -459,6 +513,7 @@ class AuthViewModelTest {
             client(HttpResponse(200, """{"id":"u","confirmation_sent_at":"2026-08-26T00:00:00Z"}""", emptyMap()))
         ) { _, _ -> throw AssertionError("no session should be handed over") }
 
+        model.updateName("Sarah")
         model.updateEmail("p@example.org")
         model.updatePassword("pw123456")
         model.createAccount()

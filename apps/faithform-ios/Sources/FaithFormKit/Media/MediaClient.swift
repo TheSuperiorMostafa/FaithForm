@@ -47,7 +47,12 @@ public actor MediaClient: PlaybackGranting {
         return value
     }
 
-    // MARK: - Archive
+    public func cachedLive(
+        churchSlug: String,
+        partition: CachePartition
+    ) async -> CacheEntry<LiveMediaResponse>? {
+        await cache.load(LiveMediaResponse.self, name: "media.live.\(churchSlug)", partition: partition)
+    }
 
     public func archive(
         churchSlug: String,
@@ -89,6 +94,13 @@ public actor MediaClient: PlaybackGranting {
         return value
     }
 
+    public func cachedArchive(
+        churchSlug: String,
+        partition: CachePartition
+    ) async -> CacheEntry<MediaPage>? {
+        await cache.load(MediaPage.self, name: "media.archive.\(churchSlug)", partition: partition)
+    }
+
     // MARK: - Detail
 
     public func detail(
@@ -115,6 +127,14 @@ public actor MediaClient: PlaybackGranting {
             partition: partition
         )
         return value
+    }
+
+    public func cachedDetail(
+        churchSlug: String,
+        mediaId: String,
+        partition: CachePartition
+    ) async -> CacheEntry<MediaDetail>? {
+        await cache.load(MediaDetail.self, name: "media.detail.\(churchSlug).\(mediaId)", partition: partition)
     }
 
     // MARK: - Playback

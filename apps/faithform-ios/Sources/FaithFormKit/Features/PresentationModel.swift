@@ -13,6 +13,11 @@ public enum PresentationListPhase: Equatable, Sendable {
         if case let .loaded(items, _) = self { return items }
         return []
     }
+
+    public var isStale: Bool {
+        if case let .loaded(_, stale) = self { return stale }
+        return false
+    }
 }
 
 @MainActor
@@ -28,16 +33,27 @@ public final class PresentationModel {
     private let client: PresentationClient
     private let churchSlug: String
     private let partition: CachePartition
+    private let now: () -> Date
+    private var lastLoadedAt: Date?
     private var generation = 0
 
-    public init(client: PresentationClient, churchSlug: String, partition: CachePartition) {
+    public static let staleAfter: TimeInterval = 5 * 60
+
+    public init(
+        client: PresentationClient,
+        churchSlug: String,
+        partition: CachePartition,
+        now: @escaping () -> Date = Date.init
+    ) {
         self.client = client
         self.churchSlug = churchSlug
         self.partition = partition
+        self.now = now
     }
 
     public func load() async {
-        if case .idle = phase { phase = .loading }
+        if shouldSkipReload { return }
+        await paintCachedIfIdle()
         await reload()
     }
 
@@ -57,6 +73,22 @@ public final class PresentationModel {
         await reload()
     }
 
+    private func paintCachedIfIdle() async {
+        guard case .idle = phase else { return }
+        guard submittedQuery.isEmpty,
+              let cached = await client.cachedArchive(churchSlug: churchSlug, partition: partition),
+              cached.isDisplayable(now: now())
+        else {
+            phase = .loading
+            return
+        }
+        nextCursor = cached.value.nextCursor
+        phase = .loaded(
+            items: cached.value.items,
+            isStale: cached.freshness(now: now(), ttl: 300) != .fresh
+        )
+    }
+
     private func reload() async {
         generation += 1
         let current = generation
@@ -74,13 +106,12 @@ public final class PresentationModel {
             )
             guard current == generation else { return }
             nextCursor = page.nextCursor
+            lastLoadedAt = now()
             phase = .loaded(items: page.items, isStale: false)
-        } catch let error as APIError {
-            guard current == generation else { return }
-            phase = mapped(error)
         } catch {
             guard current == generation else { return }
-            phase = .offline
+            if error.isCancellation { return }
+            phase = mapped(error)
         }
     }
 
@@ -110,6 +141,7 @@ public final class PresentationModel {
             }
         } catch {
             guard current == generation else { return }
+            if error.isCancellation { return }
             loadMoreFailed = true
         }
     }
@@ -119,12 +151,27 @@ public final class PresentationModel {
         await loadMore()
     }
 
-    private func mapped(_ error: APIError) -> PresentationListPhase {
-        switch error.code {
-        case .blocked, .forbidden, .notFound: return .blocked
-        case .unavailable, .internalError: return .offline
-        default: return .failed(error.message)
+    private var shouldSkipReload: Bool {
+        guard case let .loaded(_, stale) = phase, !stale, let lastLoadedAt else { return false }
+        return now().timeIntervalSince(lastLoadedAt) < Self.staleAfter
+    }
+
+    private func mapped(_ error: Error) -> PresentationListPhase {
+        if let api = error as? APIError {
+            switch api.code {
+            case .blocked, .forbidden, .notFound: return .blocked
+            case .unavailable, .internalError: return keepLoadedOrOffline()
+            default: return .failed(api.message)
+            }
         }
+        return keepLoadedOrOffline()
+    }
+
+    private func keepLoadedOrOffline() -> PresentationListPhase {
+        if case let .loaded(items, _) = phase {
+            return .loaded(items: items, isStale: true)
+        }
+        return .offline
     }
 }
 
@@ -160,20 +207,33 @@ public final class PresentationDetailModel {
 
     public func load() async {
         do {
+            if let cached = await client.cachedDetail(
+                churchSlug: churchSlug,
+                presentationId: presentationId,
+                partition: partition
+            ), cached.isDisplayable() {
+                phase = .loaded(cached.value)
+            }
             let detail = try await client.detail(
                 churchSlug: churchSlug,
                 presentationId: presentationId,
                 partition: partition
             )
             phase = .loaded(detail)
-        } catch let error as APIError {
-            switch error.code {
-            case .notFound, .blocked, .forbidden: phase = .unavailable
-            case .unavailable, .internalError: phase = .offline
-            default: phase = .failed(error.message)
-            }
         } catch {
-            phase = .offline
+            if error.isCancellation { return }
+            guard let api = error as? APIError else {
+                if case .loaded = phase { return }
+                phase = .offline
+                return
+            }
+            switch api.code {
+            case .notFound, .blocked, .forbidden: phase = .unavailable
+            case .unavailable, .internalError:
+                if case .loaded = phase { return }
+                phase = .offline
+            default: phase = .failed(api.message)
+            }
         }
     }
 }

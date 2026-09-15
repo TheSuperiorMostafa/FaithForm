@@ -6,8 +6,8 @@ import io.faithform.app.contract.PresentationListItem
 /**
  * What the presentation (slides) screens show, as data.
  *
- * Same phase shape as [SermonListPhase] / [SermonDetailPhase] so Messages' Notes
- * and Slides halves behave alike under failure and empty states.
+ * Same phase shape as [SermonListPhase] / [SermonDetailPhase] so Services'
+ * Sermons and Slides panes behave alike under failure and empty states.
  */
 
 sealed interface PresentationListPhase {

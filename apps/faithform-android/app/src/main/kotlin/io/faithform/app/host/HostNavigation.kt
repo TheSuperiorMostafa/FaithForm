@@ -95,9 +95,8 @@ object HostNavigation {
     }
 
     /**
-     * Whether the selected church's messages may open: the one gate the
-     * Services tab's Messages half, the entry on Home and a `…/sermons` link
-     * all pass.
+     * Whether the selected church's sermons may open: the one gate the
+     * Services tab's Sermons and Slides panes and a `…/sermons` link all pass.
      */
     fun sermonsAllowed(
         bootstrap: Bootstrap,
@@ -188,18 +187,23 @@ object HostNavigation {
     }
 
     /**
-     * Which half of Services to show, given what the registry allows.
+     * Which pane of Services to show, given what the registry allows.
      *
-     * Returns true for the Messages half, false for Live & past. Matches iOS
-     * `WatchTabView.effectiveSection`.
+     * A requested pane that is switched off falls back to one that is on.
+     * Matches iOS `WatchTabView.effectiveSection`.
      */
-    fun showMessagesSection(
-        requestedSermons: Boolean,
+    enum class WatchPane {
+        MEDIA, SERMONS, SLIDES
+    }
+
+    fun effectiveWatchPane(
+        requested: WatchPane,
         showsMedia: Boolean,
         showsSermons: Boolean,
-    ): Boolean = when {
-        requestedSermons -> showsSermons || !showsMedia
-        else -> !(showsMedia || !showsSermons)
+    ): WatchPane = when (requested) {
+        WatchPane.MEDIA -> if (showsMedia || !showsSermons) WatchPane.MEDIA else WatchPane.SERMONS
+        WatchPane.SERMONS -> if (showsSermons || !showsMedia) WatchPane.SERMONS else WatchPane.MEDIA
+        WatchPane.SLIDES -> if (showsSermons) WatchPane.SERMONS else WatchPane.MEDIA
     }
 }
 

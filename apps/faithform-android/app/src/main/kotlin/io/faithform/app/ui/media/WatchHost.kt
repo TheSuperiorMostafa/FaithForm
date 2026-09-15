@@ -12,6 +12,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -47,18 +48,17 @@ import io.faithform.app.storage.CachePartition
 import io.faithform.app.ui.host.TabScreen
 import io.faithform.app.ui.host.rememberSessionModel
 import io.faithform.app.ui.sermons.PresentationDetailScreen
-import io.faithform.app.ui.sermons.PresentationListScreen
 import io.faithform.app.ui.sermons.SermonDetailScreen
 import io.faithform.app.ui.sermons.SermonListScreen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 
 /**
- * Services: live and past recordings, and the messages (notes/slides) that go
- * with them — matching iOS `WatchTabView`.
+ * Services: live and past recordings, sermons, and slides — matching iOS
+ * `WatchTabView`.
  *
- * A segmented control appears only when both halves are allowed. A
- * `…/sermons` link or Home entry asks for Messages via [AppViewModel.sermonsRequested].
+ * One row of destinations appears when more than one pane is allowed. A
+ * `…/sermons` link asks for sermons via [AppViewModel.sermonsRequested].
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -73,16 +73,19 @@ fun WatchTab(
     val showsMedia = HostNavigation.mediaAllowed(bootstrap, churchSlug, appViewModel.registry)
     val showsSermons = HostNavigation.sermonsAllowed(bootstrap, churchSlug, appViewModel.registry)
 
-    var preferMessages by rememberSaveable(partition.storageKey) { mutableStateOf(false) }
+    var requestedOrdinal by rememberSaveable(partition.storageKey) { mutableIntStateOf(0) }
     val sermonsRequested by appViewModel.sermonsRequested.collectAsStateWithLifecycle()
     LaunchedEffect(sermonsRequested) {
         if (sermonsRequested) {
-            preferMessages = true
+            requestedOrdinal = HostNavigation.WatchPane.SERMONS.ordinal
             appViewModel.consumeSermonsRequest()
         }
     }
 
-    val showMessages = HostNavigation.showMessagesSection(preferMessages, showsMedia, showsSermons)
+    val requestedPane = HostNavigation.WatchPane.entries.getOrElse(requestedOrdinal) {
+        HostNavigation.WatchPane.MEDIA
+    }
+    val pane = HostNavigation.effectiveWatchPane(requestedPane, showsMedia, showsSermons)
 
     // Detail routes: null = list; "recording:id" / "live:id" / "sermon:id"
     var opened by rememberSaveable(partition.storageKey) { mutableStateOf<String?>(null) }
@@ -135,82 +138,77 @@ fun WatchTab(
     TabScreen(title = stringResource(R.string.tab_watch), modifier = modifier) { content ->
         Column(content) {
             if (showsMedia && showsSermons) {
-                SingleChoiceSegmentedButtonRow(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(
-                            horizontal = FaithFormTokens.Layout.screenPaddingHorizontal,
-                            vertical = FaithFormTokens.Spacing.sm,
-                        ),
-                ) {
-                    SegmentedButton(
-                        selected = !showMessages,
-                        onClick = { preferMessages = false },
-                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                        label = { Text(stringResource(R.string.media_tab_title)) },
-                    )
-                    SegmentedButton(
-                        selected = showMessages,
-                        onClick = { preferMessages = true },
-                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                        label = { Text(stringResource(R.string.sermons_title)) },
-                    )
-                }
-            }
-
-            if (showMessages && showsSermons) {
-                var messagesKind by rememberSaveable(partition.storageKey) { mutableStateOf(0) } // 0 notes, 1 slides
-                SingleChoiceSegmentedButtonRow(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(
-                            horizontal = FaithFormTokens.Layout.screenPaddingHorizontal,
-                            vertical = FaithFormTokens.Spacing.sm,
-                        ),
-                ) {
-                    SegmentedButton(
-                        selected = messagesKind == 0,
-                        onClick = { messagesKind = 0 },
-                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                        label = { Text(stringResource(R.string.messages_notes_segment)) },
-                    )
-                    SegmentedButton(
-                        selected = messagesKind == 1,
-                        onClick = { messagesKind = 1 },
-                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                        label = { Text(stringResource(R.string.messages_slides_segment)) },
-                    )
-                }
-                if (messagesKind == 0) {
-                    MessagesHalf(
-                        client = container.sermonClient,
-                        churchSlug = churchSlug,
-                        partition = partition,
-                        onOpen = { opened = "sermon:$it" },
-                        modifier = Modifier.weight(1f).fillMaxWidth(),
-                    )
-                } else {
-                    SlidesHalf(
-                        client = container.presentationClient,
-                        churchSlug = churchSlug,
-                        partition = partition,
-                        onOpen = { opened = "presentation:$it" },
-                        modifier = Modifier.weight(1f).fillMaxWidth(),
-                    )
-                }
-            } else if (showsMedia) {
-                MediaHalf(
-                    client = container.mediaClient,
-                    churchSlug = churchSlug,
-                    partition = partition,
-                    onOpen = { opened = "recording:${it.mediaId}" },
-                    onWatchLive = { live ->
-                        liveCard = live.title
-                        opened = "live:${live.mediaId}"
-                    },
-                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                WatchPaneRow(
+                    panes = listOf(
+                        HostNavigation.WatchPane.MEDIA,
+                        HostNavigation.WatchPane.SERMONS,
+                    ),
+                    selected = pane,
+                    onSelect = { requestedOrdinal = it.ordinal },
                 )
             }
+
+            when {
+                pane == HostNavigation.WatchPane.SERMONS && showsSermons -> {
+                    SermonsHalf(
+                        sermonClient = container.sermonClient,
+                        presentationClient = container.presentationClient,
+                        churchSlug = churchSlug,
+                        partition = partition,
+                        onOpenNotes = { opened = "sermon:$it" },
+                        onOpenSlides = { opened = "presentation:$it" },
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                    )
+                }
+                showsMedia -> {
+                    MediaHalf(
+                        client = container.mediaClient,
+                        churchSlug = churchSlug,
+                        partition = partition,
+                        onOpen = { opened = "recording:${it.mediaId}" },
+                        onWatchLive = { live ->
+                            liveCard = live.title
+                            opened = "live:${live.mediaId}"
+                        },
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun WatchPaneRow(
+    panes: List<HostNavigation.WatchPane>,
+    selected: HostNavigation.WatchPane,
+    onSelect: (HostNavigation.WatchPane) -> Unit,
+) {
+    SingleChoiceSegmentedButtonRow(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(
+                horizontal = FaithFormTokens.Layout.screenPaddingHorizontal,
+                vertical = FaithFormTokens.Spacing.sm,
+            ),
+    ) {
+        panes.forEachIndexed { index, pane ->
+            SegmentedButton(
+                selected = selected == pane,
+                onClick = { onSelect(pane) },
+                shape = SegmentedButtonDefaults.itemShape(index = index, count = panes.size),
+                label = {
+                    Text(
+                        stringResource(
+                            when (pane) {
+                                HostNavigation.WatchPane.MEDIA -> R.string.media_tab_title
+                                HostNavigation.WatchPane.SERMONS -> R.string.sermons_title
+                                HostNavigation.WatchPane.SLIDES -> R.string.presentations_title
+                            },
+                        ),
+                    )
+                },
+            )
         }
     }
 }
@@ -244,57 +242,56 @@ private fun MediaHalf(
 }
 
 @Composable
-private fun MessagesHalf(
-    client: SermonClient,
+private fun SermonsHalf(
+    sermonClient: SermonClient,
+    presentationClient: PresentationClient,
     churchSlug: String,
     partition: CachePartition,
-    onOpen: (String) -> Unit,
+    onOpenNotes: (String) -> Unit,
+    onOpenSlides: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val list = rememberSessionModel("sermons|${partition.storageKey}") {
-        SermonListModel(client, churchSlug, partition)
+    val sermons = rememberSessionModel("sermons|${partition.storageKey}") {
+        SermonListModel(sermonClient, churchSlug, partition)
     }
-    LaunchedEffect(list) {
-        list.launchOnce("search") { observeSearch() }
-        list.launch { refreshIfStale() }
+    val presentations = rememberSessionModel("presentations|${partition.storageKey}") {
+        PresentationListModel(presentationClient, churchSlug, partition)
     }
-    val state by list.value.state.collectAsStateWithLifecycle()
+    LaunchedEffect(sermons) {
+        sermons.launchOnce("search") { observeSearch() }
+        sermons.launch { refreshIfStale() }
+    }
+    LaunchedEffect(presentations) {
+        presentations.launchOnce("search") { observeSearch() }
+        presentations.launch { refreshIfStale() }
+    }
+    val sermonState by sermons.value.state.collectAsStateWithLifecycle()
+    val presentationState by presentations.value.state.collectAsStateWithLifecycle()
     SermonListScreen(
-        state = state,
-        onSearch = { term -> list.value.search(term) },
-        onOpen = { onOpen(it.sermonId) },
-        onLoadMore = { list.launch { loadMore() } },
-        onRetryLoadMore = { list.launch { retryLoadMore() } },
-        onRefresh = { list.launch { refresh() } },
-        onRetry = { list.launch { refresh() } },
-        modifier = modifier,
-        showTitle = false,
-    )
-}
-@Composable
-private fun SlidesHalf(
-    client: PresentationClient,
-    churchSlug: String,
-    partition: CachePartition,
-    onOpen: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val list = rememberSessionModel("presentations|${partition.storageKey}") {
-        PresentationListModel(client, churchSlug, partition)
-    }
-    LaunchedEffect(list) {
-        list.launchOnce("search") { observeSearch() }
-        list.launch { refreshIfStale() }
-    }
-    val state by list.value.state.collectAsStateWithLifecycle()
-    PresentationListScreen(
-        state = state,
-        onSearch = { term -> list.value.search(term) },
-        onOpen = { onOpen(it.presentationId) },
-        onLoadMore = { list.launch { loadMore() } },
-        onRetryLoadMore = { list.launch { retryLoadMore() } },
-        onRefresh = { list.launch { refresh() } },
-        onRetry = { list.launch { refresh() } },
+        state = sermonState,
+        presentationState = presentationState,
+        onSearch = { term ->
+            sermons.value.search(term)
+            presentations.value.search(term)
+        },
+        onOpenNotes = onOpenNotes,
+        onOpenSlides = onOpenSlides,
+        onLoadMore = {
+            sermons.launch { loadMore() }
+            presentations.launch { loadMore() }
+        },
+        onRetryLoadMore = {
+            sermons.launch { retryLoadMore() }
+            presentations.launch { retryLoadMore() }
+        },
+        onRefresh = {
+            sermons.launch { refresh() }
+            presentations.launch { refresh() }
+        },
+        onRetry = {
+            sermons.launch { refresh() }
+            presentations.launch { refresh() }
+        },
         modifier = modifier,
         showTitle = false,
     )

@@ -44,6 +44,7 @@ function toDto(
     body: item.body,
     startAt: item.startAt,
     endAt: item.endAt,
+    allDay: item.allDay,
     location: item.location,
     posterUrl: item.posterUrl,
     posterAltText: item.posterAltText,

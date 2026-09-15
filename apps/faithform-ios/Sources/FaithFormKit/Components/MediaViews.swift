@@ -107,7 +107,7 @@ public struct MediaArchiveList: View {
             VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
                 switch model.phase {
                 case .idle, .loading:
-                    ContentSkeleton()
+                    MediaListSkeleton()
 
                 case .blocked:
                     MediaMessage(
@@ -129,43 +129,55 @@ public struct MediaArchiveList: View {
                         Task { await model.refresh() }
                     }
 
-                case let .loaded(live, items, _):
-                    // The hero exists only when there is something live.
-                    if let live { LiveNowHero(live: live) { onWatchLive(live) } }
+                case let .loaded(live, items, isStale):
+                    if isStale {
+                        OfflineBanner(message: L.offlineCached)
+                    }
+                    if let live {
+                        LiveNowHero(live: live) { onWatchLive(live) }
+                    }
 
-                    Text(L.mediaArchiveTitle)
-                        .font(theme.font(FaithFormTokens.Text.titleMedium))
-                        .foregroundStyle(theme.palette.contentPrimary)
-
-                    FaithFormSearchField(
-                        placeholder: L.mediaSearchLabel,
-                        text: $model.searchTerm,
-                        onSubmit: { Task { await model.search(model.searchTerm) } }
-                    )
-
-                    if items.isEmpty {
-                        Text(
-                            model.searchTerm.isEmpty
-                                ? L.mediaArchiveEmpty
-                                : L.mediaArchiveEmptySearch
+                    let searching = !model.searchTerm.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    if live == nil && items.isEmpty && !searching {
+                        EmptyStateView(
+                            title: L.mediaServicesEmptyTitle,
+                            explanation: L.mediaServicesEmptyBody,
+                            symbol: "video"
                         )
-                        .font(theme.font(FaithFormTokens.Text.body))
-                        .foregroundStyle(theme.palette.contentSecondary)
                     } else {
-                        ForEach(items, id: \.mediaId) { item in
-                            Button { onOpen(item) } label: {
-                                ArchiveCard(item: item)
-                            }
-                            .buttonStyle(.plain)
-                            .onAppear {
-                                if item.mediaId == items.last?.mediaId {
-                                    Task { await model.loadMore() }
+                        Text(L.mediaArchiveTitle)
+                            .font(theme.font(FaithFormTokens.Text.titleMedium))
+                            .foregroundStyle(theme.palette.contentPrimary)
+
+                        FaithFormSearchField(
+                            placeholder: L.mediaSearchLabel,
+                            text: $model.searchTerm,
+                            onSubmit: { Task { await model.search(model.searchTerm) } }
+                        )
+
+                        if items.isEmpty {
+                            EmptyStateView(
+                                title: searching ? L.mediaArchiveEmptySearch : L.mediaArchiveEmpty,
+                                explanation: searching ? "" : L.mediaArchiveEmptyBody,
+                                symbol: searching ? "magnifyingglass" : "film"
+                            )
+                        } else {
+                            ForEach(items, id: \.mediaId) { item in
+                                Button { onOpen(item) } label: {
+                                    ArchiveCard(item: item)
+                                }
+                                .buttonStyle(.plain)
+                                .onAppear {
+                                    if item.mediaId == items.last?.mediaId {
+                                        Task { await model.loadMore() }
+                                    }
                                 }
                             }
-                        }
 
-                        if model.isLoadingMore {
-                            SkeletonCard()
+                            if model.isLoadingMore {
+                                MediaCardSkeleton()
+                                    .skeletonShimmer()
+                            }
                         }
                     }
                 }
@@ -313,13 +325,9 @@ struct PlaybackControls: View {
                 .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
 
             case .preparing, .buffering:
-                HStack(spacing: FaithFormTokens.Spacing.sm) {
-                    ProgressView()
-                    Text(L.mediaBuffering)
-                        .font(theme.font(FaithFormTokens.Text.body))
-                        .foregroundStyle(theme.palette.contentSecondary)
-                }
-                .accessibilityElement(children: .combine)
+                FaithFormWorkingLabel(L.mediaBuffering, working: true)
+                    .font(theme.font(FaithFormTokens.Text.body))
+                    .foregroundStyle(theme.palette.contentSecondary)
 
             case .playing:
                 Button(L.mediaPause) { Task { await model.pause() } }

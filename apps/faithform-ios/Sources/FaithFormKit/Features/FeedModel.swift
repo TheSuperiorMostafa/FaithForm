@@ -79,6 +79,7 @@ public final class FeedModel {
 
             phase = page.items.isEmpty ? .empty : .loaded(items: page.items, isStale: false)
         } catch let error as APIError {
+            if error.isCancellation { return }
             switch error.code {
             case .blocked:
                 // Losing access drops the cached copy immediately rather than
@@ -93,6 +94,7 @@ public final class FeedModel {
                 phase = .failed(error.displayMessage)
             }
         } catch {
+            if error.isCancellation { return }
             if case .loaded = phase { return }
             phase = .offlineNoCache
         }

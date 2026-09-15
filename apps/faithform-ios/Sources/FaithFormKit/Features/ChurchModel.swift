@@ -76,6 +76,7 @@ public final class ChurchProfileModel {
                 )
             }
         } catch let error as APIError {
+            if error.isCancellation { return }
             switch error.code {
             case .notFound:
                 // A hidden church and an unknown slug are indistinguishable by
@@ -89,6 +90,7 @@ public final class ChurchProfileModel {
                 phase = .failed(error.displayMessage)
             }
         } catch {
+            if error.isCancellation { return }
             if case .loaded = phase { return }
             phase = .offline
         }
@@ -218,6 +220,7 @@ public final class ChurchChooserModel {
     struct ChooserPage: Decodable, Sendable { let items: [ChooserChurch] }
 
     public func load() async {
+        if case .loaded = phase { return }
         phase = .loading
         do {
             let response = try await api.send(
@@ -234,8 +237,10 @@ public final class ChurchChooserModel {
                 selectedSlug = nil
             }
         } catch let error as APIError {
+            if error.isCancellation { return }
             phase = error.retryable ? .offline : .failed(error.displayMessage)
         } catch {
+            if error.isCancellation { return }
             phase = .offline
         }
     }
@@ -300,6 +305,7 @@ public final class ChurchChooserModel {
             // A relationship revoked since the list was fetched: drop it and
             // reload rather than leaving a stale row selectable.
             if error.code == .blocked || error.code == .notFound {
+                phase = .loading
                 await load()
             }
             return nil

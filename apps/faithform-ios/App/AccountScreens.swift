@@ -203,11 +203,7 @@ struct AccountView: View {
                     if !ok { nameSaveFailed = true }
                 }
             } label: {
-                if savingName {
-                    ProgressView().tint(theme.palette.contentOnAccent)
-                } else {
-                    Text(L.accountSaveName)
-                }
+                FaithFormWorkingLabel(L.accountSaveName, working: savingName)
             }
             .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
             .disabled(savingName || draftName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -290,14 +286,7 @@ struct AccountDeletionControl: View {
             Button {
                 confirming = true
             } label: {
-                if working {
-                    HStack(spacing: FaithFormTokens.Spacing.sm) {
-                        ProgressView().tint(theme.palette.destructiveContent)
-                        Text(L.deleteAccountWorking)
-                    }
-                } else {
-                    Text(L.deleteAccount)
-                }
+                FaithFormWorkingLabel(working ? L.deleteAccountWorking : L.deleteAccount, working: working)
             }
             .buttonStyle(FaithFormButtonStyle(kind: .destructive, theme: theme))
             .disabled(working)

@@ -61,7 +61,21 @@ public actor SessionManager: TokenProviding {
     private var cached: StoredSession?
     private var inFlightRefresh: Task<StoredSession, Error>?
 
-    private var storageKey: String { "session.\(environmentKey)" }
+    private var storageKey: String { Self.storageKey(environmentKey: environmentKey) }
+
+    public static func storageKey(environmentKey: String) -> String {
+        "session.\(environmentKey)"
+    }
+
+    /// Reads a session blob the same way `currentSession` does, without going
+    /// through the actor. Launch uses this to restore the shell on the first
+    /// frame rather than waiting for `load()`.
+    public static func session(fromStored data: Data, environmentKey: String) -> StoredSession? {
+        guard let session = try? JSONDecoder().decode(StoredSession.self, from: data),
+              session.environmentKey == environmentKey
+        else { return nil }
+        return session
+    }
 
     public init(
         store: SecureStoring,
@@ -110,6 +124,7 @@ public actor SessionManager: TokenProviding {
             do {
                 return try await existing.value.accessToken
             } catch {
+                if error.isCancellation { throw CancellationError() }
                 throw Self.publicError(for: error)
             }
         }
@@ -125,6 +140,7 @@ public actor SessionManager: TokenProviding {
         do {
             refreshed = try await task.value
         } catch {
+            if error.isCancellation { throw CancellationError() }
             if Self.isDefinitiveRejection(error) {
                 // The provider refused this refresh token. That is terminal for
                 // the session: keeping a dead token would make every later call

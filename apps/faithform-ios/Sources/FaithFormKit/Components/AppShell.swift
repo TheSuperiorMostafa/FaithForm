@@ -41,8 +41,8 @@ public struct AppShellView: View {
     private var content: some View {
         switch state.phase {
         case .loading:
-            ProgressView()
-                .controlSize(.large)
+            ContentSkeleton()
+                .padding(FaithFormTokens.Spacing.lg)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .accessibilityLabel(Text(L.loadingAccount))
 

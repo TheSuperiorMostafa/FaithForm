@@ -57,6 +57,9 @@ class GivingClient(
             partition = partition,
         )
 
+    suspend fun cachedHome(churchSlug: String, partition: CachePartition) =
+        cache.load("giving.funds.$churchSlug", partition, GivingHome.serializer())
+
     /** Starts, or resumes, one logical donation. */
     suspend fun startDonation(attempt: DonationAttempt): DonationSession = required(
         api.send(

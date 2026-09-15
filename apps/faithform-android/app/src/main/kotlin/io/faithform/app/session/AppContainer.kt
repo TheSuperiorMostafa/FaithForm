@@ -29,6 +29,7 @@ import io.faithform.app.storage.PartitionedCache
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import java.io.File
 
 /**
  * Everything the app needs, built once.
@@ -149,7 +150,10 @@ class AppContainer(
     )
 
     /** Caches hold projections only. Credentials are never written here. */
-    val cache = PartitionedCache()
+    val cache = PartitionedCache(directory = File(context.filesDir, "faithform-projections"))
+
+    /** The last signed-in shell, so a returning visit paints Home without waiting. */
+    val snapshots = AccountSnapshotStore(File(context.filesDir, "faithform-snapshots"))
 
     /** The typed, ETag-carrying view of [cache] every feature client reads through. */
     val projections = ProjectionCache(cache)

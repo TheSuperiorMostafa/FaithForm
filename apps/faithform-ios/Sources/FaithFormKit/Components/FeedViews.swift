@@ -60,7 +60,8 @@ public struct AnnouncementCard: View {
                 // than leaving a broken box.
                 Color.clear
             default:
-                Rectangle().fill(theme.palette.skeletonBase)
+                SkeletonPoster()
+                    .skeletonShimmer()
             }
         }
         .frame(maxWidth: .infinity)
@@ -130,6 +131,10 @@ public enum FeedFormatting {
 
         let formatter = DateFormatter()
         formatter.timeZone = zone
+        if item.allDay {
+            formatter.dateFormat = "EEEE d MMMM"
+            return formatter.string(from: start)
+        }
         formatter.dateFormat = "EEEE d MMMM, h:mm a"
         let startText = formatter.string(from: start)
 
@@ -188,35 +193,26 @@ public struct HomeFeedView: View {
     private let churchSlug: String
     private let isJoinPending: Bool
     private let onOpenItem: @MainActor (FeedItem) -> Void
-    /// Nil when this church's sermon notes are not reachable, and then no door
-    /// is drawn.
-    private let onOpenSermonNotes: (@MainActor () -> Void)?
 
     public init(
         model: FeedModel,
         churchName: String,
         churchSlug: String,
         isJoinPending: Bool = false,
-        onOpenItem: @escaping @MainActor (FeedItem) -> Void,
-        onOpenSermonNotes: (@MainActor () -> Void)? = nil
+        onOpenItem: @escaping @MainActor (FeedItem) -> Void
     ) {
         self.model = model
         self.churchName = churchName
         self.churchSlug = churchSlug
         self.isJoinPending = isJoinPending
         self.onOpenItem = onOpenItem
-        self.onOpenSermonNotes = onOpenSermonNotes
     }
 
     public var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
-                header
                 if isJoinPending {
                     JoinPendingBanner()
-                }
-                if let onOpenSermonNotes {
-                    SermonNotesEntryCard(action: onOpenSermonNotes)
                 }
                 content
             }
@@ -226,20 +222,14 @@ public struct HomeFeedView: View {
         }
         .background(theme.palette.background)
         .refreshable { await model.refresh(churchSlug: churchSlug) }
-        .navigationTitle(L.homeTitle)
-    }
-
-    private var header: some View {
-        Text(churchName)
-            .font(theme.font(FaithFormTokens.Text.displayMedium))
-            .foregroundStyle(theme.palette.contentPrimary)
+        .navigationTitle(churchName)
     }
 
     @ViewBuilder
     private var content: some View {
         switch model.phase {
         case .loading:
-            ForEach(0..<2, id: \.self) { _ in SkeletonCard() }
+            FeedSkeleton()
 
         case let .loaded(items, isStale):
             if isStale {

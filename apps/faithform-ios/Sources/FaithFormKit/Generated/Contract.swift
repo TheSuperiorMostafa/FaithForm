@@ -1338,6 +1338,7 @@ public struct FeedItem: Codable, Hashable, Sendable {
     public let body: String
     public let startAt: String
     public let endAt: String?
+    public let allDay: Bool
     public let location: String?
     public let posterUrl: String?
     public let posterAltText: String?
@@ -1356,6 +1357,7 @@ public struct FeedItem: Codable, Hashable, Sendable {
         body: String,
         startAt: String,
         endAt: String? = nil,
+        allDay: Bool,
         location: String? = nil,
         posterUrl: String? = nil,
         posterAltText: String? = nil,
@@ -1373,6 +1375,7 @@ public struct FeedItem: Codable, Hashable, Sendable {
         self.body = body
         self.startAt = startAt
         self.endAt = endAt
+        self.allDay = allDay
         self.location = location
         self.posterUrl = posterUrl
         self.posterAltText = posterAltText
@@ -1402,6 +1405,21 @@ public struct FeedPage: Codable, Hashable, Sendable {
         self.items = items
         self.nextCursor = nextCursor
         self.feedVersion = feedVersion
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct SchedulePage: Codable, Hashable, Sendable {
+    public let items: [FeedItem]
+    public let scheduleVersion: Int
+
+    public init(
+        items: [FeedItem],
+        scheduleVersion: Int
+    ) {
+        self.items = items
+        self.scheduleVersion = scheduleVersion
     }
 }
 

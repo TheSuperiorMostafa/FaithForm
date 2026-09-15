@@ -10,6 +10,12 @@ private actor FixedTokens: TokenProviding {
     func invalidationCount() -> Int { invalidated }
 }
 
+private actor CancellingTransport: HTTPTransport {
+    func perform(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        throw URLError(.cancelled)
+    }
+}
+
 @Suite("API client")
 struct APIClientTests {
 
@@ -151,6 +157,29 @@ struct APIClientTests {
             #expect(error.retryable)
         }
     }
+
+    @Test("a cancelled request is not reported as unreachable")
+    func cancellationIsNotOffline() async {
+        let transport = CancellingTransport()
+        let api = APIClient(
+            configuration: .init(
+                environment: APIEnvironment(key: "test", baseURL: URL(string: "https://example.invalid")!),
+                clientBuild: 42
+            ),
+            transport: transport,
+            tokens: FixedTokens()
+        )
+        do {
+            _ = try await api.send("api/mobile/v1/health", as: Health.self)
+            Issue.record("expected cancellation")
+        } catch is CancellationError {
+            // A screen that went away is not "could not reach the server".
+        } catch let error as APIError {
+            Issue.record("a cancelled request became \(error.code)")
+        } catch {
+            Issue.record("unexpected \(error)")
+        }
+    }
 }
 
 @Suite("Theme and accessibility")
@@ -231,6 +260,12 @@ struct ThemeTests {
     func touchTargets() {
         #expect(FaithFormTokens.TouchTarget.minimum >= 44)
         #expect(FaithFormTokens.TouchTarget.recommended >= 48)
+    }
+
+    @Test("skeleton tokens carry a sheen distinct from the base")
+    func skeletonTokens() {
+        #expect(FaithFormTokens.light.skeletonBase != FaithFormTokens.light.skeletonSheen)
+        #expect(FaithFormTokens.dark.skeletonBase != FaithFormTokens.dark.skeletonSheen)
     }
 
     @Test("generated tokens match the canonical version")

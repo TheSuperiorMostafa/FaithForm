@@ -41,7 +41,18 @@ struct RootView: View {
     private let dependencies: AppDependencies
     @State private var model: RootModel
     @State private var discovery: DiscoveryModel
-
+    /// Tabs whose content has been opened at least once this launch. Unopened
+    /// tabs stay a blank placeholder so Watch/Give/Check-in are not built until
+    /// they are selected.
+    @State private var openedTabs: Set<RootTab> = [.home]
+    /// True once this launch showed `LaunchLoadingView`. Returning visits with a
+    /// snapshot never set it, so they skip the brand dwell.
+    @State private var sawLoading = false
+    /// Cold-load dwell is over (or Reduce Motion skipped it). Until then the
+    /// lockup stays over Home so the mark has time to settle.
+    @State private var launchDwellElapsed = false
+    /// Returning Home fades in from the launch ground rather than popping.
+    @State private var shellRevealed = false
     init(dependencies: AppDependencies) {
         self.dependencies = dependencies
         _model = State(initialValue: RootModel(dependencies: dependencies))
@@ -57,7 +68,7 @@ struct RootView: View {
         Group {
             switch model.state.phase {
             case .loading:
-                LaunchLoadingView()
+                Color.clear
 
             case .signedOut:
                 // The front door: create an account, sign in, or recover a
@@ -111,13 +122,16 @@ struct RootView: View {
                 }
 
             case let .ready(bootstrap, isStale):
-                if model.needsOnboarding {
-                    // No church yet: the welcome flow stands in front of the
-                    // tabs until a relationship exists, and not a launch longer.
-                    OnboardingFlowView(dependencies: dependencies, root: model)
-                } else {
-                    tabs(bootstrap: bootstrap, isStale: isStale)
+                Group {
+                    if model.needsOnboarding {
+                        // No church yet: the welcome flow stands in front of the
+                        // tabs until a relationship exists, and not a launch longer.
+                        OnboardingFlowView(dependencies: dependencies, root: model)
+                    } else {
+                        tabs(bootstrap: bootstrap, isStale: isStale)
+                    }
                 }
+                .opacity(shellRevealed ? 1 : 0)
             }
         }
         // Every phase fills the screen on the page colour. `Group` takes each
@@ -125,7 +139,18 @@ struct RootView: View {
         // used to sit in a band of page colour with system white above and below.
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(theme.palette.background.ignoresSafeArea())
+        .overlay {
+            if showsLaunchLockup {
+                LaunchLoadingView()
+                    .transition(.opacity)
+            }
+        }
+        .animation(theme.animation(FaithFormTokens.Motion.standard), value: showsLaunchLockup)
+        .animation(theme.animation(FaithFormTokens.Motion.standard), value: shellRevealed)
         .task { await model.load() }
+        .onChange(of: model.state.phase, initial: true) { _, phase in
+            handleLaunchTiming(phase)
+        }
         // Coming back to FaithForm is an execution opportunity automatic
         // check-in uses: regions are reconciled, the OS is asked whether the
         // device is inside one, and anything due is sent. It is also when a
@@ -152,17 +177,63 @@ struct RootView: View {
         }
     }
 
+    /// The lockup covers cold loads, and stays over Home until the brand dwell
+    /// has run. Returning visits never set `sawLoading`, so they skip it.
+    private var showsLaunchLockup: Bool {
+        if case .loading = model.state.phase { return true }
+        guard sawLoading, !launchDwellElapsed else { return false }
+        if case .ready = model.state.phase { return true }
+        return false
+    }
+
+    private func handleLaunchTiming(_ phase: LaunchPhase) {
+        if case .loading = phase {
+            if !sawLoading {
+                sawLoading = true
+                launchDwellElapsed = theme.reduceMotion
+                if !theme.reduceMotion {
+                    Task {
+                        try? await Task.sleep(nanoseconds: LaunchLoadingView.dwellNanoseconds)
+                        launchDwellElapsed = true
+                        shellRevealed = true
+                    }
+                }
+            }
+            return
+        }
+
+        if case .ready = phase {
+            if sawLoading {
+                if launchDwellElapsed { shellRevealed = true }
+            } else {
+                shellRevealed = true
+            }
+            return
+        }
+
+        launchDwellElapsed = true
+        shellRevealed = true
+    }
+
     @ViewBuilder
     private func tabs(bootstrap: Bootstrap, isStale: Bool) -> some View {
         let available = model.availableTabs(bootstrap: bootstrap)
 
         TabView(selection: $model.selectedTab) {
             ForEach(available, id: \.self) { tab in
-                screen(for: tab, bootstrap: bootstrap, isStale: isStale)
+                Group {
+                    if openedTabs.contains(tab) {
+                        screen(for: tab, bootstrap: bootstrap, isStale: isStale)
+                    } else {
+                        Color.clear
+                    }
+                }
                     .tabItem { Label(tab.title, systemImage: tab.symbol) }
                     .tag(tab)
             }
         }
+        .onAppear { openedTabs.insert(model.selectedTab) }
+        .onChange(of: model.selectedTab) { _, tab in openedTabs.insert(tab) }
     }
 
     @ViewBuilder

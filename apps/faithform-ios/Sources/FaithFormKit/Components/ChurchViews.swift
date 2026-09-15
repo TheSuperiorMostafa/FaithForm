@@ -36,10 +36,7 @@ public struct ChurchProfileView: View {
     private var content: some View {
         switch model.phase {
         case .loading:
-            VStack(spacing: FaithFormTokens.Spacing.md) {
-                ForEach(0..<3, id: \.self) { _ in SkeletonCard() }
-            }
-            .accessibilityLabel(Text(L.loadingAccount))
+            ChurchProfileSkeleton()
 
         case let .loaded(profile):
             VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
@@ -295,7 +292,7 @@ public struct ChurchChooserView: View {
     private var content: some View {
         switch model.phase {
         case .loading:
-            ForEach(0..<2, id: \.self) { _ in SkeletonCard() }
+            ChurchChooserSkeleton()
 
         case let .loaded(churches):
             ScrollView {

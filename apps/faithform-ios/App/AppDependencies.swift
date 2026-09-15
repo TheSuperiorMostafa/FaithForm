@@ -13,6 +13,7 @@ final class AppDependencies {
     let environment: APIEnvironment
     let api: APIClient
     let cache: PartitionedCache
+    let snapshots: AccountSnapshotStore
     let session: SessionManager
     let media: MediaClient
     let sermons: SermonClient
@@ -83,7 +84,16 @@ final class AppDependencies {
         // Every partition this app builds starts with the environment key, so a
         // build pointed somewhere new cannot read the previous environment's
         // data. The cache itself is environment-agnostic; the *keys* are not.
-        self.cache = PartitionedCache()
+        // Disk-backed so a killed process still paints last night's feed.
+        let support = FileManager.default
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("FaithForm", isDirectory: true)
+        self.cache = PartitionedCache(
+            directory: support.appendingPathComponent("projections", isDirectory: true)
+        )
+        self.snapshots = AccountSnapshotStore(
+            directory: support.appendingPathComponent("snapshots", isDirectory: true)
+        )
         self.media = MediaClient(api: api, cache: cache)
         self.sermons = SermonClient(api: api, cache: cache)
         self.presentations = PresentationClient(api: api, cache: cache)
@@ -154,6 +164,14 @@ final class AppDependencies {
         bootstrap.relationships
             .filter { $0.canReadPublishedContent && $0.state != .blocked && $0.state != .left }
             .map { AttendanceChurch(slug: $0.churchSlug, name: $0.churchName) }
+    }
+
+    /// The session on disk, read synchronously so the first frame can skip the
+    /// launch view when a returning visit already has a shell to show.
+    func peekSession() -> StoredSession? {
+        guard let data = try? secureStore.read(SessionManager.storageKey(environmentKey: environment.key))
+        else { return nil }
+        return SessionManager.session(fromStored: data, environmentKey: environment.key)
     }
 
     /// The registry for the capabilities the server currently reports.

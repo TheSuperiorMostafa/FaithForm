@@ -1,5 +1,10 @@
 package io.faithform.app.ui
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,10 +22,15 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
@@ -37,12 +47,15 @@ import io.faithform.app.ui.account.DeleteAccountDialog
 import io.faithform.app.ui.account.DeletionRequestedNotice
 import io.faithform.app.ui.auth.AuthFlow
 import io.faithform.app.ui.auth.AuthViewModel
+import io.faithform.app.ui.brand.LaunchLoading
 import io.faithform.app.ui.brand.LaunchLoadingView
+import io.faithform.app.ui.brand.rememberReducedMotion
 import io.faithform.app.ui.discovery.EmptyState
 import io.faithform.app.ui.discovery.LocationProvider
 import io.faithform.app.ui.host.SessionScopeViewModel
 import io.faithform.app.ui.host.SignedInHost
 import io.faithform.app.ui.onboarding.FindChurchFlow
+import kotlinx.coroutines.delay
 
 /**
  * The shell: every launch phase, each a real state with a real way forward.
@@ -91,6 +104,53 @@ fun FaithFormApp(
     // different one — or signing out — empties them all at once.
     val sessionScope: SessionScopeViewModel = viewModel(key = "session-scope")
     val current = state
+    val reduceMotion = rememberReducedMotion()
+    var sawLoading by rememberSaveable { mutableStateOf(false) }
+    var launchDwellElapsed by rememberSaveable { mutableStateOf(false) }
+    var shellRevealed by remember { mutableStateOf(false) }
+
+    LaunchedEffect(current) {
+        if (current is LaunchPhase.Loading) sawLoading = true
+    }
+
+    LaunchedEffect(sawLoading, reduceMotion) {
+        if (!sawLoading) return@LaunchedEffect
+        if (reduceMotion) {
+            launchDwellElapsed = true
+            return@LaunchedEffect
+        }
+        delay(LaunchLoading.DWELL_MS.toLong())
+        launchDwellElapsed = true
+    }
+
+    val holdLaunch = current is LaunchPhase.Loading ||
+        (sawLoading && !launchDwellElapsed &&
+            (current is LaunchPhase.Ready || current is LaunchPhase.Onboarding))
+
+    LaunchedEffect(holdLaunch, current) {
+        when {
+            current is LaunchPhase.SignedOut ||
+                current is LaunchPhase.Failed ||
+                current is LaunchPhase.OfflineNoCache -> shellRevealed = true
+            !holdLaunch &&
+                (current is LaunchPhase.Ready || current is LaunchPhase.Onboarding) ->
+                shellRevealed = true
+        }
+    }
+
+    val shellAlpha by animateFloatAsState(
+        targetValue = if (
+            current is LaunchPhase.Ready || current is LaunchPhase.Onboarding
+        ) {
+            if (shellRevealed) 1f else 0f
+        } else {
+            1f
+        },
+        animationSpec = tween(
+            durationMillis = theme.durationMillis(FaithFormTokens.Motion.STANDARD_MS),
+        ),
+        label = "shell-reveal",
+    )
     // Bound *before* the host composes, never after: a store cleared after its
     // first models were created would cancel them mid-load. Transient phases
     // (loading, offline) leave the binding alone, so a retry does not throw
@@ -109,6 +169,7 @@ fun FaithFormApp(
             .fillMaxSize()
             .background(theme.palette.background)
     ) {
+        Box(Modifier.fillMaxSize().graphicsLayer { alpha = shellAlpha }) {
         if (current is LaunchPhase.Ready) {
             CompositionLocalProvider(LocalViewModelStoreOwner provides sessionScope) {
                 SignedInHost(
@@ -120,10 +181,6 @@ fun FaithFormApp(
                     cameraPermission = cameraPermission,
                 )
             }
-        } else if (current is LaunchPhase.Loading) {
-            // Centred on the whole window, not inside the bars: that is where
-            // the system splash drew the same mark a frame earlier.
-            LaunchLoadingView()
         } else if (current is LaunchPhase.SignedOut) {
             // Edge to edge: the front door's backdrop runs behind the system
             // bars, and each auth screen pads its own content for them.
@@ -175,6 +232,17 @@ fun FaithFormApp(
                     is LaunchPhase.Ready -> Unit
                 }
             }
+        }
+        }
+
+        AnimatedVisibility(
+            visible = holdLaunch,
+            enter = fadeIn(tween(0)),
+            exit = fadeOut(
+                tween(durationMillis = theme.durationMillis(FaithFormTokens.Motion.STANDARD_MS))
+            ),
+        ) {
+            LaunchLoadingView()
         }
 
         DeleteAccountDialog(

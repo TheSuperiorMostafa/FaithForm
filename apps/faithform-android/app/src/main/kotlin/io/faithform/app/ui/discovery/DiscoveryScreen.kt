@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -40,6 +39,7 @@ import io.faithform.app.R
 import io.faithform.app.contract.DiscoveredChurch
 import io.faithform.app.design.FaithFormTokens
 import io.faithform.app.design.LocalFaithFormTheme
+import io.faithform.app.ui.components.DiscoveryResultsSkeleton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.MarkEmailUnread
 import androidx.compose.material.icons.outlined.Search
@@ -195,9 +195,7 @@ fun DiscoveryScreen(
                 stringResource(R.string.search_placeholder),
                 icon = Icons.Outlined.Search,
             )
-            is DiscoveryPhase.Searching -> Column(
-                verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.md)
-            ) { repeat(3) { SkeletonCard() } }
+            is DiscoveryPhase.Searching -> DiscoveryResultsSkeleton()
 
             is DiscoveryPhase.Results -> LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.md)
@@ -280,100 +278,6 @@ private fun ChurchResultCard(church: DiscoveredChurch, onOpen: () -> Unit) {
     }
 }
 
-@Composable
-fun SkeletonCard() {
-    val theme = LocalFaithFormTheme.current
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(theme.palette.surface, RoundedCornerShape(FaithFormTokens.Radius.lg))
-            .padding(FaithFormTokens.Spacing.base),
-        verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm)
-    ) {
-        Spacer(
-            Modifier
-                .fillMaxWidth(0.6f)
-                .heightIn(min = FaithFormTokens.Spacing.base)
-                .background(theme.palette.skeletonBase, RoundedCornerShape(FaithFormTokens.Radius.sm))
-        )
-        Spacer(
-            Modifier
-                .fillMaxWidth()
-                .heightIn(min = FaithFormTokens.Spacing.md)
-                .background(theme.palette.skeletonBase, RoundedCornerShape(FaithFormTokens.Radius.sm))
-        )
-    }
-}
-
-/** A stack of cards for list screens, so loading occupies the same space results will. */
-@Composable
-fun ContentSkeleton(count: Int = 3, modifier: Modifier = Modifier) {
-    val label = stringResource(R.string.media_loading)
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .semantics { contentDescription = label },
-        verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.md),
-    ) {
-        repeat(count) { SkeletonCard() }
-    }
-}
-
-/** Title and body bars for a detail screen rather than a list of cards. */
-@Composable
-fun DetailSkeleton(modifier: Modifier = Modifier) {
-    val theme = LocalFaithFormTheme.current
-    val label = stringResource(R.string.media_loading)
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .semantics { contentDescription = label },
-        verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.md),
-    ) {
-        Spacer(
-            Modifier
-                .fillMaxWidth(0.7f)
-                .heightIn(min = FaithFormTokens.Spacing.xl)
-                .background(theme.palette.skeletonBase, RoundedCornerShape(FaithFormTokens.Radius.sm)),
-        )
-        Spacer(
-            Modifier
-                .fillMaxWidth(0.4f)
-                .heightIn(min = FaithFormTokens.Spacing.md)
-                .background(theme.palette.skeletonBase, RoundedCornerShape(FaithFormTokens.Radius.sm)),
-        )
-        repeat(3) {
-            Spacer(
-                Modifier
-                    .fillMaxWidth(if (it == 2) 0.85f else 1f)
-                    .heightIn(min = FaithFormTokens.Spacing.md)
-                    .background(theme.palette.skeletonBase, RoundedCornerShape(FaithFormTokens.Radius.sm)),
-            )
-        }
-    }
-}
-
-/** A 16:9 panel for a slide deck opening. */
-@Composable
-fun SlideSkeleton(modifier: Modifier = Modifier) {
-    val theme = LocalFaithFormTheme.current
-    val label = stringResource(R.string.media_loading)
-    Box(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(FaithFormTokens.Spacing.lg)
-            .semantics { contentDescription = label },
-        contentAlignment = Alignment.Center,
-    ) {
-        Spacer(
-            Modifier
-                .fillMaxWidth()
-                .aspectRatio(16f / 9f)
-                .background(theme.palette.skeletonBase, RoundedCornerShape(FaithFormTokens.Radius.lg)),
-        )
-    }
-}
-
 /**
  * The one empty state, shared.
  *
@@ -418,12 +322,14 @@ fun EmptyState(
             verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm)
         ) {
             Text(title, style = MaterialTheme.typography.titleMedium, color = theme.palette.contentPrimary)
-            Text(
-                body,
-                style = MaterialTheme.typography.bodyMedium,
-                color = theme.palette.contentSecondary,
-                textAlign = TextAlign.Center
-            )
+            if (body.isNotBlank()) {
+                Text(
+                    body,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = theme.palette.contentSecondary,
+                    textAlign = TextAlign.Center
+                )
+            }
         }
         if (onRetry != null) {
             OutlinedButton(onClick = onRetry) {

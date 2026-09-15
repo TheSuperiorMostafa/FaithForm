@@ -5,7 +5,9 @@ import io.faithform.app.contract.SermonPage
 import io.faithform.app.network.ApiClient
 import io.faithform.app.network.ApiException
 import io.faithform.app.network.ProjectionCache
+import io.faithform.app.storage.CacheEntry
 import io.faithform.app.storage.CachePartition
+import io.faithform.app.storage.Freshness
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.cancellation.CancellationException
@@ -53,6 +55,9 @@ class SermonClient(
         )
     }
 
+    suspend fun cachedArchive(churchSlug: String, partition: CachePartition) =
+        cache.load("sermons.archive.$churchSlug", partition, SermonPage.serializer())
+
     suspend fun detail(churchSlug: String, sermonId: String, partition: CachePartition): SermonDetail =
         cache.revalidate(
             api = api,
@@ -61,6 +66,9 @@ class SermonClient(
             name = "sermons.detail.$churchSlug.$sermonId",
             partition = partition,
         )
+
+    suspend fun cachedDetail(churchSlug: String, sermonId: String, partition: CachePartition) =
+        cache.load("sermons.detail.$churchSlug.$sermonId", partition, SermonDetail.serializer())
 }
 
 /**
@@ -113,9 +121,30 @@ class SermonListModel(
 
     suspend fun load() {
         if (_state.value.phase is SermonListPhase.Idle) {
-            _state.update { it.copy(phase = SermonListPhase.Loading) }
+            paintCachedOrLoading()
         }
         reload(_state.value.searchTerm)
+    }
+
+    private suspend fun paintCachedOrLoading() {
+        val cached = client.cachedArchive(churchSlug, partition)
+        val now = clock()
+        if (cached != null && cached.isDisplayable(now) && _state.value.searchTerm.isBlank()) {
+            nextCursor = cached.value.nextCursor
+            loadedQuery = ""
+            _state.update {
+                it.copy(
+                    phase = SermonListPhase.Loaded(
+                        cached.value.items,
+                        isStale = cached.freshness(now, CacheEntry.PROJECTION_TTL_MILLIS) !is Freshness.Fresh,
+                    ),
+                    hasMore = cached.value.nextCursor != null,
+                    loadMoreFailed = false,
+                )
+            }
+        } else {
+            _state.update { it.copy(phase = SermonListPhase.Loading) }
+        }
     }
 
     /**
@@ -292,14 +321,26 @@ class SermonDetailModel(
     val phase: StateFlow<SermonDetailPhase> = _phase.asStateFlow()
 
     suspend fun load() {
+        val now = System.currentTimeMillis()
+        client.cachedDetail(churchSlug, sermonId, partition)?.let { cached ->
+            if (cached.isDisplayable(now)) {
+                _phase.value = SermonDetailPhase.Loaded(cached.value)
+            }
+        }
         _phase.value = try {
             SermonDetailPhase.Loaded(client.detail(churchSlug, sermonId, partition))
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: ApiException) {
-            sermonDetailPhaseFor(error.code.wire, error.displayMessage)
+            keepDetailOr(sermonDetailPhaseFor(error.code.wire, error.displayMessage))
         } catch (_: Exception) {
-            SermonDetailPhase.Offline
+            keepDetailOr(SermonDetailPhase.Offline)
         }
     }
+
+    private fun keepDetailOr(fallback: SermonDetailPhase): SermonDetailPhase =
+        when (fallback) {
+            SermonDetailPhase.Unavailable -> fallback
+            else -> _phase.value as? SermonDetailPhase.Loaded ?: fallback
+        }
 }

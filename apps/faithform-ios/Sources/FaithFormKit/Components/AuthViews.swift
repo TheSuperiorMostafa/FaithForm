@@ -116,12 +116,9 @@ public struct AuthFlowView: View {
                 // Above the feature list, so neither is ever scrolled out of view.
                 if model.phase == .confirmingEmail {
                     FaithFormCard {
-                        HStack(spacing: FaithFormTokens.Spacing.sm) {
-                            ProgressView()
-                            Text(L.authConfirmingEmail)
-                                .font(theme.font(FaithFormTokens.Text.bodySmall))
-                                .foregroundStyle(theme.palette.contentSecondary)
-                        }
+                        FaithFormWorkingLabel(L.authConfirmingEmail, working: true)
+                            .font(theme.font(FaithFormTokens.Text.bodySmall))
+                            .foregroundStyle(theme.palette.contentSecondary)
                     }
                 }
                 if case let .failed(message) = model.phase {
@@ -361,8 +358,10 @@ private struct AuthShell<Content: View>: View {
         }
         .scrollBounceBehavior(.basedOnSize)
         .background { LandingBackdrop() }
+        #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
+        #endif
     }
 }
 
@@ -440,11 +439,7 @@ struct SignUpView: View {
 
     @ViewBuilder
     private func workingLabel(_ title: String) -> some View {
-        if model.phase == .working {
-            ProgressView().tint(theme.palette.contentOnAccent)
-        } else {
-            Text(title)
-        }
+        FaithFormWorkingLabel(title, working: model.phase == .working)
     }
 }
 
@@ -470,11 +465,7 @@ struct SignInView: View {
             Button {
                 Task { await model.signIn() }
             } label: {
-                if model.phase == .working {
-                    ProgressView().tint(theme.palette.contentOnAccent)
-                } else {
-                    Text(L.signIn)
-                }
+                FaithFormWorkingLabel(L.signIn, working: model.phase == .working)
             }
             .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
             .disabled(model.phase == .working)
@@ -514,11 +505,7 @@ struct ForgotPasswordView: View {
             Button {
                 Task { await model.sendReset() }
             } label: {
-                if model.phase == .working {
-                    ProgressView().tint(theme.palette.contentOnAccent)
-                } else {
-                    Text(L.authResetSend)
-                }
+                FaithFormWorkingLabel(L.authResetSend, working: model.phase == .working)
             }
             .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
             .disabled(model.phase == .working || model.resetNoticeVisible)
@@ -679,11 +666,7 @@ public struct HaveLinkEntryView: View {
             Button {
                 Task { await holdAndContinue() }
             } label: {
-                if working {
-                    ProgressView().tint(theme.palette.contentOnAccent)
-                } else {
-                    Text(L.haveLinkContinue)
-                }
+                FaithFormWorkingLabel(L.haveLinkContinue, working: working)
             }
             .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
             .disabled(working || raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -738,11 +721,7 @@ public struct InvitationEntryView: View {
                     if await model.acceptInvitation(raw) { onAccepted() }
                 }
             } label: {
-                if model.invitationPhase == .working {
-                    ProgressView().tint(theme.palette.contentInverse)
-                } else {
-                    Text(L.acceptInvitation)
-                }
+                FaithFormWorkingLabel(L.acceptInvitation, working: model.invitationPhase == .working)
             }
             .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
             .disabled(model.invitationPhase == .working || raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -918,7 +897,7 @@ struct CheckEmailView: View {
                 Task { await model.resendConfirmation() }
             } label: {
                 if model.isResending {
-                    ProgressView()
+                    FaithFormWorkingLabel(L.authCheckEmailResend, working: true)
                 } else {
                     Label(L.authCheckEmailResend, systemImage: "arrow.clockwise")
                 }

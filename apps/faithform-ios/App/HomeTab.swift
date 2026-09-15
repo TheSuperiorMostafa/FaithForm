@@ -16,6 +16,11 @@ import FaithFormKit
 /// the church a person is looking at is one tap from the control that changes
 /// it.
 struct HomeTabView: View {
+    enum HomeSection: Hashable {
+        case feed
+        case schedule
+    }
+
     enum Route: Hashable {
         /// Your churches, with a way to find another.
         case churches
@@ -32,6 +37,7 @@ struct HomeTabView: View {
     let discovery: DiscoveryModel
 
     @State private var path: [Route] = []
+    @State private var section: HomeSection = .feed
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -69,19 +75,48 @@ struct HomeTabView: View {
     @ViewBuilder
     private var content: some View {
         if let church = root.selectedChurch, let features = root.features {
-            HomeFeedView(
-                model: features.feed,
-                churchName: church.churchName,
-                churchSlug: church.churchSlug,
-                isJoinPending: church.state == .pending,
-                onOpenItem: { path.append(.announcement($0)) },
-                // Notes otherwise hide behind Watch's segmented control.
-                onOpenSermonNotes: sermonNotesAction(churchSlug: church.churchSlug)
-            )
+            VStack(spacing: 0) {
+                Picker(L.homeTitle, selection: $section) {
+                    Text(L.homeSegmentFeed).tag(HomeSection.feed)
+                    Text(L.homeSegmentSchedule).tag(HomeSection.schedule)
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
+                .padding(.vertical, FaithFormTokens.Spacing.sm)
+
+                switch section {
+                case .feed:
+                    HomeFeedView(
+                        model: features.feed,
+                        churchName: church.churchName,
+                        churchSlug: church.churchSlug,
+                        isJoinPending: church.state == .pending,
+                        onOpenItem: { path.append(.announcement($0)) }
+                    )
+                case .schedule:
+                    ScheduleView(
+                        model: features.schedule,
+                        churchName: church.churchName,
+                        churchSlug: church.churchSlug,
+                        churchTimezone: features.schedule.churchTimezone,
+                        isJoinPending: church.state == .pending,
+                        onOpenItem: { path.append(.announcement($0)) }
+                    )
+                }
+            }
             // Keyed by the container, so a church switch starts this church's
             // load rather than finishing the last one's.
             .task(id: features.key) {
-                await features.feed.load(churchSlug: features.churchSlug, partition: features.partition)
+                async let feed: Void = features.feed.load(
+                    churchSlug: features.churchSlug,
+                    partition: features.partition
+                )
+                async let schedule: Void = features.schedule.load(
+                    churchSlug: features.churchSlug,
+                    churchTimezone: "America/New_York",
+                    partition: features.partition
+                )
+                _ = await (feed, schedule)
             }
         } else {
             ScrollView {
@@ -98,16 +133,6 @@ struct HomeTabView: View {
             }
             .navigationTitle(L.homeTitle)
         }
-    }
-
-    /// Home's door to sermon notes: nil (no card) unless the registry allows
-    /// them for this church, and then the same link a `…/sermons` URL follows.
-    private func sermonNotesAction(churchSlug: String) -> (@MainActor () -> Void)? {
-        guard root.isAllowed(.sermonArchive(churchSlug: churchSlug)),
-              let link = WatchTabView.sermonsLink(churchSlug: churchSlug)
-        else { return nil }
-        let root = root
-        return { root.open(link) }
     }
 }
 
@@ -174,6 +199,7 @@ struct AnnouncementDetailView: View {
                             Rectangle()
                                 .fill(theme.palette.skeletonBase)
                                 .aspectRatio(16.0 / 9.0, contentMode: .fit)
+                                .skeletonShimmer()
                         }
                     }
                     .frame(maxWidth: .infinity)

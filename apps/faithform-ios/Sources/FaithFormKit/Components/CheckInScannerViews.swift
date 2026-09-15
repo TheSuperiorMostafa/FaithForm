@@ -221,13 +221,11 @@ private struct ScanningIndicator: View {
     @Environment(\.faithformTheme) private var theme
 
     var body: some View {
-        HStack(spacing: FaithFormTokens.Spacing.sm) {
-            ProgressView()
-            Text(L.checkinScanSearching)
-                .font(theme.font(FaithFormTokens.Text.body))
-                .foregroundStyle(theme.palette.contentSecondary)
-        }
-        .accessibilityElement(children: .combine)
+        FaithFormWorkingLabel(L.checkinScanSearching, working: true)
+            .font(theme.font(FaithFormTokens.Text.body))
+            .foregroundStyle(theme.palette.contentSecondary)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(L.checkinScanSearching)
     }
 }
 
@@ -235,13 +233,11 @@ private struct SubmittingIndicator: View {
     @Environment(\.faithformTheme) private var theme
 
     var body: some View {
-        HStack(spacing: FaithFormTokens.Spacing.sm) {
-            ProgressView()
-            Text(L.checkinScanSubmitting)
-                .font(theme.font(FaithFormTokens.Text.body))
-                .foregroundStyle(theme.palette.contentSecondary)
-        }
-        .accessibilityElement(children: .combine)
+        FaithFormWorkingLabel(L.checkinScanSubmitting, working: true)
+            .font(theme.font(FaithFormTokens.Text.body))
+            .foregroundStyle(theme.palette.contentSecondary)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(L.checkinScanSubmitting)
     }
 }
 

@@ -205,6 +205,31 @@ struct SessionTests {
         #expect(await refresher.callCount() == 2)
     }
 
+    @Test("a cancelled refresh is not reported as offline")
+    func cancelledRefreshIsNotOffline() async throws {
+        let store = InMemorySecureStore()
+        let refresher = ScriptedRefresher([.fail(CancellationError())])
+        let manager = SessionManager(
+            store: store,
+            refresher: refresher,
+            environmentKey: "test"
+        )
+        let expired = session(expiresIn: 5)
+        try await manager.adopt(expired)
+
+        do {
+            _ = try await manager.validAccessToken()
+            Issue.record("expected cancellation")
+        } catch is CancellationError {
+            // Leaving a screen mid-refresh is not "could not reach the server".
+        } catch let error as APIError {
+            Issue.record("cancellation became \(error.code)")
+        }
+
+        #expect(await manager.currentSession() == expired)
+        #expect(!store.isEmpty())
+    }
+
     @Test("a refresh token the provider refuses ends the session")
     func definitiveRejectionClearsSession() async throws {
         let store = InMemorySecureStore()
@@ -328,5 +353,19 @@ struct SessionTests {
             accountId: "x", environmentKey: "test"
         )
         #expect(!comfortable.isExpired(now: now))
+    }
+
+    @Test("a stored session can be peeked without waiting on the actor")
+    func peekWithoutActor() throws {
+        let session = StoredSession(
+            accessToken: "a",
+            refreshToken: "r",
+            expiresAt: Date().addingTimeInterval(3600),
+            accountId: "account-1",
+            environmentKey: "test"
+        )
+        let data = try JSONEncoder().encode(session)
+        #expect(SessionManager.session(fromStored: data, environmentKey: "test")?.accountId == "account-1")
+        #expect(SessionManager.session(fromStored: data, environmentKey: "other") == nil)
     }
 }

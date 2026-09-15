@@ -11,7 +11,6 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -32,6 +31,7 @@ import io.faithform.app.attendance.CheckInScannerUiState
 import io.faithform.app.attendance.ScanBlock
 import io.faithform.app.attendance.ScanPhase
 import io.faithform.app.design.FaithFormTokens
+import io.faithform.app.ui.components.FaithFormWorkingLabel
 
 /**
  * The check-in scanner.
@@ -78,25 +78,19 @@ fun CheckInScannerScreen(
         )
 
         if (state.phase is ScanPhase.RequestingPermission) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm),
-                verticalAlignment = Alignment.CenterVertically,
+            FaithFormWorkingLabel(
+                text = stringResource(R.string.checkin_scan_searching),
+                working = true,
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-            ) {
-                CircularProgressIndicator(modifier = Modifier.size(20.dp))
-                Text(stringResource(R.string.checkin_scan_searching))
-            }
+            )
         }
 
         if (state.isScanning) {
             preview()
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                CircularProgressIndicator(modifier = Modifier.size(20.dp))
-                Text(stringResource(R.string.checkin_scan_searching))
-            }
+            FaithFormWorkingLabel(
+                text = stringResource(R.string.checkin_scan_searching),
+                working = true,
+            )
         }
 
         if (state.showsScanButton) {
@@ -116,14 +110,11 @@ fun CheckInScannerScreen(
         }
 
         if (state.isSubmitting) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm),
-                verticalAlignment = Alignment.CenterVertically,
+            FaithFormWorkingLabel(
+                text = stringResource(R.string.checkin_scan_submitting),
+                working = true,
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-            ) {
-                CircularProgressIndicator(modifier = Modifier.size(20.dp))
-                Text(stringResource(R.string.checkin_scan_submitting))
-            }
+            )
         }
 
         state.resultMessage?.let { message ->

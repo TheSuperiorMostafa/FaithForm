@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState, useTransition } from "react";
-import { Calendar, ChevronDown, ChevronUp, RefreshCw } from "lucide-react";
+import { Calendar, ChevronDown, ChevronUp, RefreshCw, Smartphone } from "lucide-react";
 import { publishAnnouncement } from "@/app/dashboard/announcements/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -70,6 +70,10 @@ export function AnnouncementVerifyForm({
   const [notes, setNotes] = useState("");
   const [pushToFacebook, setPushToFacebook] = useState(false);
   const [pushToTeam, setPushToTeam] = useState(true);
+  const [shareInApp, setShareInApp] = useState(true);
+  const [appAudience, setAppAudience] = useState<"followers" | "members">(
+    "followers",
+  );
 
   const [facebookCaption, setFacebookCaption] = useState("");
   const [socialGraphicUrl, setSocialGraphicUrl] = useState<string | null>(null);
@@ -147,18 +151,27 @@ export function AnnouncementVerifyForm({
     if (checked && defaults.facebookConnected) {
       void fetchSocialPreview();
     }
-    if (!checked) {
+    if (!checked && !shareInApp) {
       setPreviewError(null);
       setPreviewWarning(null);
       setPreviewStale(false);
     }
   };
 
+  const handleShareInAppToggle = (checked: boolean) => {
+    setShareInApp(checked);
+    if (checked && !socialGraphicPath) {
+      void fetchSocialPreview();
+    }
+  };
+
   const markPreviewStale = () => {
-    if (pushToFacebook && socialGraphicPath) {
+    if ((pushToFacebook || shareInApp) && socialGraphicPath) {
       setPreviewStale(true);
     }
   };
+
+  const posterAltText = [title.trim(), location.trim()].filter(Boolean).join(". ");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -208,16 +221,27 @@ export function AnnouncementVerifyForm({
     }
     formData.set("push_to_facebook", pushToFacebook ? "true" : "false");
     formData.set("push_to_team", pushToTeam ? "true" : "false");
+    formData.set(
+      "mobile_visibility",
+      shareInApp ? appAudience : "none",
+    );
+    if (posterAltText) {
+      formData.set("poster_alt_text", posterAltText);
+    }
     formData.set("original_title", event.title);
     formData.set("original_location", event.location);
     formData.set("original_start_at", event.startAt);
     formData.set("original_end_at", event.endAt ?? "");
     if (pushToFacebook) {
       formData.set("facebook_caption", facebookCaption.trim());
-      formData.set("social_graphic_path", socialGraphicPath ?? "");
-      if (socialGraphicUrl) {
-        formData.set("social_graphic_url", socialGraphicUrl);
-      }
+    }
+    // The flyer is the app poster as well as the Facebook graphic. Persist it
+    // whenever we have one, not only when Facebook is on.
+    if (socialGraphicPath) {
+      formData.set("social_graphic_path", socialGraphicPath);
+    }
+    if (socialGraphicUrl) {
+      formData.set("social_graphic_url", socialGraphicUrl);
     }
 
     startTransition(async () => {
@@ -228,6 +252,13 @@ export function AnnouncementVerifyForm({
       }
 
       const parts: string[] = ["Submitted!"];
+      if (shareInApp) {
+        parts.push(
+          appAudience === "members"
+            ? "In the FaithForm app for members."
+            : "In the FaithForm app for everyone who has added your church.",
+        );
+      }
       if (result.facebookScheduledAt) {
         parts.push(
           `Facebook post scheduled for ${new Date(result.facebookScheduledAt).toLocaleString()}.`,
@@ -389,7 +420,89 @@ export function AnnouncementVerifyForm({
               : "Connect Google in Settings"
           }
         />
+        <ToggleRow
+          id={`app-${event.googleEventId}`}
+          label="Share in the FaithForm app"
+          checked={shareInApp}
+          onCheckedChange={handleShareInAppToggle}
+          hint="Shows this event on the church's Home feed and Schedule calendar."
+        />
       </ul>
+
+      {shareInApp && (
+        <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-4">
+          <div className="flex items-center gap-2 text-sm font-semibold">
+            <Smartphone className="size-4 text-accent" strokeWidth={1.75} />
+            In the FaithForm app
+          </div>
+          <fieldset className="flex flex-col gap-2">
+            <legend className="text-sm font-medium">Who can see this</legend>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="radio"
+                name={`app-audience-${event.googleEventId}`}
+                value="followers"
+                checked={appAudience === "followers"}
+                onChange={() => setAppAudience("followers")}
+                className="mt-1"
+              />
+              <span>
+                <span className="font-medium">Anyone who has added your church</span>
+                <span className="block text-xs text-muted-foreground">
+                  Followers and members, including people still joining.
+                </span>
+              </span>
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+              <input
+                type="radio"
+                name={`app-audience-${event.googleEventId}`}
+                value="members"
+                checked={appAudience === "members"}
+                onChange={() => setAppAudience("members")}
+                className="mt-1"
+              />
+              <span>
+                <span className="font-medium">Members only</span>
+                <span className="block text-xs text-muted-foreground">
+                  Only people who have joined your church in the FaithForm app.
+                </span>
+              </span>
+            </label>
+          </fieldset>
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-xs text-muted-foreground">
+              A poster makes the calendar worth opening. Generate one even if you
+              are not posting to Facebook.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void fetchSocialPreview()}
+              disabled={previewLoading}
+            >
+              <RefreshCw
+                className={`mr-2 size-4 ${previewLoading ? "animate-spin" : ""}`}
+              />
+              {previewLoading ? "Generating…" : socialGraphicUrl ? "Regenerate" : "Make a poster"}
+            </Button>
+          </div>
+          {previewStale && (
+            <p className="text-xs text-amber-700 dark:text-amber-300">
+              Event details changed — regenerate for an updated poster.
+            </p>
+          )}
+          {socialGraphicUrl && !pushToFacebook && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={socialGraphicUrl}
+              alt={posterAltText || "Event poster preview"}
+              className="w-full rounded-md border border-border"
+            />
+          )}
+        </div>
+      )}
 
       {pushToFacebook && defaults.facebookConnected && (
         <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-4">

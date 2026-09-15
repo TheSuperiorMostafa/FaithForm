@@ -15,7 +15,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -43,6 +42,7 @@ import io.faithform.app.contract.MobileErrorCode
 import io.faithform.app.design.FaithFormTokens
 import io.faithform.app.design.LocalFaithFormTheme
 import io.faithform.app.session.AppContainer
+import io.faithform.app.storage.CachePartition
 import io.faithform.app.ui.church.ChurchProfileScreen
 import io.faithform.app.ui.church.ChurchProfileViewModel
 import io.faithform.app.ui.discovery.DiscoveryScreen
@@ -51,6 +51,7 @@ import io.faithform.app.ui.discovery.LocationAuthorization
 import io.faithform.app.ui.discovery.LocationEducationScreen
 import io.faithform.app.ui.discovery.LocationProvider
 import io.faithform.app.ui.discovery.WelcomeScreen
+import io.faithform.app.ui.components.FaithFormWorkingLabel
 import kotlinx.coroutines.launch
 
 /**
@@ -242,7 +243,13 @@ private fun ChurchProfileHost(
     onAcceptInvitation: () -> Unit
 ) {
     val profile: ChurchProfileViewModel = viewModel(key = "church-profile-$slug") {
-        ChurchProfileViewModel(container.apiClient, slug)
+        ChurchProfileViewModel(
+            api = container.apiClient,
+            cache = container.projections,
+            slug = slug,
+            partition = appViewModel.partition(slug)
+                ?: CachePartition.publicPartition(container.environmentKey),
+        )
     }
     LaunchedEffect(slug) { profile.load() }
 
@@ -349,13 +356,10 @@ fun InvitationEntryScreen(appViewModel: AppViewModel) {
                 .fillMaxWidth()
                 .heightIn(min = FaithFormTokens.TouchTarget.recommended)
         ) {
-            if (invitationPhase == InvitationPhase.Working) {
-                CircularProgressIndicator(
-                    modifier = Modifier.heightIn(max = FaithFormTokens.Spacing.lg)
-                )
-            } else {
-                Text(stringResource(R.string.accept_invitation))
-            }
+            FaithFormWorkingLabel(
+                text = stringResource(R.string.accept_invitation),
+                working = invitationPhase == InvitationPhase.Working,
+            )
         }
     }
 }

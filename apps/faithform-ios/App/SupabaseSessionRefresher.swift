@@ -74,6 +74,8 @@ struct SupabaseSessionRefresher: SessionRefreshing {
         do {
             (data, response) = try await URLSession.shared.data(for: request)
         } catch {
+            // A screen that went away is not an answer about the token.
+            if error.isCancellation { throw CancellationError() }
             // Offline, timed out, DNS, TLS. The request never got an answer
             // about the token, so this must not read as one.
             throw APIError.transport(error)

@@ -23,7 +23,7 @@ private fun failure(code: String) =
        "meta":{"apiVersion":"1.0","apiMajor":1,"requestId":"r","minimumSupportedClientBuild":1}}"""
 
 private fun item(id: String) = """{"id":"$id","title":"Notice $id","body":"Body","startAt":"2026-09-13T15:00:00Z",
-    "endAt":null,"location":null,"posterUrl":null,"posterAltText":null,"isPinned":false,"visibility":"members",
+    "endAt":null,"allDay":false,"location":null,"posterUrl":null,"posterAltText":null,"isPinned":false,"visibility":"members",
     "publicationVersion":1,"publishedAt":"2026-09-10T00:00:00Z","isEvent":false,"churchSlug":"grace",
     "churchName":"Grace Chapel","churchTimezone":"America/Chicago"}"""
 

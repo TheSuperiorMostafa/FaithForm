@@ -205,6 +205,7 @@ class AppViewModelFactory(
             auth = container.authClient,
             registry = registry,
             sessionEnded = container.sessionEnded,
+            snapshots = container.snapshots,
         ) as T
     }
 }

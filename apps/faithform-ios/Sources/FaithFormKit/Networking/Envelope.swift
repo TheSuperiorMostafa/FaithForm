@@ -64,3 +64,18 @@ public struct APIError: Error, Sendable {
         retryable: true
     )
 }
+
+extension Error {
+    /// A screen that went away is not a network failure.
+    ///
+    /// SwiftUI cancels `.task` when the person leaves a view. URLSession
+    /// reports that as `URLError.cancelled`; structured concurrency as
+    /// `CancellationError`. Mapping either to "could not reach the server"
+    /// replaces a list they just read with an offline screen.
+    public var isCancellation: Bool {
+        if self is CancellationError { return true }
+        if (self as? URLError)?.code == .cancelled { return true }
+        let ns = self as NSError
+        return ns.domain == NSURLErrorDomain && ns.code == NSURLErrorCancelled
+    }
+}

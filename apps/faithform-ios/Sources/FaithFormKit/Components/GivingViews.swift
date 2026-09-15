@@ -52,7 +52,7 @@ public struct GivingHomeView: View {
     public var body: some View {
         switch phase {
         case .idle, .loading:
-            ContentSkeleton()
+            GivingHomeSkeleton()
                 .padding(FaithFormTokens.Spacing.xl)
 
         case .blocked:
@@ -407,14 +407,15 @@ public struct GivingOutcomeView: View {
     public var body: some View {
         switch phase {
         case .idle, .preparing, .presenting:
-            ProgressView(L.givingLoading)
+            FaithFormWorkingLabel(L.givingLoading, working: true)
+                .font(theme.font(FaithFormTokens.Text.titleMedium))
+                .foregroundStyle(theme.palette.contentPrimary)
                 .frame(maxWidth: .infinity)
                 .padding(FaithFormTokens.Spacing.xl)
 
         case .awaitingConfirmation:
             VStack(spacing: FaithFormTokens.Spacing.md) {
-                ProgressView()
-                Text(L.givingProcessingTitle)
+                FaithFormWorkingLabel(L.givingProcessingTitle, working: true)
                     .font(theme.font(FaithFormTokens.Text.titleMedium))
                     .foregroundStyle(theme.palette.contentPrimary)
                 Text(pollingExhausted ? L.givingStillProcessingBody : L.givingProcessingBody)
@@ -513,7 +514,7 @@ public struct GivingHistoryView: View {
 
     public var body: some View {
         if isLoading && items.isEmpty {
-            ContentSkeleton()
+            GivingHistorySkeleton()
                 .padding(FaithFormTokens.Spacing.xl)
         } else if items.isEmpty {
             EmptyStateView(title: L.givingHistoryTitle, explanation: L.givingHistoryEmpty, symbol: "heart")

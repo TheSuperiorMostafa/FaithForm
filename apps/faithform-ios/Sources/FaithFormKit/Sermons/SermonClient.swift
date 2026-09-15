@@ -53,6 +53,13 @@ public actor SermonClient {
         return value
     }
 
+    public func cachedArchive(
+        churchSlug: String,
+        partition: CachePartition
+    ) async -> CacheEntry<SermonPage>? {
+        await cache.load(SermonPage.self, name: "sermons.archive.\(churchSlug)", partition: partition)
+    }
+
     public func detail(
         churchSlug: String,
         sermonId: String,
@@ -77,5 +84,13 @@ public actor SermonClient {
             partition: partition
         )
         return value
+    }
+
+    public func cachedDetail(
+        churchSlug: String,
+        sermonId: String,
+        partition: CachePartition
+    ) async -> CacheEntry<SermonDetail>? {
+        await cache.load(SermonDetail.self, name: "sermons.detail.\(churchSlug).\(sermonId)", partition: partition)
     }
 }

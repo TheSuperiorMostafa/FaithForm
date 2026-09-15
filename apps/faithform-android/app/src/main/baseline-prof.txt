@@ -1,0 +1,33 @@
+# Startup classes ART should compile ahead of time.
+#
+# A returning visit restores the signed-in shell from disk and paints Home
+# without waiting on the network. These rules cover that path: the application
+# graph, the splash hand-over, the snapshot store, and the first tab.
+# ProfileInstaller applies this on first launch so the second open is the
+# one Play measures.
+
+HSPLio/faithform/app/FaithFormApplication;
+HSPLio/faithform/app/FaithFormApplication;-><init>()V
+HSPLio/faithform/app/FaithFormApplication;->onCreate()V
+HSPLio/faithform/app/MainActivity;
+HSPLio/faithform/app/MainActivity;-><init>()V
+HSPLio/faithform/app/MainActivity;->onCreate(Landroid/os/Bundle;)V
+HSPLio/faithform/app/AppViewModel;
+HSPLio/faithform/app/AppViewModelFactory;
+HSPLio/faithform/app/session/AppContainer;
+HSPLio/faithform/app/session/AccountSnapshotStore;
+HSPLio/faithform/app/session/AccountSnapshot;
+HSPLio/faithform/app/ui/FaithFormAppKt;
+HSPLio/faithform/app/ui/brand/LaunchLoadingViewKt;
+HSPLio/faithform/app/ui/host/SignedInHostKt;
+HSPLio/faithform/app/ui/host/HomeAndChurchTabsKt;
+HSPLio/faithform/app/ui/host/SessionModelsKt;
+HSPLio/faithform/app/ui/feed/FeedModel;
+HSPLio/faithform/app/ui/feed/FeedScreenKt;
+HSPLio/faithform/app/ui/components/SkeletonsKt;
+HSPLio/faithform/app/storage/PartitionedCache;
+HSPLio/faithform/app/storage/CachePartition;
+HSPLio/faithform/app/storage/CacheEntry;
+HSPLio/faithform/app/network/ProjectionCache;
+HSPLio/faithform/app/network/ApiClient;
+HSPLio/faithform/app/host/HostNavigation;

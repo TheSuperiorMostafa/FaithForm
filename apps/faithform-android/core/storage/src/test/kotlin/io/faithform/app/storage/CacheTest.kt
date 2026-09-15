@@ -99,4 +99,34 @@ class CacheTest {
         assertNull(cache.load("item-0", partition()))
         assertNotNull(cache.load("item-4", partition()))
     }
+
+    @Test
+    fun `a disk-backed cache survives a new instance`() = runTest {
+        val directory = kotlin.io.path.createTempDirectory("faithform-cache").toFile()
+        try {
+            val first = PartitionedCache(directory = directory)
+            first.store("bootstrap", partition(), "mine", 1_000L)
+
+            val second = PartitionedCache(directory = directory)
+            assertEquals("mine", second.load("bootstrap", partition()))
+            assertNull(second.load("bootstrap", partition(account = "account-2")))
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `purging an account also drops its files`() = runTest {
+        val directory = kotlin.io.path.createTempDirectory("faithform-cache").toFile()
+        try {
+            val cache = PartitionedCache(directory = directory)
+            cache.store("feed", partition(), "mine", 1_000L)
+            cache.purgeAccount("production", "account-1")
+
+            val reread = PartitionedCache(directory = directory)
+            assertNull(reread.load("feed", partition()))
+        } finally {
+            directory.deleteRecursively()
+        }
+    }
 }

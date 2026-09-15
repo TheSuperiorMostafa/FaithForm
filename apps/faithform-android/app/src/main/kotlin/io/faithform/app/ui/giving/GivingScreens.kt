@@ -14,7 +14,6 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -32,7 +31,9 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
 import io.faithform.app.R
 import io.faithform.app.design.FaithFormTokens
-import io.faithform.app.ui.discovery.ContentSkeleton
+import io.faithform.app.ui.components.FaithFormWorkingLabel
+import io.faithform.app.ui.components.GivingHistorySkeleton
+import io.faithform.app.ui.components.GivingHomeSkeleton
 import io.faithform.app.design.LocalFaithFormTheme
 import io.faithform.app.giving.AmountProblem
 import io.faithform.app.giving.DonationPhase
@@ -71,7 +72,7 @@ fun GivingScreen(
 ) {
     when (val phase = state.phase) {
         GivingListPhase.Idle, GivingListPhase.Loading ->
-            ContentSkeleton(modifier = modifier.padding(FaithFormTokens.Spacing.lg))
+            GivingHomeSkeleton(modifier = modifier.padding(FaithFormTokens.Spacing.lg))
 
         // The same answer a blocked visitor gets everywhere. Nothing about
         // giving, because there is nothing about this church to say.
@@ -349,20 +350,24 @@ fun GivingOutcomeScreen(
 ) {
     when (val donation = state.donation) {
         DonationPhase.Idle, DonationPhase.Preparing, is DonationPhase.Presenting ->
-            Centered(modifier) { CircularProgressIndicator() }
+            Centered(modifier) {
+                FaithFormWorkingLabel(
+                    text = stringResource(R.string.giving_loading),
+                    working = true,
+                    style = MaterialTheme.typography.titleMedium,
+                )
+            }
 
         is DonationPhase.AwaitingConfirmation ->
             Centered(modifier) {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.md),
-                    // Announced as it changes, so someone using TalkBack is not
-                    // left guessing whether anything is happening.
                     modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
                 ) {
-                    CircularProgressIndicator()
-                    Text(
-                        stringResource(R.string.giving_processing_title),
+                    FaithFormWorkingLabel(
+                        text = stringResource(R.string.giving_processing_title),
+                        working = true,
                         style = MaterialTheme.typography.titleMedium,
                     )
                     Text(
@@ -443,7 +448,7 @@ private fun failureMessage(reason: GivingFailure): Int = when (reason) {
 @Composable
 fun GivingHistoryScreen(state: GivingScreenState, modifier: Modifier = Modifier) {
     if (state.historyLoading && state.history.isEmpty()) {
-        ContentSkeleton(modifier = modifier.padding(FaithFormTokens.Spacing.lg))
+        GivingHistorySkeleton(modifier = modifier.padding(FaithFormTokens.Spacing.lg))
         return
     }
     if (state.history.isEmpty()) {

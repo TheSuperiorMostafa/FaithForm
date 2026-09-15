@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Cream pill search field matching Discovery — used on Messages and past services.
+/// Cream pill search field matching Discovery — used on sermons, slides, and past services.
 public struct FaithFormSearchField: View {
     @Environment(\.faithformTheme) private var theme
     private let placeholder: String

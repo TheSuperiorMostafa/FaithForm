@@ -49,7 +49,7 @@ class FeedContractTest {
     fun `an announcement and an event both decode`() {
         val announcement = """
         {"ok":true,"data":{"items":[{"id":"a-1","title":"Notice","body":"Text","startAt":"2026-08-30T14:00:00Z",
-        "endAt":null,"location":null,"posterUrl":null,"posterAltText":null,"isPinned":false,
+        "endAt":null,"allDay":false,"location":null,"posterUrl":null,"posterAltText":null,"isPinned":false,
         "visibility":"followers","publicationVersion":3,"publishedAt":null,"isEvent":false,
         "churchSlug":"grace","churchName":"Grace","churchTimezone":"America/New_York"}],
         "nextCursor":null,"feedVersion":3},$FEED_META}
@@ -73,7 +73,7 @@ class FeedContractTest {
     fun `a poster-bearing item carries alt text alongside its artwork`() {
         val withPoster = """
         {"ok":true,"data":{"items":[{"id":"a-2","title":"T","body":"","startAt":"2026-08-30T14:00:00Z",
-        "endAt":null,"location":null,"posterUrl":"https://cdn.invalid/p.png",
+        "endAt":null,"allDay":false,"location":null,"posterUrl":"https://cdn.invalid/p.png",
         "posterAltText":"A hand-lettered invitation","isPinned":true,"visibility":"public",
         "publicationVersion":1,"publishedAt":null,"isEvent":false,"churchSlug":"grace",
         "churchName":"Grace","churchTimezone":"America/New_York"}],"nextCursor":null,"feedVersion":1},$FEED_META}
@@ -90,7 +90,7 @@ class FeedContractTest {
     fun `a text-only item is valid and carries no poster`() {
         val textOnly = """
         {"ok":true,"data":{"items":[{"id":"a-3","title":"T","body":"Just words","startAt":"2026-08-30T14:00:00Z",
-        "endAt":null,"location":null,"posterUrl":null,"posterAltText":null,"isPinned":false,
+        "endAt":null,"allDay":false,"location":null,"posterUrl":null,"posterAltText":null,"isPinned":false,
         "visibility":"members","publicationVersion":1,"publishedAt":null,"isEvent":false,
         "churchSlug":"grace","churchName":"Grace","churchTimezone":"America/New_York"}],
         "nextCursor":null,"feedVersion":1},$FEED_META}

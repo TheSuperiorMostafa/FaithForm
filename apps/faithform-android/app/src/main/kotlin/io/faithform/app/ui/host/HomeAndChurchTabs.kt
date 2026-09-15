@@ -27,9 +27,10 @@ import io.faithform.app.ui.discovery.LocationProvider
 import io.faithform.app.ui.feed.AnnouncementDetailScreen
 import io.faithform.app.ui.feed.FeedModel
 import io.faithform.app.ui.feed.FeedPhase
-import io.faithform.app.ui.feed.HomeFeedScreen
 import io.faithform.app.ui.onboarding.FindChurchFlow
-import io.faithform.app.ui.sermons.SermonHomeEntry
+import io.faithform.app.ui.schedule.HomeHostScreen
+import io.faithform.app.ui.schedule.ScheduleModel
+import io.faithform.app.ui.schedule.SchedulePhase
 
 /**
  * Home: what the selected church has published, newest and pinned first.
@@ -44,8 +45,6 @@ fun HomeTab(
     church: ChurchRelationship?,
     partition: CachePartition?,
     modifier: Modifier = Modifier,
-    /** Opens the church's messages on Services; null when they may not open. */
-    onOpenSermons: (() -> Unit)? = null,
 ) {
     if (church == null || partition == null) {
         TabScreen(title = stringResource(R.string.tab_home), modifier = modifier) { content ->
@@ -62,8 +61,17 @@ fun HomeTab(
     val feed = rememberSessionModel("feed|${partition.storageKey}") {
         FeedModel(api, projections, church.churchSlug, partition)
     }
-    LaunchedEffect(feed) { feed.launchOnce("load") { load() } }
+    val schedule = rememberSessionModel("schedule|${partition.storageKey}") {
+        ScheduleModel(api, projections, church.churchSlug, partition)
+    }
+    LaunchedEffect(feed, schedule) {
+        feed.launchOnce("load") { load() }
+        schedule.launchOnce("load") { load() }
+    }
     val phase by feed.value.phase.collectAsStateWithLifecycle()
+    val schedulePhase by schedule.value.phase.collectAsStateWithLifecycle()
+    val displayedMonth by schedule.value.displayedMonth.collectAsStateWithLifecycle()
+    val churchTimezone by schedule.value.churchTimezone.collectAsStateWithLifecycle()
     var openedId by rememberSaveable(partition.storageKey) { mutableStateOf<String?>(null) }
 
     val opened = (phase as? FeedPhase.Loaded)?.items?.firstOrNull { it.id == openedId }
@@ -74,15 +82,18 @@ fun HomeTab(
         return
     }
 
-    TabScreen(title = stringResource(R.string.tab_home), modifier = modifier) { content ->
-        HomeFeedScreen(
-            phase = phase,
-            churchName = church.churchName,
+    TabScreen(title = church.churchName, modifier = modifier) { content ->
+        HomeHostScreen(
+            feedPhase = phase,
+            schedulePhase = schedulePhase,
+            displayedMonth = displayedMonth,
+            churchTimezone = churchTimezone,
+            onPreviousMonth = { schedule.launch { showPreviousMonth() } },
+            onNextMonth = { schedule.launch { showNextMonth() } },
             onOpenItem = { openedId = it.id },
-            onReachedEnd = { feed.launch { loadMore() } },
+            onFeedReachedEnd = { feed.launch { loadMore() } },
             modifier = content,
             isJoinPending = church.state == RelationshipState.PENDING,
-            header = onOpenSermons?.let { open -> @Composable { SermonHomeEntry(onOpen = open) } },
         )
     }
 }
@@ -94,7 +105,7 @@ private enum class ChurchRoute { ROOT, FIND }
  *
  * Rows are the account's relationships from bootstrap; tapping a readable one
  * selects it for every church-scoped tab. "Add another church" runs the same
- * find-a-church flow as first run, without the welcome. Messages live under
+ * find-a-church flow as first run, without the welcome. Sermons live under
  * Services, not here.
  */
 @Composable

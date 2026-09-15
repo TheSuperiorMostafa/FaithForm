@@ -12,55 +12,59 @@ import SwiftUI
 public struct SermonListView: View {
     @Environment(\.faithformTheme) private var theme
     private let model: SermonModel
-    private let onOpen: @MainActor (SermonListItem) -> Void
+    private let presentations: PresentationModel
+    private let onOpenNotes: @MainActor (String) -> Void
+    private let onOpenSlides: @MainActor (String) -> Void
     private let showTitle: Bool
 
     public init(
         model: SermonModel,
-        onOpen: @escaping @MainActor (SermonListItem) -> Void,
+        presentations: PresentationModel,
+        onOpenNotes: @escaping @MainActor (String) -> Void,
+        onOpenSlides: @escaping @MainActor (String) -> Void,
         showTitle: Bool = true
     ) {
         self.model = model
-        self.onOpen = onOpen
+        self.presentations = presentations
+        self.onOpenNotes = onOpenNotes
+        self.onOpenSlides = onOpenSlides
         self.showTitle = showTitle
     }
 
     public var body: some View {
+        let hubs = SermonHub.merge(notes: model.phase.items, slides: presentations.phase.items)
+        let waiting = hubs.isEmpty && (isUnready(model.phase) || isUnready(presentations.phase))
+        let empty = hubs.isEmpty && !waiting
+
         ScrollView {
-            // Lazy, so "the last row appeared" means the reader scrolled to it
-            // rather than that the page was built.
             LazyVStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
-                switch model.phase {
-                case .idle, .loading:
-                    ContentSkeleton()
-
-                case .blocked:
-                    // The whole list refused. Not "the church removed it" —
-                    // that is only ever true of one sermon.
-                    SermonMessage(
-                        title: L.mediaBlockedTitle,
-                        message: L.sermonsBlockedBody
-                    )
-
-                case .offline:
+                if waiting {
+                    SermonListSkeleton()
+                } else if empty, isBlocked {
+                    SermonMessage(title: L.mediaBlockedTitle, message: L.sermonsBlockedBody)
+                } else if empty, isOffline {
                     SermonMessage(
                         title: L.sermonsOfflineTitle,
                         message: L.sermonsOfflineBody,
                         actionTitle: L.sermonsRetry
                     ) {
-                        Task { await model.refresh() }
+                        Task {
+                            await presentations.refresh()
+                            await model.refresh()
+                        }
                     }
-
-                case .failed(let message):
+                } else if empty, let message = failureMessage {
                     SermonMessage(
                         title: message,
                         message: "",
                         actionTitle: L.sermonsRetry
                     ) {
-                        Task { await model.refresh() }
+                        Task {
+                            await presentations.refresh()
+                            await model.refresh()
+                        }
                     }
-
-                case let .loaded(items, _):
+                } else {
                     if showTitle {
                         Text(L.sermonsTitle)
                             .font(theme.font(FaithFormTokens.Text.titleMedium))
@@ -70,23 +74,33 @@ public struct SermonListView: View {
                     FaithFormSearchField(
                         placeholder: L.sermonsSearchLabel,
                         text: Bindable(model).searchTerm,
-                        onSubmit: { Task { await model.search(model.searchTerm) } },
-                        onClear: { Task { await model.searchTextChanged() } }
+                        onSubmit: {
+                            Task {
+                                await presentations.search(model.searchTerm)
+                                await model.search(model.searchTerm)
+                            }
+                        },
+                        onClear: {
+                            Task {
+                                presentations.searchTerm = ""
+                                await presentations.searchTextChanged()
+                                await model.searchTextChanged()
+                            }
+                        }
                     )
 
-                    if items.isEmpty {
-                        // Two different empties: a church that has published
-                        // nothing, and a search that found nothing. Keyed on the
-                        // search that ran, not on what is typed now.
-                        Text(
-                            model.submittedQuery.isEmpty
-                                ? L.sermonsEmpty
-                                : L.sermonsEmptySearch
+                    if model.phase.isStale || presentations.phase.isStale {
+                        OfflineBanner(message: L.offlineCached)
+                    }
+
+                    if hubs.isEmpty {
+                        EmptyStateView(
+                            title: model.submittedQuery.isEmpty ? L.sermonsEmpty : L.sermonsEmptySearch,
+                            explanation: "",
+                            symbol: model.submittedQuery.isEmpty ? "book" : "magnifyingglass"
                         )
-                        .font(theme.font(FaithFormTokens.Text.body))
-                        .foregroundStyle(theme.palette.contentSecondary)
                     } else {
-                        ForEach(SermonDates.groupedByMonth(items)) { group in
+                        ForEach(SermonHub.groupedByMonth(hubs)) { group in
                             if let title = group.title {
                                 Text(title)
                                     .font(theme.font(FaithFormTokens.Text.label))
@@ -94,24 +108,36 @@ public struct SermonListView: View {
                                     .accessibilityAddTraits(.isHeader)
                             }
 
-                            ForEach(group.items, id: \.sermonId) { item in
-                                Button { onOpen(item) } label: {
-                                    SermonCard(item: item)
-                                }
-                                .buttonStyle(.plain)
+                            ForEach(group.items) { hub in
+                                SermonHubCard(
+                                    hub: hub,
+                                    onOpenNotes: {
+                                        if let notes = hub.notes { onOpenNotes(notes.sermonId) }
+                                    },
+                                    onOpenSlides: {
+                                        if let slides = hub.slides { onOpenSlides(slides.presentationId) }
+                                    }
+                                )
                                 .onAppear {
-                                    if item.sermonId == items.last?.sermonId {
-                                        Task { await model.loadMore() }
+                                    if hub.sermonId == hubs.last?.sermonId {
+                                        Task {
+                                            await model.loadMore()
+                                            await presentations.loadMore()
+                                        }
                                     }
                                 }
                             }
                         }
 
-                        if model.isLoadingMore {
-                            SkeletonCard()
-                        } else if model.loadMoreFailed {
+                        if model.isLoadingMore || presentations.isLoadingMore {
+                            SermonHubCardSkeleton()
+                                .skeletonShimmer()
+                        } else if model.loadMoreFailed || presentations.loadMoreFailed {
                             SermonLoadMoreRetry {
-                                Task { await model.retryLoadMore() }
+                                Task {
+                                    await model.retryLoadMore()
+                                    await presentations.retryLoadMore()
+                                }
                             }
                         }
                     }
@@ -121,8 +147,48 @@ public struct SermonListView: View {
             .padding(.vertical, FaithFormTokens.Spacing.xl)
         }
         .background(theme.palette.background)
-        .refreshable { await model.refresh() }
-        .task { await model.load() }
+        .refreshable {
+            await presentations.refresh()
+            await model.refresh()
+        }
+        .task {
+            await presentations.load()
+            await model.load()
+        }
+    }
+
+    private func isUnready(_ phase: SermonListPhase) -> Bool {
+        switch phase {
+        case .idle, .loading: return true
+        default: return false
+        }
+    }
+
+    private func isUnready(_ phase: PresentationListPhase) -> Bool {
+        switch phase {
+        case .idle, .loading: return true
+        default: return false
+        }
+    }
+
+    private var isBlocked: Bool {
+        switch (model.phase, presentations.phase) {
+        case (.blocked, _), (_, .blocked): return true
+        default: return false
+        }
+    }
+
+    private var isOffline: Bool {
+        switch (model.phase, presentations.phase) {
+        case (.offline, _), (_, .offline): return true
+        default: return false
+        }
+    }
+
+    private var failureMessage: String? {
+        if case let .failed(message) = model.phase { return message }
+        if case let .failed(message) = presentations.phase { return message }
+        return nil
     }
 }
 
@@ -148,9 +214,9 @@ struct SermonLoadMoreRetry: View {
 
 /// The door to sermon notes from a church's Home.
 ///
-/// Notes otherwise sit behind Watch's segmented control, which nobody finds
-/// unless they already went looking for a video. The host decides whether it
-/// is shown at all, through the registry, like every other door.
+/// Notes otherwise sit behind Services. The host decides whether it is shown
+/// The host decides whether it is shown at all, through the registry, like
+/// every other door.
 public struct SermonNotesEntryCard: View {
     @Environment(\.faithformTheme) private var theme
     private let action: @MainActor () -> Void
@@ -189,6 +255,144 @@ public struct SermonNotesEntryCard: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isButton)
+    }
+}
+
+struct SermonHubCard: View {
+    @Environment(\.faithformTheme) private var theme
+    let hub: SermonHubItem
+    let onOpenNotes: () -> Void
+    let onOpenSlides: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button(action: primaryOpen) {
+                SermonHubThumbnail(hub: hub)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(primaryLabel)
+
+            VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.sm) {
+                let meta = [
+                    SermonDates.displayDay(
+                        preachedOn: hub.preachedOn,
+                        publishedAt: hub.publishedAt,
+                        churchTimezone: hub.churchTimezone
+                    ).map { SermonDates.format($0, style: .abbreviated) },
+                    hub.seriesName,
+                ]
+                .compactMap { $0 }
+                .filter { !$0.isEmpty }
+
+                if !meta.isEmpty {
+                    Text(meta.joined(separator: " · "))
+                        .font(theme.font(FaithFormTokens.Text.label))
+                        .foregroundStyle(theme.palette.contentSecondary)
+                }
+
+                Text(hub.title)
+                    .font(theme.font(FaithFormTokens.Text.titleMedium))
+                    .foregroundStyle(theme.palette.contentPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if !hub.scriptureRefs.isEmpty {
+                    Text(hub.scriptureRefs.joined(separator: " · "))
+                        .font(theme.font(FaithFormTokens.Text.label))
+                        .foregroundStyle(theme.palette.brandAccent)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                HStack(spacing: FaithFormTokens.Spacing.sm) {
+                    if hub.hasNotes {
+                        SermonHubAction(title: L.sermonsOpenNotes, action: onOpenNotes)
+                    }
+                    if hub.hasSlides {
+                        SermonHubAction(title: L.sermonsOpenSlides, action: onOpenSlides)
+                    }
+                }
+            }
+            .padding(FaithFormTokens.Spacing.base)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: FaithFormTokens.Radius.md, style: .continuous)
+                .fill(theme.palette.surface)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: FaithFormTokens.Radius.md, style: .continuous)
+                .strokeBorder(theme.palette.border, lineWidth: FaithFormTokens.BorderWidth.hairline)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: FaithFormTokens.Radius.md, style: .continuous))
+        .accessibilityElement(children: .contain)
+    }
+
+    private func primaryOpen() {
+        if hub.hasSlides { onOpenSlides() }
+        else { onOpenNotes() }
+    }
+
+    private var primaryLabel: String {
+        hub.hasSlides ? L.sermonsOpenSlides : L.sermonsOpenNotes
+    }
+}
+
+private struct SermonHubThumbnail: View {
+    @Environment(\.faithformTheme) private var theme
+    let hub: SermonHubItem
+
+    var body: some View {
+        ZStack {
+            theme.palette.brandPrimary
+            LinearGradient(
+                colors: [Color.white.opacity(0.08), Color.black.opacity(0.28)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            VStack(spacing: FaithFormTokens.Spacing.sm) {
+                Text(hub.title)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(3)
+                    .padding(.horizontal, FaithFormTokens.Spacing.lg)
+                if let slides = hub.slides {
+                    Text(String(format: L.presentationsPageCount, slides.pageCount))
+                        .font(theme.font(FaithFormTokens.Text.caption))
+                        .foregroundStyle(theme.palette.brandAccent)
+                } else {
+                    Image(systemName: "text.book.closed")
+                        .font(.system(size: FaithFormTokens.IconSize.sizeMedium, weight: .semibold))
+                        .foregroundStyle(theme.palette.brandAccent)
+                        .accessibilityHidden(true)
+                }
+            }
+        }
+        .aspectRatio(16.0 / 9.0, contentMode: .fit)
+        .clipped()
+    }
+}
+
+private struct SermonHubAction: View {
+    @Environment(\.faithformTheme) private var theme
+    let title: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(theme.font(FaithFormTokens.Text.label))
+                .foregroundStyle(theme.palette.contentPrimary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, FaithFormTokens.Spacing.sm)
+                .background(
+                    Capsule().fill(theme.palette.surfaceSunken)
+                )
+                .overlay(
+                    Capsule().strokeBorder(theme.palette.border, lineWidth: FaithFormTokens.BorderWidth.hairline)
+                )
+        }
+        .buttonStyle(.plain)
+        .frame(minHeight: FaithFormTokens.TouchTarget.minimum)
     }
 }
 

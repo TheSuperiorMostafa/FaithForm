@@ -4,7 +4,9 @@ import io.faithform.app.contract.DonationSession
 import io.faithform.app.contract.DonationStatus
 import io.faithform.app.contract.MobileErrorCode
 import io.faithform.app.network.ApiException
+import io.faithform.app.storage.CacheEntry
 import io.faithform.app.storage.CachePartition
+import io.faithform.app.storage.Freshness
 import java.util.UUID
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.delay
@@ -58,6 +60,7 @@ class GivingModel(
     private val partition: CachePartition,
     private val newAttemptId: () -> String = { UUID.randomUUID().toString().replace("-", "") },
     private val sleep: suspend (Long) -> Unit = { delay(it) },
+    private val clock: () -> Long = System::currentTimeMillis,
 ) {
     private val _state = MutableStateFlow(GivingScreenState())
     val state: StateFlow<GivingScreenState> = _state.asStateFlow()
@@ -71,7 +74,20 @@ class GivingModel(
 
     suspend fun load() {
         if (_state.value.phase is GivingListPhase.Idle) {
-            _state.update { it.copy(phase = GivingListPhase.Loading) }
+            val cached = client.cachedHome(churchSlug, partition)
+            val now = clock()
+            if (cached != null && cached.isDisplayable(now)) {
+                _state.update { current ->
+                    current.copy(
+                        phase = GivingListPhase.Loaded(cached.value),
+                        selectedFundId = current.selectedFundId
+                            ?.takeIf { id -> cached.value.funds.any { it.fundId == id } }
+                            ?: cached.value.funds.firstOrNull()?.fundId,
+                    )
+                }
+            } else {
+                _state.update { it.copy(phase = GivingListPhase.Loading) }
+            }
         }
         try {
             val home = client.home(churchSlug, partition)

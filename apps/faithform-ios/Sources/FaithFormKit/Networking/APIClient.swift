@@ -124,6 +124,7 @@ public actor APIClient {
         do {
             (data, http) = try await transport.perform(request)
         } catch {
+            if error.isCancellation { throw CancellationError() }
             throw APIError.transport(error)
         }
 

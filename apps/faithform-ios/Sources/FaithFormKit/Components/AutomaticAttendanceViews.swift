@@ -149,11 +149,7 @@ public struct LocationPermissionEducationView: View {
 
             VStack(spacing: FaithFormTokens.Spacing.md) {
                 Button(action: onContinue) {
-                    if isWorking {
-                        ProgressView().tint(theme.palette.contentInverse)
-                    } else {
-                        Text(actionTitle)
-                    }
+                    FaithFormWorkingLabel(actionTitle, working: isWorking)
                 }
                 .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
                 .disabled(isWorking)
@@ -406,7 +402,9 @@ public struct AutomaticAttendanceStatusView: View {
                     .disabled(status.isWorking)
 
             case .requestingConsent:
-                ProgressView()
+                FaithFormWorkingLabel(L.autoAttendanceSaving, working: true)
+                    .font(theme.font(FaithFormTokens.Text.body))
+                    .foregroundStyle(theme.palette.contentSecondary)
                     .accessibilityLabel(L.autoAttendanceSaving)
 
             case .blocked(let blocker):
@@ -562,11 +560,7 @@ private struct PendingArrivalCard: View {
 
                 if pending.canConfirm(now: now) {
                     Button(action: onConfirm) {
-                        if isWorking {
-                            ProgressView().tint(theme.palette.contentInverse)
-                        } else {
-                            Text(L.autoAttendancePromptActionCheckIn)
-                        }
+                        FaithFormWorkingLabel(L.autoAttendancePromptActionCheckIn, working: isWorking)
                     }
                     .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
                     .disabled(isWorking)
@@ -661,8 +655,7 @@ public struct AutomaticAttendanceFlowView: View {
 
         case .requestingConsent:
             VStack(spacing: FaithFormTokens.Spacing.md) {
-                ProgressView()
-                Text(L.autoAttendanceSaving)
+                FaithFormWorkingLabel(L.autoAttendanceSaving, working: true)
                     .font(theme.font(FaithFormTokens.Text.body))
                     .foregroundStyle(theme.palette.contentSecondary)
             }

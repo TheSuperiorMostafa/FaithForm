@@ -1,20 +1,17 @@
 package io.faithform.app.ui.brand
 
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -23,6 +20,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -31,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import io.faithform.app.R
 import io.faithform.app.design.FaithFormTokens
 import io.faithform.app.design.LocalFaithFormTheme
+import io.faithform.app.ui.components.FaithFormWorkingLabel
 import kotlinx.coroutines.delay
 
 /**
@@ -45,12 +45,14 @@ import kotlinx.coroutines.delay
  * moves. The large spinner it replaces arrived after the splash on its own,
  * which made launch look like two loading screens in a row.
  *
- * ## Why no spinner at first
+ * ## After the hand-over
  *
- * Most loads finish in well under a second, and a spinner that flashes for a
- * fraction of one reads as a glitch. The mark breathes instead; only a load that
- * is genuinely slow earns a small indicator beneath it, so a person on poor
- * signal can still tell the app has not frozen.
+ * The system splash is mark-only — Android's splash API cannot draw a wordmark,
+ * so neither platform does. Once this view owns the frame the mark settles, the
+ * name fades in under it, and a working label appears only if the load is still
+ * going after a beat. Nothing loops. Reduce Motion and Increase Contrast keep
+ * the lockup still and drop the decorative glow. Returning visits restore the
+ * last shell from disk and skip this view entirely.
  *
  * Mirrors the iPhone's `LaunchLoadingView`.
  */
@@ -59,26 +61,36 @@ fun LaunchLoadingView() {
     val theme = LocalFaithFormTheme.current
     val reduceMotion = rememberReducedMotion()
     val label = stringResource(R.string.loading_account)
+    val name = stringResource(R.string.app_name)
 
-    var showsIndicator by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        delay(LaunchLoading.INDICATOR_DELAY_MS)
-        showsIndicator = true
-    }
+    var settled by remember { mutableStateOf(reduceMotion) }
+    var showWordmark by remember { mutableStateOf(reduceMotion) }
+    var showWorking by remember { mutableStateOf(false) }
 
-    // A slow, shallow pulse. Reduced motion keeps the mark still — no
-    // transition runs at all — and the indicator below still says the app is
-    // working.
-    val breathing = if (reduceMotion) null else {
-        rememberInfiniteTransition(label = "launch-breathing").animateFloat(
-            initialValue = 1f,
-            targetValue = LaunchLoading.BREATH_LOW_ALPHA,
-            animationSpec = infiniteRepeatable(
-                tween(LaunchLoading.BREATH_MS, easing = FastOutSlowInEasing),
-                RepeatMode.Reverse
-            ),
-            label = "launch-breathing-alpha"
-        )
+    val scale by animateFloatAsState(
+        targetValue = if (settled) 1f else LaunchLoading.SETTLE_SCALE,
+        animationSpec = tween(
+            durationMillis = if (reduceMotion) 0 else FaithFormTokens.Motion.DELIBERATE_MS,
+            easing = FastOutSlowInEasing,
+        ),
+        label = "launch-settle",
+    )
+    val wordmarkAlpha by animateFloatAsState(
+        targetValue = if (showWordmark) 1f else 0f,
+        animationSpec = tween(
+            durationMillis = if (reduceMotion) 0 else FaithFormTokens.Motion.SLOW_MS,
+        ),
+        label = "launch-wordmark",
+    )
+
+    LaunchedEffect(reduceMotion) {
+        if (!reduceMotion) {
+            settled = true
+            delay(FaithFormTokens.Motion.FAST_MS.toLong())
+            showWordmark = true
+        }
+        delay(LaunchLoading.WORKING_DELAY_MS.toLong())
+        showWorking = true
     }
 
     Box(
@@ -88,24 +100,50 @@ fun LaunchLoadingView() {
             .background(theme.palette.background)
             .clearAndSetSemantics { contentDescription = label }
     ) {
-        FaithFormMark(
-            Modifier
-                .height(LaunchLoading.MARK_HEIGHT)
-                // Read in the layer, so each frame of the pulse redraws
-                // without recomposing.
-                .graphicsLayer { alpha = breathing?.value ?: 1f }
-        )
-
-        AnimatedVisibility(
-            visible = showsIndicator,
-            enter = fadeIn(tween(theme.durationMillis(FaithFormTokens.Motion.STANDARD_MS))),
-            modifier = Modifier.offset(y = LaunchLoading.MARK_HEIGHT / 2 + FaithFormTokens.Spacing.xl)
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.lg),
         ) {
-            CircularProgressIndicator(
-                color = theme.mutedContent,
-                strokeWidth = 2.dp,
-                modifier = Modifier.size(FaithFormTokens.IconSize.sizeMedium)
+            Box(contentAlignment = Alignment.Center) {
+                if (!theme.increaseContrast && !reduceMotion) {
+                    Box(
+                        Modifier
+                            .size(LaunchLoading.GLOW_SIZE)
+                            .background(
+                                Brush.radialGradient(
+                                    colors = listOf(
+                                        theme.palette.brandAccent.copy(alpha = 0.18f),
+                                        Color.Transparent,
+                                    )
+                                )
+                            )
+                    )
+                }
+                FaithFormMark(
+                    Modifier
+                        .height(LaunchLoading.MARK_HEIGHT)
+                        .graphicsLayer {
+                            scaleX = scale
+                            scaleY = scale
+                        }
+                )
+            }
+
+            Text(
+                name,
+                style = MaterialTheme.typography.titleLarge,
+                color = theme.palette.contentPrimary,
+                modifier = Modifier.graphicsLayer { alpha = wordmarkAlpha },
             )
+
+            if (showWorking) {
+                FaithFormWorkingLabel(
+                    text = label,
+                    working = true,
+                    color = theme.mutedContent,
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
         }
     }
 }
@@ -113,7 +151,9 @@ fun LaunchLoadingView() {
 internal object LaunchLoading {
     /** Matches `ic_launch_mark` as the system draws it. Change one, change both. */
     val MARK_HEIGHT = 96.dp
-    const val INDICATOR_DELAY_MS = 1_200L
-    const val BREATH_MS = 1_100
-    const val BREATH_LOW_ALPHA = 0.72f
+    val GLOW_SIZE = 180.dp
+    const val SETTLE_SCALE = 0.94f
+    /** Brand dwell for a cold signed-in load with no snapshot. Reduce Motion skips it. */
+    const val DWELL_MS = 700
+    const val WORKING_DELAY_MS = 900
 }

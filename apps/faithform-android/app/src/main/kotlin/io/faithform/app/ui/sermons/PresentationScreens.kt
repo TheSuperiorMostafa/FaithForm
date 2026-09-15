@@ -1,40 +1,61 @@
 package io.faithform.app.ui.sermons
 
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.FormatSize
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Slideshow
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
 import io.faithform.app.R
 import io.faithform.app.contract.PresentationDetail
@@ -47,9 +68,13 @@ import io.faithform.app.sermons.PresentationDetailPhase
 import io.faithform.app.sermons.PresentationListPhase
 import io.faithform.app.sermons.PresentationScreenState
 import io.faithform.app.ui.components.FaithFormSearchField
-import io.faithform.app.ui.discovery.ContentSkeleton
-import io.faithform.app.ui.discovery.SkeletonCard
-import io.faithform.app.ui.discovery.SlideSkeleton
+import io.faithform.app.ui.components.PresentationCardSkeleton
+import io.faithform.app.ui.components.PresentationListSkeleton
+import io.faithform.app.ui.components.SlideSkeleton
+import io.faithform.app.ui.components.skeletonShimmer
+import io.faithform.app.ui.discovery.EmptyState
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 
 /**
  * Slide-deck list and full-screen pager, mirroring iOS `PresentationListView`
@@ -73,7 +98,7 @@ fun PresentationListScreen(
 
     when (val phase = state.phase) {
         is PresentationListPhase.Idle, is PresentationListPhase.Loading ->
-            ContentSkeleton(modifier = modifier.padding(FaithFormTokens.Spacing.lg))
+            PresentationListSkeleton(modifier = modifier.padding(FaithFormTokens.Spacing.lg))
 
         is PresentationListPhase.Blocked ->
             PresentationMessage(
@@ -146,16 +171,20 @@ fun PresentationListScreen(
                     ) {
                         if (state.showsEmptyState) {
                             item(key = "empty") {
-                                Text(
-                                    stringResource(
+                                EmptyState(
+                                    title = stringResource(
                                         if (state.emptyIsSearch) {
                                             R.string.presentations_empty_search
                                         } else {
                                             R.string.presentations_empty
                                         },
                                     ),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = theme.palette.contentSecondary,
+                                    body = "",
+                                    icon = if (state.emptyIsSearch) {
+                                        Icons.Outlined.Search
+                                    } else {
+                                        Icons.Outlined.Slideshow
+                                    },
                                 )
                             }
                         }
@@ -169,7 +198,7 @@ fun PresentationListScreen(
 
                         if (state.isLoadingMore) {
                             item(key = "loading-more") {
-                                SkeletonCard()
+                                PresentationCardSkeleton(Modifier.skeletonShimmer())
                             }
                         } else if (state.showsLoadMoreRetry) {
                             item(key = "load-more-retry") {
@@ -267,6 +296,7 @@ fun PresentationDetailScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PresentationPager(detail: PresentationDetail, modifier: Modifier = Modifier) {
     val pages = detail.pages
@@ -280,20 +310,143 @@ private fun PresentationPager(detail: PresentationDetail, modifier: Modifier = M
     }
 
     val pagerState = rememberPagerState(pageCount = { pages.size })
-    val background = parseThemeColor(detail.theme?.bg) ?: LocalFaithFormTheme.current.palette.brandPrimary
-
-    HorizontalPager(
-        state = pagerState,
-        modifier = modifier
-            .fillMaxSize()
-            .background(background),
-    ) { index ->
-        SlidePage(
-            page = pages[index],
-            theme = detail.theme,
-            index = index,
-            total = pages.size,
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences(TEXT_SCALE_PREFS, Context.MODE_PRIVATE) }
+    var textScale by remember {
+        mutableFloatStateOf(
+            prefs.getFloat(TEXT_SCALE_KEY, TEXT_SCALE_DEFAULT).coerceIn(TEXT_SCALE_MIN, TEXT_SCALE_MAX),
         )
+    }
+
+    var showTextSize by remember { mutableStateOf(false) }
+
+    Box(modifier.fillMaxSize()) {
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize().clipToBounds(),
+        ) { index ->
+            SlidePage(
+                page = pages[index],
+                theme = detail.theme,
+                index = index,
+                total = pages.size,
+                textScale = textScale,
+                modifier = Modifier.fillMaxSize().clipToBounds(),
+            )
+        }
+        IconButton(
+            onClick = { showTextSize = true },
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(FaithFormTokens.Spacing.sm)
+                .background(Color.Black.copy(alpha = 0.4f), CircleShape),
+        ) {
+            Icon(
+                Icons.Outlined.FormatSize,
+                contentDescription = stringResource(R.string.presentations_text_size),
+                tint = Color.White,
+            )
+        }
+        if (showTextSize) {
+            ModalBottomSheet(onDismissRequest = { showTextSize = false }) {
+                SlideTextSizeBar(
+                    scale = textScale,
+                    onScaleChange = { next ->
+                        textScale = next
+                        prefs.edit().putFloat(TEXT_SCALE_KEY, next).apply()
+                    },
+                    modifier = Modifier.padding(
+                        start = FaithFormTokens.Spacing.lg,
+                        end = FaithFormTokens.Spacing.lg,
+                        top = FaithFormTokens.Spacing.md,
+                        bottom = FaithFormTokens.Spacing.xxl,
+                    ),
+                )
+            }
+        }
+    }
+}
+
+private const val TEXT_SCALE_PREFS = "faithform_ui"
+private const val TEXT_SCALE_KEY = "presentation_text_scale"
+private const val TEXT_SCALE_MIN = 0.7f
+private const val TEXT_SCALE_MAX = 1.8f
+private const val TEXT_SCALE_DEFAULT = 1f
+
+@Composable
+private fun SlideTextSizeBar(
+    scale: Float,
+    onScaleChange: (Float) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val theme = LocalFaithFormTheme.current
+    val sample = stringResource(R.string.presentations_text_size_sample)
+    val label = stringResource(R.string.presentations_text_size)
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.md),
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.titleMedium,
+            color = theme.palette.contentPrimary,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm),
+        ) {
+            Text(
+                sample,
+                color = theme.palette.contentPrimary,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.clearAndSetSemantics {},
+            )
+            Slider(
+                value = scale,
+                onValueChange = onScaleChange,
+                valueRange = TEXT_SCALE_MIN..TEXT_SCALE_MAX,
+                colors = SliderDefaults.colors(
+                    thumbColor = theme.palette.brandAccent,
+                    activeTrackColor = theme.palette.brandAccent,
+                    inactiveTrackColor = theme.palette.border,
+                ),
+                modifier = Modifier
+                    .weight(1f)
+                    .semantics { contentDescription = label },
+            )
+            Text(
+                sample,
+                color = theme.palette.contentPrimary,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.clearAndSetSemantics {},
+            )
+        }
+    }
+}
+
+/** Solid colour, or the theme photo already stored on the published deck. */
+@Composable
+private fun SlideDeckBackground(theme: PresentationTheme?, modifier: Modifier = Modifier) {
+    val fallback = parseThemeColor(theme?.bg) ?: LocalFaithFormTheme.current.palette.brandPrimary
+    val imageUrl = theme?.imageUrl?.trim().orEmpty()
+    Box(modifier.clipToBounds().background(fallback)) {
+        if (theme?.backgroundType == "image" && imageUrl.isNotEmpty()) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(imageUrl)
+                    .crossfade(true)
+                    .build(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize().clipToBounds(),
+            )
+            if (theme?.textShadow == true) {
+                Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.25f)))
+            }
+        }
     }
 }
 
@@ -303,6 +456,8 @@ private fun SlidePage(
     theme: PresentationTheme?,
     index: Int,
     total: Int,
+    textScale: Float,
+    modifier: Modifier = Modifier,
 ) {
     val textColor = parseThemeColor(theme?.text) ?: Color.White
     val accent = parseThemeColor(theme?.accent) ?: Color(0xFFC4A15A)
@@ -328,57 +483,86 @@ private fun SlidePage(
         }
         .joinToString(". ")
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(FaithFormTokens.Spacing.xl)
-            .semantics { contentDescription = reading },
-        verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.lg),
-    ) {
-        Spacer(Modifier.height(FaithFormTokens.Spacing.xl))
+    val userScale = textScale.coerceIn(TEXT_SCALE_MIN, TEXT_SCALE_MAX)
+    val titleSize = (36f * userScale).sp
+    val scriptureSize = (24f * userScale).sp
+    val bodySize = (22f * userScale).sp
+    val bodyLineHeight = (22f * userScale * 1.35f).sp
 
-        page.title?.takeIf { it.isNotBlank() }?.let { title ->
+    Box(modifier.fillMaxSize().clipToBounds()) {
+        SlideDeckBackground(theme, Modifier.fillMaxSize())
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(
+                    horizontal = FaithFormTokens.Spacing.xxl,
+                    vertical = FaithFormTokens.Spacing.xl,
+                )
+                .semantics { contentDescription = reading },
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Spacer(Modifier.weight(1f))
+
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.lg),
+            ) {
+                page.title?.takeIf { it.isNotBlank() }?.let { title ->
+                    Text(
+                        title,
+                        style = TextStyle(
+                            fontSize = titleSize,
+                            fontWeight = FontWeight.SemiBold,
+                            color = textColor,
+                            shadow = shadow,
+                            textAlign = TextAlign.Center,
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+
+                page.scripture?.takeIf { it.isNotBlank() }?.let { scripture ->
+                    Text(
+                        scripture,
+                        style = TextStyle(
+                            fontSize = scriptureSize,
+                            fontWeight = FontWeight.Medium,
+                            fontStyle = if (italicScripture) FontStyle.Italic else FontStyle.Normal,
+                            color = accent,
+                            shadow = shadow,
+                            textAlign = TextAlign.Center,
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+
+                page.body?.takeIf { it.isNotBlank() }?.let { body ->
+                    Text(
+                        body,
+                        style = TextStyle(
+                            fontSize = bodySize,
+                            fontWeight = FontWeight.Normal,
+                            lineHeight = bodyLineHeight,
+                            color = textColor.copy(alpha = 0.94f),
+                            shadow = shadow,
+                            textAlign = TextAlign.Center,
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+            }
+
+            Spacer(Modifier.weight(1f))
+
             Text(
-                title,
-                style = TextStyle(
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = textColor,
-                    shadow = shadow,
-                ),
+                "${index + 1} / $total",
+                style = MaterialTheme.typography.labelSmall,
+                color = textColor.copy(alpha = 0.55f),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
             )
         }
-
-        page.scripture?.takeIf { it.isNotBlank() }?.let { scripture ->
-            Text(
-                scripture,
-                style = TextStyle(
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Medium,
-                    fontStyle = if (italicScripture) FontStyle.Italic else FontStyle.Normal,
-                    color = accent,
-                ),
-            )
-        }
-
-        page.body?.takeIf { it.isNotBlank() }?.let { body ->
-            Text(
-                body,
-                style = TextStyle(
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Normal,
-                    color = textColor.copy(alpha = 0.92f),
-                ),
-            )
-        }
-
-        Spacer(Modifier.weight(1f))
-
-        Text(
-            "${index + 1} / $total",
-            style = MaterialTheme.typography.labelSmall,
-            color = textColor.copy(alpha = 0.6f),
-        )
     }
 }
 

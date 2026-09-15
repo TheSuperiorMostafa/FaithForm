@@ -5,8 +5,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -19,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -31,25 +34,35 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import io.faithform.app.R
 import io.faithform.app.contract.SermonDetail
 import io.faithform.app.contract.SermonListItem
 import io.faithform.app.design.FaithFormTokens
 import io.faithform.app.design.LocalFaithFormTheme
+import io.faithform.app.sermons.PresentationListPhase
+import io.faithform.app.sermons.PresentationScreenState
 import io.faithform.app.sermons.SermonDetailPhase
+import io.faithform.app.sermons.SermonHub
+import io.faithform.app.sermons.SermonHubItem
 import io.faithform.app.sermons.SermonListPhase
 import io.faithform.app.sermons.SermonScreenState
 import io.faithform.app.sermons.preachedDate
-import io.faithform.app.sermons.sermonMonthSections
 import io.faithform.app.ui.components.FaithFormSearchField
-import io.faithform.app.ui.discovery.ContentSkeleton
-import io.faithform.app.ui.discovery.DetailSkeleton
-import io.faithform.app.ui.discovery.SkeletonCard
+import io.faithform.app.ui.components.SermonHubCardSkeleton
+import io.faithform.app.ui.components.SermonListSkeleton
+import io.faithform.app.ui.components.DetailSkeleton
+import io.faithform.app.ui.components.skeletonShimmer
+import io.faithform.app.ui.discovery.EmptyState
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.DateTimeFormatter
@@ -69,21 +82,23 @@ import java.util.Locale
 @Composable
 fun SermonListScreen(
     state: SermonScreenState,
+    presentationState: PresentationScreenState,
     onSearch: (String) -> Unit,
-    onOpen: (SermonListItem) -> Unit,
+    onOpenNotes: (String) -> Unit,
+    onOpenSlides: (String) -> Unit,
     onLoadMore: () -> Unit,
     onRetryLoadMore: () -> Unit,
     onRefresh: () -> Unit,
     onRetry: () -> Unit,
     modifier: Modifier = Modifier,
-    /** False when a title bar above already says "Sermon notes". */
+    /** False when a title bar above already says "Sermons". */
     showTitle: Boolean = true,
 ) {
     val theme = LocalFaithFormTheme.current
 
     when (val phase = state.phase) {
         is SermonListPhase.Idle, is SermonListPhase.Loading ->
-            ContentSkeleton(
+            SermonListSkeleton(
                 modifier = modifier.padding(FaithFormTokens.Spacing.lg),
             )
 
@@ -112,9 +127,20 @@ fun SermonListScreen(
             )
 
         is SermonListPhase.Loaded -> {
-            val sections = remember(phase.items) { sermonMonthSections(phase.items) }
-            val lastId = phase.items.lastOrNull()?.sermonId
+            val slideItems = presentationState.items
+            val hubs = remember(phase.items, slideItems) { SermonHub.merge(phase.items, slideItems) }
+            val waitingOnSlides = hubs.isEmpty() &&
+                (presentationState.phase is PresentationListPhase.Idle ||
+                    presentationState.phase is PresentationListPhase.Loading)
+            if (waitingOnSlides) {
+                SermonListSkeleton(modifier = modifier.padding(FaithFormTokens.Spacing.lg))
+            } else {
+            val sections = remember(hubs) { SermonHub.monthSections(hubs) }
+            val lastId = hubs.lastOrNull()?.sermonId
             val dates = rememberSermonDateFormats()
+            val canLoadMore = state.canLoadMore || presentationState.canLoadMore
+            val loadingMore = state.isLoadingMore || presentationState.isLoadingMore
+            val loadMoreRetry = state.showsLoadMoreRetry || presentationState.showsLoadMoreRetry
 
             Column(
                 modifier = modifier
@@ -164,19 +190,22 @@ fun SermonListScreen(
                         modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm),
                     ) {
-                        if (state.showsEmptyState) {
-                            // Two different empties, and they do not read the same.
+                        if (hubs.isEmpty()) {
                             item(key = "empty") {
-                                Text(
-                                    stringResource(
-                                        if (state.emptyIsSearch) {
+                                EmptyState(
+                                    title = stringResource(
+                                        if (state.searchTerm.isNotBlank()) {
                                             R.string.sermons_empty_search
                                         } else {
                                             R.string.sermons_empty
                                         },
                                     ),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = theme.palette.contentSecondary,
+                                    body = "",
+                                    icon = if (state.searchTerm.isNotBlank()) {
+                                        Icons.Outlined.Search
+                                    } else {
+                                        Icons.AutoMirrored.Outlined.MenuBook
+                                    },
                                 )
                             }
                         }
@@ -187,31 +216,33 @@ fun SermonListScreen(
                                     SermonMonthHeader(dates.month(month))
                                 }
                             }
-                            items(section.items, key = { it.sermonId }, contentType = { "sermon" }) { item ->
-                                SermonCard(
-                                    item = item,
-                                    dateText = item.preachedDate?.let(dates::short),
-                                    onClick = { onOpen(item) },
+                            items(section.items, key = { it.sermonId }, contentType = { "sermon" }) { hub ->
+                                SermonHubCard(
+                                    hub = hub,
+                                    dateText = hub.preachedDate?.let(dates::short),
+                                    onOpenNotes = { hub.notes?.let { onOpenNotes(it.sermonId) } },
+                                    onOpenSlides = { hub.slides?.let { onOpenSlides(it.presentationId) } },
                                 )
-                                if (item.sermonId == lastId && state.canLoadMore) {
-                                    LaunchedEffect(item.sermonId) { onLoadMore() }
+                                if (hub.sermonId == lastId && canLoadMore) {
+                                    LaunchedEffect(hub.sermonId) { onLoadMore() }
                                 }
                             }
                         }
 
-                        if (state.isLoadingMore) {
+                        if (loadingMore) {
                             item(key = "loading-more") {
-                                SkeletonCard()
+                                SermonHubCardSkeleton(Modifier.skeletonShimmer())
                             }
                         }
 
-                        if (state.showsLoadMoreRetry) {
+                        if (loadMoreRetry) {
                             item(key = "load-more-failed") {
                                 SermonLoadMoreRetry(onRetry = onRetryLoadMore)
                             }
                         }
                     }
                 }
+            }
             }
         }
     }
@@ -298,41 +329,125 @@ private fun SermonLoadMoreRetry(onRetry: () -> Unit) {
 }
 
 @Composable
-private fun SermonCard(item: SermonListItem, dateText: String?, onClick: () -> Unit) {
+private fun SermonHubCard(
+    hub: SermonHubItem,
+    dateText: String?,
+    onOpenNotes: () -> Unit,
+    onOpenSlides: () -> Unit,
+) {
     val theme = LocalFaithFormTheme.current
+    val shape = RoundedCornerShape(FaithFormTokens.Radius.md)
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(FaithFormTokens.Spacing.md)
-            .semantics(mergeDescendants = true) {},
-        verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.xs),
+            .clip(shape)
+            .background(theme.palette.surface)
+            .border(theme.borderWidth, theme.palette.border, shape),
     ) {
-        val overline = listOfNotNull(dateText, item.seriesName?.takeIf { it.isNotBlank() })
-        if (overline.isNotEmpty()) {
-            Text(
-                overline.joinToString(" · "),
-                style = MaterialTheme.typography.labelSmall,
-                color = theme.palette.contentSecondary,
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 9f)
+                .clickable(
+                    role = Role.Button,
+                    onClick = { if (hub.hasSlides) onOpenSlides() else onOpenNotes() },
+                )
+                .background(theme.palette.brandPrimary),
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color.White.copy(alpha = 0.08f), Color.Black.copy(alpha = 0.28f)),
+                        ),
+                    ),
             )
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm),
+                modifier = Modifier.padding(horizontal = FaithFormTokens.Spacing.lg),
+            ) {
+                Text(
+                    hub.title,
+                    color = Color.White,
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = MaterialTheme.typography.titleMedium.fontSize,
+                    textAlign = TextAlign.Center,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                hub.slides?.let { slides ->
+                    Text(
+                        stringResource(R.string.presentations_page_count, slides.pageCount),
+                        color = theme.palette.brandAccent,
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
+            }
         }
-        Text(item.title, style = MaterialTheme.typography.titleSmall, color = theme.palette.contentPrimary)
-        item.summary?.takeIf { it.isNotBlank() }?.let {
-            Text(
-                it,
-                style = MaterialTheme.typography.bodySmall,
-                color = theme.palette.contentSecondary,
-                maxLines = 3,
-            )
-        }
-        if (item.scriptureRefs.isNotEmpty()) {
-            Text(
-                item.scriptureRefs.joinToString(" · "),
-                style = MaterialTheme.typography.labelSmall,
-                color = theme.palette.contentSecondary,
-            )
+        Column(
+            modifier = Modifier.padding(FaithFormTokens.Spacing.base),
+            verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm),
+        ) {
+            val overline = listOfNotNull(dateText, hub.seriesName?.takeIf { it.isNotBlank() })
+            if (overline.isNotEmpty()) {
+                Text(
+                    overline.joinToString(" · "),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = theme.palette.contentSecondary,
+                )
+            }
+            Text(hub.title, style = MaterialTheme.typography.titleSmall, color = theme.palette.contentPrimary)
+            if (hub.scriptureRefs.isNotEmpty()) {
+                Text(
+                    hub.scriptureRefs.joinToString(" · "),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = theme.palette.brandAccent,
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm)) {
+                if (hub.hasNotes) {
+                    SermonHubAction(
+                        label = stringResource(R.string.sermons_open_notes),
+                        onClick = onOpenNotes,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                if (hub.hasSlides) {
+                    SermonHubAction(
+                        label = stringResource(R.string.sermons_open_slides),
+                        onClick = onOpenSlides,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
         }
     }
+}
+
+@Composable
+private fun SermonHubAction(
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val theme = LocalFaithFormTheme.current
+    val shape = RoundedCornerShape(FaithFormTokens.Radius.pill)
+    Text(
+        label,
+        style = MaterialTheme.typography.labelMedium,
+        color = theme.palette.contentPrimary,
+        textAlign = TextAlign.Center,
+        modifier = modifier
+            .clip(shape)
+            .background(theme.palette.surfaceSunken)
+            .border(theme.borderWidth, theme.palette.border, shape)
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(vertical = FaithFormTokens.Spacing.sm)
+            .heightIn(min = FaithFormTokens.TouchTarget.minimum),
+    )
 }
 
 /** Dates in the reader's locale: a row's day, a detail's day, a month heading. */

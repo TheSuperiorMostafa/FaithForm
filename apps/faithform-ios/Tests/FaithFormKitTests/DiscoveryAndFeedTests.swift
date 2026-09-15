@@ -205,7 +205,7 @@ struct FeedTests {
 
     private var oneItem: String {
         """
-        [{"id":"a-1","title":"Sunday service","body":"Doors at nine","startAt":"2026-08-30T14:00:00Z","endAt":null,"location":"Main hall","posterUrl":null,"posterAltText":null,"isPinned":true,"visibility":"followers","publicationVersion":3,"publishedAt":"2026-08-24T10:00:00Z","isEvent":false,"churchSlug":"grace","churchName":"Grace Community","churchTimezone":"America/New_York"}]
+        [{"id":"a-1","title":"Sunday service","body":"Doors at nine","startAt":"2026-08-30T14:00:00Z","endAt":null,"allDay":false,"location":"Main hall","posterUrl":null,"posterAltText":null,"isPinned":true,"visibility":"followers","publicationVersion":3,"publishedAt":"2026-08-24T10:00:00Z","isEvent":false,"churchSlug":"grace","churchName":"Grace Community","churchTimezone":"America/New_York"}]
         """
     }
 
@@ -369,7 +369,7 @@ struct FeedFormattingTests {
         timezone: String = "America/New_York"
     ) -> FeedItem {
         FeedItem(
-            id: "a", title: "T", body: "", startAt: startAt, endAt: endAt,
+            id: "a", title: "T", body: "", startAt: startAt, endAt: endAt, allDay: false,
             location: nil, posterUrl: nil, posterAltText: nil, isPinned: false,
             visibility: .followers, publicationVersion: 1, publishedAt: nil,
             isEvent: isEvent, churchSlug: "grace", churchName: "Grace",

@@ -29,7 +29,6 @@ import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -56,6 +55,7 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import io.faithform.app.DeletionPhase
 import io.faithform.app.R
+import io.faithform.app.ui.components.FaithFormWorkingLabel
 import io.faithform.app.contract.AccountStatus
 import io.faithform.app.contract.Bootstrap
 import io.faithform.app.design.FaithFormTokens
@@ -248,15 +248,10 @@ fun AccountTab(
                         .fillMaxWidth()
                         .heightIn(min = FaithFormTokens.TouchTarget.recommended),
                 ) {
-                    if (savingName) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(FaithFormTokens.IconSize.sizeMedium),
-                            color = theme.palette.contentOnAccent,
-                            strokeWidth = 2.dp,
-                        )
-                    } else {
-                        Text(stringResource(R.string.account_save_name))
-                    }
+                    FaithFormWorkingLabel(
+                        text = stringResource(R.string.account_save_name),
+                        working = savingName,
+                    )
                 }
             }
         }
@@ -440,14 +435,12 @@ fun DeleteAccountDialog(
                     )
                 }
                 if (working) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm),
-                        verticalAlignment = Alignment.CenterVertically,
+                    FaithFormWorkingLabel(
+                        text = stringResource(R.string.delete_account_working),
+                        working = true,
+                        style = MaterialTheme.typography.bodyMedium,
                         modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                    ) {
-                        CircularProgressIndicator(modifier = Modifier.size(FaithFormTokens.IconSize.sizeMedium))
-                        Text(stringResource(R.string.delete_account_working), style = MaterialTheme.typography.bodyMedium)
-                    }
+                    )
                 }
             }
         },

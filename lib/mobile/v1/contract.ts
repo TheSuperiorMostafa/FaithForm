@@ -333,6 +333,8 @@ export const feedItemSchema = z
     body: z.string(),
     startAt: instant,
     endAt: instant.nullable(),
+    /** Date-only calendar entry. Render in UTC without a clock time. */
+    allDay: z.boolean(),
     location: z.string().nullable(),
     posterUrl: url.nullable(),
     posterAltText: z.string().nullable(),
@@ -356,6 +358,15 @@ export const feedPageSchema = z
     feedVersion: z.number().int(),
   })
   .meta({ id: "FeedPage" });
+
+/** One month of published events for the Home Schedule pane. */
+export const schedulePageSchema = z
+  .object({
+    items: z.array(feedItemSchema),
+    /** Drives the schedule ETag; a change means refetch. */
+    scheduleVersion: z.number().int(),
+  })
+  .meta({ id: "SchedulePage" });
 
 export const notificationPreferenceSchema = z
   .object({
@@ -1295,6 +1306,7 @@ export const CONTRACT_SCHEMAS = {
   OnboardingState: onboardingStateSchema,
   FeedItem: feedItemSchema,
   FeedPage: feedPageSchema,
+  SchedulePage: schedulePageSchema,
   NotificationPreference: notificationPreferenceSchema,
   DeviceInstallation: deviceInstallationSchema,
   FollowRequest: followRequestSchema,

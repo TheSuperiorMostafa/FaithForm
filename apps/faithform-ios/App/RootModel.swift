@@ -54,6 +54,17 @@ final class RootModel {
         self.authModel = AuthModel(auth: dependencies.auth) { [weak self] session, displayName in
             await self?.completeAuth(session, displayName: displayName)
         }
+        if let session = dependencies.peekSession() {
+            accountId = session.accountId
+            if let snapshot = dependencies.snapshots.load(
+                environment: dependencies.environment.key,
+                accountId: session.accountId
+            ) {
+                adoptCached(snapshot)
+            }
+        } else {
+            state.apply(.signedOut)
+        }
     }
 
     /// True exactly when the first-run flow should stand in front of the tabs.
@@ -123,11 +134,37 @@ final class RootModel {
     /// `quiet` refreshes in place after something changed — a join, an accepted
     /// invitation — without collapsing the UI back to a spinner first.
     func load(quiet: Bool) async {
-        if !quiet { state.apply(.loading) }
+        guard let session = await dependencies.session.currentSession() else {
+            state.apply(.signedOut)
+            return
+        }
+        accountId = session.accountId
+
+        if !quiet {
+            switch state.phase {
+            case .ready:
+                break
+            default:
+                if let snapshot = dependencies.snapshots.load(
+                    environment: dependencies.environment.key,
+                    accountId: session.accountId
+                ) {
+                    adoptCached(snapshot)
+                } else {
+                    // The brand dwell lives in `RootView`, not here: a returning
+                    // visit must still restore Home before the network answers.
+                    state.apply(.loading)
+                }
+            }
+        }
         // Captured before anything can fail, so an offline reload still has
-        // something honest to show: the last account this launch loaded,
+        // something honest to show: the last account this device loaded,
         // labelled stale, rather than a blank "you're offline".
         let previous = lastBootstrap
+            ?? dependencies.snapshots.load(
+                environment: dependencies.environment.key,
+                accountId: session.accountId
+            )?.bootstrap
         do {
             let response = try await dependencies.api.send(
                 "api/mobile/v1/account/bootstrap",
@@ -148,30 +185,23 @@ final class RootModel {
             // failure here falls back to nil — showing home to someone who
             // could be onboarding beats a dead app over a routing hint.
             onboardingState = await onboarding.refresh()
-            accountId = await dependencies.session.currentSession()?.accountId
+
+            if let accountId {
+                dependencies.snapshots.store(
+                    AccountSnapshot(bootstrap: bootstrap, onboarding: onboardingState),
+                    environment: dependencies.environment.key,
+                    accountId: accountId
+                )
+            }
 
             state.apply(.ready(bootstrap, isStale: false))
             adoptSelection(bootstrap)
-
-            // Automatic check-in follows the account: who is signed in, which
-            // churches they belong to, and whether consent still holds — which
-            // may have been withdrawn on the website or another phone. Not
-            // awaited: nothing on screen waits for regions to be registered.
-            if let accountId {
-                let attendance = dependencies.attendance
-                let version = bootstrap.profile.authorizationVersion
-                let consent = bootstrap.profile.autoAttendanceConsent.rawValue
-                let churches = AppDependencies.attendanceChurches(in: bootstrap)
-                Task {
-                    await attendance.updateAccount(
-                        accountId: accountId,
-                        authorizationVersion: version,
-                        serverConsent: consent,
-                        churches: churches
-                    )
-                }
-            }
+            syncAttendance(bootstrap)
         } catch let error as APIError {
+            if error.isCancellation {
+                if !quiet, let previous { state.apply(.ready(previous, isStale: false)) }
+                return
+            }
             // Typed code and correlation id only — never the message, a token,
             // or anything else a person or provider wrote.
             Self.log.failure(error.code, requestId: error.requestId)
@@ -192,17 +222,48 @@ final class RootModel {
                 state.apply(.failed(message: error.displayMessage))
             }
         } catch {
+            if error.isCancellation {
+                if !quiet, let previous { state.apply(.ready(previous, isStale: false)) }
+                return
+            }
             showOffline(previous)
         }
     }
 
-    /// The last bootstrap this launch loaded successfully.
+    /// The last bootstrap this device loaded successfully.
     ///
-    /// In memory only, like the rest of the projection cache, and dropped on
-    /// sign-out. It exists so a reload that fails offline — pull to refresh
-    /// on a train, a quiet reload after the access token lapsed — keeps what the
-    /// person was already looking at instead of replacing it with a blank.
+    /// Persisted across launches via `AccountSnapshotStore`. In memory it also
+    /// covers a reload that fails offline — pull to refresh on a train, a quiet
+    /// reload after the access token lapsed — so the person keeps what they
+    /// were already looking at instead of a blank.
     private var lastBootstrap: Bootstrap?
+
+    private func adoptCached(_ snapshot: AccountSnapshot) {
+        lastBootstrap = snapshot.bootstrap
+        onboardingState = snapshot.onboarding
+        state.apply(.ready(snapshot.bootstrap, isStale: !snapshot.isFresh))
+        adoptSelection(snapshot.bootstrap)
+        syncAttendance(snapshot.bootstrap)
+    }
+
+    /// Automatic check-in follows the account: who is signed in, which
+    /// churches they belong to, and whether consent still holds. Not awaited:
+    /// nothing on screen waits for regions to be registered.
+    private func syncAttendance(_ bootstrap: Bootstrap) {
+        guard let accountId else { return }
+        let attendance = dependencies.attendance
+        let version = bootstrap.profile.authorizationVersion
+        let consent = bootstrap.profile.autoAttendanceConsent.rawValue
+        let churches = AppDependencies.attendanceChurches(in: bootstrap)
+        Task {
+            await attendance.updateAccount(
+                accountId: accountId,
+                authorizationVersion: version,
+                serverConsent: consent,
+                churches: churches
+            )
+        }
+    }
 
     private func showOffline(_ previous: Bootstrap?) {
         if let previous {
@@ -429,6 +490,12 @@ final class RootModel {
         await dependencies.attendance.signedOut()
         await dependencies.attendanceConfiguration.purge()
         await dependencies.cache.purgeAll()
+        if let accountId {
+            dependencies.snapshots.purge(
+                environment: dependencies.environment.key,
+                accountId: accountId
+            )
+        }
         await dependencies.session.purgeEverything()
         lastBootstrap = nil
         selectedChurch = nil

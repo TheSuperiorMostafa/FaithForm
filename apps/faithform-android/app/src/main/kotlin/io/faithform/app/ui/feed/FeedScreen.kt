@@ -28,7 +28,7 @@ import io.faithform.app.contract.FeedItem
 import io.faithform.app.design.FaithFormTokens
 import io.faithform.app.design.LocalFaithFormTheme
 import io.faithform.app.ui.discovery.EmptyState
-import io.faithform.app.ui.discovery.SkeletonCard
+import io.faithform.app.ui.components.FeedSkeleton
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -51,13 +51,10 @@ sealed interface FeedPhase {
 @Composable
 fun HomeFeedScreen(
     phase: FeedPhase,
-    churchName: String,
     onOpenItem: (FeedItem) -> Unit,
     onReachedEnd: () -> Unit,
     modifier: Modifier = Modifier,
     isJoinPending: Boolean = false,
-    /** Shown under the church's name, above the feed — the way into its sermon notes. */
-    header: (@Composable () -> Unit)? = null
 ) {
     val theme = LocalFaithFormTheme.current
 
@@ -68,27 +65,14 @@ fun HomeFeedScreen(
             .padding(horizontal = FaithFormTokens.Layout.screenPaddingHorizontal),
         verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.lg)
     ) {
-        item {
-            Text(
-                churchName,
-                style = MaterialTheme.typography.displayMedium,
-                color = theme.palette.contentPrimary,
-                modifier = Modifier.padding(top = FaithFormTokens.Spacing.base)
-            )
-        }
-
         if (isJoinPending) {
             item(key = "join-pending") {
                 JoinPendingBanner()
             }
         }
 
-        if (header != null) {
-            item(key = "header") { header() }
-        }
-
         when (phase) {
-            is FeedPhase.Loading -> items(2) { SkeletonCard() }
+            is FeedPhase.Loading -> item { FeedSkeleton() }
 
             is FeedPhase.Loaded -> {
                 if (phase.isStale) {
@@ -205,7 +189,7 @@ fun AnnouncementCard(item: FeedItem, onOpen: () -> Unit) {
 }
 
 @Composable
-private fun OfflineBanner(message: String) {
+internal fun OfflineBanner(message: String) {
     val theme = LocalFaithFormTheme.current
     Text(
         message,
@@ -219,7 +203,7 @@ private fun OfflineBanner(message: String) {
 }
 
 @Composable
-private fun JoinPendingBanner() {
+internal fun JoinPendingBanner() {
     val theme = LocalFaithFormTheme.current
     Column(
         modifier = Modifier
@@ -249,6 +233,10 @@ fun formatWhen(item: FeedItem): String {
     val zone = runCatching { ZoneId.of(item.churchTimezone) }.getOrElse { ZoneId.systemDefault() }
     val start = runCatching { Instant.parse(item.startAt) }.getOrNull() ?: return ""
     val startLocal = start.atZone(zone)
+
+    if (item.allDay) {
+        return DateTimeFormatter.ofPattern("EEEE d MMMM").format(startLocal)
+    }
 
     val full = DateTimeFormatter.ofPattern("EEEE d MMMM, h:mm a")
     val timeOnly = DateTimeFormatter.ofPattern("h:mm a")

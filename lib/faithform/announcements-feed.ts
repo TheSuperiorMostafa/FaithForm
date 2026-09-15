@@ -19,6 +19,7 @@ export type FeedItem = {
   body: string;
   startAt: string;
   endAt: string | null;
+  allDay: boolean;
   location: string | null;
   posterUrl: string | null;
   posterAltText: string | null;
@@ -50,6 +51,7 @@ function mapItem(row: Record<string, unknown>): FeedItem {
     body: (row.body as string) ?? "",
     startAt: row.start_at as string,
     endAt: (row.end_at as string | null) ?? null,
+    allDay: Boolean(row.all_day),
     location: (row.location as string | null) ?? null,
     posterUrl: (row.poster_url as string | null) ?? null,
     posterAltText: (row.poster_alt_text as string | null) ?? null,
@@ -138,4 +140,34 @@ export async function getAnnouncementDetail(input: {
 
   const row = ((data ?? []) as Record<string, unknown>[])[0];
   return row ? mapItem(row) : null;
+}
+
+/**
+ * Every published event overlapping a calendar window.
+ *
+ * Unlike the feed, this includes events that already happened earlier in the
+ * month, and does not paginate — a month is bounded.
+ */
+export async function getAnnouncementSchedule(input: {
+  churchSlug: string;
+  relationshipState: RelationshipState | null;
+  from: string;
+  to: string;
+}): Promise<FeedItem[]> {
+  const slug = churchSlugSchema.safeParse(input.churchSlug);
+  if (!slug.success) throw new VisitorError("church_not_found", "Church not found.");
+
+  if (input.relationshipState === "blocked") return [];
+
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("mobile_announcement_schedule", {
+    p_church_slug: slug.data,
+    p_relationship_state: input.relationshipState ?? NO_RELATIONSHIP,
+    p_from: input.from,
+    p_to: input.to,
+  });
+
+  if (error) throw new VisitorError("unavailable", "Could not load the schedule.");
+
+  return ((data ?? []) as Record<string, unknown>[]).map(mapItem);
 }

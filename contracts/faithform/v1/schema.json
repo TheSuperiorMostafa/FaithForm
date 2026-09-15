@@ -1903,6 +1903,9 @@
             }
           ]
         },
+        "allDay": {
+          "type": "boolean"
+        },
         "location": {
           "anyOf": [
             {
@@ -1982,6 +1985,7 @@
         "body",
         "startAt",
         "endAt",
+        "allDay",
         "location",
         "posterUrl",
         "posterAltText",
@@ -2055,6 +2059,9 @@
                   "type": "null"
                 }
               ]
+            },
+            "allDay": {
+              "type": "boolean"
             },
             "location": {
               "anyOf": [
@@ -2135,6 +2142,155 @@
             "body",
             "startAt",
             "endAt",
+            "allDay",
+            "location",
+            "posterUrl",
+            "posterAltText",
+            "isPinned",
+            "visibility",
+            "publicationVersion",
+            "publishedAt",
+            "isEvent",
+            "churchSlug",
+            "churchName",
+            "churchTimezone"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "SchedulePage": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FeedItem"
+          }
+        },
+        "scheduleVersion": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "items",
+        "scheduleVersion"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "FeedItem": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            },
+            "body": {
+              "type": "string"
+            },
+            "startAt": {
+              "type": "string",
+              "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+            },
+            "endAt": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "allDay": {
+              "type": "boolean"
+            },
+            "location": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "posterUrl": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 2048
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "posterAltText": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "isPinned": {
+              "type": "boolean"
+            },
+            "visibility": {
+              "type": "string",
+              "enum": [
+                "public",
+                "followers",
+                "members"
+              ]
+            },
+            "publicationVersion": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "publishedAt": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "isEvent": {
+              "type": "boolean"
+            },
+            "churchSlug": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "churchName": {
+              "type": "string"
+            },
+            "churchTimezone": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "id",
+            "title",
+            "body",
+            "startAt",
+            "endAt",
+            "allDay",
             "location",
             "posterUrl",
             "posterAltText",

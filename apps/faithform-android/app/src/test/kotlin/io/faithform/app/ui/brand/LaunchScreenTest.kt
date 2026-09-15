@@ -97,4 +97,14 @@ class LaunchScreenTest {
         assertTrue("installSplashScreen() must precede super.onCreate", install < onCreate.indexOf("super.onCreate"))
         assertFalse("the splash is held on screen", code.contains("setKeepOnScreenCondition"))
     }
+
+    @Test
+    fun `the loading view is the mark, with no spinner`() {
+        val view = File("src/main/kotlin/io/faithform/app/ui/brand/LaunchLoadingView.kt").readText()
+        assertFalse("launch still draws a spinner", view.contains("CircularProgressIndicator"))
+        assertFalse("launch still delays a spinner", view.contains("INDICATOR_DELAY"))
+        assertFalse("launch must not loop the mark", view.contains("infiniteRepeatable"))
+        assertTrue("the mark must still be drawn", view.contains("FaithFormMark"))
+        assertTrue("the wordmark must fade in after the splash", view.contains("app_name"))
+    }
 }

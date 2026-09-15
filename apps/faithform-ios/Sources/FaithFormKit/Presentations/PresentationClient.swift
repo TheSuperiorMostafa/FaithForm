@@ -47,6 +47,17 @@ public actor PresentationClient {
         return value
     }
 
+    public func cachedArchive(
+        churchSlug: String,
+        partition: CachePartition
+    ) async -> CacheEntry<PresentationPageResponse>? {
+        await cache.load(
+            PresentationPageResponse.self,
+            name: "presentations.archive.\(churchSlug)",
+            partition: partition
+        )
+    }
+
     public func detail(
         churchSlug: String,
         presentationId: String,
@@ -71,5 +82,17 @@ public actor PresentationClient {
             partition: partition
         )
         return value
+    }
+
+    public func cachedDetail(
+        churchSlug: String,
+        presentationId: String,
+        partition: CachePartition
+    ) async -> CacheEntry<PresentationDetail>? {
+        await cache.load(
+            PresentationDetail.self,
+            name: "presentations.detail.\(churchSlug).\(presentationId)",
+            partition: partition
+        )
     }
 }

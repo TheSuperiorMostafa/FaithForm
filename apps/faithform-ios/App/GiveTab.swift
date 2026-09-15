@@ -42,7 +42,7 @@ struct GiveTabView: View {
                         .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
                         .padding(.vertical, FaithFormTokens.Spacing.lg)
                 }
-                .refreshable { await model.load() }
+                .refreshable { await model.refresh() }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(theme.palette.background)

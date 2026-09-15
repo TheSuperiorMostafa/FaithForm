@@ -215,12 +215,7 @@ public struct DiscoveryView: View {
         case .idle:
             EmptyStateView(title: L.searchResultsTitle, explanation: L.searchPlaceholder, symbol: "magnifyingglass")
         case .searching:
-            // A skeleton that mirrors the real card shape, not a spinner: it
-            // tells the eye where the results will land.
-            VStack(spacing: FaithFormTokens.Spacing.md) {
-                ForEach(0..<3, id: \.self) { _ in SkeletonCard() }
-            }
-            .accessibilityLabel(Text(L.loadingAccount))
+            DiscoveryResultsSkeleton()
         case let .results(churches, _):
             ScrollView {
                 LazyVStack(spacing: FaithFormTokens.Spacing.md) {
@@ -238,119 +233,5 @@ public struct DiscoveryView: View {
             EmptyStateView(title: L.errorTitle, explanation: message, symbol: "exclamationmark.triangle")
         }
         Spacer(minLength: 0)
-    }
-}
-
-/// Mirrors the real card's shape so loading does not reflow into results.
-public struct SkeletonCard: View {
-    @Environment(\.faithformTheme) private var theme
-    @State private var shimmer = false
-
-    public init() {}
-
-    public var body: some View {
-        FaithFormCard {
-            VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.sm) {
-                RoundedRectangle(cornerRadius: FaithFormTokens.Radius.sm)
-                    .fill(theme.palette.skeletonBase)
-                    .frame(height: 18)
-                    .frame(maxWidth: 180)
-                RoundedRectangle(cornerRadius: FaithFormTokens.Radius.sm)
-                    .fill(theme.palette.skeletonBase)
-                    .frame(height: 14)
-            }
-        }
-        .opacity(shimmer ? 0.65 : 1)
-        .onAppear {
-            // Respects Reduce Motion: with it on, the skeleton simply sits
-            // there rather than pulsing.
-            guard !theme.reduceMotion else { return }
-            withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
-                shimmer = true
-            }
-        }
-        .accessibilityHidden(true)
-    }
-}
-
-/// A stack of cards for list screens, so loading occupies the same space results will.
-public struct ContentSkeleton: View {
-    private let count: Int
-
-    public init(count: Int = 3) {
-        self.count = count
-    }
-
-    public var body: some View {
-        VStack(spacing: FaithFormTokens.Spacing.md) {
-            ForEach(0..<count, id: \.self) { _ in SkeletonCard() }
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(L.mediaLoading)
-    }
-}
-
-/// Title and body bars for a detail screen (notes, a recording) rather than a list of cards.
-public struct DetailSkeleton: View {
-    @Environment(\.faithformTheme) private var theme
-    @State private var shimmer = false
-
-    public init() {}
-
-    public var body: some View {
-        VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.md) {
-            RoundedRectangle(cornerRadius: FaithFormTokens.Radius.sm)
-                .fill(theme.palette.skeletonBase)
-                .frame(height: 28)
-                .frame(maxWidth: 240)
-            RoundedRectangle(cornerRadius: FaithFormTokens.Radius.sm)
-                .fill(theme.palette.skeletonBase)
-                .frame(height: 14)
-                .frame(maxWidth: 160)
-            RoundedRectangle(cornerRadius: FaithFormTokens.Radius.sm)
-                .fill(theme.palette.skeletonBase)
-                .frame(height: 14)
-            RoundedRectangle(cornerRadius: FaithFormTokens.Radius.sm)
-                .fill(theme.palette.skeletonBase)
-                .frame(height: 14)
-            RoundedRectangle(cornerRadius: FaithFormTokens.Radius.sm)
-                .fill(theme.palette.skeletonBase)
-                .frame(height: 14)
-                .frame(maxWidth: .infinity)
-                .padding(.trailing, 48)
-        }
-        .opacity(shimmer ? 0.65 : 1)
-        .onAppear {
-            guard !theme.reduceMotion else { return }
-            withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
-                shimmer = true
-            }
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(L.mediaLoading)
-    }
-}
-
-/// A 16:9 panel for a slide deck opening, so the pager does not pop in from a spinner.
-public struct SlideSkeleton: View {
-    @Environment(\.faithformTheme) private var theme
-    @State private var shimmer = false
-
-    public init() {}
-
-    public var body: some View {
-        RoundedRectangle(cornerRadius: FaithFormTokens.Radius.lg)
-            .fill(theme.palette.skeletonBase)
-            .aspectRatio(16 / 9, contentMode: .fit)
-            .padding(FaithFormTokens.Spacing.lg)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .opacity(shimmer ? 0.65 : 1)
-            .onAppear {
-                guard !theme.reduceMotion else { return }
-                withAnimation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true)) {
-                    shimmer = true
-                }
-            }
-            .accessibilityLabel(L.mediaLoading)
     }
 }

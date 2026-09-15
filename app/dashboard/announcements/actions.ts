@@ -162,9 +162,11 @@ export async function publishAnnouncement(
 
   const socialFields = {
     facebook_caption: payload.pushToFacebook ? payload.facebookCaption || null : null,
-    social_graphic_path: payload.pushToFacebook ? payload.socialGraphicPath || null : null,
-    social_graphic_url: payload.pushToFacebook ? payload.socialGraphicUrl || null : null,
-    social_preview_generated_at: payload.pushToFacebook
+    // The flyer is the app poster. Persist it whenever we have one, not only
+    // when Facebook is on — otherwise a calendar publish never has a thumbnail.
+    social_graphic_path: payload.socialGraphicPath || null,
+    social_graphic_url: payload.socialGraphicUrl || null,
+    social_preview_generated_at: payload.socialGraphicPath
       ? new Date().toISOString()
       : null,
   };

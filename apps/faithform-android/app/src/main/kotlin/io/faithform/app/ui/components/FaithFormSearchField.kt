@@ -27,7 +27,7 @@ import androidx.compose.ui.text.input.ImeAction
 import io.faithform.app.design.FaithFormTokens
 import io.faithform.app.design.LocalFaithFormTheme
 
-/** Cream search field matching Discovery — Messages and past services. */
+/** Cream search field matching Discovery — sermons, slides, and past services. */
 @Composable
 fun FaithFormSearchField(
     value: String,

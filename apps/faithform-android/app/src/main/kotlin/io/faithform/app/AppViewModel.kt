@@ -27,6 +27,8 @@ import io.faithform.app.network.AuthException
 import io.faithform.app.network.MobileSuccess
 import io.faithform.app.network.SupabaseAuthClient
 import io.faithform.app.network.SupabaseSession
+import io.faithform.app.session.AccountSnapshot
+import io.faithform.app.session.AccountSnapshotStore
 import io.faithform.app.session.SessionGateway
 import io.faithform.app.session.StoredSession
 import io.faithform.app.storage.PartitionedCache
@@ -140,7 +142,8 @@ class AppViewModel(
      * any screen, or a refresh token the identity provider refused. Emitted by
      * `ApiClient` through the container, collected once here.
      */
-    sessionEnded: Flow<Unit>? = null
+    sessionEnded: Flow<Unit>? = null,
+    private val snapshots: AccountSnapshotStore = AccountSnapshotStore(),
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<LaunchPhase>(LaunchPhase.Loading)
@@ -216,8 +219,13 @@ class AppViewModel(
 
     private var onboardingState: OnboardingState? = null
     private var pendingDestination: Destination? = null
+    private var lastBootstrap: Bootstrap? = null
 
     init {
+        when (val session = sessions.current()) {
+            null -> _state.value = LaunchPhase.SignedOut
+            else -> snapshots.load(environmentKey, session.accountId)?.let { applyCached(it) }
+        }
         sessionEnded?.let { events ->
             viewModelScope.launch { events.collect { handleSessionEnded() } }
         }
@@ -257,12 +265,27 @@ class AppViewModel(
     }
 
     private suspend fun loadNow(quiet: Boolean) {
-        if (!quiet) _state.value = LaunchPhase.Loading
-
-        if (sessions.current() == null) {
+        val session = sessions.current()
+        if (session == null) {
             _state.value = LaunchPhase.SignedOut
             return
         }
+
+        if (!quiet) {
+            when (_state.value) {
+                is LaunchPhase.Ready, is LaunchPhase.Onboarding -> Unit
+                else -> {
+                    val cached = snapshots.load(environmentKey, session.accountId)
+                    // The brand dwell lives in `FaithFormApp`, not here: a
+                    // returning visit must still restore Home before the
+                    // network answers.
+                    if (cached != null) applyCached(cached) else _state.value = LaunchPhase.Loading
+                }
+            }
+        }
+
+        val previous = lastBootstrap
+            ?: snapshots.load(environmentKey, session.accountId)?.bootstrap
 
         try {
             val response = api.send(
@@ -270,9 +293,11 @@ class AppViewModel(
                 serializer = MobileSuccess.serializer(Bootstrap.serializer())
             )
             val bootstrap = response.value ?: run {
-                _state.value = LaunchPhase.OfflineNoCache
+                showOffline(previous)
                 return
             }
+
+            lastBootstrap = bootstrap
 
             // First authenticated use with no recorded policy versions: the
             // person accepted them a moment ago, on the account screen that
@@ -283,6 +308,16 @@ class AppViewModel(
             // failure falls back to home — a dead app over a routing hint
             // would be the worse failure.
             onboardingState = fetchOnboardingState()
+
+            snapshots.store(
+                AccountSnapshot(
+                    bootstrap = bootstrap,
+                    onboarding = onboardingState,
+                    storedAtMillis = System.currentTimeMillis(),
+                ),
+                environmentKey,
+                session.accountId,
+            )
 
             _selectedChurchSlug.value = HostNavigation.adoptSelection(
                 bootstrap = bootstrap,
@@ -304,13 +339,37 @@ class AppViewModel(
             _state.value = when {
                 error.code == MobileErrorCode.UNAUTHENTICATED ||
                     error.code == MobileErrorCode.SESSION_EXPIRED -> LaunchPhase.SignedOut
-                error.retryable -> LaunchPhase.OfflineNoCache
+                error.retryable -> showOfflinePhase(previous)
                 else -> LaunchPhase.Failed(error.displayMessage)
             }
         } catch (error: Exception) {
-            _state.value = LaunchPhase.OfflineNoCache
+            _state.value = showOfflinePhase(previous)
         }
     }
+
+    private fun applyCached(snapshot: AccountSnapshot) {
+        lastBootstrap = snapshot.bootstrap
+        onboardingState = snapshot.onboarding
+        _selectedChurchSlug.value = HostNavigation.adoptSelection(
+            bootstrap = snapshot.bootstrap,
+            serverPreference = snapshot.onboarding?.selectedChurchSlug
+                ?: snapshot.bootstrap.profile.selectedChurchSlug,
+            current = _selectedChurchSlug.value,
+        )?.churchSlug
+        _state.value = if (snapshot.onboarding?.needsOnboarding == true) {
+            LaunchPhase.Onboarding(snapshot.bootstrap)
+        } else {
+            LaunchPhase.Ready(snapshot.bootstrap, isStale = !snapshot.isFresh())
+        }
+    }
+
+    private fun showOffline(previous: Bootstrap?) {
+        _state.value = showOfflinePhase(previous)
+    }
+
+    private fun showOfflinePhase(previous: Bootstrap?): LaunchPhase =
+        if (previous != null) LaunchPhase.Ready(previous, isStale = true)
+        else LaunchPhase.OfflineNoCache
 
     private suspend fun fetchOnboardingState(): OnboardingState? = runCatching {
         api.send(
@@ -814,6 +873,8 @@ class AppViewModel(
     private suspend fun clearLocal() {
         sessions.purgeEverything()
         cache.purgeAllPrivate()
+        snapshots.purgeAll()
+        lastBootstrap = null
         onboardingState = null
         pendingDestination = null
         deletionKey = null

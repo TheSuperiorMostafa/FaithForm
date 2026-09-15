@@ -11,52 +11,97 @@ import FaithFormKit
 /// hands over to the app nothing moves. The large spinner it replaces arrived on
 /// a different colour, which made launch look like two loading screens in a row.
 ///
-/// ## Why no spinner at first
+/// ## After the hand-over
 ///
-/// Most loads finish in well under a second, and a spinner that flashes for a
-/// fraction of one reads as a glitch. The mark breathes instead; only a load that
-/// is genuinely slow earns a small indicator beneath it, so a person on poor
-/// signal can still tell the app has not frozen.
+/// The system splash is mark-only — Android cannot draw a wordmark there, so
+/// neither platform does. Once this view owns the frame the mark settles, the
+/// name fades in under it, and a working label appears only if the load is
+/// still going after a beat. Nothing loops: a pulse that never ends read as a
+/// second loading screen. Reduce Motion and Increase Contrast keep the lockup
+/// still and drop the decorative glow. Returning visits restore the last shell
+/// from disk and skip this view entirely.
 struct LaunchLoadingView: View {
     @Environment(\.faithformTheme) private var theme
-    @State private var breathing = false
-    @State private var showsIndicator = false
+    @State private var settled = false
+    @State private var showWordmark = false
+    @State private var showWorking = false
 
     /// Matches the launch image's point height exactly. Change one, change both.
     static let markHeight: CGFloat = 96
-    static let indicatorDelay: Duration = .milliseconds(1200)
+    static let settleScale: CGFloat = 0.94
+    /// Brand dwell for a cold signed-in load with no snapshot. Reduce Motion skips it.
+    static let dwellNanoseconds: UInt64 = 700_000_000
+    static let workingDelayNanoseconds: UInt64 = 900_000_000
 
     var body: some View {
         ZStack {
             theme.palette.background
 
-            FaithFormMark()
-                .frame(height: Self.markHeight)
-                // A slow, shallow pulse. Reduce Motion keeps the mark still; the
-                // indicator below still says the app is working.
-                .opacity(breathing && !theme.reduceMotion ? 0.72 : 1)
-                .animation(
-                    theme.reduceMotion
-                        ? nil
-                        : .easeInOut(duration: 1.1).repeatForever(autoreverses: true),
-                    value: breathing
-                )
+            VStack(spacing: FaithFormTokens.Spacing.lg) {
+                ZStack {
+                    if showsGlow {
+                        Circle()
+                            .fill(
+                                RadialGradient(
+                                    colors: [
+                                        theme.palette.brandAccent.opacity(0.18),
+                                        theme.palette.brandAccent.opacity(0)
+                                    ],
+                                    center: .center,
+                                    startRadius: 0,
+                                    endRadius: 90
+                                )
+                            )
+                            .frame(width: 180, height: 180)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
+                    }
 
-            if showsIndicator {
-                ProgressView()
-                    .tint(theme.mutedContent)
-                    .offset(y: Self.markHeight / 2 + FaithFormTokens.Spacing.xl)
-                    .transition(.opacity)
+                    FaithFormMark()
+                        .frame(height: Self.markHeight)
+                        .scaleEffect(settled || theme.reduceMotion ? 1 : Self.settleScale)
+                }
+
+                Text(L.appName)
+                    .font(theme.font(FaithFormTokens.Text.titleLarge))
+                    .foregroundStyle(theme.palette.contentPrimary)
+                    .opacity(showWordmark || theme.reduceMotion ? 1 : 0)
+
+                FaithFormWorkingLabel(L.loadingAccount, working: showWorking)
+                    .font(theme.font(FaithFormTokens.Text.bodySmall))
+                    .foregroundStyle(theme.mutedContent)
+                    .opacity(showWorking ? 1 : 0)
+                    .accessibilityHidden(!showWorking)
             }
         }
         .ignoresSafeArea()
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(Text(L.loadingAccount))
-        .onAppear { breathing = true }
-        .task {
-            try? await Task.sleep(for: Self.indicatorDelay)
-            guard !Task.isCancelled else { return }
-            withAnimation(theme.animation(FaithFormTokens.Motion.standard)) { showsIndicator = true }
+        .onAppear { playEntrance() }
+    }
+
+    private var showsGlow: Bool {
+        !theme.reduceMotion && !theme.increaseContrast
+    }
+
+    private func playEntrance() {
+        if theme.reduceMotion {
+            settled = true
+            showWordmark = true
+        } else {
+            withAnimation(.easeOut(duration: FaithFormTokens.Motion.deliberate)) {
+                settled = true
+            }
+            withAnimation(
+                .easeOut(duration: FaithFormTokens.Motion.slow)
+                    .delay(FaithFormTokens.Motion.fast)
+            ) {
+                showWordmark = true
+            }
+        }
+        Task {
+            try? await Task.sleep(nanoseconds: Self.workingDelayNanoseconds)
+            showWorking = true
         }
     }
 }

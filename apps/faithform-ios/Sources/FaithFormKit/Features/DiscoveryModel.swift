@@ -142,10 +142,12 @@ public final class DiscoveryModel {
             phase = items.isEmpty ? .empty : .results(items, usedLocation: false)
         } catch let error as APIError {
             guard mine == searchGeneration else { return }
+            if error.isCancellation { return }
             loadedQuery = nil
             phase = error.retryable ? .offline : .failed(error.displayMessage)
         } catch {
             guard mine == searchGeneration else { return }
+            if error.isCancellation { return }
             loadedQuery = nil
             phase = .offline
         }
@@ -196,9 +198,11 @@ public final class DiscoveryModel {
             phase = items.isEmpty ? .empty : .results(items, usedLocation: true)
         } catch let error as APIError {
             guard mine == searchGeneration else { return }
+            if error.isCancellation { return }
             phase = error.retryable ? .offline : .failed(error.displayMessage)
         } catch {
             guard mine == searchGeneration else { return }
+            if error.isCancellation { return }
             phase = .offline
         }
     }

@@ -34,7 +34,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -91,6 +90,7 @@ import io.faithform.app.ui.account.LegalLinks
 import io.faithform.app.ui.account.openWebLink
 import io.faithform.app.ui.brand.FaithFormMark
 import io.faithform.app.ui.brand.rememberReducedMotion
+import io.faithform.app.ui.components.FaithFormWorkingLabel
 
 /**
  * The signed-out journey: one landing screen, then the doors that get someone in.
@@ -268,21 +268,12 @@ private fun LandingScreen(
                     // ever scrolled out of view.
                     when (confirmationPhase) {
                         is ConfirmationPhase.Working -> LandingCard {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                CircularProgressIndicator(
-                                    strokeWidth = 2.dp,
-                                    color = theme.mutedContent,
-                                    modifier = Modifier.size(FaithFormTokens.IconSize.sizeMedium)
-                                )
-                                Text(
-                                    stringResource(R.string.auth_confirming_email),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = theme.palette.contentSecondary
-                                )
-                            }
+                            FaithFormWorkingLabel(
+                                text = stringResource(R.string.auth_confirming_email),
+                                working = true,
+                                color = theme.palette.contentSecondary,
+                                style = MaterialTheme.typography.bodyMedium,
+                            )
                         }
                         is ConfirmationPhase.Failed -> LandingCard {
                             AuthErrorText(confirmationPhase.error)
@@ -472,10 +463,9 @@ private fun HaveLinkEntryScreen(
                 .heightIn(min = FaithFormTokens.TouchTarget.recommended)
         ) {
             if (working) {
-                CircularProgressIndicator(
-                    strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(FaithFormTokens.IconSize.sizeMedium)
+                FaithFormWorkingLabel(
+                    text = stringResource(R.string.have_link_continue),
+                    working = true,
                 )
             } else {
                 Text(stringResource(R.string.have_link_continue))
@@ -692,15 +682,10 @@ private fun CreateAccountScreen(
                 .fillMaxWidth()
                 .heightIn(min = FaithFormTokens.TouchTarget.recommended)
         ) {
-            if (phase == AuthUiPhase.Working) {
-                CircularProgressIndicator(
-                    strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(FaithFormTokens.IconSize.sizeMedium)
-                )
-            } else {
-                Text(stringResource(R.string.create_account))
-            }
+            FaithFormWorkingLabel(
+                text = stringResource(R.string.create_account),
+                working = phase == AuthUiPhase.Working,
+            )
         }
 
         TextButton(onClick = onSwitchToSignIn, modifier = Modifier.fillMaxWidth()) {
@@ -742,15 +727,10 @@ private fun SignInScreen(viewModel: AuthViewModel, onForgotPassword: () -> Unit)
                 .fillMaxWidth()
                 .heightIn(min = FaithFormTokens.TouchTarget.recommended)
         ) {
-            if (phase == AuthUiPhase.Working) {
-                CircularProgressIndicator(
-                    strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(FaithFormTokens.IconSize.sizeMedium)
-                )
-            } else {
-                Text(stringResource(R.string.sign_in))
-            }
+            FaithFormWorkingLabel(
+                text = stringResource(R.string.sign_in),
+                working = phase == AuthUiPhase.Working,
+            )
         }
 
         TextButton(onClick = onForgotPassword, modifier = Modifier.fillMaxWidth()) {
@@ -805,15 +785,10 @@ private fun ResetPasswordScreen(viewModel: AuthViewModel) {
                 .fillMaxWidth()
                 .heightIn(min = FaithFormTokens.TouchTarget.recommended)
         ) {
-            if (phase == AuthUiPhase.Working) {
-                CircularProgressIndicator(
-                    strokeWidth = 2.dp,
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(FaithFormTokens.IconSize.sizeMedium)
-                )
-            } else {
-                Text(stringResource(R.string.auth_reset_send))
-            }
+            FaithFormWorkingLabel(
+                text = stringResource(R.string.auth_reset_send),
+                working = phase == AuthUiPhase.Working,
+            )
         }
     }
 }
@@ -1096,19 +1071,10 @@ private fun CheckEmailScreen(viewModel: AuthViewModel, onSignIn: () -> Unit) {
                 .fillMaxWidth()
                 .heightIn(min = FaithFormTokens.TouchTarget.recommended)
         ) {
-            if (resending) {
-                CircularProgressIndicator(
-                    modifier = Modifier.heightIn(max = FaithFormTokens.Spacing.lg)
-                )
-            } else {
-                Icon(
-                    Icons.Outlined.Refresh,
-                    contentDescription = null,
-                    modifier = Modifier.size(FaithFormTokens.IconSize.sizeMedium)
-                )
-                Spacer(Modifier.size(FaithFormTokens.Spacing.sm))
-                Text(stringResource(R.string.auth_check_email_resend))
-            }
+            FaithFormWorkingLabel(
+                text = stringResource(R.string.auth_check_email_resend),
+                working = resending,
+            )
         }
 
         TextButton(onClick = onSignIn, modifier = Modifier.fillMaxWidth()) {

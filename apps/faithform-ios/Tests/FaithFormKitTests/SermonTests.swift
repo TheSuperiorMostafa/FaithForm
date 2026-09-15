@@ -44,12 +44,33 @@ private actor GatedTransport: HTTPTransport {
     }
 }
 
+private actor CancelAfterFirstTransport: HTTPTransport {
+    private let first: Data
+    private var count = 0
+
+    init(first: Data) { self.first = first }
+
+    func perform(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+        count += 1
+        if count == 1 {
+            let response = HTTPURLResponse(
+                url: request.url!, statusCode: 200, httpVersion: "HTTP/1.1", headerFields: [:]
+            )!
+            return (first, response)
+        }
+        throw URLError(.cancelled)
+    }
+}
+
 private let sermonPartition = CachePartition(
     environment: "test", accountId: "account-a", churchSlug: "grace", authorizationVersion: 1
 )
 
 @MainActor
-private func sermonModel(_ transport: some HTTPTransport) -> SermonModel {
+private func sermonModel(
+    _ transport: some HTTPTransport,
+    now: @escaping () -> Date = Date.init
+) -> SermonModel {
     let api = APIClient(
         configuration: .init(
             environment: APIEnvironment(key: "test", baseURL: URL(string: "https://example.invalid")!),
@@ -61,7 +82,8 @@ private func sermonModel(_ transport: some HTTPTransport) -> SermonModel {
     return SermonModel(
         client: SermonClient(api: api, cache: PartitionedCache()),
         churchSlug: "grace",
-        partition: sermonPartition
+        partition: sermonPartition,
+        now: now
     )
 }
 
@@ -355,4 +377,97 @@ struct SermonListModelTests {
         #expect(model.nextCursor == nil, "the stale answer's cursor must not be adopted either")
         #expect(model.submittedQuery.isEmpty)
     }
+
+    @Test("coming back to a fresh list does not ask the server again")
+    func loadSkipsWhenFresh() async {
+        let transport = StubTransport([
+            .init(body: page(["s1"])),
+            .init(body: page(["s2"])),
+        ])
+        let model = sermonModel(transport)
+        await model.load()
+        await model.load()
+        #expect(model.phase.items.map(\.sermonId) == ["s1"])
+        #expect(await transport.requestCount() == 1)
+    }
+
+    @Test("a list older than five minutes is asked for again")
+    func loadRefetchesWhenStale() async {
+        var now = Date()
+        let transport = StubTransport([
+            .init(body: page(["s1"])),
+            .init(body: page(["s1", "s0"])),
+        ])
+        let model = sermonModel(transport, now: { now })
+        await model.load()
+
+        now = now.addingTimeInterval(SermonModel.staleAfter)
+        await model.load()
+        #expect(model.phase.items.map(\.sermonId) == ["s1", "s0"])
+        #expect(await transport.requestCount() == 2)
+    }
+
+    @Test("a refresh that cannot reach the server keeps the list, marked stale")
+    func refreshKeepsListWhenOffline() async {
+        let transport = StubTransport([.init(body: page(["s1"]))])
+        let model = sermonModel(transport)
+        await model.load()
+        await model.refresh()
+        #expect(model.phase.items.map(\.sermonId) == ["s1"])
+        #expect(model.phase.isStale)
+    }
+
+    @Test("leaving a screen does not replace a loaded list with offline")
+    func cancelledRefreshKeepsList() async {
+        let transport = CancelAfterFirstTransport(first: page(["s1"]))
+        let model = sermonModel(transport)
+        await model.load()
+        await model.refresh()
+        #expect(model.phase.items.map(\.sermonId) == ["s1"])
+        #expect(model.phase != .offline)
+        #expect(model.phase.isStale == false)
+    }
+}
+
+@Suite("Sermon hubs")
+struct SermonHubTests {
+    @Test("notes and slides for the same sermon become one row")
+    func joinsBySermonId() {
+        let notes = item("a", preachedOn: "2026-09-13")
+        let deck = deck("p1", sermonId: "a", publishedAt: "2026-09-13T15:00:00Z")
+        let hubs = SermonHub.merge(notes: [notes], slides: [deck])
+        #expect(hubs.count == 1)
+        #expect(hubs[0].hasNotes)
+        #expect(hubs[0].hasSlides)
+        #expect(hubs[0].slides?.presentationId == "p1")
+    }
+
+    @Test("a deck without notes still appears")
+    func slidesOnly() {
+        let deck = deck("p2", sermonId: "b", publishedAt: "2026-09-06T15:00:00Z")
+        let hubs = SermonHub.merge(notes: [], slides: [deck])
+        #expect(hubs.map(\.sermonId) == ["b"])
+        #expect(hubs[0].hasNotes == false)
+        #expect(hubs[0].hasSlides)
+    }
+}
+
+private func deck(
+    _ id: String,
+    sermonId: String,
+    publishedAt: String
+) -> PresentationListItem {
+    PresentationListItem(
+        presentationId: id,
+        sermonId: sermonId,
+        version: 1,
+        title: sermonId,
+        publishedAt: publishedAt,
+        pageCount: 8,
+        contentHash: "h",
+        scriptureRefs: [],
+        churchSlug: "grace",
+        churchName: "Grace",
+        churchTimezone: "America/New_York"
+    )
 }

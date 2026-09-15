@@ -3,7 +3,7 @@ import SwiftUI
 /// Published slide decks for a church.
 ///
 /// Mirrors `SermonListView`: the model owns load/search/paging; this view only
-/// draws. Under Messages' Notes | Slides control, pass `showTitle: false`.
+/// draws. Under Services' Sermons | Slides control, pass `showTitle: false`.
 public struct PresentationListView: View {
     @Environment(\.faithformTheme) private var theme
     private let model: PresentationModel
@@ -25,7 +25,7 @@ public struct PresentationListView: View {
             LazyVStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
                 switch model.phase {
                 case .idle, .loading:
-                    ContentSkeleton()
+                    PresentationListSkeleton()
 
                 case .blocked:
                     SermonMessage(
@@ -51,7 +51,7 @@ public struct PresentationListView: View {
                         Task { await model.refresh() }
                     }
 
-                case let .loaded(items, _):
+                case let .loaded(items, isStale):
                     if showTitle {
                         Text(L.presentationsTitle)
                             .font(theme.font(FaithFormTokens.Text.titleMedium))
@@ -65,14 +65,16 @@ public struct PresentationListView: View {
                         onClear: { Task { await model.searchTextChanged() } }
                     )
 
+                    if isStale {
+                        OfflineBanner(message: L.offlineCached)
+                    }
+
                     if items.isEmpty {
-                        Text(
-                            model.submittedQuery.isEmpty
-                                ? L.presentationsEmpty
-                                : L.presentationsEmptySearch
+                        EmptyStateView(
+                            title: model.submittedQuery.isEmpty ? L.presentationsEmpty : L.presentationsEmptySearch,
+                            explanation: "",
+                            symbol: model.submittedQuery.isEmpty ? "rectangle.on.rectangle" : "magnifyingglass"
                         )
-                        .font(theme.font(FaithFormTokens.Text.body))
-                        .foregroundStyle(theme.palette.contentSecondary)
                     } else {
                         ForEach(items, id: \.presentationId) { item in
                             Button { onOpen(item) } label: {
@@ -87,7 +89,8 @@ public struct PresentationListView: View {
                         }
 
                         if model.isLoadingMore {
-                            SkeletonCard()
+                            PresentationCardSkeleton()
+                                .skeletonShimmer()
                         } else if model.loadMoreFailed {
                             SermonLoadMoreRetry {
                                 Task { await model.retryLoadMore() }
@@ -144,8 +147,9 @@ struct PresentationCard: View {
 
 /// Full-screen horizontal slide pager over semantic pages.
 public struct PresentationViewer: View {
-    @Environment(\.faithformTheme) private var theme
     let model: PresentationDetailModel
+    @AppStorage("faithform.presentation.textScale") private var textScale = SlideTextScale.default
+    @State private var showTextSize = false
 
     public init(model: PresentationDetailModel) {
         self.model = model
@@ -194,27 +198,126 @@ public struct PresentationViewer: View {
                 } else {
                     TabView {
                         ForEach(Array(detail.pages.enumerated()), id: \.element.id) { index, page in
-                            SlidePageView(
-                                page: page,
-                                theme: detail.theme,
-                                index: index,
-                                total: detail.pages.count
-                            )
+                            Color.clear
+                                .overlay {
+                                    SlidePageView(
+                                        page: page,
+                                        theme: detail.theme,
+                                        index: index,
+                                        total: detail.pages.count,
+                                        textScale: textScale
+                                    )
+                                }
+                                .clipShape(Rectangle())
+                                .contentShape(Rectangle())
                         }
                     }
+                    #if os(iOS)
                     .tabViewStyle(.page(indexDisplayMode: .automatic))
-                    .background(slideBackground(detail.theme))
+                    #endif
+                    .clipShape(Rectangle())
                     .navigationTitle(detail.title)
+                    #if os(iOS)
                     .navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .topBarTrailing) {
+                            Button {
+                                showTextSize = true
+                            } label: {
+                                Image(systemName: "textformat.size")
+                            }
+                            .accessibilityLabel(L.presentationsTextSize)
+                        }
+                    }
+                    .sheet(isPresented: $showTextSize) {
+                        SlideTextSizeSheet(scale: $textScale)
+                            .presentationDetents([.height(200)])
+                            .presentationDragIndicator(.visible)
+                    }
+                    #endif
                 }
             }
         }
         .task { await model.load() }
     }
+}
 
-    private func slideBackground(_ snapshot: PresentationTheme?) -> Color {
-        if let hex = snapshot?.bg, let color = Color(hex: hex) { return color }
-        return theme.palette.brandPrimary
+/// Solid colour, or the theme photo already stored on the published deck.
+///
+/// Photo themes used to fall through to `bg` only, so a stained-glass or
+/// landscape deck opened as a flat navy panel on the phone.
+private struct SlideDeckBackground: View {
+    let snapshot: PresentationTheme?
+    let fallback: Color
+
+    var body: some View {
+        let fill = Color(hex: snapshot?.bg) ?? fallback
+        GeometryReader { geo in
+            ZStack {
+                fill
+                if snapshot?.backgroundType == "image",
+                   let raw = snapshot?.imageUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
+                   !raw.isEmpty,
+                   let url = URL(string: raw) {
+                    AsyncImage(url: url) { phase in
+                        switch phase {
+                        case let .success(image):
+                            ZStack {
+                                image
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: geo.size.width, height: geo.size.height)
+                                    .clipped()
+                                if snapshot?.textShadow == true {
+                                    Color.black.opacity(0.25)
+                                }
+                            }
+                        default:
+                            Color.clear
+                        }
+                    }
+                    .frame(width: geo.size.width, height: geo.size.height)
+                    .clipped()
+                    .accessibilityHidden(true)
+                }
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+            .clipped()
+        }
+    }
+}
+
+private enum SlideTextScale {
+    static let `default`: Double = 1
+    static let range: ClosedRange<Double> = 0.7...1.8
+}
+
+/// Text size lives in a sheet so a horizontal slider never fights paging.
+private struct SlideTextSizeSheet: View {
+    @Environment(\.faithformTheme) private var theme
+    @Binding var scale: Double
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.md) {
+            Text(L.presentationsTextSize)
+                .font(theme.font(FaithFormTokens.Text.titleMedium))
+                .foregroundStyle(theme.palette.contentPrimary)
+            HStack(spacing: FaithFormTokens.Spacing.sm) {
+                Text(L.presentationsTextSizeSample)
+                    .font(.system(size: 12, weight: .semibold))
+                    .accessibilityHidden(true)
+                Slider(value: $scale, in: SlideTextScale.range)
+                    .tint(theme.palette.brandAccent)
+                    .accessibilityLabel(L.presentationsTextSize)
+                Text(L.presentationsTextSizeSample)
+                    .font(.system(size: 20, weight: .semibold))
+                    .accessibilityHidden(true)
+            }
+            .foregroundStyle(theme.palette.contentPrimary)
+        }
+        .padding(FaithFormTokens.Spacing.xl)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(theme.palette.background)
     }
 }
 
@@ -223,53 +326,82 @@ private struct SlidePageView: View {
     let theme: PresentationTheme?
     let index: Int
     let total: Int
+    let textScale: Double
 
     var body: some View {
         let textColor = Color(hex: theme?.text) ?? .white
         let accent = Color(hex: theme?.accent) ?? Color(red: 0.77, green: 0.63, blue: 0.35)
         let italicScripture = theme?.italicRef ?? true
+        let textShadow = theme?.textShadow == true ? Color.black.opacity(0.35) : Color.clear
 
-        VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
-            Spacer(minLength: FaithFormTokens.Spacing.xl)
+        ZStack {
+            SlideDeckBackground(
+                snapshot: theme,
+                fallback: Color(hex: theme?.bg) ?? .black
+            )
+            VStack(spacing: 0) {
+                Spacer(minLength: FaithFormTokens.Spacing.xxl)
 
-            if let title = page.title, !title.isEmpty {
-                Text(title)
-                    .font(.system(size: 28, weight: .semibold))
-                    .foregroundStyle(textColor)
-                    .shadow(color: theme?.textShadow == true ? .black.opacity(0.35) : .clear, radius: 2, y: 1)
-                    .fixedSize(horizontal: false, vertical: true)
+                VStack(spacing: FaithFormTokens.Spacing.lg) {
+                    if let title = page.title, !title.isEmpty {
+                        Text(title)
+                            .font(.system(size: titleSize, weight: .semibold))
+                            .foregroundStyle(textColor)
+                            .shadow(color: textShadow, radius: 3, y: 1)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    if let scripture = page.scripture, !scripture.isEmpty {
+                        Text(scripture)
+                            .font(
+                                italicScripture
+                                    ? .system(size: scriptureSize, weight: .medium).italic()
+                                    : .system(size: scriptureSize, weight: .medium)
+                            )
+                            .foregroundStyle(accent)
+                            .shadow(color: textShadow, radius: 3, y: 1)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    if let body = page.body, !body.isEmpty {
+                        Text(body)
+                            .font(.system(size: bodySize, weight: .regular))
+                            .foregroundStyle(textColor.opacity(0.94))
+                            .lineSpacing(6)
+                            .shadow(color: textShadow, radius: 3, y: 1)
+                            .multilineTextAlignment(.center)
+                            .minimumScaleFactor(0.75)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+
+                Spacer(minLength: FaithFormTokens.Spacing.xl)
+
+                Text("\(index + 1) / \(total)")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(textColor.opacity(0.55))
+                    .frame(maxWidth: .infinity)
+                    .accessibilityHidden(true)
             }
-
-            if let scripture = page.scripture, !scripture.isEmpty {
-                Text(scripture)
-                    .font(
-                        italicScripture
-                            ? .system(size: 18, weight: .medium).italic()
-                            : .system(size: 18, weight: .medium)
-                    )
-                    .foregroundStyle(accent)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            if let body = page.body, !body.isEmpty {
-                Text(body)
-                    .font(.system(size: 20, weight: .regular))
-                    .foregroundStyle(textColor.opacity(0.92))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Spacer()
-
-            Text("\(index + 1) / \(total)")
-                .font(.caption)
-                .foregroundStyle(textColor.opacity(0.6))
-                .accessibilityHidden(true)
+            .padding(.horizontal, FaithFormTokens.Spacing.xxl)
+            .padding(.vertical, FaithFormTokens.Spacing.xl)
         }
-        .padding(FaithFormTokens.Spacing.xl)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .compositingGroup()
+        .clipped()
+        .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilityReading)
     }
+
+    private var userScale: CGFloat {
+        CGFloat(min(max(textScale, SlideTextScale.range.lowerBound), SlideTextScale.range.upperBound))
+    }
+    private var titleSize: CGFloat { 36 * userScale }
+    private var scriptureSize: CGFloat { 24 * userScale }
+    private var bodySize: CGFloat { 22 * userScale }
 
     private var accessibilityReading: String {
         let ordered = page.readingOrder.compactMap { key -> String? in

@@ -10,7 +10,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -26,9 +25,16 @@ import androidx.compose.ui.unit.dp
 import io.faithform.app.R
 import io.faithform.app.design.FaithFormTokens
 import io.faithform.app.ui.components.FaithFormSearchField
-import io.faithform.app.ui.discovery.ContentSkeleton
-import io.faithform.app.ui.discovery.DetailSkeleton
-import io.faithform.app.ui.discovery.SkeletonCard
+import io.faithform.app.ui.components.FaithFormWorkingLabel
+import io.faithform.app.ui.components.DetailSkeleton
+import io.faithform.app.ui.components.MediaCardSkeleton
+import io.faithform.app.ui.components.MediaListSkeleton
+import io.faithform.app.ui.components.skeletonShimmer
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Movie
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.VideocamOff
+import io.faithform.app.ui.discovery.EmptyState
 import io.faithform.app.media.MediaArchiveCard
 import io.faithform.app.media.MediaDetailState
 import io.faithform.app.media.MediaLiveCard
@@ -61,7 +67,7 @@ fun MediaScreen(
     ) {
         when (state.phase) {
             is MediaListPhase.Idle, is MediaListPhase.Loading -> item {
-                ContentSkeleton()
+                MediaListSkeleton()
             }
 
             is MediaListPhase.Blocked -> item {
@@ -90,57 +96,78 @@ fun MediaScreen(
             }
 
             is MediaListPhase.Loaded -> {
-                // **Only when there is something live.** No placeholder, no
-                // grey box, no "not live right now" strip on a Tuesday.
                 state.liveCard?.let { live ->
                     item { LiveNowHero(live = live, onWatch = { onWatchLive(live) }) }
                 }
 
-                item {
-                    Text(
-                        text = stringResource(R.string.media_archive_title),
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                }
+                val searching = state.searchTerm.isNotBlank()
+                val nothingPublished = state.emptyReason == MediaScreenState.EmptyReason.NOTHING_PUBLISHED
+                val noLive = state.liveCard == null
 
-                item {
-                    FaithFormSearchField(
-                        value = state.searchTerm,
-                        onValueChange = onSearchChange,
-                        placeholder = stringResource(R.string.media_search_label),
-                        onSearch = { onSearchChange(state.searchTerm) },
-                    )
-                }
-
-                state.emptyReason?.let { reason ->
+                if (noLive && nothingPublished && !searching) {
                     item {
-                        Text(
-                            text = stringResource(
-                                when (reason) {
-                                    MediaScreenState.EmptyReason.NO_MATCHES ->
-                                        R.string.media_archive_empty_search
-                                    MediaScreenState.EmptyReason.NOTHING_PUBLISHED ->
-                                        R.string.media_archive_empty
-                                },
-                            ),
-                            style = MaterialTheme.typography.bodyMedium,
+                        EmptyState(
+                            title = stringResource(R.string.media_services_empty_title),
+                            body = stringResource(R.string.media_services_empty_body),
+                            icon = Icons.Outlined.VideocamOff,
                         )
                     }
-                }
-
-                items(state.items, key = { it.mediaId }) { item ->
-                    ArchiveCard(item = item, onOpen = { onOpen(item) })
-                }
-
-                if (state.hasMore) {
+                } else {
                     item {
-                        OutlinedButton(onClick = onLoadMore, modifier = Modifier.fillMaxWidth()) {
-                            Text(stringResource(R.string.media_archive_title))
+                        Text(
+                            text = stringResource(R.string.media_archive_title),
+                            style = MaterialTheme.typography.titleMedium,
+                        )
+                    }
+
+                    item {
+                        FaithFormSearchField(
+                            value = state.searchTerm,
+                            onValueChange = onSearchChange,
+                            placeholder = stringResource(R.string.media_search_label),
+                            onSearch = { onSearchChange(state.searchTerm) },
+                        )
+                    }
+
+                    state.emptyReason?.let { reason ->
+                        item {
+                            EmptyState(
+                                title = stringResource(
+                                    when (reason) {
+                                        MediaScreenState.EmptyReason.NO_MATCHES ->
+                                            R.string.media_archive_empty_search
+                                        MediaScreenState.EmptyReason.NOTHING_PUBLISHED ->
+                                            R.string.media_archive_empty
+                                    },
+                                ),
+                                body = if (reason == MediaScreenState.EmptyReason.NOTHING_PUBLISHED) {
+                                    stringResource(R.string.media_archive_empty_body)
+                                } else {
+                                    ""
+                                },
+                                icon = if (reason == MediaScreenState.EmptyReason.NO_MATCHES) {
+                                    Icons.Outlined.Search
+                                } else {
+                                    Icons.Outlined.Movie
+                                },
+                            )
                         }
                     }
-                }
 
-                if (state.isLoadingMore) item { SkeletonCard() }
+                    items(state.items, key = { it.mediaId }) { item ->
+                        ArchiveCard(item = item, onOpen = { onOpen(item) })
+                    }
+
+                    if (state.hasMore) {
+                        item {
+                            OutlinedButton(onClick = onLoadMore, modifier = Modifier.fillMaxWidth()) {
+                                Text(stringResource(R.string.media_archive_title))
+                            }
+                        }
+                    }
+
+                    if (state.isLoadingMore) item { MediaCardSkeleton(Modifier.skeletonShimmer()) }
+                }
             }
         }
     }
@@ -256,13 +283,10 @@ fun MediaDetailScreen(
                 }
 
                 if (state.isBuffering) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        CircularProgressIndicator(modifier = Modifier.size(20.dp))
-                        Text(stringResource(R.string.media_buffering))
-                    }
+                    FaithFormWorkingLabel(
+                        text = stringResource(R.string.media_buffering),
+                        working = true,
+                    )
                 }
 
                 if (state.offersPlay) {

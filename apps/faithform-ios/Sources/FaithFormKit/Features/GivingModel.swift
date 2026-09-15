@@ -55,6 +55,10 @@ public final class GivingModel {
     private let partition: CachePartition
     private let applePayMerchantID: String?
     private let deviceCanUseApplePay: () -> Bool
+    private let now: () -> Date
+    private var lastLoadedAt: Date?
+
+    public static let staleAfter: TimeInterval = 5 * 60
 
     public init(
         client: GivingClient,
@@ -63,7 +67,8 @@ public final class GivingModel {
         churchSlug: String,
         partition: CachePartition,
         applePayMerchantID: String? = nil,
-        deviceCanUseApplePay: @escaping () -> Bool = { false }
+        deviceCanUseApplePay: @escaping () -> Bool = { false },
+        now: @escaping () -> Date = Date.init
     ) {
         self.client = client
         self.sheet = sheet
@@ -72,21 +77,50 @@ public final class GivingModel {
         self.partition = partition
         self.applePayMerchantID = applePayMerchantID
         self.deviceCanUseApplePay = deviceCanUseApplePay
+        self.now = now
     }
 
     // MARK: - The list
 
     public func load() async {
-        if case .idle = listPhase { listPhase = .loading }
+        if shouldSkipReload { return }
+        await reloadHome()
+    }
+
+    public func refresh() async {
+        await reloadHome()
+    }
+
+    private func reloadHome() async {
+        if case .idle = listPhase {
+            if let cached = await client.cachedHome(churchSlug: churchSlug, partition: partition),
+               cached.isDisplayable(now: now()) {
+                listPhase = .loaded(cached.value)
+                if selectedFund == nil { selectedFund = cached.value.funds.first }
+            } else {
+                listPhase = .loading
+            }
+        }
         do {
             let home = try await client.home(churchSlug: churchSlug, partition: partition)
+            lastLoadedAt = now()
             listPhase = .loaded(home)
             if selectedFund == nil { selectedFund = home.funds.first }
-        } catch let error as APIError {
-            listPhase = mapped(error)
         } catch {
-            listPhase = .offline
+            if error.isCancellation { return }
+            if let api = error as? APIError {
+                listPhase = mapped(api)
+            } else if case .loaded = listPhase {
+                return
+            } else {
+                listPhase = .offline
+            }
         }
+    }
+
+    private var shouldSkipReload: Bool {
+        guard case .loaded = listPhase, let lastLoadedAt else { return false }
+        return now().timeIntervalSince(lastLoadedAt) < Self.staleAfter
     }
 
     private func mapped(_ error: APIError) -> GivingListPhase {
@@ -95,7 +129,9 @@ public final class GivingModel {
         // There is no distinct transport code: a request that never completed
         // surfaces as `unavailable`, which reads to a person as "offline" and is
         // the state that offers a retry.
-        case .unavailable, .internalError: return .offline
+        case .unavailable, .internalError:
+            if case .loaded = listPhase { return listPhase }
+            return .offline
         default: return .failed(error.message)
         }
     }

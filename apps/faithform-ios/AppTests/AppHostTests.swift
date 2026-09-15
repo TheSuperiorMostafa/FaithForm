@@ -173,10 +173,13 @@ struct AppCompositionTests {
         // Both on: whatever was asked for.
         #expect(WatchTabView.effectiveSection(requested: .sermons, showsMedia: true, showsSermons: true) == .sermons)
         #expect(WatchTabView.effectiveSection(requested: .media, showsMedia: true, showsSermons: true) == .media)
+        #expect(WatchTabView.effectiveSection(requested: .slides, showsMedia: true, showsSermons: true) == .sermons)
         // A sermons link to a church with notes off shows the recordings…
         #expect(WatchTabView.effectiveSection(requested: .sermons, showsMedia: true, showsSermons: false) == .media)
-        // …and a server with only notes on shows the notes.
+        #expect(WatchTabView.effectiveSection(requested: .slides, showsMedia: true, showsSermons: false) == .media)
+        // …and a church with only notes on shows sermons, including slides.
         #expect(WatchTabView.effectiveSection(requested: .media, showsMedia: false, showsSermons: true) == .sermons)
+        #expect(WatchTabView.effectiveSection(requested: .slides, showsMedia: false, showsSermons: true) == .sermons)
     }
 
     @Test("the check-in tab polls only for a scan the person started")
@@ -274,6 +277,22 @@ struct AppCompositionTests {
         )
         #expect(RootModel.scoped(.home, to: "grace") == .home)
         #expect(RootModel.scoped(.watch(churchSlug: "a"), to: nil) == .watch(churchSlug: "a"))
+    }
+}
+
+@Suite("Launch")
+struct LaunchViewTests {
+    @Test("the loading view is the mark, with no spinner")
+    func logoOnly() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("App/LaunchLoadingView.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        #expect(!source.contains("ProgressView"), "launch still draws a spinner")
+        #expect(!source.contains("repeatForever"), "launch must not loop the mark")
+        #expect(source.contains("FaithFormMark"), "the mark must still be drawn")
+        #expect(source.contains("L.appName"), "the wordmark must fade in after the splash")
     }
 }
 

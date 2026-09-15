@@ -15,6 +15,11 @@ public enum SermonListPhase: Equatable, Sendable {
         if case let .loaded(items, _) = self { return items }
         return []
     }
+
+    public var isStale: Bool {
+        if case let .loaded(_, stale) = self { return stale }
+        return false
+    }
 }
 
 /// A church's published sermon notes.
@@ -45,20 +50,33 @@ public final class SermonModel {
     private let client: SermonClient
     private let churchSlug: String
     private let partition: CachePartition
+    private let now: () -> Date
+    private var lastLoadedAt: Date?
 
     /// Bumped by every request that replaces the list, so an older answer
     /// arriving late — a slow search overtaken by clearing it — is dropped
     /// rather than drawn over the newer one.
     private var generation = 0
 
-    public init(client: SermonClient, churchSlug: String, partition: CachePartition) {
+    /// Coming back to a list that just loaded must not ask the server again.
+    /// Five minutes matches Android; pull-to-refresh and search still fetch.
+    public static let staleAfter: TimeInterval = 5 * 60
+
+    public init(
+        client: SermonClient,
+        churchSlug: String,
+        partition: CachePartition,
+        now: @escaping () -> Date = Date.init
+    ) {
         self.client = client
         self.churchSlug = churchSlug
         self.partition = partition
+        self.now = now
     }
 
     public func load() async {
-        if case .idle = phase { phase = .loading }
+        if shouldSkipReload { return }
+        await paintCachedIfIdle()
         await reload()
     }
 
@@ -82,6 +100,22 @@ public final class SermonModel {
         await reload()
     }
 
+    private func paintCachedIfIdle() async {
+        guard case .idle = phase else { return }
+        guard submittedQuery.isEmpty,
+              let cached = await client.cachedArchive(churchSlug: churchSlug, partition: partition),
+              cached.isDisplayable(now: now())
+        else {
+            phase = .loading
+            return
+        }
+        nextCursor = cached.value.nextCursor
+        phase = .loaded(
+            items: cached.value.items,
+            isStale: cached.freshness(now: now(), ttl: 300) != .fresh
+        )
+    }
+
     private func reload() async {
         generation += 1
         let current = generation
@@ -101,13 +135,12 @@ public final class SermonModel {
             )
             guard current == generation else { return }
             nextCursor = page.nextCursor
+            lastLoadedAt = now()
             phase = .loaded(items: page.items, isStale: false)
-        } catch let error as APIError {
-            guard current == generation else { return }
-            phase = mapped(error)
         } catch {
             guard current == generation else { return }
-            phase = .offline
+            if error.isCancellation { return }
+            phase = mapped(error)
         }
     }
 
@@ -139,6 +172,7 @@ public final class SermonModel {
             }
         } catch {
             guard current == generation else { return }
+            if error.isCancellation { return }
             // A failed next page keeps what is already on screen, and keeps
             // its cursor: the rest of the list still exists.
             loadMoreFailed = true
@@ -155,22 +189,41 @@ public final class SermonModel {
         nextCursor = nil
         isLoadingMore = false
         loadMoreFailed = false
+        lastLoadedAt = nil
         phase = .idle
     }
 
-    private func mapped(_ error: APIError) -> SermonListPhase {
-        switch error.code {
-        case .blocked, .forbidden:
-            return .blocked
-        case .unavailable, .internalError:
-            return .offline
-        case .notFound:
-            // A hidden church, an unknown slug and a blocked visitor are one
-            // answer server-side, so the client cannot and must not guess.
-            return .blocked
-        default:
-            return .failed(error.message)
+    /// A list older than `staleAfter`, one already marked stale, or anything
+    /// that is not a successful list, is asked for again. A fresh list is left
+    /// alone so leaving the tab and coming back cannot cancel a refetch and
+    /// paint an offline screen over rows that just loaded.
+    private var shouldSkipReload: Bool {
+        guard case let .loaded(_, stale) = phase, !stale, let lastLoadedAt else { return false }
+        return now().timeIntervalSince(lastLoadedAt) < Self.staleAfter
+    }
+
+    private func mapped(_ error: Error) -> SermonListPhase {
+        if let api = error as? APIError {
+            switch api.code {
+            case .blocked, .forbidden, .notFound:
+                // A hidden church, an unknown slug and a blocked visitor are one
+                // answer server-side, so the client cannot and must not guess.
+                return .blocked
+            case .unavailable, .internalError:
+                return keepLoadedOrOffline()
+            default:
+                return .failed(api.message)
+            }
         }
+        return keepLoadedOrOffline()
+    }
+
+    /// Losing the connection is not a reason to take away what was already read.
+    private func keepLoadedOrOffline() -> SermonListPhase {
+        if case let .loaded(items, _) = phase {
+            return .loaded(items: items, isStale: true)
+        }
+        return .offline
     }
 }
 
@@ -208,26 +261,41 @@ public final class SermonDetailModel {
 
     public func load() async {
         do {
+            if let cached = await client.cachedDetail(
+                churchSlug: churchSlug,
+                sermonId: sermonId,
+                partition: partition
+            ), cached.isDisplayable() {
+                phase = .loaded(cached.value)
+            }
             let detail = try await client.detail(
                 churchSlug: churchSlug,
                 sermonId: sermonId,
                 partition: partition
             )
             phase = .loaded(detail)
-        } catch let error as APIError {
-            switch error.code {
+        } catch {
+            if error.isCancellation { return }
+            guard let api = error as? APIError else {
+                phase = keepDetail(or: .offline)
+                return
+            }
+            switch api.code {
             // The server answers `not_found` for unpublished, revoked and
             // never-published alike, so a stale list opening a sermon that has
             // since been taken down lands here rather than showing anything.
             case .notFound, .blocked, .forbidden:
                 phase = .unavailable
             case .unavailable, .internalError:
-                phase = .offline
+                phase = keepDetail(or: .offline)
             default:
-                phase = .failed(error.message)
+                phase = .failed(api.message)
             }
-        } catch {
-            phase = .offline
         }
+    }
+
+    private func keepDetail(or fallback: SermonDetailPhase) -> SermonDetailPhase {
+        if case .loaded = phase { return phase }
+        return fallback
     }
 }

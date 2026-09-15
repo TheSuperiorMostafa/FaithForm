@@ -822,6 +822,7 @@ data class FeedItem(
     val body: String,
     val startAt: String,
     val endAt: String? = null,
+    val allDay: Boolean,
     val location: String? = null,
     val posterUrl: String? = null,
     val posterAltText: String? = null,
@@ -844,6 +845,16 @@ data class FeedPage(
     val items: List<FeedItem>,
     val nextCursor: String? = null,
     val feedVersion: Int
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class SchedulePage(
+    val items: List<FeedItem>,
+    val scheduleVersion: Int
 )
 
 /**

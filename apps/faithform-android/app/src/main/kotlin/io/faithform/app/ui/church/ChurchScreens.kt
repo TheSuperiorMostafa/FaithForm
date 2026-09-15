@@ -34,8 +34,9 @@ import io.faithform.app.contract.ChurchProfile
 import io.faithform.app.contract.RelationshipState
 import io.faithform.app.design.FaithFormTokens
 import io.faithform.app.design.LocalFaithFormTheme
+import io.faithform.app.ui.components.ChurchChooserSkeleton
+import io.faithform.app.ui.components.ChurchProfileSkeleton
 import io.faithform.app.ui.discovery.EmptyState
-import io.faithform.app.ui.discovery.SkeletonCard
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Church
@@ -71,7 +72,7 @@ fun ChurchProfileScreen(
         verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.lg)
     ) {
         when (phase) {
-            is ChurchProfilePhase.Loading -> repeat(3) { SkeletonCard() }
+            is ChurchProfilePhase.Loading -> ChurchProfileSkeleton()
 
             is ChurchProfilePhase.Loaded -> {
                 Identity(phase.profile)
@@ -358,7 +359,7 @@ fun ChurchChooserScreen(
         }
 
         when (phase) {
-            is ChooserPhase.Loading -> repeat(2) { SkeletonCard() }
+            is ChooserPhase.Loading -> ChurchChooserSkeleton()
 
             is ChooserPhase.Loaded -> LazyColumn(
                 modifier = Modifier.weight(1f),

@@ -16,7 +16,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -33,6 +32,7 @@ import io.faithform.app.R
 import io.faithform.app.design.FaithFormTokens
 import io.faithform.app.attendance.AutomaticAttendanceUiState
 import io.faithform.app.design.LocalFaithFormTheme
+import io.faithform.app.ui.components.FaithFormWorkingLabel
 
 /**
  * The automatic-attendance experience.
@@ -178,17 +178,7 @@ fun LocationPermissionEducationScreen(
         Spacer(Modifier.weight(1f))
 
         Button(onClick = onContinue, enabled = !isWorking, modifier = fill) {
-            if (isWorking) {
-                CircularProgressIndicator(
-                    modifier = Modifier
-                        .size(20.dp)
-                        .semantics {
-                            contentDescription = actionLabel
-                        },
-                )
-            } else {
-                Text(actionLabel)
-            }
+            FaithFormWorkingLabel(text = actionLabel, working = isWorking)
         }
         TextButton(onClick = onNotNow, enabled = !isWorking, modifier = fill) {
             Text(stringResource(R.string.auto_attendance_not_now))
@@ -292,10 +282,9 @@ fun AutomaticAttendanceStatusScreen(
         }
 
         when {
-            state.isWorking -> CircularProgressIndicator(
-                modifier = Modifier.semantics {
-                    contentDescription = state.title
-                },
+            state.isWorking -> FaithFormWorkingLabel(
+                text = state.title,
+                working = true,
             )
 
             state.isReady -> OutlinedButton(onClick = onDisable, modifier = fill) {

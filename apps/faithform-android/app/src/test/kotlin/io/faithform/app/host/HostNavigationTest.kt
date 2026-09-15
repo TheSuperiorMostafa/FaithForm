@@ -232,6 +232,38 @@ class DeepLinkTargetTest {
     }
 
     @Test
+    fun `Watch never opens on a half that is switched off`() {
+        assertEquals(
+            HostNavigation.WatchPane.SERMONS,
+            HostNavigation.effectiveWatchPane(HostNavigation.WatchPane.SERMONS, true, true),
+        )
+        assertEquals(
+            HostNavigation.WatchPane.MEDIA,
+            HostNavigation.effectiveWatchPane(HostNavigation.WatchPane.MEDIA, true, true),
+        )
+        assertEquals(
+            HostNavigation.WatchPane.SERMONS,
+            HostNavigation.effectiveWatchPane(HostNavigation.WatchPane.SLIDES, true, true),
+        )
+        assertEquals(
+            HostNavigation.WatchPane.MEDIA,
+            HostNavigation.effectiveWatchPane(HostNavigation.WatchPane.SERMONS, true, false),
+        )
+        assertEquals(
+            HostNavigation.WatchPane.MEDIA,
+            HostNavigation.effectiveWatchPane(HostNavigation.WatchPane.SLIDES, true, false),
+        )
+        assertEquals(
+            HostNavigation.WatchPane.SERMONS,
+            HostNavigation.effectiveWatchPane(HostNavigation.WatchPane.MEDIA, false, true),
+        )
+        assertEquals(
+            HostNavigation.WatchPane.SERMONS,
+            HostNavigation.effectiveWatchPane(HostNavigation.WatchPane.SLIDES, false, true),
+        )
+    }
+
+    @Test
     fun `announcements have a destination and no tab, so the link does nothing`() {
         assertNull(target("faithform://church/grace/announcements"))
     }
