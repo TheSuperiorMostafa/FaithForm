@@ -4,18 +4,11 @@ import {
   SectionLinkTabs,
   type SectionLinkTab,
 } from "@/components/dashboard/section-link-tabs";
-import { canAccessFeature, getFeatureAccess } from "@/lib/features/access";
 
 export default async function PeopleLayout({ children }: { children: ReactNode }) {
-  const access = await getFeatureAccess();
-
-  // Households ship with Check-In. A church without it gets the roster alone
-  // rather than a tab that opens onto a locked card.
   const tabs: SectionLinkTab[] = [
     { label: "People", href: "/dashboard/people", match: "exact" },
-    ...(canAccessFeature(access, "checkin")
-      ? [{ label: "Households", href: "/dashboard/people/households" }]
-      : []),
+    { label: "Households", href: "/dashboard/people/households" },
   ];
 
   return (
@@ -30,7 +23,7 @@ export default async function PeopleLayout({ children }: { children: ReactNode }
           </p>
         </header>
 
-        {tabs.length > 1 && <SectionLinkTabs tabs={tabs} />}
+        <SectionLinkTabs tabs={tabs} />
 
         {children}
       </div>

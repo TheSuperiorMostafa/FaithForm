@@ -17,11 +17,11 @@ import {
 } from "@/lib/stream/events";
 import { assertRateLimit } from "@/lib/security/rate-limit";
 import {
-  buildCapabilityStreamName,
-  MAX_INGEST_TTL_SEC,
-  signIngestToken,
-} from "@/lib/stream/ingest-token";
-import { saveStreamRelaySettings } from "@/lib/stream/relay";
+  buildStaticStreamName,
+  ensureStreamRelayCredentials,
+  getIntegrationPublishSecret,
+  saveStreamRelaySettings,
+} from "@/lib/stream/relay";
 import { STREAM_RECORDINGS_BUCKET } from "@/lib/stream/recording-storage";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -177,20 +177,15 @@ export async function createStreamingPcPairingCode(): Promise<
 export type RevealIngestKeyState = StreamRelayActionState & {
   /** The full string OBS wants in its Stream Key field. */
   ingestKey?: string;
-  expiresAt?: string;
 };
 
 /**
- * A stream key for a church running OBS by hand.
+ * The church's permanent stream key for a hand-run encoder (OBS, vMix, ATEM).
  *
- * Not the persistent publish key: that was retired because it sat in public
- * playback URLs, and nothing here brings it back. This is the same expiring,
- * tenant-bound capability the paired encoder agent is handed when it starts a
- * broadcast, minted for a person instead of a machine. It lives four hours,
- * the most the relay will honour, so it has to be made on the day. It is
- * returned only in this action's reply, never in the page's props, so it is
- * never in the HTML or the RSC payload; it is audited, and it is rate limited
- * so a stolen admin session cannot mint keys by the thousand.
+ * Same value every time: churches paste it once and leave it in the encoder.
+ * It is never rotated by this action. Returned only in the reply (never in
+ * page props), audited, and rate limited so a stolen admin session cannot
+ * scrape it by the thousand.
  */
 export async function revealIngestKey(): Promise<RevealIngestKeyState> {
   const gate = await requireStreamAccess();
@@ -209,31 +204,33 @@ export async function revealIngestKey(): Promise<RevealIngestKeyState> {
       ok: false,
       error:
         limit.reason === "limited"
-          ? `That is enough keys for now. Try again in ${Math.max(1, Math.ceil(limit.retryAfterSeconds / 60))} minutes.`
-          : "Stream keys cannot be issued right now. Try again in a minute.",
+          ? `That is enough for now. Try again in ${Math.max(1, Math.ceil(limit.retryAfterSeconds / 60))} minutes.`
+          : "Stream keys cannot be shown right now. Try again in a minute.",
     };
   }
 
   try {
-    const ttlSec = MAX_INGEST_TTL_SEC;
-    const token = signIngestToken(auth.churchId, { ttlSec });
+    await ensureStreamRelayCredentials(auth.churchId, auth.userId);
+    const publishSecret = await getIntegrationPublishSecret(auth.churchId);
+    if (!publishSecret) {
+      return { ok: false, error: "Stream is not configured for this church." };
+    }
 
     await logAdminAction({
       churchId: auth.churchId,
-      taskName: "Revealed a stream key for a manual encoder",
+      taskName: "Revealed the church stream key",
       triggerSource: "Live Streaming",
     });
 
     return {
       ok: true,
-      ingestKey: buildCapabilityStreamName(auth.churchId, token),
-      expiresAt: new Date(Date.now() + ttlSec * 1000).toISOString(),
+      ingestKey: buildStaticStreamName(auth.churchId, publishSecret),
     };
   } catch (error) {
     return {
       ok: false,
       error:
-        error instanceof Error ? error.message : "Could not create a stream key.",
+        error instanceof Error ? error.message : "Could not load the stream key.",
     };
   }
 }

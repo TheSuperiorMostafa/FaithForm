@@ -11,19 +11,18 @@ const dashboard = readFileSync(
 const docs = readFileSync("components/live-streaming/encoder-docs-card.tsx", "utf8");
 
 /**
- * The persistent publish key was retired because it sat in public playback
- * URLs. What a church running OBS by hand gets instead is the same expiring
- * capability the paired encoder is handed, minted for a person: admin-only,
- * audited, rate limited, and never present in a page's initial props.
+ * Churches keep one permanent stream key. Reveal never mints a fresh expiring
+ * capability; it returns the integration publish secret every time.
  */
 
-test("a manual encoder can get a stream key, and it is the expiring kind", () => {
-  assert.match(actions, /export async function revealIngestKey\(/);
-  assert.match(actions, /signIngestToken\(auth\.churchId, \{ ttlSec \}\)/);
-  assert.match(actions, /const ttlSec = MAX_INGEST_TTL_SEC/);
-  assert.match(actions, /buildCapabilityStreamName\(auth\.churchId, token\)/);
-  // Nothing here reads the persistent key back out of church_integrations.
-  assert.doesNotMatch(actions, /access_token/);
+test("a manual encoder gets the church's permanent stream key", () => {
+  const body = actions.slice(actions.indexOf("export async function revealIngestKey("));
+  const fn = body.slice(0, body.indexOf("export async function goLiveBroadcast("));
+  assert.match(fn, /ensureStreamRelayCredentials\(auth\.churchId/);
+  assert.match(fn, /getIntegrationPublishSecret\(auth\.churchId\)/);
+  assert.match(fn, /buildStaticStreamName\(auth\.churchId, publishSecret\)/);
+  assert.doesNotMatch(fn, /signIngestToken/);
+  assert.doesNotMatch(fn, /expiresAt/);
 });
 
 test("the key is admin-only, audited, and rate limited", () => {
@@ -32,18 +31,19 @@ test("the key is admin-only, audited, and rate limited", () => {
   assert.match(fn, /if \(!auth\.isAdmin\)/);
   assert.match(fn, /assertRateLimit\(`stream:ingest-key:\$\{auth\.churchId\}`/);
   assert.match(fn, /logAdminAction\(/);
-  assert.match(fn, /Revealed a stream key/);
+  assert.match(fn, /Revealed the church stream key/);
 });
 
 test("the key reaches the browser only as an action reply", () => {
-  // The card asks for it on click; the server page never hands it down.
   assert.match(card, /revealIngestKey\(\)/);
   assert.doesNotMatch(dashboard, /ingestKey/);
   assert.match(card, /Show stream key/);
-  assert.match(card, /Lasts 4 hours/);
+  assert.match(card, /does not expire/);
+  assert.doesNotMatch(card, /Lasts 4 hours/);
 });
 
-test("the encoder instructions point at the key that exists now", () => {
-  assert.doesNotMatch(docs, /your church stream key/);
+test("the encoder instructions point at the permanent key", () => {
+  assert.match(docs, /stays the same forever/);
   assert.match(docs, /Show stream key/);
+  assert.doesNotMatch(docs, /fresh stream key/);
 });

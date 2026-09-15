@@ -49,6 +49,27 @@ export function buildStreamName(churchId: string): string {
   return churchId;
 }
 
+/**
+ * OBS / encoder stream key: church id plus the church's permanent publish
+ * secret. Same string for the life of the church configuration.
+ */
+export function buildStaticStreamName(
+  churchId: string,
+  publishSecret: string,
+): string {
+  return `${churchId}?token=${encodeURIComponent(publishSecret)}`;
+}
+
+/** The permanent publish secret stored on the stream integration row. */
+export async function getIntegrationPublishSecret(
+  churchId: string,
+  supabase?: SupabaseClient,
+): Promise<string | null> {
+  const integration = await getIntegration(churchId, STREAM_PROVIDER, supabase);
+  const secret = integration?.access_token?.trim() || null;
+  return secret;
+}
+
 export function parseStreamPath(path: string): {
   churchId: string;
   legacyCredentialInPath: boolean;

@@ -63,16 +63,26 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid stream path" }, { status: 401 });
   }
 
-  const queryToken = new URLSearchParams(body.query ?? "").get("token");
-  const suppliedToken = queryToken || body.password?.trim() || body.token?.trim();
-  const capability = suppliedToken ? verifyIngestToken(suppliedToken) : null;
-  if (!capability || capability.churchId !== parsedPath.churchId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   const integration = await getIntegration(parsedPath.churchId, "stream");
   if (!integration?.access_token) {
     return NextResponse.json({ error: "Stream not configured" }, { status: 401 });
+  }
+
+  const queryToken = new URLSearchParams(body.query ?? "").get("token");
+  const suppliedToken = queryToken || body.password?.trim() || body.token?.trim();
+  if (!suppliedToken) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  // Permanent church key (OBS / paired encoder) or a short-lived capability
+  // (browser studio / WHIP). Capability tokens still expire; the static key
+  // never does.
+  const capability = verifyIngestToken(suppliedToken);
+  const staticOk = compareSecret(suppliedToken, integration.access_token);
+  const capabilityOk =
+    Boolean(capability) && capability!.churchId === parsedPath.churchId;
+  if (!capabilityOk && !staticOk) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   await setPreviewIngestActive(parsedPath.churchId, true);

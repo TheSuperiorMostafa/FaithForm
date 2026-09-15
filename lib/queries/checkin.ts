@@ -407,9 +407,37 @@ export async function getRoster(
   });
   if (error) console.error("[checkin] roster read failed:", error.message);
 
-  return ((data ?? []) as unknown as SessionJoin[])
+  const rows = ((data ?? []) as unknown as SessionJoin[])
     .map(mapSession)
     .filter((row): row is CheckinSessionRow => row !== null);
+
+  // Adults (guardians / other) are never part of kids check-in. If an old
+  // session somehow exists for one, keep it off the board.
+  const dependentIds = await listDependentMemberIds(churchId, client);
+  return rows.filter((row) => dependentIds.has(row.memberId));
+}
+
+/**
+ * Member ids marked as household dependents — the only people kids check-in
+ * receives or releases.
+ */
+export async function listDependentMemberIds(
+  churchId: string,
+  supabase?: SupabaseClient,
+): Promise<Set<string>> {
+  const client = supabase ?? db();
+  const { data, error } = await client
+    .from("household_members")
+    .select("member_id")
+    .eq("church_id", churchId)
+    .eq("relationship", "dependent");
+
+  if (error) {
+    console.error("[checkin] dependent members read failed:", error.message);
+    return new Set();
+  }
+
+  return new Set((data ?? []).map((row) => row.member_id as string));
 }
 
 /** The open sessions for one household: what a checkout desk is releasing. */
@@ -432,9 +460,21 @@ export async function getHouseholdOpenSessions(
     console.error("[checkin] household sessions read failed:", error.message);
   }
 
-  return ((data ?? []) as unknown as SessionJoin[])
+  const rows = ((data ?? []) as unknown as SessionJoin[])
     .map(mapSession)
     .filter((row): row is CheckinSessionRow => row !== null);
+
+  const { data: dependents } = await client
+    .from("household_members")
+    .select("member_id")
+    .eq("church_id", churchId)
+    .eq("household_id", householdId)
+    .eq("relationship", "dependent");
+
+  const dependentIds = new Set(
+    (dependents ?? []).map((row) => row.member_id as string),
+  );
+  return rows.filter((row) => dependentIds.has(row.memberId));
 }
 
 // ---------------------------------------------------------------------------

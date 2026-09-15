@@ -7,11 +7,10 @@ import {
 } from "@/lib/stream/encoder";
 import { verifyStreamSecret } from "@/lib/stream/device-secret";
 import {
-  buildCapabilityStreamName,
-  MAX_INGEST_TTL_SEC,
-  signIngestToken,
-} from "@/lib/stream/ingest-token";
-import { getStreamRelaySettings } from "@/lib/stream/relay";
+  buildStaticStreamName,
+  getIntegrationPublishSecret,
+  getStreamRelaySettings,
+} from "@/lib/stream/relay";
 
 function readDeviceSecret(request: Request): string | null {
   const auth = request.headers.get("authorization");
@@ -48,15 +47,14 @@ export async function GET(request: Request) {
 
     const safePayload = { ...pending.payload };
     delete safePayload.streamKey;
-    const streamKey =
-      pending.command === "start_stream"
-        ? buildCapabilityStreamName(
-            device.church_id,
-            signIngestToken(device.church_id, {
-              ttlSec: MAX_INGEST_TTL_SEC,
-            }),
-          )
-        : undefined;
+    let streamKey: string | undefined;
+    if (pending.command === "start_stream") {
+      const publishSecret = await getIntegrationPublishSecret(device.church_id);
+      if (!publishSecret) {
+        return NextResponse.json({ error: "Stream unavailable" }, { status: 503 });
+      }
+      streamKey = buildStaticStreamName(device.church_id, publishSecret);
+    }
 
     return NextResponse.json({
       command: pending.command,

@@ -202,6 +202,16 @@ test("a release only ever moves a session that is still open", () => {
   assert.match(actions, /Those children have already been checked out/);
 });
 
+test("only household dependents can be checked in or checked out", () => {
+  assert.match(actions, /Only children in a household can be checked in/);
+  assert.match(actions, /Only children can be checked out/);
+  assert.match(actions, /relationship !== "dependent"/);
+  assert.match(
+    readFileSync("app/dashboard/checkin/page.tsx", "utf8"),
+    /listDependentMemberIds/,
+  );
+});
+
 test("every release records who did it, when, and against which credential", () => {
   assert.match(actions, /checked_out_by: context\.auth\.userId/);
   assert.match(actions, /checkout_method: input\.method/);
@@ -273,11 +283,12 @@ const directory = readFileSync("components/people/households-directory.tsx", "ut
 const detailView = readFileSync("components/people/household-detail.tsx", "utf8");
 const memberPanel = readFileSync("components/people/member-form-panel.tsx", "utf8");
 
-test("households are a tab of People, gated on Check-In, and no longer a Check-In tab", () => {
+test("households are a tab of People and no longer a Check-In tab", () => {
   assert.match(peopleLayout, /href: "\/dashboard\/people\/households"/);
-  assert.match(peopleLayout, /canAccessFeature\(access, "checkin"\)/);
+  assert.match(peopleLayout, /label: "Households"/);
+  assert.doesNotMatch(peopleLayout, /canAccessFeature\(access, "checkin"\)/);
   assert.doesNotMatch(checkinLayout, /href: "\/dashboard\/checkin\/households"/);
-  assert.match(
+  assert.doesNotMatch(
     readFileSync("app/dashboard/people/households/layout.tsx", "utf8"),
     /feature="checkin"/,
   );

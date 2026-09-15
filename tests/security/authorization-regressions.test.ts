@@ -67,14 +67,15 @@ test("browser and native stream surfaces cannot serialize the persistent publish
   assert.doesNotMatch(status, /publishKey|streamName|streamPath/);
   assert.doesNotMatch(browserPublish, /includeSecret:\s*true|streamPath:/);
   assert.doesNotMatch(dashboard, /publishKey\?:|streamName\?:/);
-  assert.match(encoderPoll, /signIngestToken/);
+  assert.match(encoderPoll, /buildStaticStreamName/);
+  assert.match(encoderPoll, /getIntegrationPublishSecret/);
   assert.match(encoderPoll, /delete safePayload\.streamKey/);
   assert.doesNotMatch(encoder, /streamKey:/);
   assert.doesNotMatch(encoderAgent, /data\.streamKey|config\.streamKey/);
   assert.match(publishAuth, /verifyIngestToken/);
   assert.match(publishAuth, /legacyCredentialInPath/);
-  assert.match(publishAuth, /capability\.churchId !== parsedPath\.churchId/);
-  assert.doesNotMatch(publishAuth, /integration\.access_token\s*!==/);
+  assert.match(publishAuth, /compareSecret\(suppliedToken, integration\.access_token\)/);
+  assert.match(publishAuth, /capabilityOk/);
   assert.match(publishAuth, /STREAM_RELAY_PLAYBACK_SECRET/);
   assert.match(publishAuth, /body\.action === "read"/);
   // The relay's Basic credential is attached to the *upstream* request and

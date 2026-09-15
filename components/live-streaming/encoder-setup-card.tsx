@@ -26,9 +26,7 @@ export function EncoderSetupCard({
 }: EncoderSetupCardProps) {
   const [copied, setCopied] = useState<"server" | "key" | null>(null);
   const [pending, startTransition] = useTransition();
-  const [key, setKey] = useState<{ value: string; expiresAt: string } | null>(
-    null,
-  );
+  const [key, setKey] = useState<string | null>(null);
 
   const copy = async (field: "server" | "key", value: string) => {
     await navigator.clipboard.writeText(value);
@@ -39,11 +37,11 @@ export function EncoderSetupCard({
   const handleReveal = () => {
     startTransition(async () => {
       const result = await revealIngestKey();
-      if (!result.ok || !result.ingestKey || !result.expiresAt) {
-        toast.error(result.error ?? "Could not create a stream key.");
+      if (!result.ok || !result.ingestKey) {
+        toast.error(result.error ?? "Could not load the stream key.");
         return;
       }
-      setKey({ value: result.ingestKey, expiresAt: result.expiresAt });
+      setKey(result.ingestKey);
     });
   };
 
@@ -55,9 +53,8 @@ export function EncoderSetupCard({
           Encoder settings
         </CardTitle>
         <CardDescription>
-          Point OBS, vMix, or a hardware encoder at this server. Pair the
-          streaming PC below and FaithForm hands it the key on its own; running
-          the encoder by hand, get a key here on the day you stream.
+          Point OBS, vMix, or a hardware encoder at this server. Your stream key
+          stays the same — paste it once and leave it in the encoder.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -94,7 +91,7 @@ export function EncoderSetupCard({
               <div className="flex gap-2">
                 <Input
                   id="encoder-key"
-                  value={key.value}
+                  value={key}
                   readOnly
                   className="font-mono text-sm"
                 />
@@ -103,7 +100,7 @@ export function EncoderSetupCard({
                   variant="outline"
                   size="icon"
                   className="shrink-0"
-                  onClick={() => void copy("key", key.value)}
+                  onClick={() => void copy("key", key)}
                   aria-label="Copy stream key"
                 >
                   {copied === "key" ? (
@@ -115,14 +112,7 @@ export function EncoderSetupCard({
               </div>
               <p className="text-xs text-muted-foreground">
                 Paste the whole thing into the encoder&rsquo;s Stream Key field.
-                It works until{" "}
-                <strong className="font-medium text-foreground">
-                  {new Date(key.expiresAt).toLocaleTimeString(undefined, {
-                    hour: "numeric",
-                    minute: "2-digit",
-                  })}
-                </strong>{" "}
-                today; after that, come back for a fresh one.
+                This key does not expire and does not change.
               </p>
             </>
           ) : isAdmin ? (
@@ -135,24 +125,23 @@ export function EncoderSetupCard({
                 onClick={handleReveal}
               >
                 <KeyRound className="mr-1.5 size-3.5" aria-hidden />
-                {pending ? "Creating…" : "Show stream key"}
+                {pending ? "Loading…" : "Show stream key"}
               </Button>
               <p className="text-xs text-muted-foreground">
-                Lasts 4 hours. Create it on the day you stream.
+                Permanent for this church. Same key every time you open it.
               </p>
             </div>
           ) : (
             <p className="text-sm text-muted-foreground">
-              A church admin can create a stream key here.
+              A church admin can show the stream key here.
             </p>
           )}
         </div>
 
         <p className="flex items-start gap-2 rounded-lg bg-muted p-3 text-sm text-muted-foreground">
           <KeyRound className="mt-0.5 size-4 shrink-0" />
-          Every key expires on its own and only works for this church. A paired
-          streaming PC gets one automatically when it starts a broadcast and
-          loses it when the broadcast stops.
+          Keep this key private. It only works for this church. A paired
+          streaming PC uses the same permanent key when it starts a broadcast.
         </p>
       </CardContent>
     </Card>

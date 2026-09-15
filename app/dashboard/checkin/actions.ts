@@ -561,10 +561,14 @@ export async function checkInMember(
 
   const { data: membership } = await context.admin
     .from("household_members")
-    .select("household_id")
+    .select("household_id, relationship")
     .eq("member_id", memberId)
     .eq("church_id", context.auth.churchId)
     .maybeSingle();
+
+  if (!membership || membership.relationship !== "dependent") {
+    return fail("Only children in a household can be checked in.");
+  }
 
   const today = localDateInTimeZone(context.auth.churchTimezone);
   const now = new Date().toISOString();
@@ -866,6 +870,32 @@ export async function completeCheckout(input: {
     return fail(
       "An override has to say why, which ID was checked, or who confirmed it.",
     );
+  }
+
+  // Guardians and other adults are never released through kids checkout.
+  const { data: openRows } = await context.admin
+    .from("checkin_sessions")
+    .select("id, member_id")
+    .in("id", input.sessionIds)
+    .eq("church_id", context.auth.churchId)
+    .in("status", ["pre_checked_in", "checked_in"]);
+
+  const memberIds = Array.from(
+    new Set((openRows ?? []).map((row) => row.member_id as string)),
+  );
+  if (memberIds.length > 0) {
+    const { data: dependents } = await context.admin
+      .from("household_members")
+      .select("member_id")
+      .eq("church_id", context.auth.churchId)
+      .eq("relationship", "dependent")
+      .in("member_id", memberIds);
+    const dependentIds = new Set(
+      (dependents ?? []).map((row) => row.member_id as string),
+    );
+    if (memberIds.some((id) => !dependentIds.has(id))) {
+      return fail("Only children can be checked out.");
+    }
   }
 
   const { data, error } = await context.admin
