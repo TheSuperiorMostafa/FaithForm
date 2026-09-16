@@ -82,6 +82,13 @@ as $$
 $$;
 
 -- Feed and detail now expose `all_day` for date-only rendering.
+-- Postgres rejects CREATE OR REPLACE when OUT columns change, so drop first.
+
+drop function if exists
+  public.mobile_announcement_feed(text, text, boolean, timestamptz, uuid, integer, timestamptz);
+
+drop function if exists
+  public.mobile_announcement_detail(text, uuid, text, timestamptz);
 
 create or replace function public.mobile_announcement_feed(
   p_church_slug text,

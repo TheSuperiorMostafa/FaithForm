@@ -58,3 +58,12 @@ apps/faithform-android/local.properties
 apps/faithform-ios/.build/
 apps/faithform-ios/.swiftpm/
 apps/faithform-ios/*.xcodeproj/xcuserdata/
+
+# Xcode build output (each worktree grows its own multi-GB DerivedData tree)
+apps/faithform-ios/build/
+
+# Agent worktrees live here; their branches are pushed, the checkouts are not
+.claude/worktrees/
+
+# Supabase CLI scratch state
+supabase/.temp/

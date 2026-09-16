@@ -51,6 +51,17 @@ test("schedule: callable by the service role only", () => {
   );
 });
 
+test("feed and detail: drop before recreate when OUT columns change", () => {
+  assert.match(
+    executable,
+    /drop function if exists\s+public\.mobile_announcement_feed\(text, text, boolean, timestamptz, uuid, integer, timestamptz\)/,
+  );
+  assert.match(
+    executable,
+    /drop function if exists\s+public\.mobile_announcement_detail\(text, uuid, text, timestamptz\)/,
+  );
+});
+
 test("feed and detail: expose all_day", () => {
   const feed = executable.slice(
     executable.indexOf("create or replace function public.mobile_announcement_feed"),
