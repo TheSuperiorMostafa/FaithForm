@@ -72,6 +72,7 @@ class EncryptedAutomaticAttendanceRecordStore(
             } ?: JSONObject.NULL,
         )
         put("revokePending", record.consentRevocationPending)
+        put("unavailableAt", JSONArray(record.unavailableAt))
     }
 
     private fun decode(json: JSONObject) = AutomaticAttendanceRecord(
@@ -107,6 +108,7 @@ class EncryptedAutomaticAttendanceRecordStore(
             )
         },
         consentRevocationPending = json.optBoolean("revokePending", false),
+        unavailableAt = json.optJSONArray("unavailableAt").strings(),
     )
 
     private companion object {

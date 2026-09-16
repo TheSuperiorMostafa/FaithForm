@@ -129,9 +129,9 @@ fun AutomaticAttendanceFlow(
         )
 
         SetupScreen.NotificationEducation -> LocationPermissionEducationScreen(
-            title = stringResource(R.string.auto_attendance_notifications_title),
-            body = stringResource(R.string.auto_attendance_notifications_body),
-            actionLabel = stringResource(R.string.auto_attendance_notifications_allow),
+            title = stringResource(R.string.auto_attendance_notification_title),
+            body = stringResource(R.string.auto_attendance_notification_body),
+            actionLabel = stringResource(R.string.auto_attendance_continue),
             isWorking = ui.isWorking,
             onContinue = model::requestNotifications,
             onNotNow = model::leaveSetup,
@@ -163,6 +163,7 @@ private fun perform(fix: AttendanceFix, model: AutomaticAttendanceModel, context
     when (fix) {
         AttendanceFix.None -> Unit
         AttendanceFix.TurnOn -> model.begin()
+        AttendanceFix.ContinueSetup -> model.continueSetup()
         AttendanceFix.RequestForeground -> model.requestForegroundInPlace()
         AttendanceFix.RequestPrecise -> model.requestPrecise()
         AttendanceFix.AllowBackground -> model.showBackgroundDisclosure()
@@ -250,7 +251,7 @@ fun AutomaticAttendanceIntroScreen(
 
         if (failed) {
             Text(
-                text = stringResource(R.string.auto_attendance_turn_on_failed),
+                text = stringResource(R.string.error_title),
                 style = MaterialTheme.typography.bodyMedium,
                 color = theme.palette.destructive,
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
@@ -258,7 +259,11 @@ fun AutomaticAttendanceIntroScreen(
         }
 
         Button(onClick = onContinue, enabled = !isWorking, modifier = fill) {
-            if (isWorking) WorkingIndicator() else Text(stringResource(R.string.auto_attendance_continue))
+            if (isWorking) {
+                WorkingIndicator(stringResource(R.string.auto_attendance_saving))
+            } else {
+                Text(stringResource(R.string.auto_attendance_continue))
+            }
         }
         TextButton(onClick = onNotNow, enabled = !isWorking, modifier = fill) {
             Text(stringResource(R.string.auto_attendance_not_now))
@@ -437,7 +442,6 @@ fun AutomaticAttendanceStatusScreen(
 ) {
     val theme = LocalFaithFormTheme.current
     val context = LocalContext.current
-    var confirmingTurnOff by rememberSaveable { mutableStateOf(false) }
     val fill = Modifier
         .fillMaxWidth()
         .heightIn(min = FaithFormTokens.TouchTarget.recommended)
@@ -495,19 +499,25 @@ fun AutomaticAttendanceStatusScreen(
         // `pending_confirmation`, never a guess.
         val pendingChurch = status.pendingChurchName?.takeIf { status.pendingConfirmation != null }
         if (pendingChurch != null) {
+            val name = pendingChurch.ifBlank { stringResource(R.string.auto_attendance_your_church) }
+            val due = System.currentTimeMillis() >= (status.pendingConfirmation?.notBeforeEpochMillis ?: 0L)
             SurfaceCard {
                 Text(
-                    text = stringResource(R.string.auto_attendance_question_title, pendingChurch),
+                    text = stringResource(R.string.auto_attendance_prompt_title, name),
                     style = MaterialTheme.typography.titleMedium,
                     color = theme.palette.contentPrimary,
                 )
                 Text(
-                    text = stringResource(R.string.auto_attendance_question_body),
+                    // Before the server's instant the person is asked to stay a
+                    // moment; after it, to tap.
+                    text = stringResource(
+                        if (due) R.string.auto_attendance_prompt_body else R.string.auto_attendance_pending_waiting_body,
+                    ),
                     style = MaterialTheme.typography.bodyMedium,
                     color = theme.palette.contentSecondary,
                 )
                 Button(onClick = onConfirmArrival, enabled = !isWorking, modifier = fill) {
-                    Text(stringResource(R.string.auto_attendance_check_in))
+                    Text(stringResource(R.string.auto_attendance_prompt_action_check_in))
                 }
             }
         }
@@ -552,28 +562,33 @@ fun AutomaticAttendanceStatusScreen(
         status.nextService?.let { next ->
             SurfaceCard(modifier = Modifier.semantics(mergeDescendants = true) { }) {
                 Text(
-                    text = stringResource(R.string.auto_attendance_next_title),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = theme.mutedContent,
-                )
-                Text(
-                    text = stringResource(R.string.auto_attendance_next_service, next.label, next.churchName),
+                    text = if (next.checkInOpen) {
+                        stringResource(R.string.auto_attendance_service_open, next.label)
+                    } else {
+                        stringResource(R.string.auto_attendance_next_service, next.label)
+                    },
                     style = MaterialTheme.typography.titleMedium,
                     color = theme.palette.contentPrimary,
                 )
                 Text(
-                    text = if (next.checkInOpen) {
-                        stringResource(R.string.auto_attendance_next_open_now)
-                    } else {
-                        stringResource(
-                            R.string.auto_attendance_next_opens,
-                            DateUtils.formatDateTime(
-                                context,
-                                next.checkInOpensAtEpochMillis,
-                                DateUtils.FORMAT_SHOW_WEEKDAY or DateUtils.FORMAT_SHOW_TIME or DateUtils.FORMAT_ABBREV_WEEKDAY,
-                            ),
-                        )
-                    },
+                    text = listOfNotNull(
+                        next.churchName.takeIf { it.isNotBlank() },
+                        DateUtils.formatDateTime(
+                            context,
+                            if (next.checkInOpen) next.startsAtEpochMillis else next.checkInOpensAtEpochMillis,
+                            DateUtils.FORMAT_SHOW_WEEKDAY or DateUtils.FORMAT_SHOW_TIME or DateUtils.FORMAT_ABBREV_WEEKDAY,
+                        ),
+                    ).joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = theme.palette.contentSecondary,
+                )
+            }
+
+            // A church that does not offer it is named, rather than silently
+            // left out of "Watching for".
+            for (church in status.unavailableAt) {
+                Text(
+                    text = stringResource(R.string.auto_attendance_not_at_this_church, church.name),
                     style = MaterialTheme.typography.bodySmall,
                     color = theme.palette.contentSecondary,
                 )
@@ -584,34 +599,17 @@ fun AutomaticAttendanceStatusScreen(
             HealthCard(status = status, isWorking = isWorking, onFix = onFix)
         }
 
+        // One tap, as on iPhone: nothing is lost that turning on again
+        // would not restore.
         if (status.canTurnOff) {
             OutlinedButton(
-                onClick = { confirmingTurnOff = true },
+                onClick = onTurnOff,
                 enabled = !isWorking,
                 modifier = fill,
             ) { Text(stringResource(R.string.auto_attendance_disable)) }
         }
 
         Spacer(Modifier.size(FaithFormTokens.Spacing.lg))
-    }
-
-    if (confirmingTurnOff) {
-        AlertDialog(
-            onDismissRequest = { confirmingTurnOff = false },
-            title = { Text(stringResource(R.string.auto_attendance_turn_off_title)) },
-            text = { Text(stringResource(R.string.auto_attendance_turn_off_body)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    confirmingTurnOff = false
-                    onTurnOff()
-                }) { Text(stringResource(R.string.auto_attendance_disable)) }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmingTurnOff = false }) {
-                    Text(stringResource(android.R.string.cancel))
-                }
-            },
-        )
     }
 }
 
@@ -705,7 +703,7 @@ private fun HealthRow(
     val state = stringResource(
         when {
             ok -> R.string.auto_attendance_health_ok
-            optional -> R.string.auto_attendance_health_off
+            optional -> R.string.auto_attendance_off
             else -> R.string.auto_attendance_health_needed
         },
     )
@@ -806,7 +804,10 @@ fun AutomaticAttendanceSummaryCard(
                 verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm),
             ) {
                 Text(
-                    stringResource(R.string.auto_attendance_question_title, pendingChurch),
+                    stringResource(
+                        R.string.auto_attendance_prompt_title,
+                        pendingChurch.ifBlank { stringResource(R.string.auto_attendance_your_church) },
+                    ),
                     style = MaterialTheme.typography.bodyLarge,
                     color = theme.palette.contentPrimary,
                 )
@@ -814,27 +815,26 @@ fun AutomaticAttendanceSummaryCard(
                     onClick = model::confirmArrival,
                     enabled = !ui.isWorking,
                     modifier = Modifier.fillMaxWidth().heightIn(min = FaithFormTokens.TouchTarget.recommended),
-                ) { Text(stringResource(R.string.auto_attendance_check_in)) }
+                ) { Text(stringResource(R.string.auto_attendance_prompt_action_check_in)) }
             }
         }
     }
 }
 
-/** "On", "Off" or "Needs attention", for the summary and the Account row. */
+/**
+ * The line under "Automatic check-in" in the summary: "On", what needs doing
+ * when it is on but blocked, or "Off".
+ */
 fun stateLabelFor(status: AutomaticAttendanceStatus): Int = when {
-    status.isOn -> R.string.auto_attendance_state_on
-    status.canTurnOff -> R.string.auto_attendance_state_attention
-    else -> R.string.auto_attendance_state_off
+    status.isOn -> R.string.auto_attendance_on
+    status.canTurnOff -> copyFor(status).title
+    else -> R.string.auto_attendance_off
 }
 
 @Composable
 private fun watchingLine(status: AutomaticAttendanceStatus): String? {
-    val first = status.churches.firstOrNull() ?: return null
-    return if (status.churches.size == 1) {
-        stringResource(R.string.auto_attendance_watching_church, first.name)
-    } else {
-        stringResource(R.string.auto_attendance_watching_churches, first.name, status.churches.size - 1)
-    }
+    if (status.watching.isEmpty()) return null
+    return stringResource(R.string.auto_attendance_watching_churches, status.watching.joinToString(", ") { it.name })
 }
 
 // ---------------------------------------------------------------------------
@@ -858,11 +858,19 @@ fun copyFor(status: AutomaticAttendanceStatus): StatusCopy {
         is AutomaticAttendanceStep.Blocked -> when (step.blocker) {
             AutomaticAttendanceBlocker.ForegroundDenied,
             AutomaticAttendanceBlocker.ForegroundPermanentlyDenied,
-            -> StatusCopy(R.string.auto_attendance_denied_title, R.string.auto_attendance_denied_body, fixLabel)
+            -> if (status.fix == AttendanceFix.ContinueSetup) {
+                StatusCopy(R.string.auto_attendance_needs_permission_title, R.string.auto_attendance_needs_permission_body, fixLabel)
+            } else {
+                StatusCopy(R.string.auto_attendance_denied_title, R.string.auto_attendance_denied_body, fixLabel)
+            }
             AutomaticAttendanceBlocker.ApproximateLocationOnly ->
                 StatusCopy(R.string.auto_attendance_accuracy_title, R.string.auto_attendance_accuracy_body, fixLabel)
             AutomaticAttendanceBlocker.NeedsBackgroundPermission ->
-                StatusCopy(R.string.auto_attendance_always_title, R.string.auto_attendance_always_body, fixLabel)
+                if (status.fix == AttendanceFix.ContinueSetup) {
+                    StatusCopy(R.string.auto_attendance_needs_permission_title, R.string.auto_attendance_needs_permission_body, fixLabel)
+                } else {
+                    StatusCopy(R.string.auto_attendance_always_title, R.string.auto_attendance_always_body, fixLabel)
+                }
             AutomaticAttendanceBlocker.LocationServicesOff ->
                 StatusCopy(R.string.auto_attendance_services_off_title, R.string.auto_attendance_services_off_body, fixLabel)
             AutomaticAttendanceBlocker.PlayServicesUnavailable ->
@@ -871,10 +879,12 @@ fun copyFor(status: AutomaticAttendanceStatus): StatusCopy {
                 StatusCopy(R.string.auto_attendance_no_link_title, R.string.auto_attendance_no_link_body, null)
             AutomaticAttendanceBlocker.ConsentMissing ->
                 StatusCopy(R.string.auto_attendance_consent_missing_title, R.string.auto_attendance_consent_missing_body, fixLabel)
+            // A button only while the feature is off, where trying again cannot
+            // raise a location prompt; while it is on, nothing here helps.
             AutomaticAttendanceBlocker.ChurchDisabled ->
-                StatusCopy(R.string.auto_attendance_church_disabled_title, R.string.auto_attendance_church_disabled_body, null)
+                StatusCopy(R.string.auto_attendance_church_disabled_title, R.string.auto_attendance_church_disabled_body, fixLabel)
             AutomaticAttendanceBlocker.NoCampus ->
-                StatusCopy(R.string.auto_attendance_no_campus_title, R.string.auto_attendance_no_campus_body, null)
+                StatusCopy(R.string.auto_attendance_no_campus_title, R.string.auto_attendance_no_campus_body, fixLabel)
             AutomaticAttendanceBlocker.Unavailable ->
                 StatusCopy(R.string.auto_attendance_offline_title, R.string.auto_attendance_offline_body, fixLabel)
         }
@@ -886,13 +896,14 @@ fun copyFor(status: AutomaticAttendanceStatus): StatusCopy {
 fun fixLabel(fix: AttendanceFix): Int? = when (fix) {
     AttendanceFix.None -> null
     AttendanceFix.TurnOn -> R.string.auto_attendance_enable
-    AttendanceFix.RequestForeground -> R.string.auto_attendance_allow_location
-    AttendanceFix.RequestPrecise -> R.string.auto_attendance_precise_action
+    AttendanceFix.ContinueSetup -> R.string.auto_attendance_continue_setup
+    AttendanceFix.RequestForeground -> R.string.auto_attendance_continue_setup
+    AttendanceFix.RequestPrecise -> R.string.auto_attendance_continue_setup
     AttendanceFix.OpenAppSettings -> R.string.auto_attendance_open_settings
     AttendanceFix.OpenLocationSettings -> R.string.auto_attendance_location_settings_action
     AttendanceFix.AllowBackground -> R.string.auto_attendance_allow_all_the_time
     AttendanceFix.ResolvePlayServices -> R.string.auto_attendance_play_services_action
-    AttendanceFix.RequestNotifications -> R.string.auto_attendance_notifications_allow
+    AttendanceFix.RequestNotifications -> R.string.auto_attendance_continue_setup
     AttendanceFix.OpenNotificationSettings -> R.string.auto_attendance_open_settings
     AttendanceFix.TryAgain -> R.string.try_again
 }

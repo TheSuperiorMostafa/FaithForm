@@ -215,9 +215,10 @@ class StatusResolverTest {
         val cases = listOf(
             NOTHING_YET.copy(foreground = ForegroundLocationPermission.Denied) to AttendanceFix.RequestForeground,
             NOTHING_YET.copy(foreground = ForegroundLocationPermission.PermanentlyDenied) to AttendanceFix.OpenAppSettings,
-            NOTHING_YET.copy(foreground = ForegroundLocationPermission.NotRequested) to AttendanceFix.RequestForeground,
+            // Never asked is setup left unfinished, not a refusal.
+            NOTHING_YET.copy(foreground = ForegroundLocationPermission.NotRequested) to AttendanceFix.ContinueSetup,
             FINE_AND_ALWAYS.copy(foreground = ForegroundLocationPermission.Coarse) to AttendanceFix.RequestPrecise,
-            FINE_AND_ALWAYS.copy(background = BackgroundLocationPermission.NotRequested) to AttendanceFix.AllowBackground,
+            FINE_AND_ALWAYS.copy(background = BackgroundLocationPermission.NotRequested) to AttendanceFix.ContinueSetup,
             FINE_AND_ALWAYS.copy(background = BackgroundLocationPermission.Denied) to AttendanceFix.AllowBackground,
             FINE_AND_ALWAYS.copy(background = BackgroundLocationPermission.PermanentlyDenied) to AttendanceFix.OpenAppSettings,
             FINE_AND_ALWAYS.copy(locationServicesEnabled = false) to AttendanceFix.OpenLocationSettings,
@@ -285,5 +286,29 @@ class StatusResolverTest {
         assertNull(AutomaticAttendanceStatusResolver.resolve(
             record(), FINE_AND_ALWAYS.copy(locationServicesEnabled = false), NotificationAccess.Granted, false, next,
         ).nextService)
+    }
+
+    @Test
+    fun `a church that offers nothing is said plainly, with no permission and no turn off`() {
+        val refused = record(enabled = false, refusal = "geofence_disabled")
+        // Even with no location granted at all: nothing is asked for.
+        val status = resolve(record = refused, permissions = NOTHING_YET)
+        assertEquals(AutomaticAttendanceStep.Blocked(AutomaticAttendanceBlocker.ChurchDisabled), status.step)
+        assertEquals(AttendanceFix.TurnOn, status.fix)
+        assertFalse(status.canTurnOff)
+
+        val noCampus = resolve(record = record(enabled = false, refusal = "no_campus_configured"), permissions = NOTHING_YET)
+        assertEquals(AutomaticAttendanceStep.Blocked(AutomaticAttendanceBlocker.NoCampus), noCampus.step)
+    }
+
+    @Test
+    fun `a church that refused is listed apart from the churches being watched`() {
+        val both = record().copy(
+            churches = listOf(ChurchName("grace", "Grace Church"), ChurchName("hope", "Hope")),
+            unavailableAt = listOf("hope"),
+        )
+        val status = resolve(record = both)
+        assertEquals(listOf("Grace Church"), status.watching.map { it.name })
+        assertEquals(listOf("Hope"), status.unavailableAt.map { it.name })
     }
 }

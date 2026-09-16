@@ -84,6 +84,10 @@ class RecordingNotifier : AttendanceNotifier {
     override fun checkedIn(churchSlug: String, churchName: String, serviceLabel: String?) {
         checkIns += churchName to serviceLabel
     }
+    val notCheckedIn = mutableListOf<String>()
+    override fun notCheckedIn(churchSlug: String, churchName: String) {
+        notCheckedIn += churchSlug
+    }
     override fun withdrawQuestion() {
         withdrawals++
     }
@@ -543,6 +547,65 @@ class ConfirmationFlowTest {
     }
 
     @Test
+    fun `a confirmation whose response was lost reads the status instead of reporting a refusal`() = runTest {
+        val h = EngineHarness()
+        h.confirming()
+        h.on()
+        h.submitter.answers = mutableListOf(
+            Result.success(pendingUntil(NOW + 60_000, detectionId = "det-1")),
+            // The first confirm counted, its response never arrived, and the
+            // retry is refused `detection_already_used`.
+            Result.success(REJECTED),
+        )
+        h.dwell()
+        h.engine.processTransitions()
+        h.now = NOW + 60_001
+        h.submitter.countedStatus = true
+
+        h.engine.confirmArrival()
+
+        assertEquals(1, h.submitter.statusReads)
+        assertEquals(listOf("Grace Church" to "Sunday Morning"), h.notifier.checkIns)
+        assertTrue(h.notifier.notCheckedIn.isEmpty())
+        assertEquals(EvidencePhase.Counted("occ-1", alreadyCounted = true), h.coordinator.phase)
+    }
+
+    @Test
+    fun `a tapped confirmation the server refuses says so, once`() = runTest {
+        val h = EngineHarness()
+        h.confirming()
+        h.on()
+        h.submitter.answers = mutableListOf(
+            Result.success(pendingUntil(NOW + 60_000)),
+            Result.success(REJECTED),
+        )
+        h.dwell()
+        h.engine.processTransitions()
+        h.now = NOW + 60_001
+        h.submitter.countedStatus = false
+
+        h.engine.confirmArrival()
+
+        assertEquals(listOf("grace"), h.notifier.notCheckedIn)
+        assertTrue(h.notifier.checkIns.isEmpty())
+        assertNull(h.records.record.pendingConfirmation)
+    }
+
+    @Test
+    fun `a detection refused on arrival is never followed by a status read`() = runTest {
+        val h = EngineHarness().on()
+        h.submitter.answers = mutableListOf(Result.success(REJECTED))
+        h.submitter.countedStatus = true
+
+        h.dwell()
+        h.engine.processTransitions()
+
+        assertEquals(0, h.submitter.statusReads)
+        assertTrue(h.notifier.checkIns.isEmpty())
+        assertTrue(h.notifier.notCheckedIn.isEmpty())
+    }
+
+    @Test
     fun `a church that chose no wait is not asked, even if the server wants a second step`() = runTest {
         val h = EngineHarness().on()
         h.submitter.answers = mutableListOf(Result.success(pendingUntil(NOW + 30_000)))
@@ -788,6 +851,56 @@ class TurnOffTest {
     }
 
     @Test
+    fun `when no church offers automatic check-in, consent is withdrawn before any location prompt`() = runTest {
+        val h = EngineHarness(
+            source = ChurchSource(
+                mutableMapOf(
+                    "grace" to GeofenceConfigurationState.Refused("geofence_disabled"),
+                    "hope" to GeofenceConfigurationState.Refused("no_campus_configured"),
+                ),
+            ),
+        )
+        // No location permission at all: the answer must not depend on one.
+        h.permissions.state = h.permissions.state.copy(
+            foreground = ForegroundLocationPermission.NotRequested,
+            background = BackgroundLocationPermission.NotRequested,
+        )
+
+        val result = h.engine.turnOn(
+            h.snapshot(churches = listOf(ChurchName("grace", "Grace Church"), ChurchName("hope", "Hope"))),
+        )
+
+        assertTrue(result is TurnOnResult.NotOffered)
+        assertEquals(listOf(true, false), h.consent.calls)
+        assertFalse(h.records.record.enabled)
+        assertEquals("revoked", h.records.record.serverConsent)
+        assertTrue(h.monitor.regions.isEmpty())
+        assertTrue(h.permissions.prompts.isEmpty())
+        assertTrue(h.source.calls.all { it.third })
+    }
+
+    @Test
+    fun `one church that offers it is enough to go on`() = runTest {
+        val h = EngineHarness(
+            source = ChurchSource(
+                mutableMapOf(
+                    "grace" to GeofenceConfigurationState.Available(churchConfig()),
+                    "hope" to GeofenceConfigurationState.Refused("geofence_disabled"),
+                ),
+            ),
+        )
+
+        val result = h.engine.turnOn(
+            h.snapshot(churches = listOf(ChurchName("grace", "Grace Church"), ChurchName("hope", "Hope"))),
+        )
+
+        assertTrue(result is TurnOnResult.On)
+        assertEquals(listOf(true), h.consent.calls)
+        assertEquals(listOf("hope"), h.records.record.unavailableAt)
+        assertEquals(1, h.monitor.regions.size)
+    }
+
+    @Test
     fun `turning on offline changes nothing`() = runTest {
         val h = EngineHarness()
         h.consent.failure = TransientAttendanceFailure("offline")
@@ -856,19 +969,33 @@ class MultiChurchReconcilerTest {
     }
 
     @Test
-    fun `the selected church comes first, then the soonest window, then the name`() {
-        val soon = churchConfig(slug = "zion", windows = listOf(window(opens = NOW + 60_000)))
-        val later = churchConfig(slug = "abbey", windows = listOf(window(opens = NOW + 86_400_000)))
-        val none = churchConfig(slug = "bethel", windows = emptyList())
-        val selected = churchConfig(slug = "hope", windows = emptyList())
+    fun `beyond the limit an open window comes first, then the soonest service, then no schedule, by region id`() {
+        val open = churchConfig(slug = "zion", regions = regions("zion", 20), windows = listOf(window(opens = NOW - 60_000)))
+        val soon = churchConfig(slug = "abbey", regions = regions("abbey", 20), windows = listOf(window(opens = NOW + 60_000)))
+        val later = churchConfig(slug = "carmel", regions = regions("carmel", 20), windows = listOf(window(opens = NOW + 86_400_000)))
+        val none = churchConfig(slug = "bethel", regions = regions("bethel", 20), windows = emptyList())
 
-        val order = GeofenceReconciler.prioritise(
-            mapOf("abbey" to later, "bethel" to none, "hope" to selected, "zion" to soon),
-            primary = "hope",
-            nowEpochMillis = NOW,
-        ).map { it.churchSlug }
+        val selection = GeofenceReconciler.selectAcrossChurches(
+            listOf(none, later, soon, open), nowEpochMillis = NOW, limit = 50,
+        )
 
-        assertEquals(listOf("hope", "zion", "abbey", "bethel"), order)
+        val ids = selection.regions.map { it.identifier }
+        assertEquals(50, ids.size)
+        // Open now, whole; then the next service, whole; then the rest of the
+        // limit from the service after that, in region-id order.
+        assertEquals(regions("zion", 20).map { it.regionId }, ids.take(20))
+        assertEquals(regions("abbey", 20).map { it.regionId }, ids.subList(20, 40))
+        assertEquals(regions("carmel", 20).map { it.regionId }.take(10), ids.subList(40, 50))
+        // Nothing scheduled gives way first.
+        assertTrue(selection.dropped.containsAll(regions("bethel", 20).map { it.regionId }))
+    }
+
+    @Test
+    fun `churches with the same priority are ordered by region id, not by church`() {
+        val b = churchConfig(slug = "b", regions = listOf(region("faithform.campus.1")))
+        val a = churchConfig(slug = "a", regions = listOf(region("faithform.campus.2")))
+        val selection = GeofenceReconciler.selectAcrossChurches(listOf(a, b), nowEpochMillis = NOW, limit = 1)
+        assertEquals(listOf("faithform.campus.1"), selection.regions.map { it.identifier })
     }
 
     @Test
@@ -880,24 +1007,23 @@ class MultiChurchReconcilerTest {
     }
 
     @Test
-    fun `churches together never exceed Android's limit, and the lowest priority gives way`() = runTest {
+    fun `churches together never exceed Android's limit`() = runTest {
         val slugs = listOf("a", "b", "c", "d", "e", "f")
         val source = ChurchSource(
-            slugs.associateWith {
-                GeofenceConfigurationState.Available(churchConfig(slug = it, regions = regions(it, 20)))
+            slugs.associateWith { slug ->
+                // "f" has nothing scheduled; the others are open now.
+                val windows = if (slug == "f") emptyList() else listOf(window())
+                GeofenceConfigurationState.Available(churchConfig(slug = slug, regions = regions(slug, 20), windows = windows))
             }.toMutableMap<String, GeofenceConfigurationState>(),
         )
         val monitor = FakeMonitor()
         val reconciler = GeofenceReconciler(monitor, FakePermissions(), source) { NOW }
-        reconciler.bind(base.copy(churchSlug = "c"), slugs.sortedBy { if (it == "c") 0 else 1 }, enabled = true)
+        reconciler.bind(base.copy(churchSlug = "c"), slugs, enabled = true)
 
         val outcome = reconciler.reconcile(ReconcileTrigger.OptIn)
 
         assertEquals(ANDROID_GEOFENCE_LIMIT, outcome.monitoring)
         assertEquals(ANDROID_GEOFENCE_LIMIT, monitor.regions.size)
-        // The selected church is always whole.
-        assertEquals(20, monitor.regions.count { it.churchSlug == "c" })
-        // Five others fit; the last by priority is the one left out.
         assertEquals(20, outcome.droppedForCapacity.size)
         assertTrue(outcome.droppedForCapacity.all { it.contains("campus.f-") })
     }

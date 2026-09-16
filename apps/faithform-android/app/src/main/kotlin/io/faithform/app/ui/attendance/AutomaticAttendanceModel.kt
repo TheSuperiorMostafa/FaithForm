@@ -130,6 +130,15 @@ class AutomaticAttendanceModel(
         _ui.value = _ui.value.copy(screen = SetupScreen.Introduction, turnOnFailed = false)
     }
 
+    /**
+     * "Continue setup": the feature is on, but setup was left before a
+     * permission was asked for. Picks up at the first screen still missing,
+     * without recording consent a second time.
+     */
+    fun continueSetup() {
+        viewModelScope.launch { advance(SetupScreen.Introduction) }
+    }
+
     /** "Not now" on any setup screen. Whatever was granted stays granted. */
     fun leaveSetup() {
         _ui.value = _ui.value.copy(screen = null, isWorking = false)
@@ -145,6 +154,13 @@ class AutomaticAttendanceModel(
                 is TurnOnResult.On -> {
                     onAuthorizationChanged()
                     advance(SetupScreen.Introduction)
+                }
+                // No church here offers it: consent was withdrawn again, and
+                // the status screen says why — with no location prompt.
+                is TurnOnResult.NotOffered -> {
+                    onAuthorizationChanged()
+                    _ui.value = _ui.value.copy(screen = null, isWorking = false)
+                    refreshStatus()
                 }
                 TurnOnResult.Offline, TurnOnResult.Failed ->
                     _ui.value = _ui.value.copy(isWorking = false, turnOnFailed = true)

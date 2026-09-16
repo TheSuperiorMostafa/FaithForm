@@ -38,15 +38,18 @@ class AndroidAttendanceNotifier(private val context: Context) : AttendanceNotifi
         if (!canPost()) return
         ensureChannel(context)
         val notification = base(churchSlug)
-            .setContentTitle(context.getString(R.string.auto_attendance_question_title, churchName))
-            .setContentText(
-                serviceLabel?.let { context.getString(R.string.auto_attendance_question_body_service, it) }
-                    ?: context.getString(R.string.auto_attendance_question_body),
+            .setContentTitle(context.getString(R.string.auto_attendance_prompt_title, named(churchName)))
+            .setContentText(context.getString(R.string.auto_attendance_prompt_body))
+            .setSubText(serviceLabel)
+            .addAction(
+                0,
+                context.getString(R.string.auto_attendance_prompt_action_check_in),
+                AttendanceNotificationReceiver.confirmIntent(context),
             )
             .addAction(
                 0,
-                context.getString(R.string.auto_attendance_check_in),
-                AttendanceNotificationReceiver.confirmIntent(context),
+                context.getString(R.string.auto_attendance_not_now),
+                AttendanceNotificationReceiver.notNowIntent(context),
             )
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             // The attempt behind the question lives two hours at most.
@@ -60,15 +63,30 @@ class AndroidAttendanceNotifier(private val context: Context) : AttendanceNotifi
         if (!canPost()) return
         ensureChannel(context)
         val notification = base(churchSlug)
-            .setContentTitle(context.getString(R.string.auto_attendance_counted_title, churchName))
-            .setContentText(
-                serviceLabel ?: context.getString(R.string.auto_attendance_counted_body),
-            )
+            .setContentTitle(context.getString(R.string.auto_attendance_checked_in_title, named(churchName)))
+            .setContentText(serviceLabel)
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             .setTimeoutAfter(CHECKED_IN_LIFETIME_MILLIS)
             .build()
         post(CHECKED_IN_ID, notification)
     }
+
+    override fun notCheckedIn(churchSlug: String, churchName: String) {
+        cancel(QUESTION_ID)
+        if (!canPost()) return
+        ensureChannel(context)
+        val notification = base(churchSlug)
+            .setContentTitle(context.getString(R.string.auto_attendance_not_checked_in_title, named(churchName)))
+            .setContentText(context.getString(R.string.auto_attendance_not_checked_in_body))
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .setTimeoutAfter(CHECKED_IN_LIFETIME_MILLIS)
+            .build()
+        post(CHECKED_IN_ID, notification)
+    }
+
+    /** A church whose name this phone does not know is "your church", never a slug. */
+    private fun named(churchName: String): String =
+        churchName.ifBlank { context.getString(R.string.auto_attendance_your_church) }
 
     /** Replaces the question while the confirmation is on its way. */
     fun checking() {
@@ -209,14 +227,26 @@ class AndroidAttendanceNotifier(private val context: Context) : AttendanceNotifi
  */
 class AttendanceNotificationReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action != ACTION_CONFIRM) return
-        val wakeups = AttendanceWakeups.from(context) ?: return
-        wakeups.personConfirmed()
+        when (intent.action) {
+            ACTION_CONFIRM -> AttendanceWakeups.from(context)?.personConfirmed()
+            // "Not now" only puts the question away. The attempt behind it
+            // expires on its own; leaving closes it sooner.
+            ACTION_NOT_NOW -> NotificationManagerCompat.from(context).cancel(AndroidAttendanceNotifier.QUESTION_ID)
+        }
     }
 
     companion object {
         const val ACTION_CONFIRM = "io.faithform.app.ATTENDANCE_CONFIRM"
+        const val ACTION_NOT_NOW = "io.faithform.app.ATTENDANCE_NOT_NOW"
         private const val REQUEST_CODE = 7104
+        private const val NOT_NOW_REQUEST_CODE = 7105
+
+        fun notNowIntent(context: Context): PendingIntent = PendingIntent.getBroadcast(
+            context,
+            NOT_NOW_REQUEST_CODE,
+            Intent(context, AttendanceNotificationReceiver::class.java).setAction(ACTION_NOT_NOW),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
 
         fun confirmIntent(context: Context): PendingIntent = PendingIntent.getBroadcast(
             context,

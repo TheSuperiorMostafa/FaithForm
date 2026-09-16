@@ -96,10 +96,13 @@ data class AutomaticAttendanceRecord(
     val pendingConfirmation: PendingConfirmation? = null,
     /** Turned off while offline: the server still has to hear it. */
     val consentRevocationPending: Boolean = false,
+    /** Churches that refused automatic check-in on the last pass, while others may still be watched. */
+    val unavailableAt: List<String> = emptyList(),
 ) {
     val primaryChurch: String? get() = churches.firstOrNull()?.slug
 
-    fun churchName(slug: String): String = churches.firstOrNull { it.slug == slug }?.name ?: slug
+    /** The church's name, or blank when this record does not know it — the screen then says "your church". */
+    fun churchName(slug: String): String = churches.firstOrNull { it.slug == slug }?.name.orEmpty()
 
     fun settings(): AutomaticAttendanceSettings = AutomaticAttendanceSettings(
         enabled = enabled,
@@ -124,6 +127,9 @@ interface AutomaticAttendanceRecordStore {
 interface AttendanceNotifier {
     fun askToConfirm(churchSlug: String, churchName: String, serviceLabel: String?)
     fun checkedIn(churchSlug: String, churchName: String, serviceLabel: String?)
+
+    /** Only after the person tapped Check in and the server still refused. */
+    fun notCheckedIn(churchSlug: String, churchName: String)
     fun withdrawQuestion()
     fun clearAll()
 }
@@ -205,6 +211,12 @@ enum class WorkResult { Done, RetryLater }
 /** What turning the feature on produced. */
 sealed interface TurnOnResult {
     data class On(val outcome: ReconcileOutcome) : TurnOnResult
+
+    /**
+     * No church this person can read offers automatic check-in. Consent was
+     * withdrawn again and nothing will be asked for.
+     */
+    data class NotOffered(val reason: String) : TurnOnResult
     data object Offline : TurnOnResult
     data object Failed : TurnOnResult
 }
@@ -477,6 +489,11 @@ class AutomaticAttendanceEngine(
             }
             is EvidencePhase.Refused -> {
                 notifier.withdrawQuestion()
+                // The person was asked and said yes: they are told it did not
+                // work, and that the code on screen still does.
+                current.pendingConfirmation?.let { asked ->
+                    notifier.notCheckedIn(asked.churchSlug, current.churchName(asked.churchSlug))
+                }
                 onRefusedLocked(phase.reason)
                 save(load().copy(pendingConfirmation = null))
             }
@@ -541,6 +558,38 @@ class AutomaticAttendanceEngine(
         if (!next.enabled) return@withLock TurnOnResult.Failed
 
         bindLocked()
+
+        // Before any permission is asked for: does any church this person can
+        // read offer automatic check-in at all? When none does, the consent
+        // just recorded is withdrawn and the journey stops — asking for
+        // location that nothing would ever use is the wrong question to put.
+        val offers = reconciler.offers()
+        val refusedOffers = offers.values.filterIsInstance<GeofenceConfigurationState.Refused>()
+        if (offers.isNotEmpty() && refusedOffers.size == offers.size &&
+            refusedOffers.all { it.reason in NOT_OFFERED_REFUSALS }
+        ) {
+            val reason = refusedOffers.first().reason
+            tearDownLocally()
+            val revoked = try {
+                consent.record(granted = false)
+            } catch (_: Exception) {
+                null
+            }
+            val latest = load()
+            save(
+                latest.copy(
+                    enabled = false,
+                    serverConsent = revoked?.consent ?: latest.serverConsent,
+                    authorizationVersion = maxOf(latest.authorizationVersion, revoked?.authorizationVersion ?: 0),
+                    consentRevocationPending = revoked == null,
+                    monitoring = 0,
+                    monitoringRefusal = reason,
+                ),
+            )
+            if (revoked == null) scheduler.revokeConsentWhenOnline()
+            return@withLock TurnOnResult.NotOffered(reason)
+        }
+
         val outcome = coordinator.enable(next.settings())
         afterReconcileLocked(outcome, ReconcileTrigger.OptIn)
         TurnOnResult.On(outcome)
@@ -726,7 +775,14 @@ class AutomaticAttendanceEngine(
         trigger: ReconcileTrigger,
     ): WorkResult {
         val current = load()
-        save(current.copy(monitoring = outcome.monitoring, monitoringRefusal = outcome.refusal))
+        val readable = current.churches.map { it.slug }.toSet()
+        save(
+            current.copy(
+                monitoring = outcome.monitoring,
+                monitoringRefusal = outcome.refusal,
+                unavailableAt = outcome.refusals.keys.filter { it in readable },
+            ),
+        )
         scheduleNextWindowLocked()
 
         // After a reboot or a reset the system holds nothing. Offline, nothing
@@ -756,7 +812,10 @@ class AutomaticAttendanceEngine(
         val alreadyTold = phase.occurrenceId in current.notifiedOccurrences
         val question = current.pendingConfirmation?.takeIf { it.occurrenceId == phase.occurrenceId }
 
-        if (!phase.alreadyCounted && !alreadyTold) {
+        // A person who answered a question hears the answer even when the
+        // server had already counted them: a confirmation whose response was
+        // lost, and whose retry found it counted.
+        if (!alreadyTold && (!phase.alreadyCounted || question != null)) {
             notifier.checkedIn(churchSlug, current.churchName(churchSlug), label)
         } else if (question != null) {
             notifier.withdrawQuestion()
@@ -885,6 +944,9 @@ class AutomaticAttendanceEngine(
 
         /** Settled and notified occurrences kept: a handful of services, never a history. */
         const val BOUNDED_HISTORY = 8
+
+        /** A church's own answer that it does not offer automatic check-in. */
+        val NOT_OFFERED_REFUSALS = setOf("geofence_disabled", "no_campus_configured")
 
         val RETRY_WHEN_UNAVAILABLE = setOf(
             ReconcileTrigger.BootOrUpdate,

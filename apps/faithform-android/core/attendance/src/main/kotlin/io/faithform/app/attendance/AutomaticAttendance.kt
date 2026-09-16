@@ -54,6 +54,18 @@ interface AttendanceSubmitter {
     suspend fun eligibleOccurrenceId(churchSlug: String, regionId: String? = null): String?
 
     suspend fun submit(evidence: AttendanceEvidence, idempotencyKey: String): AttendanceOutcome
+
+    /**
+     * Whether this account is already counted at an occurrence, or null when
+     * that could not be found out.
+     *
+     * Asked only after a `confirm` is refused. The server redeems a detection
+     * *before* its idempotency replay, so a confirmation whose response was
+     * lost is refused `detection_already_used` on retry even though it
+     * counted. Reading the status back is what stops that person being told
+     * they were not checked in. Mirrors `isCounted(occurrenceId:)` on iPhone.
+     */
+    suspend fun isCounted(occurrenceId: String): Boolean? = null
 }
 
 /**
@@ -660,7 +672,17 @@ class AutomaticAttendanceCoordinator(
         )
 
         return when (val result = send(confirm, attempt, currentAccount, currentPartition)) {
-            is SendOutcome.Refusal -> fail(result.reason, currentPartition)
+            is SendOutcome.Refusal -> {
+                // A refused confirmation may be one that already counted and
+                // lost its response. Ask before saying it did not work.
+                if (result.reason == EvidenceRefusal.Unknown &&
+                    runCatching { submitter.isCounted(occurrenceId) }.getOrNull() == true
+                ) {
+                    succeed(occurrenceId, alreadyCounted = true, partition = currentPartition)
+                } else {
+                    fail(result.reason, currentPartition)
+                }
+            }
             SendOutcome.Transient -> phase
             is SendOutcome.Answer -> {
                 when (result.value.outcome) {
@@ -818,7 +840,16 @@ class AutomaticAttendanceCoordinator(
                     else -> return fail(EvidenceRefusal.Unknown, currentPartition)
                 }
             }
-            is SendOutcome.Refusal -> return fail(result.reason, currentPartition)
+            is SendOutcome.Refusal -> {
+                // The retried confirmation is the one most likely to have
+                // counted already: its first response is what was lost.
+                if (queued.kind == "confirm" && result.reason == EvidenceRefusal.Unknown &&
+                    runCatching { submitter.isCounted(attempt.occurrenceId) }.getOrNull() == true
+                ) {
+                    return succeed(attempt.occurrenceId, alreadyCounted = true, partition = currentPartition)
+                }
+                return fail(result.reason, currentPartition)
+            }
             SendOutcome.Transient -> Unit
         }
         return phase

@@ -306,6 +306,7 @@ class AttendanceStoresTest {
             notifiedOccurrences = listOf("occ-1"),
             pendingConfirmation = PendingConfirmation("grace", "occ-2", 1_800_000_120_000),
             consentRevocationPending = false,
+            unavailableAt = listOf("hope"),
         )
 
         store.save(record)
@@ -525,7 +526,7 @@ class AttendanceNotificationsTest {
         assertEquals(android.app.Notification.VISIBILITY_PRIVATE, posted.visibility)
         assertNotNull(posted.publicVersion)
         assertFalse(posted.publicVersion.extras.getString(android.app.Notification.EXTRA_TEXT).orEmpty().contains("Grace"))
-        assertEquals("Check in", posted.actions.single().title.toString())
+        assertEquals(listOf("Check in", "Not now"), posted.actions.map { it.title.toString() })
     }
 
     @Test
@@ -538,6 +539,24 @@ class AttendanceNotificationsTest {
         assertNull(shadowOf(manager).getNotification(AndroidAttendanceNotifier.QUESTION_ID))
         val posted = shadowOf(manager).getNotification(AndroidAttendanceNotifier.CHECKED_IN_ID)
         assertEquals("You're checked in at Grace Church", posted.extras.getString(android.app.Notification.EXTRA_TITLE))
+    }
+
+    @Test
+    fun `a refused tap says so, and an unknown church is never named by its slug`() {
+        allow()
+        AndroidAttendanceNotifier(context).notCheckedIn("grace", "")
+
+        val posted = shadowOf(manager).getNotification(AndroidAttendanceNotifier.CHECKED_IN_ID)
+        assertEquals("FaithForm couldn't check you in at your church", posted.extras.getString(android.app.Notification.EXTRA_TITLE))
+        assertEquals("You can still check in with the code on screen.", posted.extras.getString(android.app.Notification.EXTRA_TEXT))
+    }
+
+    @Test
+    fun `not now puts the question away`() {
+        allow()
+        AndroidAttendanceNotifier(context).askToConfirm("grace", "Grace Church", null)
+        AttendanceNotificationReceiver().onReceive(context, Intent(AttendanceNotificationReceiver.ACTION_NOT_NOW))
+        assertNull(shadowOf(manager).getNotification(AndroidAttendanceNotifier.QUESTION_ID))
     }
 
     @Test

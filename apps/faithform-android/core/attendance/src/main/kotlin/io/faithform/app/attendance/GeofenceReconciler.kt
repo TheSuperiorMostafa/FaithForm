@@ -172,7 +172,7 @@ interface ConfigurationSource {
  * device user."
  *
  * The ceiling across **every** church this person is opted in at. When the
- * churches together offer more, [GeofenceReconciler.prioritise] decides which
+ * churches together offer more, [GeofenceReconciler.selectAcrossChurches] decides which
  * are kept.
  */
 const val ANDROID_GEOFENCE_LIMIT = 100
@@ -257,6 +257,26 @@ class GeofenceReconciler(
 
     /** The last configuration [churchSlug] made available, if any. */
     fun configuration(churchSlug: String): GeofenceConfiguration? = configurations[churchSlug]
+
+    /**
+     * What each bound church offers, asked afresh, without touching what is
+     * registered and without looking at a single permission.
+     *
+     * Used once, right after consent is recorded: if no church this person
+     * can read offers automatic check-in, the journey stops before any
+     * location prompt rather than asking for access nothing would use.
+     */
+    suspend fun offers(): Map<String, GeofenceConfigurationState> = mutex.withLock {
+        val base = partition ?: return@withLock emptyMap()
+        val now = clock()
+        val states = churchSlugs.take(MAX_MONITORED_CHURCHES).associateWith { slug ->
+            source.currentConfiguration(slug, base.copy(churchSlug = slug), now, forceRefresh = true)
+        }
+        configurations = configurations + states.mapNotNull { (slug, state) ->
+            (state as? GeofenceConfigurationState.Available)?.let { slug to it.configuration }
+        }
+        states
+    }
 
     /**
      * The church a region belongs to.
@@ -457,9 +477,9 @@ class GeofenceReconciler(
         // is registered for it exactly as it is, and decide again next time.
         val retained = actualSet.filter { it.churchSlug != null && it.churchSlug in unavailable }
 
-        val prioritised = prioritise(available, churchSlugs.firstOrNull(), now)
         val selection = selectAcrossChurches(
-            prioritised,
+            available.values,
+            nowEpochMillis = now,
             limit = ANDROID_GEOFENCE_LIMIT - retained.size,
         )
         val desired = retained + selection.regions
@@ -624,50 +644,42 @@ class GeofenceReconciler(
         }
 
         /**
-         * The order churches claim capacity in, when together they offer more
-         * than [ANDROID_GEOFENCE_LIMIT].
+         * Which regions to monitor across churches, within [limit].
          *
-         * 1. The church the person has selected.
-         * 2. Then the church whose next check-in window opens soonest — a
-         *    window already open counts as now — because that is the next
-         *    place this person could be checked in.
-         * 3. Then by slug, so the order is total and reproducible.
+         * Each church keeps its own cap of [MONITORED_REGION_LIMIT], chosen by
+         * [selectRegions]. When together they offer more than the limit, the
+         * regions are ordered exactly as on iPhone:
          *
-         * Deliberately never by distance, for the same reason as within a
-         * church: the set must not depend on where the phone happens to be.
+         * 1. A church whose check-in window is **open now**.
+         * 2. Then the church whose **next service** opens soonest.
+         * 3. Then churches with **nothing scheduled**.
+         * 4. Ties by **region id**, so the order is total and reproducible.
+         *
+         * Deliberately never by distance: the set must not depend on where
+         * the phone happens to be.
          */
-        fun prioritise(
-            configurations: Map<String, GeofenceConfiguration>,
-            primary: String?,
-            nowEpochMillis: Long,
-        ): List<GeofenceConfiguration> =
-            configurations.entries
-                .sortedWith(
-                    compareBy<Map.Entry<String, GeofenceConfiguration>> { if (it.key == primary) 0 else 1 }
-                        .thenBy { nextWindowOpening(it.value, nowEpochMillis) }
-                        .thenBy { it.key },
-                )
-                .map { it.value }
-
-        /** Across churches in priority order, each within its own cap, together within [limit]. */
         fun selectAcrossChurches(
-            prioritised: List<GeofenceConfiguration>,
+            configurations: Collection<GeofenceConfiguration>,
+            nowEpochMillis: Long,
             limit: Int = ANDROID_GEOFENCE_LIMIT,
         ): Selection {
-            val chosen = mutableListOf<MonitoredRegion>()
             val dropped = mutableListOf<String>()
+            val candidates = mutableListOf<Pair<Long, MonitoredRegion>>()
             val seen = HashSet<String>()
-            for (configuration in prioritised) {
-                val candidates = selectRegions(configuration)
-                val selectedIds = candidates.map { it.identifier }.toSet()
+            for (configuration in configurations) {
+                val selected = selectRegions(configuration)
+                val selectedIds = selected.map { it.identifier }.toSet()
                 // Regions the per-church cap or bad geometry excluded.
                 dropped += configuration.regions.map { it.regionId }.filterNot { it in selectedIds }
-                for (region in candidates) {
-                    if (!seen.add(region.identifier)) continue
-                    if (chosen.size < limit.coerceAtLeast(0)) chosen += region else dropped += region.identifier
+                val priority = nextWindowOpening(configuration, nowEpochMillis)
+                for (region in selected) {
+                    if (seen.add(region.identifier)) candidates += priority to region
                 }
             }
-            return Selection(chosen, dropped)
+            val ordered = candidates.sortedWith(compareBy({ it.first }, { it.second.identifier }))
+            val keep = limit.coerceAtLeast(0)
+            dropped += ordered.drop(keep).map { it.second.identifier }
+            return Selection(ordered.take(keep).map { it.second }, dropped)
         }
 
         /**

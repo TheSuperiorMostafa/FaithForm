@@ -21,6 +21,12 @@
         page, Play services can be missing or outdated, and location can be
         switched off from a screen an app may open. iOS has none of these.
       * channel_attendance_* - iOS has no notification channels.
+      * auto_attendance_notify_public - Android shows an app-written public
+        version of a notification on a locked screen; iOS hides previews itself.
+      * auto_attendance_health_* - Android's automatic check-in depends on
+        four separate switches a person can change independently (precise
+        location, "Allow all the time", device location, notifications), each
+        with its own fix, and the status screen lists them one by one.
 -->
 <resources>
     <string name="nav_back">Back</string>
@@ -38,6 +44,18 @@
     <string name="auto_attendance_allow_all_the_time">Allow all the time</string>
     <string name="auto_attendance_location_settings_action">Turn on location</string>
     <string name="auto_attendance_play_services_action">Update Google Play services</string>
+
+    <!-- Automatic check-in: the lock-screen version of its notifications -->
+    <string name="auto_attendance_notify_public">You have a check-in update.</string>
+
+    <!-- Automatic check-in: what it depends on, one row each -->
+    <string name="auto_attendance_health_title">What automatic check-in needs</string>
+    <string name="auto_attendance_health_precise">Precise location</string>
+    <string name="auto_attendance_health_background">Location all the time</string>
+    <string name="auto_attendance_health_services">Location turned on</string>
+    <string name="auto_attendance_health_notifications">Notifications</string>
+    <string name="auto_attendance_health_ok">Allowed</string>
+    <string name="auto_attendance_health_needed">Needed</string>
 
     <!-- Automatic check-in: notification channel -->
     <string name="channel_attendance_name">Check-in</string>

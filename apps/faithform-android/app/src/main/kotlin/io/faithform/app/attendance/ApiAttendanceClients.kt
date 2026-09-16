@@ -4,6 +4,7 @@ import android.content.SharedPreferences
 import io.faithform.app.contract.AttendanceConsentRequest
 import io.faithform.app.contract.AttendanceConsentResult
 import io.faithform.app.contract.AttendanceResult
+import io.faithform.app.contract.AttendanceStatus
 import io.faithform.app.contract.EligibleOccurrence
 import io.faithform.app.contract.GeofenceConfigResponse
 import io.faithform.app.contract.MobileErrorCode
@@ -78,6 +79,18 @@ class ApiAttendanceSubmitter(
             confirmationNotBeforeEpochMillis = value.confirmationNotBefore?.let(::epochMillis),
             detectionId = value.detectionId,
         )
+    }
+
+    override suspend fun isCounted(occurrenceId: String): Boolean? = try {
+        api.send(
+            path = "api/mobile/v1/attendance/status/${encode(occurrenceId)}",
+            serializer = MobileSuccess.serializer(AttendanceStatus.serializer()),
+        ).value?.isCounted
+    } catch (cancelled: CancellationException) {
+        throw cancelled
+    } catch (_: Exception) {
+        // Not knowing is not "counted": the refusal stands.
+        null
     }
 
     @Serializable

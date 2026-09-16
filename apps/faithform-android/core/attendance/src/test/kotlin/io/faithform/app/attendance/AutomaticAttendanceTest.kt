@@ -106,6 +106,15 @@ class ScriptedSubmitter : AttendanceSubmitter {
     var occurrenceThrows: Exception? = null
     var answers: MutableList<Result<AttendanceOutcome>> = mutableListOf()
 
+    /** What `/status` says after a refused confirmation; null when it could not be read. */
+    var countedStatus: Boolean? = null
+    var statusReads = 0
+
+    override suspend fun isCounted(occurrenceId: String): Boolean? {
+        statusReads++
+        return countedStatus
+    }
+
     /** Every lookup, with the church and the region it named, in order. */
     val lookups = mutableListOf<Pair<String, String?>>()
 

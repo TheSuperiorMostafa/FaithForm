@@ -26,6 +26,12 @@ enum class AttendanceFix {
     /** Start (or restart) the journey from the introduction. */
     TurnOn,
 
+    /**
+     * The feature is on but setup was left before a permission was ever asked
+     * for: pick up the journey at the first screen still missing.
+     */
+    ContinueSetup,
+
     /** Raise the foreground dialog again: it was declined, not permanently. */
     RequestForeground,
 
@@ -74,6 +80,10 @@ data class AutomaticAttendanceStatus(
     val pendingChurchName: String?,
     /** Whether "Turn off" is offered. True whenever the person turned the feature on. */
     val canTurnOff: Boolean,
+    /** Churches being watched: every readable church that did not refuse. */
+    val watching: List<ChurchName> = churches,
+    /** Churches that do not offer automatic check-in, while others may. */
+    val unavailableAt: List<ChurchName> = emptyList(),
 ) {
     val isOn: Boolean get() = step is AutomaticAttendanceStep.Ready
 }
@@ -88,19 +98,47 @@ object AutomaticAttendanceStatusResolver {
         nextService: NextService? = null,
         playServicesResolvable: Boolean = false,
     ): AutomaticAttendanceStatus {
-        val step = AutomaticAttendanceResolver.resolve(
-            record.settings(),
-            permissions,
-            record.monitoringRefusal,
-        )
-
-        val fix = when (step) {
-            AutomaticAttendanceStep.NotStarted -> AttendanceFix.TurnOn
-            AutomaticAttendanceStep.Ready -> AttendanceFix.None
-            is AutomaticAttendanceStep.Blocked -> fixFor(step.blocker, permissions, playServicesResolvable)
-            else -> AttendanceFix.None
+        val notOffered = record.monitoringRefusal?.takeIf {
+            !record.enabled && it in AutomaticAttendanceEngine.NOT_OFFERED_REFUSALS
+        }
+        val step = when (notOffered) {
+            // Turning on found no church that offers it, and withdrew consent
+            // again. Said plainly, with no permission in sight.
+            "geofence_disabled" -> AutomaticAttendanceStep.Blocked(AutomaticAttendanceBlocker.ChurchDisabled)
+            "no_campus_configured" -> AutomaticAttendanceStep.Blocked(AutomaticAttendanceBlocker.NoCampus)
+            else -> AutomaticAttendanceResolver.resolve(record.settings(), permissions, record.monitoringRefusal)
         }
 
+        val fix = when {
+            notOffered != null -> AttendanceFix.TurnOn
+            else -> fixForStep(step, permissions, playServicesResolvable)
+        }
+
+        val unavailable = record.unavailableAt.toSet()
+
+        return build(record, step, fix, notifications, requiresConfirmation, nextService, unavailable)
+    }
+
+    private fun fixForStep(
+        step: AutomaticAttendanceStep,
+        permissions: LocationPermissionState,
+        playServicesResolvable: Boolean,
+    ): AttendanceFix = when (step) {
+        AutomaticAttendanceStep.NotStarted -> AttendanceFix.TurnOn
+        AutomaticAttendanceStep.Ready -> AttendanceFix.None
+        is AutomaticAttendanceStep.Blocked -> fixFor(step.blocker, permissions, playServicesResolvable)
+        else -> AttendanceFix.None
+    }
+
+    private fun build(
+        record: AutomaticAttendanceRecord,
+        step: AutomaticAttendanceStep,
+        fix: AttendanceFix,
+        notifications: NotificationAccess,
+        requiresConfirmation: Boolean,
+        nextService: NextService?,
+        unavailable: Set<String>,
+    ): AutomaticAttendanceStatus {
         // Notifications only matter once the feature is on. Before that, asking
         // about them would be asking for something with nothing behind it.
         val notificationFix = if (!record.enabled) {
@@ -130,6 +168,8 @@ object AutomaticAttendanceStatusResolver {
             pendingConfirmation = pending,
             pendingChurchName = pending?.let { record.churchName(it.churchSlug) },
             canTurnOff = record.enabled,
+            watching = record.churches.filterNot { it.slug in unavailable },
+            unavailableAt = record.churches.filter { it.slug in unavailable && record.enabled },
         )
     }
 
@@ -145,15 +185,20 @@ object AutomaticAttendanceStatusResolver {
         permissions: LocationPermissionState,
         playServicesResolvable: Boolean,
     ): AttendanceFix = when (blocker) {
-        AutomaticAttendanceBlocker.ForegroundDenied -> AttendanceFix.RequestForeground
+        AutomaticAttendanceBlocker.ForegroundDenied ->
+            // Never asked is not declined: setup was left before the question.
+            if (permissions.foreground == ForegroundLocationPermission.NotRequested) {
+                AttendanceFix.ContinueSetup
+            } else {
+                AttendanceFix.RequestForeground
+            }
         AutomaticAttendanceBlocker.ForegroundPermanentlyDenied -> AttendanceFix.OpenAppSettings
         AutomaticAttendanceBlocker.ApproximateLocationOnly -> AttendanceFix.RequestPrecise
-        AutomaticAttendanceBlocker.NeedsBackgroundPermission ->
-            if (permissions.background == BackgroundLocationPermission.PermanentlyDenied) {
-                AttendanceFix.OpenAppSettings
-            } else {
-                AttendanceFix.AllowBackground
-            }
+        AutomaticAttendanceBlocker.NeedsBackgroundPermission -> when (permissions.background) {
+            BackgroundLocationPermission.PermanentlyDenied -> AttendanceFix.OpenAppSettings
+            BackgroundLocationPermission.NotRequested -> AttendanceFix.ContinueSetup
+            else -> AttendanceFix.AllowBackground
+        }
         AutomaticAttendanceBlocker.LocationServicesOff -> AttendanceFix.OpenLocationSettings
         AutomaticAttendanceBlocker.PlayServicesUnavailable ->
             if (playServicesResolvable) AttendanceFix.ResolvePlayServices else AttendanceFix.None
