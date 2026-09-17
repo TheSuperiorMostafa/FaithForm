@@ -143,10 +143,10 @@ export async function saveChurchProfile(
   const primary = normalizeHexColor(parsed.data.primaryColor);
   const accent = normalizeHexColor(parsed.data.accentColor);
   if (parsed.data.primaryColor.trim() && !primary) {
-    return { error: "Primary color must be a valid hex value (e.g. #1A2B4B)." };
+    return { error: "Primary color must be a valid hex value (e.g. #002D5F)." };
   }
   if (parsed.data.accentColor.trim() && !accent) {
-    return { error: "Accent color must be a valid hex value (e.g. #C19A6B)." };
+    return { error: "Accent color must be a valid hex value (e.g. #C5A059)." };
   }
 
   try {

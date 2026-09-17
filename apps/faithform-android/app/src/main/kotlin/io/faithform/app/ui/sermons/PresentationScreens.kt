@@ -460,7 +460,7 @@ private fun SlidePage(
     modifier: Modifier = Modifier,
 ) {
     val textColor = parseThemeColor(theme?.text) ?: Color.White
-    val accent = parseThemeColor(theme?.accent) ?: Color(0xFFC4A15A)
+    val accent = parseThemeColor(theme?.accent) ?: LocalFaithFormTheme.current.palette.brandAccent
     val italicScripture = theme?.italicRef ?: true
     val shadow = if (theme?.textShadow == true) {
         Shadow(color = Color.Black.copy(alpha = 0.35f), blurRadius = 4f)

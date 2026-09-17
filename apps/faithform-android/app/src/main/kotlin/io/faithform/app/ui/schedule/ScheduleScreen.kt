@@ -77,6 +77,7 @@ fun HomeHostScreen(
     churchTimezone: String,
     onOpenItem: (FeedItem) -> Unit,
     onFeedReachedEnd: () -> Unit,
+    onRetrySchedule: () -> Unit = {},
     modifier: Modifier = Modifier,
     isJoinPending: Boolean = false,
 ) {
@@ -113,6 +114,7 @@ fun HomeHostScreen(
                 onPreviousMonth = onPreviousMonth,
                 onNextMonth = onNextMonth,
                 onOpenItem = onOpenItem,
+                onRetry = onRetrySchedule,
                 modifier = Modifier.fillMaxSize(),
                 isJoinPending = isJoinPending,
             )
@@ -128,6 +130,7 @@ fun ScheduleScreen(
     onPreviousMonth: () -> Unit,
     onNextMonth: () -> Unit,
     onOpenItem: (FeedItem) -> Unit,
+    onRetry: () -> Unit = {},
     modifier: Modifier = Modifier,
     isJoinPending: Boolean = false,
 ) {
@@ -235,6 +238,7 @@ fun ScheduleScreen(
                     stringResource(R.string.error_title),
                     phase.message,
                     icon = Icons.Outlined.WarningAmber,
+                    onRetry = onRetry,
                 )
             }
         }

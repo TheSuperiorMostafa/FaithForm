@@ -47,6 +47,7 @@ struct GiveTabView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(theme.palette.background)
             .navigationTitle(L.givingTitle)
+            .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: Route.self) { route in
                 destination(route, model: model)
             }

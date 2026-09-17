@@ -12,7 +12,7 @@ export async function generateCinematicPlaceholderBackground(
   accentColor: string,
 ): Promise<ArrayBuffer> {
   const primary = primaryColor || "#1a1208";
-  const accent = accentColor || "#c9a227";
+  const accent = accentColor || "#C5A059";
 
   const svg = `
 <svg width="${WIDTH}" height="${HEIGHT}" xmlns="http://www.w3.org/2000/svg">

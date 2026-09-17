@@ -43,8 +43,17 @@ struct CheckInTabView: View {
                     // scanner already started and cannot start, stop or read it.
                     CheckInCameraPreview(session: features.scanner.previewSession)
                         .frame(maxWidth: .infinity)
-                        .frame(height: 240)
+                        .frame(height: 250)
                         .clipShape(RoundedRectangle(cornerRadius: FaithFormTokens.Radius.lg, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: FaithFormTokens.Radius.lg, style: .continuous)
+                                .strokeBorder(theme.palette.brandAccent, lineWidth: FaithFormTokens.BorderWidth.emphasis)
+                        )
+                        .shadow(
+                            color: theme.palette.brandPrimary.opacity(0.15),
+                            radius: 8,
+                            y: 4
+                        )
                         .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
                         .padding(.top, FaithFormTokens.Spacing.base)
                 }
@@ -89,7 +98,7 @@ struct CheckInTabView: View {
                     onOpenSettings: openSettings,
                     onClose: { settingUp = false }
                 )
-                .faithformTheme()
+                .faithformTheme(root.selectedChurch?.appTheme)
                 // Never while consent or a permission answer is in flight.
                 .interactiveDismissDisabled(attendance.isWorking || attendance.step == .requestingConsent)
             }
@@ -153,10 +162,15 @@ struct AutomaticCheckInSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.md) {
-            Text(L.autoAttendanceTitle)
-                .font(theme.font(FaithFormTokens.Text.titleMedium))
-                .foregroundStyle(theme.palette.contentPrimary)
-                .accessibilityAddTraits(.isHeader)
+            HStack(spacing: FaithFormTokens.Spacing.sm) {
+                Image(systemName: "location.circle.fill")
+                    .font(.system(size: FaithFormTokens.IconSize.sizeLarge))
+                    .foregroundStyle(theme.palette.brandAccent)
+                Text(L.autoAttendanceTitle)
+                    .font(theme.font(FaithFormTokens.Text.titleMedium))
+                    .foregroundStyle(theme.palette.contentPrimary)
+            }
+            .accessibilityAddTraits(.isHeader)
 
             AutomaticAttendanceStatusView(
                 status: model.status,

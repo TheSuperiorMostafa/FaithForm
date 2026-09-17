@@ -63,8 +63,8 @@ export async function loadChurchBranding(
   return {
     name: (data?.name as string) ?? "Our Church",
     logoUrl: (data?.logo_url as string | null) ?? null,
-    primaryColor: (data?.giving_primary_color as string) || "#1e3a5f",
-    accentColor: (data?.giving_accent_color as string) || "#c9a227",
+    primaryColor: (data?.giving_primary_color as string) || "#002D5F",
+    accentColor: (data?.giving_accent_color as string) || "#C5A059",
     timezone: (data?.timezone as string) || "America/New_York",
   };
 }

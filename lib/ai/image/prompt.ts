@@ -141,7 +141,7 @@ export function buildFullFlyerPrompt(input: GenerateEventBackgroundInput): strin
     "Design a complete, ready-to-post CHURCH EVENT FLYER as a single 16:9 landscape graphic. It is a piece of graphic design a skilled designer would be proud of, not a stock photograph with words on it.",
     `ART DIRECTION: ${artDirection(input)}`,
     `VISUAL MOTIF: ${scene}. Treat it as designed elements (shapes, texture, line iconography, illustration, abstract light), not as a documentary photo.`,
-    `COLOUR: build the palette from the brand colour ${input.primaryColor} and the accent ${input.accentColor || "#c9a227"}, with at most two supporting tones. Cohesive, printable, and never washed out.`,
+    `COLOUR: build the palette from the brand colour ${input.primaryColor} and the accent ${input.accentColor || "#C5A059"}, with at most two supporting tones. Cohesive, printable, and never washed out.`,
     NO_PEOPLE_RULE,
     "",
     "TEXT TO RENDER ON THE FLYER (spell every word EXACTLY, no misspellings, no extra or invented words, no lorem ipsum):",

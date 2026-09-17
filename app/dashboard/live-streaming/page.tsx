@@ -30,7 +30,7 @@ export default async function LiveStreamingPage() {
     logoUrl: (churchRow.data?.logo_url as string | null) ?? null,
     churchName: (churchRow.data?.name as string) ?? "",
     primaryColor:
-      (churchRow.data?.giving_primary_color as string | null) ?? "#1e3a5f",
+      (churchRow.data?.giving_primary_color as string | null) ?? "#002D5F",
   };
 
   return (

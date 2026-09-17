@@ -29,31 +29,34 @@ private struct SkeletonShimmerModifier: ViewModifier {
     let onDark: Bool
 
     func body(content: Content) -> some View {
-        content.overlay {
-            if !theme.reduceMotion {
-                TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
-                    GeometryReader { geo in
-                        let progress = timeline.date.timeIntervalSinceReferenceDate
-                            .truncatingRemainder(dividingBy: skeletonShimmerDuration)
-                            / skeletonShimmerDuration
-                        let width = max(geo.size.width, 1)
-                        let band = max(width * 0.42, 56)
-                        let sheen = onDark
-                            ? Color.white.opacity(0.28)
-                            : theme.palette.skeletonSheen
-                        LinearGradient(
-                            colors: [sheen.opacity(0), sheen, sheen.opacity(0)],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                        .frame(width: band)
-                        .offset(x: -band + CGFloat(progress) * (width + band))
+        content
+            .overlay {
+                if !theme.reduceMotion {
+                    TimelineView(.animation(minimumInterval: 1.0 / 30.0)) { timeline in
+                        GeometryReader { geo in
+                            let progress = timeline.date.timeIntervalSinceReferenceDate
+                                .truncatingRemainder(dividingBy: skeletonShimmerDuration)
+                                / skeletonShimmerDuration
+                            let width = max(geo.size.width, 1)
+                            let band = max(width * 0.42, 56)
+                            let sheen = onDark
+                                ? Color.white.opacity(0.28)
+                                : theme.palette.skeletonSheen
+                            LinearGradient(
+                                colors: [sheen.opacity(0), sheen, sheen.opacity(0)],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                            .frame(width: band)
+                            .offset(x: -band + CGFloat(progress) * (width + band))
+                        }
                     }
+                    .allowsHitTesting(false)
                 }
-                .allowsHitTesting(false)
             }
-        }
-        .clipped()
+            .mask {
+                content
+            }
     }
 }
 
@@ -88,7 +91,7 @@ struct SkeletonBone: View {
 
 struct SkeletonPoster: View {
     @Environment(\.faithformTheme) private var theme
-    var cornerRadius: CGFloat = 0
+    var cornerRadius: CGFloat = FaithFormTokens.Radius.lg
     var fill: Color?
 
     var body: some View {
@@ -349,7 +352,7 @@ struct ChurchProfileSkeleton: View {
     var body: some View {
         VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
             ZStack(alignment: .bottomLeading) {
-                RoundedRectangle(cornerRadius: 0)
+                RoundedRectangle(cornerRadius: FaithFormTokens.Radius.lg, style: .continuous)
                     .fill(theme.palette.skeletonBase)
                     .frame(maxWidth: .infinity)
                     .frame(height: 160)
@@ -528,6 +531,7 @@ public struct DetailSkeleton: View {
 /// Full-screen slide canvas: title, scripture, body, page index — the same
 /// hierarchy `SlidePageView` draws once the deck arrives.
 public struct SlideSkeleton: View {
+    @Environment(\.faithformTheme) private var theme
     public init() {}
 
     public var body: some View {
@@ -569,9 +573,7 @@ public struct SlideSkeleton: View {
             .padding(.bottom, FaithFormTokens.Spacing.xl)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // Always the light navy, not `brandPrimary`: in dark appearance that
-        // token is gold, and a slide is a dark canvas in either scheme.
-        .background(FaithFormTokens.light.brandPrimary)
+        .background(theme.palette.brandPrimary)
         .skeletonShimmer(onDark: true)
         .skeletonAccessible()
     }

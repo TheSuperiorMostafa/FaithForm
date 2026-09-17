@@ -203,6 +203,16 @@ object ShortCodeEntry {
         input.uppercase().filter { ALPHABET.contains(it) }.take(LENGTH)
 
     fun isComplete(input: String): Boolean = normalise(input).length == LENGTH
+
+    fun containsUnusedCharacters(input: String): Boolean =
+        input.uppercase().any { (it.isLetter() || it.isDigit()) && !ALPHABET.contains(it) }
+
+    fun showsUnusedCharacterHint(input: String, wasShowing: Boolean): Boolean {
+        if (containsUnusedCharacters(input)) return true
+        if (!wasShowing) return false
+        val normalised = normalise(input)
+        return normalised.isNotEmpty() && normalised.length < LENGTH
+    }
 }
 
 // ---------------------------------------------------------------------------

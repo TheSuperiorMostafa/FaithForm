@@ -29,8 +29,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -69,19 +72,24 @@ internal fun Modifier.skeletonShimmer(onDark: Boolean = false): Modifier {
         label = "skeleton-sheen",
     )
     val sheen = if (onDark) Color.White.copy(alpha = 0.28f) else theme.palette.skeletonSheen
-    return drawWithContent {
-        drawContent()
-        val width = size.width.coerceAtLeast(1f)
-        val band = (width * 0.42f).coerceAtLeast(56.dp.toPx())
-        val startX = -band + progress * (width + band)
-        drawRect(
-            brush = Brush.linearGradient(
-                colors = listOf(sheen.copy(alpha = 0f), sheen, sheen.copy(alpha = 0f)),
-                start = Offset(startX, 0f),
-                end = Offset(startX + band, 0f),
-            ),
-        )
-    }
+    return this
+        .graphicsLayer {
+            compositingStrategy = CompositingStrategy.Offscreen
+        }
+        .drawWithContent {
+            drawContent()
+            val width = size.width.coerceAtLeast(1f)
+            val band = (width * 0.42f).coerceAtLeast(56.dp.toPx())
+            val startX = -band + progress * (width + band)
+            drawRect(
+                brush = Brush.linearGradient(
+                    colors = listOf(sheen.copy(alpha = 0f), sheen, sheen.copy(alpha = 0f)),
+                    start = Offset(startX, 0f),
+                    end = Offset(startX + band, 0f),
+                ),
+                blendMode = BlendMode.SrcAtop,
+            )
+        }
 }
 
 @Composable
@@ -111,7 +119,7 @@ fun SkeletonBone(
 @Composable
 fun SkeletonPoster(
     modifier: Modifier = Modifier,
-    cornerRadius: Dp = 0.dp,
+    cornerRadius: Dp = FaithFormTokens.Radius.lg,
     fill: Color? = null,
 ) {
     val theme = LocalFaithFormTheme.current
@@ -401,6 +409,7 @@ fun ChurchProfileSkeleton(modifier: Modifier = Modifier) {
                 Modifier
                     .fillMaxWidth()
                     .height(160.dp)
+                    .clip(RoundedCornerShape(FaithFormTokens.Radius.lg))
                     .background(theme.palette.skeletonBase),
             )
             SkeletonAvatar(
@@ -584,11 +593,12 @@ fun DetailSkeleton(modifier: Modifier = Modifier) {
 /** Full-screen slide canvas matching [io.faithform.app.ui.sermons.PresentationDetailScreen]. */
 @Composable
 fun SlideSkeleton(modifier: Modifier = Modifier) {
+    val theme = LocalFaithFormTheme.current
     val bone = Color.White.copy(alpha = 0.22f)
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF002D5F))
+            .background(theme.palette.brandPrimary)
             .then(skeletonLabel())
             .skeletonShimmer(onDark = true)
             .padding(

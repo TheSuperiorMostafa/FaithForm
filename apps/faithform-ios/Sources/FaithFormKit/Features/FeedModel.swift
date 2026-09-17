@@ -38,10 +38,10 @@ public final class FeedModel {
 
         if let cached = await cache.load([FeedItem].self, name: "feed", partition: partition) {
             let freshness = cached.freshness(now: Date(), ttl: 300)
-            if freshness != .expired {
-                phase = .loaded(items: cached.value, isStale: freshness != .fresh)
-                etag = cached.etag
-            }
+            phase = cached.value.isEmpty
+                ? .empty
+                : .loaded(items: cached.value, isStale: freshness != .fresh)
+            etag = cached.etag
         }
 
         await refresh(churchSlug: churchSlug)
@@ -63,6 +63,8 @@ public final class FeedModel {
             if response.notModified {
                 if case let .loaded(items, _) = phase {
                     phase = .loaded(items: items, isStale: false)
+                } else if let cached = await cache.load([FeedItem].self, name: "feed", partition: partition) {
+                    phase = cached.value.isEmpty ? .empty : .loaded(items: cached.value, isStale: false)
                 }
                 return
             }

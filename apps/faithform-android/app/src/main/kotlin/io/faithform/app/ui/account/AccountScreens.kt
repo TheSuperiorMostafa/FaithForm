@@ -360,7 +360,7 @@ fun ChurchAppearanceScreen(
     val theme = LocalFaithFormTheme.current
     val presets = remember {
         listOf(
-            AppearancePreset("Classic", "#1A2B4B", "#C19A6B"),
+            AppearancePreset("Classic", "#002D5F", "#C5A059"),
             AppearancePreset("Ocean", "#164E63", "#22D3EE"),
             AppearancePreset("Hope", "#365314", "#A3E635"),
             AppearancePreset("Grace", "#581C87", "#D8B4FE"),
@@ -369,10 +369,10 @@ fun ChurchAppearanceScreen(
         )
     }
     var primary by remember(church.churchSlug) {
-        mutableStateOf(church.appTheme?.light?.primary ?: "#1A2B4B")
+        mutableStateOf(church.appTheme?.light?.primary ?: "#002D5F")
     }
     var accent by remember(church.churchSlug) {
-        mutableStateOf(church.appTheme?.light?.accent ?: "#C19A6B")
+        mutableStateOf(church.appTheme?.light?.accent ?: "#C5A059")
     }
     var saving by remember { mutableStateOf(false) }
     var failed by remember { mutableStateOf(false) }
@@ -434,8 +434,8 @@ fun ChurchAppearanceScreen(
         }
 
         Text(stringResource(R.string.church_appearance_custom), style = MaterialTheme.typography.titleMedium)
-        TextField(value = primary, onValueChange = { primary = it.uppercase(); failed = false }, label = { Text("Primary · #1A2B4B") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-        TextField(value = accent, onValueChange = { accent = it.uppercase(); failed = false }, label = { Text("Accent · #C19A6B") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        TextField(value = primary, onValueChange = { primary = it.uppercase(); failed = false }, label = { Text("Primary · #002D5F") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        TextField(value = accent, onValueChange = { accent = it.uppercase(); failed = false }, label = { Text("Accent · #C5A059") }, singleLine = true, modifier = Modifier.fillMaxWidth())
         if (failed) {
             Text(stringResource(R.string.church_appearance_error), color = theme.palette.destructive)
         }

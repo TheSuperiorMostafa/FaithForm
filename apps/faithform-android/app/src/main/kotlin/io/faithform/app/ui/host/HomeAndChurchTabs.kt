@@ -1,5 +1,6 @@
 package io.faithform.app.ui.host
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Church
 import androidx.compose.runtime.Composable
@@ -75,7 +76,9 @@ fun HomeTab(
     var openedId by rememberSaveable(partition.storageKey) { mutableStateOf<String?>(null) }
 
     val opened = (phase as? FeedPhase.Loaded)?.items?.firstOrNull { it.id == openedId }
+        ?: (schedulePhase as? SchedulePhase.Loaded)?.items?.firstOrNull { it.id == openedId }
     if (opened != null) {
+        BackHandler { openedId = null }
         TabScreen(title = church.churchName, onBack = { openedId = null }, modifier = modifier) { content ->
             AnnouncementDetailScreen(item = opened, modifier = content)
         }
@@ -92,6 +95,7 @@ fun HomeTab(
             onNextMonth = { schedule.launch { showNextMonth() } },
             onOpenItem = { openedId = it.id },
             onFeedReachedEnd = { feed.launch { loadMore() } },
+            onRetrySchedule = { schedule.launch { refresh() } },
             modifier = content,
             isJoinPending = church.state == RelationshipState.PENDING,
         )

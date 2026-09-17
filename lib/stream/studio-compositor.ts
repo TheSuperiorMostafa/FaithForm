@@ -64,7 +64,7 @@ export class StudioCompositor {
   private branding: StudioBranding = {
     logoUrl: null,
     churchName: "",
-    primaryColor: "#1e3a5f",
+    primaryColor: "#002D5F",
   };
   private logoImage: HTMLImageElement | null = null;
   private logoLoaded = false;

@@ -47,6 +47,8 @@ struct HomeTabView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(theme.palette.background)
+            .navigationTitle(root.selectedChurch?.churchName ?? L.homeTitle)
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { path.append(.churches) } label: {
@@ -199,7 +201,7 @@ struct AnnouncementDetailView: View {
                         case .failure:
                             EmptyView()
                         default:
-                            Rectangle()
+                            RoundedRectangle(cornerRadius: FaithFormTokens.Radius.lg, style: .continuous)
                                 .fill(theme.palette.skeletonBase)
                                 .aspectRatio(16.0 / 9.0, contentMode: .fit)
                                 .skeletonShimmer()

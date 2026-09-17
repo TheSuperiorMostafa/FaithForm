@@ -86,11 +86,23 @@ class ApiClient(
         idempotencyKey: String? = null,
         authenticated: Boolean = true
     ): ApiResult<T> {
+        val cleanPath = path.substringBefore('?')
+        val inlineQuery = if (path.contains('?')) {
+            path.substringAfter('?')
+                .split('&')
+                .filter { it.isNotBlank() }
+                .associate {
+                    val parts = it.split('=', limit = 2)
+                    decode(parts[0]) to (if (parts.size > 1) decode(parts[1]) else "")
+                }
+        } else emptyMap()
+        val mergedQuery = inlineQuery + query
+
         // Percent-encoded, like `URLQueryItem` on iOS. A search for
         // "St. Mark's & St. John's" is a value, and an unencoded `&` would
         // silently split it into a second, meaningless parameter.
-        val queryString = if (query.isEmpty()) "" else {
-            query.entries.sortedBy { it.key }
+        val queryString = if (mergedQuery.isEmpty()) "" else {
+            mergedQuery.entries.sortedBy { it.key }
                 .joinToString("&", prefix = "?") { "${encode(it.key)}=${encode(it.value)}" }
         }
 
@@ -113,7 +125,7 @@ class ApiClient(
             transport.perform(
                 HttpRequest(
                     method = method,
-                    url = "${environment.baseUrl.trimEnd('/')}/$path$queryString",
+                    url = "${environment.baseUrl.trimEnd('/')}/${cleanPath.trimStart('/')}$queryString",
                     headers = headers,
                     body = body
                 )
@@ -204,6 +216,9 @@ class ApiClient(
 
     private fun encode(value: String): String =
         java.net.URLEncoder.encode(value, Charsets.UTF_8.name()).replace("+", "%20")
+
+    private fun decode(value: String): String =
+        java.net.URLDecoder.decode(value, Charsets.UTF_8.name())
 }
 
 /**

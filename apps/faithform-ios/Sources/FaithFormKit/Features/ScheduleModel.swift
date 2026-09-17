@@ -70,12 +70,10 @@ public final class ScheduleModel {
 
         if let cached = await cache.load([FeedItem].self, name: cacheName, partition: partition) {
             let freshness = cached.freshness(now: Date(), ttl: 300)
-            if freshness != .expired {
-                phase = cached.value.isEmpty
-                    ? .empty
-                    : .loaded(items: cached.value, isStale: freshness != .fresh)
-                etag = cached.etag
-            }
+            phase = cached.value.isEmpty
+                ? .empty
+                : .loaded(items: cached.value, isStale: freshness != .fresh)
+            etag = cached.etag
         } else {
             phase = .loading
         }
@@ -84,12 +82,18 @@ public final class ScheduleModel {
         defer { isRefreshing = false }
 
         do {
-            let path = "api/mobile/v1/schedule/\(churchSlug)?from=\(window.from)&to=\(window.to)"
-            let response = try await api.send(path, ifNoneMatch: etag, as: SchedulePage.self)
+            let response = try await api.send(
+                "api/mobile/v1/schedule/\(churchSlug)",
+                query: ["from": window.from, "to": window.to],
+                ifNoneMatch: etag,
+                as: SchedulePage.self
+            )
 
             if response.notModified {
                 if case let .loaded(items, _) = phase {
                     phase = .loaded(items: items, isStale: false)
+                } else if let cached = await cache.load([FeedItem].self, name: cacheName, partition: partition) {
+                    phase = cached.value.isEmpty ? .empty : .loaded(items: cached.value, isStale: false)
                 }
                 return
             }

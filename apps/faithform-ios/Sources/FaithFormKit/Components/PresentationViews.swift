@@ -322,6 +322,7 @@ private struct SlideTextSizeSheet: View {
 }
 
 private struct SlidePageView: View {
+    @Environment(\.faithformTheme) private var faithTheme
     let page: PresentationPage
     let theme: PresentationTheme?
     let index: Int
@@ -330,7 +331,7 @@ private struct SlidePageView: View {
 
     var body: some View {
         let textColor = Color(hex: theme?.text) ?? .white
-        let accent = Color(hex: theme?.accent) ?? Color(red: 0.77, green: 0.63, blue: 0.35)
+        let accent = Color(hex: theme?.accent) ?? faithTheme.palette.brandAccent
         let italicScripture = theme?.italicRef ?? true
         let textShadow = theme?.textShadow == true ? Color.black.opacity(0.35) : Color.clear
 

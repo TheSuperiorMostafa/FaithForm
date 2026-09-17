@@ -87,12 +87,27 @@ public actor APIClient {
         authenticated: Bool = true,
         as type: T.Type = T.self
     ) async throws -> Response<T> {
+        let cleanPath: String
+        var effectiveQuery = query
+        if let queryIndex = path.firstIndex(of: "?") {
+            cleanPath = String(path[..<queryIndex])
+            let queryString = String(path[path.index(after: queryIndex)...])
+            let dummy = URLComponents(string: "?\(queryString)")
+            for item in dummy?.queryItems ?? [] {
+                if effectiveQuery[item.name] == nil, let val = item.value {
+                    effectiveQuery[item.name] = val
+                }
+            }
+        } else {
+            cleanPath = path
+        }
+
         var components = URLComponents(
-            url: configuration.environment.baseURL.appendingPathComponent(path),
+            url: configuration.environment.baseURL.appendingPathComponent(cleanPath),
             resolvingAgainstBaseURL: false
         )
-        if !query.isEmpty {
-            components?.queryItems = query
+        if !effectiveQuery.isEmpty {
+            components?.queryItems = effectiveQuery
                 .sorted { $0.key < $1.key }
                 .map { URLQueryItem(name: $0.key, value: $0.value) }
         }

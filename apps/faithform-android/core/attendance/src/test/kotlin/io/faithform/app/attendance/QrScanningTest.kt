@@ -248,6 +248,19 @@ class ShortCodeEntryTest {
     fun `the field never grows past a code`() {
         assertEquals(7, ShortCodeEntry.normalise("BCDFGHJKLMNPQRTVWXY3479").length)
     }
+
+    @Test
+    fun `unused character hint triggers on disallowed letters and digits`() {
+        assertTrue(ShortCodeEntry.containsUnusedCharacters("A"))
+        assertTrue(ShortCodeEntry.containsUnusedCharacters("0"))
+        assertFalse(ShortCodeEntry.containsUnusedCharacters("B"))
+        assertFalse(ShortCodeEntry.containsUnusedCharacters(" - "))
+
+        assertTrue(ShortCodeEntry.showsUnusedCharacterHint("BC", wasShowing = true))
+        assertFalse(ShortCodeEntry.showsUnusedCharacterHint("BC", wasShowing = false))
+        assertFalse(ShortCodeEntry.showsUnusedCharacterHint("", wasShowing = true))
+        assertFalse(ShortCodeEntry.showsUnusedCharacterHint("BCDFGHJ", wasShowing = true))
+    }
 }
 
 class ScanAttemptIdentityTest {

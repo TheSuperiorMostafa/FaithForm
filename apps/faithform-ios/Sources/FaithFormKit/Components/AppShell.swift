@@ -34,7 +34,6 @@ public struct AppShellView: View {
                 .background(theme.palette.background)
                 .navigationTitle(L.appName)
         }
-        .faithformTheme()
     }
 
     @ViewBuilder

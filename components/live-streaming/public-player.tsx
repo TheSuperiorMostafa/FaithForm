@@ -328,7 +328,7 @@ export function PublicPlayer({
         <Link
           href={getGivePageUrl(slug)}
           className="inline-flex items-center rounded-lg px-4 py-2 text-sm font-semibold text-white"
-          style={{ backgroundColor: givingColor ?? "#1e3a5f" }}
+          style={{ backgroundColor: givingColor ?? "#002D5F" }}
         >
           Give online
         </Link>

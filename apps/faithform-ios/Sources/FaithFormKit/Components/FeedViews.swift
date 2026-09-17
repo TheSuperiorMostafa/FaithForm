@@ -210,7 +210,7 @@ public struct HomeFeedView: View {
 
     public var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
+            VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
                 if isJoinPending {
                     JoinPendingBanner()
                 }
@@ -222,7 +222,6 @@ public struct HomeFeedView: View {
         }
         .background(theme.palette.background)
         .refreshable { await model.refresh(churchSlug: churchSlug) }
-        .navigationTitle(churchName)
     }
 
     @ViewBuilder

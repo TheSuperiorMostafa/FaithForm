@@ -42,7 +42,6 @@ public struct ScheduleView: View {
         }
         .background(theme.palette.background)
         .refreshable { await model.refresh(churchSlug: churchSlug) }
-        .navigationTitle(churchName)
         .onChange(of: model.displayedMonth) { _, _ in
             selectedDay = todayInChurchZone()
         }
@@ -79,7 +78,13 @@ public struct ScheduleView: View {
             EmptyStateView(title: L.blockedTitle, explanation: L.blockedBody, symbol: "hand.raised")
 
         case let .failed(message):
-            EmptyStateView(title: L.errorTitle, explanation: message, symbol: "exclamationmark.triangle")
+            VStack(spacing: FaithFormTokens.Spacing.base) {
+                EmptyStateView(title: L.errorTitle, explanation: message, symbol: "exclamationmark.triangle")
+                Button(L.retry) {
+                    Task { await model.refresh(churchSlug: churchSlug) }
+                }
+                .buttonStyle(FaithFormButtonStyle(kind: .secondary, theme: theme))
+            }
         }
     }
 

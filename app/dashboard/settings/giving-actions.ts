@@ -264,10 +264,10 @@ export async function updateGivingBranding(params: {
   const accent = normalizeHexColor(params.accentColor);
 
   if (params.primaryColor && !primary) {
-    return { error: "Primary color must be a valid hex value (e.g. #1A2B4B)." };
+    return { error: "Primary color must be a valid hex value (e.g. #002D5F)." };
   }
   if (params.accentColor && !accent) {
-    return { error: "Accent color must be a valid hex value (e.g. #C19A6B)." };
+    return { error: "Accent color must be a valid hex value (e.g. #C5A059)." };
   }
 
   const admin = createAdminClient();

@@ -82,6 +82,7 @@ struct WatchTabView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(theme.palette.background)
             .navigationTitle(L.tabWatch)
+            .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: Route.self) { route in
                 switch route {
                 case let .recording(mediaId):

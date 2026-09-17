@@ -28,8 +28,8 @@ export function GivingBrandingSettings({
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(logoUrl);
-  const [primary, setPrimary] = useState(primaryColor ?? "#1A2B4B");
-  const [accent, setAccent] = useState(accentColor ?? "#C19A6B");
+  const [primary, setPrimary] = useState(primaryColor ?? "#002D5F");
+  const [accent, setAccent] = useState(accentColor ?? "#C5A059");
 
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -74,8 +74,8 @@ export function GivingBrandingSettings({
         accentColor: null,
       });
       if (!result.error) {
-        setPrimary("#1A2B4B");
-        setAccent("#C19A6B");
+        setPrimary("#002D5F");
+        setAccent("#C5A059");
       }
       setMessage(result.error ?? "Colors reset to FaithForm defaults.");
     });
@@ -153,7 +153,7 @@ export function GivingBrandingSettings({
               id="giving-primary"
               value={primary}
               onChange={(e) => setPrimary(e.target.value)}
-              placeholder="#1A2B4B"
+              placeholder="#002D5F"
             />
           </div>
         </div>
@@ -172,7 +172,7 @@ export function GivingBrandingSettings({
               id="giving-accent"
               value={accent}
               onChange={(e) => setAccent(e.target.value)}
-              placeholder="#C19A6B"
+              placeholder="#C5A059"
             />
           </div>
         </div>

@@ -81,14 +81,12 @@ class ScheduleModel(
         val cacheName = "schedule|${window.from}|${window.to}"
 
         cache.load(cacheName, partition, itemsSerializer)?.let { cached ->
+            etag = cached.etag
             val freshness = cached.freshness(clock(), TTL_MILLIS)
-            if (freshness != Freshness.Expired) {
-                _phase.value = if (cached.value.isEmpty()) {
-                    SchedulePhase.Empty
-                } else {
-                    SchedulePhase.Loaded(cached.value, isStale = freshness != Freshness.Fresh)
-                }
-                etag = cached.etag
+            _phase.value = if (cached.value.isEmpty()) {
+                SchedulePhase.Empty
+            } else {
+                SchedulePhase.Loaded(cached.value, isStale = freshness != Freshness.Fresh)
             }
         } ?: run {
             _phase.value = SchedulePhase.Loading
@@ -105,6 +103,10 @@ class ScheduleModel(
             if (response.notModified) {
                 (_phase.value as? SchedulePhase.Loaded)?.let {
                     _phase.value = it.copy(isStale = false)
+                    return
+                }
+                cache.load(cacheName, partition, itemsSerializer)?.let { cached ->
+                    _phase.value = if (cached.value.isEmpty()) SchedulePhase.Empty else SchedulePhase.Loaded(cached.value, isStale = false)
                 }
                 return
             }

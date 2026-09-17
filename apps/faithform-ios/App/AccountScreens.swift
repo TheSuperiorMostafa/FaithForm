@@ -29,6 +29,7 @@ struct AccountTabView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(theme.palette.background)
             .navigationTitle(L.tabAccount)
+            .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: AccountRoute.self) { route in
                 switch route {
                 case .automaticCheckIn:
@@ -296,13 +297,13 @@ private struct ChurchAppearanceScreen: View {
     @Environment(\.dismiss) private var dismiss
     let root: RootModel
 
-    @State private var primary = "#1A2B4B"
-    @State private var accent = "#C19A6B"
+    @State private var primary = "#002D5F"
+    @State private var accent = "#C5A059"
     @State private var saving = false
     @State private var message: String?
 
     private let presets = [
-        ChurchAppearancePreset(id: "classic", name: "Classic", primary: "#1A2B4B", accent: "#C19A6B"),
+        ChurchAppearancePreset(id: "classic", name: "Classic", primary: "#002D5F", accent: "#C5A059"),
         ChurchAppearancePreset(id: "ocean", name: "Ocean", primary: "#164E63", accent: "#22D3EE"),
         ChurchAppearancePreset(id: "hope", name: "Hope", primary: "#365314", accent: "#A3E635"),
         ChurchAppearancePreset(id: "grace", name: "Grace", primary: "#581C87", accent: "#D8B4FE"),
@@ -344,10 +345,10 @@ private struct ChurchAppearanceScreen: View {
                 VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.sm) {
                     Text(L.churchAppearanceCustom)
                         .font(theme.font(FaithFormTokens.Text.titleMedium))
-                    TextField("#1A2B4B", text: $primary)
+                    TextField("#002D5F", text: $primary)
                         .textInputAutocapitalization(.characters)
                         .padding(12).background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 10))
-                    TextField("#C19A6B", text: $accent)
+                    TextField("#C5A059", text: $accent)
                         .textInputAutocapitalization(.characters)
                         .padding(12).background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 10))
                 }
@@ -412,7 +413,7 @@ private struct ChurchAppearanceScreen: View {
 private extension Color {
     init(hexCode: String) {
         let normalized = hexCode.trimmingCharacters(in: .whitespacesAndNewlines)
-        let value = UInt64(normalized.dropFirst(), radix: 16) ?? 0x1A2B4B
+        let value = UInt64(normalized.dropFirst(), radix: 16) ?? 0x002D5F
         self.init(.sRGB, red: Double((value >> 16) & 255) / 255, green: Double((value >> 8) & 255) / 255, blue: Double(value & 255) / 255)
     }
 }

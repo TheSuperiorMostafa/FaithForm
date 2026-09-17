@@ -56,8 +56,8 @@ function updateDay(
   return { ...hours, [day]: { ...hours[day], ...patch } };
 }
 
-const DEFAULT_PRIMARY_COLOR = "#1A2B4B";
-const DEFAULT_ACCENT_COLOR = "#C19A6B";
+const DEFAULT_PRIMARY_COLOR = "#002D5F";
+const DEFAULT_ACCENT_COLOR = "#C5A059";
 
 function formsEqual(a: ChurchProfileFormState, b: ChurchProfileFormState): boolean {
   return JSON.stringify(a) === JSON.stringify(b);

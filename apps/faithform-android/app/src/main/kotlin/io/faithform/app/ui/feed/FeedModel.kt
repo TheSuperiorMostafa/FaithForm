@@ -51,11 +51,9 @@ class FeedModel(
 
     suspend fun load() {
         cache.load(NAME, partition, itemsSerializer)?.let { cached ->
+            etag = cached.etag
             val freshness = cached.freshness(clock(), TTL_MILLIS)
-            if (freshness != Freshness.Expired) {
-                _phase.value = FeedPhase.Loaded(cached.value, isStale = freshness != Freshness.Fresh)
-                etag = cached.etag
-            }
+            _phase.value = if (cached.value.isEmpty()) FeedPhase.Empty else FeedPhase.Loaded(cached.value, isStale = freshness != Freshness.Fresh)
         }
         refresh()
     }
@@ -69,7 +67,13 @@ class FeedModel(
             )
 
             if (response.notModified) {
-                (_phase.value as? FeedPhase.Loaded)?.let { _phase.value = it.copy(isStale = false) }
+                (_phase.value as? FeedPhase.Loaded)?.let {
+                    _phase.value = it.copy(isStale = false)
+                    return
+                }
+                cache.load(NAME, partition, itemsSerializer)?.let { cached ->
+                    _phase.value = if (cached.value.isEmpty()) FeedPhase.Empty else FeedPhase.Loaded(cached.value, isStale = false)
+                }
                 return
             }
 
