@@ -106,9 +106,9 @@ fun SignedInHost(
                         icon = { Icon(tab.icon, contentDescription = null) },
                         label = { Text(label, maxLines = 1) },
                         colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = theme.palette.brandPrimary,
-                            selectedTextColor = theme.palette.brandPrimary,
-                            indicatorColor = theme.palette.brandAccentSoft,
+                            selectedIconColor = theme.palette.brandAccent,
+                            selectedTextColor = theme.palette.brandAccent,
+                            indicatorColor = theme.palette.brandAccentSoft.copy(alpha = 0.22f),
                             unselectedIconColor = theme.mutedContent,
                             unselectedTextColor = theme.mutedContent,
                         ),

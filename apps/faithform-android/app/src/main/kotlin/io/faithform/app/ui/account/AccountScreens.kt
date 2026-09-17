@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -260,13 +261,57 @@ fun AccountTab(
             }
         }
 
-        if (showsAutomaticCheckIn && onOpenAutomaticCheckIn != null) {
-            Column(verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm)) {
+        val context = LocalContext.current
+        val prefs = remember { context.getSharedPreferences("faithform_prefs", Context.MODE_PRIVATE) }
+        var currentAppearance by remember { mutableStateOf(prefs.getString("appearance", "system") ?: "system") }
+
+        Column(verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm)) {
+            Text(
+                stringResource(R.string.preferences_section),
+                style = MaterialTheme.typography.labelLarge,
+                color = theme.mutedContent,
+            )
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(theme.palette.surface, RoundedCornerShape(FaithFormTokens.Radius.lg))
+                    .border(theme.borderWidth, theme.palette.border, RoundedCornerShape(FaithFormTokens.Radius.lg))
+                    .padding(FaithFormTokens.Spacing.base),
+                verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm),
+            ) {
                 Text(
-                    stringResource(R.string.preferences_section),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = theme.mutedContent,
+                    text = "Display",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = theme.palette.contentPrimary,
                 )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm),
+                ) {
+                    listOf("system" to "System", "light" to "Light", "dark" to "Dark").forEach { (key, label) ->
+                        val selected = currentAppearance == key
+                        OutlinedButton(
+                            onClick = {
+                                currentAppearance = key
+                                prefs.edit().putString("appearance", key).apply()
+                            },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = if (selected) theme.palette.brandAccent else Color.Transparent,
+                                contentColor = if (selected) theme.palette.contentOnAccent else theme.palette.contentPrimary,
+                            ),
+                            border = BorderStroke(
+                                theme.borderWidth,
+                                if (selected) theme.palette.brandAccent else theme.palette.border,
+                            ),
+                        ) {
+                            Text(label, maxLines = 1)
+                        }
+                    }
+                }
+            }
+
+            if (showsAutomaticCheckIn && onOpenAutomaticCheckIn != null) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()

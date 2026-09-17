@@ -14,7 +14,7 @@ export type ChurchAppTheme = {
 };
 
 const LIGHT_BACKGROUND = "#F8F7F4";
-const DARK_BACKGROUND = "#0A1628";
+const DARK_BACKGROUND = "#0F1117";
 const LIGHT_CONTENT = "#002D5F";
 const DARK_CONTENT = "#F0EDE6";
 

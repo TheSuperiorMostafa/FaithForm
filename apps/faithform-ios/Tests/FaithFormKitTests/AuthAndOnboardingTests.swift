@@ -327,6 +327,7 @@ struct AuthModelTests {
         let model = AuthModel(auth: auth) { _, _ in
             Issue.record("no session should be handed over")
         }
+        model.name = "Sarah"
         model.email = "p@example.org"
         model.password = "pw123456"
 
@@ -353,7 +354,7 @@ struct AuthModelTests {
         #expect(model.phase == .checkEmail)
     }
 
-    @Test("a blank name is sent as no name")
+    @Test("a blank name is rejected on sign up")
     func signUpBlankName() async {
         let auth = ScriptedAuth(signUp: .success(.confirmationRequired))
         let model = AuthModel(auth: auth) { _, _ in }
@@ -363,7 +364,8 @@ struct AuthModelTests {
 
         await model.createAccount()
 
-        #expect(auth.signUpNames == [nil])
+        #expect(model.phase == .failed(L.authErrorNameMissing))
+        #expect(auth.signUpNames.isEmpty)
     }
 
     @Test("an empty form never reaches the network")
@@ -379,6 +381,10 @@ struct AuthModelTests {
 
         model.email = "p@example.org"
         model.password = "short"
+        await model.createAccount()
+        #expect(model.phase == .failed(L.authErrorNameMissing))
+
+        model.name = "Sarah"
         await model.createAccount()
         #expect(model.phase == .failed(L.authErrorWeakPassword))
     }

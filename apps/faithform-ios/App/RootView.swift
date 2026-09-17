@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import FaithFormKit
 
 /// The visitor journey, in one place.
@@ -246,8 +247,55 @@ struct RootView: View {
                     .tag(tab)
             }
         }
-        .onAppear { openedTabs.insert(model.selectedTab) }
+        .tint(theme.palette.brandAccent)
+        .toolbarBackground(theme.palette.surface, for: .tabBar)
+        .toolbarBackground(.visible, for: .tabBar)
+        .onAppear {
+            openedTabs.insert(model.selectedTab)
+            applyTabBarAppearance(
+                surface: theme.palette.surface,
+                accent: theme.palette.brandAccent,
+                unselected: theme.palette.contentMuted,
+                divider: theme.palette.divider
+            )
+        }
         .onChange(of: model.selectedTab) { _, tab in openedTabs.insert(tab) }
+        .onChange(of: theme.palette.surface) { _, newSurface in
+            applyTabBarAppearance(
+                surface: newSurface,
+                accent: theme.palette.brandAccent,
+                unselected: theme.palette.contentMuted,
+                divider: theme.palette.divider
+            )
+        }
+        .onChange(of: theme.palette.brandAccent) { _, newAccent in
+            applyTabBarAppearance(
+                surface: theme.palette.surface,
+                accent: newAccent,
+                unselected: theme.palette.contentMuted,
+                divider: theme.palette.divider
+            )
+        }
+    }
+
+    private func applyTabBarAppearance(surface: Color, accent: Color, unselected: Color, divider: Color) {
+        let appearance = UITabBarAppearance()
+        appearance.configureWithOpaqueBackground()
+        appearance.backgroundColor = UIColor(surface)
+        appearance.shadowColor = UIColor(divider)
+
+        let itemAppearance = UITabBarItemAppearance()
+        itemAppearance.normal.iconColor = UIColor(unselected)
+        itemAppearance.normal.titleTextAttributes = [.foregroundColor: UIColor(unselected)]
+        itemAppearance.selected.iconColor = UIColor(accent)
+        itemAppearance.selected.titleTextAttributes = [.foregroundColor: UIColor(accent)]
+
+        appearance.stackedLayoutAppearance = itemAppearance
+        appearance.inlineLayoutAppearance = itemAppearance
+        appearance.compactInlineLayoutAppearance = itemAppearance
+
+        UITabBar.appearance().standardAppearance = appearance
+        UITabBar.appearance().scrollEdgeAppearance = appearance
     }
 
     @ViewBuilder

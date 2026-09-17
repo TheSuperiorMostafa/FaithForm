@@ -132,6 +132,7 @@ struct AccountView: View {
     /// it offers nothing that would lead to a location prompt.
     var showsAutomaticCheckIn = false
 
+    @AppStorage("faithform.appearance") private var appearance = "system"
     @State private var draftName = ""
     @State private var savingName = false
     @State private var nameSaveFailed = false
@@ -144,11 +145,25 @@ struct AccountView: View {
                 nameEditor
             }
 
-            if showsAutomaticCheckIn {
-                VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.sm) {
-                    Text(L.preferencesSection)
-                        .font(theme.font(FaithFormTokens.Text.label))
-                        .foregroundStyle(theme.mutedContent)
+            VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.sm) {
+                Text(L.preferencesSection)
+                    .font(theme.font(FaithFormTokens.Text.label))
+                    .foregroundStyle(theme.mutedContent)
+
+                VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.xs) {
+                    Text("Display")
+                        .font(theme.font(FaithFormTokens.Text.body))
+                        .foregroundStyle(theme.palette.contentPrimary)
+                    Picker("Appearance", selection: $appearance) {
+                        Text("System").tag("system")
+                        Text("Light").tag("light")
+                        Text("Dark").tag("dark")
+                    }
+                    .pickerStyle(.segmented)
+                }
+                .padding(.vertical, FaithFormTokens.Spacing.xs)
+
+                if showsAutomaticCheckIn {
                     AutomaticCheckInRow(model: dependencies.attendanceModel)
                 }
             }

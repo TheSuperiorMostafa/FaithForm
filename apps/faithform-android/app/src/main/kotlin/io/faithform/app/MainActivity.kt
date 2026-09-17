@@ -1,17 +1,25 @@
 package io.faithform.app
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.runtime.getValue
 import io.faithform.app.attendance.CameraPermissionRequester
 import io.faithform.app.design.ChurchBrandPalette
 import io.faithform.app.design.ChurchBrandTheme
@@ -157,6 +165,24 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
+            val context = LocalContext.current
+            val prefs = remember { context.getSharedPreferences("faithform_prefs", Context.MODE_PRIVATE) }
+            var appearance by remember { mutableStateOf(prefs.getString("appearance", "system") ?: "system") }
+            DisposableEffect(prefs) {
+                val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+                    if (key == "appearance") {
+                        appearance = prefs.getString("appearance", "system") ?: "system"
+                    }
+                }
+                prefs.registerOnSharedPreferenceChangeListener(listener)
+                onDispose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+            }
+            val isDark = when (appearance) {
+                "light" -> false
+                "dark" -> true
+                else -> isSystemInDarkTheme()
+            }
+
             val phase by viewModel.state.collectAsStateWithLifecycle()
             val selectedSlug by viewModel.selectedChurchSlug.collectAsStateWithLifecycle()
             val bootstrap = (phase as? LaunchPhase.Ready)?.bootstrap
@@ -179,7 +205,7 @@ class MainActivity : ComponentActivity() {
                     ),
                 )
             }
-            FaithFormTheme(churchBrand = churchBrand) {
+            FaithFormTheme(darkTheme = isDark, churchBrand = churchBrand) {
                 FaithFormApp(
                     viewModel = viewModel,
                     container = container,
