@@ -130,11 +130,25 @@ export const visitorProfileSchema = z.object({
   authorizationVersion: z.number().int(),
 }).meta({ id: "VisitorProfile" });
 
+export const appThemePaletteSchema = z.object({
+  primary: z.string().regex(/^#[0-9A-F]{6}$/),
+  accent: z.string().regex(/^#[0-9A-F]{6}$/),
+  accentSoft: z.string().regex(/^#[0-9A-F]{6}$/),
+  onAccent: z.string().regex(/^#[0-9A-F]{6}$/),
+}).meta({ id: "AppThemePalette" });
+
+export const churchAppThemeSchema = z.object({
+  light: appThemePaletteSchema,
+  dark: appThemePaletteSchema,
+}).meta({ id: "ChurchAppTheme" });
+
 /** One church this account has a relationship with. */
 export const churchRelationshipSchema = z.object({
   churchSlug,
   churchName: z.string(),
   logoUrl: url.nullable(),
+  /** Accessible semantic colors selected by this church. Null uses FaithForm defaults. */
+  appTheme: churchAppThemeSchema.nullable().optional(),
   state: relationshipStateSchema,
   joinPolicy: joinPolicySchema,
   joinedAt: instant.nullable(),
@@ -1287,6 +1301,8 @@ export const CONTRACT_SCHEMAS = {
   ErrorBody: errorBodySchema,
   Failure: failureSchema,
   VisitorProfile: visitorProfileSchema,
+  AppThemePalette: appThemePaletteSchema,
+  ChurchAppTheme: churchAppThemeSchema,
   ChurchRelationship: churchRelationshipSchema,
   AccountRequest: accountRequestSchema,
   Bootstrap: bootstrapSchema,

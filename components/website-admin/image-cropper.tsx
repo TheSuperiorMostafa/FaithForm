@@ -20,18 +20,30 @@ import { cn } from "@/lib/utils";
  * point: without it, `object-fit: cover` silently centre-crops and a church has
  * no say in which part of the photo survives.
  */
+/** What the frame locks to, and what the church is told about it. */
+export type CropShape = { label: string; hint: string; ratio: number | null };
+
 export function ImageCropper({
   file,
   aspectKey,
+  shape,
   onCancel,
   onConfirm,
 }: {
   file: File;
-  aspectKey: ImageAspectKey;
+  /** A website aspect. Ignored when `shape` is given. */
+  aspectKey?: ImageAspectKey;
+  /**
+   * An explicit shape, for callers outside the website builder. Media artwork
+   * ratios come from `design/faithform/tokens.json` rather than from the
+   * site's rendered column widths, so they cannot be expressed as an
+   * `ImageAspectKey` without putting them in the wrong file.
+   */
+  shape?: CropShape;
   onCancel: () => void;
   onConfirm: (crop: Area) => void;
 }) {
-  const aspect = getAspect(aspectKey);
+  const aspect: CropShape = shape ?? getAspect(aspectKey);
   const [src, setSrc] = useState<string | null>(null);
   const [crop, setCrop] = useState({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);

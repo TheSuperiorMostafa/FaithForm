@@ -36,7 +36,8 @@ import FaithFormKit
 /// down — stopping a camera or a player on the way — and the next church's
 /// screens start from their own models, never the previous church's rows.
 struct RootView: View {
-    @Environment(\.faithformTheme) private var theme
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.scenePhase) private var scenePhase
     private let dependencies: AppDependencies
     @State private var model: RootModel
@@ -61,6 +62,18 @@ struct RootView: View {
                 api: dependencies.api,
                 location: DiscoveryLocationProvider()
             )
+        )
+    }
+
+    private var selectedAppTheme: ChurchAppTheme? {
+        model.selectedChurch?.appTheme
+    }
+
+    private var theme: FaithFormTheme {
+        FaithFormTheme(
+            colorScheme: colorScheme,
+            reduceMotion: reduceMotion,
+            appTheme: selectedAppTheme
         )
     }
 
@@ -138,6 +151,7 @@ struct RootView: View {
         // child's own size, so a short phase — the offline and failed screens —
         // used to sit in a band of page colour with system white above and below.
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .faithformTheme(selectedAppTheme)
         .background(theme.palette.background.ignoresSafeArea())
         .overlay {
             if showsLaunchLockup {

@@ -12,9 +12,12 @@ public struct FaithFormTheme: Sendable {
     public init(
         colorScheme: ColorScheme,
         reduceMotion: Bool = false,
-        increaseContrast: Bool = false
+        increaseContrast: Bool = false,
+        appTheme: ChurchAppTheme? = nil
     ) {
-        self.palette = colorScheme == .dark ? FaithFormTokens.dark : FaithFormTokens.light
+        let base = colorScheme == .dark ? FaithFormTokens.dark : FaithFormTokens.light
+        let brand = colorScheme == .dark ? appTheme?.dark : appTheme?.light
+        self.palette = base.applying(brand)
         self.reduceMotion = reduceMotion
         self.increaseContrast = increaseContrast
     }
@@ -89,7 +92,11 @@ public struct FaithFormThemeProvider: ViewModifier {
     @Environment(\.legibilityWeight) private var legibilityWeight
     #endif
 
-    public init() {}
+    private let appTheme: ChurchAppTheme?
+
+    public init(appTheme: ChurchAppTheme? = nil) {
+        self.appTheme = appTheme
+    }
 
     public func body(content: Content) -> some View {
         content.environment(
@@ -103,12 +110,64 @@ public struct FaithFormThemeProvider: ViewModifier {
                     #else
                     return false
                     #endif
-                }()
+                }(),
+                appTheme: appTheme
             )
         )
     }
 }
 
 extension View {
-    public func faithformTheme() -> some View { modifier(FaithFormThemeProvider()) }
+    public func faithformTheme(_ appTheme: ChurchAppTheme? = nil) -> some View {
+        modifier(FaithFormThemeProvider(appTheme: appTheme))
+    }
+}
+
+private extension FaithFormTokens.Palette {
+    func applying(_ brand: AppThemePalette?) -> Self {
+        guard let brand else { return self }
+        return Self(
+            brandPrimary: Color(hex: brand.primary),
+            brandAccent: Color(hex: brand.accent),
+            brandAccentSoft: Color(hex: brand.accentSoft),
+            background: background,
+            surface: surface,
+            surfaceRaised: surfaceRaised,
+            surfaceSunken: surfaceSunken,
+            surfaceInverse: surfaceInverse,
+            contentPrimary: contentPrimary,
+            contentSecondary: contentSecondary,
+            contentMuted: contentMuted,
+            contentInverse: contentInverse,
+            contentOnAccent: Color(hex: brand.onAccent),
+            border: border,
+            borderStrong: borderStrong,
+            divider: divider,
+            destructive: destructive,
+            destructiveContent: destructiveContent,
+            success: success,
+            successContent: successContent,
+            warning: warning,
+            warningContent: warningContent,
+            live: live,
+            liveContent: liveContent,
+            focusRing: Color(hex: brand.accent),
+            overlayScrim: overlayScrim,
+            skeletonBase: skeletonBase,
+            skeletonSheen: skeletonSheen
+        )
+    }
+}
+
+private extension Color {
+    init(hex: String) {
+        let value = UInt64(hex.dropFirst(), radix: 16) ?? 0
+        self.init(
+            .sRGB,
+            red: Double((value >> 16) & 0xff) / 255,
+            green: Double((value >> 8) & 0xff) / 255,
+            blue: Double(value & 0xff) / 255,
+            opacity: 1
+        )
+    }
 }

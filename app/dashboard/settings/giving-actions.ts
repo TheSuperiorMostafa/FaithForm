@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireChurchAuth } from "@/lib/auth/church";
 import { validateImageBuffer } from "@/lib/security/validate-image";
 import { normalizeHexColor } from "@/lib/giving/branding";
+import { extractLogoTheme } from "@/lib/branding/church-theme";
 import { ensureDefaultFunds } from "@/lib/giving/funds";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { refreshAccountFromStripe } from "@/lib/stripe/connect";
@@ -207,7 +208,12 @@ export async function setDefaultFund(fundId: string): Promise<{ error?: string }
 
 export async function uploadGivingLogo(
   formData: FormData,
-): Promise<{ error?: string; logoUrl?: string }> {
+): Promise<{
+  error?: string;
+  logoUrl?: string;
+  suggestedPrimaryColor?: string;
+  suggestedAccentColor?: string;
+}> {
   const auth = await requireChurchAuth();
   if (!auth.isAdmin) return { error: "Forbidden" };
 
@@ -239,7 +245,12 @@ export async function uploadGivingLogo(
   if (error) return { error: error.message };
 
   await revalidateGivingPaths(auth.churchId);
-  return { logoUrl };
+  const suggestion = await extractLogoTheme(validated.buffer);
+  return {
+    logoUrl,
+    suggestedPrimaryColor: suggestion?.primaryColor,
+    suggestedAccentColor: suggestion?.accentColor,
+  };
 }
 
 export async function updateGivingBranding(params: {

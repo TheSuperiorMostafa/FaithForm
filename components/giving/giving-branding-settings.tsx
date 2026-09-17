@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
+import { Palette } from "lucide-react";
 import {
   updateGivingBranding,
   uploadGivingLogo,
@@ -43,7 +44,13 @@ export function GivingBrandingSettings({
     startTransition(async () => {
       setMessage(null);
       const result = await uploadGivingLogo(formData);
-      setMessage(result.error ?? "Logo updated.");
+      if (result.suggestedPrimaryColor && result.suggestedAccentColor) {
+        setPrimary(result.suggestedPrimaryColor);
+        setAccent(result.suggestedAccentColor);
+        setMessage("Logo updated. We found two accessible color suggestions—review and save them.");
+      } else {
+        setMessage(result.error ?? "Logo updated. Choose colors below to finish your app theme.");
+      }
       if (result.logoUrl) setPreview(result.logoUrl);
     });
   };
@@ -77,9 +84,13 @@ export function GivingBrandingSettings({
   return (
     <div className={cn("space-y-4 border-t pt-4", className)}>
       <div>
-        <h4 className="text-sm font-medium">Donor page branding</h4>
+        <h4 className="flex items-center gap-2 text-sm font-medium">
+          <Palette className="h-4 w-4 text-accent" />
+          Church app theme
+        </h4>
         <p className="text-xs text-muted-foreground">
-          Logo and colors appear on your public giving page for donors.
+          Your logo and colors personalize the entire member app and your public giving page.
+          Upload a logo for smart suggestions, or choose your own colors.
         </p>
       </div>
 
@@ -174,11 +185,11 @@ export function GivingBrandingSettings({
           borderColor: `${accent}66`,
         }}
       >
-        <p className="text-xs text-muted-foreground">Preview</p>
+        <p className="text-xs text-muted-foreground">App preview</p>
         <div className="mt-2 flex gap-2">
           <span
-            className="rounded-md px-3 py-1.5 text-sm font-medium text-white"
-            style={{ backgroundColor: primary }}
+            className="rounded-md px-3 py-1.5 text-sm font-medium"
+            style={{ backgroundColor: accent, color: primary }}
           >
             Selected amount
           </span>
@@ -193,7 +204,7 @@ export function GivingBrandingSettings({
 
       <div className="flex flex-wrap gap-2">
         <Button type="button" onClick={saveColors} disabled={pending}>
-          Save colors
+          Apply across app
         </Button>
         <Button type="button" variant="outline" onClick={resetColors} disabled={pending}>
           Reset to defaults

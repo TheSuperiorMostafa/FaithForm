@@ -428,6 +428,82 @@
       ],
       "additionalProperties": false
     },
+    "AppThemePalette": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "primary": {
+          "type": "string",
+          "pattern": "^#[0-9A-F]{6}$"
+        },
+        "accent": {
+          "type": "string",
+          "pattern": "^#[0-9A-F]{6}$"
+        },
+        "accentSoft": {
+          "type": "string",
+          "pattern": "^#[0-9A-F]{6}$"
+        },
+        "onAccent": {
+          "type": "string",
+          "pattern": "^#[0-9A-F]{6}$"
+        }
+      },
+      "required": [
+        "primary",
+        "accent",
+        "accentSoft",
+        "onAccent"
+      ],
+      "additionalProperties": false
+    },
+    "ChurchAppTheme": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "light": {
+          "$ref": "#/$defs/AppThemePalette"
+        },
+        "dark": {
+          "$ref": "#/$defs/AppThemePalette"
+        }
+      },
+      "required": [
+        "light",
+        "dark"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "AppThemePalette": {
+          "type": "object",
+          "properties": {
+            "primary": {
+              "type": "string",
+              "pattern": "^#[0-9A-F]{6}$"
+            },
+            "accent": {
+              "type": "string",
+              "pattern": "^#[0-9A-F]{6}$"
+            },
+            "accentSoft": {
+              "type": "string",
+              "pattern": "^#[0-9A-F]{6}$"
+            },
+            "onAccent": {
+              "type": "string",
+              "pattern": "^#[0-9A-F]{6}$"
+            }
+          },
+          "required": [
+            "primary",
+            "accent",
+            "accentSoft",
+            "onAccent"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
     "ChurchRelationship": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "object",
@@ -445,6 +521,16 @@
             {
               "type": "string",
               "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "appTheme": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChurchAppTheme"
             },
             {
               "type": "null"
@@ -498,7 +584,53 @@
         "updatedAt",
         "canReadPublishedContent"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "$defs": {
+        "ChurchAppTheme": {
+          "type": "object",
+          "properties": {
+            "light": {
+              "$ref": "#/$defs/AppThemePalette"
+            },
+            "dark": {
+              "$ref": "#/$defs/AppThemePalette"
+            }
+          },
+          "required": [
+            "light",
+            "dark"
+          ],
+          "additionalProperties": false
+        },
+        "AppThemePalette": {
+          "type": "object",
+          "properties": {
+            "primary": {
+              "type": "string",
+              "pattern": "^#[0-9A-F]{6}$"
+            },
+            "accent": {
+              "type": "string",
+              "pattern": "^#[0-9A-F]{6}$"
+            },
+            "accentSoft": {
+              "type": "string",
+              "pattern": "^#[0-9A-F]{6}$"
+            },
+            "onAccent": {
+              "type": "string",
+              "pattern": "^#[0-9A-F]{6}$"
+            }
+          },
+          "required": [
+            "primary",
+            "accent",
+            "accentSoft",
+            "onAccent"
+          ],
+          "additionalProperties": false
+        }
+      }
     },
     "AccountRequest": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -744,6 +876,16 @@
                 }
               ]
             },
+            "appTheme": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ChurchAppTheme"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "state": {
               "type": "string",
               "enum": [
@@ -790,6 +932,50 @@
             "joinedAt",
             "updatedAt",
             "canReadPublishedContent"
+          ],
+          "additionalProperties": false
+        },
+        "ChurchAppTheme": {
+          "type": "object",
+          "properties": {
+            "light": {
+              "$ref": "#/$defs/AppThemePalette"
+            },
+            "dark": {
+              "$ref": "#/$defs/AppThemePalette"
+            }
+          },
+          "required": [
+            "light",
+            "dark"
+          ],
+          "additionalProperties": false
+        },
+        "AppThemePalette": {
+          "type": "object",
+          "properties": {
+            "primary": {
+              "type": "string",
+              "pattern": "^#[0-9A-F]{6}$"
+            },
+            "accent": {
+              "type": "string",
+              "pattern": "^#[0-9A-F]{6}$"
+            },
+            "accentSoft": {
+              "type": "string",
+              "pattern": "^#[0-9A-F]{6}$"
+            },
+            "onAccent": {
+              "type": "string",
+              "pattern": "^#[0-9A-F]{6}$"
+            }
+          },
+          "required": [
+            "primary",
+            "accent",
+            "accentSoft",
+            "onAccent"
           ],
           "additionalProperties": false
         },
@@ -892,6 +1078,16 @@
                 }
               ]
             },
+            "appTheme": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/ChurchAppTheme"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "state": {
               "type": "string",
               "enum": [
@@ -938,6 +1134,50 @@
             "joinedAt",
             "updatedAt",
             "canReadPublishedContent"
+          ],
+          "additionalProperties": false
+        },
+        "ChurchAppTheme": {
+          "type": "object",
+          "properties": {
+            "light": {
+              "$ref": "#/$defs/AppThemePalette"
+            },
+            "dark": {
+              "$ref": "#/$defs/AppThemePalette"
+            }
+          },
+          "required": [
+            "light",
+            "dark"
+          ],
+          "additionalProperties": false
+        },
+        "AppThemePalette": {
+          "type": "object",
+          "properties": {
+            "primary": {
+              "type": "string",
+              "pattern": "^#[0-9A-F]{6}$"
+            },
+            "accent": {
+              "type": "string",
+              "pattern": "^#[0-9A-F]{6}$"
+            },
+            "accentSoft": {
+              "type": "string",
+              "pattern": "^#[0-9A-F]{6}$"
+            },
+            "onAccent": {
+              "type": "string",
+              "pattern": "^#[0-9A-F]{6}$"
+            }
+          },
+          "required": [
+            "primary",
+            "accent",
+            "accentSoft",
+            "onAccent"
           ],
           "additionalProperties": false
         }

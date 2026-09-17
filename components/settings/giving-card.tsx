@@ -18,7 +18,6 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { GivingBrandingSettings } from "@/components/giving/giving-branding-settings";
 import { FundsSettings } from "@/components/giving/funds-settings";
 import { StatementSettings } from "@/components/giving/statement-settings";
 import { STRIPE_NONPROFIT_RATE_LABEL } from "@/lib/stripe/config";
@@ -235,12 +234,6 @@ export function GivingCard({
             </div>
           </div>
 
-          <GivingBrandingSettings
-            logoUrl={profile.logoUrl}
-            primaryColor={profile.givingPrimaryColor}
-            accentColor={profile.givingAccentColor}
-            className="border-t-0 pt-0 lg:border-l lg:border-t-0 lg:pl-4 lg:pt-0"
-          />
         </div>
 
         {profile.stripeChargesEnabled && (

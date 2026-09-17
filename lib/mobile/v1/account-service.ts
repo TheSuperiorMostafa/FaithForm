@@ -14,6 +14,7 @@ import {
   requestAccountAction,
 } from "@/lib/faithform/account-lifecycle";
 import { grantsPublishedContentAccess } from "@/lib/faithform/relationship-state";
+import { createChurchAppTheme } from "@/lib/branding/church-theme";
 import { admitStaffAsMember } from "@/lib/faithform/relationships";
 import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/legal/policy-versions";
 import { retireInstallationsForAccount } from "@/lib/faithform/push/installations";
@@ -101,7 +102,14 @@ type RelationshipRow = {
 function projectRelationship(row: RelationshipRow): ChurchRelationshipDto | null {
   const church = Array.isArray(row.churches) ? row.churches[0] : row.churches;
   const resolved = church as
-    | { slug: string | null; name: string; logo_url: string | null; join_policy: string | null }
+    | {
+        slug: string | null;
+        name: string;
+        logo_url: string | null;
+        join_policy: string | null;
+        giving_primary_color: string | null;
+        giving_accent_color: string | null;
+      }
     | null;
 
   // A church without a public handle cannot be addressed by a client at all,
@@ -113,6 +121,10 @@ function projectRelationship(row: RelationshipRow): ChurchRelationshipDto | null
     churchSlug: resolved.slug,
     churchName: resolved.name,
     logoUrl: resolved.logo_url ?? null,
+    appTheme: createChurchAppTheme(
+      resolved.giving_primary_color,
+      resolved.giving_accent_color,
+    ),
     state,
     joinPolicy: (resolved.join_policy ?? "approval_required") as ChurchRelationshipDto["joinPolicy"],
     joinedAt: row.joined_at,
@@ -124,7 +136,7 @@ function projectRelationship(row: RelationshipRow): ChurchRelationshipDto | null
 }
 
 const RELATIONSHIP_SELECT =
-  "id, state, joined_at, updated_at, churches!inner(slug, name, logo_url, join_policy)";
+  "id, state, joined_at, updated_at, churches!inner(slug, name, logo_url, join_policy, giving_primary_color, giving_accent_color)";
 
 async function loadSelectedChurchSlug(
   selectedChurchId: string | null,

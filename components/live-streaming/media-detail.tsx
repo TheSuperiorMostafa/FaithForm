@@ -11,6 +11,7 @@ import {
 } from "@/app/dashboard/live-streaming/media/actions";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ItemArtworkPanel } from "@/components/media/item-artwork-panel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -222,6 +223,14 @@ export function MediaDetail({
           )}
         </CardContent>
       </Card>
+
+      <ItemArtworkPanel
+        recordingId={item.id}
+        artwork={item.artwork}
+        seriesArtwork={item.seriesArtwork}
+        seriesName={item.seriesName}
+        seriesSlug={item.seriesSlug}
+      />
 
       {shareUrl && (
         <div className="flex flex-col gap-2 rounded-xl border border-border bg-muted/30 p-4 sm:flex-row sm:items-center">

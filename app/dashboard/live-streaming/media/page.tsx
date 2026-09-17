@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 import { FaithFormPublishingPanel } from "@/components/live-streaming/faithform-publishing-panel";
-import { MediaList } from "@/components/live-streaming/media-list";
+import { MediaBrowseView } from "@/components/media/media-browse";
 import { getChurchAuth } from "@/lib/auth/church";
-import { listMediaItems } from "@/lib/stream/media-library";
+import { DASHBOARD_MEDIA_LINKS, loadLibraryBrowse } from "@/lib/media/browse";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -12,23 +12,29 @@ export default async function LiveStreamingMediaPage() {
   const auth = await getChurchAuth(supabase);
   if (!auth) redirect("/login");
 
-  // The index is a list, not a player: each service opens on its own page.
-  // Nothing here signs a playback URL, which also keeps the page fast.
-  const items = await listMediaItems(auth.churchId);
+  // Shelves, not a list. Nothing here signs a playback URL — each service
+  // opens on its own page — which is what keeps the index fast even once a
+  // church has years of recordings in it.
+  const { browse, items } = await loadLibraryBrowse(auth.churchId);
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <div>
         <h2 className="font-heading text-lg font-bold">Library</h2>
         <p className="text-sm text-muted-foreground">
-          Every service you&apos;ve streamed. Open one to watch it, tag it, or
-          see how many people did.
+          Every service you&apos;ve streamed. Open one to watch it, give it
+          artwork, tag it, or see how many people did.
         </p>
       </div>
 
       <FaithFormPublishingPanel />
 
-      <MediaList items={items} />
+      <MediaBrowseView
+        browse={browse}
+        items={items}
+        links={DASHBOARD_MEDIA_LINKS}
+        churchId={auth.churchId}
+      />
     </div>
   );
 }

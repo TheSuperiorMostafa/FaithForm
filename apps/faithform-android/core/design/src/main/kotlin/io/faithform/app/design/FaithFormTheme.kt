@@ -13,6 +13,33 @@ import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
+
+data class ChurchBrandPalette(
+    val primary: String,
+    val accent: String,
+    val accentSoft: String,
+    val onAccent: String,
+)
+
+data class ChurchBrandTheme(
+    val light: ChurchBrandPalette,
+    val dark: ChurchBrandPalette,
+)
+
+private fun String.asThemeColor(): Color =
+    Color((0xFF000000L or removePrefix("#").toLong(16)).toInt())
+
+private fun FaithFormTokens.Palette.applying(brand: ChurchBrandPalette?): FaithFormTokens.Palette {
+    if (brand == null) return this
+    return copy(
+        brandPrimary = brand.primary.asThemeColor(),
+        brandAccent = brand.accent.asThemeColor(),
+        brandAccentSoft = brand.accentSoft.asThemeColor(),
+        contentOnAccent = brand.onAccent.asThemeColor(),
+        focusRing = brand.accent.asThemeColor(),
+    )
+}
 
 /**
  * Resolves the canonical tokens for Compose.
@@ -84,9 +111,14 @@ fun FaithFormTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     reduceMotion: Boolean = false,
     increaseContrast: Boolean = false,
+    churchBrand: ChurchBrandTheme? = null,
     content: @Composable () -> Unit
 ) {
-    val palette = if (darkTheme) FaithFormTokens.DARK else FaithFormTokens.LIGHT
+    val palette = if (darkTheme) {
+        FaithFormTokens.DARK.applying(churchBrand?.dark)
+    } else {
+        FaithFormTokens.LIGHT.applying(churchBrand?.light)
+    }
     val state = FaithFormThemeState(palette, reduceMotion, increaseContrast)
 
     val colors = if (darkTheme) {

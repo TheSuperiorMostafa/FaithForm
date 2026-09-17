@@ -903,10 +903,47 @@ public struct VisitorProfile: Codable, Hashable, Sendable {
 
 /// Unknown additive fields are ignored by Codable, which is what lets a
 /// released client keep working when the server adds one.
+public struct AppThemePalette: Codable, Hashable, Sendable {
+    public let primary: String
+    public let accent: String
+    public let accentSoft: String
+    public let onAccent: String
+
+    public init(
+        primary: String,
+        accent: String,
+        accentSoft: String,
+        onAccent: String
+    ) {
+        self.primary = primary
+        self.accent = accent
+        self.accentSoft = accentSoft
+        self.onAccent = onAccent
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct ChurchAppTheme: Codable, Hashable, Sendable {
+    public let light: AppThemePalette
+    public let dark: AppThemePalette
+
+    public init(
+        light: AppThemePalette,
+        dark: AppThemePalette
+    ) {
+        self.light = light
+        self.dark = dark
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
 public struct ChurchRelationship: Codable, Hashable, Sendable {
     public let churchSlug: String
     public let churchName: String
     public let logoUrl: String?
+    public let appTheme: ChurchAppTheme?
     public let state: RelationshipState
     public let joinPolicy: JoinPolicy
     public let joinedAt: String?
@@ -917,6 +954,7 @@ public struct ChurchRelationship: Codable, Hashable, Sendable {
         churchSlug: String,
         churchName: String,
         logoUrl: String? = nil,
+        appTheme: ChurchAppTheme? = nil,
         state: RelationshipState,
         joinPolicy: JoinPolicy,
         joinedAt: String? = nil,
@@ -926,6 +964,7 @@ public struct ChurchRelationship: Codable, Hashable, Sendable {
         self.churchSlug = churchSlug
         self.churchName = churchName
         self.logoUrl = logoUrl
+        self.appTheme = appTheme
         self.state = state
         self.joinPolicy = joinPolicy
         self.joinedAt = joinedAt

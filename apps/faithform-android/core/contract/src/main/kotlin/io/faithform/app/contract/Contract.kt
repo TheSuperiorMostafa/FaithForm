@@ -588,10 +588,33 @@ data class VisitorProfile(
  * which is what lets a released client keep working when the server adds one.
  */
 @Serializable
+data class AppThemePalette(
+    val primary: String,
+    val accent: String,
+    val accentSoft: String,
+    val onAccent: String
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class ChurchAppTheme(
+    val light: AppThemePalette,
+    val dark: AppThemePalette
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
 data class ChurchRelationship(
     val churchSlug: String,
     val churchName: String,
     val logoUrl: String? = null,
+    val appTheme: ChurchAppTheme? = null,
     val state: RelationshipState,
     val joinPolicy: JoinPolicy,
     val joinedAt: String? = null,

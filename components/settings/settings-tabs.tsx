@@ -12,6 +12,7 @@ import type { IntegrationsCardProps } from "@/components/settings/integrations-c
 import { TeamMembersCard } from "@/components/settings/team-members-card";
 import type { TeamMembersCardProps } from "@/components/settings/team-members-card";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { GivingBrandingSettings } from "@/components/giving/giving-branding-settings";
 import {
   Card,
   CardContent,
@@ -127,6 +128,29 @@ function SettingsTabsInner({
             </CardHeader>
             <CardContent>
               <ThemeToggle variant="segmented" />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Church branding</CardTitle>
+              <CardDescription>
+                Make the member app feel like home for your congregation.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {isAdmin && givingProfile ? (
+                <GivingBrandingSettings
+                  logoUrl={givingProfile.logoUrl}
+                  primaryColor={givingProfile.givingPrimaryColor}
+                  accentColor={givingProfile.givingAccentColor}
+                  className="border-0 pt-0"
+                />
+              ) : (
+                <p className="text-sm text-muted-foreground">
+                  Ask a church admin to update the app logo and colors.
+                </p>
+              )}
             </CardContent>
           </Card>
 

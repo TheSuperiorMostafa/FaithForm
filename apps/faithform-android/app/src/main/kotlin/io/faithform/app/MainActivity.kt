@@ -10,7 +10,11 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.getValue
 import io.faithform.app.attendance.CameraPermissionRequester
+import io.faithform.app.design.ChurchBrandPalette
+import io.faithform.app.design.ChurchBrandTheme
 import io.faithform.app.design.FaithFormTheme
 import io.faithform.app.giving.StripePaymentSheetAdapter
 import io.faithform.app.navigation.RouteRegistry
@@ -153,7 +157,29 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            FaithFormTheme {
+            val phase by viewModel.state.collectAsStateWithLifecycle()
+            val selectedSlug by viewModel.selectedChurchSlug.collectAsStateWithLifecycle()
+            val bootstrap = (phase as? LaunchPhase.Ready)?.bootstrap
+            val appTheme = bootstrap?.relationships
+                ?.firstOrNull { it.churchSlug == selectedSlug }
+                ?.appTheme
+            val churchBrand = appTheme?.let { theme ->
+                ChurchBrandTheme(
+                    light = ChurchBrandPalette(
+                        primary = theme.light.primary,
+                        accent = theme.light.accent,
+                        accentSoft = theme.light.accentSoft,
+                        onAccent = theme.light.onAccent,
+                    ),
+                    dark = ChurchBrandPalette(
+                        primary = theme.dark.primary,
+                        accent = theme.dark.accent,
+                        accentSoft = theme.dark.accentSoft,
+                        onAccent = theme.dark.onAccent,
+                    ),
+                )
+            }
+            FaithFormTheme(churchBrand = churchBrand) {
                 FaithFormApp(
                     viewModel = viewModel,
                     container = container,
