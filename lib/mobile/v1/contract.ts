@@ -142,6 +142,17 @@ export const churchAppThemeSchema = z.object({
   dark: appThemePaletteSchema,
 }).meta({ id: "ChurchAppTheme" });
 
+export const churchThemeSettingsSchema = z.object({
+  primaryColor: z.string().regex(/^#[0-9A-F]{6}$/).nullable(),
+  accentColor: z.string().regex(/^#[0-9A-F]{6}$/).nullable(),
+  appTheme: churchAppThemeSchema.nullable(),
+}).meta({ id: "ChurchThemeSettings" });
+
+export const updateChurchThemeRequestSchema = z.object({
+  primaryColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).nullable(),
+  accentColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/).nullable(),
+}).meta({ id: "UpdateChurchThemeRequest" });
+
 /** One church this account has a relationship with. */
 export const churchRelationshipSchema = z.object({
   churchSlug,
@@ -149,6 +160,8 @@ export const churchRelationshipSchema = z.object({
   logoUrl: url.nullable(),
   /** Accessible semantic colors selected by this church. Null uses FaithForm defaults. */
   appTheme: churchAppThemeSchema.nullable().optional(),
+  /** Church admins may edit this church's appearance from the native app. */
+  canManageBranding: z.boolean().optional(),
   state: relationshipStateSchema,
   joinPolicy: joinPolicySchema,
   joinedAt: instant.nullable(),
@@ -1303,6 +1316,8 @@ export const CONTRACT_SCHEMAS = {
   VisitorProfile: visitorProfileSchema,
   AppThemePalette: appThemePaletteSchema,
   ChurchAppTheme: churchAppThemeSchema,
+  ChurchThemeSettings: churchThemeSettingsSchema,
+  UpdateChurchThemeRequest: updateChurchThemeRequestSchema,
   ChurchRelationship: churchRelationshipSchema,
   AccountRequest: accountRequestSchema,
   Bootstrap: bootstrapSchema,

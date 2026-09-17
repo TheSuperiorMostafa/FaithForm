@@ -504,6 +504,129 @@
         }
       }
     },
+    "ChurchThemeSettings": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "primaryColor": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^#[0-9A-F]{6}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "accentColor": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^#[0-9A-F]{6}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "appTheme": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ChurchAppTheme"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "primaryColor",
+        "accentColor",
+        "appTheme"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "ChurchAppTheme": {
+          "type": "object",
+          "properties": {
+            "light": {
+              "$ref": "#/$defs/AppThemePalette"
+            },
+            "dark": {
+              "$ref": "#/$defs/AppThemePalette"
+            }
+          },
+          "required": [
+            "light",
+            "dark"
+          ],
+          "additionalProperties": false
+        },
+        "AppThemePalette": {
+          "type": "object",
+          "properties": {
+            "primary": {
+              "type": "string",
+              "pattern": "^#[0-9A-F]{6}$"
+            },
+            "accent": {
+              "type": "string",
+              "pattern": "^#[0-9A-F]{6}$"
+            },
+            "accentSoft": {
+              "type": "string",
+              "pattern": "^#[0-9A-F]{6}$"
+            },
+            "onAccent": {
+              "type": "string",
+              "pattern": "^#[0-9A-F]{6}$"
+            }
+          },
+          "required": [
+            "primary",
+            "accent",
+            "accentSoft",
+            "onAccent"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "UpdateChurchThemeRequest": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "primaryColor": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^#[0-9A-Fa-f]{6}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "accentColor": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^#[0-9A-Fa-f]{6}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "primaryColor",
+        "accentColor"
+      ],
+      "additionalProperties": false
+    },
     "ChurchRelationship": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "object",
@@ -536,6 +659,9 @@
               "type": "null"
             }
           ]
+        },
+        "canManageBranding": {
+          "type": "boolean"
         },
         "state": {
           "type": "string",
@@ -886,6 +1012,9 @@
                 }
               ]
             },
+            "canManageBranding": {
+              "type": "boolean"
+            },
             "state": {
               "type": "string",
               "enum": [
@@ -1087,6 +1216,9 @@
                   "type": "null"
                 }
               ]
+            },
+            "canManageBranding": {
+              "type": "boolean"
             },
             "state": {
               "type": "string",

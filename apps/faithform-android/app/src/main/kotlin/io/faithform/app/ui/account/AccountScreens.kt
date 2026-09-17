@@ -26,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -51,6 +52,7 @@ import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import io.faithform.app.DeletionPhase
@@ -58,6 +60,7 @@ import io.faithform.app.R
 import io.faithform.app.ui.components.FaithFormWorkingLabel
 import io.faithform.app.contract.AccountStatus
 import io.faithform.app.contract.Bootstrap
+import io.faithform.app.contract.ChurchRelationship
 import io.faithform.app.design.FaithFormTokens
 import io.faithform.app.design.LocalFaithFormTheme
 
@@ -106,6 +109,7 @@ fun AccountTab(
     showsAutomaticCheckIn: Boolean = false,
     automaticCheckInEnabled: Boolean = false,
     onOpenAutomaticCheckIn: (() -> Unit)? = null,
+    onOpenChurchAppearance: (() -> Unit)? = null,
     onUpdateDisplayName: ((String, (Boolean) -> Unit) -> Unit)? = null,
 ) {
     val theme = LocalFaithFormTheme.current
@@ -297,6 +301,37 @@ fun AccountTab(
             }
         }
 
+        if (onOpenChurchAppearance != null) {
+            Column(verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm)) {
+                Text(
+                    stringResource(R.string.church_tools_section),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = theme.mutedContent,
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(theme.palette.surface, RoundedCornerShape(FaithFormTokens.Radius.lg))
+                        .border(theme.borderWidth, theme.palette.border, RoundedCornerShape(FaithFormTokens.Radius.lg))
+                        .clickable(onClick = onOpenChurchAppearance)
+                        .padding(FaithFormTokens.Spacing.base)
+                        .heightIn(min = FaithFormTokens.TouchTarget.recommended),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.md),
+                ) {
+                    Icon(Icons.Outlined.Palette, contentDescription = null, tint = theme.palette.brandPrimary)
+                    Column(Modifier.weight(1f)) {
+                        Text(stringResource(R.string.church_appearance_title), color = theme.palette.contentPrimary)
+                        Text(
+                            stringResource(R.string.church_appearance_row_body),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = theme.palette.contentSecondary,
+                        )
+                    }
+                }
+            }
+        }
+
         Column(verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm)) {
             Text(
                 stringResource(R.string.legal_section),
@@ -309,6 +344,121 @@ fun AccountTab(
         AccountExitActions(onSignOut = onSignOut, onDeleteAccount = onDeleteAccount)
     }
 }
+
+private data class AppearancePreset(
+    val name: String,
+    val primary: String,
+    val accent: String,
+)
+
+@Composable
+fun ChurchAppearanceScreen(
+    church: ChurchRelationship,
+    onSave: (String, String, (Boolean) -> Unit) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val theme = LocalFaithFormTheme.current
+    val presets = remember {
+        listOf(
+            AppearancePreset("Classic", "#1A2B4B", "#C19A6B"),
+            AppearancePreset("Ocean", "#164E63", "#22D3EE"),
+            AppearancePreset("Hope", "#365314", "#A3E635"),
+            AppearancePreset("Grace", "#581C87", "#D8B4FE"),
+            AppearancePreset("Warm", "#7C2D12", "#FDBA74"),
+            AppearancePreset("Modern", "#111827", "#60A5FA"),
+        )
+    }
+    var primary by remember(church.churchSlug) {
+        mutableStateOf(church.appTheme?.light?.primary ?: "#1A2B4B")
+    }
+    var accent by remember(church.churchSlug) {
+        mutableStateOf(church.appTheme?.light?.accent ?: "#C19A6B")
+    }
+    var saving by remember { mutableStateOf(false) }
+    var failed by remember { mutableStateOf(false) }
+    val valid = HEX_COLOR.matches(primary.trim()) && HEX_COLOR.matches(accent.trim())
+
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
+            .padding(FaithFormTokens.Layout.screenPaddingHorizontal),
+        verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.lg),
+    ) {
+        Text(
+            stringResource(R.string.church_appearance_body),
+            color = theme.palette.contentSecondary,
+        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(theme.palette.surface, RoundedCornerShape(FaithFormTokens.Radius.lg))
+                .padding(FaithFormTokens.Spacing.lg),
+            verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm),
+        ) {
+            Text(
+                church.churchName,
+                style = MaterialTheme.typography.titleLarge,
+                color = colorFromHex(primary, theme.palette.brandPrimary),
+            )
+            Text(stringResource(R.string.church_appearance_preview), color = theme.palette.contentSecondary)
+            Button(
+                onClick = {},
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = colorFromHex(accent, theme.palette.brandAccent),
+                    contentColor = colorFromHex(primary, theme.palette.contentOnAccent),
+                ),
+            ) { Text(stringResource(R.string.church_appearance_button)) }
+        }
+
+        Text(stringResource(R.string.church_appearance_presets), style = MaterialTheme.typography.titleMedium)
+        presets.chunked(2).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm)) {
+                row.forEach { preset ->
+                    OutlinedButton(
+                        onClick = {
+                            primary = preset.primary
+                            accent = preset.accent
+                            failed = false
+                        },
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(18.dp).background(colorFromHex(preset.primary, Color.Black), CircleShape))
+                            Box(Modifier.size(18.dp).background(colorFromHex(preset.accent, Color.White), CircleShape))
+                            Text(preset.name)
+                        }
+                    }
+                }
+            }
+        }
+
+        Text(stringResource(R.string.church_appearance_custom), style = MaterialTheme.typography.titleMedium)
+        TextField(value = primary, onValueChange = { primary = it.uppercase(); failed = false }, label = { Text("Primary · #1A2B4B") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        TextField(value = accent, onValueChange = { accent = it.uppercase(); failed = false }, label = { Text("Accent · #C19A6B") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+        if (failed) {
+            Text(stringResource(R.string.church_appearance_error), color = theme.palette.destructive)
+        }
+        Button(
+            onClick = {
+                saving = true
+                onSave(primary.trim().uppercase(), accent.trim().uppercase()) { ok ->
+                    saving = false
+                    failed = !ok
+                }
+            },
+            enabled = valid && !saving,
+            modifier = Modifier.fillMaxWidth().heightIn(min = FaithFormTokens.TouchTarget.recommended),
+        ) {
+            FaithFormWorkingLabel(stringResource(R.string.church_appearance_save), saving)
+        }
+    }
+}
+
+private val HEX_COLOR = Regex("^#[0-9A-Fa-f]{6}$")
+
+private fun colorFromHex(value: String, fallback: Color): Color =
+    runCatching { Color((0xFF000000L or value.removePrefix("#").toLong(16)).toInt()) }.getOrDefault(fallback)
 
 private fun accountInitials(name: String): String {
     val parts = name.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }.take(2)

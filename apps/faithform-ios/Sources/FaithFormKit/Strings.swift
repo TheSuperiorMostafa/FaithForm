@@ -936,6 +936,17 @@ public enum L {
     public static var preferencesSection: String {
         t("preferences_section", "Preferences")
     }
+    public static var churchToolsSection: String { t("church_tools_section", "Church tools") }
+    public static var churchAppearanceTitle: String { t("church_appearance_title", "Church appearance") }
+    public static var churchAppearanceRowBody: String { t("church_appearance_row_body", "App colors and preview") }
+    public static var churchAppearanceBody: String { t("church_appearance_body", "Choose an accessible palette for your congregation. The app updates for everyone after you save.") }
+    public static var churchAppearancePresets: String { t("church_appearance_presets", "Recommended palettes") }
+    public static var churchAppearanceCustom: String { t("church_appearance_custom", "Custom colors") }
+    public static var churchAppearancePreview: String { t("church_appearance_preview", "Preview changes before applying them.") }
+    public static var churchAppearanceButton: String { t("church_appearance_button", "Primary action") }
+    public static var churchAppearanceSave: String { t("church_appearance_save", "Apply theme") }
+    public static var churchAppearanceSaved: String { t("church_appearance_saved", "Theme updated.") }
+    public static var churchAppearanceError: String { t("church_appearance_error", "Could not update the theme. Try again.") }
     public static var legalSection: String {
         t("legal_section", "Legal")
     }

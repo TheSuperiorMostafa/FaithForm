@@ -4,11 +4,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -47,6 +42,8 @@ import io.faithform.app.session.AppContainer
 import io.faithform.app.storage.CachePartition
 import io.faithform.app.ui.host.TabScreen
 import io.faithform.app.ui.host.rememberSessionModel
+import io.faithform.app.ui.components.FaithFormPillOption
+import io.faithform.app.ui.components.FaithFormPillSwitcher
 import io.faithform.app.ui.sermons.PresentationDetailScreen
 import io.faithform.app.ui.sermons.SermonDetailScreen
 import io.faithform.app.ui.sermons.SermonListScreen
@@ -60,7 +57,6 @@ import kotlinx.coroutines.isActive
  * One row of destinations appears when more than one pane is allowed. A
  * `…/sermons` link asks for sermons via [AppViewModel.sermonsRequested].
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WatchTab(
     appViewModel: AppViewModel,
@@ -184,33 +180,28 @@ private fun WatchPaneRow(
     selected: HostNavigation.WatchPane,
     onSelect: (HostNavigation.WatchPane) -> Unit,
 ) {
-    SingleChoiceSegmentedButtonRow(
+    FaithFormPillSwitcher(
+        options = panes.map { pane ->
+            FaithFormPillOption(
+                pane,
+                stringResource(
+                    when (pane) {
+                        HostNavigation.WatchPane.MEDIA -> R.string.media_tab_title
+                        HostNavigation.WatchPane.SERMONS -> R.string.sermons_title
+                        HostNavigation.WatchPane.SLIDES -> R.string.presentations_title
+                    },
+                ),
+            )
+        },
+        selected = selected,
+        onSelect = onSelect,
         modifier = Modifier
             .fillMaxWidth()
             .padding(
                 horizontal = FaithFormTokens.Layout.screenPaddingHorizontal,
                 vertical = FaithFormTokens.Spacing.sm,
             ),
-    ) {
-        panes.forEachIndexed { index, pane ->
-            SegmentedButton(
-                selected = selected == pane,
-                onClick = { onSelect(pane) },
-                shape = SegmentedButtonDefaults.itemShape(index = index, count = panes.size),
-                label = {
-                    Text(
-                        stringResource(
-                            when (pane) {
-                                HostNavigation.WatchPane.MEDIA -> R.string.media_tab_title
-                                HostNavigation.WatchPane.SERMONS -> R.string.sermons_title
-                                HostNavigation.WatchPane.SLIDES -> R.string.presentations_title
-                            },
-                        ),
-                    )
-                },
-            )
-        }
-    }
+    )
 }
 
 @Composable

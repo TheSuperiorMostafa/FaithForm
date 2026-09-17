@@ -477,6 +477,35 @@ class AppViewModel(
         }
     }
 
+    fun updateChurchTheme(
+        churchSlug: String,
+        primaryColor: String,
+        accentColor: String,
+        onDone: (Boolean) -> Unit = {},
+    ) {
+        viewModelScope.launch {
+            val ok = runCatching {
+                api.send(
+                    path = "api/mobile/v1/churches/$churchSlug/theme",
+                    serializer = MobileSuccess.serializer(
+                        io.faithform.app.contract.ChurchThemeSettings.serializer()
+                    ),
+                    method = "PUT",
+                    idempotencyKey = UUID.randomUUID().toString(),
+                    body = json.encodeToString(
+                        kotlinx.serialization.json.JsonObject.serializer(),
+                        buildJsonObject {
+                            put("primaryColor", primaryColor)
+                            put("accentColor", accentColor)
+                        }
+                    ),
+                )
+            }.isSuccess
+            if (ok) loadNow(quiet = true)
+            onDone(ok)
+        }
+    }
+
     /**
      * Parsed and authorized before anything is mutated. An invitation is a
      * credential, not a destination: signed out it is held for after sign-in,

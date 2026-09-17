@@ -38,6 +38,8 @@ struct AccountTabView: View {
                             AttendanceChurch(slug: $0.churchSlug, name: $0.churchName)
                         }
                     )
+                case .churchAppearance:
+                    ChurchAppearanceScreen(root: root)
                 }
             }
         }
@@ -46,6 +48,7 @@ struct AccountTabView: View {
 
 enum AccountRoute: Hashable {
     case automaticCheckIn
+    case churchAppearance
 }
 
 /// Automatic check-in, from Account: the whole journey on one pushed page.
@@ -146,6 +149,33 @@ struct AccountView: View {
                         .font(theme.font(FaithFormTokens.Text.label))
                         .foregroundStyle(theme.mutedContent)
                     AutomaticCheckInRow(model: dependencies.attendanceModel)
+                }
+            }
+
+            if root.selectedChurch?.canManageBranding == true {
+                VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.sm) {
+                    Text(L.churchToolsSection)
+                        .font(theme.font(FaithFormTokens.Text.label))
+                        .foregroundStyle(theme.mutedContent)
+                    NavigationLink(value: AccountRoute.churchAppearance) {
+                        HStack(spacing: FaithFormTokens.Spacing.md) {
+                            Image(systemName: "paintpalette")
+                                .foregroundStyle(theme.palette.brandPrimary)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(L.churchAppearanceTitle)
+                                    .foregroundStyle(theme.palette.contentPrimary)
+                                Text(L.churchAppearanceRowBody)
+                                    .font(theme.font(FaithFormTokens.Text.caption))
+                                    .foregroundStyle(theme.palette.contentSecondary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .foregroundStyle(theme.palette.contentSecondary)
+                        }
+                        .frame(minHeight: FaithFormTokens.TouchTarget.recommended)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
                 }
             }
 
@@ -251,6 +281,139 @@ struct AccountView: View {
         let parts = name.split(separator: " ").prefix(2)
         let letters = parts.compactMap { $0.first.map(String.init) }
         return letters.isEmpty ? String(name.prefix(1)).uppercased() : letters.joined().uppercased()
+    }
+}
+
+private struct ChurchAppearancePreset: Identifiable {
+    let id: String
+    let name: String
+    let primary: String
+    let accent: String
+}
+
+private struct ChurchAppearanceScreen: View {
+    @Environment(\.faithformTheme) private var theme
+    @Environment(\.dismiss) private var dismiss
+    let root: RootModel
+
+    @State private var primary = "#1A2B4B"
+    @State private var accent = "#C19A6B"
+    @State private var saving = false
+    @State private var message: String?
+
+    private let presets = [
+        ChurchAppearancePreset(id: "classic", name: "Classic", primary: "#1A2B4B", accent: "#C19A6B"),
+        ChurchAppearancePreset(id: "ocean", name: "Ocean", primary: "#164E63", accent: "#22D3EE"),
+        ChurchAppearancePreset(id: "hope", name: "Hope", primary: "#365314", accent: "#A3E635"),
+        ChurchAppearancePreset(id: "grace", name: "Grace", primary: "#581C87", accent: "#D8B4FE"),
+        ChurchAppearancePreset(id: "warm", name: "Warm", primary: "#7C2D12", accent: "#FDBA74"),
+        ChurchAppearancePreset(id: "modern", name: "Modern", primary: "#111827", accent: "#60A5FA")
+    ]
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
+                Text(L.churchAppearanceBody)
+                    .foregroundStyle(theme.palette.contentSecondary)
+
+                preview
+
+                Text(L.churchAppearancePresets)
+                    .font(theme.font(FaithFormTokens.Text.titleMedium))
+                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                    ForEach(presets) { preset in
+                        Button {
+                            primary = preset.primary
+                            accent = preset.accent
+                            message = nil
+                        } label: {
+                            HStack {
+                                Circle().fill(Color(hexCode: preset.primary)).frame(width: 24, height: 24)
+                                Circle().fill(Color(hexCode: preset.accent)).frame(width: 24, height: 24)
+                                Text(preset.name).foregroundStyle(theme.palette.contentPrimary)
+                                Spacer(minLength: 0)
+                            }
+                            .padding(12)
+                            .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 12))
+                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(theme.palette.border))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.sm) {
+                    Text(L.churchAppearanceCustom)
+                        .font(theme.font(FaithFormTokens.Text.titleMedium))
+                    TextField("#1A2B4B", text: $primary)
+                        .textInputAutocapitalization(.characters)
+                        .padding(12).background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 10))
+                    TextField("#C19A6B", text: $accent)
+                        .textInputAutocapitalization(.characters)
+                        .padding(12).background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 10))
+                }
+
+                if let message {
+                    Text(message).foregroundStyle(theme.palette.contentSecondary)
+                }
+                Button {
+                    Task {
+                        saving = true
+                        let ok = await root.updateChurchTheme(
+                            primaryColor: validHex(primary),
+                            accentColor: validHex(accent)
+                        )
+                        saving = false
+                        message = ok ? L.churchAppearanceSaved : L.churchAppearanceError
+                        if ok { dismiss() }
+                    }
+                } label: {
+                    FaithFormWorkingLabel(L.churchAppearanceSave, working: saving)
+                }
+                .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
+                .disabled(saving || validHex(primary) == nil || validHex(accent) == nil)
+            }
+            .padding(FaithFormTokens.Spacing.lg)
+        }
+        .background(theme.palette.background)
+        .navigationTitle(L.churchAppearanceTitle)
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            if let appTheme = root.selectedChurch?.appTheme {
+                primary = appTheme.light.primary
+                accent = appTheme.light.accent
+            }
+        }
+    }
+
+    private var preview: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(root.selectedChurch?.churchName ?? L.churchAppearanceTitle)
+                .font(theme.font(FaithFormTokens.Text.titleLarge))
+                .foregroundStyle(Color(hexCode: primary))
+            Text(L.churchAppearancePreview)
+                .foregroundStyle(theme.palette.contentSecondary)
+            Text(L.churchAppearanceButton)
+                .font(theme.font(FaithFormTokens.Text.label))
+                .padding(.horizontal, 18).padding(.vertical, 12)
+                .background(Color(hexCode: accent), in: RoundedRectangle(cornerRadius: 10))
+                .foregroundStyle(Color(hexCode: primary))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(20)
+        .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private func validHex(_ value: String) -> String? {
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        return normalized.range(of: "^#[0-9A-F]{6}$", options: .regularExpression) == nil ? nil : normalized
+    }
+}
+
+private extension Color {
+    init(hexCode: String) {
+        let normalized = hexCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        let value = UInt64(normalized.dropFirst(), radix: 16) ?? 0x1A2B4B
+        self.init(.sRGB, red: Double((value >> 16) & 255) / 255, green: Double((value >> 8) & 255) / 255, blue: Double(value & 255) / 255)
     }
 }
 

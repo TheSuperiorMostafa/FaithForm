@@ -50,11 +50,14 @@ struct WatchTabView: View {
                 if isStale { OfflineBanner(message: L.offlineCached) }
 
                 if showsMedia && showsSermons {
-                    Picker(L.tabWatch, selection: watchSelection) {
-                        Text(L.mediaTabTitle).tag(WatchSection.media)
-                        Text(L.sermonsTitle).tag(WatchSection.sermons)
-                    }
-                    .pickerStyle(.segmented)
+                    FaithFormPillSwitcher(
+                        selection: watchSelection,
+                        options: [
+                            .init(.media, title: L.mediaTabTitle),
+                            .init(.sermons, title: L.sermonsTitle),
+                        ],
+                        accessibilityLabel: L.tabWatch
+                    )
                     .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
                     .padding(.vertical, FaithFormTokens.Spacing.sm)
                 }

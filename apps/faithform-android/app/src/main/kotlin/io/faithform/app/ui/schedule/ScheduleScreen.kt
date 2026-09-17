@@ -24,13 +24,9 @@ import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material.icons.outlined.WifiOff
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -52,6 +48,8 @@ import io.faithform.app.contract.FeedItem
 import io.faithform.app.design.FaithFormTokens
 import io.faithform.app.design.LocalFaithFormTheme
 import io.faithform.app.ui.components.FeedSkeleton
+import io.faithform.app.ui.components.FaithFormPillOption
+import io.faithform.app.ui.components.FaithFormPillSwitcher
 import io.faithform.app.ui.discovery.EmptyState
 import io.faithform.app.ui.feed.AnnouncementCard
 import io.faithform.app.ui.feed.FeedPhase
@@ -69,7 +67,6 @@ import java.util.Locale
 private enum class HomeSection { FEED, SCHEDULE }
 
 /** Feed and Schedule segments on Home, matching iOS `HomeTabView`. */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeHostScreen(
     feedPhase: FeedPhase,
@@ -86,29 +83,20 @@ fun HomeHostScreen(
     var section by rememberSaveable { mutableStateOf(HomeSection.FEED) }
 
     Column(modifier = modifier.fillMaxSize()) {
-        SingleChoiceSegmentedButtonRow(
+        FaithFormPillSwitcher(
+            options = listOf(
+                FaithFormPillOption(HomeSection.FEED, stringResource(R.string.home_segment_feed)),
+                FaithFormPillOption(HomeSection.SCHEDULE, stringResource(R.string.home_segment_schedule)),
+            ),
+            selected = section,
+            onSelect = { section = it },
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(
                     horizontal = FaithFormTokens.Layout.screenPaddingHorizontal,
                     vertical = FaithFormTokens.Spacing.sm,
                 ),
-        ) {
-            SegmentedButton(
-                selected = section == HomeSection.FEED,
-                onClick = { section = HomeSection.FEED },
-                shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-            ) {
-                Text(stringResource(R.string.home_segment_feed))
-            }
-            SegmentedButton(
-                selected = section == HomeSection.SCHEDULE,
-                onClick = { section = HomeSection.SCHEDULE },
-                shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-            ) {
-                Text(stringResource(R.string.home_segment_schedule))
-            }
-        }
+        )
 
         when (section) {
             HomeSection.FEED -> HomeFeedScreen(

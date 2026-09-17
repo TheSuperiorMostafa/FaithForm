@@ -129,6 +129,28 @@ final class RootModel {
         }
     }
 
+    /// Saves branding through the same server authority as the dashboard, then
+    /// reloads bootstrap so the entire app adopts the new palette immediately.
+    func updateChurchTheme(primaryColor: String?, accentColor: String?) async -> Bool {
+        guard let church = selectedChurch, church.canManageBranding == true else { return false }
+        do {
+            _ = try await dependencies.api.send(
+                "api/mobile/v1/churches/\(church.churchSlug)/theme",
+                method: .put,
+                body: UpdateChurchThemeRequest(
+                    primaryColor: primaryColor,
+                    accentColor: accentColor
+                ),
+                idempotencyKey: UUID().uuidString,
+                as: ChurchThemeSettings.self
+            )
+            await load(quiet: true)
+            return true
+        } catch {
+            return false
+        }
+    }
+
     func load() async { await load(quiet: false) }
 
     /// `quiet` refreshes in place after something changed — a join, an accepted

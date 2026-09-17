@@ -939,11 +939,45 @@ public struct ChurchAppTheme: Codable, Hashable, Sendable {
 
 /// Unknown additive fields are ignored by Codable, which is what lets a
 /// released client keep working when the server adds one.
+public struct ChurchThemeSettings: Codable, Hashable, Sendable {
+    public let primaryColor: String?
+    public let accentColor: String?
+    public let appTheme: ChurchAppTheme?
+
+    public init(
+        primaryColor: String? = nil,
+        accentColor: String? = nil,
+        appTheme: ChurchAppTheme? = nil
+    ) {
+        self.primaryColor = primaryColor
+        self.accentColor = accentColor
+        self.appTheme = appTheme
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct UpdateChurchThemeRequest: Codable, Hashable, Sendable {
+    public let primaryColor: String?
+    public let accentColor: String?
+
+    public init(
+        primaryColor: String? = nil,
+        accentColor: String? = nil
+    ) {
+        self.primaryColor = primaryColor
+        self.accentColor = accentColor
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
 public struct ChurchRelationship: Codable, Hashable, Sendable {
     public let churchSlug: String
     public let churchName: String
     public let logoUrl: String?
     public let appTheme: ChurchAppTheme?
+    public let canManageBranding: Bool?
     public let state: RelationshipState
     public let joinPolicy: JoinPolicy
     public let joinedAt: String?
@@ -955,6 +989,7 @@ public struct ChurchRelationship: Codable, Hashable, Sendable {
         churchName: String,
         logoUrl: String? = nil,
         appTheme: ChurchAppTheme? = nil,
+        canManageBranding: Bool? = nil,
         state: RelationshipState,
         joinPolicy: JoinPolicy,
         joinedAt: String? = nil,
@@ -965,6 +1000,7 @@ public struct ChurchRelationship: Codable, Hashable, Sendable {
         self.churchName = churchName
         self.logoUrl = logoUrl
         self.appTheme = appTheme
+        self.canManageBranding = canManageBranding
         self.state = state
         self.joinPolicy = joinPolicy
         self.joinedAt = joinedAt

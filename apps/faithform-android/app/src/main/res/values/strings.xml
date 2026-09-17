@@ -130,6 +130,17 @@
     <string name="notifications_on">Updates are on</string>
     <!-- Automatic attendance (Prompt 7) -->
     <string name="preferences_section">Preferences</string>
+    <string name="church_tools_section">Church tools</string>
+    <string name="church_appearance_title">Church appearance</string>
+    <string name="church_appearance_row_body">App colors and preview</string>
+    <string name="church_appearance_body">Choose an accessible palette for your congregation. The app updates for everyone after you save.</string>
+    <string name="church_appearance_presets">Recommended palettes</string>
+    <string name="church_appearance_custom">Custom colors</string>
+    <string name="church_appearance_preview">Preview changes before applying them.</string>
+    <string name="church_appearance_button">Primary action</string>
+    <string name="church_appearance_save">Apply theme</string>
+    <string name="church_appearance_saved">Theme updated.</string>
+    <string name="church_appearance_error">Could not update the theme. Try again.</string>
     <string name="legal_section">Legal</string>
     <string name="auto_attendance_title">Automatic check-in</string>
     <string name="auto_attendance_on">On</string>

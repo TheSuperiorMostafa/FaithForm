@@ -76,11 +76,14 @@ struct HomeTabView: View {
     private var content: some View {
         if let church = root.selectedChurch, let features = root.features {
             VStack(spacing: 0) {
-                Picker(L.homeTitle, selection: $section) {
-                    Text(L.homeSegmentFeed).tag(HomeSection.feed)
-                    Text(L.homeSegmentSchedule).tag(HomeSection.schedule)
-                }
-                .pickerStyle(.segmented)
+                FaithFormPillSwitcher(
+                    selection: $section,
+                    options: [
+                        .init(.feed, title: L.homeSegmentFeed),
+                        .init(.schedule, title: L.homeSegmentSchedule),
+                    ],
+                    accessibilityLabel: L.homeTitle
+                )
                 .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
                 .padding(.vertical, FaithFormTokens.Spacing.sm)
 

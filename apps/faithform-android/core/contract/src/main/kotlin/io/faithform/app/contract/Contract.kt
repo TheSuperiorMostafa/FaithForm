@@ -610,11 +610,33 @@ data class ChurchAppTheme(
  * which is what lets a released client keep working when the server adds one.
  */
 @Serializable
+data class ChurchThemeSettings(
+    val primaryColor: String? = null,
+    val accentColor: String? = null,
+    val appTheme: ChurchAppTheme? = null
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class UpdateChurchThemeRequest(
+    val primaryColor: String? = null,
+    val accentColor: String? = null
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
 data class ChurchRelationship(
     val churchSlug: String,
     val churchName: String,
     val logoUrl: String? = null,
     val appTheme: ChurchAppTheme? = null,
+    val canManageBranding: Boolean? = null,
     val state: RelationshipState,
     val joinPolicy: JoinPolicy,
     val joinedAt: String? = null,

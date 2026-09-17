@@ -99,10 +99,14 @@ type RelationshipRow = {
   churches: unknown;
 };
 
-function projectRelationship(row: RelationshipRow): ChurchRelationshipDto | null {
+function projectRelationship(
+  row: RelationshipRow,
+  adminChurchIds: ReadonlySet<string> = new Set(),
+): ChurchRelationshipDto | null {
   const church = Array.isArray(row.churches) ? row.churches[0] : row.churches;
   const resolved = church as
     | {
+        id: string;
         slug: string | null;
         name: string;
         logo_url: string | null;
@@ -125,6 +129,7 @@ function projectRelationship(row: RelationshipRow): ChurchRelationshipDto | null
       resolved.giving_primary_color,
       resolved.giving_accent_color,
     ),
+    canManageBranding: adminChurchIds.has(resolved.id),
     state,
     joinPolicy: (resolved.join_policy ?? "approval_required") as ChurchRelationshipDto["joinPolicy"],
     joinedAt: row.joined_at,
@@ -136,7 +141,7 @@ function projectRelationship(row: RelationshipRow): ChurchRelationshipDto | null
 }
 
 const RELATIONSHIP_SELECT =
-  "id, state, joined_at, updated_at, churches!inner(slug, name, logo_url, join_policy, giving_primary_color, giving_accent_color)";
+  "id, state, joined_at, updated_at, churches!inner(id, slug, name, logo_url, join_policy, giving_primary_color, giving_accent_color)";
 
 async function loadSelectedChurchSlug(
   selectedChurchId: string | null,
@@ -163,14 +168,14 @@ async function syncStaffChurchesIntoApp(
   admin: ReturnType<typeof createAdminClient>,
   account: VisitorAccount,
   userId: string,
-): Promise<void> {
+): Promise<Set<string>> {
   const { data, error } = await admin
     .from("church_users")
-    .select("church_id")
+    .select("church_id, role")
     .eq("user_id", userId)
     .limit(50);
 
-  if (error || !data?.length) return;
+  if (error || !data?.length) return new Set();
 
   const churchIds = [
     ...new Set(
@@ -182,6 +187,11 @@ async function syncStaffChurchesIntoApp(
 
   await Promise.allSettled(
     churchIds.map((churchId) => admitStaffAsMember(account.id, churchId, userId)),
+  );
+  return new Set(
+    data
+      .filter((row) => row.role === "admin")
+      .map((row) => row.church_id as string),
   );
 }
 
@@ -196,7 +206,7 @@ export async function getBootstrap(userId: string): Promise<Bootstrap> {
   const account = await ensureVisitorAccount(userId);
   const admin = createAdminClient();
 
-  await syncStaffChurchesIntoApp(admin, account, userId);
+  const adminChurchIds = await syncStaffChurchesIntoApp(admin, account, userId);
 
   const [{ data: rows }, requests, selectedChurchSlug] = await Promise.all([
     admin
@@ -210,7 +220,7 @@ export async function getBootstrap(userId: string): Promise<Bootstrap> {
   ]);
 
   const relationships = ((rows ?? []) as unknown as RelationshipRow[])
-    .map(projectRelationship)
+    .map((row) => projectRelationship(row, adminChurchIds))
     .filter((value): value is ChurchRelationshipDto => value !== null);
 
   return {
@@ -238,6 +248,12 @@ export async function listRelationshipsPage(
   if (!account) throw new VisitorError("account_missing", "No visitor account.");
 
   const admin = createAdminClient();
+  const { data: staffRows } = await admin
+    .from("church_users")
+    .select("church_id")
+    .eq("user_id", userId)
+    .eq("role", "admin");
+  const adminChurchIds = new Set((staffRows ?? []).map((row) => row.church_id as string));
   let query = admin
     .from("visitor_church_relationships")
     .select(RELATIONSHIP_SELECT)
@@ -256,7 +272,7 @@ export async function listRelationshipsPage(
 
   return {
     items: page
-      .map(projectRelationship)
+      .map((row) => projectRelationship(row, adminChurchIds))
       .filter((value): value is ChurchRelationshipDto => value !== null),
     nextCursorId: hasMore ? page[page.length - 1].id : null,
   };

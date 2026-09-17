@@ -44,6 +44,7 @@ import io.faithform.app.host.HostNavigation
 import io.faithform.app.host.HostTab
 import io.faithform.app.session.AppContainer
 import io.faithform.app.ui.account.AccountTab
+import io.faithform.app.ui.account.ChurchAppearanceScreen
 import io.faithform.app.ui.attendance.AutomaticAttendanceIntroScreen
 import io.faithform.app.ui.attendance.CheckInTab
 import io.faithform.app.ui.discovery.LocationProvider
@@ -173,9 +174,30 @@ fun SignedInHost(
 
                     HostTab.ACCOUNT -> {
                         var showAutoCheckIn by rememberSaveable { mutableStateOf(false) }
+                        var showChurchAppearance by rememberSaveable { mutableStateOf(false) }
                         val showsAuto =
                             "attendance" in bootstrap.enabledCapabilities && selectedSlug != null
-                        if (showAutoCheckIn && showsAuto) {
+                        if (showChurchAppearance && church?.canManageBranding == true) {
+                            TabScreen(
+                                title = stringResource(R.string.church_appearance_title),
+                                onBack = { showChurchAppearance = false },
+                            ) { content ->
+                                ChurchAppearanceScreen(
+                                    church = church,
+                                    modifier = content,
+                                    onSave = { primary, accent, done ->
+                                        viewModel.updateChurchTheme(
+                                            church.churchSlug,
+                                            primary,
+                                            accent,
+                                        ) { ok ->
+                                            done(ok)
+                                            if (ok) showChurchAppearance = false
+                                        }
+                                    },
+                                )
+                            }
+                        } else if (showAutoCheckIn && showsAuto) {
                             TabScreen(
                                 title = stringResource(R.string.auto_attendance_title),
                                 onBack = { showAutoCheckIn = false },
@@ -195,6 +217,9 @@ fun SignedInHost(
                                     showsAutomaticCheckIn = showsAuto,
                                     automaticCheckInEnabled = container.automaticAttendance?.settings?.enabled == true,
                                     onOpenAutomaticCheckIn = { showAutoCheckIn = true },
+                                    onOpenChurchAppearance = if (church?.canManageBranding == true) {
+                                        { showChurchAppearance = true }
+                                    } else null,
                                     onUpdateDisplayName = viewModel::updateDisplayName,
                                 )
                             }
