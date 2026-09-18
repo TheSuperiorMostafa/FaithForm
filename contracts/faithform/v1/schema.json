@@ -4467,6 +4467,26 @@
         },
         "churchTimezone": {
           "type": "string"
+        },
+        "theme": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PresentationTheme"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "thumbnailUrl": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -4482,7 +4502,83 @@
         "churchName",
         "churchTimezone"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "$defs": {
+        "PresentationTheme": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "backgroundType": {
+              "type": "string",
+              "enum": [
+                "solid",
+                "image"
+              ]
+            },
+            "bg": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "bgCss": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "accent": {
+              "type": "string"
+            },
+            "fontHead": {
+              "type": "string"
+            },
+            "fontBody": {
+              "type": "string"
+            },
+            "italicRef": {
+              "type": "boolean"
+            },
+            "textShadow": {
+              "type": "boolean"
+            },
+            "imageUrl": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "backgroundType",
+            "bg",
+            "bgCss",
+            "text",
+            "accent",
+            "fontHead",
+            "fontBody",
+            "italicRef",
+            "textShadow",
+            "imageUrl"
+          ],
+          "additionalProperties": false
+        }
+      }
     },
     "SermonPage": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -4581,6 +4677,26 @@
             },
             "churchTimezone": {
               "type": "string"
+            },
+            "theme": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/PresentationTheme"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "thumbnailUrl": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           },
           "required": [
@@ -4595,6 +4711,80 @@
             "churchSlug",
             "churchName",
             "churchTimezone"
+          ],
+          "additionalProperties": false
+        },
+        "PresentationTheme": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "backgroundType": {
+              "type": "string",
+              "enum": [
+                "solid",
+                "image"
+              ]
+            },
+            "bg": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "bgCss": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "accent": {
+              "type": "string"
+            },
+            "fontHead": {
+              "type": "string"
+            },
+            "fontBody": {
+              "type": "string"
+            },
+            "italicRef": {
+              "type": "boolean"
+            },
+            "textShadow": {
+              "type": "boolean"
+            },
+            "imageUrl": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "backgroundType",
+            "bg",
+            "bgCss",
+            "text",
+            "accent",
+            "fontHead",
+            "fontBody",
+            "italicRef",
+            "textShadow",
+            "imageUrl"
           ],
           "additionalProperties": false
         }
@@ -5012,6 +5202,26 @@
         },
         "churchTimezone": {
           "type": "string"
+        },
+        "theme": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PresentationTheme"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "thumbnailUrl": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -5028,7 +5238,83 @@
         "churchName",
         "churchTimezone"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "$defs": {
+        "PresentationTheme": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "backgroundType": {
+              "type": "string",
+              "enum": [
+                "solid",
+                "image"
+              ]
+            },
+            "bg": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "bgCss": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "accent": {
+              "type": "string"
+            },
+            "fontHead": {
+              "type": "string"
+            },
+            "fontBody": {
+              "type": "string"
+            },
+            "italicRef": {
+              "type": "boolean"
+            },
+            "textShadow": {
+              "type": "boolean"
+            },
+            "imageUrl": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "backgroundType",
+            "bg",
+            "bgCss",
+            "text",
+            "accent",
+            "fontHead",
+            "fontBody",
+            "italicRef",
+            "textShadow",
+            "imageUrl"
+          ],
+          "additionalProperties": false
+        }
+      }
     },
     "PresentationPageResponse": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -5118,6 +5404,26 @@
             },
             "churchTimezone": {
               "type": "string"
+            },
+            "theme": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/PresentationTheme"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "thumbnailUrl": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           },
           "required": [
@@ -5133,6 +5439,80 @@
             "churchSlug",
             "churchName",
             "churchTimezone"
+          ],
+          "additionalProperties": false
+        },
+        "PresentationTheme": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string"
+            },
+            "backgroundType": {
+              "type": "string",
+              "enum": [
+                "solid",
+                "image"
+              ]
+            },
+            "bg": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "bgCss": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "accent": {
+              "type": "string"
+            },
+            "fontHead": {
+              "type": "string"
+            },
+            "fontBody": {
+              "type": "string"
+            },
+            "italicRef": {
+              "type": "boolean"
+            },
+            "textShadow": {
+              "type": "boolean"
+            },
+            "imageUrl": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "backgroundType",
+            "bg",
+            "bgCss",
+            "text",
+            "accent",
+            "fontHead",
+            "fontBody",
+            "italicRef",
+            "textShadow",
+            "imageUrl"
           ],
           "additionalProperties": false
         }

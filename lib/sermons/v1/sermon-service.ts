@@ -8,6 +8,11 @@ import {
   type SermonOutlineDto,
   type SermonQuestionDto,
 } from "@/lib/sermons/v1/projection";
+import { getThemeAsync } from "@/lib/queries/slide-themes";
+import {
+  snapshotTheme,
+  type PresentationThemeSnapshot,
+} from "@/lib/sermons/v1/presentation-manifest";
 
 export type {
   SermonOutlineDto,
@@ -92,6 +97,8 @@ export type SermonListItemDto = {
   churchSlug: string;
   churchName: string;
   churchTimezone: string;
+  theme?: PresentationThemeSnapshot | null;
+  thumbnailUrl?: string | null;
 };
 
 export type SermonDetailDto = SermonListItemDto & {
@@ -113,7 +120,15 @@ function utcInstant(value: unknown): string {
 function projectListItem(
   row: Record<string, unknown>,
   churchSlug: string,
+  extra?: { theme: PresentationThemeSnapshot | null; thumbnailUrl: string | null },
 ): SermonListItemDto {
+  const theme = (row.theme_snapshot as PresentationThemeSnapshot | null) ?? extra?.theme ?? null;
+  const thumbnailUrl =
+    (row.thumbnail_url as string | null) ??
+    extra?.thumbnailUrl ??
+    theme?.imageUrl ??
+    null;
+
   return {
     sermonId: row.id as string,
     title: row.title as string,
@@ -126,6 +141,8 @@ function projectListItem(
     churchSlug,
     churchName: row.church_name as string,
     churchTimezone: (row.church_timezone as string) ?? "America/New_York",
+    theme: theme ?? null,
+    thumbnailUrl: thumbnailUrl ?? null,
   };
 }
 
@@ -189,9 +206,61 @@ export async function getSermonArchivePage(input: {
   const page = rows.slice(0, input.limit);
   const last = page.at(-1);
 
+  const sermonIds = page.map((r) => r.id as string).filter(Boolean);
+  const themeMap = new Map<string, { theme: PresentationThemeSnapshot | null; thumbnailUrl: string | null }>();
+  if (sermonIds.length > 0) {
+    const { data: verRows } = await admin
+      .from("sermon_presentation_versions")
+      .select("sermon_id, theme_snapshot, renditions")
+      .in("sermon_id", sermonIds)
+      .neq("mobile_visibility", "none")
+      .is("unpublished_at", null)
+      .order("version", { ascending: false });
+    if (verRows) {
+      for (const vr of verRows) {
+        if (!themeMap.has(vr.sermon_id as string)) {
+          const theme = vr.theme_snapshot as PresentationThemeSnapshot | null;
+          const renditions = vr.renditions as { slides?: Array<{ imageUrl?: string }> } | null;
+          themeMap.set(vr.sermon_id as string, {
+            theme,
+            thumbnailUrl: renditions?.slides?.[0]?.imageUrl ?? theme?.imageUrl ?? null,
+          });
+        }
+      }
+    }
+
+    const missingIds = sermonIds.filter((id) => !themeMap.has(id));
+    if (missingIds.length > 0) {
+      const { data: sRows } = await admin
+        .from("sermons")
+        .select("id, theme_id")
+        .in("id", missingIds);
+      if (sRows) {
+        for (const s of sRows) {
+          if (s.theme_id) {
+            try {
+              const t = await getThemeAsync(s.theme_id);
+              if (t) {
+                const snap = snapshotTheme(t);
+                themeMap.set(s.id as string, {
+                  theme: snap,
+                  thumbnailUrl: snap?.imageUrl ?? null,
+                });
+              }
+            } catch {
+              // Non-fatal if theme not found
+            }
+          }
+        }
+      }
+    }
+  }
+
   return {
     version,
-    items: page.map((row) => projectListItem(row, input.churchSlug)),
+    items: page.map((row) =>
+      projectListItem(row, input.churchSlug, themeMap.get(row.id as string)),
+    ),
     nextCursor:
       rows.length > input.limit && last
         ? {

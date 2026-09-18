@@ -2229,6 +2229,8 @@ public struct SermonListItem: Codable, Hashable, Sendable {
     public let churchSlug: String
     public let churchName: String
     public let churchTimezone: String
+    public let theme: PresentationTheme?
+    public let thumbnailUrl: String?
 
     public init(
         sermonId: String,
@@ -2241,7 +2243,9 @@ public struct SermonListItem: Codable, Hashable, Sendable {
         publicationVersion: Int,
         churchSlug: String,
         churchName: String,
-        churchTimezone: String
+        churchTimezone: String,
+        theme: PresentationTheme? = nil,
+        thumbnailUrl: String? = nil
     ) {
         self.sermonId = sermonId
         self.title = title
@@ -2254,6 +2258,8 @@ public struct SermonListItem: Codable, Hashable, Sendable {
         self.churchSlug = churchSlug
         self.churchName = churchName
         self.churchTimezone = churchTimezone
+        self.theme = theme
+        self.thumbnailUrl = thumbnailUrl
     }
 }
 
@@ -2419,6 +2425,8 @@ public struct PresentationListItem: Codable, Hashable, Sendable {
     public let churchSlug: String
     public let churchName: String
     public let churchTimezone: String
+    public let theme: PresentationTheme?
+    public let thumbnailUrl: String?
 
     public init(
         presentationId: String,
@@ -2432,7 +2440,9 @@ public struct PresentationListItem: Codable, Hashable, Sendable {
         seriesName: String? = nil,
         churchSlug: String,
         churchName: String,
-        churchTimezone: String
+        churchTimezone: String,
+        theme: PresentationTheme? = nil,
+        thumbnailUrl: String? = nil
     ) {
         self.presentationId = presentationId
         self.sermonId = sermonId
@@ -2446,6 +2456,8 @@ public struct PresentationListItem: Codable, Hashable, Sendable {
         self.churchSlug = churchSlug
         self.churchName = churchName
         self.churchTimezone = churchTimezone
+        self.theme = theme
+        self.thumbnailUrl = thumbnailUrl
     }
 }
 

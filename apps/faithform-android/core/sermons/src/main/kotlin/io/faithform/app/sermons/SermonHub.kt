@@ -1,6 +1,7 @@
 package io.faithform.app.sermons
 
 import io.faithform.app.contract.PresentationListItem
+import io.faithform.app.contract.PresentationTheme
 import io.faithform.app.contract.SermonListItem
 import java.time.LocalDate
 import java.time.YearMonth
@@ -25,6 +26,8 @@ data class SermonHubItem(
 ) {
     val hasNotes: Boolean get() = notes != null
     val hasSlides: Boolean get() = slides != null
+    val theme: PresentationTheme? get() = slides?.theme ?: notes?.theme
+    val thumbnailUrl: String? get() = slides?.thumbnailUrl ?: notes?.thumbnailUrl ?: theme?.imageUrl
     val preachedDate: LocalDate?
         get() = sermonDate(preachedOn, publishedAt, churchTimezone)
 }

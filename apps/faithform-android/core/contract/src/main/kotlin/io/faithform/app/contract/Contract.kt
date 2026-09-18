@@ -1292,7 +1292,9 @@ data class SermonListItem(
     val publicationVersion: Int,
     val churchSlug: String,
     val churchName: String,
-    val churchTimezone: String
+    val churchTimezone: String,
+    val theme: PresentationTheme? = null,
+    val thumbnailUrl: String? = null
 )
 
 /**
@@ -1391,7 +1393,9 @@ data class PresentationListItem(
     val seriesName: String? = null,
     val churchSlug: String,
     val churchName: String,
-    val churchTimezone: String
+    val churchTimezone: String,
+    val theme: PresentationTheme? = null,
+    val thumbnailUrl: String? = null
 )
 
 /**

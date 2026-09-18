@@ -16,12 +16,22 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
+import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.Slideshow
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -351,39 +361,119 @@ private fun SermonHubCard(
                 .clickable(
                     role = Role.Button,
                     onClick = { if (hub.hasSlides) onOpenSlides() else onOpenNotes() },
-                )
-                .background(theme.palette.brandPrimary),
+                ),
             contentAlignment = Alignment.Center,
         ) {
+            SlideDeckBackground(
+                theme = hub.theme,
+                modifier = Modifier.matchParentSize(),
+            )
             Box(
                 Modifier
                     .matchParentSize()
                     .background(
                         Brush.verticalGradient(
-                            listOf(Color.White.copy(alpha = 0.08f), Color.Black.copy(alpha = 0.28f)),
+                            if (hub.thumbnailUrl != null || hub.theme?.imageUrl != null) {
+                                listOf(Color.Black.copy(alpha = 0.35f), Color.Black.copy(alpha = 0.65f))
+                            } else {
+                                listOf(Color.Black.copy(alpha = 0.10f), Color.Black.copy(alpha = 0.35f))
+                            },
                         ),
                     ),
             )
+            val textColor = parseThemeColor(hub.theme?.text) ?: Color.White
+            val accentColor = parseThemeColor(hub.theme?.accent) ?: theme.palette.brandAccent
+            val textShadow = if (hub.theme?.textShadow == true) {
+                Shadow(color = Color.Black.copy(alpha = 0.7f), blurRadius = 4f)
+            } else {
+                Shadow(color = Color.Black.copy(alpha = 0.3f), blurRadius = 4f)
+            }
+
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm),
-                modifier = Modifier.padding(horizontal = FaithFormTokens.Spacing.lg),
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = FaithFormTokens.Spacing.lg),
             ) {
                 Text(
                     hub.title,
-                    color = Color.White,
-                    fontWeight = FontWeight.SemiBold,
+                    color = textColor,
+                    fontWeight = FontWeight.Bold,
                     fontSize = MaterialTheme.typography.titleMedium.fontSize,
                     textAlign = TextAlign.Center,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
+                    style = TextStyle(shadow = textShadow),
                 )
-                hub.slides?.let { slides ->
+                val ref = hub.scriptureRefs.firstOrNull() ?: hub.seriesName
+                if (!ref.isNullOrBlank()) {
+                    Spacer(Modifier.height(FaithFormTokens.Spacing.xs))
                     Text(
-                        stringResource(R.string.presentations_page_count, slides.pageCount),
-                        color = theme.palette.brandAccent,
-                        style = MaterialTheme.typography.labelSmall,
+                        ref,
+                        color = accentColor,
+                        fontStyle = if (hub.theme?.italicRef != false) FontStyle.Italic else FontStyle.Normal,
+                        style = TextStyle(shadow = Shadow(color = Color.Black.copy(alpha = 0.5f), blurRadius = 4f)),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center,
+                        fontSize = 13.sp,
                     )
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(FaithFormTokens.Spacing.sm),
+                contentAlignment = Alignment.BottomEnd,
+            ) {
+                if (hub.hasSlides) {
+                    hub.slides?.let { slides ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier
+                                .background(Color.Black.copy(alpha = 0.65f), CircleShape)
+                                .border(0.5.dp, Color.White.copy(alpha = 0.2f), CircleShape)
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Slideshow,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(12.dp),
+                            )
+                            Text(
+                                stringResource(R.string.presentations_page_count, slides.pageCount),
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+                    }
+                } else {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        modifier = Modifier
+                            .background(Color.Black.copy(alpha = 0.65f), CircleShape)
+                            .border(0.5.dp, Color.White.copy(alpha = 0.2f), CircleShape)
+                            .padding(horizontal = 8.dp, vertical = 4.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Description,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(12.dp),
+                        )
+                        Text(
+                            stringResource(R.string.sermons_open_notes),
+                            color = Color.White,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
                 }
             }
         }

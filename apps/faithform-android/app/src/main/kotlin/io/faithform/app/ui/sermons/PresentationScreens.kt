@@ -17,10 +17,17 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FormatSize
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Slideshow
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -237,8 +244,103 @@ private fun PresentationCard(item: PresentationListItem, onClick: () -> Unit) {
             .clickable(role = Role.Button, onClick = onClick)
             .padding(FaithFormTokens.Spacing.md)
             .semantics(mergeDescendants = true) {},
-        verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.xs),
+        verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm),
     ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(16f / 9f)
+                .clip(RoundedCornerShape(FaithFormTokens.Radius.sm)),
+            contentAlignment = Alignment.Center,
+        ) {
+            SlideDeckBackground(
+                theme = item.theme,
+                modifier = Modifier.matchParentSize(),
+            )
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .background(
+                        Brush.verticalGradient(
+                            if (item.thumbnailUrl != null || item.theme?.imageUrl != null) {
+                                listOf(Color.Black.copy(alpha = 0.35f), Color.Black.copy(alpha = 0.65f))
+                            } else {
+                                listOf(Color.Black.copy(alpha = 0.10f), Color.Black.copy(alpha = 0.35f))
+                            },
+                        ),
+                    ),
+            )
+            val textColor = parseThemeColor(item.theme?.text) ?: Color.White
+            val accentColor = parseThemeColor(item.theme?.accent) ?: theme.palette.brandAccent
+            val textShadow = if (item.theme?.textShadow == true) {
+                Shadow(color = Color.Black.copy(alpha = 0.7f), blurRadius = 4f)
+            } else {
+                Shadow(color = Color.Black.copy(alpha = 0.3f), blurRadius = 4f)
+            }
+
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = FaithFormTokens.Spacing.md),
+            ) {
+                Text(
+                    item.title,
+                    color = textColor,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp,
+                    textAlign = TextAlign.Center,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    style = TextStyle(shadow = textShadow),
+                )
+                val ref = item.scriptureRefs.firstOrNull() ?: item.seriesName
+                if (!ref.isNullOrBlank()) {
+                    Spacer(Modifier.height(FaithFormTokens.Spacing.xs))
+                    Text(
+                        ref,
+                        color = accentColor,
+                        fontStyle = if (item.theme?.italicRef != false) FontStyle.Italic else FontStyle.Normal,
+                        style = TextStyle(shadow = Shadow(color = Color.Black.copy(alpha = 0.5f), blurRadius = 4f)),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center,
+                        fontSize = 12.sp,
+                    )
+                }
+            }
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(FaithFormTokens.Spacing.sm),
+                contentAlignment = Alignment.BottomEnd,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier
+                        .background(Color.Black.copy(alpha = 0.65f), CircleShape)
+                        .border(0.5.dp, Color.White.copy(alpha = 0.2f), CircleShape)
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Slideshow,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(12.dp),
+                    )
+                    Text(
+                        stringResource(R.string.presentations_page_count, item.pageCount),
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+            }
+        }
+
         if (meta.isNotBlank()) {
             Text(meta, style = MaterialTheme.typography.labelSmall, color = theme.palette.contentSecondary)
         }
@@ -429,7 +531,7 @@ private fun SlideTextSizeBar(
 
 /** Solid colour, or the theme photo already stored on the published deck. */
 @Composable
-private fun SlideDeckBackground(theme: PresentationTheme?, modifier: Modifier = Modifier) {
+internal fun SlideDeckBackground(theme: PresentationTheme?, modifier: Modifier = Modifier) {
     val fallback = parseThemeColor(theme?.bg) ?: LocalFaithFormTheme.current.palette.brandPrimary
     val imageUrl = theme?.imageUrl?.trim().orEmpty()
     Box(modifier.clipToBounds().background(fallback)) {

@@ -127,9 +127,9 @@ private extension FaithFormTokens.Palette {
     func applying(_ brand: AppThemePalette?) -> Self {
         guard let brand else { return self }
         return Self(
-            brandPrimary: Color(hex: brand.primary),
-            brandAccent: Color(hex: brand.accent),
-            brandAccentSoft: Color(hex: brand.accentSoft),
+            brandPrimary: Color(hex: brand.primary) ?? brandPrimary,
+            brandAccent: Color(hex: brand.accent) ?? brandAccent,
+            brandAccentSoft: Color(hex: brand.accentSoft) ?? brandAccentSoft,
             background: background,
             surface: surface,
             surfaceRaised: surfaceRaised,
@@ -139,7 +139,7 @@ private extension FaithFormTokens.Palette {
             contentSecondary: contentSecondary,
             contentMuted: contentMuted,
             contentInverse: contentInverse,
-            contentOnAccent: Color(hex: brand.onAccent),
+            contentOnAccent: Color(hex: brand.onAccent) ?? contentOnAccent,
             border: border,
             borderStrong: borderStrong,
             divider: divider,
@@ -151,7 +151,7 @@ private extension FaithFormTokens.Palette {
             warningContent: warningContent,
             live: live,
             liveContent: liveContent,
-            focusRing: Color(hex: brand.accent),
+            focusRing: Color(hex: brand.accent) ?? focusRing,
             overlayScrim: overlayScrim,
             skeletonBase: skeletonBase,
             skeletonSheen: skeletonSheen
@@ -159,15 +159,18 @@ private extension FaithFormTokens.Palette {
     }
 }
 
-private extension Color {
-    init(hex: String) {
-        let value = UInt64(hex.dropFirst(), radix: 16) ?? 0
-        self.init(
-            .sRGB,
-            red: Double((value >> 16) & 0xff) / 255,
-            green: Double((value >> 8) & 0xff) / 255,
-            blue: Double(value & 0xff) / 255,
-            opacity: 1
-        )
+extension Color {
+    init?(hex: String?) {
+        guard var hex else { return nil }
+        hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var int: UInt64 = 0
+        guard Scanner(string: hex).scanHexInt64(&int) else { return nil }
+        let r, g, b: UInt64
+        switch hex.count {
+        case 6: (r, g, b) = (int >> 16, int >> 8 & 0xFF, int & 0xFF)
+        case 8: (r, g, b) = (int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
+        default: return nil
+        }
+        self.init(.sRGB, red: Double(r) / 255, green: Double(g) / 255, blue: Double(b) / 255, opacity: 1)
     }
 }

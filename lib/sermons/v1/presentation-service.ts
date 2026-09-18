@@ -66,6 +66,8 @@ export type PresentationListItemDto = {
   churchSlug: string;
   churchName: string;
   churchTimezone: string;
+  theme?: PresentationThemeSnapshot | null;
+  thumbnailUrl?: string | null;
 };
 
 export type PresentationDetailDto = PresentationListItemDto & {
@@ -83,7 +85,17 @@ function utcInstant(value: unknown): string {
 function projectListItem(
   row: Record<string, unknown>,
   churchSlug: string,
+  extra?: { theme: PresentationThemeSnapshot | null; thumbnailUrl: string | null },
 ): PresentationListItemDto {
+  const theme = (row.theme_snapshot as PresentationThemeSnapshot | null) ?? extra?.theme ?? null;
+  const renditions = row.renditions as { slides?: Array<{ imageUrl?: string }> } | null;
+  const thumbnailUrl =
+    (row.thumbnail_url as string | null) ??
+    renditions?.slides?.[0]?.imageUrl ??
+    extra?.thumbnailUrl ??
+    theme?.imageUrl ??
+    null;
+
   return {
     presentationId: row.id as string,
     sermonId: row.sermon_id as string,
@@ -97,6 +109,8 @@ function projectListItem(
     churchSlug,
     churchName: row.church_name as string,
     churchTimezone: (row.church_timezone as string) ?? "America/New_York",
+    theme: theme ?? null,
+    thumbnailUrl: thumbnailUrl ?? null,
   };
 }
 
@@ -169,9 +183,30 @@ export async function getPresentationArchivePage(input: {
   const page = rows.slice(0, input.limit);
   const last = page.at(-1);
 
+  const ids = page.map((r) => r.id as string).filter(Boolean);
+  const themeMap = new Map<string, { theme: PresentationThemeSnapshot | null; thumbnailUrl: string | null }>();
+  if (ids.length > 0 && page.some((r) => !r.theme_snapshot)) {
+    const { data: verRows } = await admin
+      .from("sermon_presentation_versions")
+      .select("id, theme_snapshot, renditions")
+      .in("id", ids);
+    if (verRows) {
+      for (const vr of verRows) {
+        const theme = vr.theme_snapshot as PresentationThemeSnapshot | null;
+        const renditions = vr.renditions as { slides?: Array<{ imageUrl?: string }> } | null;
+        themeMap.set(vr.id as string, {
+          theme,
+          thumbnailUrl: renditions?.slides?.[0]?.imageUrl ?? theme?.imageUrl ?? null,
+        });
+      }
+    }
+  }
+
   return {
     version,
-    items: page.map((row) => projectListItem(row, input.churchSlug)),
+    items: page.map((row) =>
+      projectListItem(row, input.churchSlug, themeMap.get(row.id as string)),
+    ),
     nextCursor:
       rows.length > input.limit && last
         ? {

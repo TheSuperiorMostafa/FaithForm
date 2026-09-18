@@ -342,28 +342,89 @@ private struct SermonHubThumbnail: View {
 
     var body: some View {
         ZStack {
-            theme.palette.brandPrimary
+            SlideDeckBackground(
+                snapshot: hub.theme,
+                fallback: theme.palette.brandPrimary
+            )
+
             LinearGradient(
-                colors: [Color.white.opacity(0.08), Color.black.opacity(0.28)],
+                colors: [
+                    Color.black.opacity(hub.thumbnailUrl != nil || hub.theme?.imageUrl != nil ? 0.35 : 0.10),
+                    Color.black.opacity(hub.thumbnailUrl != nil || hub.theme?.imageUrl != nil ? 0.65 : 0.35),
+                ],
                 startPoint: .top,
                 endPoint: .bottom
             )
-            VStack(spacing: FaithFormTokens.Spacing.sm) {
+
+            VStack(spacing: FaithFormTokens.Spacing.xs) {
+                Spacer()
+
                 Text(hub.title)
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(Color(hex: hub.theme?.text) ?? .white)
                     .multilineTextAlignment(.center)
                     .lineLimit(3)
+                    .shadow(color: hub.theme?.textShadow == true ? Color.black.opacity(0.7) : Color.black.opacity(0.3), radius: 2, y: 1)
                     .padding(.horizontal, FaithFormTokens.Spacing.lg)
-                if let slides = hub.slides {
-                    Text(String(format: L.presentationsPageCount, slides.pageCount))
-                        .font(theme.font(FaithFormTokens.Text.caption))
-                        .foregroundStyle(theme.palette.brandAccent)
-                } else {
-                    Image(systemName: "text.book.closed")
-                        .font(.system(size: FaithFormTokens.IconSize.sizeMedium, weight: .semibold))
-                        .foregroundStyle(theme.palette.brandAccent)
-                        .accessibilityHidden(true)
+
+                let ref = hub.scriptureRefs.first ?? hub.seriesName
+                if let ref, !ref.isEmpty {
+                    Text(ref)
+                        .font(
+                            hub.theme?.italicRef ?? true
+                                ? .system(size: 13, weight: .medium).italic()
+                                : .system(size: 13, weight: .medium)
+                        )
+                        .foregroundStyle(Color(hex: hub.theme?.accent) ?? theme.palette.brandAccent)
+                        .multilineTextAlignment(.center)
+                        .lineLimit(1)
+                        .shadow(color: Color.black.opacity(0.5), radius: 2, y: 1)
+                        .padding(.horizontal, FaithFormTokens.Spacing.md)
+                }
+
+                Spacer()
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    if let slides = hub.slides {
+                        HStack(spacing: 4) {
+                            Image(systemName: "rectangle.inset.filled.and.person.filled")
+                                .font(.system(size: 10, weight: .semibold))
+                            Text(String(format: L.presentationsPageCount, slides.pageCount))
+                                .font(.system(size: 11, weight: .semibold))
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule().fill(Color.black.opacity(0.65))
+                        )
+                        .overlay(
+                            Capsule().strokeBorder(Color.white.opacity(0.2), lineWidth: 0.5)
+                        )
+                        .padding(FaithFormTokens.Spacing.sm)
+                    } else {
+                        HStack(spacing: 4) {
+                            Image(systemName: "text.book.closed")
+                                .font(.system(size: 10, weight: .semibold))
+                            Text(L.sermonsOpenNotes)
+                                .font(.system(size: 11, weight: .semibold))
+                        }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(
+                            Capsule().fill(Color.black.opacity(0.65))
+                        )
+                        .overlay(
+                            Capsule().strokeBorder(Color.white.opacity(0.2), lineWidth: 0.5)
+                        )
+                        .padding(FaithFormTokens.Spacing.sm)
+                    }
                 }
             }
         }

@@ -19,6 +19,8 @@ public struct SermonHubItem: Hashable, Identifiable, Sendable {
 
     public var hasNotes: Bool { notes != nil }
     public var hasSlides: Bool { slides != nil }
+    public var theme: PresentationTheme? { slides?.theme ?? notes?.theme }
+    public var thumbnailUrl: String? { slides?.thumbnailUrl ?? notes?.thumbnailUrl ?? theme?.imageUrl }
 }
 
 public struct SermonHubMonthGroup: Identifiable, Sendable {

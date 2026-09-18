@@ -917,6 +917,23 @@ export const mediaDetailSchema = z
   })
   .meta({ id: "MediaDetail" });
 
+export const presentationThemeFieldsSchema = z
+  .object({
+    id: z.string(),
+    name: z.string(),
+    backgroundType: z.enum(["solid", "image"]),
+    bg: z.string().nullable(),
+    bgCss: z.string(),
+    text: z.string(),
+    accent: z.string(),
+    fontHead: z.string(),
+    fontBody: z.string(),
+    italicRef: z.boolean(),
+    textShadow: z.boolean(),
+    imageUrl: z.string().nullable(),
+  })
+  .meta({ id: "PresentationTheme" });
+
 /**
  * One sermon in the archive list.
  *
@@ -939,6 +956,8 @@ export const sermonListItemSchema = z
     churchSlug,
     churchName: z.string(),
     churchTimezone: z.string(),
+    theme: presentationThemeFieldsSchema.nullable().optional(),
+    thumbnailUrl: z.string().nullable().optional(),
   })
   .meta({ id: "SermonListItem" });
 
@@ -1038,6 +1057,8 @@ export const presentationListItemSchema = z
     churchSlug,
     churchName: z.string(),
     churchTimezone: z.string(),
+    theme: presentationThemeFieldsSchema.nullable().optional(),
+    thumbnailUrl: z.string().nullable().optional(),
   })
   .meta({ id: "PresentationListItem" });
 
@@ -1048,23 +1069,6 @@ export const presentationPageResponseSchema = z
     presentationVersion: z.number().int(),
   })
   .meta({ id: "PresentationPageResponse" });
-
-export const presentationThemeFieldsSchema = z
-  .object({
-    id: z.string(),
-    name: z.string(),
-    backgroundType: z.enum(["solid", "image"]),
-    bg: z.string().nullable(),
-    bgCss: z.string(),
-    text: z.string(),
-    accent: z.string(),
-    fontHead: z.string(),
-    fontBody: z.string(),
-    italicRef: z.boolean(),
-    textShadow: z.boolean(),
-    imageUrl: z.string().nullable(),
-  })
-  .meta({ id: "PresentationTheme" });
 
 export const presentationSlideRenditionSchema = z
   .object({

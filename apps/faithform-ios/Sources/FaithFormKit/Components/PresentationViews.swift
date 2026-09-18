@@ -115,6 +115,67 @@ struct PresentationCard: View {
     var body: some View {
         FaithFormCard {
             VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.sm) {
+                ZStack {
+                    SlideDeckBackground(
+                        snapshot: item.theme,
+                        fallback: theme.palette.brandPrimary
+                    )
+                    LinearGradient(
+                        colors: [
+                            Color.black.opacity(item.thumbnailUrl != nil || item.theme?.imageUrl != nil ? 0.35 : 0.10),
+                            Color.black.opacity(item.thumbnailUrl != nil || item.theme?.imageUrl != nil ? 0.65 : 0.35),
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    VStack(spacing: FaithFormTokens.Spacing.xs) {
+                        Spacer()
+                        Text(item.title)
+                            .font(.system(size: 16, weight: .bold))
+                            .foregroundStyle(Color(hex: item.theme?.text) ?? .white)
+                            .multilineTextAlignment(.center)
+                            .lineLimit(2)
+                            .shadow(color: item.theme?.textShadow == true ? Color.black.opacity(0.7) : Color.black.opacity(0.3), radius: 2, y: 1)
+                            .padding(.horizontal, FaithFormTokens.Spacing.md)
+
+                        let ref = item.scriptureRefs.first ?? item.seriesName
+                        if let ref, !ref.isEmpty {
+                            Text(ref)
+                                .font(
+                                    item.theme?.italicRef ?? true
+                                        ? .system(size: 12, weight: .medium).italic()
+                                        : .system(size: 12, weight: .medium)
+                                )
+                                .foregroundStyle(Color(hex: item.theme?.accent) ?? theme.palette.brandAccent)
+                                .lineLimit(1)
+                                .shadow(color: Color.black.opacity(0.5), radius: 2, y: 1)
+                        }
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Spacer()
+                            HStack(spacing: 4) {
+                                Image(systemName: "rectangle.inset.filled.and.person.filled")
+                                    .font(.system(size: 10, weight: .semibold))
+                                Text(String(format: L.presentationsPageCount, item.pageCount))
+                                    .font(.system(size: 11, weight: .semibold))
+                            }
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Capsule().fill(Color.black.opacity(0.65)))
+                            .overlay(Capsule().strokeBorder(Color.white.opacity(0.2), lineWidth: 0.5))
+                            .padding(FaithFormTokens.Spacing.sm)
+                        }
+                    }
+                }
+                .aspectRatio(16.0 / 9.0, contentMode: .fit)
+                .clipShape(RoundedRectangle(cornerRadius: FaithFormTokens.Radius.sm, style: .continuous))
+
                 let meta = [
                     item.seriesName,
                     String(format: L.presentationsPageCount, item.pageCount),
@@ -246,7 +307,7 @@ public struct PresentationViewer: View {
 ///
 /// Photo themes used to fall through to `bg` only, so a stained-glass or
 /// landscape deck opened as a flat navy panel on the phone.
-private struct SlideDeckBackground: View {
+struct SlideDeckBackground: View {
     let snapshot: PresentationTheme?
     let fallback: Color
 
@@ -425,18 +486,3 @@ private struct SlidePageView: View {
     }
 }
 
-private extension Color {
-    init?(hex: String?) {
-        guard var hex else { return nil }
-        hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
-        var int: UInt64 = 0
-        guard Scanner(string: hex).scanHexInt64(&int) else { return nil }
-        let r, g, b: UInt64
-        switch hex.count {
-        case 6: (r, g, b) = (int >> 16, int >> 8 & 0xFF, int & 0xFF)
-        case 8: (r, g, b) = (int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
-        default: return nil
-        }
-        self.init(.sRGB, red: Double(r) / 255, green: Double(g) / 255, blue: Double(b) / 255, opacity: 1)
-    }
-}
