@@ -78,6 +78,15 @@ public actor MediaPlaybackCoordinator {
     private var refreshing = false
     private var lastKnownDuration: Double?
 
+    /// Whether the one retry an `unavailable` failure earns has been spent since
+    /// the stream last became ready.
+    ///
+    /// Without it, something genuinely gone — a 404 that no capability will fix
+    /// — looped forever: fail, renew, play, fail, spending the server's playback
+    /// rate limit and never telling the person anything. Android's coordinator
+    /// carries the same guard.
+    private var retriedSinceReady = false
+
     public init(
         granter: PlaybackGranting,
         player: MediaPlayerFacade,
@@ -104,6 +113,7 @@ public actor MediaPlaybackCoordinator {
         partition: CachePartition
     ) async {
         state = .preparing
+        retriedSinceReady = false
         self.partition = partition
         current = (churchSlug, kind, mediaId)
 
@@ -186,6 +196,7 @@ public actor MediaPlaybackCoordinator {
         case .buffering:
             state = .buffering
         case .readyToPlay(let duration):
+            retriedSinceReady = false
             lastKnownDuration = duration
             state = .paused
         case .playing:
@@ -204,10 +215,13 @@ public actor MediaPlaybackCoordinator {
             // playing without the person ever seeing a stall.
             await refreshIfNeeded()
         case .failed(let failure):
-            if failure == .unavailable {
+            if failure == .unavailable, !retriedSinceReady {
                 // One retry through a fresh capability: an expired one looks
                 // exactly like a revoked one from the transport's point of view,
-                // and only the server can tell them apart.
+                // and only the server can tell them apart. One — a second
+                // failure before the stream ever became ready means the
+                // capability was not the problem.
+                retriedSinceReady = true
                 if await refreshIfNeeded(force: true) {
                     await player.send(.play)
                     return

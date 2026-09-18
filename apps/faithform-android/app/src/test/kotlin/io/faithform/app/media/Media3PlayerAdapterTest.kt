@@ -71,6 +71,10 @@ class Media3ErrorCodeMirrorTest {
             PlaybackException.ERROR_CODE_DECODING_FAILED,
             PlayerFailureMapping.ERROR_DECODING_FAILED,
         )
+        assertEquals(
+            PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW,
+            PlayerFailureMapping.ERROR_BEHIND_LIVE_WINDOW,
+        )
     }
 
     @Test

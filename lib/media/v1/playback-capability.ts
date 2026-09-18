@@ -36,18 +36,41 @@ import { createHmac, timingSafeEqual } from "node:crypto";
  *
  * ## Where it lives, and where it does not
  *
- * It travels in an `Authorization: Bearer` header and **never in a URL**. That
- * is the whole reason both native players are wired through header-capable
- * loaders: a capability in a query string is a capability in a browser history,
- * a proxy log, a referrer, and a screenshot of a share sheet.
+ * It travels in an `Authorization: Bearer` header and **never in a URL**: a
+ * capability in a query string is a capability in a browser history, a proxy
+ * log, a referrer, and a screenshot of a share sheet.
+ *
+ * ## The delivery token, which does live in a URL
+ *
+ * A native HLS player cannot carry a header on every request. AVFoundation
+ * refuses media segments served through an `AVAssetResourceLoaderDelegate`
+ * (CoreMediaErrorDomain -12881, "custom url not redirect") and accepts only a
+ * redirect to a plain HTTP URL, which drops any header; the only other way to
+ * attach one, `AVURLAssetHTTPHeaderFieldsKey`, is undocumented. So a live
+ * stream is addressed by a URL that carries a **delivery token** in its path:
+ *
+ *   * a different type, signed under its own sub-key and format prefix, so a
+ *     delivery token never verifies as a capability or the reverse;
+ *   * bound to the same account, church, kind, item and authorization version;
+ *   * valid for one viewing session rather than five minutes, because HLS
+ *     forbids a listed segment's URL from changing (RFC 8216 §6.2.2) and every
+ *     segment URL inherits the token from the playlist URL;
+ *   * worth nothing on its own: the delivery route re-runs the full
+ *     authorization on **every** playlist and segment request, so an unpublish,
+ *     a revocation, an ended service or a sign-out refuses the next request no
+ *     matter what the token's expiry says.
+ *
+ * It sits in the path, never a query string, and the account capability still
+ * never enters a URL.
  *
  * Nothing in this file logs.
  */
 
 const DOMAIN = "faithform.faithform.media.v1";
 const FORMAT = "FFM1";
+const DELIVERY_FORMAT = "FFD1";
 
-export const MEDIA_CAPABILITY_TYPES = ["playback"] as const;
+export const MEDIA_CAPABILITY_TYPES = ["playback", "delivery"] as const;
 export type MediaCapabilityType = (typeof MEDIA_CAPABILITY_TYPES)[number];
 
 export type MediaKind = "live" | "recording";
@@ -71,6 +94,17 @@ export const MEDIA_CAPABILITY_TTL_SECONDS = 5 * 60;
  * once, and still land before the current one dies.
  */
 export const MEDIA_CAPABILITY_REFRESH_LEAD_SECONDS = 60;
+
+/**
+ * How long a delivery token addresses a stream: six hours.
+ *
+ * Long because it has to be. It is part of every playlist and segment URL the
+ * player derives from the one it was handed, and HLS does not allow those to
+ * change mid-stream, so it must outlast a service rather than be renewed
+ * inside one. The expiry bounds only how long a URL stays *well-formed*;
+ * whether it may still be used is decided per request by the delivery route.
+ */
+export const MEDIA_DELIVERY_TTL_SECONDS = 6 * 60 * 60;
 
 export const MAX_CAPABILITY_LENGTH = 1024;
 
@@ -130,7 +164,7 @@ export function issueMediaCapability(input: {
     Math.max(30, input.ttlSeconds ?? MEDIA_CAPABILITY_TTL_SECONDS),
   );
 
-  const payload: MediaCapability = {
+  return mint(material, FORMAT, {
     v: 1,
     t: "playback",
     a: input.accountId,
@@ -139,11 +173,57 @@ export function issueMediaCapability(input: {
     m: input.mediaId,
     av: input.authorizationVersion,
     e: now + ttl,
-  };
+  });
+}
 
+/**
+ * Issues the token a live stream's delivery URL carries in its path.
+ *
+ * See "The delivery token" above. Minted beside a capability, from the same
+ * grant decision, and never instead of the per-request authorization.
+ */
+export function issueMediaDeliveryToken(input: {
+  accountId: string;
+  churchSlug: string;
+  kind: MediaKind;
+  mediaId: string;
+  authorizationVersion: number;
+  nowSeconds?: number;
+}): { token: string; expiresAt: string } | null {
+  const material = secret();
+  if (!material) return null;
+
+  const now = input.nowSeconds ?? Math.floor(Date.now() / 1000);
+  return mint(material, DELIVERY_FORMAT, {
+    v: 1,
+    t: "delivery",
+    a: input.accountId,
+    c: input.churchSlug,
+    k: input.kind,
+    m: input.mediaId,
+    av: input.authorizationVersion,
+    e: now + MEDIA_DELIVERY_TTL_SECONDS,
+  });
+}
+
+/**
+ * Whether a path segment is shaped like a delivery token.
+ *
+ * Shape only — it proves nothing. The route uses it to tell a delivery path
+ * from a header-authenticated one, then verifies the token like any other.
+ */
+export function isMediaDeliveryToken(segment: string | null | undefined): boolean {
+  return typeof segment === "string" && segment.startsWith(`${DELIVERY_FORMAT}.`);
+}
+
+function mint(
+  material: string,
+  format: string,
+  payload: MediaCapability,
+): { token: string; expiresAt: string } | null {
   const body = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
-  const signed = `${FORMAT}.${body}`;
-  const token = `${signed}.${sign("playback", material, signed)}`;
+  const signed = `${format}.${body}`;
+  const token = `${signed}.${sign(payload.t, material, signed)}`;
   if (token.length > MAX_CAPABILITY_LENGTH) return null;
 
   return { token, expiresAt: new Date(payload.e * 1000).toISOString() };
@@ -167,14 +247,39 @@ export type CapabilityVerification =
  */
 export function verifyMediaCapability(
   token: string | null | undefined,
-  expected?: {
-    accountId?: string;
-    churchSlug?: string;
-    kind?: MediaKind;
-    mediaId?: string;
-    authorizationVersion?: number;
-    nowSeconds?: number;
-  },
+  expected?: VerificationExpectations,
+): CapabilityVerification {
+  return verifySigned("playback", FORMAT, token, expected);
+}
+
+/**
+ * Verifies a delivery token taken from a delivery path.
+ *
+ * The same order and the same refusals as a capability, under the delivery
+ * sub-key and prefix — so a capability presented here, or a delivery token
+ * presented as a bearer header, fails its signature.
+ */
+export function verifyMediaDeliveryToken(
+  token: string | null | undefined,
+  expected?: VerificationExpectations,
+): CapabilityVerification {
+  return verifySigned("delivery", DELIVERY_FORMAT, token, expected);
+}
+
+type VerificationExpectations = {
+  accountId?: string;
+  churchSlug?: string;
+  kind?: MediaKind;
+  mediaId?: string;
+  authorizationVersion?: number;
+  nowSeconds?: number;
+};
+
+function verifySigned(
+  type: MediaCapabilityType,
+  expectedFormat: string,
+  token: string | null | undefined,
+  expected?: VerificationExpectations,
 ): CapabilityVerification {
   const material = secret();
   if (!material) return { ok: false, reason: "unconfigured" };
@@ -186,10 +291,12 @@ export function verifyMediaCapability(
   const parts = token.split(".");
   if (parts.length !== 3) return { ok: false, reason: "malformed" };
   const [format, body, signature] = parts;
-  if (format !== FORMAT || !body || !signature) return { ok: false, reason: "malformed" };
+  if (format !== expectedFormat || !body || !signature) {
+    return { ok: false, reason: "malformed" };
+  }
 
   const expectedSignature = Buffer.from(
-    sign("playback", material, `${format}.${body}`),
+    sign(type, material, `${format}.${body}`),
     "utf8",
   );
   const actual = Buffer.from(signature, "utf8");
@@ -207,7 +314,7 @@ export function verifyMediaCapability(
   if (
     !capability ||
     capability.v !== 1 ||
-    capability.t !== "playback" ||
+    capability.t !== type ||
     typeof capability.a !== "string" ||
     typeof capability.c !== "string" ||
     typeof capability.m !== "string" ||

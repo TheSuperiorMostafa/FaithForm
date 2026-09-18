@@ -24,10 +24,12 @@ import androidx.compose.material.icons.outlined.CalendarMonth
 import androidx.compose.material.icons.outlined.Inbox
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material.icons.outlined.WifiOff
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -69,6 +71,7 @@ import java.util.Locale
 private enum class HomeSection { FEED, SCHEDULE }
 
 /** Feed and Schedule segments on Home, matching iOS `HomeTabView`. */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeHostScreen(
     feedPhase: FeedPhase,
@@ -83,7 +86,9 @@ fun HomeHostScreen(
     modifier: Modifier = Modifier,
     isJoinPending: Boolean = false,
     live: MediaLiveCard? = null,
-    onWatchLive: () -> Unit = {},
+    onWatchLive: (MediaLiveCard) -> Unit = {},
+    isRefreshing: Boolean = false,
+    onRefresh: () -> Unit = {},
 ) {
     var section by rememberSaveable { mutableStateOf(HomeSection.FEED) }
 
@@ -91,7 +96,8 @@ fun HomeHostScreen(
         if (live?.isLive == true) {
             LiveNowHero(
                 live = live,
-                onWatch = onWatchLive,
+                // Straight into the picture, full screen and playing.
+                onWatch = { onWatchLive(live) },
                 modifier = Modifier.padding(
                     horizontal = FaithFormTokens.Layout.screenPaddingHorizontal,
                     vertical = FaithFormTokens.Spacing.sm,
@@ -114,25 +120,33 @@ fun HomeHostScreen(
                 ),
         )
 
-        when (section) {
-            HomeSection.FEED -> HomeFeedScreen(
-                phase = feedPhase,
-                onOpenItem = onOpenItem,
-                onReachedEnd = onFeedReachedEnd,
-                modifier = Modifier.fillMaxSize(),
-                isJoinPending = isJoinPending,
-            )
-            HomeSection.SCHEDULE -> ScheduleScreen(
-                phase = schedulePhase,
-                displayedMonth = displayedMonth,
-                churchTimezone = churchTimezone,
-                onPreviousMonth = onPreviousMonth,
-                onNextMonth = onNextMonth,
-                onOpenItem = onOpenItem,
-                onRetry = onRetrySchedule,
-                modifier = Modifier.fillMaxSize(),
-                isJoinPending = isJoinPending,
-            )
+        // A pull-down brings everything on Home up to date — including
+        // whether the church has gone live since the screen was drawn.
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = onRefresh,
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            when (section) {
+                HomeSection.FEED -> HomeFeedScreen(
+                    phase = feedPhase,
+                    onOpenItem = onOpenItem,
+                    onReachedEnd = onFeedReachedEnd,
+                    modifier = Modifier.fillMaxSize(),
+                    isJoinPending = isJoinPending,
+                )
+                HomeSection.SCHEDULE -> ScheduleScreen(
+                    phase = schedulePhase,
+                    displayedMonth = displayedMonth,
+                    churchTimezone = churchTimezone,
+                    onPreviousMonth = onPreviousMonth,
+                    onNextMonth = onNextMonth,
+                    onOpenItem = onOpenItem,
+                    onRetry = onRetrySchedule,
+                    modifier = Modifier.fillMaxSize(),
+                    isJoinPending = isJoinPending,
+                )
+            }
         }
     }
 }

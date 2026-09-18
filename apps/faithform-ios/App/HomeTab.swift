@@ -30,7 +30,6 @@ struct HomeTabView: View {
     }
 
     @Environment(\.faithformTheme) private var theme
-    @Environment(\.scenePhase) private var scenePhase
     let dependencies: AppDependencies
     let root: RootModel
     let bootstrap: Bootstrap
@@ -95,12 +94,10 @@ struct HomeTabView: View {
         if let church = root.selectedChurch, let features = root.features {
             VStack(spacing: 0) {
                 if let live = features.media.phase.live, live.state == "live" {
-                    LiveNowHero(live: live) {
-                        root.watchSection = .media
-                        root.selectedTab = .watch
-                    }
-                    .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
-                    .padding(.top, FaithFormTokens.Spacing.sm)
+                    // Straight into the picture, full screen and playing.
+                    LiveNowHero(live: live) { root.watchLive(live) }
+                        .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
+                        .padding(.top, FaithFormTokens.Spacing.sm)
                 }
 
                 FaithFormPillSwitcher(
@@ -121,7 +118,8 @@ struct HomeTabView: View {
                         churchName: church.churchName,
                         churchSlug: church.churchSlug,
                         isJoinPending: church.state == .pending,
-                        onOpenItem: { path.append(.announcement($0)) }
+                        onOpenItem: { path.append(.announcement($0)) },
+                        onRefresh: { await features.media.refreshLive() }
                     )
                 case .schedule:
                     ScheduleView(
@@ -130,10 +128,13 @@ struct HomeTabView: View {
                         churchSlug: church.churchSlug,
                         churchTimezone: features.schedule.churchTimezone,
                         isJoinPending: church.state == .pending,
-                        onOpenItem: { path.append(.announcement($0)) }
+                        onOpenItem: { path.append(.announcement($0)) },
+                        onRefresh: { await features.media.refreshLive() }
                     )
                 }
             }
+            // A service usually starts with the app already open on Home.
+            .refreshesLiveStatus(features.media)
             // Keyed by the container, so a church switch starts this church's
             // load rather than finishing the last one's.
             .task(id: features.key) {
@@ -148,10 +149,6 @@ struct HomeTabView: View {
                 )
                 async let media: Void = features.media.refresh()
                 _ = await (feed, schedule, media)
-            }
-            .onChange(of: scenePhase) { _, phase in
-                guard phase == .active else { return }
-                Task { await features.media.refresh() }
             }
         } else {
             ScrollView {

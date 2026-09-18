@@ -56,6 +56,37 @@ layout.
 `recent_ended` exists so the card does not vanish mid-Sunday and look broken. It
 is bounded to twenty-four hours.
 
+### Staying current while the app is open
+
+A service usually starts with the app already open on Home. So while Home or
+Watch is on screen and the app is in the foreground, the live projection alone
+is revalidated every thirty seconds — a conditional request the server answers
+304 until something changes — and again the moment the app returns to the
+foreground. Pulling Home down refreshes it too, not only the feed. Nothing polls
+from the background or from another tab.
+
+---
+
+## 2a. Watching live
+
+**Watch live** — on Home or on Watch — opens the service **full screen and
+already playing**. It is not a tab switch onto a screen with a second button:
+the tap was the request to watch.
+
+| | |
+| --- | --- |
+| Picture | fills the screen, letterboxed rather than cropped; follows the phone into landscape |
+| Controls | close, a LIVE badge, the title, pause and play (iOS adds AirPlay); they fade while it plays and return on a tap, and stay put under VoiceOver or TalkBack |
+| Pause | resumes **at the live edge** — the relay keeps only a few seconds, so "where it paused" is usually gone |
+| Background | paused on leaving the app, rejoined at the live edge on return (there is no background playback) |
+| Encoder still connecting | the playlist 404s; the player waits and retries while the church lists the service as live |
+| Dropped uplink or network | reconnects by itself with backoff (1, 2, 4, 8 s…), for a couple of minutes, then offers **Try again** |
+| Service ends | noticed within thirty seconds from the live projection, not left buffering |
+| Refused twice while listed live | "This service can't be watched here right now" |
+
+`LivePlayerModel` (Swift and Kotlin, both tested) owns every one of those
+decisions; the screens only draw its phase.
+
 ---
 
 ## 3. The archive
@@ -170,8 +201,10 @@ that survives a navigation prompt and one that stops for it.
 
 | | iOS | Android |
 | --- | --- | --- |
-| Header injection | `AVAssetResourceLoaderDelegate` + custom scheme | `setDefaultRequestProperties` |
-| Why | `AVPlayer` has no public header API | Media3 has one |
+| Live delivery | the delivery path, fetched by `AVPlayer` itself | the same path, plus the header |
+| Recording delivery | `AVAssetResourceLoaderDelegate` + custom scheme | `setDefaultRequestProperties` |
+| Why | `AVPlayer` has no public header API, and refuses HLS segments a loader answers | Media3 has one |
+| AirPlay | the system route picker | no casting (out of scope) |
 | Audio focus | the system manages it | the app decides, via `AudioFocusPolicy` |
 | Container support | H.264 + AAC in an ISO container | the same, plus more |
 | Rendition MIME | inferred by `AVPlayer` | **declared** from `renditionKind` |
@@ -238,12 +271,13 @@ iOS needs no equivalent.
 
 | Path | Why | Verified instead by |
 | --- | --- | --- |
-| `AVPlayer` playback, playlist and segment fetching | `swift test` runs on macOS; no iOS media stack, no simulator segments | runbook |
-| `AVAssetResourceLoaderDelegate` end to end | same | runbook |
-| `ExoPlayer` playback and `bindToLifecycle` | needs a `Context`, a `Looper` and a media stack; Robolectric cannot instrument Media3 in reasonable time | runbook |
+| `AVPlayer` live playback, playlist and segment fetching | `swift test` runs on macOS; no iOS media stack | `scripts/verify-ios-live-playback.sh` — plays an ffmpeg live stream shaped like the delivery route's on a simulator, asserts moving frames, and reproduces the old loader path's `-12881` |
+| `AVAssetResourceLoaderDelegate` end to end, for recordings | same | runbook |
+| `ExoPlayer` live playback and the full-screen surface | needs a `Context`, a `Looper` and a media stack; Robolectric cannot instrument Media3 in reasonable time | `scripts/verify-android-live-playback.sh` — the same stream on an emulator, through the real grant client, asserting the `PlayerView` holds a player with a picture |
 | Actual HLS from a real relay | needs a provider | runbook |
 | Scrubbing a real recording | needs a device and a file | runbook |
 | Battery and thermal behaviour | not measured | runbook |
 
-**No claim is made that playback works on a device.** The seams around it are
-tested; the media stacks are not.
+Live playback is proven against a relay-shaped stream on a simulator and an
+emulator, by the two scripts above. **No claim is made for a physical device or
+the real relay** — those remain runbook steps.

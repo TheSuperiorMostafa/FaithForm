@@ -7,6 +7,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -33,9 +35,11 @@ import io.faithform.app.ui.onboarding.FindChurchFlow
 import io.faithform.app.ui.schedule.HomeHostScreen
 import io.faithform.app.ui.schedule.ScheduleModel
 import io.faithform.app.ui.schedule.SchedulePhase
-import io.faithform.app.host.HostTab
 import io.faithform.app.media.MediaClient
 import io.faithform.app.media.MediaListModel
+import io.faithform.app.ui.media.PollLiveStatus
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 
 /**
  * Home: what the selected church has published, newest and pinned first.
@@ -83,6 +87,26 @@ fun HomeTab(
         media.launch { refresh() }
         onPauseOrDispose { }
     }
+    // A service usually starts with the app already open on Home.
+    PollLiveStatus(media)
+
+    var refreshing by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val refreshAll: () -> Unit = {
+        scope.launch {
+            refreshing = true
+            try {
+                coroutineScope {
+                    launch { feed.value.refresh() }
+                    launch { schedule.value.refresh() }
+                    launch { media.value.refreshLive() }
+                }
+            } finally {
+                refreshing = false
+            }
+        }
+    }
+
     val phase by feed.value.phase.collectAsStateWithLifecycle()
     val schedulePhase by schedule.value.phase.collectAsStateWithLifecycle()
     val displayedMonth by schedule.value.displayedMonth.collectAsStateWithLifecycle()
@@ -119,7 +143,9 @@ fun HomeTab(
             modifier = content,
             isJoinPending = church.state == RelationshipState.PENDING,
             live = mediaState.liveCard,
-            onWatchLive = { appViewModel.selectTab(HostTab.WATCH) },
+            onWatchLive = appViewModel::watchLive,
+            isRefreshing = refreshing,
+            onRefresh = refreshAll,
         )
     }
 }

@@ -233,6 +233,51 @@ public struct MediaArchiveList: View {
         // five-minute list cache for the time-sensitive live state.
         .task { await model.refresh() }
         .refreshable { await model.refresh() }
+        .refreshesLiveStatus(model)
+    }
+}
+
+// MARK: - Keeping "live" current
+
+extension View {
+    /// Keeps `model`'s live state current while this view is on screen.
+    ///
+    /// A service starts at a set time, very often with the app already open on
+    /// Home, and a person should see it appear without having to know to pull
+    /// down or relaunch. So while the view is visible and the app is in the
+    /// foreground, the live projection is revalidated on a timer — a
+    /// conditional request the server answers 304 until something changes —
+    /// and once more the moment the app returns to the foreground.
+    public func refreshesLiveStatus(
+        _ model: MediaModel,
+        every interval: Duration = .seconds(30)
+    ) -> some View {
+        modifier(LiveStatusRefresher(model: model, interval: interval))
+    }
+}
+
+private struct LiveStatusRefresher: ViewModifier {
+    @Environment(\.scenePhase) private var scenePhase
+    let model: MediaModel
+    let interval: Duration
+
+    func body(content: Content) -> some View {
+        content
+            // Restarted whenever the app becomes active or inactive, and
+            // cancelled when the view leaves the screen, so a phone in a
+            // pocket or on another tab does not poll.
+            .task(id: scenePhase == .active) {
+                guard scenePhase == .active else { return }
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: interval)
+                    if Task.isCancelled { return }
+                    await model.refreshLive()
+                }
+            }
+            .onChange(of: scenePhase) { _, phase in
+                guard phase == .active else { return }
+                Task { await model.refreshLive() }
+            }
     }
 }
 
@@ -487,5 +532,255 @@ public struct MediaVideoSurface: UIViewRepresentable {
             layer as! AVPlayerLayer
         }
     }
+}
+
+// MARK: - Full-screen live service
+
+import AVKit
+
+/// A live service, full screen, playing.
+///
+/// What "Watch live" opens, from Home or from Watch: the picture fills the
+/// screen (letterboxed, never cropped — a slide with its edges cut off is a
+/// slide nobody can read), and it rotates with the phone. Playback starts
+/// without a second tap; the model owns that and every retry.
+///
+/// Controls fade out while the service plays and come back on a tap. They stay
+/// put under VoiceOver, where a control that hides itself is a control that
+/// cannot be found. A swipe down closes it, as it does for the system's player.
+public struct LivePlayerView: View {
+    @Environment(\.faithformTheme) private var theme
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOverEnabled
+    private let model: LivePlayerModel
+    private let player: AVPlayer
+    private let live: LiveMedia
+    private let onClose: @MainActor () -> Void
+
+    @State private var controlsVisible = true
+    @State private var hideControls: Task<Void, Never>?
+    @State private var dragOffset: CGFloat = 0
+
+    public init(
+        model: LivePlayerModel,
+        player: AVPlayer,
+        live: LiveMedia,
+        onClose: @escaping @MainActor () -> Void
+    ) {
+        self.model = model
+        self.player = player
+        self.live = live
+        self.onClose = onClose
+    }
+
+    public var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            MediaVideoSurface(player: player)
+                .ignoresSafeArea()
+                .accessibilityHidden(true)
+
+            status
+
+            if showsControls {
+                controls
+                    .transition(.opacity)
+            }
+        }
+        .offset(y: dragOffset)
+        .contentShape(Rectangle())
+        .onTapGesture { toggleControls() }
+        .gesture(
+            DragGesture(minimumDistance: 24)
+                .onChanged { value in dragOffset = max(0, value.translation.height) }
+                .onEnded { value in
+                    if value.translation.height > 140 {
+                        onClose()
+                    } else {
+                        withAnimation(theme.animation(FaithFormTokens.Motion.standard)) { dragOffset = 0 }
+                    }
+                }
+        )
+        .statusBarHidden(!showsControls)
+        .persistentSystemOverlays(.hidden)
+        .animation(theme.animation(FaithFormTokens.Motion.standard), value: showsControls)
+        .onChange(of: model.phase, initial: true) { _, phase in
+            if phase == .playing { scheduleHide() } else { reveal() }
+        }
+    }
+
+    private var showsControls: Bool {
+        controlsVisible || voiceOverEnabled || model.phase != .playing
+    }
+
+    // MARK: Status
+
+    @ViewBuilder
+    private var status: some View {
+        switch model.phase {
+        case .connecting, .reconnecting:
+            VStack(spacing: FaithFormTokens.Spacing.md) {
+                ProgressView()
+                    .controlSize(.large)
+                    .tint(.white)
+                Text(model.phase == .connecting ? L.mediaLiveConnecting : L.mediaLiveReconnecting)
+                    .font(theme.font(FaithFormTokens.Text.body))
+                    .foregroundStyle(.white.opacity(0.9))
+                    .multilineTextAlignment(.center)
+            }
+            .padding(FaithFormTokens.Spacing.lg)
+            .accessibilityElement(children: .combine)
+
+        case .ended:
+            message(title: L.mediaLiveEnded, body: L.mediaLiveEndedBody, canRetry: false)
+        case .unavailable:
+            message(title: L.mediaLiveUnavailable, body: nil, canRetry: true)
+        case .failed:
+            message(title: L.mediaLiveFailed, body: nil, canRetry: true)
+
+        case .playing, .paused:
+            EmptyView()
+        }
+    }
+
+    private func message(title: String, body: String?, canRetry: Bool) -> some View {
+        VStack(spacing: FaithFormTokens.Spacing.md) {
+            Text(title)
+                .font(theme.font(FaithFormTokens.Text.titleMedium))
+                .foregroundStyle(.white)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+            if let body {
+                Text(body)
+                    .font(theme.font(FaithFormTokens.Text.body))
+                    .foregroundStyle(.white.opacity(0.8))
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            HStack(spacing: FaithFormTokens.Spacing.md) {
+                if canRetry {
+                    Button(L.mediaRetry) { Task { await model.retry() } }
+                        .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
+                }
+                Button(L.mediaClosePlayer, action: onClose)
+                    .buttonStyle(FaithFormButtonStyle(kind: .secondary, theme: theme))
+            }
+            .fixedSize()
+        }
+        .padding(FaithFormTokens.Spacing.xl)
+        .frame(maxWidth: 420)
+    }
+
+    // MARK: Controls
+
+    private var controls: some View {
+        VStack {
+            HStack(spacing: FaithFormTokens.Spacing.md) {
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 17, weight: .semibold))
+                        .frame(width: 44, height: 44)
+                        .background(.black.opacity(0.45), in: Circle())
+                }
+                .foregroundStyle(.white)
+                .accessibilityLabel(L.mediaClosePlayer)
+
+                HStack(spacing: FaithFormTokens.Spacing.sm) {
+                    Circle()
+                        .fill(.red)
+                        .frame(width: 8, height: 8)
+                    Text(L.mediaLiveNowBadge)
+                        .font(theme.font(FaithFormTokens.Text.caption))
+                        .fontWeight(.bold)
+                }
+                .padding(.horizontal, FaithFormTokens.Spacing.sm)
+                .padding(.vertical, FaithFormTokens.Spacing.xs)
+                .background(.black.opacity(0.45), in: Capsule())
+                .foregroundStyle(.white)
+
+                Text(live.title)
+                    .font(theme.font(FaithFormTokens.Text.titleMedium))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .shadow(color: .black.opacity(0.6), radius: 4)
+
+                Spacer(minLength: 0)
+
+                AirPlayButton()
+                    .frame(width: 44, height: 44)
+            }
+            .padding(.horizontal, FaithFormTokens.Spacing.lg)
+            .padding(.top, FaithFormTokens.Spacing.sm)
+
+            Spacer()
+
+            if model.phase == .playing || model.phase == .paused {
+                Button {
+                    Task {
+                        if model.phase == .playing {
+                            await model.pause()
+                        } else {
+                            await model.resume()
+                        }
+                    }
+                } label: {
+                    Image(systemName: model.phase == .playing ? "pause.fill" : "play.fill")
+                        .font(.system(size: 30, weight: .semibold))
+                        .frame(width: 72, height: 72)
+                        .background(.black.opacity(0.45), in: Circle())
+                }
+                .foregroundStyle(.white)
+                .accessibilityLabel(model.phase == .playing ? L.mediaPause : L.mediaPlay)
+            }
+
+            Spacer()
+        }
+        .background(
+            LinearGradient(
+                colors: [.black.opacity(0.55), .clear, .clear, .black.opacity(0.35)],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
+        )
+    }
+
+    private func toggleControls() {
+        if controlsVisible {
+            hideControls?.cancel()
+            controlsVisible = false
+        } else {
+            reveal()
+            if model.phase == .playing { scheduleHide() }
+        }
+    }
+
+    private func reveal() {
+        hideControls?.cancel()
+        controlsVisible = true
+    }
+
+    private func scheduleHide() {
+        hideControls?.cancel()
+        hideControls = Task {
+            try? await Task.sleep(for: .seconds(3))
+            guard !Task.isCancelled else { return }
+            controlsVisible = false
+        }
+    }
+}
+
+/// The system's own route picker, so a service can go to the living-room TV.
+private struct AirPlayButton: UIViewRepresentable {
+    func makeUIView(context: Context) -> AVRoutePickerView {
+        let view = AVRoutePickerView()
+        view.tintColor = .white
+        view.activeTintColor = .systemBlue
+        view.prioritizesVideoDevices = true
+        return view
+    }
+
+    func updateUIView(_ uiView: AVRoutePickerView, context: Context) {}
 }
 #endif

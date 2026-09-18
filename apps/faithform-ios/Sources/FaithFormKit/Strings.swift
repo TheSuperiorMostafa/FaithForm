@@ -759,6 +759,21 @@ public enum L {
     public static var mediaErrorUnknown: String {
         t("media_error_unknown", "Playback stopped unexpectedly.")
     }
+    public static var mediaLiveConnecting: String {
+        t("media_live_connecting", "Connecting to the live service…")
+    }
+    public static var mediaLiveReconnecting: String {
+        t("media_live_reconnecting", "Reconnecting to the live service…")
+    }
+    public static var mediaLiveUnavailable: String {
+        t("media_live_unavailable", "This service can't be watched here right now.")
+    }
+    public static var mediaLiveFailed: String {
+        t("media_live_failed", "The live stream isn't coming through. Check your connection, then try again.")
+    }
+    public static var mediaClosePlayer: String {
+        t("media_close_player", "Close")
+    }
     public static var mediaDurationLabel: String {
         t("media_duration_label", "Length")
     }

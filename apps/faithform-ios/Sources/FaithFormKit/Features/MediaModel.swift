@@ -72,6 +72,37 @@ public final class MediaModel {
         await reload()
     }
 
+    /// Re-reads only what is on now.
+    ///
+    /// The live state is the one part of these screens that changes while a
+    /// person is looking at them: a service starts with the app already open.
+    /// Called on a timer while Home or Watch is showing, it costs one
+    /// conditional request that the server answers 304 almost every time — and
+    /// leaves the archive, the search and the scroll position alone.
+    public func refreshLive() async {
+        switch phase {
+        case .loaded:
+            break
+        case .loading, .blocked:
+            // A full load is already on its way, or there is nothing to watch.
+            return
+        case .idle, .offline, .failed:
+            // Nothing is drawn yet, so load the whole screen rather than half.
+            await reload()
+            return
+        }
+
+        do {
+            let response = try await client.live(churchSlug: churchSlug, partition: partition)
+            // Read again after the await: a search or a page may have landed.
+            if case let .loaded(_, items, stale) = phase {
+                phase = .loaded(live: response.live, items: items, isStale: stale)
+            }
+        } catch {
+            // A missed poll changes nothing on screen; the next one tries again.
+        }
+    }
+
     /// Re-runs the search. Separate from `refresh` so a search never silently
     /// discards a cached first page the person may come back to.
     public func search(_ term: String) async {

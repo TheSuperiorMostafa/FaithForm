@@ -14,6 +14,7 @@ import io.faithform.app.contract.SelectChurchRequest
 import io.faithform.app.contract.SelectedChurch
 import io.faithform.app.host.HostNavigation
 import io.faithform.app.host.HostTab
+import io.faithform.app.media.MediaLiveCard
 import io.faithform.app.navigation.AuthCallbackLink
 import io.faithform.app.navigation.DeepLinkParser
 import io.faithform.app.navigation.Destination
@@ -126,6 +127,19 @@ data class PendingChurchContext(
     val isInvitation: Boolean get() = invitationToken != null
 }
 
+/**
+ * One live service, open full screen, and the church it was opened for — so a
+ * player can never be shown over another church's tabs.
+ *
+ * [presentationId] is new each time "Watch live" is tapped and survives
+ * rotation, so the player behind it starts once per tap, not once per window.
+ */
+data class WatchingLive(
+    val churchSlug: String,
+    val card: MediaLiveCard,
+    val presentationId: String = UUID.randomUUID().toString(),
+)
+
 class AppViewModel(
     private val api: ApiClient,
     private val sessions: SessionGateway,
@@ -195,6 +209,27 @@ class AppViewModel(
      */
     private val _sermonsRequested = MutableStateFlow(false)
     val sermonsRequested: StateFlow<Boolean> = _sermonsRequested.asStateFlow()
+
+    /**
+     * The live service playing full screen, if one is.
+     *
+     * Here rather than in a tab because "Watch live" is offered on Home and on
+     * Watch, and both open the same player — over the tabs, straight into the
+     * picture, not onto another screen with another button to press.
+     */
+    private val _watchingLive = MutableStateFlow<WatchingLive?>(null)
+    val watchingLive: StateFlow<WatchingLive?> = _watchingLive.asStateFlow()
+
+    /** Opens a live service full screen. Playback starts as it opens. */
+    fun watchLive(card: MediaLiveCard) {
+        val slug = _selectedChurchSlug.value ?: return
+        if (!card.isLive) return
+        _watchingLive.value = WatchingLive(churchSlug = slug, card = card)
+    }
+
+    fun closeLive() {
+        _watchingLive.value = null
+    }
 
     private val _deletion = MutableStateFlow<DeletionPhase>(DeletionPhase.Idle)
     val deletion: StateFlow<DeletionPhase> = _deletion.asStateFlow()
@@ -567,7 +602,10 @@ class AppViewModel(
      */
     private fun openDestination(destination: Destination, bootstrap: Bootstrap) {
         val target = HostNavigation.resolveLink(destination, bootstrap, registry) ?: return
-        target.churchSlug?.let { _selectedChurchSlug.value = it }
+        target.churchSlug?.let { slug ->
+            if (slug != _selectedChurchSlug.value) _watchingLive.value = null
+            _selectedChurchSlug.value = slug
+        }
         _selectedTab.value = target.tab
         _sermonsRequested.value = target.destination is Destination.SermonArchive
     }
@@ -607,6 +645,8 @@ class AppViewModel(
         val relationship = ready.bootstrap.relationships
             .firstOrNull { it.churchSlug == slug && it.canReadPublishedContent } ?: return
         if (_selectedChurchSlug.value == relationship.churchSlug) return
+        // A service from another church must not keep playing over this one.
+        _watchingLive.value = null
         _selectedChurchSlug.value = relationship.churchSlug
 
         viewModelScope.launch {
@@ -910,6 +950,7 @@ class AppViewModel(
         _selectedChurchSlug.value = null
         _selectedTab.value = HostTab.HOME
         _sermonsRequested.value = false
+        _watchingLive.value = null
         _deletion.value = DeletionPhase.Idle
         _pendingInvitationToken.value = null
         _churchContext.value = null

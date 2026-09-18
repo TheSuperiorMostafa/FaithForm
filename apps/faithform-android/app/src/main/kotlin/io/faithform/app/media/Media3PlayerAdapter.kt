@@ -15,6 +15,9 @@ import androidx.media3.datasource.HttpDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 
 /**
@@ -25,12 +28,14 @@ import kotlinx.coroutines.withContext
  * revocation — all of that lives in `:core:media`, which is pure JVM and fully
  * tested. This file translates.
  *
- * ## Why a data source and not a signed URL
+ * ## What a request carries
  *
  * `DefaultHttpDataSource.Factory.setDefaultRequestProperties` attaches headers
  * to **every** request the player makes — the playlist, each segment, each byte
  * range. So the capability travels in an `Authorization` header and never in a
- * URL, a browser history, a proxy log, or a screenshot.
+ * URL. A live stream's delivery URL also carries its own delivery token in the
+ * path (iOS cannot put a header on HLS segments), and the server accepts either;
+ * Android sends both.
  *
  * [PlayerCommand.UpdateCapability] hands the renewed header to the factory's
  * shared request properties, which is what lets a refresh land without
@@ -103,7 +108,20 @@ class Media3PlayerAdapter(
     private var player: ExoPlayer? = null
     private var handler: ((PlayerEvent) -> Unit)? = null
     private var startOffsetMillis: Long = 0
+    private var kind: MediaPlaybackKind = MediaPlaybackKind.RECORDING
     private val appContext = context.applicationContext
+
+    /**
+     * The player a `PlayerView` shows, as state it can follow.
+     *
+     * The player is created by the first Play, *after* the view exists. Read
+     * as a plain property the view was bound once, to null, and never again —
+     * a black rectangle with the sermon playing somewhere behind it. Observed,
+     * the view is handed the player the moment there is one, and let go of it
+     * the moment it is released.
+     */
+    private val _videoPlayerState = MutableStateFlow<Player?>(null)
+    val videoPlayerState: StateFlow<Player?> = _videoPlayerState.asStateFlow()
 
     override fun setEventHandler(handler: (PlayerEvent) -> Unit) {
         this.handler = handler
@@ -132,10 +150,7 @@ class Media3PlayerAdapter(
             is PlayerCommand.Pause -> player?.pause()
             is PlayerCommand.Seek ->
                 player?.seekTo(startOffsetMillis + maxOf(0, command.millis))
-            is PlayerCommand.Stop -> {
-                player?.release()
-                player = null
-            }
+            is PlayerCommand.Stop -> release()
             is PlayerCommand.UpdateCapability -> setCapability(command.capability)
         }
     }
@@ -153,20 +168,23 @@ class Media3PlayerAdapter(
     /**
      * The player a `PlayerView` renders, or null before anything was loaded.
      *
-     * Exposed for the video surface only. Commands still go through [send], so
-     * nothing a screen does to the view can bypass the coordinator's decisions.
+     * Exposed for the video surface only — and a surface should follow
+     * [videoPlayerState] rather than read this once. Commands still go through
+     * [send], so nothing a screen does to the view can bypass the coordinator.
      */
     val videoPlayer: Player? get() = player
 
     /**
      * Releases the player immediately, on the calling (main) thread.
      *
-     * For the one moment [send] cannot be used: a view model being cleared,
-     * whose coroutine scope is already cancelled. Leaving the player alive
-     * there would keep a decoder, a network connection and audio focus held
-     * for a screen that no longer exists.
+     * Also for the one moment [send] cannot be used: a view model being
+     * cleared, whose coroutine scope is already cancelled. Leaving the player
+     * alive there would keep a decoder, a network connection and audio focus
+     * held for a screen that no longer exists.
      */
     fun release() {
+        // The view lets go first, so it never holds a released player.
+        _videoPlayerState.value = null
         player?.release()
         player = null
     }
@@ -175,6 +193,7 @@ class Media3PlayerAdapter(
 
     private fun load(request: PlaybackRequest) {
         startOffsetMillis = request.startOffsetMillis
+        kind = request.kind
         setCapability(request.capability)
 
         val instance = player ?: playerFactory(appContext, dataSourceFactory).also { created ->
@@ -190,6 +209,7 @@ class Media3PlayerAdapter(
             )
             created.addListener(listener)
             player = created
+            _videoPlayerState.value = created
         }
 
         // **The MIME type is declared, not inferred.**
@@ -248,7 +268,17 @@ class Media3PlayerAdapter(
         }
 
         override fun onPlayerError(error: PlaybackException) {
-            handler?.invoke(PlayerEvent.Failed(mapPlaybackError(error)))
+            if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW) {
+                // Fell behind the relay's few-second window — a stall on a slow
+                // network, or a phone left paused. Media3's documented recovery
+                // is to rejoin at the live edge, not to report a failure.
+                player?.let { current ->
+                    current.seekToDefaultPosition()
+                    current.prepare()
+                }
+                return
+            }
+            handler?.invoke(PlayerEvent.Failed(mapPlaybackError(error, kind)))
         }
     }
 
@@ -264,10 +294,13 @@ class Media3PlayerAdapter(
          * The exception's own message carries a URI, a response body and a
          * cause chain. None of it crosses this boundary.
          */
-        fun mapPlaybackError(error: PlaybackException): PlayerFailure {
+        fun mapPlaybackError(
+            error: PlaybackException,
+            kind: MediaPlaybackKind = MediaPlaybackKind.RECORDING,
+        ): PlayerFailure {
             val cause = error.cause
             val httpStatus = (cause as? HttpDataSource.InvalidResponseCodeException)?.responseCode
-            return PlayerFailureMapping.fromPlayerError(error.errorCode, httpStatus)
+            return PlayerFailureMapping.fromPlayerError(error.errorCode, httpStatus, kind)
         }
 
     }

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -14,9 +15,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Brush
@@ -62,6 +65,7 @@ import io.faithform.app.media.PlayerFailure
  * in [MediaScreenState] and [MediaDetailState], in `:core:media`, where it is
  * tested.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MediaScreen(
     state: MediaScreenState,
@@ -71,113 +75,122 @@ fun MediaScreen(
     onRetry: () -> Unit,
     onLoadMore: () -> Unit,
     modifier: Modifier = Modifier,
+    isRefreshing: Boolean = false,
+    onRefresh: () -> Unit = {},
 ) {
-    LazyColumn(
-        modifier = modifier.fillMaxWidth().padding(FaithFormTokens.Spacing.lg),
-        verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.lg),
+    // Pull down to ask again — including whether the church has gone live.
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        modifier = modifier.fillMaxWidth(),
     ) {
-        when (state.phase) {
-            is MediaListPhase.Idle, is MediaListPhase.Loading -> item {
-                MediaListSkeleton()
-            }
-
-            is MediaListPhase.Blocked -> item {
-                MediaMessage(
-                    title = stringResource(R.string.media_blocked_title),
-                    message = stringResource(R.string.media_unavailable_body),
-                )
-            }
-
-            is MediaListPhase.Offline -> item {
-                MediaMessage(
-                    title = stringResource(R.string.media_offline_title),
-                    message = stringResource(R.string.media_offline_body),
-                    actionLabel = stringResource(R.string.media_retry),
-                    onAction = onRetry,
-                )
-            }
-
-            is MediaListPhase.Failed -> item {
-                MediaMessage(
-                    title = (state.phase as MediaListPhase.Failed).message,
-                    message = "",
-                    actionLabel = stringResource(R.string.media_retry),
-                    onAction = onRetry,
-                )
-            }
-
-            is MediaListPhase.Loaded -> {
-                state.liveCard?.let { live ->
-                    item { LiveNowHero(live = live, onWatch = { onWatchLive(live) }) }
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(FaithFormTokens.Spacing.lg),
+            verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.lg),
+        ) {
+            when (state.phase) {
+                is MediaListPhase.Idle, is MediaListPhase.Loading -> item {
+                    MediaListSkeleton()
                 }
 
-                val searching = state.searchTerm.isNotBlank()
-                val nothingPublished = state.emptyReason == MediaScreenState.EmptyReason.NOTHING_PUBLISHED
-                val noLive = state.liveCard == null
+                is MediaListPhase.Blocked -> item {
+                    MediaMessage(
+                        title = stringResource(R.string.media_blocked_title),
+                        message = stringResource(R.string.media_unavailable_body),
+                    )
+                }
 
-                if (noLive && nothingPublished && !searching) {
-                    item {
-                        EmptyState(
-                            title = stringResource(R.string.media_services_empty_title),
-                            body = stringResource(R.string.media_services_empty_body),
-                            icon = Icons.Outlined.VideocamOff,
-                        )
-                    }
-                } else {
-                    item {
-                        Text(
-                            text = stringResource(R.string.media_archive_title),
-                            style = MaterialTheme.typography.titleMedium,
-                        )
+                is MediaListPhase.Offline -> item {
+                    MediaMessage(
+                        title = stringResource(R.string.media_offline_title),
+                        message = stringResource(R.string.media_offline_body),
+                        actionLabel = stringResource(R.string.media_retry),
+                        onAction = onRetry,
+                    )
+                }
+
+                is MediaListPhase.Failed -> item {
+                    MediaMessage(
+                        title = (state.phase as MediaListPhase.Failed).message,
+                        message = "",
+                        actionLabel = stringResource(R.string.media_retry),
+                        onAction = onRetry,
+                    )
+                }
+
+                is MediaListPhase.Loaded -> {
+                    state.liveCard?.let { live ->
+                        item { LiveNowHero(live = live, onWatch = { onWatchLive(live) }) }
                     }
 
-                    item {
-                        FaithFormSearchField(
-                            value = state.searchTerm,
-                            onValueChange = onSearchChange,
-                            placeholder = stringResource(R.string.media_search_label),
-                            onSearch = { onSearchChange(state.searchTerm) },
-                        )
-                    }
+                    val searching = state.searchTerm.isNotBlank()
+                    val nothingPublished = state.emptyReason == MediaScreenState.EmptyReason.NOTHING_PUBLISHED
+                    val noLive = state.liveCard == null
 
-                    state.emptyReason?.let { reason ->
+                    if (noLive && nothingPublished && !searching) {
                         item {
                             EmptyState(
-                                title = stringResource(
-                                    when (reason) {
-                                        MediaScreenState.EmptyReason.NO_MATCHES ->
-                                            R.string.media_archive_empty_search
-                                        MediaScreenState.EmptyReason.NOTHING_PUBLISHED ->
-                                            R.string.media_archive_empty
-                                    },
-                                ),
-                                body = if (reason == MediaScreenState.EmptyReason.NOTHING_PUBLISHED) {
-                                    stringResource(R.string.media_archive_empty_body)
-                                } else {
-                                    ""
-                                },
-                                icon = if (reason == MediaScreenState.EmptyReason.NO_MATCHES) {
-                                    Icons.Outlined.Search
-                                } else {
-                                    Icons.Outlined.Movie
-                                },
+                                title = stringResource(R.string.media_services_empty_title),
+                                body = stringResource(R.string.media_services_empty_body),
+                                icon = Icons.Outlined.VideocamOff,
                             )
                         }
-                    }
-
-                    items(state.items, key = { it.mediaId }) { item ->
-                        ArchiveCard(item = item, onOpen = { onOpen(item) })
-                    }
-
-                    if (state.hasMore) {
+                    } else {
                         item {
-                            OutlinedButton(onClick = onLoadMore, modifier = Modifier.fillMaxWidth()) {
-                                Text(stringResource(R.string.media_archive_title))
+                            Text(
+                                text = stringResource(R.string.media_archive_title),
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                        }
+
+                        item {
+                            FaithFormSearchField(
+                                value = state.searchTerm,
+                                onValueChange = onSearchChange,
+                                placeholder = stringResource(R.string.media_search_label),
+                                onSearch = { onSearchChange(state.searchTerm) },
+                            )
+                        }
+
+                        state.emptyReason?.let { reason ->
+                            item {
+                                EmptyState(
+                                    title = stringResource(
+                                        when (reason) {
+                                            MediaScreenState.EmptyReason.NO_MATCHES ->
+                                                R.string.media_archive_empty_search
+                                            MediaScreenState.EmptyReason.NOTHING_PUBLISHED ->
+                                                R.string.media_archive_empty
+                                        },
+                                    ),
+                                    body = if (reason == MediaScreenState.EmptyReason.NOTHING_PUBLISHED) {
+                                        stringResource(R.string.media_archive_empty_body)
+                                    } else {
+                                        ""
+                                    },
+                                    icon = if (reason == MediaScreenState.EmptyReason.NO_MATCHES) {
+                                        Icons.Outlined.Search
+                                    } else {
+                                        Icons.Outlined.Movie
+                                    },
+                                )
                             }
                         }
-                    }
 
-                    if (state.isLoadingMore) item { MediaCardSkeleton(Modifier.skeletonShimmer()) }
+                        items(state.items, key = { it.mediaId }) { item ->
+                            ArchiveCard(item = item, onOpen = { onOpen(item) })
+                        }
+
+                        if (state.hasMore) {
+                            item {
+                                OutlinedButton(onClick = onLoadMore, modifier = Modifier.fillMaxWidth()) {
+                                    Text(stringResource(R.string.media_archive_title))
+                                }
+                            }
+                        }
+
+                        if (state.isLoadingMore) item { MediaCardSkeleton(Modifier.skeletonShimmer()) }
+                    }
                 }
             }
         }

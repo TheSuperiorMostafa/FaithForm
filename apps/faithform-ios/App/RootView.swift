@@ -250,6 +250,22 @@ struct RootView: View {
         .tint(theme.palette.brandAccent)
         .toolbarBackground(theme.palette.surface, for: .tabBar)
         .toolbarBackground(.visible, for: .tabBar)
+        // "Watch live" from any tab opens here, over the tab bar, and starts
+        // playing — the person asked to watch, not to be taken somewhere with
+        // another button on it.
+        .fullScreenCover(item: $model.livePresentation) { presentation in
+            if let features = model.features, features.key == presentation.featuresKey {
+                LivePlayerScreen(features: features, live: presentation.live) {
+                    model.closeLive()
+                }
+                .faithformTheme(selectedAppTheme)
+            } else {
+                // The church or the account changed underneath it.
+                Color.black
+                    .ignoresSafeArea()
+                    .onAppear { model.closeLive() }
+            }
+        }
         .onAppear {
             openedTabs.insert(model.selectedTab)
             applyTabBarAppearance(

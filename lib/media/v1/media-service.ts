@@ -4,6 +4,7 @@ import { getVisitorAccount } from "@/lib/faithform/account";
 import { resolvePublishedContentRelationshipState } from "@/lib/mobile/v1/discovery-service";
 import {
   issueMediaCapability,
+  issueMediaDeliveryToken,
   mediaPlaybackConfigured,
   type MediaKind,
 } from "@/lib/media/v1/playback-capability";
@@ -396,18 +397,35 @@ export async function grantPlayback(input: {
   });
   if (!issued) throw new VisitorError("unavailable", "Playback is unavailable.");
 
+  // Live is HLS, and a native HLS player cannot put a header on its segment
+  // requests (see `playback-capability.ts`), so a live stream is addressed by a
+  // path carrying a delivery token. Minted from the same decision as the
+  // capability; the delivery route still re-authorizes every request.
+  const delivery =
+    input.kind === "live"
+      ? issueMediaDeliveryToken({
+          accountId: account.id,
+          churchSlug: input.churchSlug,
+          kind: "live",
+          mediaId: input.mediaId,
+          authorizationVersion: account.authorizationVersion,
+        })
+      : null;
+  if (input.kind === "live" && !delivery) {
+    throw new VisitorError("unavailable", "Playback is unavailable.");
+  }
+
   const encodedSlug = encodeURIComponent(input.churchSlug);
   const encodedId = encodeURIComponent(input.mediaId);
 
   return {
     capability: issued.token,
     expiresAt: issued.expiresAt,
-    // **No capability in this URL.** Both native players attach it as a bearer
-    // header on every request, including segment requests.
-    deliveryUrl:
-      input.kind === "live"
-        ? `/api/media/v1/live/${encodedSlug}/${encodedId}/index.m3u8`
-        : `/api/media/v1/recording/${encodedSlug}/${encodedId}`,
+    // **Never the capability.** A recording's URL carries nothing; a live
+    // stream's carries only its delivery token, in the path.
+    deliveryUrl: delivery
+      ? `/api/media/v1/live/${encodedSlug}/${encodedId}/${delivery.token}/index.m3u8`
+      : `/api/media/v1/recording/${encodedSlug}/${encodedId}`,
     kind: input.kind,
     // Live is always HLS through the relay proxy. A recording reports the
     // rendition its own verified metadata recorded — `progressive` today,
@@ -437,6 +455,12 @@ export async function authorizeDelivery(input: {
   churchSlug: string;
   kind: MediaKind;
   mediaId: string;
+  /**
+   * The version the presented token was minted under. When given, a sign-out
+   * or any other bump since then refuses the request — which is what bounds a
+   * long-lived delivery token by the session that asked for it.
+   */
+  authorizationVersion?: number;
 }): Promise<{
   churchId: string;
   storagePath: string | null;
@@ -447,10 +471,16 @@ export async function authorizeDelivery(input: {
 
   const { data: account } = await admin
     .from("visitor_accounts")
-    .select("id, user_id, status")
+    .select("id, user_id, status, authorization_version")
     .eq("id", input.accountId)
     .maybeSingle();
   if (!account || account.status !== "active") return null;
+  if (
+    input.authorizationVersion !== undefined &&
+    ((account.authorization_version as number | null) ?? 1) !== input.authorizationVersion
+  ) {
+    return null;
+  }
 
   const relationshipState = await resolvePublishedContentRelationshipState(
     account.user_id as string,

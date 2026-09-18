@@ -122,34 +122,55 @@ test("every swept set is a real, substantial file list", () => {
 // A capability never enters a URL
 // ---------------------------------------------------------------------------
 
-test("the delivery URL carries no credential, and there is no query fallback", () => {
+test("the capability never enters a URL; a live URL carries only its delivery token, in the path", () => {
   const capability = stripComments(read("lib/media/v1/playback-capability.ts"), "a.ts");
   const service = stripComments(read("lib/media/v1/media-service.ts"), "a.ts");
 
-  // The reader accepts a bearer header and nothing else.
+  // The capability reader accepts a bearer header and nothing else, and no
+  // token of either kind is ever read from a query string.
   assert.match(capability, /export function capabilityFromRequest/);
   assert.match(capability, /scheme\?\.toLowerCase\(\) !== "bearer"/);
-  assert.ok(
-    !/searchParams\.get\(\s*["']cap/.test(capability),
-    "the media capability has a query-string fallback",
-  );
+  assert.ok(!/searchParams/.test(capability), "a media token is read from a query string");
 
-  // And nothing appends one to a delivery URL.
-  const grant = service.slice(service.indexOf("deliveryUrl:"), service.indexOf("kind: input.kind"));
-  assert.ok(grant.length > 40);
-  for (const forbidden of ["capability", "issued.token", "?cap", "token="]) {
-    assert.ok(!grant.includes(forbidden), `the delivery URL carries ${forbidden}`);
+  // The grant builds the delivery URL from the delivery token — never from the
+  // capability — and puts it in the path, never a query string.
+  const grant = service.slice(
+    service.indexOf("export async function grantPlayback("),
+    service.indexOf("export async function authorizeDelivery("),
+  );
+  const urlStart = grant.indexOf("deliveryUrl:");
+  const url = grant.slice(urlStart, grant.indexOf("kind: input.kind", urlStart));
+  assert.ok(url.length > 40);
+  for (const forbidden of ["capability", "issued.token", "cap=", "token="]) {
+    assert.ok(!url.includes(forbidden), `the delivery URL carries ${forbidden}`);
   }
+  assert.ok(!/\?\w+=/.test(url), "the delivery URL has a query string");
+  assert.match(url, /\/\$\{delivery\.token\}\/index\.m3u8`/);
+  assert.match(grant, /const delivery =\s*input\.kind === "live"\s*\?\s*issueMediaDeliveryToken\(/);
+
+  // Domain-separated: its own format and its own sub-key, so neither token
+  // can stand in for the other.
+  assert.match(capability, /const DELIVERY_FORMAT = "FFD1"/);
+  assert.match(capability, /verifySigned\("delivery", DELIVERY_FORMAT/);
+  assert.match(capability, /verifySigned\("playback", FORMAT/);
 });
 
-test("the native live route never rewrites a capability into segment URLs", () => {
+test("the native live route reads its token from the path and re-authorizes every request", () => {
   const route = stripComments(read("app/api/media/v1/live/[...path]/route.ts"), "a.ts");
 
   // The website's route passes `cap=…` to the rewriter so a browser player can
-  // fetch segments. Passing anything here would put FaithForm's capability into
-  // every segment URL, which is what the header strategy exists to avoid.
+  // fetch segments. This one rewrites under its own path, which already holds
+  // the delivery token, and adds nothing.
   assert.match(route, /rewriteM3u8Playlist\(playlist, request\.nextUrl\.pathname\)/);
-  assert.ok(!/rewriteM3u8Playlist\([^)]*cap/.test(route));
+  assert.ok(!/rewriteM3u8Playlist\([^)]*,[^)]*,/.test(route), "the rewriter is given a query suffix");
+  assert.ok(!/searchParams/.test(route), "the route reads a token from a query string");
+
+  // A path segment shaped like a delivery token is only ever verified as one.
+  assert.match(route, /isMediaDeliveryToken\(input\.rest\[0\]\)/);
+  assert.match(route, /verifyMediaDeliveryToken\(input\.rest\[0\]/);
+  // And every request — playlist and segment — is authorized again, bound to
+  // the authorization version the token was minted under.
+  assert.match(route, /authorizeDelivery\(\{[^}]*authorizationVersion: credential\.authorizationVersion/);
 });
 
 test("neither native player puts a capability in a URL", () => {
@@ -162,9 +183,13 @@ test("neither native player puts a capability in a URL", () => {
     "a.kt",
   );
 
-  // iOS: a resource loader that sets the header on each request it issues.
+  // iOS, progressive: a resource loader that sets the header on each request
+  // it issues. Live HLS cannot go that way (AVFoundation refuses segments a
+  // loader answers), so it plays its delivery URL exactly as granted.
   assert.match(swift, /forHTTPHeaderField: "Authorization"/);
   assert.match(swift, /AVAssetResourceLoaderDelegate/);
+  const hls = swift.slice(swift.indexOf("case .hls:"), swift.indexOf("case .progressive:"));
+  assert.match(hls, /AVURLAsset\(url: request\.url\)/);
   // Android: default request properties, which Media3 applies to every
   // request. The header itself is built by `CapabilityHeaders` in
   // `:core:media`, so the adapter hands over a live view rather than composing

@@ -33,6 +33,13 @@ final class RootModel {
     /// a sermons link can choose it.
     var watchSection: WatchSection = .media
 
+    /// The live service playing full screen, if one is.
+    ///
+    /// Here rather than in a tab because "Watch live" is offered on Home and on
+    /// Watch, and both open the same player — over the tabs, straight into the
+    /// picture, not onto another screen with another button to press.
+    var livePresentation: LivePresentation?
+
     /// The account-deletion request. Rebuilt on sign-out so the next account on
     /// this phone starts with a fresh idempotency key.
     private(set) var deletion: AccountDeletionModel
@@ -379,6 +386,7 @@ final class RootModel {
     /// progress, a gift being confirmed, and a sermon's playback.
     private func refreshFeatures() {
         guard let church = selectedChurch else {
+            livePresentation = nil
             features = nil
             return
         }
@@ -389,6 +397,9 @@ final class RootModel {
             authorizationVersion: bootstrap.profile.authorizationVersion
         )
         guard features?.key != key else { return }
+        // The player belongs to the old container. A service from another
+        // church, or seen under an older authorization, must not keep playing.
+        livePresentation = nil
         features = ChurchFeatures(
             key: key,
             partition: dependencies.partition(
@@ -401,6 +412,18 @@ final class RootModel {
     }
 
     func select(_ tab: RootTab) { selectedTab = tab }
+
+    /// Opens a live service full screen. Playback starts as it opens.
+    func watchLive(_ live: LiveMedia) {
+        guard let features, live.state == "live", live.churchSlug == features.churchSlug else {
+            return
+        }
+        livePresentation = LivePresentation(live: live, featuresKey: features.key)
+    }
+
+    func closeLive() {
+        livePresentation = nil
+    }
 
     /// Opens a `faithform://` link, or does nothing.
     ///
@@ -521,6 +544,7 @@ final class RootModel {
         await dependencies.session.purgeEverything()
         lastBootstrap = nil
         selectedChurch = nil
+        livePresentation = nil
         features = nil
         accountId = nil
         watchSection = .media
@@ -602,4 +626,15 @@ final class RootModel {
         case .announcements: return nil
         }
     }
+}
+
+/// One live service, open full screen.
+///
+/// Carries the container key it was opened under, so a player can never be
+/// shown with another church's — or an older authorization's — models.
+struct LivePresentation: Identifiable, Hashable {
+    let live: LiveMedia
+    let featuresKey: ChurchFeatures.Key
+
+    var id: String { live.mediaId }
 }

@@ -155,6 +155,21 @@ object PlayerFailureMapping {
     }
 
     /**
+     * The same, knowing what is being watched.
+     *
+     * A live stream that answers 404 has not gone anywhere: the encoder is
+     * still connecting, or reconnecting after a dropped uplink, and the relay
+     * has no playlist *yet*. That is worth waiting out, so it is transient.
+     * 401 and 403 are still refusals.
+     */
+    fun fromStatus(statusCode: Int, kind: MediaPlaybackKind): PlayerFailure =
+        if (kind == MediaPlaybackKind.LIVE && (statusCode == 404 || statusCode == 410)) {
+            PlayerFailure.NETWORK
+        } else {
+            fromStatus(statusCode)
+        }
+
+    /**
      * The Media3 error codes this app can encounter, as plain integers.
      *
      * Kept here rather than in the adapter because **this is a decision**, and
@@ -167,6 +182,7 @@ object PlayerFailureMapping {
      * Robolectric test asserts the adapter still reads the same fields, so a
      * rename in Media3 fails there rather than silently here.
      */
+    const val ERROR_BEHIND_LIVE_WINDOW = 1002
     const val ERROR_IO_NETWORK_CONNECTION_FAILED = 2001
     const val ERROR_IO_NETWORK_CONNECTION_TIMEOUT = 2002
     const val ERROR_IO_BAD_HTTP_STATUS = 2004
@@ -201,6 +217,15 @@ object PlayerFailureMapping {
 
             else -> PlayerFailure.UNKNOWN
         }
+    }
+
+    /** [fromPlayerError], for a known kind — see [fromStatus] with a kind. */
+    fun fromPlayerError(errorCode: Int, httpStatus: Int?, kind: MediaPlaybackKind): PlayerFailure {
+        if (httpStatus != null) return fromStatus(httpStatus, kind)
+        // Fallen behind the relay's few-second window: the adapter rejoins the
+        // live edge itself, and if it ever surfaces, it is only a stall.
+        if (errorCode == ERROR_BEHIND_LIVE_WINDOW) return PlayerFailure.NETWORK
+        return fromPlayerError(errorCode, null)
     }
 }
 

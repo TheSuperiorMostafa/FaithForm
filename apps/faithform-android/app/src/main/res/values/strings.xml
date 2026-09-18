@@ -315,6 +315,11 @@
     <string name="media_error_unavailable">This is no longer available to watch.</string>
     <string name="media_error_unsupported">This recording cannot be played on this device.</string>
     <string name="media_error_unknown">Playback stopped unexpectedly.</string>
+    <string name="media_live_connecting">Connecting to the live service…</string>
+    <string name="media_live_reconnecting">Reconnecting to the live service…</string>
+    <string name="media_live_unavailable">This service can\'t be watched here right now.</string>
+    <string name="media_live_failed">The live stream isn\'t coming through. Check your connection, then try again.</string>
+    <string name="media_close_player">Close</string>
     <string name="media_duration_label">Length</string>
     <string name="media_speaker_label">Speaker</string>
     <string name="media_series_label">Series</string>

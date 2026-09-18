@@ -1,7 +1,7 @@
 # Prompt 9 — Secure Playback
 
-*How a phone gets permission to watch something, how the bytes reach it, and
-why the capability never appears in a URL.*
+*How a phone gets permission to watch something, how the bytes reach it, why
+the capability never appears in a URL — and the one narrower token that must.*
 
 ---
 
@@ -52,9 +52,29 @@ in flight** stop verifying, without needing to find and revoke each one.
 Verification order is shape, then signature, then contents. Nothing inside the
 payload is read until the signature over it has been proven.
 
+### The delivery token (live only)
+
+```
+FFD1.<payload-b64url>.<signature-b64url>
+
+{"v":1,"t":"delivery","a":"<account>","c":"<slug>","k":"live",
+ "m":"<event>","av":3,"e":1800021600}
+```
+
+A live grant carries this beside the capability, and the live delivery URL
+carries it **in its path** (§2 says why). It is signed under its own sub-key
+(`…|delivery`) and prefix, so a delivery token never verifies as a capability
+and a capability never opens a delivery path — tests assert both directions.
+It lives six hours rather than five minutes, because every playlist and segment
+URL the player derives inherits it and HLS forbids those from changing mid-stream
+(RFC 8216 §6.2.2). What stops it outliving permission is not its expiry: the
+delivery route re-authorizes every request, including the authorization
+version, so a sign-out, a revocation or an ended service refuses the next
+segment.
+
 ---
 
-## 2. Why the capability is never in a URL
+## 2. Why the capability is never in a URL — and what live does instead
 
 > No capability is stored in logs, crash reports, URL history, ordinary cache,
 > screenshots, or analytics.
@@ -67,15 +87,14 @@ segment requests it issues on its own.
 **A native player can**, and that is the whole reason both platforms are wired
 the way they are.
 
-### iOS: a resource loader
+### iOS, recordings: a resource loader
 
-`AVPlayer` fetches a playlist and then every segment in it. The documented way
-to put a header on all of those is `AVAssetResourceLoaderDelegate`:
+For progressive media, `AVAssetResourceLoaderDelegate` puts a header on every
+byte-range request:
 
 1. the asset is created with a **custom scheme** (`faithform-media://…`), which
    `AVPlayer` cannot resolve itself;
-2. every request — playlist, segment, byte range — therefore arrives at the
-   loader;
+2. every byte-range request therefore arrives at the loader;
 3. the loader rewrites the scheme back to `https`, attaches
    `Authorization: Bearer <capability>`, and issues it with `URLSession`.
 
@@ -86,10 +105,28 @@ sweep asserts it appears nowhere.
 The session is `URLSessionConfiguration.ephemeral` with `urlCache = nil` and
 `httpCookieStorage = nil`: nothing about a capability or a segment reaches disk.
 
+### iOS, live: a delivery path
+
+The loader cannot serve live. AVFoundation refuses HLS **media segments**
+answered by a resource loader — the only response it accepts for one is a
+redirect to a plain HTTP URL, which carries no header — and fails the item with
+`CoreMediaErrorDomain -12881` ("custom url not redirect"). Every live service
+routed through the loader was a black frame; the app-hosted proof test
+(`AppTests/LivePlaybackProofTests.swift`) reproduces that error against a real
+stream.
+
+So a live grant's delivery URL carries the delivery token in its path, and
+`AVPlayer` fetches the playlist and every segment itself — which is also what
+lets the system buffer, recover from stalls, and AirPlay. The account capability
+still never enters a URL; the token that does is scoped to one account, one
+church and one event, cannot be exchanged for anything, and is never read from a
+query string.
+
 ### Android: default request properties
 
 `DefaultHttpDataSource.Factory.setDefaultRequestProperties(map)` attaches headers
-to every request Media3 makes. The map is a **live view** owned by
+to every request Media3 makes. Android plays the same delivery URL as iOS and
+sends the header as well; the live route accepts either. The map is a **live view** owned by
 `CapabilityHeaders` in `:core:media`, so a refresh replaces the header for
 requests not yet issued without rebuilding the player or reloading the item.
 
@@ -108,11 +145,13 @@ capability's expiry.
      │  { capability, deliveryUrl, expiresAt, refreshAfterSeconds,  │
      │    renditionKind }                                           │
      ▼
-  GET  <deliveryUrl>          Authorization: Bearer <capability>
+  GET  <deliveryUrl>          (recordings: Authorization: Bearer <capability>)
      │
-     ├─ live       /api/media/v1/live/<slug>/<eventId>/index.m3u8
-     │                → verify capability → re-check grant → fetchFromRelay
-     │                → rewrite playlist **with no query suffix**
+     ├─ live       /api/media/v1/live/<slug>/<eventId>/<deliveryToken>/index.m3u8
+     │                → verify delivery token (or a bearer capability, for a
+     │                  build that sends one) → re-check grant and
+     │                  authorization version → fetchFromRelay
+     │                → rewrite playlist under the same path, **no query suffix**
      │
      └─ recording  /api/media/v1/recording/<slug>/<id>
                       → verify capability → re-check grant
@@ -248,7 +287,7 @@ Player failures collapse to four cases with no payload:
 | | Meaning |
 | --- | --- |
 | `network` | the connection went away; recoverable by itself |
-| `unavailable` | 401/403/404/410 — the church took it down, revoked it, or the relationship changed |
+| `unavailable` | 401/403/404/410 — the church took it down, revoked it, or the relationship changed. For **live**, 404/410 are `network` instead: the relay has no playlist *yet* — the encoder is connecting or reconnecting — and the player waits it out while the church still lists the service as live |
 | `unsupported` | this device cannot decode it |
 | `unknown` | anything else |
 

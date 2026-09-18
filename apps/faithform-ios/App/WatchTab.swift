@@ -20,7 +20,6 @@ enum WatchSection: Hashable {
 struct WatchTabView: View {
     enum Route: Hashable {
         case recording(mediaId: String)
-        case live(LiveMedia)
         case sermon(sermonId: String)
         case presentation(presentationId: String)
     }
@@ -67,7 +66,8 @@ struct WatchTabView: View {
                     MediaArchiveList(
                         model: features.media,
                         onOpen: { path.append(.recording(mediaId: $0.mediaId)) },
-                        onWatchLive: { path.append(.live($0)) }
+                        // Full screen and playing, exactly as from Home.
+                        onWatchLive: { root.watchLive($0) }
                     )
                 case .sermons, .slides:
                     SermonListView(
@@ -104,8 +104,6 @@ struct WatchTabView: View {
                 switch route {
                 case let .recording(mediaId):
                     RecordingScreen(features: features, mediaId: mediaId)
-                case let .live(live):
-                    LiveServiceScreen(features: features, live: live)
                 case let .sermon(sermonId):
                     SermonScreen(features: features, sermonId: sermonId)
                 case let .presentation(presentationId):
@@ -208,6 +206,9 @@ struct RecordingScreen: View {
                 MediaDetailScreen(model: model)
             }
             .navigationBarTitleDisplayMode(.inline)
+            // Reclaimed on every appearance, not only the first: the live
+            // player may have held the shared player's events in between.
+            .task { await Self.connect(model, to: features) }
         }
     }
 
@@ -224,81 +225,7 @@ struct RecordingScreen: View {
     }
 }
 
-/// A service that is on right now.
-///
-/// Not `MediaDetailScreen`: a live service has no recording to describe or
-/// resume, and that screen's controls always play the recording. This one plays
-/// the live edge and nothing else.
-struct LiveServiceScreen: View {
-    @Environment(\.faithformTheme) private var theme
-    let features: ChurchFeatures
-    let live: LiveMedia
-
-    var body: some View {
-        OnceModel(
-            make: { features.mediaDetail(mediaId: live.mediaId) },
-            onCreate: { model in await RecordingScreen.connect(model, to: features) }
-        ) { model in
-            VStack(spacing: 0) {
-                VideoFrame(features: features)
-                ScrollView {
-                    LiveServiceDetails(live: live, model: model)
-                        .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
-                        .padding(.vertical, FaithFormTokens.Spacing.xl)
-                }
-            }
-            .background(theme.palette.background)
-            .navigationBarTitleDisplayMode(.inline)
-            // Leaving stops the stream. A live service still playing behind
-            // another screen is sound nobody can find the source of.
-            .onDisappear { Task { await model.stop() } }
-        }
-    }
-}
-
-private struct LiveServiceDetails: View {
-    @Environment(\.faithformTheme) private var theme
-    let live: LiveMedia
-    let model: MediaDetailModel
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
-            Text(L.mediaLiveNowBadge)
-                .font(theme.font(FaithFormTokens.Text.caption))
-                .foregroundStyle(theme.palette.brandPrimary)
-            Text(live.title)
-                .font(theme.font(FaithFormTokens.Text.displayLarge))
-                .foregroundStyle(theme.palette.contentPrimary)
-                .fixedSize(horizontal: false, vertical: true)
-            Text(live.churchName)
-                .font(theme.font(FaithFormTokens.Text.body))
-                .foregroundStyle(theme.palette.contentSecondary)
-
-            if let message = model.failureMessage {
-                Text(message)
-                    .font(theme.font(FaithFormTokens.Text.body))
-                    .foregroundStyle(theme.palette.contentSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            switch model.playback {
-            case .preparing, .buffering:
-                FaithFormWorkingLabel(L.mediaBuffering, working: true)
-                    .font(theme.font(FaithFormTokens.Text.body))
-                    .foregroundStyle(theme.palette.contentSecondary)
-            case .playing:
-                Button(L.mediaPause) { Task { await model.pause() } }
-                    .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
-            case .idle, .paused, .ended, .failed:
-                Button(L.mediaWatchLive) { Task { await model.play(kind: .live) } }
-                    .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-/// The picture, above a recording's or a live service's details.
+/// The picture, above a recording's details.
 ///
 /// 16:9, because that is what a service is filmed in, and pinned above the
 /// scrolling text so the video stays in view while a person reads the summary.

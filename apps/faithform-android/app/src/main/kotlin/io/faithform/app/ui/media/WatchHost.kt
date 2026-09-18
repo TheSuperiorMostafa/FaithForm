@@ -9,6 +9,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -51,6 +53,7 @@ import io.faithform.app.ui.sermons.SermonDetailScreen
 import io.faithform.app.ui.sermons.SermonListScreen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 /**
  * Services: live and past recordings, sermons, and slides — matching iOS
@@ -86,9 +89,9 @@ fun WatchTab(
     }
     val pane = HostNavigation.effectiveWatchPane(requestedPane, showsMedia, showsSermons)
 
-    // Detail routes: null = list; "recording:id" / "live:id" / "sermon:id"
+    // Detail routes: null = list; "recording:id" / "sermon:id" / "presentation:id".
+    // A live service is not a route: it opens full screen over the tabs.
     var opened by rememberSaveable(partition.storageKey) { mutableStateOf<String?>(null) }
-    var liveCard by rememberSaveable(partition.storageKey) { mutableStateOf<String?>(null) }
 
     val route = opened
     if (route != null) {
@@ -116,7 +119,6 @@ fun WatchTab(
                 )
             }
             else -> {
-                val kind = if (route.startsWith("live:")) MediaPlaybackKind.LIVE else MediaPlaybackKind.RECORDING
                 val mediaId = route.substringAfter(':')
                 MediaDetailHost(
                     client = container.mediaClient,
@@ -124,8 +126,6 @@ fun WatchTab(
                     churchSlug = churchSlug,
                     partition = partition,
                     mediaId = mediaId,
-                    kind = kind,
-                    liveTitle = liveCard,
                     onClose = { opened = null },
                     modifier = modifier,
                 )
@@ -171,10 +171,8 @@ fun WatchTab(
                         churchSlug = churchSlug,
                         partition = partition,
                         onOpen = { opened = "recording:${it.mediaId}" },
-                        onWatchLive = { live ->
-                            liveCard = live.title
-                            opened = "live:${live.mediaId}"
-                        },
+                        // Full screen and playing, exactly as from Home.
+                        onWatchLive = appViewModel::watchLive,
                         modifier = Modifier.weight(1f).fillMaxWidth(),
                     )
                 }
@@ -230,6 +228,10 @@ private fun MediaHalf(
         list.launch { refresh() }
         onPauseOrDispose { }
     }
+    PollLiveStatus(list)
+
+    var refreshing by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     val state by list.value.state.collectAsStateWithLifecycle()
     MediaScreen(
         state = state,
@@ -242,6 +244,17 @@ private fun MediaHalf(
         onRetry = { list.launch { refresh() } },
         onLoadMore = { list.launch { loadMore() } },
         modifier = modifier,
+        isRefreshing = refreshing,
+        onRefresh = {
+            scope.launch {
+                refreshing = true
+                try {
+                    list.value.refresh()
+                } finally {
+                    refreshing = false
+                }
+            }
+        },
     )
 }
 
@@ -353,12 +366,11 @@ private fun MediaDetailHost(
     churchSlug: String,
     partition: CachePartition,
     mediaId: String,
-    kind: MediaPlaybackKind,
-    liveTitle: String?,
     onClose: () -> Unit,
     modifier: Modifier,
 ) {
     val appContext = LocalContext.current.applicationContext
+    val kind = MediaPlaybackKind.RECORDING
 
     val holder = rememberSessionModel(
         key = "media-detail|${partition.storageKey}|${kind.wire}|$mediaId",
@@ -372,11 +384,6 @@ private fun MediaDetailHost(
             mediaId = mediaId,
             kind = kind,
             partition = partition,
-            knownCard = if (kind == MediaPlaybackKind.LIVE) {
-                MediaArchiveCard(mediaId, liveTitle.orEmpty(), null, "", null, null, null, emptyList(), "UTC")
-            } else {
-                null
-            },
         )
         model to adapter
     }
@@ -389,6 +396,9 @@ private fun MediaDetailHost(
     }
 
     val state by model.state.collectAsStateWithLifecycle()
+    // Followed, not read once: the player is created by the first Play, after
+    // this screen — and its surface — already exist.
+    val player by adapter.videoPlayerState.collectAsStateWithLifecycle()
 
     val close = {
         holder.launch { first.stop() }
@@ -423,7 +433,7 @@ private fun MediaDetailHost(
             videoSurface = {
                 AndroidView(
                     factory = { context -> PlayerView(context).apply { useController = false } },
-                    update = { view -> view.player = adapter.videoPlayer },
+                    update = { view -> view.player = player },
                     onRelease = { view -> view.player = null },
                     modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f),
                 )

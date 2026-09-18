@@ -1,6 +1,9 @@
 #if canImport(AVFoundation)
 import AVFoundation
 import Foundation
+#if canImport(UniformTypeIdentifiers)
+import UniformTypeIdentifiers
+#endif
 
 /// The only file in FaithForm that touches AVFoundation.
 ///
@@ -8,36 +11,38 @@ import Foundation
 /// means to a person, whether a position is worth remembering, what happens on
 /// a revocation — all of that lives in `MediaPlayback.swift` and
 /// `MediaPlaybackCoordinator`, which are plain Swift and run on any test
-/// runner. This file translates.
+/// runner. This file translates, in both directions: commands in, and what the
+/// player *actually* did — observed, never assumed — back out.
 ///
-/// ## Why a resource loader and not a signed URL
+/// ## Two ways in, by rendition
 ///
-/// `AVPlayer` fetches a playlist and then every segment in it. Handing it a URL
-/// with a credential in the query string would put that credential into each of
-/// those requests, into any proxy log between here and the server, and into
-/// whatever the system does with a URL it is asked to play.
+/// **HLS (every live service) is a plain HTTPS asset.** AVFoundation refuses
+/// media segments served through an `AVAssetResourceLoaderDelegate` — the only
+/// response it accepts for one is a redirect, which drops any header
+/// (CoreMediaErrorDomain -12881, "custom url not redirect"). A live stream
+/// routed through a loader therefore never shows a frame. So the server hands
+/// out a delivery URL whose *path* carries a delivery token (see the server's
+/// `playback-capability.ts`), and `AVPlayer` fetches the playlist and every
+/// segment itself — which is also what lets AirPlay and the system's own
+/// buffering work.
 ///
-/// `AVURLAssetHTTPHeaderFieldsKey` would attach a header, but it is
-/// undocumented and using it risks a review rejection for private API. The
-/// documented mechanism is `AVAssetResourceLoaderDelegate`: the asset is created
-/// with a **custom scheme** so `AVPlayer` cannot fetch it itself, every request
-/// — playlist, segment, byte range — arrives here instead, and each is issued
-/// with `URLSession` carrying the capability as a bearer header.
-///
-/// The capability therefore appears in exactly one place: an HTTP header on an
-/// outbound request. Not in a URL, not in a log, not in a screenshot.
+/// **Progressive (the archive) goes through a resource loader.** The asset is
+/// created with a custom scheme so `AVPlayer` cannot fetch it itself, every byte
+/// range arrives here instead, and each is issued with `URLSession` carrying the
+/// capability as a bearer header. That is allowed for progressive media, and
+/// keeps the capability out of any URL.
 ///
 /// ## What is not exercised in CI
 ///
-/// `swift test` runs on macOS with no iOS media stack, and no simulator vends
-/// real HLS segments. So **the player wiring below is not covered by an
-/// automated test** and is verified by the device runbook instead. What *is*
-/// covered — because it was deliberately kept out of this file — is the refresh
-/// schedule, the single-flight, the error mapping, the resume policy and the
-/// revocation behaviour.
+/// `swift test` runs on macOS with no iOS media stack, so **the player wiring
+/// below is not covered by `swift test`**; the app's tests play a real stream
+/// through it on a simulator. What *is* covered here — because it was
+/// deliberately kept out of this file — is the refresh schedule, the
+/// single-flight, the error mapping, the resume policy and the revocation
+/// behaviour.
 public actor AVPlayerAdapter: MediaPlayerFacade {
 
-    /// The scheme that keeps `AVPlayer` out of the network.
+    /// The scheme that keeps `AVPlayer` out of the network for progressive media.
     ///
     /// It must not be one the system can resolve; `AVPlayer` only consults a
     /// resource loader for schemes it does not recognise.
@@ -50,6 +55,20 @@ public actor AVPlayerAdapter: MediaPlayerFacade {
     private var item: AVPlayerItem?
     private var timeObserver: Any?
     private var startOffset: Double = 0
+
+    /// What is loaded, so an item that failed can be built again from it —
+    /// `AVPlayer` never plays a failed item, however often it is told to.
+    private var request: PlaybackRequest?
+    /// The newest capability, which a rebuilt progressive item must use rather
+    /// than the one the request was first made with.
+    private var capability: String?
+
+    private var observations: [NSKeyValueObservation] = []
+    private var notificationTokens: [NSObjectProtocol] = []
+    /// Bumped on every load and stop. Callbacks from an item that has since
+    /// been replaced carry an older value and are dropped, so a stale failure
+    /// can never land on the stream that followed it.
+    private var generation = 0
     #endif
 
     private var handler: (@Sendable (PlayerEvent) -> Void)?
@@ -100,19 +119,26 @@ public actor AVPlayerAdapter: MediaPlayerFacade {
         case .load(let request):
             await load(request)
         case .play:
+            // A failed item stays failed. Playing again means building the item
+            // again — through whatever capability the coordinator just renewed.
+            if item?.status == .failed, let request {
+                await load(request)
+            }
+            // No synthetic "playing": the time-control observer reports what
+            // the player actually does, and a stream that never loads must not
+            // read as playing in the meantime.
             player.play()
-            handler?(.playing)
         case .pause:
             player.pause()
-            handler?(.paused)
         case .seek(let seconds):
             let target = CMTime(seconds: startOffset + max(0, seconds), preferredTimescale: 600)
             await player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero)
         case .stop:
+            tearDown()
             player.pause()
             player.replaceCurrentItem(with: nil)
-            item = nil
-            loader = nil
+            request = nil
+            capability = nil
         case .updateCapability(let capability):
             // Swapped in place: the loader uses it on the next request it
             // makes, so a refresh never interrupts playback.
@@ -121,6 +147,7 @@ public actor AVPlayerAdapter: MediaPlayerFacade {
             // AVFoundation's own delegate queue, so it guards its capability
             // with a lock rather than with isolation. Awaiting it would have
             // suggested a suspension point that does not exist.
+            self.capability = capability
             loader?.update(capability: capability)
         }
         #else
@@ -130,39 +157,38 @@ public actor AVPlayerAdapter: MediaPlayerFacade {
 
     #if os(iOS)
     private func load(_ request: PlaybackRequest) async {
+        tearDown()
+        self.request = request
         startOffset = request.startOffsetSeconds
 
-        guard var components = URLComponents(url: request.url, resolvingAgainstBaseURL: false) else {
-            handler?(.failed(.unknown))
-            return
+        let asset: AVURLAsset
+        switch request.renditionKind {
+        case .hls:
+            // Plain HTTPS: the delivery path carries its own token, and every
+            // playlist and segment URL the player derives from it inherits it.
+            asset = AVURLAsset(url: request.url)
+        case .progressive:
+            guard let intercepted = interceptedAsset(for: request) else {
+                handler?(.failed(.unknown))
+                return
+            }
+            asset = intercepted
         }
-        // The asset's URL is deliberately unresolvable by the system, so every
-        // request lands in the loader.
-        components.scheme = Self.interceptScheme
-        guard let interceptURL = components.url else {
-            handler?(.failed(.unknown))
-            return
-        }
-
-        let originalScheme = request.url.scheme ?? "https"
-        let loader = CapabilityResourceLoader(
-            capability: request.capability,
-            realScheme: originalScheme,
-        ) { [weak self] failure in
-            Task { await self?.report(.failed(failure)) }
-        }
-        self.loader = loader
-
-        let asset = AVURLAsset(url: interceptURL)
-        asset.resourceLoader.setDelegate(loader, queue: DispatchQueue(label: "faithform.media.loader"))
 
         let item = AVPlayerItem(asset: asset)
+        if request.kind == .live {
+            // After a stall, catch up to where the rest of the congregation is
+            // rather than resuming a minute behind them.
+            item.automaticallyPreservesTimeOffsetFromLive = true
+        }
         self.item = item
-        player.replaceCurrentItem(with: item)
+        observe(item, kind: request.kind, generation: generation)
 
-        // A live stream must not be paused into a stall by the system deciding
-        // to buffer more; a recording benefits from it.
-        player.automaticallyWaitsToMinimizeStalling = request.kind == .recording
+        // Left at the system default (true) for live and recorded alike. With
+        // it off, `play()` on a stream that has not buffered yet starts, stalls
+        // and stops — a black frame that never recovers on its own.
+        player.automaticallyWaitsToMinimizeStalling = true
+        player.replaceCurrentItem(with: item)
 
         if request.kind.isResumable, request.resumeSeconds > 0 {
             let target = CMTime(
@@ -179,22 +205,146 @@ public actor AVPlayerAdapter: MediaPlayerFacade {
         handler?(.buffering)
     }
 
-    private func observeProgress() {
+    private func interceptedAsset(for request: PlaybackRequest) -> AVURLAsset? {
+        guard var components = URLComponents(url: request.url, resolvingAgainstBaseURL: false) else {
+            return nil
+        }
+        // The asset's URL is deliberately unresolvable by the system, so every
+        // request lands in the loader.
+        components.scheme = Self.interceptScheme
+        guard let interceptURL = components.url else { return nil }
+
+        let loader = CapabilityResourceLoader(
+            capability: capability ?? request.capability,
+            realScheme: request.url.scheme ?? "https",
+        ) { [weak self, generation] failure in
+            Task { await self?.report(.failed(failure), generation: generation) }
+        }
+        self.loader = loader
+
+        let asset = AVURLAsset(url: interceptURL)
+        asset.resourceLoader.setDelegate(loader, queue: DispatchQueue(label: "faithform.media.loader"))
+        return asset
+    }
+
+    // MARK: - Observing what the player actually does
+
+    private func observe(_ item: AVPlayerItem, kind: MediaPlaybackKind, generation: Int) {
+        observations = [
+            item.observe(\.status, options: [.new]) { [weak self] item, _ in
+                let status = item.status
+                let duration = item.duration.seconds
+                let failure = status == .failed ? Self.failure(of: item, kind: kind) : nil
+                Task {
+                    await self?.itemStatusChanged(
+                        status,
+                        duration: duration,
+                        failure: failure,
+                        generation: generation,
+                    )
+                }
+            },
+            player.observe(\.timeControlStatus, options: [.new]) { [weak self] player, _ in
+                let status = player.timeControlStatus
+                Task { await self?.timeControlChanged(status, generation: generation) }
+            },
+        ]
+
+        let center = NotificationCenter.default
+        notificationTokens = [
+            center.addObserver(
+                forName: AVPlayerItem.didPlayToEndTimeNotification,
+                object: item,
+                queue: nil,
+            ) { [weak self] _ in
+                Task { await self?.report(.ended, generation: generation) }
+            },
+            center.addObserver(
+                forName: AVPlayerItem.failedToPlayToEndTimeNotification,
+                object: item,
+                queue: nil,
+            ) { [weak self] note in
+                let error = note.userInfo?[AVPlayerItemFailedToPlayToEndTimeErrorKey] as? NSError
+                let failure = error.map { Self.failure(of: $0, kind: kind) } ?? .network
+                Task { await self?.report(.failed(failure), generation: generation) }
+            },
+        ]
+    }
+
+    private func itemStatusChanged(
+        _ status: AVPlayerItem.Status,
+        duration: Double,
+        failure: PlayerFailure?,
+        generation: Int,
+    ) {
+        guard generation == self.generation else { return }
+        switch status {
+        case .readyToPlay:
+            handler?(.readyToPlay(durationSeconds: duration.isFinite ? duration : nil))
+            // Ready and "playing" arrive on separate observers in no promised
+            // order. Restating the player's state after "ready" means the last
+            // word is always what the player is doing now.
+            if let event = Self.event(for: player.timeControlStatus) { handler?(event) }
+        case .failed:
+            handler?(.failed(failure ?? .unknown))
+        case .unknown:
+            break
+        @unknown default:
+            break
+        }
+    }
+
+    private func timeControlChanged(_ status: AVPlayer.TimeControlStatus, generation: Int) {
+        guard generation == self.generation, let item else { return }
+        // Before an item is ready, "paused" is only its starting state, and
+        // after it fails the player pauses as a consequence. Neither is a
+        // pause anyone asked for, and reporting one would hide the failure.
+        if status == .paused, item.status != .readyToPlay { return }
+        if let event = Self.event(for: status) { handler?(event) }
+    }
+
+    private func report(_ event: PlayerEvent, generation: Int) {
+        guard generation == self.generation else { return }
+        handler?(event)
+    }
+
+    private static func event(for status: AVPlayer.TimeControlStatus) -> PlayerEvent? {
+        switch status {
+        case .playing: return .playing
+        case .paused: return .paused
+        case .waitingToPlayAtSpecifiedRate: return .buffering
+        @unknown default: return nil
+        }
+    }
+
+    private func tearDown() {
+        generation += 1
+        observations.forEach { $0.invalidate() }
+        observations = []
+        notificationTokens.forEach { NotificationCenter.default.removeObserver($0) }
+        notificationTokens = []
         if let timeObserver {
             player.removeTimeObserver(timeObserver)
             self.timeObserver = nil
         }
+        item = nil
+        loader = nil
+    }
+
+    private func observeProgress() {
+        let generation = generation
         let interval = CMTime(seconds: 5, preferredTimescale: 600)
         timeObserver = player.addPeriodicTimeObserver(
             forInterval: interval,
             queue: .main,
         ) { [weak self] time in
-            Task { await self?.reportProgress(time.seconds) }
+            let seconds = time.seconds
+            Task { await self?.reportProgress(seconds, generation: generation) }
         }
     }
 
-    private func reportProgress(_ seconds: Double) {
-        guard seconds.isFinite else { return }
+    private func reportProgress(_ seconds: Double, generation: Int) {
+        guard generation == self.generation, seconds.isFinite else { return }
         let duration = item?.duration.seconds
         handler?(.progress(
             seconds: max(0, seconds - startOffset),
@@ -202,15 +352,66 @@ public actor AVPlayerAdapter: MediaPlayerFacade {
         ))
     }
 
-    private func report(_ event: PlayerEvent) {
-        handler?(event)
+    // MARK: - What a failure means
+
+    /// The class of a failure, read from what AVFoundation recorded about it.
+    ///
+    /// The error log names the HTTP status of a failed playlist or segment
+    /// request, which the error itself usually buries under a CoreMedia code.
+    /// Only the class leaves this function: never the URL, the comment, or the
+    /// domain.
+    private nonisolated static func failure(of item: AVPlayerItem, kind: MediaPlaybackKind) -> PlayerFailure {
+        if let event = item.errorLog()?.events.last,
+           let status = httpStatus(code: event.errorStatusCode, comment: event.errorComment) {
+            return PlayerFailureMapping.from(statusCode: status, kind: kind)
+        }
+        if let error = item.error as NSError? { return failure(of: error, kind: kind) }
+        return .unknown
+    }
+
+    private nonisolated static func failure(of error: NSError, kind: MediaPlaybackKind) -> PlayerFailure {
+        if let status = httpStatus(code: error.code, comment: error.localizedDescription) {
+            return PlayerFailureMapping.from(statusCode: status, kind: kind)
+        }
+        if error.domain == NSURLErrorDomain { return .network }
+        if error.domain == AVFoundationErrorDomain,
+           let code = AVError.Code(rawValue: error.code) {
+            switch code {
+            case .fileFormatNotRecognized, .decoderNotFound, .formatUnsupported:
+                return .unsupported
+            case .contentIsUnavailable, .contentIsProtected, .contentIsNotAuthorized:
+                return .unavailable
+            default:
+                break
+            }
+        }
+        if let underlying = error.userInfo[NSUnderlyingErrorKey] as? NSError {
+            return failure(of: underlying, kind: kind)
+        }
+        return .unknown
+    }
+
+    /// An HTTP status, from a status code or from CoreMedia's "HTTP 404: …".
+    private nonisolated static func httpStatus(code: Int, comment: String?) -> Int? {
+        if (400...599).contains(code) { return code }
+        switch code {
+        // CoreMedia's own codes for the statuses that decide something.
+        case -12937: return 401
+        case -12660: return 403
+        case -12938: return 404
+        default: break
+        }
+        guard let comment,
+              let range = comment.range(of: #"HTTP (\d{3})"#, options: .regularExpression)
+        else { return nil }
+        return Int(comment[range].dropFirst(5))
     }
     #endif
 }
 
 #if os(iOS)
-/// Issues every request `AVPlayer` would have made, with the capability
-/// attached as a header.
+/// Issues every byte-range request `AVPlayer` makes for a progressive
+/// recording, with the capability attached as a header.
 ///
 /// **Holds nothing.** No response body is cached, no file is written, and the
 /// capability lives only in this object for as long as the session does. There
@@ -305,10 +506,18 @@ private final class CapabilityResourceLoader: NSObject, AVAssetResourceLoaderDel
             }
 
             if let contentInformation = loadingRequest.contentInformationRequest {
-                contentInformation.contentType = http.value(forHTTPHeaderField: "Content-Type")
-                contentInformation.isByteRangeAccessSupported =
-                    http.value(forHTTPHeaderField: "Accept-Ranges") == "bytes"
-                contentInformation.contentLength = http.expectedContentLength
+                // A UTI, not a MIME type: that is what this property is
+                // documented to hold, and a MIME string here leaves the asset
+                // unidentifiable.
+                contentInformation.contentType = Self.uniformType(
+                    forMIMEType: http.value(forHTTPHeaderField: "Content-Type")
+                )
+                contentInformation.isByteRangeAccessSupported = http.statusCode == 206
+                    || http.value(forHTTPHeaderField: "Accept-Ranges")?.lowercased() == "bytes"
+                // The **whole** resource's length. The first request is a
+                // two-byte probe, and a 206's own length would tell the player
+                // the recording is two bytes long.
+                contentInformation.contentLength = Self.totalLength(of: http)
             }
 
             if let data { loadingRequest.dataRequest?.respond(with: data) }
@@ -316,6 +525,29 @@ private final class CapabilityResourceLoader: NSObject, AVAssetResourceLoaderDel
         }.resume()
 
         return true
+    }
+
+    /// `Content-Range: bytes 0-1/48213000` → 48213000; a 200's own length otherwise.
+    static func totalLength(of response: HTTPURLResponse) -> Int64 {
+        if let range = response.value(forHTTPHeaderField: "Content-Range"),
+           let slash = range.lastIndex(of: "/"),
+           let total = Int64(range[range.index(after: slash)...].trimmingCharacters(in: .whitespaces)) {
+            return total
+        }
+        return max(0, response.expectedContentLength)
+    }
+
+    static func uniformType(forMIMEType mime: String?) -> String {
+        #if canImport(UniformTypeIdentifiers)
+        if let mime,
+           let base = mime.split(separator: ";").first?.trimmingCharacters(in: .whitespaces),
+           let type = UTType(mimeType: base) {
+            return type.identifier
+        }
+        return UTType.mpeg4Movie.identifier
+        #else
+        return AVFileType.mp4.rawValue
+        #endif
     }
 }
 #endif

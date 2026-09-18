@@ -149,6 +149,17 @@ public enum PlayerFailureMapping {
         }
     }
 
+    /// The same, knowing what is being watched.
+    ///
+    /// A live stream that answers 404 has not gone anywhere: the encoder is
+    /// still connecting, or reconnecting after a dropped uplink, and the relay
+    /// has no playlist *yet*. That is worth waiting out, so it is a transient
+    /// failure. 401 and 403 are still refusals.
+    public static func from(statusCode: Int, kind: MediaPlaybackKind) -> PlayerFailure {
+        if kind == .live, statusCode == 404 || statusCode == 410 { return .network }
+        return from(statusCode: statusCode)
+    }
+
     /// What the person reads. Never a URL, a status code, or a domain.
     public static func message(for failure: PlayerFailure) -> String {
         switch failure {

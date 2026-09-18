@@ -203,9 +203,12 @@ Same behaviour on both platforms unless the row says otherwise.
 | Resume on recordings only, same bounds | ✅ | ✅ | ✅ |
 | Refresh 60 s before expiry, single-flight | ✅ | ✅ | ✅ |
 | Refused refresh is terminal | ✅ | ✅ | ✅ |
-| One retry on `unavailable`, none on `network` | ✅ | ✅ | ✅ |
+| One retry on `unavailable` until ready, none on `network` | ✅ | ✅ | ✅ |
 | Four error cases, no transport detail | ✅ | ✅ | ✅ |
-| Capability in a header, never a URL | resource loader | request properties | ✅ behaviour, ≠ mechanism |
+| Capability in a header, never a URL | resource loader (recordings) | request properties | ✅ behaviour, ≠ mechanism |
+| Live addressed by a delivery path | `AVPlayer` fetches it directly | same path, plus the header | ✅ |
+| Watch live opens full screen, already playing | `LivePlayerModel` | `LivePlayerModel` | ✅ |
+| Live state polled while Home/Watch is visible | `refreshesLiveStatus` | `PollLiveStatus` | ✅ |
 | Audio focus | system-managed | `AudioFocusPolicy` | ❌ platform difference, documented |
 | MKV recordings | ~~cannot play~~ | ~~plays~~ | ✅ **the difference is gone** — an MKV cannot be published, so neither platform is offered one |
 | Rendition MIME for a progressive file | probed by `AVPlayer` | **declared** from `renditionKind` | ✅ behaviour, ≠ mechanism |
@@ -508,8 +511,10 @@ Each with the exact reason. **None is claimed as passing.**
 
 | Item | Reason | Verified instead by |
 | --- | --- | --- |
-| `AVPlayer` playback and the resource loader | `swift test` runs on macOS; no iOS media stack | runbook §3–§6 |
-| `ExoPlayer` playback and `bindToLifecycle` | needs a `Context`, a `Looper` and a media stack; Robolectric cannot instrument Media3 | runbook §3–§6 |
+| `AVPlayer` live playback | `swift test` runs on macOS; no iOS media stack | `scripts/verify-ios-live-playback.sh` (simulator) |
+| `AVPlayer` recordings and the resource loader | same | runbook §3–§6 |
+| `ExoPlayer` live playback and the full-screen surface | needs a `Context`, a `Looper` and a media stack; Robolectric cannot instrument Media3 | `scripts/verify-android-live-playback.sh` (emulator) |
+| `ExoPlayer` recordings and `bindToLifecycle` | same | runbook §3–§6 |
 | Live HLS from a real relay | needs a provider | runbook §3, §9 |
 | Recording playback and scrubbing | needs a device and a file | runbook §4 |
 | **The parser against a real recording** | every test drives byte structures built in the tests — real ISO layouts with real `avcC` and `esds`, but no MP4 from an actual service | runbook step 26i |

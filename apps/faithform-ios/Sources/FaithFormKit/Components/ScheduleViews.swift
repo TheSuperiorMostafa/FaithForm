@@ -9,16 +9,20 @@ public struct ScheduleView: View {
     private let churchTimezone: String
     private let isJoinPending: Bool
     private let onOpenItem: @MainActor (FeedItem) -> Void
+    private let onRefresh: (@MainActor @Sendable () async -> Void)?
 
     @State private var selectedDay = Date()
 
+    /// - Parameter onRefresh: anything else a pull-down should bring up to
+    ///   date — on Home, whether the church has gone live since.
     public init(
         model: ScheduleModel,
         churchName: String,
         churchSlug: String,
         churchTimezone: String,
         isJoinPending: Bool = false,
-        onOpenItem: @escaping @MainActor (FeedItem) -> Void
+        onOpenItem: @escaping @MainActor (FeedItem) -> Void,
+        onRefresh: (@MainActor @Sendable () async -> Void)? = nil
     ) {
         self.model = model
         self.churchName = churchName
@@ -26,6 +30,7 @@ public struct ScheduleView: View {
         self.churchTimezone = churchTimezone
         self.isJoinPending = isJoinPending
         self.onOpenItem = onOpenItem
+        self.onRefresh = onRefresh
     }
 
     public var body: some View {
@@ -41,7 +46,11 @@ public struct ScheduleView: View {
             .frame(maxWidth: FaithFormTokens.Layout.contentMaxWidth)
         }
         .background(theme.palette.background)
-        .refreshable { await model.refresh(churchSlug: churchSlug) }
+        .refreshable {
+            async let schedule: Void = model.refresh(churchSlug: churchSlug)
+            await onRefresh?()
+            await schedule
+        }
         .onChange(of: model.displayedMonth) { _, _ in
             selectedDay = todayInChurchZone()
         }

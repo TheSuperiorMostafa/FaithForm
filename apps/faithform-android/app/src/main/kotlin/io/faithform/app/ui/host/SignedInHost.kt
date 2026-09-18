@@ -22,6 +22,7 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -49,6 +50,7 @@ import io.faithform.app.ui.attendance.AutomaticAttendanceIntroScreen
 import io.faithform.app.ui.attendance.CheckInTab
 import io.faithform.app.ui.discovery.LocationProvider
 import io.faithform.app.ui.giving.GiveTab
+import io.faithform.app.ui.media.LivePlayerScreen
 import io.faithform.app.ui.media.WatchTab
 
 /**
@@ -93,6 +95,26 @@ fun SignedInHost(
     val church = bootstrap.relationships.firstOrNull { it.churchSlug == selectedSlug }
     val partition = viewModel.partition(selectedSlug)
     val tabStates = rememberSaveableStateHolder()
+
+    // "Watch live" from any tab opens here, over the tabs and the bar, and
+    // starts playing — the person asked to watch, not to be taken somewhere
+    // with another button on it.
+    val watchingLive by viewModel.watchingLive.collectAsStateWithLifecycle()
+    val live = watchingLive
+    if (live != null) {
+        if (live.churchSlug == selectedSlug && partition != null) {
+            LivePlayerScreen(
+                watching = live,
+                client = container.mediaClient,
+                resumePositions = container.resumePositions,
+                partition = partition,
+                onClose = viewModel::closeLive,
+            )
+            return
+        }
+        // The church changed underneath it; nothing of the old one may play.
+        LaunchedEffect(live) { viewModel.closeLive() }
+    }
 
     Scaffold(
         containerColor = theme.palette.background,

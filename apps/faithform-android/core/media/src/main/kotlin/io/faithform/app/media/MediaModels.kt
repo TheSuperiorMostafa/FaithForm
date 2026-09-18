@@ -74,6 +74,42 @@ class MediaListModel(
     suspend fun refresh() = reload()
 
     /**
+     * Re-reads only what is on now.
+     *
+     * The live state is the one part of these screens that changes while a
+     * person is looking at them: a service starts with the app already open.
+     * Called on a timer while Home or Watch is showing, it costs one
+     * conditional request the server answers 304 almost every time — and
+     * leaves the archive, the search and the scroll position alone.
+     */
+    suspend fun refreshLive() {
+        when (_state.value.phase) {
+            is MediaListPhase.Loaded -> Unit
+            // A full load is already on its way, or there is nothing to watch.
+            is MediaListPhase.Loading, is MediaListPhase.Blocked -> return
+            // Nothing is drawn yet, so load the whole screen rather than half.
+            is MediaListPhase.Idle, is MediaListPhase.Offline, is MediaListPhase.Failed -> {
+                reload()
+                return
+            }
+        }
+
+        val live = try {
+            client.live(churchSlug, partition)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            // A missed poll changes nothing on screen; the next one tries again.
+            return
+        }
+        _state.update { current ->
+            // Read again: a search or a page may have landed meanwhile.
+            val loaded = current.phase as? MediaListPhase.Loaded ?: return@update current
+            current.copy(phase = loaded.copy(live = live.live?.toCard()))
+        }
+    }
+
+    /**
      * Re-runs the search. The term is recorded first so the empty state can
      * tell "nothing matches that" from "nothing published".
      */
@@ -261,6 +297,17 @@ class MediaDetailModel(
             publish()
             return
         }
+        restart()
+    }
+
+    /**
+     * Starts from a fresh grant, even with a session under way.
+     *
+     * For a live service that is the live edge: where it paused may already
+     * have scrolled out of the relay's few-second window, and a stream that
+     * failed needs a new item, not the old one played again.
+     */
+    suspend fun restart() {
         coordinator.start(churchSlug, kind, mediaId, partition.storageKey)
         publish()
         if (coordinator.currentState() is PlaybackSessionState.Buffering) {
