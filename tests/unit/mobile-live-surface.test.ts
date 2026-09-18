@@ -146,3 +146,22 @@ test("a live grant addresses the stream by a delivery path", () => {
     /`\/api\/media\/v1\/live\/\$\{encodedSlug\}\/\$\{encodedId\}\/\$\{delivery\.token\}\/index\.m3u8`/,
   );
 });
+
+test("both live players give up on a silent stall instead of spinning forever", () => {
+  // A player can stall without reporting an error — AVPlayer retried 404ing
+  // segments indefinitely behind one frozen frame — so both apps notice a
+  // stall by time and rejoin the live edge, a bounded number of times.
+  const swift = read(`${IOS}/Sources/FaithFormKit/Features/LivePlayerModel.swift`);
+  const kotlin = read(
+    "apps/faithform-android/core/media/src/main/kotlin/io/faithform/app/media/LivePlayerModel.kt",
+  );
+
+  assert.match(swift, /static let stallTimeout: Duration = \.seconds\(20\)/);
+  assert.match(swift, /static let maxStallRestarts = 3/);
+  assert.match(kotlin, /const val STALL_TIMEOUT_MILLIS = 20_000L/);
+  assert.match(kotlin, /const val MAX_STALL_RESTARTS = 3/);
+  // A restart that lands after the service ended, or the screen closed, is
+  // stopped again rather than left playing behind the message.
+  assert.match(swift, /if isStopped \|\| isTerminal \{ await detail\.stop\(\) \}/);
+  assert.match(kotlin, /if \(stopped \|\| isTerminal\) detail\.stop\(\)/);
+});

@@ -78,16 +78,19 @@ class LivePlayerModel(
 
     private var attempts = 0
     private var refusals = 0
+    private var stallRestarts = 0
     private var stopped = false
     private var resumesOnForeground = false
     private var recovery: Job? = null
     private var monitor: Job? = null
+    private var watchdog: Job? = null
 
     /** Plays from the live edge. Called once, when the screen appears. */
     suspend fun start() {
         stopped = false
         attempts = 0
         refusals = 0
+        stallRestarts = 0
         _phase.value = Phase.CONNECTING
         startMonitoring()
         playFromLiveEdge()
@@ -147,6 +150,7 @@ class LivePlayerModel(
         recovery = null
         monitor?.cancel()
         monitor = null
+        disarmWatchdog()
         detail.stop()
     }
 
@@ -156,31 +160,100 @@ class LivePlayerModel(
 
     private suspend fun playFromLiveEdge() {
         if (stopped) return
-        detail.restart()
+        restartAtLiveEdge()
         sync()
+    }
+
+    /**
+     * A fresh grant and a new item at the live edge.
+     *
+     * The grant is a network round trip, and the service can end or the screen
+     * close while it is in flight. Whatever it started is then stopped again,
+     * so nothing plays behind an "ended" message or a closed screen.
+     */
+    private suspend fun restartAtLiveEdge() {
+        detail.restart()
+        if (stopped || isTerminal) detail.stop()
     }
 
     private fun sync() {
         if (stopped || isTerminal) return
         when (detail.state.value.playback) {
             PlaybackSessionState.Idle -> Unit
-            PlaybackSessionState.Preparing, PlaybackSessionState.Buffering ->
-                _phase.value = if (attempts > 0) Phase.RECONNECTING else Phase.CONNECTING
+            PlaybackSessionState.Preparing, PlaybackSessionState.Buffering -> {
+                _phase.value = if (attempts > 0 || stallRestarts > 0) Phase.RECONNECTING else Phase.CONNECTING
+                armWatchdog()
+            }
             PlaybackSessionState.Playing -> {
                 _phase.value = Phase.PLAYING
                 // Healthy again: the next failure starts a fresh budget.
                 attempts = 0
                 refusals = 0
+                stallRestarts = 0
+                disarmWatchdog()
             }
-            PlaybackSessionState.Paused -> _phase.value = Phase.PAUSED
+            PlaybackSessionState.Paused -> {
+                _phase.value = Phase.PAUSED
+                disarmWatchdog()
+            }
             // A live playlist never ends on its own — the server strips ENDLIST —
             // so an ending here is the service really ending.
-            PlaybackSessionState.Ended -> _phase.value = Phase.ENDED
+            PlaybackSessionState.Ended -> {
+                _phase.value = Phase.ENDED
+                disarmWatchdog()
+            }
             is PlaybackSessionState.Failed -> recoverIfNeeded()
         }
     }
 
+    // -----------------------------------------------------------------------
+    // Noticing a stall
+    // -----------------------------------------------------------------------
+
+    /**
+     * Starts the clock on "Connecting", unless it is already running — a
+     * buffering spell that keeps bouncing between states is still one spell.
+     */
+    private fun armWatchdog() {
+        if (watchdog != null || stopped) return
+        watchdog = scope.launch {
+            sleep(STALL_TIMEOUT_MILLIS)
+            stalled()
+        }
+    }
+
+    private fun disarmWatchdog() {
+        watchdog?.cancel()
+        watchdog = null
+    }
+
+    /**
+     * Stuck without an error: rejoin the live edge from a fresh grant, a few
+     * times, then say so and offer Try again.
+     *
+     * The job forgets itself first, so a restart that buffers again can arm a
+     * new clock — and so disarming from inside the restart cannot cancel it
+     * half way through.
+     */
+    private suspend fun stalled() {
+        watchdog = null
+        val phase = _phase.value
+        if (stopped || isTerminal || recovery?.isActive == true) return
+        if (phase != Phase.CONNECTING && phase != Phase.RECONNECTING) return
+
+        if (availability() == LiveAvailability.ENDED) return finish(Phase.ENDED)
+        if (stopped) return
+        if (stallRestarts >= MAX_STALL_RESTARTS) return finish(Phase.FAILED)
+        stallRestarts++
+        _phase.value = Phase.RECONNECTING
+        restartAtLiveEdge()
+        sync()
+    }
+
     private fun recoverIfNeeded() {
+        // The recovery loop restarts playback itself; a stall clock running
+        // alongside it would restart it twice.
+        disarmWatchdog()
         if (recovery?.isActive == true || stopped) return
         recovery = scope.launch { recover() }
     }
@@ -216,7 +289,7 @@ class LivePlayerModel(
             sleep(RETRY_DELAYS_MILLIS[minOf(attempts, RETRY_DELAYS_MILLIS.size) - 1])
             if (stopped) return
 
-            detail.restart()
+            restartAtLiveEdge()
             if (detail.state.value.playback is PlaybackSessionState.Failed) continue
             sync()
             return
@@ -230,6 +303,9 @@ class LivePlayerModel(
      */
     private suspend fun finish(terminal: Phase) {
         _phase.value = terminal
+        // Never this coroutine: stalled() lets go of the watchdog before it
+        // can call here.
+        disarmWatchdog()
         detail.stop()
         monitor?.cancel()
         monitor = null
@@ -262,5 +338,16 @@ class LivePlayerModel(
 
         /** How often the church is asked whether the service is still on. */
         const val MONITOR_INTERVAL_MILLIS = 30_000L
+
+        /**
+         * How long "Connecting" may last before it is treated as a stall. A
+         * player can stall without reporting an error — retrying segments it
+         * cannot get while one frame sits on screen — so a stall is noticed by
+         * time, not by an error.
+         */
+        const val STALL_TIMEOUT_MILLIS = 20_000L
+
+        /** Consecutive stalls rejoined at the live edge before giving up. */
+        const val MAX_STALL_RESTARTS = 3
     }
 }

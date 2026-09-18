@@ -88,9 +88,16 @@ class LiveStatusTest {
 
 class LivePlayerModelTest {
 
-    /** Retry delays pass in virtual time; the end-of-service check waits to be asked for. */
+    /**
+     * Retry delays pass in virtual time; the end-of-service check and the stall
+     * watchdog wait to be asked for.
+     */
     private val instantRetries: suspend (Long) -> Unit = { millis ->
-        if (millis == LivePlayerModel.MONITOR_INTERVAL_MILLIS) awaitCancellation() else delay(millis)
+        if (millis == LivePlayerModel.MONITOR_INTERVAL_MILLIS || millis == LivePlayerModel.STALL_TIMEOUT_MILLIS) {
+            awaitCancellation()
+        } else {
+            delay(millis)
+        }
     }
 
     private fun TestScope.live(
@@ -229,6 +236,32 @@ class LivePlayerModelTest {
 
         assertEquals(LivePlayerModel.Phase.ENDED, model.phase.value)
         assertTrue(player.commands.last() is PlayerCommand.Stop)
+        model.stop()
+    }
+
+    @Test
+    fun `a stream stuck connecting without an error is rejoined, then given up on`() = runTest {
+        val granter = FakeGranter()
+        val player = FakePlayer()
+        // The player never reports playing and never reports a failure: how a
+        // player behaves while every segment request 404s.
+        val stallsInVirtualTime: suspend (Long) -> Unit = { millis ->
+            if (millis == LivePlayerModel.MONITOR_INTERVAL_MILLIS) awaitCancellation() else delay(millis)
+        }
+        val model = live(granter, player, sleep = stallsInVirtualTime) { LiveAvailability.LIVE }
+
+        model.start()
+        advanceUntilIdle()
+
+        assertEquals(LivePlayerModel.Phase.FAILED, model.phase.value)
+        // The first attempt, then one fresh grant per stall restart.
+        assertEquals(1 + LivePlayerModel.MAX_STALL_RESTARTS, granter.calls.size)
+        assertTrue(player.commands.last() is PlayerCommand.Stop)
+
+        // And Try again starts over with a fresh budget.
+        val before = granter.calls.size
+        model.retry()
+        assertEquals(before + 1, granter.calls.size)
         model.stop()
     }
 

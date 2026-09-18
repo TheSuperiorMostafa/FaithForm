@@ -81,6 +81,7 @@ the tap was the request to watch.
 | Background | paused on leaving the app, rejoined at the live edge on return (there is no background playback) |
 | Encoder still connecting | the playlist 404s; the player waits and retries while the church lists the service as live |
 | Dropped uplink or network | reconnects by itself with backoff (1, 2, 4, 8 s…), for a couple of minutes, then offers **Try again** |
+| Stuck connecting, no error | a player can retry segments it cannot get forever behind one frozen frame; after 20 s the model rejoins the live edge from a fresh grant, and after three such stalls offers **Try again** |
 | Service ends | noticed within thirty seconds from the live projection, not left buffering |
 | Refused twice while listed live | "This service can't be watched here right now" |
 

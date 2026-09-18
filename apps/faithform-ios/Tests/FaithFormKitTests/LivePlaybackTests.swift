@@ -76,10 +76,11 @@ private func mediaClient(_ transport: HTTPTransport = StubTransport([])) -> Medi
     )
 }
 
-/// Retry delays pass at once; the end-of-service check waits for a test to
-/// ask for it, so it cannot fire in the middle of something else.
+/// Retry delays pass at once; the end-of-service check and the stall watchdog
+/// wait for a test to ask for them, so they cannot fire in the middle of
+/// something else.
 private func instantRetries(_ duration: Duration) async throws {
-    if duration == LivePlayerModel.monitorInterval {
+    if duration == LivePlayerModel.monitorInterval || duration == LivePlayerModel.stallTimeout {
         try await Task.sleep(for: .seconds(3600))
     }
 }
@@ -314,6 +315,33 @@ struct LivePlayerModelTests {
 
         #expect(await eventually { model.phase == .ended })
         #expect(await player.commands.last == .stop)
+        await model.stop()
+    }
+
+    @Test("a stream stuck connecting without an error is rejoined, then given up on")
+    func stallWatchdog() async {
+        let granter = FakeGranter()
+        let player = FakePlayer()
+        // The player never reports playing and never reports a failure — how
+        // AVPlayer behaves while every segment request 404s.
+        let stallsAtOnce: @Sendable (Duration) async throws -> Void = { duration in
+            if duration == LivePlayerModel.monitorInterval {
+                try await Task.sleep(for: .seconds(3600))
+            }
+        }
+        let model = makeLive(granter: granter, player: player, sleep: stallsAtOnce) { .live }
+
+        await model.start()
+
+        #expect(await eventually { model.phase == .failed })
+        // The first attempt, then one fresh grant per stall restart.
+        #expect(await granter.calls.count == 1 + LivePlayerModel.maxStallRestarts)
+        #expect(await player.commands.last == .stop)
+
+        // And Try again starts over with a fresh budget.
+        let before = await granter.calls.count
+        await model.retry()
+        #expect(await granter.calls.count == before + 1)
         await model.stop()
     }
 

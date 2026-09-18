@@ -56,6 +56,15 @@ public final class LivePlayerModel {
     public nonisolated static let maxAttempts = 18
     /// How often the church is asked whether the service is still on.
     public nonisolated static let monitorInterval: Duration = .seconds(30)
+    /// How long "Connecting" may last before it is treated as a stall.
+    ///
+    /// A player can stall without ever reporting an error: AVPlayer retries
+    /// segments it cannot get indefinitely, holding one frame on screen. That
+    /// is exactly how a relay serving expired segments looked — a spinner that
+    /// never ended — so a stall is noticed by time, not by an error.
+    public nonisolated static let stallTimeout: Duration = .seconds(20)
+    /// Consecutive stalls rejoined at the live edge before giving up.
+    public nonisolated static let maxStallRestarts = 3
 
     private let detail: MediaDetailModel
     private let availability: @MainActor () async -> LiveAvailability
@@ -63,10 +72,12 @@ public final class LivePlayerModel {
 
     private var attempts = 0
     private var refusals = 0
+    private var stallRestarts = 0
     private var isStopped = false
     private var resumesOnForeground = false
     private var recovery: Task<Void, Never>?
     private var monitor: Task<Void, Never>?
+    private var watchdog: Task<Void, Never>?
 
     public init(
         detail: MediaDetailModel,
@@ -83,6 +94,7 @@ public final class LivePlayerModel {
         isStopped = false
         attempts = 0
         refusals = 0
+        stallRestarts = 0
         phase = .connecting
         startMonitoring()
         await playFromLiveEdge()
@@ -145,6 +157,7 @@ public final class LivePlayerModel {
         recovery = nil
         monitor?.cancel()
         monitor = nil
+        disarmWatchdog()
         await detail.stop()
     }
 
@@ -161,8 +174,18 @@ public final class LivePlayerModel {
 
     private func playFromLiveEdge() async {
         guard !isStopped else { return }
-        await detail.play(kind: .live)
+        await restartAtLiveEdge()
         sync()
+    }
+
+    /// A fresh grant and a new item at the live edge.
+    ///
+    /// The grant is a network round trip, and the service can end or the screen
+    /// close while it is in flight. Whatever it started is then stopped again,
+    /// so nothing plays behind an "ended" message or a closed screen.
+    private func restartAtLiveEdge() async {
+        await detail.play(kind: .live)
+        if isStopped || isTerminal { await detail.stop() }
     }
 
     private func sync() {
@@ -171,24 +194,73 @@ public final class LivePlayerModel {
         case .idle:
             break
         case .preparing, .buffering:
-            phase = attempts > 0 ? .reconnecting : .connecting
+            phase = attempts > 0 || stallRestarts > 0 ? .reconnecting : .connecting
+            armWatchdog()
         case .playing:
             phase = .playing
             // Healthy again: the next failure starts a fresh budget.
             attempts = 0
             refusals = 0
+            stallRestarts = 0
+            disarmWatchdog()
         case .paused:
             phase = .paused
+            disarmWatchdog()
         case .ended:
             // A live playlist never ends on its own — the server strips
             // ENDLIST — so an ending here is the service really ending.
             phase = .ended
+            disarmWatchdog()
         case .failed:
             recoverIfNeeded()
         }
     }
 
+    // MARK: - Noticing a stall
+
+    /// Starts the clock on "Connecting", unless it is already running — a
+    /// buffering spell that keeps bouncing between states is still one spell.
+    private func armWatchdog() {
+        guard watchdog == nil, !isStopped else { return }
+        let sleep = self.sleep
+        watchdog = Task { [weak self] in
+            do { try await sleep(Self.stallTimeout) } catch { return }
+            await self?.stalled()
+        }
+    }
+
+    private func disarmWatchdog() {
+        watchdog?.cancel()
+        watchdog = nil
+    }
+
+    /// Stuck without an error: rejoin the live edge from a fresh grant, a few
+    /// times, then say so and offer Try again.
+    private func stalled() async {
+        watchdog = nil
+        guard !isStopped, !isTerminal, recovery == nil,
+              phase == .connecting || phase == .reconnecting
+        else { return }
+
+        if await availability() == .ended {
+            await finish(.ended)
+            return
+        }
+        guard !isStopped else { return }
+        guard stallRestarts < Self.maxStallRestarts else {
+            await finish(.failed)
+            return
+        }
+        stallRestarts += 1
+        phase = .reconnecting
+        await restartAtLiveEdge()
+        sync()
+    }
+
     private func recoverIfNeeded() {
+        // The recovery loop restarts playback itself; a stall timer running
+        // alongside it would restart it twice.
+        disarmWatchdog()
         guard recovery == nil, !isStopped else { return }
         recovery = Task { [weak self] in
             await self?.recover()
@@ -235,7 +307,7 @@ public final class LivePlayerModel {
             do { try await sleep(delay) } catch { return }
             guard !isStopped else { return }
 
-            await detail.play(kind: .live)
+            await restartAtLiveEdge()
             if case .failed = detail.playback { continue }
             sync()
         }
@@ -245,6 +317,7 @@ public final class LivePlayerModel {
         phase = terminal
         monitor?.cancel()
         monitor = nil
+        disarmWatchdog()
         await detail.stop()
     }
 
