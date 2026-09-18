@@ -371,13 +371,13 @@ test("one church never sees another's published media", options,
 // The live projection
 // ---------------------------------------------------------------------------
 
-test("live requires a session with an encoder actually attached", options,
+test("Go Live appears immediately while the encoder connects", options,
   run(1, async ([client], track) => {
     const fixture = await seedChurch(client);
     track(fixture);
-    // A published event marked live, but nothing is ingesting. An event someone
-    // forgot to end must not keep claiming to be live on a congregation's home
-    // screen.
+    // The operator's Go Live action is the publication boundary. Mobile must
+    // show the service immediately instead of falling back to an older ended
+    // event while browser ingest is still connecting.
     const eventId = await seedEvent(client, fixture, {
       visibility: "public",
       withLiveSession: false,
@@ -387,7 +387,14 @@ test("live requires a session with an encoder actually attached", options,
       `select count(*)::int as n from public.mobile_media_live($1, null)`,
       [fixture.slug],
     );
-    assert.equal(result.rows[0].n, 0);
+    assert.equal(result.rows[0].n, 1);
+
+    result = await client.query(
+      `select state, event_id from public.mobile_media_live($1, null)`,
+      [fixture.slug],
+    );
+    assert.equal(result.rows[0].state, "live");
+    assert.equal(result.rows[0].event_id, eventId);
 
     await client.query(
       `insert into public.stream_sessions
