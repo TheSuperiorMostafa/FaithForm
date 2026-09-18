@@ -24,12 +24,21 @@ function formatDate(value: string | null): string | null {
   });
 }
 
+const APPROVED_MESSAGES = {
+  linked: "Approved and added to People.",
+  awaiting_staff:
+    "Approved. Someone in People may already be them — confirm who they are on the People page.",
+  not_connected: "Approved.",
+} as const;
+
 /**
  * People in the app waiting on a yes.
  *
  * These are join requests against an approval-required policy. Approving makes
- * someone a member *in the app* — feed access at member visibility, nothing
- * more. Declining returns them to "left"; they can still add the church again.
+ * someone a member of the church: they see what members see in the app, and
+ * they become one of the church's people — added to People, or, when someone
+ * by that name is already there, waiting for staff to say which person they
+ * are. Declining returns them to "left"; they can still add the church again.
  */
 export function JoinRequestsPanel({
   requests,
@@ -44,7 +53,11 @@ export function JoinRequestsPanel({
     startTransition(async () => {
       const result = await decideVisitorRelationship({ accountId, action });
       if (result.ok) {
-        toast.success(action === "approve" ? "Approved." : "Declined.");
+        toast.success(
+          action === "approve"
+            ? APPROVED_MESSAGES[result.data?.people ?? "not_connected"]
+            : "Declined.",
+        );
       } else {
         toast.error(result.message);
       }
@@ -58,8 +71,9 @@ export function JoinRequestsPanel({
           Requests to join ({requests.length})
         </CardTitle>
         <CardDescription>
-          These people asked to join your church in the app. They are waiting
-          on staff approval — not active members until you approve.
+          These people asked to join your church in the app. Approving makes
+          them members: they are added to People, and their check-ins —
+          including automatic check-in — count toward attendance.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-2">

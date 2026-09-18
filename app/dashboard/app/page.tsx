@@ -4,7 +4,7 @@ import {
   getCampusesForSettings,
   getInvitationsForSettings,
 } from "@/app/dashboard/settings/faithform-actions";
-import { getVisitorRelationships } from "@/app/dashboard/people/claim-actions";
+import { getPendingJoinRequests } from "@/app/dashboard/people/claim-actions";
 import { JoinRequestsPanel } from "@/components/people/join-requests-panel";
 import { FaithFormVisibilityCard } from "@/components/settings/faithform-visibility-card";
 import { VisitorInvitationsCard } from "@/components/settings/visitor-invitations-card";
@@ -41,7 +41,7 @@ export default async function MemberAppPage() {
       getChurchDiscoverySettings(auth.churchId),
       getCampusesForSettings(),
       getInvitationsForSettings(),
-      getVisitorRelationships(),
+      getPendingJoinRequests(),
     ]);
 
   const joinRequests = relationships.items.filter(

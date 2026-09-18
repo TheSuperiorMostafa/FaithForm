@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
+import { checkedInOtherwise, getPresenceOnDate } from "@/lib/attendance/presence";
 import { sendAttendanceFollowUpTexts } from "@/lib/attendance/send-follow-up-texts";
 import { featureActionError } from "@/lib/features/guard";
 import { getChurchAuth } from "@/lib/auth/church";
@@ -94,8 +95,16 @@ export async function sendFollowUps(input: {
     follow_up_sent_at?: string | null;
   };
 
+  // Someone the app, a code, the kiosk or a room checked in was there, whatever
+  // the sheet says. Checked here as well as on the page, so a stale page
+  // cannot text them.
+  const presence = await getPresenceOnDate(supabase, auth.churchId, input.serviceDate);
+
   const eligible = ((entries ?? []) as unknown as EntryRow[]).filter((entry) => {
     if (entry.status !== "absent") return false;
+    if (entry.member_id && checkedInOtherwise(presence?.get(entry.member_id)).length > 0) {
+      return false;
+    }
     return trackingDelivery
       ? !entry.follow_up_sent_at
       : !entry.follow_up_requested;
@@ -104,7 +113,7 @@ export async function sendFollowUps(input: {
   if (eligible.length === 0) {
     return {
       ok: false,
-      error: "Everyone you picked has already been contacted.",
+      error: "Everyone you picked has already been contacted or checked in.",
     };
   }
 

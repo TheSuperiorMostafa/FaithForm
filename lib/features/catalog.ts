@@ -72,7 +72,8 @@ export const FEATURES: FeatureDefinition[] = [
   {
     key: "attendance",
     label: "Attendance",
-    description: "Mark who came on Sunday and submit the weekly count.",
+    description:
+      "Who came: the weekly sheet, service rosters, and check-ins from the app, QR codes and the kiosk.",
     href: "/dashboard/attendance",
     icon: Users,
     routes: ["/dashboard/attendance"],
@@ -96,9 +97,9 @@ export const FEATURES: FeatureDefinition[] = [
   },
   {
     key: "checkin",
-    label: "Check-In",
+    label: "Kids Check-In",
     description:
-      "Households, rooms, children's check-in, and the checkout console.",
+      "Rooms, children's check-in and the checkout console, under Attendance. Everyone checked in counts toward attendance.",
     href: "/dashboard/checkin",
     icon: BabyIcon,
     routes: ["/dashboard/checkin"],

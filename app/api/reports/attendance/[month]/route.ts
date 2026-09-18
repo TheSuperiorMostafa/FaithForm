@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { createElement, type ReactElement } from "react";
 
 import { AttendancePdfDocument } from "@/components/library/pdf-attendance-report";
+import { getPresenceByDate, isSundayIsoDate } from "@/lib/attendance/presence";
 import { getChurchName } from "@/lib/queries/library";
 import {
   buildAttendanceComparisonMetrics,
@@ -45,26 +46,44 @@ export async function GET(
   const historyStart = new Date(parsed.year - 1, 0, 1);
   const historyStartIso = `${historyStart.getFullYear()}-01-01`;
 
-  const [churchName, recordsResult] = await Promise.all([
+  // The report's range ends before `endDateIso`; the totals take both ends.
+  const lastDay = new Date(`${parsed.endDateIso}T12:00:00Z`);
+  lastDay.setUTCDate(lastDay.getUTCDate() - 1);
+  const lastDayIso = lastDay.toISOString().slice(0, 10);
+
+  const [churchName, presence] = await Promise.all([
     getChurchName(supabase, churchId),
-    supabase
+    // Each Sunday's attendance counts everyone recorded any way — the weekly
+    // sheet, the app, a code, the kiosk or a room — once. Null on a database
+    // without migration 0083, where the weekly sheets are read directly.
+    getPresenceByDate(supabase, churchId, historyStartIso, lastDayIso),
+  ]);
+
+  let records: AttendanceRecord[];
+  if (presence) {
+    records = Array.from(presence.entries())
+      .filter(([date, day]) => isSundayIsoDate(date) && (day.hasSheet || day.present > 0))
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, day]) => ({ service_date: date, total_present: day.present }));
+  } else {
+    const recordsResult = await supabase
       .from("attendance_records")
       .select("service_date,total_present")
       .eq("church_id", churchId)
       .gte("service_date", historyStartIso)
       .lt("service_date", parsed.endDateIso)
-      .order("service_date", { ascending: true }),
-  ]);
+      .order("service_date", { ascending: true });
 
-  if (recordsResult.error) {
-    console.error("attendance report:", recordsResult.error.message);
-    return NextResponse.json(
-      { error: "Failed to load attendance data" },
-      { status: 500 },
-    );
+    if (recordsResult.error) {
+      console.error("attendance report:", recordsResult.error.message);
+      return NextResponse.json(
+        { error: "Failed to load attendance data" },
+        { status: 500 },
+      );
+    }
+
+    records = (recordsResult.data ?? []) as AttendanceRecord[];
   }
-
-  const records = (recordsResult.data ?? []) as AttendanceRecord[];
 
   const allRows = records.map((row) => ({
     serviceDate: row.service_date,

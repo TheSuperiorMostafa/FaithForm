@@ -15,6 +15,23 @@ const account = read("lib/faithform/account.ts");
 const settingsActions = read("app/dashboard/settings/faithform-actions.ts");
 const claimActions = read("app/dashboard/people/claim-actions.ts");
 const staffRelationships = read("lib/faithform/staff-relationships.ts");
+const appPeople = read("lib/faithform/app-people.ts");
+const appPeopleMigration = read(
+  "supabase/migrations/0083_app_members_in_people_and_one_attendance.sql",
+);
+
+/** The body of one SQL function in a migration, comments stripped. */
+function sqlFunction(sql: string, name: string): string {
+  const start = sql.indexOf(`create or replace function public.${name}(`);
+  assert.ok(start >= 0, `${name} is not defined`);
+  const bodyStart = sql.indexOf("$$", start);
+  const bodyEnd = sql.indexOf("$$;", bodyStart + 2);
+  return sql
+    .slice(bodyStart, bodyEnd)
+    .split("\n")
+    .map((line) => line.replace(/--.*$/, ""))
+    .join("\n");
+}
 
 // ---------------------------------------------------------------------------
 // Tenant resolution
@@ -110,13 +127,17 @@ test("bootstrap reads church_users so dashboard staff see their church in the ap
   assert.match(relationships, /export async function admitStaffAsMember/);
 });
 
-test("no FaithForm module creates, merges or deletes a People record", () => {
+test("no FaithForm module writes a People record directly", () => {
+  // A new record for someone who joined is made in the database, in the same
+  // transaction as its link (`connect_app_member`, 0083). No module here
+  // writes `members` itself.
   for (const [name, source] of [
     ["claims", claims],
     ["lifecycle", lifecycle],
     ["deletion", deletion],
     ["relationships", relationships],
     ["invitations", invitations],
+    ["app-people", appPeople],
   ] as const) {
     assert.ok(!/from\("members"\)[\s\S]{0,200}\.insert\(/.test(source), `${name} inserts members`);
     assert.ok(!/from\("members"\)[\s\S]{0,200}\.delete\(/.test(source), `${name} deletes members`);
@@ -159,12 +180,21 @@ test("account deletion reads staff membership and never writes it", () => {
 });
 
 // ---------------------------------------------------------------------------
-// No automatic People linking
+// No automatic linking to an existing person
 // ---------------------------------------------------------------------------
+//
+// Migration 0083 supersedes "a link is only ever created by staff approval"
+// with a narrower rule: joining a church links the account to a People record
+// *it just created* from its own name. Linking an account to a record that
+// already existed still takes a staff member naming that record.
 
-test("a link is only ever created by an explicit staff approval", () => {
+test("in the dashboard, a link is only ever created by an explicit staff approval", () => {
   const inserts = claims.match(/from\("visitor_people_links"\)\s*\.insert\(/g) ?? [];
   assert.equal(inserts.length, 1, "exactly one code path may create a link");
+  assert.ok(
+    !/from\("visitor_people_links"\)\s*\.(insert|update|upsert)\(/.test(appPeople),
+    "app-people must go through the database functions",
+  );
 
   const approve = claims.slice(
     claims.indexOf("export async function approveClaim"),
@@ -193,6 +223,59 @@ test("email and phone are candidate hints and never a link key", () => {
   );
   assert.ok(!approve.includes("normalized_email"));
   assert.ok(!approve.includes("normalized_phone"));
+});
+
+test("joining links an account only to a People record made for it, from its name", () => {
+  const connect = sqlFunction(appPeopleMigration, "connect_app_member");
+
+  // One link insert, and its member is the row inserted just above it.
+  const linkInserts = connect.match(/insert into public\.visitor_people_links/g) ?? [];
+  assert.equal(linkInserts.length, 1);
+  assert.match(
+    connect,
+    /insert into public\.members \(church_id, first_name, last_name, is_active, source\)[\s\S]*?returning id into v_member_id;\s*insert into public\.visitor_people_links \([\s\S]*?\) values \(\s*p_account_id, p_church_id, v_member_id,/,
+  );
+  assert.equal((connect.match(/into v_member_id/g) ?? []).length, 1, "v_member_id has one source");
+
+  // Someone by the same name already in People is a question, not an answer.
+  assert.match(connect, /public\.person_name_key\(m\.first_name, m\.last_name\) = lower\(v_name\)/);
+  assert.match(connect, /insert into public\.visitor_people_claims[\s\S]*?'join'/);
+
+  // Contact details never decide anything, and never reach the church.
+  assert.doesNotMatch(connect, /email|phone/i);
+  assert.doesNotMatch(sqlFunction(appPeopleMigration, "app_account_name"), /email|phone/i);
+});
+
+test("staff answers to app members are single database calls, gated like every claim action", () => {
+  for (const [rpc, fn] of [
+    ["connect_app_member", "connectAppMember"],
+    ["add_people_claim_as_new_person", "addClaimAsNewPerson"],
+    ["move_people_link", "moveAppConnection"],
+  ] as const) {
+    assert.match(appPeople, new RegExp(`export async function ${fn}\\(`));
+    assert.match(appPeople, new RegExp(`rpc\\("${rpc}"`));
+  }
+
+  for (const action of [
+    "approvePeopleClaim",
+    "addPeopleClaimAsNewPerson",
+    "addAppMemberToPeople",
+    "moveAppConnectionToPerson",
+    "rejectPeopleClaim",
+    "revokePeopleLink",
+    "decideVisitorRelationship",
+  ]) {
+    const start = claimActions.indexOf(`export async function ${action}(`);
+    assert.ok(start >= 0, `${action} is missing`);
+    const body = claimActions.slice(start, claimActions.indexOf("\n}\n", start));
+    assert.match(body, /await requirePeopleAdmin\(\)/, `${action} must require a People admin`);
+  }
+
+  // Each database function takes the church explicitly and matches rows on it,
+  // so an id from another church finds nothing.
+  for (const name of ["add_people_claim_as_new_person", "move_people_link"]) {
+    assert.match(sqlFunction(appPeopleMigration, name), /church_id = p_church_id/);
+  }
 });
 
 test("approval refuses a person already claimed by another account", () => {

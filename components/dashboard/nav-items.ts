@@ -1,5 +1,4 @@
 import {
-  Baby,
   BookOpen,
   Contact,
   Globe,
@@ -30,6 +29,13 @@ export type NavItem = {
    * Items with no features (Home, Support, Settings) are always available.
    */
   features?: FeatureKey[];
+  /**
+   * Parts of this section that live at their own routes under their own
+   * feature. The row is active on them too, and a member who holds only a
+   * part's feature still sees the row — it takes them straight to that part.
+   * Attendance lists Kids check-in this way: one section, several grants.
+   */
+  sections?: { href: string; features: FeatureKey[] }[];
 };
 
 /** Keeps nav in sync with route guards: hidden rows are also unreachable. */
@@ -37,10 +43,29 @@ export function filterNavByFeatures(
   items: NavItem[],
   allowed: FeatureKey[],
 ): NavItem[] {
-  return items.filter(
-    (item) =>
+  return items.flatMap((item) => {
+    const own =
       !item.features?.length ||
-      item.features.some((feature) => allowed.includes(feature)),
+      item.features.some((feature) => allowed.includes(feature));
+    if (own) return [item];
+
+    const part = item.sections?.find((section) =>
+      section.features.some((feature) => allowed.includes(feature)),
+    );
+    return part ? [{ ...item, href: part.href }] : [];
+  });
+}
+
+function isUnder(pathname: string, href: string): boolean {
+  return pathname === href || pathname.startsWith(`${href}/`);
+}
+
+/** Whether a row is the current section — its own route, or any of its parts. */
+export function isNavItemActive(pathname: string, item: NavItem): boolean {
+  if (item.href === "/dashboard") return pathname === "/dashboard";
+  return (
+    isUnder(pathname, item.href) ||
+    (item.sections ?? []).some((section) => isUnder(pathname, section.href))
   );
 }
 
@@ -52,11 +77,15 @@ export const navItems: NavItem[] = [
     icon: LayoutDashboard,
   },
   {
+    // Check-ins are attendance. Kids check-in is a tab of this section rather
+    // than a second sidebar row, so "Attendance" and "Check-In" no longer
+    // read as two different things.
     label: "Attendance",
     shortLabel: "Attend",
     href: "/dashboard/attendance",
     icon: Users,
     features: ["attendance", "attendance_follow_up"],
+    sections: [{ href: "/dashboard/checkin", features: ["checkin"] }],
   },
   {
     label: "People",
@@ -64,13 +93,6 @@ export const navItems: NavItem[] = [
     href: "/dashboard/people",
     icon: Contact,
     features: ["people"],
-  },
-  {
-    label: "Check-In",
-    shortLabel: "Check-In",
-    href: "/dashboard/checkin",
-    icon: Baby,
-    features: ["checkin"],
   },
   {
     label: "Announcements",

@@ -12,6 +12,7 @@ import {
   navItems,
   filterNavByFeatures,
   footerUtilityNavItems,
+  isNavItemActive,
 } from "./nav-items";
 import { useSidebarHoverIntent } from "./use-sidebar-hover-intent";
 
@@ -42,7 +43,7 @@ function SidebarLink({
   pending: boolean;
   onNavigate: (href: string) => void;
 }) {
-  const active = isActive(pathname, item.href);
+  const active = isNavItemActive(pathname, item);
   const selected = active || pending;
   const Icon = item.icon;
 

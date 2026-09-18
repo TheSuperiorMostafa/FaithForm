@@ -29,7 +29,10 @@ create schema if not exists auth;
 
 create table if not exists auth.users (
   id uuid primary key default gen_random_uuid(),
-  email text
+  email text,
+  -- Where Supabase keeps the name typed at sign-up. 0083 reads it when an
+  -- account has no display name of its own.
+  raw_user_meta_data jsonb not null default '{}'::jsonb
 );
 
 -- RLS helpers the policies call. Returning null is correct here: this harness
@@ -103,10 +106,12 @@ create table if not exists public.church_service_times (
 create table if not exists public.visitor_accounts (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null unique references auth.users (id) on delete cascade,
+  display_name text,
   auto_attendance_consent text not null default 'unset',
   authorization_version integer not null default 1,
   status text not null default 'active',
-  selected_church_id uuid references public.churches (id) on delete set null
+  selected_church_id uuid references public.churches (id) on delete set null,
+  updated_at timestamptz not null default now()
 );
 
 create table if not exists public.visitor_church_relationships (
@@ -117,16 +122,83 @@ create table if not exists public.visitor_church_relationships (
   unique (account_id, church_id)
 );
 
+-- Claims, links and their audit trail as 0053 creates them. 0083 writes all
+-- three, so their columns, checks and the two uniqueness rules are the real
+-- ones rather than a reduction.
+create table if not exists public.visitor_people_claims (
+  id uuid primary key default gen_random_uuid(),
+  account_id uuid not null references public.visitor_accounts (id) on delete cascade,
+  church_id uuid not null references public.churches (id) on delete cascade,
+  status text not null default 'pending'
+    check (status in ('pending', 'approved', 'rejected', 'withdrawn', 'disputed')),
+  source text not null check (source in ('self_request', 'invitation')),
+  invitation_id uuid,
+  requested_member_id uuid references public.members (id) on delete set null,
+  claimed_first_name text,
+  claimed_last_name text,
+  normalized_email text,
+  normalized_phone text,
+  resolved_member_id uuid references public.members (id) on delete set null,
+  resolved_by uuid references auth.users (id) on delete set null,
+  resolved_at timestamptz,
+  resolution_note text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint visitor_people_claims_self_request_has_no_target
+    check (source = 'invitation' or requested_member_id is null)
+);
+
+create unique index if not exists visitor_people_claims_one_open_idx
+  on public.visitor_people_claims (account_id, church_id)
+  where status in ('pending', 'disputed');
+
 create table if not exists public.visitor_people_links (
   id uuid primary key default gen_random_uuid(),
   account_id uuid not null references public.visitor_accounts (id) on delete cascade,
   church_id uuid not null references public.churches (id) on delete cascade,
   member_id uuid not null references public.members (id) on delete cascade,
-  is_active boolean not null default true
+  claim_id uuid references public.visitor_people_claims (id) on delete set null,
+  is_active boolean not null default true,
+  linked_at timestamptz not null default now(),
+  linked_by uuid references auth.users (id) on delete set null,
+  revoked_at timestamptz,
+  revoked_by uuid references auth.users (id) on delete set null,
+  revoke_reason text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
 );
 
--- The two RLS helpers 0055's policies reference.
+create unique index if not exists visitor_people_links_active_member_idx
+  on public.visitor_people_links (member_id)
+  where is_active;
+
+create unique index if not exists visitor_people_links_active_account_church_idx
+  on public.visitor_people_links (account_id, church_id)
+  where is_active;
+
+create table if not exists public.visitor_people_link_events (
+  id uuid primary key default gen_random_uuid(),
+  church_id uuid not null references public.churches (id) on delete cascade,
+  account_id uuid references public.visitor_accounts (id) on delete set null,
+  claim_id uuid references public.visitor_people_claims (id) on delete set null,
+  link_id uuid references public.visitor_people_links (id) on delete set null,
+  member_id uuid references public.members (id) on delete set null,
+  action text not null,
+  from_status text,
+  to_status text,
+  actor_type text not null check (actor_type in ('visitor', 'staff', 'system')),
+  actor_user_id uuid references auth.users (id) on delete set null,
+  note text,
+  created_at timestamptz not null default now()
+);
+
+-- The RLS helpers the policies reference. Returning a constant is correct
+-- here: this harness connects as a superuser and exercises the functions, not
+-- the policies.
 create or replace function public.is_church_staff(target_church_id uuid)
+returns boolean language sql stable as $$ select false $$;
+
+create or replace function public.is_church_admin(target_church_id uuid)
 returns boolean language sql stable as $$ select false $$;
 
 create or replace function public.current_visitor_account_id()
@@ -140,21 +212,29 @@ returns uuid language sql stable as $$ select null::uuid $$;
 -- never writes to it. Prompt 6 asserts this by source inspection; with the
 -- tables present it can be *observed* — count before, count after, compare.
 --
--- Deliberately minimal: only the columns a "was anything written" check needs.
--- This is not a schema rehearsal, and the real tables have more.
+-- The shape 0001 creates. 0083 reads these for the one attendance answer and
+-- `move_people_link` rewrites them, so the null-on-delete member and the
+-- one-entry-per-person-per-sheet rule have to be the real ones.
 
 create table if not exists public.attendance_records (
   id uuid primary key default gen_random_uuid(),
   church_id uuid not null references public.churches(id) on delete cascade,
   service_date date not null,
+  submitted_at timestamptz not null default now(),
+  total_present int,
+  total_absent int,
+  notes text,
   created_at timestamptz not null default now()
 );
 
 create table if not exists public.attendance_entries (
   id uuid primary key default gen_random_uuid(),
   record_id uuid not null references public.attendance_records(id) on delete cascade,
-  member_id uuid not null references public.members(id) on delete cascade,
-  status text not null default 'present'
+  member_id uuid references public.members(id) on delete set null,
+  church_id uuid not null references public.churches(id) on delete cascade,
+  status text not null default 'present' check (status in ('present', 'absent')),
+  follow_up_requested boolean not null default false,
+  unique (record_id, member_id)
 );
 
 -- ---------------------------------------------------------------------------

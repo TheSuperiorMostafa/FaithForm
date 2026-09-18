@@ -20,9 +20,15 @@ export type ChurchRelationshipRow = {
   updatedAt: string;
 };
 
+/**
+ * `state` narrows the page in the database. Filtering a page after reading it
+ * — which the join-request panels used to do — silently drops every pending
+ * request that does not happen to fall in the first page of relationships.
+ */
 export async function listChurchRelationships(
   churchId: string,
   input?: unknown,
+  filter: { state?: RelationshipState } = {},
 ): Promise<{ items: ChurchRelationshipRow[]; nextCursor: string | null }> {
   const parsed = pageSchema.safeParse(input ?? {});
   if (!parsed.success) throw new VisitorError("invalid_input", "Check your request.");
@@ -39,6 +45,7 @@ export async function listChurchRelationships(
     .order("id", { ascending: true })
     .limit(limit + 1);
 
+  if (filter.state) query = query.eq("state", filter.state);
   if (cursorId) query = query.gt("id", cursorId);
 
   const { data, error } = await query;

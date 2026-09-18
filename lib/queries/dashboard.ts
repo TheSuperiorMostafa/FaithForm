@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getPresenceByDate, isSundayIsoDate } from "@/lib/attendance/presence";
 import { createAdminClientOrNull } from "@/lib/supabase/admin";
 import {
   computeHoursSaved,
@@ -367,18 +368,33 @@ export async function getAttendanceTrend(
 ): Promise<AttendanceTrendResult> {
   const since = new Date();
   since.setDate(since.getDate() - 12 * 7);
+  const sinceDate = since.toISOString().slice(0, 10);
+  const today = new Date().toISOString().slice(0, 10);
 
-  const { data } = await supabase
-    .from("attendance_records")
-    .select("service_date, total_present")
-    .eq("church_id", churchId)
-    .gte("service_date", since.toISOString().slice(0, 10))
-    .order("service_date", { ascending: true });
+  // Every Sunday anyone was recorded — on the weekly sheet, or checked in by
+  // the app, a code, the kiosk or a room — each person counted once. Without
+  // migration 0083 the weekly sheets are all there is.
+  const presence = await getPresenceByDate(supabase, churchId, sinceDate, today);
 
-  const records = (data ?? []) as {
-    service_date: string;
-    total_present: number | null;
-  }[];
+  let records: { service_date: string; total_present: number | null }[];
+  if (presence) {
+    records = Array.from(presence.entries())
+      .filter(([date, day]) => isSundayIsoDate(date) && (day.hasSheet || day.present > 0))
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([date, day]) => ({ service_date: date, total_present: day.present }));
+  } else {
+    const { data } = await supabase
+      .from("attendance_records")
+      .select("service_date, total_present")
+      .eq("church_id", churchId)
+      .gte("service_date", sinceDate)
+      .order("service_date", { ascending: true });
+
+    records = (data ?? []) as {
+      service_date: string;
+      total_present: number | null;
+    }[];
+  }
 
   const points: AttendanceWeekPoint[] = records.map((r) => {
     const d = new Date(r.service_date);

@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Plus, Search } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Plus, Search, Smartphone } from "lucide-react";
 
 import { MemberFormPanel } from "@/components/people/member-form-panel";
 import { Button } from "@/components/ui/button";
@@ -12,17 +12,36 @@ import { cn } from "@/lib/utils";
 type PeopleManagerProps = {
   initialMembers: ChurchMember[];
   isAdmin: boolean;
+  /**
+   * Whether the church offers the member app. When it does, every person
+   * shows whether they are on it; when it does not, the question is noise.
+   */
+  showAppStatus?: boolean;
+  /** People connected to an app account, by member id. */
+  appConnections?: Record<string, { linkedAt: string }>;
 };
 
-type FilterOption = "all" | "missing-phone" | "inactive";
+type FilterOption = "all" | "on-app" | "missing-phone" | "inactive";
 type SortOption = "last-name" | "first-name";
 
 function getInitials(firstName: string, lastName: string) {
   return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
 }
 
-export function PeopleManager({ initialMembers, isAdmin }: PeopleManagerProps) {
+export function PeopleManager({
+  initialMembers,
+  isAdmin,
+  showAppStatus = false,
+  appConnections = {},
+}: PeopleManagerProps) {
   const [members, setMembers] = useState(initialMembers);
+  // The panels above the list change People too — confirming someone from the
+  // app adds a person, moving a connection retires one — and each of those
+  // re-renders this page with the new list. Take it, rather than keep showing
+  // the list as it was when the page first loaded.
+  useEffect(() => {
+    setMembers(initialMembers);
+  }, [initialMembers]);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<FilterOption>("all");
   const [sortBy, setSortBy] = useState<SortOption>("last-name");
@@ -32,6 +51,9 @@ export function PeopleManager({ initialMembers, isAdmin }: PeopleManagerProps) {
     null,
   );
 
+  const isOnApp = (memberId: string) =>
+    showAppStatus && Boolean(appConnections[memberId]);
+
   const stats = useMemo(() => {
     const active = members.filter((member) => member.is_active);
     const withPhone = active.filter((member) => member.phone?.trim()).length;
@@ -39,8 +61,9 @@ export function PeopleManager({ initialMembers, isAdmin }: PeopleManagerProps) {
       total: active.length,
       withPhone,
       missingPhone: active.length - withPhone,
+      onApp: active.filter((member) => Boolean(appConnections[member.id])).length,
     };
-  }, [members]);
+  }, [members, appConnections]);
 
   const filteredMembers = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -49,6 +72,7 @@ export function PeopleManager({ initialMembers, isAdmin }: PeopleManagerProps) {
       if (filter === "inactive") return !member.is_active;
       if (!member.is_active) return false;
       if (filter === "missing-phone") return !member.phone?.trim();
+      if (filter === "on-app") return Boolean(appConnections[member.id]);
       return true;
     });
 
@@ -81,7 +105,7 @@ export function PeopleManager({ initialMembers, isAdmin }: PeopleManagerProps) {
     }
 
     return sorted;
-  }, [members, search, filter, sortBy]);
+  }, [members, search, filter, sortBy, appConnections]);
 
   function openCreatePanel() {
     setSelectedMember(null);
@@ -99,23 +123,36 @@ export function PeopleManager({ initialMembers, isAdmin }: PeopleManagerProps) {
     setPanelOpen(false);
   }
 
+  /**
+   * A save replies with the row as stored, which knows nothing of attendance
+   * or where the record came from. Keep those from what was already shown.
+   */
+  function withKnownHistory(member: ChurchMember): ChurchMember {
+    const known = members.find((row) => row.id === member.id);
+    if (!known) return { ...member, attendance_count: 0 };
+    return {
+      ...known,
+      ...member,
+      attendance_count: known.attendance_count,
+      last_attended: known.last_attended,
+      source: known.source,
+    };
+  }
+
   function handleSaved(member: ChurchMember) {
-    setSelectedMember(member);
+    const merged = withKnownHistory(member);
+    setSelectedMember(merged);
     setPanelMode("edit");
     setMembers((prev) => {
       const index = prev.findIndex((row) => row.id === member.id);
       if (index === -1) {
-        return [...prev, { ...member, attendance_count: 0 }].sort((a, b) =>
+        return [...prev, merged].sort((a, b) =>
           a.last_name.localeCompare(b.last_name),
         );
       }
 
       const next = [...prev];
-      next[index] = {
-        ...next[index],
-        ...member,
-        attendance_count: next[index].attendance_count,
-      };
+      next[index] = merged;
       return next;
     });
   }
@@ -132,17 +169,13 @@ export function PeopleManager({ initialMembers, isAdmin }: PeopleManagerProps) {
   }
 
   function handleReactivated(member: ChurchMember) {
-    setSelectedMember(member);
+    const merged = { ...withKnownHistory(member), is_active: true };
+    setSelectedMember(merged);
     setMembers((prev) => {
       const index = prev.findIndex((row) => row.id === member.id);
-      if (index === -1) return [...prev, { ...member, attendance_count: 0 }];
+      if (index === -1) return [...prev, merged];
       const next = [...prev];
-      next[index] = {
-        ...next[index],
-        ...member,
-        is_active: true,
-        attendance_count: next[index].attendance_count,
-      };
+      next[index] = merged;
       return next;
     });
     setFilter("all");
@@ -181,6 +214,7 @@ export function PeopleManager({ initialMembers, isAdmin }: PeopleManagerProps) {
       <div className="rounded-xl border border-border bg-card px-4 py-3 text-center text-base font-semibold text-foreground shadow-card dark:shadow-none">
         {stats.total} people · {stats.withPhone} with phone · {stats.missingPhone}{" "}
         missing phone
+        {showAppStatus ? ` · ${stats.onApp} on the app` : ""}
       </div>
 
       <div className="relative">
@@ -201,6 +235,7 @@ export function PeopleManager({ initialMembers, isAdmin }: PeopleManagerProps) {
         {(
           [
             ["all", "All"],
+            ...(showAppStatus ? ([["on-app", "On the app"]] as const) : []),
             ["missing-phone", "Missing phone"],
             ["inactive", "Inactive"],
           ] as const
@@ -330,6 +365,12 @@ export function PeopleManager({ initialMembers, isAdmin }: PeopleManagerProps) {
                           No phone
                         </span>
                       )}
+                      {isOnApp(member.id) ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary dark:bg-accent/15 dark:text-accent">
+                          <Smartphone className="size-3" aria-hidden />
+                          On the app
+                        </span>
+                      ) : null}
                     </div>
                     <p
                       className={cn(
@@ -404,6 +445,19 @@ export function PeopleManager({ initialMembers, isAdmin }: PeopleManagerProps) {
                 onSaved={handleSaved}
                 onDeactivated={handleDeactivated}
                 onReactivated={handleReactivated}
+                showAppStatus={showAppStatus}
+                appConnection={
+                  panelMode === "edit" && selectedMember
+                    ? appConnections[selectedMember.id] ?? null
+                    : null
+                }
+                moveTargets={members.filter(
+                  (member) =>
+                    member.is_active &&
+                    member.id !== selectedMember?.id &&
+                    !appConnections[member.id],
+                )}
+                onAppConnectionMoved={closePanel}
               />
             </div>
           </aside>

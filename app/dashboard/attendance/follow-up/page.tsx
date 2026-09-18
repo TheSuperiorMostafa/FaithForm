@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { FollowUpBoard, type FollowUpCandidate } from "./follow-up-board";
+import { checkedInOtherwise, getPresenceOnDate } from "@/lib/attendance/presence";
 import { getChurchAuth } from "@/lib/auth/church";
 import {
   getPriorConsecutiveAbsences,
@@ -53,9 +54,17 @@ export default async function AttendanceFollowUpPage({
       ? requested
       : services[0].serviceDate;
 
-  const record = await getRecordByDate(supabase, auth.churchId, selectedDate);
+  const [record, presence] = await Promise.all([
+    getRecordByDate(supabase, auth.churchId, selectedDate),
+    getPresenceOnDate(supabase, auth.churchId, selectedDate),
+  ]);
+  // Marked absent, but checked in by the app, a code, the kiosk or a room:
+  // they were there, and a "we missed you" text would be wrong.
+  const cameAnyway = (memberId: string) =>
+    checkedInOtherwise(presence?.get(memberId)).length > 0;
   const absentEntries = (record?.entries ?? []).filter(
-    (entry) => entry.status === "absent" && entry.member,
+    (entry) =>
+      entry.status === "absent" && entry.member && !cameAnyway(entry.member.id),
   );
 
   // Without migration 0014 there is nowhere to record a send, so the request

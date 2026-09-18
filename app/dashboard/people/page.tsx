@@ -1,13 +1,17 @@
 import { redirect } from "next/navigation";
 
+import { AppMembersNotInPeoplePanel } from "@/components/people/app-members-not-in-people-panel";
 import { JoinRequestsPanel } from "@/components/people/join-requests-panel";
 import { PeopleClaimsPanel } from "@/components/people/people-claims-panel";
 import { PeopleManager } from "@/components/people/people-manager";
 import {
+  getAppMembersNotInPeople,
   getPendingClaims,
-  getVisitorRelationships,
+  getPendingJoinRequests,
 } from "@/app/dashboard/people/claim-actions";
 import { getChurchAuth } from "@/lib/auth/church";
+import { listAppConnections } from "@/lib/faithform/app-people";
+import { getFeatureAccess } from "@/lib/features/access";
 import { getMembersForChurch } from "@/lib/queries/members";
 import { createClient } from "@/lib/supabase/server";
 
@@ -32,12 +36,26 @@ export default async function PeoplePage() {
   }
 
   const supabase = createClient();
-  const [members, pendingClaims, relationships] = await Promise.all([
-    getMembersForChurch(supabase, auth.churchId, { includeInactive: true }),
-    getPendingClaims(),
-    getVisitorRelationships(),
-  ]);
+  const access = await getFeatureAccess();
+  // Who is on the app is only worth showing where the church offers the app.
+  const showAppStatus = access?.flags.member_app ?? false;
 
+  const [members, pendingClaims, relationships, notInPeople, connections] =
+    await Promise.all([
+      getMembersForChurch(supabase, auth.churchId, {
+        includeInactive: true,
+        includeAttendanceTotals: true,
+      }),
+      getPendingClaims(),
+      getPendingJoinRequests(),
+      getAppMembersNotInPeople(),
+      showAppStatus
+        ? listAppConnections(supabase, auth.churchId)
+        : Promise.resolve(new Map<string, { linkedAt: string }>()),
+    ]);
+
+  // Filtered in the database already; kept so a stray state can never render
+  // as a request.
   const joinRequests = relationships.items.filter(
     (relationship) => relationship.state === "pending",
   );
@@ -46,7 +64,13 @@ export default async function PeoplePage() {
     <div className="flex w-full flex-col gap-5">
       <JoinRequestsPanel requests={joinRequests} />
       <PeopleClaimsPanel claims={pendingClaims} />
-      <PeopleManager initialMembers={members} isAdmin={auth.isAdmin} />
+      <AppMembersNotInPeoplePanel people={notInPeople} />
+      <PeopleManager
+        initialMembers={members}
+        isAdmin={auth.isAdmin}
+        showAppStatus={showAppStatus}
+        appConnections={Object.fromEntries(connections)}
+      />
     </div>
   );
 }

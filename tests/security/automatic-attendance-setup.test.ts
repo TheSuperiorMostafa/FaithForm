@@ -118,9 +118,12 @@ test("the attendance client components import no server module values", () => {
   assert.doesNotMatch(read("lib/attendance/v2/setup-bounds.ts"), /^import /m);
 });
 
-test("Services and Check-in setup are reachable from the Attendance tabs", () => {
-  assert.match(layout, /href: "\/dashboard\/attendance\/services"/);
-  assert.match(layout, /href: "\/dashboard\/attendance\/setup"/);
+test("Services and Setup are reachable from the Attendance tabs", () => {
+  // One tab strip for the whole section, shared with Kids check-in.
+  const tabs = read("lib/attendance/section-tabs.ts");
+  assert.match(layout, /attendanceSectionTabs\(/);
+  assert.match(tabs, /href: "\/dashboard\/attendance\/services"/);
+  assert.match(tabs, /href: "\/dashboard\/attendance\/setup"/);
   assert.match(read("app/dashboard/attendance/setup/layout.tsx"), /<FeatureGate feature="attendance">/);
   assert.match(read("app/dashboard/attendance/services/layout.tsx"), /<FeatureGate feature="attendance">/);
 });

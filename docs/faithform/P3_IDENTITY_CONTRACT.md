@@ -82,8 +82,10 @@ state grants dashboard access.**
 The church-owned operational person. The only People identity in the system.
 
 - **Read/mutate:** church staff, through the existing People dashboard, unchanged.
-- **FaithForm may never create, merge, update, or delete a `members` row.**
-  Enforced by automated test across every FaithForm module.
+- **FaithForm may never create, merge, update, or delete a `members` row** —
+  with one exception, added by migration 0083 (see *Joining makes you one of
+  the church's people* below). Enforced by automated test across every
+  FaithForm module.
 - `members.id` is stable. Attendance already references it and must keep working.
 
 ### People claim — `visitor_people_claims`
@@ -112,8 +114,9 @@ The verified answer to a claim.
 - **Read:** the linked account, and staff of that church. An active link means
   that person *is* the account holder, so their own `member_id` discloses nothing
   new to them.
-- **Created by exactly one code path**, `approveClaim`, which requires a staff
-  member to name the record explicitly.
+- **Linked to an existing record by exactly one code path**, `approveClaim`,
+  which requires a staff member to name the record explicitly. The other
+  path — joining — only ever links a record it has just created (below).
 
 Two database invariants:
 - at most one active link per `member_id`;
@@ -121,6 +124,32 @@ Two database invariants:
 
 Revocation sets `is_active = false` and writes an audit row. **The `members` row
 is untouched** — the person still exists and keeps their history.
+
+### Joining makes you one of the church's people (migration 0083)
+
+**Supersedes** the "never create a `members` row" and "one code path creates a
+link" rules above, narrowly. Before 0083 nothing ever opened a claim — the app
+had no screen for it — so nobody who joined in the app could be linked, and
+automatic check-in refused every one of them with `no_people_link`.
+
+When a relationship becomes `joined` (open join, staff approval, accepted
+invitation, or dashboard staff opening the app), the trigger
+`visitor_church_relationships_connect_people` runs `connect_app_member`:
+
+| Situation | Outcome |
+| --- | --- |
+| Already linked at this church | nothing |
+| A claim is already open | nothing — staff are deciding |
+| Nobody in the church's People has the same name | a new `members` row (`source = 'app'`) from the account's **name only**, linked, audited as `member_created_on_join` |
+| Someone has the same name, or the account has no name | a `join` claim for staff; nothing is linked |
+
+What Prompt 3 protected still holds: an account is never linked to an
+**existing** People record without a staff member naming it, and email and
+phone decide nothing — they are not even copied into the new record, because
+churches are told they see a member's name. Staff answer `join` claims on the
+People page ("Link this person" or "Add as new person",
+`add_people_claim_as_new_person`) and can move a wrong connection
+(`move_people_link`), which retires only a record created on joining.
 
 ### Invitation — `visitor_invitations`
 

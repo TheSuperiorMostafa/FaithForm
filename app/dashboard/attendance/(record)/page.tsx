@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Check } from "lucide-react";
+import { Check, Smartphone } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { getChurchAuth } from "@/lib/auth/church";
+import { getPresenceByDate } from "@/lib/attendance/presence";
 import { getRecentSundayRecords } from "@/lib/queries/attendance";
 import { createClient } from "@/lib/supabase/server";
 import { formatServiceDate, getLast8Sundays } from "@/lib/utils/dates";
@@ -33,11 +34,15 @@ export default async function AttendancePage() {
   }
 
   const sundays = getLast8Sundays(new Date(), auth.churchTimezone);
-  const recordsByDate = await getRecentSundayRecords(
-    supabase,
-    churchId,
-    sundays,
-  );
+  const [recordsByDate, presenceByDate] = await Promise.all([
+    getRecentSundayRecords(supabase, churchId, sundays),
+    // Everyone recorded any way — the sheet, the app, a code, the kiosk, a
+    // room — counted once. Null on a database without migration 0083, where
+    // the sheet's own numbers are all there is.
+    sundays.length > 0
+      ? getPresenceByDate(supabase, churchId, sundays[sundays.length - 1], sundays[0])
+      : Promise.resolve(null),
+  ]);
 
   return (
     <div className="flex w-full flex-col gap-5">
@@ -46,7 +51,9 @@ export default async function AttendancePage() {
           Weekly Attendance
         </h1>
         <p className="text-base text-muted-foreground">
-          Select a service date to mark attendance or view a completed record.{" "}
+          Select a service date to mark attendance or view a completed record.
+          Anyone checked in by the app, a code, the kiosk or a room is already
+          counted.{" "}
           <Link
             href="/dashboard/people"
             className="font-semibold text-accent hover:underline"
@@ -58,7 +65,16 @@ export default async function AttendancePage() {
 
       <div className="flex flex-col gap-3">
         {sundays.map((date, index) => {
-          const status = recordsByDate.get(date);
+          const sheet = recordsByDate.get(date);
+          const day = presenceByDate?.get(date);
+          const status = sheet
+            ? {
+                ...sheet,
+                totalPresent: day?.present ?? sheet.totalPresent,
+                totalAbsent: day?.absent ?? sheet.totalAbsent,
+              }
+            : undefined;
+          const checkedIn = !sheet ? (day?.checkedIn ?? 0) : 0;
           const isLatest = index === 0;
           const label = formatServiceDate(date, { isLatest });
 
@@ -82,6 +98,11 @@ export default async function AttendancePage() {
                     <Check className="size-4" strokeWidth={1.75} aria-hidden />
                     Completed
                   </span>
+                ) : checkedIn > 0 ? (
+                  <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary dark:bg-accent/15 dark:text-accent">
+                    <Smartphone className="size-4" strokeWidth={1.75} aria-hidden />
+                    {checkedIn} checked in
+                  </span>
                 ) : (
                   <span className="inline-flex shrink-0 rounded-full bg-muted px-3 py-1 text-sm font-semibold text-muted-foreground">
                     Not started
@@ -98,6 +119,11 @@ export default async function AttendancePage() {
                   {status.followedUp > 0
                     ? `, ${status.followedUp} followed up`
                     : ""}
+                </p>
+              ) : checkedIn > 0 ? (
+                <p className="text-base text-muted-foreground">
+                  {checkedIn === 1 ? "1 person is" : `${checkedIn} people are`}{" "}
+                  already counted from check-ins. Tap to mark everyone else.
                 </p>
               ) : (
                 <p className="text-base text-muted-foreground">

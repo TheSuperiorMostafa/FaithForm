@@ -5,6 +5,7 @@ import { VisitorError } from "@/lib/faithform/errors";
 import { bumpAuthorizationVersion, requireActiveAccount } from "@/lib/faithform/account";
 import { hashInvitationToken } from "@/lib/faithform/invitation-token";
 import { invitationFailure } from "@/lib/faithform/relationships";
+import { escapeLikePattern, personNameKey } from "@/lib/people/names";
 import {
   claimRequestSchema,
   claimResolutionSchema,
@@ -21,15 +22,23 @@ import {
  * identity, and nothing here creates, merges or deletes a members row. A claim
  * is a request to be recognised; a link is a staff-verified answer.
  *
+ * Since migration 0083 a claim is also how joining asks a question: when
+ * someone joins and a person by that name is already in People, the database
+ * opens a `join` claim instead of guessing. Creating a *new* People record for
+ * someone who joined happens in the database too (see
+ * `lib/faithform/app-people.ts`), never here.
+ *
  * Email and phone appear only as text shown to authorized staff. There is no
  * code path — here or anywhere — that resolves a claim by matching them.
  */
 
 export type ClaimStatus = "pending" | "approved" | "rejected" | "withdrawn" | "disputed";
 
+export type ClaimSource = "self_request" | "invitation" | "join";
+
 export type VisitorClaimView = {
   status: ClaimStatus;
-  source: "self_request" | "invitation";
+  source: ClaimSource;
   createdAt: string;
   resolvedAt: string | null;
   isLinked: boolean;
@@ -354,8 +363,11 @@ export async function getClaimStatus(
 export type StaffClaimRow = {
   id: string;
   status: ClaimStatus;
-  source: "self_request" | "invitation";
+  source: ClaimSource;
   claimedName: string | null;
+  /** The name as the claimant gave it, split — what "add as new person" starts from. */
+  claimedFirstName: string | null;
+  claimedLastName: string | null;
   claimedEmail: string | null;
   claimedPhone: string | null;
   requestedMemberId: string | null;
@@ -420,6 +432,8 @@ export async function listPendingClaims(
           .filter(Boolean)
           .join(" ")
           .trim() || null,
+      claimedFirstName: (row.claimed_first_name as string | null) ?? null,
+      claimedLastName: (row.claimed_last_name as string | null) ?? null,
       claimedEmail: (row.normalized_email as string | null) ?? null,
       claimedPhone: (row.normalized_phone as string | null) ?? null,
       requestedMemberId: (row.requested_member_id as string | null) ?? null,
@@ -505,15 +519,21 @@ async function findCandidates(
     for (const row of data ?? []) add(row as never, "phone");
   }
 
-  if (hints.firstName && hints.lastName) {
+  // The same name however it was split between the two columns: "Mary" +
+  // "Ann Smith" is "Mary Ann" + "Smith". Every full name starts with its first
+  // word, so that narrows the read; the comparison is on the whole name.
+  const nameKey = personNameKey(hints.firstName, hints.lastName);
+  if (nameKey) {
+    const firstWord = nameKey.split(" ")[0];
     const { data } = await admin
       .from("members")
       .select(columns)
       .eq("church_id", churchId)
-      .ilike("first_name", hints.firstName)
-      .ilike("last_name", hints.lastName)
-      .limit(10);
-    for (const row of data ?? []) add(row as never, "name");
+      .ilike("first_name", `${escapeLikePattern(firstWord)}%`)
+      .limit(200);
+    for (const row of (data ?? []) as { id: string; first_name: string; last_name: string }[]) {
+      if (personNameKey(row.first_name, row.last_name) === nameKey) add(row, "name");
+    }
   }
 
   const candidates = Array.from(byId.values());

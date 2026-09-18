@@ -3,61 +3,35 @@ import Link from "next/link";
 import { ShieldOff } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import {
-  SectionLinkTabs,
-  type SectionLinkTab,
-} from "@/components/dashboard/section-link-tabs";
+import { SectionLinkTabs } from "@/components/dashboard/section-link-tabs";
+import { attendanceSectionTabs } from "@/lib/attendance/section-tabs";
 import { getFeatureAccess } from "@/lib/features/access";
 
 /**
- * Attendance holds two tools that different people run.
+ * Attendance holds the tools that different people run.
  *
  * Marking a service is volunteer work; deciding who gets a check-in text is the
- * pastor's. They are granted separately (`attendance` / `attendance_follow_up`),
- * so this layout only checks that the member holds at least one of them — each
- * tab's own layout gates its half. The tab strip lists only what they can open:
- * Attendance brings the weekly page, Services and Check-in setup, and someone
- * holding only Follow-up sees no tabs at all.
+ * pastor's; the kids' room desk is its own grant. They are granted separately
+ * (`attendance` / `attendance_follow_up` / `checkin`), so this layout only checks
+ * that the member holds at least one of this section's own two — each tab's
+ * own layout gates its half. The tab strip is shared with Kids check-in (see
+ * `lib/attendance/section-tabs.ts`) and lists only what the member can open:
+ * Attendance brings Weekly, Services and Setup (automatic, QR and kiosk
+ * check-in), and someone holding only Follow-up sees no tabs at all.
  */
-const TABS_FOR_FEATURE = {
-  attendance: [
-    {
-      label: "Weekly",
-      href: "/dashboard/attendance",
-      match: "exact",
-    },
-    {
-      label: "Services",
-      href: "/dashboard/attendance/services",
-      match: "prefix",
-    },
-    {
-      label: "Check-in setup",
-      href: "/dashboard/attendance/setup",
-      match: "prefix",
-    },
-  ],
-  attendance_follow_up: [
-    {
-      label: "Follow-up",
-      href: "/dashboard/attendance/follow-up",
-      match: "prefix",
-    },
-  ],
-} satisfies Record<"attendance" | "attendance_follow_up", SectionLinkTab[]>;
-
 export default async function AttendanceLayout({
   children,
 }: {
   children: ReactNode;
 }) {
   const access = await getFeatureAccess();
+  const allowed = access?.allowed ?? [];
 
-  const tabs = (["attendance", "attendance_follow_up"] as const)
-    .filter((key) => access?.allowed.includes(key))
-    .flatMap((key) => TABS_FOR_FEATURE[key]);
+  const holdsAttendance =
+    allowed.includes("attendance") || allowed.includes("attendance_follow_up");
+  const tabs = attendanceSectionTabs(allowed);
 
-  if (tabs.length === 0) {
+  if (!holdsAttendance) {
     // Same shape as FeatureGate's locked state — a member who hits one of
     // these should not be able to tell which layer turned them away.
     return (

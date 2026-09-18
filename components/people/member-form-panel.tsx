@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { X } from "lucide-react";
+import Link from "next/link";
+import { Smartphone, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -10,7 +11,9 @@ import {
   reactivateMember,
   updateMember,
 } from "@/app/dashboard/people/actions";
+import { moveAppConnectionToPerson } from "@/app/dashboard/people/claim-actions";
 import { Button } from "@/components/ui/button";
+import { Select } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   MemberCareSection,
@@ -28,7 +31,174 @@ type MemberFormPanelProps = {
   onSaved: (member: ChurchMember) => void;
   onDeactivated?: (memberId: string) => void;
   onReactivated?: (member: ChurchMember) => void;
+  /** The church offers the member app, so say whether this person is on it. */
+  showAppStatus?: boolean;
+  /** Set when this person is connected to an app account. */
+  appConnection?: { linkedAt: string } | null;
+  /** Who an app connection could be moved to: active, and not on the app. */
+  moveTargets?: ChurchMember[];
+  onAppConnectionMoved?: () => void;
 };
+
+function formatDay(value: string | null | undefined): string | null {
+  if (!value) return null;
+  // A church's calendar day ("2026-09-13") is read at noon UTC and printed in
+  // UTC, so no viewer's timezone can move it to the day before.
+  const isCalendarDay = /^\d{4}-\d{2}-\d{2}$/.test(value);
+  const date = new Date(isCalendarDay ? `${value}T12:00:00Z` : value);
+  if (Number.isNaN(date.getTime())) return null;
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    ...(isCalendarDay ? { timeZone: "UTC" } : {}),
+  });
+}
+
+function fullName(member: Pick<ChurchMember, "first_name" | "last_name">): string {
+  return `${member.first_name} ${member.last_name}`.trim();
+}
+
+/**
+ * Whether this person is on the app, and — for when the automatic match got
+ * it wrong — moving the connection to the person it should have been.
+ */
+function MemberAppSection({
+  member,
+  connection,
+  isAdmin,
+  moveTargets,
+  onMoved,
+}: {
+  member: ChurchMember;
+  connection: { linkedAt: string } | null;
+  isAdmin: boolean;
+  moveTargets: ChurchMember[];
+  onMoved?: () => void;
+}) {
+  const [moving, setMoving] = useState(false);
+  const [target, setTarget] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  if (!connection) {
+    return (
+      <section className="flex items-start gap-3 rounded-xl border border-border bg-muted/30 p-4">
+        <Smartphone className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden />
+        <div className="flex flex-col gap-1 text-sm">
+          <p className="font-semibold text-foreground">Not on the app yet</p>
+          <p className="text-muted-foreground">
+            When {member.first_name} joins your church in the FaithForm app,
+            they are connected here and their check-ins count automatically.{" "}
+            <Link href="/dashboard/app" className="font-medium text-accent hover:underline">
+              Share an invitation link
+            </Link>
+          </p>
+        </div>
+      </section>
+    );
+  }
+
+  const sortedTargets = [...moveTargets].sort((a, b) =>
+    fullName(a).localeCompare(fullName(b)),
+  );
+
+  const move = () => {
+    if (!target) {
+      toast.error("Choose who this app account belongs to.");
+      return;
+    }
+    const chosen = sortedTargets.find((candidate) => candidate.id === target);
+    startTransition(async () => {
+      const result = await moveAppConnectionToPerson({
+        fromMemberId: member.id,
+        toMemberId: target,
+      });
+      if (!result.ok) {
+        toast.error(result.message);
+        return;
+      }
+      toast.success(
+        chosen ? `The app connection is now ${fullName(chosen)}'s.` : "App connection moved.",
+      );
+      onMoved?.();
+    });
+  };
+
+  const since = formatDay(connection.linkedAt);
+
+  return (
+    <section className="flex flex-col gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4 dark:border-accent/30 dark:bg-accent/10">
+      <div className="flex items-start gap-3">
+        <Smartphone className="mt-0.5 size-5 shrink-0 text-primary dark:text-accent" aria-hidden />
+        <div className="flex flex-col gap-1 text-sm">
+          <p className="font-semibold text-foreground">
+            On the FaithForm app{since ? ` since ${since}` : ""}
+          </p>
+          <p className="text-muted-foreground">
+            Check-ins from the app — automatic on arrival, or by scanning the
+            service code — count as {member.first_name}&apos;s attendance.
+            {member.source === "app"
+              ? " This record was added when they joined in the app."
+              : ""}
+          </p>
+        </div>
+      </div>
+
+      {isAdmin ? (
+        moving ? (
+          <div className="flex flex-col gap-2">
+            <label htmlFor={`move-${member.id}`} className="text-sm font-semibold text-foreground">
+              Which person is this app account?
+            </label>
+            <Select
+              id={`move-${member.id}`}
+              value={target}
+              onChange={(event) => setTarget(event.target.value)}
+              disabled={pending}
+            >
+              <option value="">Choose someone…</option>
+              {sortedTargets.map((candidate) => (
+                <option key={candidate.id} value={candidate.id}>
+                  {fullName(candidate)}
+                </option>
+              ))}
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {member.source === "app"
+                ? `Their check-ins move with the connection, and this record is deactivated — it only existed for this app account.`
+                : `Check-ins already recorded stay with ${member.first_name}; new ones go to the person you choose.`}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" size="sm" disabled={pending || !target} onClick={move}>
+                {pending ? "Moving…" : "Move the app connection"}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={pending}
+                onClick={() => {
+                  setMoving(false);
+                  setTarget("");
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setMoving(true)}
+            className="self-start text-sm font-medium text-accent hover:underline"
+          >
+            Not the right person? Move this app connection
+          </button>
+        )
+      ) : null}
+    </section>
+  );
+}
 
 const inputClassName =
   "min-h-12 rounded-[10px] border-[1.5px] border-border bg-background px-4 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
@@ -48,6 +218,10 @@ export function MemberFormPanel({
   onSaved,
   onDeactivated,
   onReactivated,
+  showAppStatus = false,
+  appConnection = null,
+  moveTargets = [],
+  onAppConnectionMoved,
 }: MemberFormPanelProps) {
   const isEdit = Boolean(member);
   const readOnly = !isAdmin;
@@ -325,7 +499,27 @@ export function MemberFormPanel({
             </TabsTrigger>
             <TabsTrigger value="household">Household</TabsTrigger>
           </TabsList>
-          <TabsContent value="details" className="mt-5">
+          <TabsContent value="details" className="mt-5 flex flex-col gap-5">
+            <p className="text-sm text-muted-foreground">
+              {member.attendance_count > 0
+                ? `At church ${member.attendance_count} ${
+                    member.attendance_count === 1 ? "day" : "days"
+                  }${
+                    member.last_attended
+                      ? `, most recently ${formatDay(member.last_attended)}`
+                      : ""
+                  } — marked on the weekly sheet, or checked in by the app, a code, the kiosk or a room.`
+                : "No attendance recorded yet."}
+            </p>
+            {showAppStatus ? (
+              <MemberAppSection
+                member={member}
+                connection={appConnection}
+                isAdmin={isAdmin}
+                moveTargets={moveTargets}
+                onMoved={onAppConnectionMoved}
+              />
+            ) : null}
             {detailsForm}
           </TabsContent>
           <TabsContent value="care" className="mt-5">

@@ -3,10 +3,11 @@
 import { useMemo, useState, useTransition, type KeyboardEvent } from "react";
 import Link from "next/link";
 import { Dialog } from "@base-ui/react/dialog";
-import { ArrowLeft, Check, Plus, Search } from "lucide-react";
+import { ArrowLeft, Check, Plus, Search, Smartphone } from "lucide-react";
 
 import { addMember, submitAttendance } from "./actions";
 import { Button } from "@/components/ui/button";
+import { describePresence, type PresenceMethod } from "@/lib/attendance/presence";
 import type { AttendanceMember } from "@/lib/queries/attendance";
 import { formatServiceDate } from "@/lib/utils/dates";
 import { cn } from "@/lib/utils";
@@ -20,6 +21,12 @@ type WizardMember = AttendanceMember & {
 type AttendanceWizardProps = {
   serviceDate: string;
   members: AttendanceMember[];
+  /**
+   * Already counted today by the app, a code, the kiosk, the Services roster
+   * or a room check-in, and how. They start present and stay present: the
+   * sheet cannot un-count a check-in — a wrong one is reversed on Services.
+   */
+  checkedIn?: Record<string, PresenceMethod[]>;
 };
 
 type SortOption = "first-name" | "last-name" | "most-attended";
@@ -31,12 +38,18 @@ function getInitials(firstName: string, lastName: string) {
 export function AttendanceWizard({
   serviceDate,
   members: initialMembers,
+  checkedIn = {},
 }: AttendanceWizardProps) {
+  const isCheckedIn = (memberId: string) => Boolean(checkedIn[memberId]?.length);
+  const startingStatus = (memberId: string): MemberStatus =>
+    isCheckedIn(memberId) ? "present" : "unmarked";
+  const checkedInCount = initialMembers.filter((m) => isCheckedIn(m.id)).length;
+
   const [submitted, setSubmitted] = useState(false);
   const [search, setSearch] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("last-name");
   const [members, setMembers] = useState<WizardMember[]>(() =>
-    initialMembers.map((m) => ({ ...m, status: "unmarked" as MemberStatus })),
+    initialMembers.map((m) => ({ ...m, status: startingStatus(m.id) })),
   );
   const [notes, setNotes] = useState("");
   const [addOpen, setAddOpen] = useState(false);
@@ -101,12 +114,14 @@ export function AttendanceWizard({
   }, [members]);
 
   function setMemberStatus(memberId: string, status: MemberStatus) {
+    if (isCheckedIn(memberId)) return;
     setMembers((prev) =>
       prev.map((m) => (m.id === memberId ? { ...m, status } : m)),
     );
   }
 
   function toggleMemberStatus(memberId: string) {
+    if (isCheckedIn(memberId)) return;
     setMembers((prev) =>
       prev.map((m) => {
         if (m.id !== memberId) return m;
@@ -128,11 +143,13 @@ export function AttendanceWizard({
   }
 
   function setAllAbsent() {
-    setMembers((prev) => prev.map((m) => ({ ...m, status: "absent" })));
+    setMembers((prev) =>
+      prev.map((m) => (isCheckedIn(m.id) ? m : { ...m, status: "absent" })),
+    );
   }
 
   function resetAll() {
-    setMembers((prev) => prev.map((m) => ({ ...m, status: "unmarked" })));
+    setMembers((prev) => prev.map((m) => ({ ...m, status: startingStatus(m.id) })));
   }
 
   function handleAddMember() {
@@ -228,6 +245,19 @@ export function AttendanceWizard({
         <p className="text-base text-muted-foreground">
           Mark each member as present or absent.
         </p>
+        {checkedInCount > 0 ? (
+          <p className="flex items-start gap-2 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-foreground dark:border-accent/30 dark:bg-accent/10">
+            <Smartphone className="mt-0.5 size-4 shrink-0 text-primary dark:text-accent" aria-hidden />
+            <span>
+              {checkedInCount === 1
+                ? "1 person already checked in"
+                : `${checkedInCount} people already checked in`}{" "}
+              — by the app, a code, the kiosk or a room — and{" "}
+              {checkedInCount === 1 ? "is" : "are"} marked present. A check-in
+              that was a mistake can be reversed on Services.
+            </span>
+          </p>
+        ) : null}
       </div>
 
       <div className="relative">
@@ -333,6 +363,8 @@ export function AttendanceWizard({
       <ul className="flex flex-col gap-2">
         {filteredMembers.map((member) => {
           const memberLabel = `${member.first_name} ${member.last_name}`;
+          const checkInMethods = checkedIn[member.id] ?? [];
+          const locked = checkInMethods.length > 0;
           const statusLabel =
             member.status === "present"
               ? "present"
@@ -346,11 +378,17 @@ export function AttendanceWizard({
               role="button"
               tabIndex={0}
               aria-pressed={member.status !== "unmarked"}
-              aria-label={`${memberLabel}, ${statusLabel}. Click to toggle present or absent.`}
+              aria-disabled={locked || undefined}
+              aria-label={
+                locked
+                  ? `${memberLabel}, present (${describePresence(checkInMethods)}).`
+                  : `${memberLabel}, ${statusLabel}. Click to toggle present or absent.`
+              }
               onClick={() => toggleMemberStatus(member.id)}
               onKeyDown={(e) => handleMemberRowKeyDown(e, member.id)}
               className={cn(
-                "flex min-h-[4.5rem] cursor-pointer items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 shadow-card transition-colors hover:bg-muted/30 dark:shadow-none",
+                "flex min-h-[4.5rem] items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 shadow-card transition-colors dark:shadow-none",
+                locked ? "cursor-default" : "cursor-pointer hover:bg-muted/30",
                 member.status === "present" &&
                   "border-green-200/80 dark:border-green-500/30",
                 member.status === "absent" &&
@@ -373,8 +411,16 @@ export function AttendanceWizard({
                 </div>
               )}
 
-              <span className="min-w-0 flex-1 text-base font-medium text-foreground">
-                {memberLabel}
+              <span className="flex min-w-0 flex-1 flex-col">
+                <span className="text-base font-medium text-foreground">
+                  {memberLabel}
+                </span>
+                {locked ? (
+                  <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                    <Smartphone className="size-3.5 shrink-0" aria-hidden />
+                    {describePresence(checkInMethods)}
+                  </span>
+                ) : null}
               </span>
 
               <div className="flex shrink-0 gap-2">
@@ -395,11 +441,13 @@ export function AttendanceWizard({
                 </button>
                 <button
                   type="button"
+                  disabled={locked}
                   onClick={(e) => {
                     e.stopPropagation();
                     setMemberStatus(member.id, "absent");
                   }}
                   className={cn(
+                    "disabled:cursor-not-allowed disabled:opacity-50",
                     "h-11 min-w-[5.5rem] rounded-lg px-3 text-base font-semibold transition-colors",
                     member.status === "absent"
                       ? "bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-300"
