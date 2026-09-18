@@ -100,7 +100,7 @@ test("bootstrap reads church_users so dashboard staff see their church in the ap
     accountService.indexOf("export async function getBootstrap"),
   );
   assert.match(sync, /from\("church_users"\)/);
-  assert.match(sync, /select\("church_id"\)/);
+  assert.match(sync, /select\("church_id, role"\)/);
   assert.match(sync, /admitStaffAsMember/);
   assert.doesNotMatch(sync, /\.insert\(/);
   assert.doesNotMatch(sync, /\.update\(/);

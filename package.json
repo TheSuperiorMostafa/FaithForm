@@ -9,7 +9,7 @@
     "start": "next start",
     "lint": "eslint . --ext .js,.mjs,.ts,.tsx",
     "typecheck": "tsc --noEmit",
-    "test": "tsx --test tests/unit/**/*.test.ts tests/security/**/*.test.ts tests/policies/**/*.test.ts",
+    "test": "tsx --test tests/unit/*.test.ts tests/security/*.test.ts tests/policies/*.test.ts",
     "test:unit": "tsx --test tests/unit/**/*.test.ts",
     "test:security": "tsx --test tests/security/**/*.test.ts",
     "test:policies": "tsx --test tests/policies/**/*.test.ts",

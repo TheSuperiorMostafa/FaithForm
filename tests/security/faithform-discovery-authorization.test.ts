@@ -88,7 +88,10 @@ test("the feed never filters visibility in application memory", () => {
 });
 
 test("the relationship state is resolved server-side, never taken from a request", () => {
-  assert.match(feedService, /resolveRelationshipState\(\s*input\.userId/);
+  assert.match(
+    feedService,
+    /resolvePublishedContentRelationshipState\(\s*input\.userId/,
+  );
   assert.ok(
     !/relationshipState:\s*input\.relationshipState/.test(feedService),
     "feed service must not accept a caller-supplied relationship",

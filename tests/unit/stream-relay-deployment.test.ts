@@ -19,6 +19,14 @@ test("relay deployment can restart browser ingest after syncing it", () => {
   assert.match(deploy, /bash ~\/scripts\/start-ws-ingest\.sh/);
 });
 
+test("every relay deployment syncs and verifies the current MediaMTX path rule", () => {
+  const deploy = read("infra/stream-relay/deploy.sh");
+
+  assert.match(deploy, /rsync -av "\$SRC\/mediamtx\.yml"/);
+  assert.match(deploy, /grep -Fq .*live\/\(\[0-9a-fA-F-\]\{36\}\)/);
+  assert.doesNotMatch(deploy, /if \[\[ \$WITH_CONFIG/);
+});
+
 test("bootstrap keeps browser ingest alive under systemd", () => {
   const bootstrap = read("infra/stream-relay/bootstrap.sh");
 

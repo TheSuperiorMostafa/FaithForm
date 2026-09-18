@@ -24,10 +24,11 @@ nothing until they are copied over:
 ./infra/stream-relay/deploy.sh
 ```
 
-That syncs the scripts and `mediamtx.yml`, re-runs `bootstrap.sh` (idempotent —
-it also installs the IPv4 precedence line the Facebook push needs), and restarts
-MediaMTX. To deploy a browser-ingest-only fix without restarting MediaMTX, run
-`./infra/stream-relay/deploy.sh --restart-ws-ingest`.
+That syncs the scripts and `mediamtx.yml`. MediaMTX watches its configuration
+and reloads the path rules in place, so an ordinary deploy does not interrupt a
+service already on air. To restart only the browser-ingest bridge after syncing,
+run `./infra/stream-relay/deploy.sh --restart-ws-ingest`. Use `--bootstrap` only
+for host setup changes that require sudo and a full MediaMTX restart.
 
 ## Server setup
 
