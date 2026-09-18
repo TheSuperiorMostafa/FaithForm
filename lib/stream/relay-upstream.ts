@@ -1,3 +1,4 @@
+import { ExpiringCache } from "@/lib/cache/expiring-cache";
 import { getStreamRelaySettings } from "@/lib/stream/relay";
 
 /**
@@ -73,6 +74,30 @@ export function segmentsAreSafe(segments: string[]): boolean {
   );
 }
 
+/**
+ * A church's relay path, remembered for a minute.
+ *
+ * It is `live/<churchId>` for any church with a configured relay and does not
+ * change during a service, but reading it costs a database query and a
+ * decryption — which a live player used to pay on every playlist and every
+ * segment, pushing requests past the few seconds a live segment exists for.
+ * Only a configured path is remembered; "not configured" is asked again.
+ */
+const STREAM_PATH_TTL_MS = 60_000;
+const streamPaths = new ExpiringCache<string>(STREAM_PATH_TTL_MS);
+
+async function streamPathFor(churchId: string): Promise<string | null> {
+  const cached = streamPaths.get(churchId);
+  if (cached) return cached;
+
+  const settings = await getStreamRelaySettings(churchId, {
+    includeSecret: false,
+    includeInternalPath: true,
+  });
+  if (settings.streamPath) streamPaths.set(churchId, settings.streamPath);
+  return settings.streamPath;
+}
+
 export type RelayFetch =
   | { ok: true; response: Response; upstreamPath: string }
   | { ok: false; reason: "unconfigured" | "no_stream_path" | "aborted" | "unreachable" };
@@ -94,14 +119,11 @@ export async function fetchFromRelay(input: {
   const authorization = playbackAuthorization();
   if (!base || !authorization) return { ok: false, reason: "unconfigured" };
 
-  const settings = await getStreamRelaySettings(input.churchId, {
-    includeSecret: false,
-    includeInternalPath: true,
-  });
-  if (!settings.streamPath) return { ok: false, reason: "no_stream_path" };
+  const streamPath = await streamPathFor(input.churchId);
+  if (!streamPath) return { ok: false, reason: "no_stream_path" };
 
   const mediaPath = input.mediaSegments.map(encodeURIComponent).join("/");
-  const upstreamPath = `${settings.streamPath}/${mediaPath}`;
+  const upstreamPath = `${streamPath}/${mediaPath}`;
 
   try {
     const response = await fetch(`${base}/${upstreamPath}`, {

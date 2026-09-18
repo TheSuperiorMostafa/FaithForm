@@ -212,8 +212,8 @@ async def spawn_ffmpeg(rtmp_url: str, settings: StreamSettings):
         # this the GOP length would drift and HLS segments would stop aligning.
         "-r",
         str(settings.fps),
-        # One keyframe per second, matching hlsSegmentDuration in mediamtx.yml so
-        # segments cut on GOP boundaries.
+        # One keyframe per second, so MediaMTX's 2s segments (hlsSegmentDuration
+        # in mediamtx.yml) cut on GOP boundaries, two GOPs each.
         "-g",
         str(gop),
         "-keyint_min",

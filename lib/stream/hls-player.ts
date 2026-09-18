@@ -20,17 +20,17 @@ export function createHlsPlayer(HlsCtor: typeof Hls): Hls {
 
 /**
  * All of the live tuning below assumes the relay's HLS geometry in
- * `infra/stream-relay/mediamtx.yml`: 1s segments, 8 segments per playlist.
+ * `infra/stream-relay/mediamtx.yml`: 2s segments, 12 segments per playlist.
  * If either value changes there, revisit these constants together.
  */
-const RELAY_SEGMENT_SEC = 1;
-const RELAY_PLAYLIST_SEGMENTS = 8;
+const RELAY_SEGMENT_SEC = 2;
+const RELAY_PLAYLIST_SEGMENTS = 12;
 
 /**
  * Steady-state distance from the live edge, in target durations. Three is the
  * hls.js default and the HLS spec's recommended minimum; at one, any network
- * jitter exhausts the buffer and the player stalls. With 1s segments this is
- * still only ~3s of latency.
+ * jitter exhausts the buffer and the player stalls. With 2s segments this is
+ * about 6s of latency.
  */
 export const LIVE_SYNC_DURATION_COUNT = 3;
 

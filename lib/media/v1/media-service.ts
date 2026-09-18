@@ -400,7 +400,7 @@ export async function grantPlayback(input: {
   // Live is HLS, and a native HLS player cannot put a header on its segment
   // requests (see `playback-capability.ts`), so a live stream is addressed by a
   // path carrying a delivery token. Minted from the same decision as the
-  // capability; the delivery route still re-authorizes every request.
+  // capability; the delivery route keeps re-authorizing while it plays.
   const delivery =
     input.kind === "live"
       ? issueMediaDeliveryToken({

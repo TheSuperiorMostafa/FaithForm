@@ -19,14 +19,18 @@ hls: yes
 hlsAddress: :8888
 hlsAllowOrigin: '*'
 hlsVariant: mpegts
-# 1s segments keep latency low (the encoder emits a keyframe every 30 frames at
-# 30fps, so segments align exactly with GOP boundaries).
-hlsSegmentDuration: 1s
+# 2s segments. Every playlist and segment reaches viewers through FaithForm's
+# authorizing proxy, and players fetch segments one after another, so each
+# request has to finish well inside one segment's duration or playback can
+# never keep up. At 1s it could not: the apps loaded the playlist and then
+# watched every segment 404, because it had been deleted by the time the
+# request arrived. The encoder still emits a keyframe every second, so each
+# segment is exactly two GOPs. Latency is about three segments behind live.
+hlsSegmentDuration: 2s
 # The playlist must expose enough history that a viewer who briefly stalls can
-# still find their position. At 4 segments the whole live window was 4s, so any
-# hiccup longer than that dropped the player off the playlist and forced a
-# rebuffer. 8 gives an 8s window without changing latency.
-hlsSegmentCount: 8
+# still find their position — and a segment is deleted the moment it leaves
+# the playlist. 12 segments gives a 24s window.
+hlsSegmentCount: 12
 webrtc: yes
 webrtcAddress: :8889
 webrtcLocalUDPAddress: :8189

@@ -34,3 +34,15 @@ test("bootstrap keeps browser ingest alive under systemd", () => {
   assert.match(bootstrap, /ExecStart=\/usr\/bin\/python3 \$\{HOME_DIR\}\/scripts\/ws-ingest\.py/);
   assert.match(bootstrap, /systemctl restart faithform-ws-ingest/);
 });
+
+test("relay deployment can restart the auth bridge without restarting MediaMTX", () => {
+  const deploy = readFileSync("infra/stream-relay/deploy.sh", "utf8");
+  const restart = readFileSync("infra/stream-relay/restart-auth-proxy.sh", "utf8");
+
+  assert.match(deploy, /--restart-auth-proxy\) RESTART_AUTH_PROXY=1/);
+  assert.match(deploy, /bash ~\/scripts\/restart-auth-proxy\.sh/);
+  assert.match(restart, /pkill -f "auth-proxy\.py"/);
+  assert.match(restart, /nohup python3 "\$\{HOME\}\/scripts\/auth-proxy\.py"/);
+  // MediaMTX, and whoever is publishing to it, is left alone.
+  assert.doesNotMatch(restart, /pkill -x mediamtx|systemctl restart/);
+});

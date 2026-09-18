@@ -55,10 +55,11 @@ import { createHmac, timingSafeEqual } from "node:crypto";
  *   * valid for one viewing session rather than five minutes, because HLS
  *     forbids a listed segment's URL from changing (RFC 8216 §6.2.2) and every
  *     segment URL inherits the token from the playlist URL;
- *   * worth nothing on its own: the delivery route re-runs the full
- *     authorization on **every** playlist and segment request, so an unpublish,
- *     a revocation, an ended service or a sign-out refuses the next request no
- *     matter what the token's expiry says.
+ *   * worth nothing on its own: the delivery route keeps re-running the full
+ *     authorization while the stream plays (a positive answer is reused for
+ *     at most fifteen seconds; a sign-out invalidates it at once), so an
+ *     unpublish, a revocation or an ended service stops the stream no matter
+ *     what the token's expiry says.
  *
  * It sits in the path, never a query string, and the account capability still
  * never enters a URL.

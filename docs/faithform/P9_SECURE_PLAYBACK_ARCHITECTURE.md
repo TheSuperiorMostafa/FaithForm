@@ -68,9 +68,9 @@ and a capability never opens a delivery path — tests assert both directions.
 It lives six hours rather than five minutes, because every playlist and segment
 URL the player derives inherits it and HLS forbids those from changing mid-stream
 (RFC 8216 §6.2.2). What stops it outliving permission is not its expiry: the
-delivery route re-authorizes every request, including the authorization
-version, so a sign-out, a revocation or an ended service refuses the next
-segment.
+delivery route keeps re-authorizing while the stream plays (see below), bound to
+the authorization version, so a sign-out refuses the next segment and a
+revocation or an ended service stops it within seconds.
 
 ---
 
@@ -206,7 +206,7 @@ an unrecognised value, so a released app does not break if the server learns a
 new rendition form. Today every recording is `progressive`: nothing in this
 repository packages VOD HLS.
 
-### Authorization is re-checked on every request
+### Authorization is re-checked while playing
 
 The signature proves the server minted the capability. It cannot prove the
 church has not unpublished the item in the last thirty seconds, because a
@@ -214,9 +214,20 @@ signature cannot be revoked.
 
 So both delivery routes call `authorizeDelivery`, which re-runs
 `mobile_media_playback_grant` — publication, unpublish, revocation, relationship,
-account status — for **every playlist and every segment**. That is what makes an
-unpublish stop a stream that is already playing, within one segment rather than
-at the end of the sermon.
+account status — while the item plays. That is what makes an unpublish stop a
+stream that is already playing, rather than at the end of the sermon.
+
+For **recordings** it runs on every range request. For **live** a positive
+answer is reused for fifteen seconds per server instance
+(`lib/media/v1/delivery-cache.ts`), keyed by account, church, event and the
+token's authorization version, so a sign-out still takes effect at once and a
+revocation within fifteen seconds. Live cannot afford the round trip per
+request: players fetch segments one after another, the relay deletes a segment
+as soon as it leaves a 24-second window, and at 0.6–1.7s per check every segment
+had been deleted by the time it was asked for — the apps loaded the playlist and
+sat on one frozen frame. The relay's own per-request auth callback is cached for
+the same reason (`infra/stream-relay/auth-proxy.py`), and so is the church's
+relay path.
 
 ### The relay credential
 

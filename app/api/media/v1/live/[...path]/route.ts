@@ -14,8 +14,21 @@ import {
   verifyMediaDeliveryToken,
 } from "@/lib/media/v1/playback-capability";
 import { authorizeDelivery } from "@/lib/media/v1/media-service";
+import {
+  DELIVERY_AUTHORIZATION_TTL_MS,
+  ExpiringCache,
+  withCachedAuthorization,
+} from "@/lib/media/v1/delivery-cache";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * Recent positive authorizations, per server instance. See `delivery-cache.ts`
+ * for why a live stream cannot afford a database round trip per segment.
+ */
+const liveAuthorizations = new ExpiringCache<
+  NonNullable<Awaited<ReturnType<typeof authorizeDelivery>>>
+>(DELIVERY_AUTHORIZATION_TTL_MS);
 
 /**
  * Live HLS for the FaithForm apps.
@@ -78,16 +91,28 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  // **Re-checked on every request, not just at issuance.** A signature cannot
-  // be revoked; this is what makes an unpublish or a revocation stop a stream
-  // that is already playing, within one segment.
-  const authorized = await authorizeDelivery({
-    accountId: credential.accountId,
-    churchSlug,
-    kind: "live",
-    mediaId: eventId,
-    authorizationVersion: credential.authorizationVersion,
-  });
+  // **Re-checked while playing, not just at issuance.** A signature cannot be
+  // revoked; this is what makes an unpublish or a revocation stop a stream
+  // that is already playing. A positive answer is reused for a few seconds —
+  // a per-segment database round trip made segments expire on the relay
+  // before they could be fetched (see `delivery-cache.ts`).
+  const authorized = await withCachedAuthorization(
+    liveAuthorizations,
+    [
+      credential.accountId,
+      churchSlug,
+      eventId,
+      credential.authorizationVersion ?? "header",
+    ].join("|"),
+    () =>
+      authorizeDelivery({
+        accountId: credential.accountId,
+        churchSlug,
+        kind: "live",
+        mediaId: eventId,
+        authorizationVersion: credential.authorizationVersion,
+      }),
+  );
   if (!authorized) {
     return NextResponse.json(
       { error: "Unavailable" },
