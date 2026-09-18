@@ -306,7 +306,9 @@ export async function publishAnnouncement(
     isPinned: payload.isPinned,
     pinnedUntil: payload.pinnedUntil,
     posterAltText: payload.posterAltText,
-    hasEndDate: Boolean(payload.endAt),
+    startAt: payload.startAt,
+    endAt: payload.endAt,
+    allDay: payload.allDay,
   });
 
   if (!mobileResult.applied && payload.mobileVisibility !== "none") {

@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createAdminClientOrNull } from "@/lib/supabase/admin";
+import { hasLeftAppFeed } from "@/lib/faithform/feed-window";
 import {
   cancelNotificationsForSubject,
   enqueuePublicationNotification,
@@ -28,7 +29,9 @@ export type MobilePublicationInput = {
   isPinned: boolean;
   pinnedUntil: string | null;
   posterAltText: string | null;
-  hasEndDate: boolean;
+  startAt: string;
+  endAt: string | null;
+  allDay: boolean;
 };
 
 export type MobilePublicationResult = {
@@ -110,6 +113,13 @@ export async function applyMobilePublication(
   // A prior version's pending notification is superseded by this one.
   await cancelNotificationsForSubject(input.announcementId, admin).catch(() => undefined);
 
+  // An event that is already over is on the Schedule calendar but not the Home
+  // feed, so a notification would open a feed without it. Publishing last
+  // month's walk used to do exactly that: a push, a tap, and nothing there.
+  if (hasLeftAppFeed(input)) {
+    return { applied: true, enqueued: false, unavailableReason: "event_has_ended" };
+  }
+
   const result = await enqueuePublicationNotification(
     {
       churchId: input.churchId,
@@ -119,7 +129,7 @@ export async function applyMobilePublication(
       body: input.body,
       visibility: input.visibility,
       publicationVersion: Number(updated?.publication_version ?? 1),
-      topic: input.hasEndDate ? "events" : "announcements",
+      topic: input.endAt ? "events" : "announcements",
     },
     admin,
   );

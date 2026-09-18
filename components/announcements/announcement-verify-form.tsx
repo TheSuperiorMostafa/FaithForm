@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import type { CalendarQueueItem, AnnouncementRow } from "@/lib/queries/announcements";
+import { hasLeftAppFeed } from "@/lib/faithform/feed-window";
 import {
   fromDateInputValue,
   fromDatetimeLocalValue,
@@ -70,7 +71,12 @@ export function AnnouncementVerifyForm({
   const [notes, setNotes] = useState("");
   const [pushToFacebook, setPushToFacebook] = useState(false);
   const [pushToTeam, setPushToTeam] = useState(true);
-  const [shareInApp, setShareInApp] = useState(true);
+  // An event that already happened is not on the app's Home feed, so sharing
+  // it there is opt-in. The calendar grid shows the tail of last month, and
+  // publishing one of those days looked like a publish that went nowhere.
+  const [shareInApp, setShareInApp] = useState(
+    () => !hasLeftAppFeed({ startAt: event.startAt, endAt: event.endAt, allDay }),
+  );
   const [appAudience, setAppAudience] = useState<"followers" | "members">(
     "followers",
   );
@@ -173,6 +179,13 @@ export function AnnouncementVerifyForm({
 
   const posterAltText = [title.trim(), location.trim()].filter(Boolean).join(". ");
 
+  // Read from the form as it is now, so moving the date forward clears it.
+  const alreadyOver = hasLeftAppFeed({
+    startAt: allDay ? fromDateInputValue(startAt) : fromDatetimeLocalValue(startAt),
+    endAt: !allDay && endAt ? fromDatetimeLocalValue(endAt) : null,
+    allDay,
+  });
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -254,9 +267,11 @@ export function AnnouncementVerifyForm({
       const parts: string[] = ["Submitted!"];
       if (shareInApp) {
         parts.push(
-          appAudience === "members"
-            ? "In the FaithForm app for members."
-            : "In the FaithForm app for everyone who has added your church.",
+          alreadyOver
+            ? "On the app's Schedule calendar only — it already happened, so it is not on Home."
+            : appAudience === "members"
+              ? "In the FaithForm app for members."
+              : "In the FaithForm app for everyone who has added your church.",
         );
       }
       if (result.facebookScheduledAt) {
@@ -425,7 +440,12 @@ export function AnnouncementVerifyForm({
           label="Share in the FaithForm app"
           checked={shareInApp}
           onCheckedChange={handleShareInAppToggle}
-          hint="Shows this event on the church's Home feed and Schedule calendar."
+          hint={
+            alreadyOver
+              ? "This event already happened, so the app won't show it on Home or send a notification. It would only appear on the Schedule calendar for its month."
+              : "Shows this event on the church's Home feed and Schedule calendar."
+          }
+          warning={alreadyOver}
         />
       </ul>
 
@@ -684,6 +704,7 @@ function ToggleRow({
   onCheckedChange,
   disabled,
   hint,
+  warning = false,
 }: {
   id: string;
   label: string;
@@ -691,6 +712,8 @@ function ToggleRow({
   onCheckedChange: (v: boolean) => void;
   disabled?: boolean;
   hint?: string;
+  /** Shows the hint as a caution rather than as help text. */
+  warning?: boolean;
 }) {
   return (
     <li className="flex items-center justify-between gap-4">
@@ -702,7 +725,13 @@ function ToggleRow({
           <span>{label}</span>
         </Label>
         {hint && (
-          <p className="mt-0.5 pl-4 text-xs text-muted-foreground">{hint}</p>
+          <p
+            className={`mt-0.5 pl-4 text-xs ${
+              warning ? "text-amber-700 dark:text-amber-300" : "text-muted-foreground"
+            }`}
+          >
+            {hint}
+          </p>
         )}
       </div>
       <Switch
