@@ -26,7 +26,8 @@ nothing until they are copied over:
 
 That syncs the scripts and `mediamtx.yml`, re-runs `bootstrap.sh` (idempotent —
 it also installs the IPv4 precedence line the Facebook push needs), and restarts
-MediaMTX.
+MediaMTX. To deploy a browser-ingest-only fix without restarting MediaMTX, run
+`./infra/stream-relay/deploy.sh --restart-ws-ingest`.
 
 ## Server setup
 

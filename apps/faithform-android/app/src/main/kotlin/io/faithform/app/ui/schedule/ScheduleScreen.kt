@@ -56,6 +56,8 @@ import io.faithform.app.ui.feed.FeedPhase
 import io.faithform.app.ui.feed.HomeFeedScreen
 import io.faithform.app.ui.feed.JoinPendingBanner
 import io.faithform.app.ui.feed.OfflineBanner
+import io.faithform.app.media.MediaLiveCard
+import io.faithform.app.ui.media.LiveNowHero
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
@@ -80,10 +82,23 @@ fun HomeHostScreen(
     onRetrySchedule: () -> Unit = {},
     modifier: Modifier = Modifier,
     isJoinPending: Boolean = false,
+    live: MediaLiveCard? = null,
+    onWatchLive: () -> Unit = {},
 ) {
     var section by rememberSaveable { mutableStateOf(HomeSection.FEED) }
 
     Column(modifier = modifier.fillMaxSize()) {
+        if (live?.isLive == true) {
+            LiveNowHero(
+                live = live,
+                onWatch = onWatchLive,
+                modifier = Modifier.padding(
+                    horizontal = FaithFormTokens.Layout.screenPaddingHorizontal,
+                    vertical = FaithFormTokens.Spacing.sm,
+                ),
+            )
+        }
+
         FaithFormPillSwitcher(
             options = listOf(
                 FaithFormPillOption(HomeSection.FEED, stringResource(R.string.home_segment_feed)),

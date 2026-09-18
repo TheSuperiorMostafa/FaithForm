@@ -17,6 +17,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.media3.ui.PlayerView
 import io.faithform.app.AppViewModel
@@ -225,6 +226,10 @@ private fun MediaHalf(
         MediaListModel(client, churchSlug, partition)
     }
     LaunchedEffect(list) { list.launchOnce("load") { load() } }
+    LifecycleResumeEffect(list) {
+        list.launch { refresh() }
+        onPauseOrDispose { }
+    }
     val state by list.value.state.collectAsStateWithLifecycle()
     MediaScreen(
         state = state,

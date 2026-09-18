@@ -129,8 +129,10 @@ fun SignedInHost(
             tabStates.SaveableStateProvider(current.name) {
                 when (current) {
                     HostTab.HOME -> HomeTab(
+                        appViewModel = viewModel,
                         api = container.apiClient,
                         projections = container.projections,
+                        mediaClient = container.mediaClient,
                         church = church,
                         partition = partition,
                     )

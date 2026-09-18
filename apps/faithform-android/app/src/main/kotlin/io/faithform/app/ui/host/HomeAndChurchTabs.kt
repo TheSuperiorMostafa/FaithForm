@@ -12,6 +12,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LifecycleResumeEffect
 import io.faithform.app.AppViewModel
 import io.faithform.app.R
 import io.faithform.app.contract.Bootstrap
@@ -32,6 +33,9 @@ import io.faithform.app.ui.onboarding.FindChurchFlow
 import io.faithform.app.ui.schedule.HomeHostScreen
 import io.faithform.app.ui.schedule.ScheduleModel
 import io.faithform.app.ui.schedule.SchedulePhase
+import io.faithform.app.host.HostTab
+import io.faithform.app.media.MediaClient
+import io.faithform.app.media.MediaListModel
 
 /**
  * Home: what the selected church has published, newest and pinned first.
@@ -41,8 +45,10 @@ import io.faithform.app.ui.schedule.SchedulePhase
  */
 @Composable
 fun HomeTab(
+    appViewModel: AppViewModel,
     api: ApiClient,
     projections: ProjectionCache,
+    mediaClient: MediaClient,
     church: ChurchRelationship?,
     partition: CachePartition?,
     modifier: Modifier = Modifier,
@@ -65,14 +71,23 @@ fun HomeTab(
     val schedule = rememberSessionModel("schedule|${partition.storageKey}") {
         ScheduleModel(api, projections, church.churchSlug, partition)
     }
-    LaunchedEffect(feed, schedule) {
+    val media = rememberSessionModel("home-media|${partition.storageKey}") {
+        MediaListModel(mediaClient, church.churchSlug, partition)
+    }
+    LaunchedEffect(feed, schedule, media) {
         feed.launchOnce("load") { load() }
         schedule.launchOnce("load") { load() }
+        media.launch { refresh() }
+    }
+    LifecycleResumeEffect(media) {
+        media.launch { refresh() }
+        onPauseOrDispose { }
     }
     val phase by feed.value.phase.collectAsStateWithLifecycle()
     val schedulePhase by schedule.value.phase.collectAsStateWithLifecycle()
     val displayedMonth by schedule.value.displayedMonth.collectAsStateWithLifecycle()
     val churchTimezone by schedule.value.churchTimezone.collectAsStateWithLifecycle()
+    val mediaState by media.value.state.collectAsStateWithLifecycle()
     var openedId by rememberSaveable(partition.storageKey) { mutableStateOf<String?>(null) }
 
     val opened = (phase as? FeedPhase.Loaded)?.items?.firstOrNull { it.id == openedId }
@@ -103,6 +118,8 @@ fun HomeTab(
             onRetrySchedule = { schedule.launch { refresh() } },
             modifier = content,
             isJoinPending = church.state == RelationshipState.PENDING,
+            live = mediaState.liveCard,
+            onWatchLive = { appViewModel.selectTab(HostTab.WATCH) },
         )
     }
 }

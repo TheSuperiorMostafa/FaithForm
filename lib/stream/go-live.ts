@@ -31,6 +31,7 @@ import {
 } from "@/lib/stream/syndication";
 import { isPreviewIngestActive } from "@/lib/stream/preview-ingest";
 import { getStreamShareLinks } from "@/lib/stream/share-links";
+import { publishToFaithForm } from "@/lib/media/v1/publication";
 
 function getClient(supabase?: SupabaseClient) {
   return supabase ?? createAdminClient();
@@ -129,6 +130,27 @@ export async function startLiveBroadcast(
 
   if (!settings.connected) {
     throw new Error("Stream credentials are missing.");
+  }
+
+  // "Go live" is the congregation-facing action, not merely a relay switch.
+  // Before this, a pastor could be on air successfully while both mobile apps
+  // kept the service hidden until somebody found a separate publishing screen.
+  // Scheduled starts keep their explicit publication choice; an admin-started
+  // broadcast is published to everyone as part of the same intent.
+  if (userId) {
+    const publication = await publishToFaithForm(
+      {
+        churchId,
+        kind: "live",
+        id: event.id,
+        visibility: "public",
+        actorUserId: userId,
+      },
+      client,
+    );
+    if (!publication.ok) {
+      throw new Error("Could not make this broadcast visible in FaithForm.");
+    }
   }
 
   const session = await createStreamSession(

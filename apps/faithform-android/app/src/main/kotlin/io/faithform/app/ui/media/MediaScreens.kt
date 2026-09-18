@@ -1,29 +1,40 @@
 package io.faithform.app.ui.media
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.shape.RoundedCornerShape
+import coil.compose.AsyncImage
 import io.faithform.app.R
 import io.faithform.app.design.FaithFormTokens
+import io.faithform.app.design.LocalFaithFormTheme
 import io.faithform.app.ui.components.FaithFormSearchField
 import io.faithform.app.ui.components.FaithFormWorkingLabel
 import io.faithform.app.ui.components.DetailSkeleton
@@ -174,7 +185,12 @@ fun MediaScreen(
 }
 
 @Composable
-private fun LiveNowHero(live: MediaLiveCard, onWatch: () -> Unit) {
+fun LiveNowHero(
+    live: MediaLiveCard,
+    onWatch: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val theme = LocalFaithFormTheme.current
     val badge = when {
         live.isLive -> stringResource(R.string.media_live_now_badge)
         live.isUpcoming -> stringResource(R.string.media_live_upcoming)
@@ -186,9 +202,40 @@ private fun LiveNowHero(live: MediaLiveCard, onWatch: () -> Unit) {
         live.churchName
     }
 
-    Card(modifier = Modifier.fillMaxWidth()) {
+    val shape = RoundedCornerShape(FaithFormTokens.Radius.lg)
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 210.dp)
+            .clip(shape)
+            .background(
+                Brush.linearGradient(
+                    listOf(theme.palette.brandPrimary, theme.palette.brandAccent),
+                ),
+            ),
+        contentAlignment = Alignment.BottomStart,
+    ) {
+        live.posterUrl?.let { posterUrl ->
+            AsyncImage(
+                model = posterUrl,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.matchParentSize(),
+            )
+            Box(
+                Modifier
+                    .matchParentSize()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.86f)),
+                        ),
+                    ),
+            )
+        }
+
         Column(
             modifier = Modifier
+                .fillMaxWidth()
                 .padding(FaithFormTokens.Spacing.lg)
                 // One node to TalkBack: a card read as five fragments is a card
                 // nobody listens to twice.
@@ -197,12 +244,30 @@ private fun LiveNowHero(live: MediaLiveCard, onWatch: () -> Unit) {
                 },
             verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.md),
         ) {
-            Text(text = badge, style = MaterialTheme.typography.labelMedium)
-            Text(text = live.title, style = MaterialTheme.typography.headlineSmall)
-            Text(text = subtitle, style = MaterialTheme.typography.bodyMedium)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm),
+                modifier = Modifier
+                    .background(Color.Black.copy(alpha = 0.36f), RoundedCornerShape(50))
+                    .padding(horizontal = FaithFormTokens.Spacing.sm, vertical = FaithFormTokens.Spacing.xs),
+            ) {
+                if (live.isLive) {
+                    Box(Modifier.size(8.dp).background(Color.Red, androidx.compose.foundation.shape.CircleShape))
+                }
+                Text(text = badge, style = MaterialTheme.typography.labelMedium, color = Color.White)
+            }
+            Text(text = live.title, style = MaterialTheme.typography.headlineSmall, color = Color.White)
+            Text(text = subtitle, style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.82f))
 
             if (live.offersWatch) {
-                Button(onClick = onWatch, modifier = Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = onWatch,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.White,
+                        contentColor = theme.palette.brandPrimary,
+                    ),
+                ) {
                     Text(stringResource(R.string.media_watch_live))
                 }
             }

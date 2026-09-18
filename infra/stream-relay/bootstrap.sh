@@ -85,11 +85,36 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 
+cat > /etc/systemd/system/faithform-ws-ingest.service <<EOF
+[Unit]
+Description=FaithForm browser studio WebSocket ingest
+After=network-online.target faithform-mediamtx.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=${USER_NAME}
+Group=${USER_NAME}
+EnvironmentFile=-${ENV_FILE}
+Environment=PATH=${BIN_DIR}:/usr/local/bin:/usr/bin:/bin
+Environment=WS_INGEST_HOST=127.0.0.1
+Environment=WS_INGEST_PORT=8090
+Environment=FFMPEG_PATH=${BIN_DIR}/ffmpeg
+ExecStart=/usr/bin/python3 ${HOME_DIR}/scripts/ws-ingest.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
 systemctl daemon-reload
 systemctl enable faithform-stream-auth-proxy
 systemctl restart faithform-stream-auth-proxy
 systemctl enable faithform-mediamtx
 systemctl restart faithform-mediamtx
+systemctl enable faithform-ws-ingest
+systemctl restart faithform-ws-ingest
 
 echo ""
 echo "Done. MediaMTX status:"

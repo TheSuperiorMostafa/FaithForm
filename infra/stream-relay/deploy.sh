@@ -8,6 +8,7 @@
 #
 # Usage (from the repo root):
 #   ./infra/stream-relay/deploy.sh
+#   ./infra/stream-relay/deploy.sh --restart-ws-ingest
 #   ./infra/stream-relay/deploy.sh --with-config   # also mediamtx.yml + restart
 #   ./infra/stream-relay/deploy.sh --bootstrap     # also re-run bootstrap.sh
 #   RELAY_HOST=mostafa@stream.faithform.io ./infra/stream-relay/deploy.sh
@@ -21,11 +22,13 @@ RELAY_HOST="${RELAY_HOST:-faithform-relay}"
 SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WITH_CONFIG=0
 BOOTSTRAP=0
+RESTART_WS_INGEST=0
 
 for arg in "$@"; do
   case "$arg" in
     --with-config) WITH_CONFIG=1 ;;
     --bootstrap) BOOTSTRAP=1 ;;
+    --restart-ws-ingest) RESTART_WS_INGEST=1 ;;
     *) echo "Unknown option: $arg" >&2; exit 1 ;;
   esac
 done
@@ -33,6 +36,11 @@ done
 echo "→ syncing scripts to ${RELAY_HOST}:~/scripts"
 rsync -av "$SRC"/*.sh "$SRC"/*.py "${RELAY_HOST}:scripts/"
 ssh "$RELAY_HOST" 'chmod +x ~/scripts/*.sh ~/scripts/*.py'
+
+if [[ $RESTART_WS_INGEST -eq 1 ]]; then
+  echo "→ restarting browser studio ingest"
+  ssh "$RELAY_HOST" 'bash ~/scripts/start-ws-ingest.sh'
+fi
 
 if [[ $WITH_CONFIG -eq 1 ]]; then
   echo "→ syncing mediamtx.yml"

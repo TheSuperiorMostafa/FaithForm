@@ -26,7 +26,30 @@ public struct LiveNowHero: View {
     }
 
     public var body: some View {
-        FaithFormCard {
+        ZStack(alignment: .bottomLeading) {
+            LinearGradient(
+                colors: [theme.palette.brandPrimary, theme.palette.brandAccent],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            if let poster = live.posterUrl.flatMap(URL.init(string:)) {
+                AsyncImage(url: poster) { phase in
+                    if case let .success(image) = phase {
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    }
+                }
+                .overlay {
+                    LinearGradient(
+                        colors: [.black.opacity(0.08), .black.opacity(0.82)],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                }
+            }
+
             VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.md) {
                 HStack(spacing: FaithFormTokens.Spacing.sm) {
                     if live.state == "live" {
@@ -34,30 +57,49 @@ public struct LiveNowHero: View {
                         // a pulsing indicator into a distraction someone cannot
                         // switch off.
                         Circle()
-                            .fill(theme.palette.brandPrimary)
+                            .fill(.red)
                             .frame(width: 8, height: 8)
                     }
                     Text(badgeText)
                         .font(theme.font(FaithFormTokens.Text.caption))
-                        .foregroundStyle(theme.palette.brandPrimary)
+                        .fontWeight(.bold)
+                        .foregroundStyle(.white)
                 }
+                .padding(.horizontal, FaithFormTokens.Spacing.sm)
+                .padding(.vertical, FaithFormTokens.Spacing.xs)
+                .background(.black.opacity(0.34), in: Capsule())
 
                 Text(live.title)
                     .font(theme.font(FaithFormTokens.Text.displayLarge))
-                    .foregroundStyle(theme.palette.contentPrimary)
+                    .foregroundStyle(.white)
                     .fixedSize(horizontal: false, vertical: true)
 
                 Text(subtitle)
                     .font(theme.font(FaithFormTokens.Text.body))
-                    .foregroundStyle(theme.palette.contentSecondary)
+                    .foregroundStyle(.white.opacity(0.82))
                     .fixedSize(horizontal: false, vertical: true)
 
                 if live.state == "live" {
-                    Button(L.mediaWatchLive, action: onWatch)
-                        .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
+                    Button(action: onWatch) {
+                        HStack(spacing: FaithFormTokens.Spacing.sm) {
+                            Image(systemName: "play.fill")
+                            Text(L.mediaWatchLive)
+                                .fontWeight(.semibold)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, FaithFormTokens.Spacing.sm)
+                        .foregroundStyle(theme.palette.brandPrimary)
+                        .background(.white, in: RoundedRectangle(cornerRadius: FaithFormTokens.Radius.md))
+                    }
+                    .buttonStyle(.plain)
                 }
             }
+            .padding(FaithFormTokens.Spacing.lg)
         }
+        .frame(maxWidth: .infinity, minHeight: 210, alignment: .bottomLeading)
+        .clipped()
+        .clipShape(RoundedRectangle(cornerRadius: FaithFormTokens.Radius.lg))
+        .shadow(color: theme.palette.brandPrimary.opacity(0.2), radius: 18, y: 8)
         // One element to VoiceOver: a card read as five fragments is a card
         // nobody listens to twice.
         .accessibilityElement(children: .combine)
@@ -186,7 +228,10 @@ public struct MediaArchiveList: View {
             .padding(.vertical, FaithFormTokens.Spacing.xl)
         }
         .background(theme.palette.background)
-        .task { await model.load() }
+        // A service can begin while this tab is sitting in the saved tab stack.
+        // Revalidate whenever it appears instead of honoring the ordinary
+        // five-minute list cache for the time-sensitive live state.
+        .task { await model.refresh() }
         .refreshable { await model.refresh() }
     }
 }
