@@ -60,7 +60,7 @@ class MediaListModel(
                     phase = MediaListPhase.Loaded(
                         live = live?.takeIf { entry -> entry.isDisplayable(now) }?.value?.live?.toCard(),
                         items = archive.value.items.map(ArchiveItem::toCard),
-                        isStale = archive.freshness(now, CacheEntry.PROJECTION_TTL_MILLIS) !is Freshness.Fresh,
+                        isStale = false,
                     ),
                     hasMore = archive.value.nextCursor != null,
                     isLoadingMore = false,

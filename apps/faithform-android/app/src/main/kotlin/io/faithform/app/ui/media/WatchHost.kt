@@ -22,6 +22,7 @@ import androidx.media3.ui.PlayerView
 import io.faithform.app.AppViewModel
 import io.faithform.app.R
 import io.faithform.app.contract.Bootstrap
+import io.faithform.app.contract.ChurchRelationship
 import io.faithform.app.design.FaithFormTokens
 import io.faithform.app.host.HostNavigation
 import io.faithform.app.media.Media3PlayerAdapter
@@ -65,6 +66,7 @@ fun WatchTab(
     churchSlug: String,
     partition: CachePartition,
     modifier: Modifier = Modifier,
+    church: ChurchRelationship? = null,
 ) {
     val showsMedia = HostNavigation.mediaAllowed(bootstrap, churchSlug, appViewModel.registry)
     val showsSermons = HostNavigation.sermonsAllowed(bootstrap, churchSlug, appViewModel.registry)
@@ -131,7 +133,13 @@ fun WatchTab(
         return
     }
 
-    TabScreen(title = stringResource(R.string.tab_watch), modifier = modifier) { content ->
+    val watchTitle = church?.churchName ?: stringResource(R.string.tab_watch)
+    TabScreen(
+        title = watchTitle,
+        logoUrl = church?.logoUrl,
+        showChurchAvatar = church != null,
+        modifier = modifier,
+    ) { content ->
         Column(content) {
             if (showsMedia && showsSermons) {
                 WatchPaneRow(

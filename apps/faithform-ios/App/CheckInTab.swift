@@ -89,6 +89,23 @@ struct CheckInTabView: View {
             .background(theme.palette.background)
             .navigationTitle(L.checkinScanTitle)
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    HStack(spacing: FaithFormTokens.Spacing.sm) {
+                        if let church = root.selectedChurch {
+                            ChurchAvatar(logoUrl: church.logoUrl, name: church.churchName, size: 28)
+                            Text(church.churchName)
+                                .font(theme.font(FaithFormTokens.Text.titleMedium))
+                                .foregroundStyle(theme.palette.contentPrimary)
+                                .lineLimit(1)
+                        } else {
+                            Text(L.checkinScanTitle)
+                                .font(theme.font(FaithFormTokens.Text.titleMedium))
+                                .foregroundStyle(theme.palette.contentPrimary)
+                        }
+                    }
+                }
+            }
             .sheet(isPresented: $settingUp, onDismiss: {
                 // Swiped away part-way: the same as "Not now" on that screen.
                 if attendance.step.isSetup { Task { await attendance.notNow() } }

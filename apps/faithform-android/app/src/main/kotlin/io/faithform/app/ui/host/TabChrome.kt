@@ -1,7 +1,9 @@
 package io.faithform.app.ui.host
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
@@ -14,11 +16,15 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
 import io.faithform.app.R
+import io.faithform.app.design.FaithFormTokens
 import io.faithform.app.design.LocalFaithFormTheme
+import io.faithform.app.ui.church.ChurchAvatar
 
 /**
  * A tab's own title bar, with a back arrow when the tab has gone deeper than
@@ -34,6 +40,8 @@ import io.faithform.app.design.LocalFaithFormTheme
 @Composable
 fun TabScreen(
     title: String,
+    logoUrl: String? = null,
+    showChurchAvatar: Boolean = false,
     onBack: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
     content: @Composable (Modifier) -> Unit,
@@ -44,12 +52,24 @@ fun TabScreen(
     Column(modifier = modifier.fillMaxSize()) {
         TopAppBar(
             title = {
-                Text(
-                    title,
-                    style = MaterialTheme.typography.titleLarge,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm),
+                ) {
+                    if (showChurchAvatar || !logoUrl.isNullOrBlank()) {
+                        ChurchAvatar(
+                            logoUrl = logoUrl,
+                            name = title,
+                            size = 28.dp,
+                        )
+                    }
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.titleLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             },
             navigationIcon = {
                 if (onBack != null) {

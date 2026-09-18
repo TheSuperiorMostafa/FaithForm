@@ -69,10 +69,9 @@ public final class ScheduleModel {
         let cacheName = "schedule|\(window.from)|\(window.to)"
 
         if let cached = await cache.load([FeedItem].self, name: cacheName, partition: partition) {
-            let freshness = cached.freshness(now: Date(), ttl: 300)
             phase = cached.value.isEmpty
                 ? .empty
-                : .loaded(items: cached.value, isStale: freshness != .fresh)
+                : .loaded(items: cached.value, isStale: false)
             etag = cached.etag
         } else {
             phase = .loading
@@ -118,7 +117,10 @@ public final class ScheduleModel {
                 await cache.purge(partition: partition)
                 phase = .blocked
             case .unavailable:
-                if case .loaded = phase { return }
+                if case let .loaded(items, _) = phase {
+                    phase = .loaded(items: items, isStale: true)
+                    return
+                }
                 phase = .offlineNoCache
             default:
                 if case .loaded = phase { return }
@@ -126,7 +128,10 @@ public final class ScheduleModel {
             }
         } catch {
             if error.isCancellation { return }
-            if case .loaded = phase { return }
+            if case let .loaded(items, _) = phase {
+                phase = .loaded(items: items, isStale: true)
+                return
+            }
             phase = .offlineNoCache
         }
     }

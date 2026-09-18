@@ -83,6 +83,23 @@ struct WatchTabView: View {
             .background(theme.palette.background)
             .navigationTitle(L.tabWatch)
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    HStack(spacing: FaithFormTokens.Spacing.sm) {
+                        if let church = root.selectedChurch {
+                            ChurchAvatar(logoUrl: church.logoUrl, name: church.churchName, size: 28)
+                            Text(church.churchName)
+                                .font(theme.font(FaithFormTokens.Text.titleMedium))
+                                .foregroundStyle(theme.palette.contentPrimary)
+                                .lineLimit(1)
+                        } else {
+                            Text(L.tabWatch)
+                                .font(theme.font(FaithFormTokens.Text.titleMedium))
+                                .foregroundStyle(theme.palette.contentPrimary)
+                        }
+                    }
+                }
+            }
             .navigationDestination(for: Route.self) { route in
                 switch route {
                 case let .recording(mediaId):

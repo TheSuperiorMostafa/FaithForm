@@ -85,7 +85,12 @@ fun HomeTab(
         return
     }
 
-    TabScreen(title = church.churchName, modifier = modifier) { content ->
+    TabScreen(
+        title = church.churchName,
+        logoUrl = church.logoUrl,
+        showChurchAvatar = true,
+        modifier = modifier,
+    ) { content ->
         HomeHostScreen(
             feedPhase = phase,
             schedulePhase = schedulePhase,

@@ -37,10 +37,9 @@ public final class FeedModel {
         self.partition = partition
 
         if let cached = await cache.load([FeedItem].self, name: "feed", partition: partition) {
-            let freshness = cached.freshness(now: Date(), ttl: 300)
             phase = cached.value.isEmpty
                 ? .empty
-                : .loaded(items: cached.value, isStale: freshness != .fresh)
+                : .loaded(items: cached.value, isStale: false)
             etag = cached.etag
         }
 
@@ -89,7 +88,10 @@ public final class FeedModel {
                 await cache.purge(partition: partition)
                 phase = .blocked
             case .unavailable:
-                if case .loaded = phase { return }   // keep showing the cache
+                if case let .loaded(items, _) = phase {
+                    phase = .loaded(items: items, isStale: true)
+                    return
+                }
                 phase = .offlineNoCache
             default:
                 if case .loaded = phase { return }
@@ -97,7 +99,10 @@ public final class FeedModel {
             }
         } catch {
             if error.isCancellation { return }
-            if case .loaded = phase { return }
+            if case let .loaded(items, _) = phase {
+                phase = .loaded(items: items, isStale: true)
+                return
+            }
             phase = .offlineNoCache
         }
     }

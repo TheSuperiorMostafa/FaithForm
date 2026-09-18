@@ -82,11 +82,10 @@ class ScheduleModel(
 
         cache.load(cacheName, partition, itemsSerializer)?.let { cached ->
             etag = cached.etag
-            val freshness = cached.freshness(clock(), TTL_MILLIS)
             _phase.value = if (cached.value.isEmpty()) {
                 SchedulePhase.Empty
             } else {
-                SchedulePhase.Loaded(cached.value, isStale = freshness != Freshness.Fresh)
+                SchedulePhase.Loaded(cached.value, isStale = false)
             }
         } ?: run {
             _phase.value = SchedulePhase.Loading

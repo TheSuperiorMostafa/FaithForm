@@ -124,7 +124,7 @@ class PresentationListModel(
                 it.copy(
                     phase = PresentationListPhase.Loaded(
                         cached.value.items,
-                        isStale = cached.freshness(now, CacheEntry.PROJECTION_TTL_MILLIS) !is Freshness.Fresh,
+                        isStale = false,
                     ),
                     hasMore = cached.value.nextCursor != null,
                     loadMoreFailed = false,

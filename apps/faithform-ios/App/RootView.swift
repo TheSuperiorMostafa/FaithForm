@@ -349,7 +349,7 @@ struct RootView: View {
         case .watch:
             WatchTabView(root: model, features: features, isStale: isStale)
         case .give:
-            GiveTabView(features: features, isStale: isStale)
+            GiveTabView(root: model, features: features, isStale: isStale)
         default:
             EmptyView()
         }

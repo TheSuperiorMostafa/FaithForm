@@ -50,6 +50,21 @@ struct HomeTabView: View {
             .navigationTitle(root.selectedChurch?.churchName ?? L.homeTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
+                ToolbarItem(placement: .principal) {
+                    HStack(spacing: FaithFormTokens.Spacing.sm) {
+                        if let church = root.selectedChurch {
+                            ChurchAvatar(logoUrl: church.logoUrl, name: church.churchName, size: 28)
+                            Text(church.churchName)
+                                .font(theme.font(FaithFormTokens.Text.titleMedium))
+                                .foregroundStyle(theme.palette.contentPrimary)
+                                .lineLimit(1)
+                        } else {
+                            Text(L.homeTitle)
+                                .font(theme.font(FaithFormTokens.Text.titleMedium))
+                                .foregroundStyle(theme.palette.contentPrimary)
+                        }
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { path.append(.churches) } label: {
                         Label(L.switchChurch, systemImage: "building.2")

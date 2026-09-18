@@ -96,7 +96,7 @@ public final class MediaModel {
         phase = .loaded(
             live: liveValue,
             items: archive.value.items,
-            isStale: archiveStale || liveStale
+            isStale: false
         )
     }
 

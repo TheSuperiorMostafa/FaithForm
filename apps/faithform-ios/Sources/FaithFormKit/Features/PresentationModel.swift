@@ -85,7 +85,7 @@ public final class PresentationModel {
         nextCursor = cached.value.nextCursor
         phase = .loaded(
             items: cached.value.items,
-            isStale: cached.freshness(now: now(), ttl: 300) != .fresh
+            isStale: false
         )
     }
 

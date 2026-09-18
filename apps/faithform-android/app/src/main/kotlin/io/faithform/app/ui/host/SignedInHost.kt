@@ -159,6 +159,7 @@ fun SignedInHost(
                             bootstrap = bootstrap,
                             churchSlug = church.churchSlug,
                             partition = partition,
+                            church = church,
                         )
                     }
 

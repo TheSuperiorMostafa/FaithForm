@@ -359,7 +359,7 @@ class AppViewModel(
         _state.value = if (snapshot.onboarding?.needsOnboarding == true) {
             LaunchPhase.Onboarding(snapshot.bootstrap)
         } else {
-            LaunchPhase.Ready(snapshot.bootstrap, isStale = !snapshot.isFresh())
+            LaunchPhase.Ready(snapshot.bootstrap, isStale = false)
         }
     }
 

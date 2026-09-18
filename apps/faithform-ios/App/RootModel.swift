@@ -263,7 +263,7 @@ final class RootModel {
     private func adoptCached(_ snapshot: AccountSnapshot) {
         lastBootstrap = snapshot.bootstrap
         onboardingState = snapshot.onboarding
-        state.apply(.ready(snapshot.bootstrap, isStale: !snapshot.isFresh))
+        state.apply(.ready(snapshot.bootstrap, isStale: false))
         adoptSelection(snapshot.bootstrap)
         syncAttendance(snapshot.bootstrap)
     }

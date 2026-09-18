@@ -41,7 +41,7 @@ public struct ChurchAvatar: View {
         ZStack {
             theme.palette.surfaceSunken
             Text(initials)
-                .font(theme.font(FaithFormTokens.Text.titleMedium))
+                .font(size <= 32 ? theme.font(FaithFormTokens.Text.caption) : theme.font(FaithFormTokens.Text.titleMedium))
                 .foregroundStyle(theme.palette.brandPrimary)
         }
     }

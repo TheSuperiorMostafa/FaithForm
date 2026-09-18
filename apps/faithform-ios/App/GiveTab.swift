@@ -26,6 +26,7 @@ struct GiveTabView: View {
     }
 
     @Environment(\.faithformTheme) private var theme
+    let root: RootModel
     let features: ChurchFeatures
     let isStale: Bool
 
@@ -48,6 +49,23 @@ struct GiveTabView: View {
             .background(theme.palette.background)
             .navigationTitle(L.givingTitle)
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    HStack(spacing: FaithFormTokens.Spacing.sm) {
+                        if let church = root.selectedChurch {
+                            ChurchAvatar(logoUrl: church.logoUrl, name: church.churchName, size: 28)
+                            Text(church.churchName)
+                                .font(theme.font(FaithFormTokens.Text.titleMedium))
+                                .foregroundStyle(theme.palette.contentPrimary)
+                                .lineLimit(1)
+                        } else {
+                            Text(L.givingTitle)
+                                .font(theme.font(FaithFormTokens.Text.titleMedium))
+                                .foregroundStyle(theme.palette.contentPrimary)
+                        }
+                    }
+                }
+            }
             .navigationDestination(for: Route.self) { route in
                 destination(route, model: model)
             }
