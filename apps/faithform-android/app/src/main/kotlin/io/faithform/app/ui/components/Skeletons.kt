@@ -241,23 +241,37 @@ fun ChooserRowSkeleton(modifier: Modifier = Modifier) {
 @Composable
 fun FeedCardSkeleton(modifier: Modifier = Modifier) {
     val theme = LocalFaithFormTheme.current
-    val shape = RoundedCornerShape(FaithFormTokens.Radius.lg)
+    val shape = RoundedCornerShape(FaithFormTokens.Radius.xl)
+    // Matches `AnnouncementCard`: the banner at its generated shape, then the
+    // date tile beside the title, time and place.
     Column(
         modifier = modifier
             .fillMaxWidth()
             .clip(shape)
             .background(theme.palette.surface)
-            .border(theme.borderWidth, theme.palette.border, shape),
+            .border(FaithFormTokens.BorderWidth.hairline, theme.palette.border, shape),
     ) {
-        SkeletonPoster()
-        Column(
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(1200f / 630f)
+                .background(theme.palette.skeletonBase),
+        )
+        Row(
             modifier = Modifier.padding(FaithFormTokens.Spacing.base),
-            verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm),
+            horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.md),
         ) {
-            SkeletonBone(height = 22.dp, widthFraction = 0.78f)
-            SkeletonBone(height = 13.dp, widthFraction = 0.42f)
-            SkeletonBone(height = 15.dp, widthFraction = 1f)
-            SkeletonBone(height = 15.dp, widthFraction = 0.72f)
+            Box(
+                Modifier
+                    .size(width = 52.dp, height = 58.dp)
+                    .clip(RoundedCornerShape(FaithFormTokens.Radius.md))
+                    .background(theme.palette.skeletonBase),
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm)) {
+                SkeletonBone(height = 22.dp, widthFraction = 0.78f)
+                SkeletonBone(height = 15.dp, widthFraction = 0.55f)
+                SkeletonBone(height = 15.dp, widthFraction = 0.4f)
+            }
         }
     }
 }
@@ -377,6 +391,7 @@ fun FeedSkeleton(modifier: Modifier = Modifier) {
             .skeletonShimmer(),
         verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.lg),
     ) {
+        SkeletonBone(height = 13.dp, widthFraction = 0.24f)
         repeat(3) { FeedCardSkeleton() }
     }
 }

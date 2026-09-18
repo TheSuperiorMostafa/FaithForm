@@ -9,6 +9,7 @@ import io.faithform.app.network.MobileSuccess
 import io.faithform.app.network.ProjectionCache
 import io.faithform.app.storage.CachePartition
 import io.faithform.app.storage.Freshness
+import io.faithform.app.ui.feed.AnnouncementTiming
 import java.time.Instant
 import java.time.YearMonth
 import java.time.ZoneId
@@ -163,11 +164,11 @@ object ScheduleCalendar {
         month.atDay(1).format(DateTimeFormatter.ofPattern("MMMM yyyy"))
 
     fun eventOverlaps(item: FeedItem, day: java.time.LocalDate, zone: ZoneId): Boolean {
-        val start = runCatching { Instant.parse(item.startAt).atZone(zone) }.getOrNull() ?: return false
+        val start = AnnouncementTiming.parseInstant(item.startAt)?.atZone(zone) ?: return false
         val dayStart = day.atStartOfDay(zone)
         val dayEnd = day.plusDays(1).atStartOfDay(zone)
 
-        val end = item.endAt?.let { runCatching { Instant.parse(it).atZone(zone) }.getOrNull() }
+        val end = AnnouncementTiming.parseInstant(item.endAt)?.atZone(zone)
             ?: if (item.allDay) {
                 start.plusDays(2)
             } else {
@@ -184,8 +185,8 @@ object ScheduleCalendar {
     fun daysWithEvents(items: List<FeedItem>, zone: ZoneId): Set<java.time.LocalDate> {
         val days = mutableSetOf<java.time.LocalDate>()
         for (item in items) {
-            val start = runCatching { Instant.parse(item.startAt).atZone(zone) }.getOrNull() ?: continue
-            val end = item.endAt?.let { runCatching { Instant.parse(it).atZone(zone) }.getOrNull() }
+            val start = AnnouncementTiming.parseInstant(item.startAt)?.atZone(zone) ?: continue
+            val end = AnnouncementTiming.parseInstant(item.endAt)?.atZone(zone)
                 ?: if (item.allDay) start.plusDays(2) else start.plusDays(1)
             var cursor = start.toLocalDate()
             val last = end.toLocalDate()

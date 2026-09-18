@@ -104,6 +104,23 @@ public enum L {
     public static var emptyFeedBody: String {
         t("empty_feed_body", "When your church posts something, it will appear here.")
     }
+    public static var announcementHappeningNow: String { t("announcement_happening_now", "Happening now") }
+    public static var announcementToday: String { t("announcement_today", "Today") }
+    public static var announcementTomorrow: String { t("announcement_tomorrow", "Tomorrow") }
+    public static var announcementThisWeek: String { t("announcement_this_week", "This week") }
+    public static var announcementComingUp: String { t("announcement_coming_up", "Coming up") }
+    public static var announcementAllDay: String { t("announcement_all_day", "All day") }
+    public static var announcementDetails: String { t("announcement_details", "Details") }
+    public static var announcementAddToCalendar: String {
+        t("announcement_add_to_calendar", "Add to Calendar")
+    }
+    public static var announcementShare: String { t("announcement_share", "Share") }
+    public static var announcementDirections: String { t("announcement_directions", "Get directions") }
+    public static var announcementDirectionsHint: String {
+        t("announcement_directions_hint", "Opens your maps app")
+    }
+    /// "%@" is when it was posted, relative: "Posted 2 days ago".
+    public static var announcementPosted: String { t("announcement_posted", "Posted %@") }
     public static var homeSegmentFeed: String { t("home_segment_feed", "Feed") }
     public static var homeSegmentSchedule: String { t("home_segment_schedule", "Schedule") }
     public static var emptyScheduleTitle: String { t("empty_schedule_title", "Nothing on the calendar") }

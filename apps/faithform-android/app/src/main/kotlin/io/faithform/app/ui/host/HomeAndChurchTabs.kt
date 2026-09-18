@@ -118,9 +118,8 @@ fun HomeTab(
         ?: (schedulePhase as? SchedulePhase.Loaded)?.items?.firstOrNull { it.id == openedId }
     if (opened != null) {
         BackHandler { openedId = null }
-        TabScreen(title = church.churchName, onBack = { openedId = null }, modifier = modifier) { content ->
-            AnnouncementDetailScreen(item = opened, modifier = content)
-        }
+        // Its own bar, floating over the banner, rather than the tab's.
+        AnnouncementDetailScreen(item = opened, onBack = { openedId = null }, modifier = modifier)
         return
     }
 

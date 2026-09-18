@@ -38,6 +38,8 @@ struct HomeTabView: View {
 
     @State private var path: [Route] = []
     @State private var section: HomeSection = .feed
+    /// Shared by the cards and the detail, so a tapped card zooms into it.
+    @Namespace private var announcementTransition
 
     var body: some View {
         NavigationStack(path: $path) {
@@ -47,6 +49,7 @@ struct HomeTabView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(theme.palette.background)
+            .environment(\.announcementTransitionNamespace, announcementTransition)
             .navigationTitle(root.selectedChurch?.churchName ?? L.homeTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -84,6 +87,7 @@ struct HomeTabView: View {
                     DiscoverySearchView(dependencies: dependencies, root: root, discovery: discovery)
                 case let .announcement(item):
                     AnnouncementDetailView(item: item)
+                        .modifier(AnnouncementZoomDestination(id: item.id, namespace: announcementTransition))
                 }
             }
         }
@@ -202,74 +206,6 @@ struct ChurchesScreen: View {
         }
         .background(theme.palette.background)
         .navigationTitle(L.yourChurches)
-        .navigationBarTitleDisplayMode(.inline)
-    }
-}
-
-// MARK: - One announcement
-
-/// An announcement or event, in full.
-///
-/// The card in the feed clips the body to three lines; this is where the rest
-/// is. Same rules as the card: the poster is given room and never has text laid
-/// over it, and times are in the church's zone, not the phone's.
-struct AnnouncementDetailView: View {
-    @Environment(\.faithformTheme) private var theme
-    let item: FeedItem
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
-                if let poster = item.posterUrl, let url = URL(string: poster) {
-                    AsyncImage(url: url) { phase in
-                        switch phase {
-                        case let .success(image):
-                            image.resizable().aspectRatio(contentMode: .fit)
-                        case .failure:
-                            EmptyView()
-                        default:
-                            RoundedRectangle(cornerRadius: FaithFormTokens.Radius.lg, style: .continuous)
-                                .fill(theme.palette.skeletonBase)
-                                .aspectRatio(16.0 / 9.0, contentMode: .fit)
-                                .skeletonShimmer()
-                        }
-                    }
-                    .frame(maxWidth: .infinity)
-                    .clipShape(RoundedRectangle(cornerRadius: FaithFormTokens.Radius.lg, style: .continuous))
-                    .accessibilityLabel(Text(item.posterAltText ?? ""))
-                    .accessibilityHidden(item.posterAltText == nil)
-                }
-
-                VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.sm) {
-                    if item.isPinned { StatusChip(L.pinnedLabel, tone: .live) }
-                    Text(item.title)
-                        .font(theme.font(FaithFormTokens.Text.displayMedium))
-                        .foregroundStyle(theme.palette.contentPrimary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text(FeedFormatting.whenLine(item))
-                        .font(theme.font(FaithFormTokens.Text.label))
-                        .foregroundStyle(theme.palette.brandAccent)
-                    if let location = item.location, !location.isEmpty {
-                        Text(location)
-                            .font(theme.font(FaithFormTokens.Text.caption))
-                            .foregroundStyle(theme.mutedContent)
-                    }
-                }
-
-                if !item.body.isEmpty {
-                    Text(item.body)
-                        .font(theme.font(FaithFormTokens.Text.body))
-                        .foregroundStyle(theme.palette.contentPrimary)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .textSelection(.enabled)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
-            .padding(.vertical, FaithFormTokens.Spacing.lg)
-        }
-        .background(theme.palette.background)
-        .navigationTitle(item.churchName)
         .navigationBarTitleDisplayMode(.inline)
     }
 }

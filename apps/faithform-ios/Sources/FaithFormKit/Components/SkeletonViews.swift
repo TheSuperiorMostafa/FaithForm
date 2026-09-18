@@ -185,29 +185,34 @@ struct ChooserRowSkeleton: View {
     }
 }
 
+/// Matches `AnnouncementCard`: the banner at its generated shape, then the
+/// date tile beside the title, time and place.
 struct FeedCardSkeleton: View {
     @Environment(\.faithformTheme) private var theme
 
     var body: some View {
+        let shape = RoundedRectangle(cornerRadius: FaithFormTokens.Radius.xl, style: .continuous)
+
         VStack(alignment: .leading, spacing: 0) {
-            SkeletonPoster()
-            VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.sm) {
-                SkeletonBone(height: FaithFormTokens.Text.titleLarge.size, widthFraction: 0.78)
-                SkeletonBone(height: FaithFormTokens.Text.label.size, widthFraction: 0.42)
-                SkeletonBone(height: FaithFormTokens.Text.bodySmall.size, widthFraction: 1)
-                SkeletonBone(height: FaithFormTokens.Text.bodySmall.size, widthFraction: 0.72)
+            Rectangle()
+                .fill(theme.palette.skeletonBase)
+                .aspectRatio(AnnouncementArtwork.aspectRatio, contentMode: .fit)
+                .frame(maxWidth: .infinity)
+            HStack(alignment: .top, spacing: FaithFormTokens.Spacing.md) {
+                RoundedRectangle(cornerRadius: FaithFormTokens.Radius.md, style: .continuous)
+                    .fill(theme.palette.skeletonBase)
+                    .frame(width: 52, height: 58)
+                VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.sm) {
+                    SkeletonBone(height: FaithFormTokens.Text.titleLarge.size, widthFraction: 0.78)
+                    SkeletonBone(height: FaithFormTokens.Text.bodySmall.size, widthFraction: 0.55)
+                    SkeletonBone(height: FaithFormTokens.Text.bodySmall.size, widthFraction: 0.4)
+                }
             }
             .padding(FaithFormTokens.Spacing.base)
         }
-        .background(
-            RoundedRectangle(cornerRadius: FaithFormTokens.Radius.lg, style: .continuous)
-                .fill(theme.palette.surface)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: FaithFormTokens.Radius.lg, style: .continuous)
-                .strokeBorder(theme.palette.border, lineWidth: FaithFormTokens.BorderWidth.hairline)
-        )
-        .clipShape(RoundedRectangle(cornerRadius: FaithFormTokens.Radius.lg, style: .continuous))
+        .background(shape.fill(theme.palette.surface))
+        .overlay(shape.strokeBorder(theme.palette.border, lineWidth: FaithFormTokens.BorderWidth.hairline))
+        .clipShape(shape)
     }
 }
 
@@ -325,10 +330,12 @@ struct SermonHubCardSkeleton: View {
 
 // MARK: - Screens
 
-/// Home feed: poster-first announcement cards, matching `AnnouncementCard`.
+/// Home feed: a section header over banner cards, matching `HomeFeedView`.
 struct FeedSkeleton: View {
     var body: some View {
-        VStack(spacing: FaithFormTokens.Spacing.lg) {
+        VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
+            SkeletonBone(height: FaithFormTokens.Text.label.size, widthFraction: 0.24)
+                .padding(.bottom, -FaithFormTokens.Spacing.md)
             ForEach(0..<3, id: \.self) { _ in FeedCardSkeleton() }
         }
         .skeletonShimmer()
