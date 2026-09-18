@@ -206,6 +206,30 @@ export function CheckinSetup({
     });
   };
 
+  const setAutomaticCheckin = (enabled: boolean) => {
+    const nextDraft = { ...draft, geofenceEnabled: enabled };
+    setDraft(nextDraft);
+
+    // The primary switch is a commitment, not a form field. Persist it as soon
+    // as it is tapped so the phone-sized dashboard cannot leave the church in
+    // an unsaved state with the Save button below the fold.
+    startTransition(async () => {
+      const result = await saveCheckinPolicy({
+        ...nextDraft,
+        minDwellSeconds: nextDraft.requiresConfirmation ? nextDraft.minDwellSeconds : 0,
+      });
+      if (!result.ok) {
+        setDraft((current) => ({ ...current, geofenceEnabled: state.policy.geofenceEnabled }));
+        toast.error(result.message);
+        return;
+      }
+
+      setDraft(draftFrom(result.data.policy));
+      toast.success(enabled ? "Automatic check-in is on." : "Automatic check-in is off.");
+      router.refresh();
+    });
+  };
+
   const createCampus = () => {
     startTransition(async () => {
       const result = await addMainCampus();
@@ -353,7 +377,7 @@ export function CheckinSetup({
               id="setup-automatic"
               title="Automatic check-in"
               checked={draft.geofenceEnabled}
-              onChange={(value) => setDraft({ ...draft, geofenceEnabled: value })}
+              onChange={setAutomaticCheckin}
               disabled={!isAdmin || pending}
             >
               People who turn this on in the FaithForm app are checked in when
@@ -363,6 +387,7 @@ export function CheckinSetup({
               reading on arrival; FaithForm checks it against your campus and
               then discards it. You see that they attended, never where they
               were.
+              {isAdmin ? " This switch saves immediately." : ""}
             </ToggleRow>
 
             <ToggleRow

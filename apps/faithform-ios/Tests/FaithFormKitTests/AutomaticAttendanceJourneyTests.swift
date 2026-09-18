@@ -1486,6 +1486,26 @@ struct ServiceLifecycleTests {
         #expect(await stack.location.regions.count == 1)
     }
 
+    @Test("a cached bootstrap cannot erase the stored choice before launch restoration")
+    func staleLoadBeforeStart() async {
+        let stack = AttendanceStack.make(settingsStore: MemorySettingsStore(stored))
+
+        // This is the real app launch race: RootModel may adopt its cached
+        // bootstrap before AppDependencies' startup task calls start(). The
+        // cached profile predates the consent grant saved in the Keychain.
+        await stack.service.updateAccount(
+            accountId: "acct-1",
+            authorizationVersion: 6,
+            serverConsent: "unset",
+            churches: [grace]
+        )
+        await stack.service.start()
+
+        #expect(await stack.service.currentSettings().enabled)
+        #expect(await stack.settingsStore.stored?.settings.enabled == true)
+        #expect(await stack.location.regions.count == 1)
+    }
+
     @Test("joining a church starts watching it")
     func joiningAChurch() async {
         let stack = AttendanceStack.make(

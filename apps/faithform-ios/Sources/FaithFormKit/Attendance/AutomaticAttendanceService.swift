@@ -200,6 +200,17 @@ public actor AutomaticAttendanceService {
         serverConsent: String,
         churches: [AttendanceChurch]
     ) async {
+        // RootModel can publish a cached bootstrap immediately while the app's
+        // launch task is still restoring this service from the Keychain. Make
+        // the ordering deterministic here, at the actor boundary: otherwise
+        // that cached (and commonly older) bootstrap can create an account
+        // from the default `enabled = false` settings before `prepare()` runs.
+        // `prepare()` would then see an account and skip the stored enabled
+        // choice, making automatic check-in appear to turn itself off after a
+        // relaunch. It is idempotent, so every account update can safely make
+        // restoration its first operation.
+        await prepare()
+
         if let account, account.accountId != accountId {
             // A different person on this phone. Nothing of the previous one's
             // may keep running.
