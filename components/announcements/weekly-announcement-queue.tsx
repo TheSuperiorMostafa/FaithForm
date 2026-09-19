@@ -118,7 +118,7 @@ export function WeeklyAnnouncementQueue({
         return;
       }
       setDraftMessage(
-        `Gmail draft created with ${result.eventCount} upcoming event${result.eventCount === 1 ? "" : "s"}.`,
+        `Email draft created with ${result.eventCount} upcoming event${result.eventCount === 1 ? "" : "s"}.`,
       );
       router.refresh();
     });
@@ -134,7 +134,7 @@ export function WeeklyAnnouncementQueue({
           </CardTitle>
           <CardDescription>
             Link Google Calendar or iCloud Calendar in Settings to pull this
-            week&apos;s events. Google also creates the Monday Gmail draft.
+            week&apos;s events. Connect an email account to create the Monday draft.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -165,7 +165,7 @@ export function WeeklyAnnouncementQueue({
           <span className="min-w-0 flex-1">
             <span className="flex flex-wrap items-center gap-2">
               <span className="font-heading text-lg font-semibold">
-                Weekly Gmail draft
+                Weekly email draft
               </span>
               {weeklyDraftCreated ? (
                 <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-800 dark:bg-green-500/15 dark:text-green-300">
@@ -191,7 +191,7 @@ export function WeeklyAnnouncementQueue({
           <>
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <p className="text-sm text-muted-foreground">
-              One Gmail draft every Monday. Past events are skipped
+              One email draft every Monday. Past events are skipped
               automatically.
             </p>
             {isAdmin && (
@@ -222,7 +222,7 @@ export function WeeklyAnnouncementQueue({
                   rel="noopener noreferrer"
                 >
                   <Button type="button" variant="ghost" size="sm">
-                    Open Gmail drafts
+                    Open email drafts
                   </Button>
                 </a>
               </div>

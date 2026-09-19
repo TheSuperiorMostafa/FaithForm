@@ -422,10 +422,8 @@ test("switching churches re-runs every gate, not just the campus lookup", () => 
 test("a revoked authorization changes the validator through configVersion", () => {
   // `configVersion` folds in the account's authorization version, so blocking,
   // leaving, link revocation and consent withdrawal all move it.
-  assert.match(
-    source,
-    /Number\(policy\.policy_version \?\? 1\) \* 1000 \+ account\.authorizationVersion/,
-  );
+  assert.match(source, /policyVersion: Number\(policy\.policy_version \?\? 1\)/);
+  assert.match(source, /configVersion: policy\.policyVersion \* 1000 \+ account\.authorizationVersion/);
 
   const before = respond("grace", { ok: true, configuration: configuration() });
   const after = respond(
@@ -574,8 +572,16 @@ test("an inactive account gets no configuration", () => {
 });
 
 test("a church with geofencing off gets no regions", () => {
-  assert.match(source, /if \(!policy\?\.geofence_enabled\)/);
-  assert.match(source, /reason: "geofence_disabled"/);
+  // Readiness is one function, shared with the dashboard, and switching it on
+  // is judged before the campus: an unconfigured church is "not set up", not
+  // "no location".
+  assert.match(source, /const switchedOn = Boolean\(policy\?\.geofence_enabled\)/);
+  assert.match(source, /if \(!input\.switchedOn \|\| !input\.featureEnabled\) return "geofence_disabled";/);
+  assert.match(source, /readinessProblem\(\{ switchedOn, featureEnabled, regionCount: regions\.length \}\)/);
+  assert.match(
+    source,
+    /if \(readiness\.problem \|\| !readiness\.policy\) \{\s*return \{ ok: false, reason: readiness\.problem \?\? "geofence_disabled" \};/,
+  );
 });
 
 test("a hidden, inactive or unpositioned campus is never monitored", () => {
@@ -583,7 +589,7 @@ test("a hidden, inactive or unpositioned campus is never monitored", () => {
   assert.match(source, /\.not\("latitude", "is", null\)/);
   assert.match(source, /\.not\("longitude", "is", null\)/);
   assert.match(source, /campus\.is_active && campus\.is_public/);
-  assert.match(source, /reason: "no_campus_configured"/);
+  assert.match(source, /if \(input\.regionCount === 0\) return "no_campus_configured";/);
 });
 
 test("the configuration carries no People, staff, or credential data", () => {

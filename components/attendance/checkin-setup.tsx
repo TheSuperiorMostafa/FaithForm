@@ -3,60 +3,32 @@
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { CircleAlert, CircleCheck, MapPin } from "lucide-react";
+import { CalendarClock, MapPin, QrCode, Radio, TabletSmartphone } from "lucide-react";
 import { toast } from "sonner";
 
 import {
   addMainCampus,
   saveCheckinPolicy,
+  type CheckinSetupView,
 } from "@/app/dashboard/attendance/setup/actions";
 import type {
   AttendanceSetupPolicy,
-  AttendanceSetupState,
   SetupCampus,
   SetupUpcomingService,
 } from "@/lib/attendance/v2/setup";
 import { CONSENT_COUNT_FLOOR } from "@/lib/attendance/v2/setup-bounds";
+import { DAY_NAMES, formatClock, minutesPhrase } from "@/lib/attendance/v2/setup-view";
 import { CampusLocationEditor } from "@/components/attendance/campus-location-editor";
 import { CampusRadiusMap } from "@/components/attendance/campus-radius-map";
+import { CheckinWindowEditor } from "@/components/attendance/checkin-window-editor";
+import { PhoneCheckCard } from "@/components/attendance/phone-check-card";
 import { ServiceScheduleEditor } from "@/components/attendance/service-schedule-editor";
+import { SetupStep, StatusChip, type StepTone } from "@/components/attendance/setup-step";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
-const OPENS_BEFORE_OPTIONS = [0, 10, 15, 20, 30, 45, 60, 90, 120];
-const CLOSES_AFTER_OPTIONS = [0, 10, 15, 20, 30, 45, 60, 90, 120];
-const DWELL_OPTIONS = [
-  { seconds: 0, label: "As soon as they arrive" },
-  { seconds: 60, label: "After 1 minute" },
-  { seconds: 120, label: "After 2 minutes (recommended)" },
-  { seconds: 180, label: "After 3 minutes" },
-  { seconds: 300, label: "After 5 minutes" },
-  { seconds: 600, label: "After 10 minutes" },
-  { seconds: 900, label: "After 15 minutes" },
-];
-const ACCURACY_OPTIONS = [
-  { meters: 50, label: "Strict (within 50 m)" },
-  { meters: 100, label: "Standard (within 100 m, recommended)" },
-  { meters: 150, label: "Relaxed (within 150 m)" },
-  { meters: 200, label: "Lenient (within 200 m)" },
-];
-
-function minutesLabel(minutes: number, when: "before" | "after"): string {
-  if (minutes === 0) return when === "before" ? "When the service starts" : "When the service ends";
-  if (minutes < 60) return `${minutes} minutes ${when}`;
-  const hours = minutes / 60;
-  return `${hours === 1 ? "1 hour" : `${hours} hours`} ${when}`;
-}
+type StepId = "location" | "services" | "window" | "live";
 
 function formatTime(iso: string, timeZone: string): string {
   return new Intl.DateTimeFormat("en-US", {
@@ -75,157 +47,118 @@ function formatDay(iso: string, timeZone: string): string {
   }).format(new Date(iso));
 }
 
-/** Window preview for a service, recomputed from the unsaved choices. */
-function previewWindow(
-  service: SetupUpcomingService,
-  opensBefore: number,
-  closesAfter: number,
-): { opens: string; closes: string } {
-  const opens = new Date(Date.parse(service.startsAt) - opensBefore * 60_000).toISOString();
-  const closes = new Date(Date.parse(service.endsAt) + closesAfter * 60_000).toISOString();
-  return {
-    opens: formatTime(opens, service.timezone),
-    closes: formatTime(closes, service.timezone),
-  };
+function dwellPhrase(policy: AttendanceSetupPolicy): string {
+  if (!policy.requiresConfirmation || policy.minDwellSeconds === 0) return "counts on arrival";
+  const minutes = Math.round(policy.minDwellSeconds / 60);
+  return `counts after ${minutes} min`;
 }
 
-type PolicyDraft = Omit<AttendanceSetupPolicy, "policyVersion" | "updatedAt">;
+/** The switches that save the moment they are tapped. */
+type Switches = Pick<AttendanceSetupPolicy, "geofenceEnabled" | "qrEnabled" | "kioskEnabled">;
 
-function draftFrom(policy: AttendanceSetupPolicy): PolicyDraft {
-  return {
+/**
+ * Check-in setup, as four steps a church goes through once: put the building
+ * on the map, list the weekly services, choose when check-in opens, and switch
+ * it on.
+ *
+ * Whether it is live comes from the server — the same function a phone's own
+ * request runs (`readChurchAutomaticReadiness`) — so this page cannot say
+ * "ready" while phones are being refused, which is how a church could be shown
+ * its campus on a map while the app said it had no location.
+ *
+ * Every change applies to the services whose check-in has not opened yet, as
+ * soon as it is saved.
+ */
+export function CheckinSetup({
+  view,
+  isAdmin,
+}: {
+  view: CheckinSetupView;
+  isAdmin: boolean;
+}) {
+  const { state, readiness, phone, churchAddress, churchName } = view;
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [editingCampus, setEditingCampus] = useState<string | null>(null);
+
+  const policy = state.policy;
+  const savedSwitches: Switches = {
     geofenceEnabled: policy.geofenceEnabled,
     qrEnabled: policy.qrEnabled,
     kioskEnabled: policy.kioskEnabled,
-    checkinOpensMinutesBefore: policy.checkinOpensMinutesBefore,
-    checkinClosesMinutesAfter: policy.checkinClosesMinutesAfter,
-    requiresConfirmation: policy.requiresConfirmation,
-    minDwellSeconds: policy.requiresConfirmation ? policy.minDwellSeconds : 0,
-    maxLocationAccuracyM: policy.maxLocationAccuracyM,
   };
-}
-
-/** The closest wait the menu offers, never "as soon as they arrive". */
-function nearestDwell(seconds: number): number {
-  return DWELL_OPTIONS.filter((option) => option.seconds > 0).reduce((best, option) =>
-    Math.abs(option.seconds - seconds) < Math.abs(best.seconds - seconds) ? option : best,
-  ).seconds;
-}
-
-/**
- * Check-in setup, in the order a church needs it: where it is, when services
- * are, how check-in works, and whether automatic check-in is on.
- *
- * Every change to the policy, a location or the service times is applied to
- * the services whose check-in has not opened yet, straight away. That is said on
- * the page, so nobody expects an edit to change how a service already under way
- * is being judged.
- */
-export function CheckinSetup({
-  state,
-  isAdmin,
-}: {
-  state: AttendanceSetupState;
-  isAdmin: boolean;
-}) {
-  const router = useRouter();
-  const [pending, startTransition] = useTransition();
-  const [draft, setDraft] = useState<PolicyDraft>(() => draftFrom(state.policy));
-  const [editingCampus, setEditingCampus] = useState<string | null>(null);
-
-  // When the saved policy itself changes, take it as the new draft. Keyed on the
-  // saved values rather than the object, so saving a location or the service
-  // times (which refreshes the page) does not throw away unsaved edits here.
-  const savedKey = JSON.stringify(draftFrom(state.policy));
+  const [switches, setSwitches] = useState<Switches>(savedSwitches);
+  const switchesKey = JSON.stringify(savedSwitches);
   useEffect(() => {
-    setDraft(JSON.parse(savedKey) as PolicyDraft);
-  }, [savedKey]);
+    setSwitches(JSON.parse(switchesKey) as Switches);
+  }, [switchesKey]);
 
-  const dirty = savedKey !== JSON.stringify(draft);
-
-  const positionedCampuses = state.campuses.filter(
+  const positioned = state.campuses.filter(
     (campus) => campus.latitude !== null && campus.longitude !== null,
   );
-  const usableCampuses = positionedCampuses.filter((campus) => campus.isPublic);
-  const nextService = state.upcoming[0] ?? null;
+  const hiddenOnly = readiness.watching.length === 0 && positioned.some((campus) => !campus.isPublic);
+  const live = readiness.problem === null;
+  const nextWindow = readiness.windows[0] ?? null;
 
-  const checks = [
-    {
-      done: usableCampuses.length > 0,
-      title: "Your church's location is set",
-      detail:
-        usableCampuses.length > 0
-          ? `${usableCampuses.length === 1 ? usableCampuses[0].name : `${usableCampuses.length} campuses`} on the map.`
-          : positionedCampuses.length > 0
-            ? "Your located campuses are hidden from the app. Show one publicly on the Member App page."
-            : "Place your building on the map below.",
-    },
-    {
-      done: state.serviceTimes.length > 0 && state.upcoming.length > 0,
-      title: "Service times are set",
-      detail:
-        state.serviceTimes.length === 0
-          ? "Add your weekly services below."
-          : nextService
-            ? `Next: ${nextService.label}, ${formatDay(nextService.startsAt, nextService.timezone)} at ${formatTime(nextService.startsAt, nextService.timezone)}.`
-            : "No upcoming services yet. Save your service times to create them.",
-    },
-    {
-      done: state.policy.geofenceEnabled,
-      title: "Automatic check-in is on",
-      detail: state.policy.geofenceEnabled
-        ? "People who turn it on in the app can be checked in."
-        : "Turn it on below when the steps above are done.",
-    },
-    {
-      done: state.linkedPeople > 0,
-      title: "People are connected to the app",
-      detail:
-        state.linkedPeople > 0
-          ? `${state.linkedPeople} ${state.linkedPeople === 1 ? "person has" : "people have"} an app account connected to their record here. ${
-              state.optedInPeople !== null
-                ? `${state.optedInPeople} have turned on automatic check-in.`
-                : `Fewer than ${CONSENT_COUNT_FLOOR} have turned on automatic check-in so far.`
-            }`
-          : "Automatic check-in only works for people whose app account is connected to their record in People.",
-    },
-  ];
-  const remaining = checks.filter((check) => !check.done).length;
+  const tones: Record<StepId, StepTone> = {
+    location: readiness.watching.length > 0 ? "done" : hiddenOnly ? "attention" : "todo",
+    services:
+      state.serviceTimes.length === 0 ? "todo" : state.upcoming.length > 0 ? "done" : "attention",
+    // Sensible defaults exist, so this never blocks going live.
+    window: "done",
+    live: live ? "done" : readiness.switchedOn ? "attention" : "todo",
+  };
+  const doneCount = Object.values(tones).filter((tone) => tone === "done").length;
 
-  const savePolicy = () => {
-    startTransition(async () => {
-      const result = await saveCheckinPolicy({
-        ...draft,
-        minDwellSeconds: draft.requiresConfirmation ? draft.minDwellSeconds : 0,
-      });
-      if (!result.ok) {
-        toast.error(result.message);
-        return;
-      }
-      toast.success("Check-in settings saved. Upcoming services now use them.");
-      router.refresh();
-    });
+  const firstOpen = (["location", "services", "live"] as StepId[]).find(
+    (step) => tones[step] !== "done",
+  );
+  const [open, setOpen] = useState<StepId | null>(firstOpen ?? null);
+  const toggle = (step: StepId) => setOpen((current) => (current === step ? null : step));
+  const openStep = (step: StepId) => {
+    setOpen(step);
+    requestAnimationFrame(() =>
+      document.getElementById(`setup-${step}`)?.scrollIntoView({ behavior: "smooth", block: "start" }),
+    );
   };
 
-  const setAutomaticCheckin = (enabled: boolean) => {
-    const nextDraft = { ...draft, geofenceEnabled: enabled };
-    setDraft(nextDraft);
+  // A link to one part of setup opens that step: `#setup-location` and the
+  // like, and the section names the page had before it was steps — other pages
+  // still link to `#locations`.
+  useEffect(() => {
+    const hash = window.location.hash.replace(/^#/, "");
+    const legacy: Record<string, StepId> = {
+      locations: "location",
+      "service-times": "services",
+      "how-check-in-works": "window",
+    };
+    const named = hash.startsWith("setup-") ? hash.slice("setup-".length) : "";
+    const step =
+      legacy[hash] ??
+      ((["location", "services", "window", "live"] as const).find((id) => id === named) ?? null);
+    if (step) openStep(step);
+    // On arrival only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-    // The primary switch is a commitment, not a form field. Persist it as soon
-    // as it is tapped so the phone-sized dashboard cannot leave the church in
-    // an unsaved state with the Save button below the fold.
+  const saveSwitch = (patch: Partial<Switches>, message: string) => {
+    const next = { ...switches, ...patch };
+    setSwitches(next);
     startTransition(async () => {
       const result = await saveCheckinPolicy({
-        ...nextDraft,
-        minDwellSeconds: nextDraft.requiresConfirmation ? nextDraft.minDwellSeconds : 0,
+        ...next,
+        checkinOpensMinutesBefore: policy.checkinOpensMinutesBefore,
+        checkinClosesMinutesAfter: policy.checkinClosesMinutesAfter,
+        requiresConfirmation: policy.requiresConfirmation,
+        minDwellSeconds: policy.requiresConfirmation ? policy.minDwellSeconds : 0,
+        maxLocationAccuracyM: policy.maxLocationAccuracyM,
       });
       if (!result.ok) {
-        setDraft((current) => ({ ...current, geofenceEnabled: state.policy.geofenceEnabled }));
+        setSwitches(savedSwitches);
         toast.error(result.message);
         return;
       }
-
-      setDraft(draftFrom(result.data.policy));
-      toast.success(enabled ? "Automatic check-in is on." : "Automatic check-in is off.");
+      toast.success(message);
       router.refresh();
     });
   };
@@ -242,95 +175,92 @@ export function CheckinSetup({
     });
   };
 
-  const dwellSelected = draft.requiresConfirmation
-    ? nearestDwell(draft.minDwellSeconds)
-    : 0;
+  const firstService = state.serviceTimes[0] ?? null;
 
   return (
     <div className="flex w-full flex-col gap-5">
-      <div>
-        <h1 className="border-l-4 border-accent pl-3 font-heading text-[26px] font-bold text-foreground">
-          Check-in setup
-        </h1>
+      <header className="flex flex-col gap-1">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="border-l-4 border-accent pl-3 font-heading text-[26px] font-bold text-foreground">
+            Automatic Attendance
+          </h1>
+          <LiveBadge live={live} switchedOn={readiness.switchedOn} />
+        </div>
         <p className="text-sm text-muted-foreground">
-          Where your church is, when services happen, and the ways people can
-          check in, including automatically when they arrive.
+          Where people arrive, when your services are, and how they&apos;re
+          checked in — including automatically, when their phone arrives.
         </p>
-      </div>
+      </header>
 
       {!isAdmin && (
-        <p className="rounded-lg border border-border bg-muted/40 p-3 text-sm text-muted-foreground">
+        <p className="rounded-xl border border-border bg-muted p-3 text-sm text-muted-foreground">
           You can see how check-in is set up. Only a church admin can change it.
         </p>
       )}
 
-      {/* ------------------------------------------------------------------ */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">
-            {remaining === 0 ? "Automatic check-in is ready" : "Getting automatic check-in ready"}
-          </CardTitle>
-          <CardDescription>
-            {remaining === 0
-              ? "People who turn it on in the FaithForm app are checked in when they arrive for a service."
-              : `${remaining} ${remaining === 1 ? "step" : "steps"} left.`}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ul className="flex flex-col gap-3">
-            {checks.map((check) => (
-              <li key={check.title} className="flex gap-3">
-                {check.done ? (
-                  <CircleCheck className="mt-0.5 size-5 shrink-0 text-green-600 dark:text-green-400" aria-hidden />
-                ) : (
-                  <CircleAlert className="mt-0.5 size-5 shrink-0 text-amber-600 dark:text-amber-400" aria-hidden />
-                )}
-                <div className="flex flex-col">
-                  <span className="text-sm font-semibold text-foreground">
-                    {check.title}
-                    <span className="sr-only">{check.done ? " (done)" : " (not yet)"}</span>
-                  </span>
-                  <span className="text-xs text-muted-foreground">{check.detail}</span>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </CardContent>
-      </Card>
+      <StatusCard
+        live={live}
+        doneCount={doneCount}
+        watching={readiness.watching}
+        nextWindow={nextWindow}
+        linkedPeople={state.linkedPeople}
+        optedInPeople={state.optedInPeople}
+        problem={readiness.problem}
+        featureEnabled={readiness.featureEnabled}
+        onContinue={() =>
+          openStep(readiness.problem === "no_campus_configured" ? "location" : firstOpen ?? "live")
+        }
+      />
 
-      {/* ------------------------------------------------------------------ */}
-      <Card id="locations">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Where your church is</CardTitle>
-          <CardDescription>
-            Phones watch for arrival within a circle around each campus. The
-            address and circle are the only place phones are told about, and
-            people&rsquo;s own locations are never shown to you.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-3">
-          {state.campuses.length === 0 && (
-            <div className="flex flex-col items-start gap-3 rounded-lg border border-dashed border-border p-4">
-              <p className="text-sm text-muted-foreground">
-                No location yet. Start with your main building; you can add
-                other campuses on the Member App page.
-              </p>
-              {isAdmin && (
+      <SetupStep
+        id="setup-location"
+        number={1}
+        title="Where people arrive"
+        tone={tones.location}
+        open={open === "location"}
+        onToggle={() => toggle("location")}
+        actionLabel={tones.location === "done" ? "Change" : "Set up"}
+        summary={
+          readiness.watching.length > 0
+            ? readiness.watching
+                .map((campus) => `${campus.campusName} · ${campus.radiusMeters} m circle`)
+                .join(" · ")
+            : hiddenOnly
+              ? "Your campus on the map is hidden from the app"
+              : "Not on the map yet"
+        }
+      >
+        <div className="flex flex-col gap-3">
+          {state.campuses.length === 0 ? (
+            <div className="flex flex-col items-start gap-3 rounded-xl border border-dashed border-border p-5">
+              <span className="flex size-10 items-center justify-center rounded-xl bg-brand-gold/15 text-accent">
+                <MapPin className="size-5" aria-hidden />
+              </span>
+              <div className="flex flex-col gap-1">
+                <p className="font-semibold text-foreground">Put your church on the map</p>
+                <p className="text-sm text-muted-foreground">
+                  Phones watch a circle around your building. Start with your
+                  main building{churchAddress ? ` at ${churchAddress}` : ""};
+                  other campuses can be added on the Member App page.
+                </p>
+              </div>
+              {isAdmin ? (
                 <Button onClick={createCampus} disabled={pending}>
                   <MapPin className="size-4" aria-hidden />
-                  Set your church&rsquo;s location
+                  Set your church&apos;s location
                 </Button>
-              )}
+              ) : null}
             </div>
-          )}
+          ) : null}
 
           {state.campuses.map((campus) => (
-            <CampusRow
+            <CampusCard
               key={campus.id}
               campus={campus}
               editing={editingCampus === campus.id}
               isAdmin={isAdmin}
               disabled={pending}
+              churchAddress={churchAddress}
               onEdit={() => setEditingCampus(campus.id)}
               onDone={() => {
                 setEditingCampus(null);
@@ -339,311 +269,415 @@ export function CheckinSetup({
               onCancel={() => setEditingCampus(null)}
             />
           ))}
-        </CardContent>
-      </Card>
 
-      {/* ------------------------------------------------------------------ */}
-      <Card id="service-times">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">When services happen</CardTitle>
-          <CardDescription>
-            Your weekly services. Check-in is only ever open around these, so
-            nobody is checked in for passing the building on a Tuesday.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ServiceScheduleEditor
-            key={state.serviceTimes.map((service) => service.id).join(",")}
-            serviceTimes={state.serviceTimes}
-            campuses={state.campuses}
-            isAdmin={isAdmin}
-            onSaved={() => router.refresh()}
-          />
-        </CardContent>
-      </Card>
+          {state.campuses.length > 0 ? (
+            <p className="text-xs text-muted-foreground">
+              Another campus?{" "}
+              <Link href="/dashboard/app" className="font-semibold text-accent hover:underline">
+                Add it on the Member App page
+              </Link>
+              , then place it here.
+            </p>
+          ) : null}
+        </div>
+      </SetupStep>
 
-      {/* ------------------------------------------------------------------ */}
-      <Card id="how-check-in-works">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">How check-in works</CardTitle>
-          <CardDescription>
-            Changes apply to every service whose check-in hasn&rsquo;t opened
-            yet. Turning automatic check-in off takes effect immediately.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-5">
-          <fieldset disabled={!isAdmin || pending} className="flex flex-col gap-5">
-            <ToggleRow
-              id="setup-automatic"
-              title="Automatic check-in"
-              checked={draft.geofenceEnabled}
-              onChange={setAutomaticCheckin}
-              disabled={!isAdmin || pending}
-            >
-              People who turn this on in the FaithForm app are checked in when
-              their phone arrives at your church during a service&rsquo;s
-              check-in window. It&rsquo;s optional for each person, and they
-              can turn it off at any time. Their phone sends one location
-              reading on arrival; FaithForm checks it against your campus and
-              then discards it. You see that they attended, never where they
-              were.
-              {isAdmin ? " This switch saves immediately." : ""}
-            </ToggleRow>
+      <SetupStep
+        id="setup-services"
+        number={2}
+        title="When your services are"
+        tone={tones.services}
+        open={open === "services"}
+        onToggle={() => toggle("services")}
+        actionLabel={tones.services === "done" ? "Change" : "Add services"}
+        summary={
+          state.serviceTimes.length === 0
+            ? "No weekly services yet"
+            : state.serviceTimes
+                .slice(0, 3)
+                .map(
+                  (service) =>
+                    `${DAY_NAMES[service.dayOfWeek]?.slice(0, 3)} ${formatClock(service.startTime)}`,
+                )
+                .join(" · ") +
+              (state.serviceTimes.length > 3 ? ` · +${state.serviceTimes.length - 3} more` : "")
+        }
+      >
+        <ServiceScheduleEditor
+          key={state.serviceTimes.map((service) => service.id).join(",")}
+          serviceTimes={state.serviceTimes}
+          campuses={state.campuses}
+          isAdmin={isAdmin}
+          onSaved={() => router.refresh()}
+          opensMinutesBefore={policy.checkinOpensMinutesBefore}
+          closesMinutesAfter={policy.checkinClosesMinutesAfter}
+        />
+      </SetupStep>
 
-            <ToggleRow
+      <SetupStep
+        id="setup-window"
+        number={3}
+        title="When check-in is open"
+        tone={tones.window}
+        open={open === "window"}
+        onToggle={() => toggle("window")}
+        actionLabel="Change"
+        summary={`Opens ${minutesPhrase(policy.checkinOpensMinutesBefore)} before · closes ${minutesPhrase(policy.checkinClosesMinutesAfter)} after · ${dwellPhrase(policy)}`}
+      >
+        <CheckinWindowEditor
+          key={JSON.stringify([
+            policy.checkinOpensMinutesBefore,
+            policy.checkinClosesMinutesAfter,
+            policy.requiresConfirmation,
+            policy.minDwellSeconds,
+            policy.maxLocationAccuracyM,
+          ])}
+          policy={policy}
+          sample={
+            firstService
+              ? {
+                  label: firstService.label,
+                  startTime: firstService.startTime,
+                  endTime: firstService.endTime,
+                }
+              : null
+          }
+          isAdmin={isAdmin}
+          onSaved={() => router.refresh()}
+        />
+      </SetupStep>
+
+      <SetupStep
+        id="setup-live"
+        number={4}
+        title="Go live"
+        tone={tones.live}
+        open={open === "live"}
+        onToggle={() => toggle("live")}
+        actionLabel={live ? "Change" : "Turn on"}
+        summary={
+          live
+            ? "Automatic check-in is on"
+            : readiness.switchedOn
+              ? "Switched on, but not live yet"
+              : "Automatic check-in is off"
+        }
+      >
+        <div className="flex flex-col gap-5">
+          <SwitchRow
+            id="setup-automatic"
+            icon={<Radio className="size-5" aria-hidden />}
+            title="Automatic check-in"
+            checked={switches.geofenceEnabled}
+            disabled={!isAdmin || pending}
+            onChange={(value) =>
+              saveSwitch(
+                { geofenceEnabled: value },
+                value ? "Automatic check-in is on." : "Automatic check-in is off.",
+              )
+            }
+          >
+            People who turn it on in the FaithForm app are checked in when
+            their phone arrives during a service&apos;s check-in window. It&apos;s
+            optional for each person. Their phone sends one reading on
+            arrival, which FaithForm checks against your circle and discards:
+            you see that they came, never where they were.
+          </SwitchRow>
+
+          {readiness.switchedOn && readiness.problem === "no_campus_configured" ? (
+            <Callout>
+              It&apos;s switched on, but phones have no location to watch yet.{" "}
+              <button
+                type="button"
+                className="font-semibold underline"
+                onClick={() => openStep("location")}
+              >
+                Put your building on the map
+              </button>
+              .
+            </Callout>
+          ) : null}
+          {readiness.switchedOn && !readiness.featureEnabled ? (
+            <Callout>
+              Attendance is switched off for this church by FaithForm, so phones
+              aren&apos;t checked in. Contact support to turn it back on.
+            </Callout>
+          ) : null}
+
+          <div className="flex flex-col gap-4 border-t border-border pt-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Other ways to check in
+            </p>
+            <SwitchRow
               id="setup-qr"
+              icon={<QrCode className="size-5" aria-hidden />}
               title="Scan a code"
-              checked={draft.qrEnabled}
-              onChange={(value) => setDraft({ ...draft, qrEnabled: value })}
+              checked={switches.qrEnabled}
               disabled={!isAdmin || pending}
+              onChange={(value) =>
+                saveSwitch({ qrEnabled: value }, value ? "Code check-in is on." : "Code check-in is off.")
+              }
             >
               Show a changing code on a screen from the Services page; people
               scan it or type it in the app. Works for anyone, with or without
               automatic check-in.
-            </ToggleRow>
-
-            <ToggleRow
+            </SwitchRow>
+            <SwitchRow
               id="setup-kiosk"
+              icon={<TabletSmartphone className="size-5" aria-hidden />}
               title="Welcome desk kiosk"
-              checked={draft.kioskEnabled}
-              onChange={(value) => setDraft({ ...draft, kioskEnabled: value })}
+              checked={switches.kioskEnabled}
               disabled={!isAdmin || pending}
+              onChange={(value) =>
+                saveSwitch({ kioskEnabled: value }, value ? "The kiosk is on." : "The kiosk is off.")
+              }
             >
               A tablet at the door where a volunteer finds someone and checks
               them in.
-            </ToggleRow>
-
+            </SwitchRow>
             <p className="text-xs text-muted-foreground">
-              Staff can always mark people present from the Services page.
+              Staff can always mark people present on the Services page, and
+              kids&apos; rooms have their own check-in.
             </p>
+          </div>
+        </div>
+      </SetupStep>
 
-            <div className="grid gap-4 border-t border-border pt-4 sm:grid-cols-2">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="setup-opens" className="text-xs font-semibold">
-                  Check-in opens
-                </Label>
-                <Select
-                  id="setup-opens"
-                  value={draft.checkinOpensMinutesBefore}
-                  onChange={(event) =>
-                    setDraft({ ...draft, checkinOpensMinutesBefore: Number(event.target.value) })
-                  }
-                >
-                  {withCurrent(OPENS_BEFORE_OPTIONS, draft.checkinOpensMinutesBefore).map((minutes) => (
-                    <option key={minutes} value={minutes}>
-                      {minutesLabel(minutes, "before")}
-                    </option>
-                  ))}
-                </Select>
-                <span className="text-[11px] text-muted-foreground">Before the service starts</span>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="setup-closes" className="text-xs font-semibold">
-                  Check-in closes
-                </Label>
-                <Select
-                  id="setup-closes"
-                  value={draft.checkinClosesMinutesAfter}
-                  onChange={(event) =>
-                    setDraft({ ...draft, checkinClosesMinutesAfter: Number(event.target.value) })
-                  }
-                >
-                  {withCurrent(CLOSES_AFTER_OPTIONS, draft.checkinClosesMinutesAfter).map((minutes) => (
-                    <option key={minutes} value={minutes}>
-                      {minutesLabel(minutes, "after")}
-                    </option>
-                  ))}
-                </Select>
-                <span className="text-[11px] text-muted-foreground">After the service ends</span>
-              </div>
-            </div>
+      <PhoneCheckCard
+        phone={phone}
+        churchName={churchName}
+        readiness={{ problem: readiness.problem, watching: readiness.watching }}
+        onOpenStep={(step) => openStep(step)}
+      />
 
-            {nextService ? (
-              <p className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-                For {nextService.label} on {formatDay(nextService.startsAt, nextService.timezone)}{" "}
-                ({formatTime(nextService.startsAt, nextService.timezone)} to{" "}
-                {formatTime(nextService.endsAt, nextService.timezone)}), check-in would be open
-                from {previewWindow(nextService, draft.checkinOpensMinutesBefore, draft.checkinClosesMinutesAfter).opens}{" "}
-                to {previewWindow(nextService, draft.checkinOpensMinutesBefore, draft.checkinClosesMinutesAfter).closes}.
-              </p>
-            ) : null}
-
-            <div className="grid gap-4 border-t border-border pt-4 sm:grid-cols-2">
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="setup-dwell" className="text-xs font-semibold">
-                  Count someone automatically
-                </Label>
-                <Select
-                  id="setup-dwell"
-                  value={dwellSelected}
-                  onChange={(event) => {
-                    const seconds = Number(event.target.value);
-                    setDraft({
-                      ...draft,
-                      requiresConfirmation: seconds > 0,
-                      minDwellSeconds: seconds,
-                    });
-                  }}
-                >
-                  {DWELL_OPTIONS.map((option) => (
-                    <option key={option.seconds} value={option.seconds}>
-                      {option.label}
-                    </option>
-                  ))}
-                </Select>
-                <span className="text-[11px] text-muted-foreground">
-                  Waiting a couple of minutes means someone driving past or
-                  dropping off isn&rsquo;t counted. Phones may take a little
-                  longer than this to confirm.
-                </span>
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="setup-accuracy" className="text-xs font-semibold">
-                  Location accuracy needed
-                </Label>
-                <Select
-                  id="setup-accuracy"
-                  value={nearestAccuracy(draft.maxLocationAccuracyM)}
-                  onChange={(event) =>
-                    setDraft({ ...draft, maxLocationAccuracyM: Number(event.target.value) })
-                  }
-                >
-                  {ACCURACY_OPTIONS.map((option) => (
-                    <option key={option.meters} value={option.meters}>
-                      {option.label}
-                    </option>
-                  ))}
-                </Select>
-                <span className="text-[11px] text-muted-foreground">
-                  Phones indoors are often less precise. A reading less precise
-                  than this isn&rsquo;t used.
-                </span>
-              </div>
-            </div>
-          </fieldset>
-
-          {isAdmin && (
-            <div className="flex flex-wrap items-center gap-3">
-              <Button onClick={savePolicy} disabled={pending || !dirty}>
-                {pending ? "Saving…" : "Save check-in settings"}
-              </Button>
-              {dirty && (
-                <Button
-                  variant="outline"
-                  onClick={() => setDraft(draftFrom(state.policy))}
-                  disabled={pending}
-                >
-                  Undo changes
-                </Button>
-              )}
-              {state.lastChangedAt && (
-                <span className="text-xs text-muted-foreground">
-                  Last changed{" "}
-                  {new Intl.DateTimeFormat("en-US", {
-                    month: "short",
-                    day: "numeric",
-                    hour: "numeric",
-                    minute: "2-digit",
-                  }).format(new Date(state.lastChangedAt))}
-                </span>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* ------------------------------------------------------------------ */}
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Coming up</CardTitle>
-          <CardDescription>
-            The next services and their check-in windows. Automatic check-ins
-            appear on the{" "}
-            <Link href="/dashboard/attendance/services" className="font-semibold text-accent hover:underline">
-              Services
-            </Link>{" "}
-            page marked &ldquo;Automatic&rdquo;.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {state.upcoming.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No upcoming services. Add service times above.
-            </p>
-          ) : (
-            <ul className="flex flex-col divide-y divide-border">
-              {state.upcoming.map((service) => (
-                <li key={service.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
-                  <div className="flex flex-col">
-                    <span className="text-sm font-semibold text-foreground">
-                      {service.label}
-                      {service.campusName ? (
-                        <span className="font-normal text-muted-foreground"> · {service.campusName}</span>
-                      ) : null}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {formatDay(service.startsAt, service.timezone)},{" "}
-                      {formatTime(service.startsAt, service.timezone)}. Check-in{" "}
-                      {formatTime(service.checkinOpensAt, service.timezone)} to{" "}
-                      {formatTime(service.checkinClosesAt, service.timezone)}
-                    </span>
-                  </div>
-                  <span
-                    className={cn(
-                      "rounded-full px-2 py-0.5 text-[11px] font-semibold",
-                      service.automatic && service.positioned
-                        ? "bg-sky-100 text-sky-800 dark:bg-sky-500/15 dark:text-sky-300"
-                        : "bg-muted text-muted-foreground",
-                    )}
-                  >
-                    {!service.automatic
-                      ? "Automatic check-in off"
-                      : service.positioned
-                        ? "Automatic check-in on"
-                        : "No location for this service"}
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+      <UpcomingCard upcoming={state.upcoming} />
     </div>
   );
 }
 
-function nearestAccuracy(meters: number): number {
-  return ACCURACY_OPTIONS.reduce((best, option) =>
-    Math.abs(option.meters - meters) < Math.abs(best.meters - meters) ? option : best,
-  ).meters;
+function LiveBadge({ live, switchedOn }: { live: boolean; switchedOn: boolean }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-sm font-semibold",
+        live
+          ? "border-green-300/70 bg-green-50 text-green-800 dark:border-green-500/30 dark:bg-green-500/10 dark:text-green-200"
+          : "border-border bg-muted text-muted-foreground",
+      )}
+    >
+      <span className="relative flex size-2.5">
+        {live ? (
+          <span className="absolute inline-flex size-full animate-ping rounded-full bg-green-500 opacity-60 motion-reduce:animate-none" />
+        ) : null}
+        <span
+          className={cn(
+            "relative inline-flex size-2.5 rounded-full",
+            live ? "bg-green-500" : switchedOn ? "bg-amber-500" : "bg-slate-400",
+          )}
+        />
+      </span>
+      {live ? "Live" : switchedOn ? "Not live yet" : "Off"}
+    </span>
+  );
 }
 
-/** The preset list, plus the saved value when it is not one of them. */
-function withCurrent(options: number[], current: number): number[] {
-  return options.includes(current) ? options : [...options, current].sort((a, b) => a - b);
+function StatusCard({
+  live,
+  doneCount,
+  watching,
+  nextWindow,
+  linkedPeople,
+  optedInPeople,
+  problem,
+  featureEnabled,
+  onContinue,
+}: {
+  live: boolean;
+  doneCount: number;
+  watching: { campusName: string; radiusMeters: number }[];
+  nextWindow: CheckinSetupView["readiness"]["windows"][number] | null;
+  linkedPeople: number;
+  optedInPeople: number | null;
+  problem: CheckinSetupView["readiness"]["problem"];
+  featureEnabled: boolean;
+  onContinue: () => void;
+}) {
+  return (
+    <section
+      className={cn(
+        "overflow-hidden rounded-2xl border p-5 shadow-card dark:shadow-none",
+        live
+          ? "border-green-300/60 bg-gradient-to-br from-green-50 to-card dark:border-green-500/25 dark:from-green-500/10"
+          : "border-brand-gold/40 bg-gradient-to-br from-brand-gold/10 to-card",
+      )}
+    >
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-1">
+          <h2 className="font-heading text-xl font-bold text-foreground">
+            {live ? "Automatic check-in is live" : "Get automatic check-in live"}
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            {live
+              ? `Phones watch ${watching.map((campus) => campus.campusName).join(", ")}. People are counted when they arrive during a check-in window.`
+              : problem === "geofence_disabled" && featureEnabled
+                ? "Finish the steps below, then switch it on."
+                : problem === "no_campus_configured"
+                  ? "It's switched on — put your building on the map and phones can start."
+                  : "Attendance is switched off for this church by FaithForm."}
+          </p>
+        </div>
+        {!live && problem !== null ? (
+          <Button
+            variant="outline"
+            className="shrink-0"
+            onClick={onContinue}
+          >
+            {problem === "no_campus_configured" ? "Set the location" : "Continue setup"}
+          </Button>
+        ) : null}
+      </div>
+
+      <div className="mt-4 flex gap-1.5" aria-label={`${doneCount} of 4 steps done`} role="img">
+        {[0, 1, 2, 3].map((index) => (
+          <span
+            key={index}
+            className={cn(
+              "h-1.5 flex-1 rounded-full",
+              index < doneCount ? (live ? "bg-green-500" : "bg-accent") : "bg-muted",
+            )}
+          />
+        ))}
+      </div>
+
+      <dl className="mt-4 grid gap-3 text-sm sm:grid-cols-3">
+        <div className="flex flex-col">
+          <dt className="text-xs text-muted-foreground">Next check-in</dt>
+          <dd className="font-semibold text-foreground">
+            {nextWindow
+              ? `${formatDay(nextWindow.checkinOpensAt, nextWindow.timezone)}, ${formatTime(nextWindow.checkinOpensAt, nextWindow.timezone)} – ${formatTime(nextWindow.checkinClosesAt, nextWindow.timezone)}`
+              : live
+                ? "No services in the next 7 days"
+                : "—"}
+          </dd>
+        </div>
+        <div className="flex flex-col">
+          <dt className="text-xs text-muted-foreground">Connected to the app</dt>
+          <dd className="font-semibold text-foreground">
+            {linkedPeople} {linkedPeople === 1 ? "person" : "people"}
+          </dd>
+        </div>
+        <div className="flex flex-col">
+          <dt className="text-xs text-muted-foreground">Turned automatic check-in on</dt>
+          <dd className="font-semibold text-foreground">
+            {optedInPeople !== null ? optedInPeople : `Fewer than ${CONSENT_COUNT_FLOOR}`}
+          </dd>
+        </div>
+      </dl>
+    </section>
+  );
 }
 
-function ToggleRow({
+function CampusCard({
+  campus,
+  editing,
+  isAdmin,
+  disabled,
+  churchAddress,
+  onEdit,
+  onDone,
+  onCancel,
+}: {
+  campus: SetupCampus;
+  editing: boolean;
+  isAdmin: boolean;
+  disabled: boolean;
+  churchAddress: string | null;
+  onEdit: () => void;
+  onDone: () => void;
+  onCancel: () => void;
+}) {
+  const positioned = campus.latitude !== null && campus.longitude !== null;
+
+  return (
+    <div className="flex flex-col gap-3 rounded-xl border border-border bg-background p-3 sm:p-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-col gap-1">
+          <span className="flex flex-wrap items-center gap-2 text-sm font-semibold text-foreground">
+            {campus.name}
+            {campus.isPrimary ? <StatusChip tone="info">Main</StatusChip> : null}
+            {!campus.isPublic ? (
+              <StatusChip tone="warn">Hidden from the app</StatusChip>
+            ) : positioned ? (
+              <StatusChip tone="good">On the map · {campus.radiusMeters} m</StatusChip>
+            ) : (
+              <StatusChip tone="warn">No location yet</StatusChip>
+            )}
+          </span>
+          <span className="truncate text-xs text-muted-foreground">
+            {campus.address ?? churchAddress ?? "No address"}
+          </span>
+          {!campus.isPublic ? (
+            <span className="text-xs text-amber-700 dark:text-amber-300">
+              A hidden campus isn&apos;t used for automatic check-in.{" "}
+              <Link href="/dashboard/app" className="font-semibold underline">
+                Show it on the Member App page
+              </Link>
+              .
+            </span>
+          ) : null}
+        </div>
+        {isAdmin && !editing ? (
+          <Button variant={positioned ? "outline" : "default"} size="sm" disabled={disabled} onClick={onEdit}>
+            <MapPin className="size-4" aria-hidden />
+            {positioned ? "Move" : "Set location"}
+          </Button>
+        ) : null}
+      </div>
+
+      {editing ? (
+        <CampusLocationEditor
+          campus={campus}
+          churchAddress={churchAddress}
+          onSaved={onDone}
+          onCancel={onCancel}
+        />
+      ) : positioned ? (
+        <CampusRadiusMap
+          latitude={campus.latitude as number}
+          longitude={campus.longitude as number}
+          radiusMeters={campus.radiusMeters}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+function SwitchRow({
   id,
+  icon,
   title,
   checked,
-  onChange,
   disabled,
+  onChange,
   children,
 }: {
   id: string;
+  icon: React.ReactNode;
   title: string;
   checked: boolean;
-  onChange: (value: boolean) => void;
   disabled: boolean;
+  onChange: (value: boolean) => void;
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4">
-      <div className="flex flex-col gap-1">
-        <Label htmlFor={id} className="text-sm font-semibold">
+    <div className="flex items-start gap-3">
+      <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+        {icon}
+      </span>
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <label htmlFor={id} className="text-sm font-semibold text-foreground">
           {title}
-        </Label>
+        </label>
         <p id={`${id}-detail`} className="text-xs leading-relaxed text-muted-foreground">
           {children}
         </p>
@@ -659,64 +693,64 @@ function ToggleRow({
   );
 }
 
-function CampusRow({
-  campus,
-  editing,
-  isAdmin,
-  disabled,
-  onEdit,
-  onDone,
-  onCancel,
-}: {
-  campus: SetupCampus;
-  editing: boolean;
-  isAdmin: boolean;
-  disabled: boolean;
-  onEdit: () => void;
-  onDone: () => void;
-  onCancel: () => void;
-}) {
-  const positioned = campus.latitude !== null && campus.longitude !== null;
-
+function Callout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-3 rounded-lg border border-border bg-background p-3">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-col">
-          <span className="text-sm font-semibold text-foreground">
-            {campus.name}
-            {campus.isPrimary && (
-              <span className="ml-2 rounded bg-accent/15 px-1.5 py-0.5 text-[11px] font-semibold text-accent">
-                Main
-              </span>
-            )}
-          </span>
-          <span className="text-xs text-muted-foreground">
-            {campus.address ?? "No address"}
-            {" · "}
-            {positioned ? `Check-in area ${campus.radiusMeters} m` : "No location yet"}
-          </span>
-          {!campus.isPublic && (
-            <span className="text-xs text-amber-700 dark:text-amber-300">
-              Hidden from the app, so it can&rsquo;t be used for automatic check-in.
-            </span>
-          )}
-        </div>
-        {isAdmin && !editing && (
-          <Button variant="outline" size="sm" disabled={disabled} onClick={onEdit}>
-            {positioned ? "Change location" : "Set location"}
-          </Button>
-        )}
-      </div>
+    <p className="rounded-xl border border-amber-300/70 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+      {children}
+    </p>
+  );
+}
 
-      {editing ? (
-        <CampusLocationEditor campus={campus} onSaved={onDone} onCancel={onCancel} />
-      ) : positioned ? (
-        <CampusRadiusMap
-          latitude={campus.latitude as number}
-          longitude={campus.longitude as number}
-          radiusMeters={campus.radiusMeters}
-        />
-      ) : null}
-    </div>
+function UpcomingCard({ upcoming }: { upcoming: SetupUpcomingService[] }) {
+  return (
+    <section className="rounded-2xl border border-border bg-card p-4 shadow-card sm:p-5 dark:shadow-none">
+      <div className="flex items-start gap-3">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+          <CalendarClock className="size-5" aria-hidden />
+        </span>
+        <div className="flex flex-col gap-0.5">
+          <h2 className="font-heading text-base font-semibold text-foreground">Coming up</h2>
+          <p className="text-sm text-muted-foreground">
+            The next services and their check-in windows. Check-ins appear on{" "}
+            <Link href="/dashboard/attendance/services" className="font-semibold text-accent hover:underline">
+              Services
+            </Link>{" "}
+            and count on the weekly sheet.
+          </p>
+        </div>
+      </div>
+      {upcoming.length === 0 ? (
+        <p className="mt-4 text-sm text-muted-foreground">
+          No upcoming services. Add your service times in step 2.
+        </p>
+      ) : (
+        <ul className="mt-3 flex flex-col divide-y divide-border">
+          {upcoming.map((service) => (
+            <li key={service.id} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
+              <div className="flex min-w-0 flex-col">
+                <span className="text-sm font-semibold text-foreground">
+                  {service.label}
+                  {service.campusName ? (
+                    <span className="font-normal text-muted-foreground"> · {service.campusName}</span>
+                  ) : null}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {formatDay(service.startsAt, service.timezone)}, {formatTime(service.startsAt, service.timezone)}
+                  {" · "}check-in {formatTime(service.checkinOpensAt, service.timezone)}–
+                  {formatTime(service.checkinClosesAt, service.timezone)}
+                </span>
+              </div>
+              {!service.automatic ? (
+                <StatusChip tone="muted">Automatic off</StatusChip>
+              ) : service.positioned ? (
+                <StatusChip tone="good">Automatic on</StatusChip>
+              ) : (
+                <StatusChip tone="warn">No location</StatusChip>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }

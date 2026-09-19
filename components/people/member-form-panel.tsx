@@ -13,6 +13,7 @@ import {
 } from "@/app/dashboard/people/actions";
 import { moveAppConnectionToPerson } from "@/app/dashboard/people/claim-actions";
 import { Button } from "@/components/ui/button";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { Select } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -127,7 +128,7 @@ function MemberAppSection({
   const since = formatDay(connection.linkedAt);
 
   return (
-    <section className="flex flex-col gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4 dark:border-accent/30 dark:bg-accent/10">
+    <section className="flex flex-col gap-3 rounded-xl border border-brand-navy/20 bg-brand-navy/5 p-4 dark:border-brand-gold/30 dark:bg-brand-gold/10">
       <div className="flex items-start gap-3">
         <Smartphone className="mt-0.5 size-5 shrink-0 text-primary dark:text-accent" aria-hidden />
         <div className="flex flex-col gap-1 text-sm">
@@ -340,13 +341,11 @@ export function MemberFormPanel({
         <label htmlFor="member-phone" className="text-base font-semibold">
           Phone
         </label>
-        <input
+        <PhoneInput
           id="member-phone"
-          type="tel"
           value={phone}
-          onChange={(event) => setPhone(event.target.value)}
+          onValueChange={setPhone}
           readOnly={readOnly}
-          placeholder="(502) xxx-xxxx"
           className={inputClassName}
         />
         {!readOnly ? (

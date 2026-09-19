@@ -22,6 +22,7 @@ import { downscaleForUpload } from "@/lib/sites/downscale-image";
 import {
   AI_KNOWLEDGE_FIELDS,
   DAY_OF_WEEK_LABELS,
+  newRecurringEventRow,
   newServiceTimeRow,
   newStaffRow,
   SERVICE_TIME_KINDS,
@@ -829,6 +830,152 @@ export function ChurchProfileForm({
               />
             </div>
           ))}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Recurring events</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Give the announcement writer context for events your church runs repeatedly.
+            Calendar titles are matched to these names and aliases; FaithForm never schedules
+            an event from this information.
+          </p>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          {form.recurringEvents.map((event, index) => {
+            const update = (next: Partial<typeof event>) => {
+              const recurringEvents = [...form.recurringEvents];
+              recurringEvents[index] = { ...event, ...next };
+              patch({ recurringEvents });
+            };
+
+            return (
+              <div
+                key={event.clientId}
+                className="grid gap-3 rounded-[10px] border border-border p-4 sm:grid-cols-2"
+              >
+                <div className="space-y-2">
+                  <Label>Event name</Label>
+                  <Input
+                    value={event.name}
+                    disabled={readOnly}
+                    placeholder="Men's Breakfast"
+                    onChange={(e) => update({ name: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Other calendar names</Label>
+                  <Input
+                    value={event.aliases}
+                    disabled={readOnly}
+                    placeholder="Men's Prayer Breakfast, Brothers' Table"
+                    onChange={(e) => update({ aliases: e.target.value })}
+                  />
+                  <p className="text-xs text-muted-foreground">Separate aliases with commas.</p>
+                </div>
+                <div className="space-y-2">
+                  <Label>How often</Label>
+                  <Input
+                    value={event.cadence}
+                    disabled={readOnly}
+                    placeholder="First Saturday of every month at 8 AM"
+                    onChange={(e) => update({ cadence: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Who it is for</Label>
+                  <Input
+                    value={event.audience}
+                    disabled={readOnly}
+                    placeholder="Men of every age; visitors are welcome"
+                    onChange={(e) => update({ audience: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Description</Label>
+                  <Textarea
+                    rows={3}
+                    value={event.description}
+                    disabled={readOnly}
+                    placeholder="What happens, what people should expect, and anything they should bring."
+                    onChange={(e) => update({ description: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Writing tone</Label>
+                  <Textarea
+                    rows={2}
+                    value={event.tone}
+                    disabled={readOnly}
+                    placeholder="Relaxed, neighborly, and practical"
+                    onChange={(e) => update({ tone: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Caption notes</Label>
+                  <Textarea
+                    rows={2}
+                    value={event.captionNotes}
+                    disabled={readOnly}
+                    placeholder="Mention that breakfast is free; avoid calling it a conference."
+                    onChange={(e) => update({ captionNotes: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2 sm:col-span-2">
+                  <Label>Image notes</Label>
+                  <Textarea
+                    rows={2}
+                    value={event.visualNotes}
+                    disabled={readOnly}
+                    placeholder="Cast iron, coffee, warm lantern light; no stock-photo boardroom."
+                    onChange={(e) => update({ visualNotes: e.target.value })}
+                  />
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-3 sm:col-span-2">
+                  <label className="flex items-center gap-2 text-sm">
+                    <Switch
+                      checked={event.isActive}
+                      disabled={readOnly}
+                      onCheckedChange={(isActive) => update({ isActive })}
+                    />
+                    Use this context in announcements
+                  </label>
+                  {!readOnly ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() =>
+                        patch({
+                          recurringEvents: form.recurringEvents.filter((_, i) => i !== index),
+                        })
+                      }
+                    >
+                      Remove
+                    </Button>
+                  ) : null}
+                </div>
+              </div>
+            );
+          })}
+          {form.recurringEvents.length === 0 ? (
+            <p className="rounded-[10px] border border-dashed border-border p-4 text-sm text-muted-foreground">
+              No recurring events have been added yet.
+            </p>
+          ) : null}
+          {!readOnly ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() =>
+                patch({
+                  recurringEvents: [...form.recurringEvents, newRecurringEventRow()],
+                })
+              }
+            >
+              Add recurring event
+            </Button>
+          ) : null}
         </CardContent>
       </Card>
 

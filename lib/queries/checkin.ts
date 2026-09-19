@@ -1,6 +1,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createClient } from "@/lib/supabase/server";
+import {
+  householdNamePattern,
+  memberNameFilter,
+} from "@/lib/checkin/name-filter";
+import {
+  childrenFromMemberships,
+  type CheckinChild,
+  type HouseholdMembership,
+} from "@/lib/checkin/roster-search";
 import { recentServiceWeeks, serviceWeekStartForDate } from "@/lib/checkin/service-week";
 import type {
   CheckinSessionRow,
@@ -276,50 +285,112 @@ export async function getHousehold(
   };
 }
 
+export type HouseholdNameSearch =
+  | { ok: true; households: HouseholdDetail[] }
+  | { ok: false; error: string };
+
+const NAME_SEARCH_FAILED =
+  "Could not search by name just now. Try again in a moment.";
+
 /**
- * The household a person belongs to, found from any member's name.
+ * The household a person belongs to, found from any member's name or from the
+ * household's own.
  *
  * This is the whole point of the directory: a volunteer types "John Doe" and
- * gets the Doe household, not John. Two steps rather than one query because
- * the match is on a *member* and the result is a *household*: searching the
- * household name instead would miss a child whose surname differs from the
- * household's.
+ * gets the Doe household, not John. The match is on a *member* and the result
+ * is a *household*, because searching household names alone would miss a
+ * child whose surname differs from the household's; household names are
+ * searched as well, so "the Does" works too.
+ *
+ * A failed read is reported as a failure. It used to come back as an empty
+ * list, which the checkout desk showed as "nobody by that name" to a family
+ * standing in front of it.
+ *
+ * `withChildrenCheckedInOn` keeps only households with a child in a room that
+ * day, and it narrows *before* `limit` cuts, so a family is never pushed off
+ * the list by others who share its name but have nobody to collect.
  */
 export async function findHouseholdsByPersonName(
   churchId: string,
   search: string,
   supabase?: SupabaseClient,
-): Promise<HouseholdDetail[]> {
-  const term = search.trim();
-  if (!term) return [];
+  options: { withChildrenCheckedInOn?: string; limit?: number } = {},
+): Promise<HouseholdNameSearch> {
+  const memberFilter = memberNameFilter(search);
+  const householdPattern = householdNamePattern(search);
+  if (!memberFilter || !householdPattern) return { ok: true, households: [] };
 
   const client = supabase ?? db();
-  const pattern = `%${term.replace(/[%_]/g, (c) => `\\${c}`)}%`;
+  const openOn = options.withChildrenCheckedInOn;
 
-  const { data: matches } = await client
-    .from("members")
-    .select("id")
-    .eq("church_id", churchId)
-    .or(`first_name.ilike.${pattern},last_name.ilike.${pattern}`)
-    .limit(50);
+  const [members, named, open] = await Promise.all([
+    client
+      .from("members")
+      .select("id")
+      .eq("church_id", churchId)
+      .or(memberFilter)
+      .order("last_name", { ascending: true })
+      .order("first_name", { ascending: true })
+      .limit(100),
+    client
+      .from("households")
+      .select("id")
+      .eq("church_id", churchId)
+      .ilike("name", householdPattern)
+      .order("name", { ascending: true })
+      .limit(50),
+    openOn
+      ? client
+          .from("checkin_sessions")
+          .select("household_id")
+          .eq("church_id", churchId)
+          .eq("local_service_date", openOn)
+          .in("status", ["pre_checked_in", "checked_in"])
+      : null,
+  ]);
 
-  const memberIds = (matches ?? []).map((row) => row.id as string);
-  if (memberIds.length === 0) return [];
+  const readError = members.error ?? named.error ?? open?.error;
+  if (readError) {
+    console.error("[checkin] household name search failed:", readError.message);
+    return { ok: false, error: NAME_SEARCH_FAILED };
+  }
 
-  const { data: links } = await client
-    .from("household_members")
-    .select("household_id")
-    .in("member_id", memberIds);
+  const memberIds = (members.data ?? []).map((row) => row.id as string);
+  let linkedIds: string[] = [];
+  if (memberIds.length > 0) {
+    const { data: links, error } = await client
+      .from("household_members")
+      .select("household_id")
+      .eq("church_id", churchId)
+      .in("member_id", memberIds);
 
+    if (error) {
+      console.error("[checkin] household name search failed:", error.message);
+      return { ok: false, error: NAME_SEARCH_FAILED };
+    }
+    linkedIds = (links ?? []).map((row) => row.household_id as string);
+  }
+
+  const withChildrenIn = open
+    ? new Set((open.data ?? []).map((row) => row.household_id as string | null))
+    : null;
+
+  // A household named for what was typed first, then households found
+  // through one of their people.
   const householdIds = Array.from(
-    new Set((links ?? []).map((row) => row.household_id as string)),
-  ).slice(0, 20);
+    new Set([...(named.data ?? []).map((row) => row.id as string), ...linkedIds]),
+  )
+    .filter((id) => !withChildrenIn || withChildrenIn.has(id))
+    .slice(0, options.limit ?? 20);
 
   const households = await Promise.all(
     householdIds.map((id) => getHousehold(churchId, id, client)),
   );
 
-  return households.filter((row): row is HouseholdDetail => row !== null);
+  return {
+    ok: true,
+    households: households.filter((row): row is HouseholdDetail => row !== null),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -418,7 +489,7 @@ export async function getRoster(
 }
 
 /**
- * Member ids marked as household dependents — the only people kids check-in
+ * Member ids marked as household dependents: the only people kids check-in
  * receives or releases.
  */
 export async function listDependentMemberIds(
@@ -438,6 +509,74 @@ export async function listDependentMemberIds(
   }
 
   return new Set((data ?? []).map((row) => row.member_id as string));
+}
+
+type ChildMembershipJoin = {
+  member_id: string;
+  household_id: string;
+  relationship: HouseholdRelationship;
+  households: { name: string } | { name: string }[] | null;
+  members:
+    | {
+        first_name: string;
+        last_name: string;
+        is_active: boolean | null;
+        default_location_id: string | null;
+      }
+    | {
+        first_name: string;
+        last_name: string;
+        is_active: boolean | null;
+        default_location_id: string | null;
+      }[]
+    | null;
+};
+
+/**
+ * The children the Today desk may check in, each with the names a family might
+ * give instead of the child's: the household's, and its guardians'.
+ *
+ * One read of `household_members` rather than the whole People directory. The
+ * desk needs children, and adults only as words to search by, so guardians
+ * come back attached to a child and never as people the desk can check in.
+ * It also means no phone number or email address is sent to the browser for a
+ * list that only ever shows names.
+ */
+export async function listCheckinChildren(
+  churchId: string,
+  supabase?: SupabaseClient,
+): Promise<CheckinChild[]> {
+  const client = supabase ?? db();
+  const { data, error } = await client
+    .from("household_members")
+    .select(
+      "member_id, household_id, relationship, households(name), members(first_name, last_name, is_active, default_location_id)",
+    )
+    .eq("church_id", churchId)
+    .in("relationship", ["dependent", "guardian"]);
+
+  if (error) {
+    console.error("[checkin] children read failed:", error.message);
+    return [];
+  }
+
+  const rows: HouseholdMembership[] = [];
+  for (const row of (data ?? []) as unknown as ChildMembershipJoin[]) {
+    const member = unwrap(row.members);
+    if (!member) continue;
+    rows.push({
+      memberId: row.member_id,
+      householdId: row.household_id,
+      relationship: row.relationship,
+      householdName: unwrap(row.households)?.name ?? null,
+      firstName: member.first_name,
+      lastName: member.last_name,
+      isActive: member.is_active !== false,
+      defaultLocationId: member.default_location_id ?? null,
+    });
+  }
+
+  return childrenFromMemberships(rows);
 }
 
 /** The open sessions for one household: what a checkout desk is releasing. */
@@ -488,6 +627,10 @@ export async function getHouseholdOpenSessions(
  * nobody turned up for is not attendance, and counting it would make the
  * numbers drift upward the moment parents start using the app, which is
  * exactly when a director would be looking at them.
+ *
+ * Children only, by the same rule as the roster. Adults could be checked into
+ * rooms before the desk was limited to children, and those old sessions would
+ * otherwise go on inflating a room's numbers for weeks.
  */
 export async function getLocationStats(
   churchId: string,
@@ -498,17 +641,22 @@ export async function getLocationStats(
   const weeks = recentServiceWeeks(options.endWeekStart, options.weeks ?? 8);
   const earliest = weeks[0];
 
-  const { data, error } = await client
-    .from("checkin_sessions")
-    .select("location_id, local_service_date, church_locations(id, name)")
-    .eq("church_id", churchId)
-    .in("status", ["checked_in", "checked_out"])
-    .gte("local_service_date", earliest);
+  const [{ data, error }, dependentIds] = await Promise.all([
+    client
+      .from("checkin_sessions")
+      .select("member_id, location_id, local_service_date, church_locations(id, name)")
+      .eq("church_id", churchId)
+      .in("status", ["checked_in", "checked_out"])
+      .gte("local_service_date", earliest),
+    listDependentMemberIds(churchId, client),
+  ]);
   if (error) console.error("[checkin] stats read failed:", error.message);
 
   const byLocation = new Map<string, LocationHeadcount>();
 
   for (const raw of (data ?? []) as unknown as SessionJoin[]) {
+    if (!dependentIds.has(raw.member_id as string)) continue;
+
     const location = unwrap(raw.church_locations);
     if (!location) continue;
 

@@ -2,7 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 
 import { sendSiteContactEmail } from "@/lib/email/site-contact";
-import { isChurchFeatureEnabled } from "@/lib/features/access";
+import {
+  isChurchFeatureEmailEnabled,
+  isChurchFeatureEnabled,
+} from "@/lib/features/access";
 import {
   assertRateLimit,
   getClientIp,
@@ -116,6 +119,13 @@ export async function POST(request: NextRequest) {
       { error: "We could not send that right now. Please try again shortly." },
       { status: 500 },
     );
+  }
+
+  // The Website's emails are switched off in the control center. The message
+  // is kept, and the church still reads it under Website → Messages; only the
+  // notice to their inbox is skipped.
+  if (!(await isChurchFeatureEmailEnabled(target.churchId, "website"))) {
+    return NextResponse.json({ ok: true });
   }
 
   if (!target.recipient) {

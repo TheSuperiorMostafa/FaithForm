@@ -99,7 +99,7 @@ export default async function AttendancePage() {
                     Completed
                   </span>
                 ) : checkedIn > 0 ? (
-                  <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1 text-sm font-semibold text-primary dark:bg-accent/15 dark:text-accent">
+                  <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-brand-navy/10 px-3 py-1 text-sm font-semibold text-primary dark:bg-brand-gold/15 dark:text-accent">
                     <Smartphone className="size-4" strokeWidth={1.75} aria-hidden />
                     {checkedIn} checked in
                   </span>

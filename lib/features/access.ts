@@ -162,6 +162,116 @@ export async function isChurchFeatureEnabled(
   return data ? Boolean(data.enabled) : true;
 }
 
+function isMissingEmailsColumn(message: string): boolean {
+  return /emails_enabled/i.test(message);
+}
+
+/**
+ * Whether a feature may send email for a church — receipts, contact-form
+ * notices, the weekly announcement email. A platform admin can switch a
+ * feature's email off without switching the feature off (migration 0085).
+ *
+ * Same defaulting rule as `isChurchFeatureEnabled`: no row, no column (an
+ * unmigrated database) or a failed read all mean on, so a transient error can
+ * never silently stop a church's receipts.
+ */
+export async function isChurchFeatureEmailEnabled(
+  churchId: string,
+  key: FeatureKey,
+): Promise<boolean> {
+  const admin = createAdminClientOrNull();
+  if (!admin) return true;
+
+  const { data, error } = await admin
+    .from("church_features")
+    .select("emails_enabled")
+    .eq("church_id", churchId)
+    .eq("feature_key", key)
+    .maybeSingle();
+
+  if (error) {
+    if (!isMissingFeatureTable(error.message) && !isMissingEmailsColumn(error.message)) {
+      console.error("isChurchFeatureEmailEnabled:", error.message);
+    }
+    return true;
+  }
+
+  return data ? data.emails_enabled !== false : true;
+}
+
+/**
+ * The churches that have had `key`'s email switched off, for batch senders
+ * like the weekly announcement cron. Errors return an empty set: every church
+ * keeps its email rather than a failed read silencing everyone.
+ */
+export async function churchIdsWithFeatureEmailOff(
+  key: FeatureKey,
+): Promise<Set<string>> {
+  const admin = createAdminClientOrNull();
+  if (!admin) return new Set();
+
+  const { data, error } = await admin
+    .from("church_features")
+    .select("church_id")
+    .eq("feature_key", key)
+    .eq("emails_enabled", false);
+
+  if (error) {
+    if (!isMissingFeatureTable(error.message) && !isMissingEmailsColumn(error.message)) {
+      console.error("churchIdsWithFeatureEmailOff:", error.message);
+    }
+    return new Set();
+  }
+
+  return new Set((data ?? []).map((row) => row.church_id as string));
+}
+
+/** Whether each feature may send email for one church. Every key is present. */
+export type FeatureEmailFlags = Record<FeatureKey, boolean>;
+
+/**
+ * Every feature's Emails switch for one church, for the control center.
+ *
+ * Defaults exactly as the send sites do: no row, no column (migration 0085 not
+ * applied yet) or a failed read all read as on. The switch then never shows
+ * email as off while the church is in fact still sending it.
+ */
+export async function getChurchFeatureEmailFlags(
+  churchId: string,
+  supabase?: SupabaseClient,
+): Promise<FeatureEmailFlags> {
+  const emails = Object.fromEntries(
+    FEATURE_KEYS.map((key) => [key, true]),
+  ) as FeatureEmailFlags;
+
+  const client = supabase ?? createAdminClientOrNull();
+  if (!client) return emails;
+
+  try {
+    const { data, error } = await client
+      .from("church_features")
+      .select("feature_key, emails_enabled")
+      .eq("church_id", churchId);
+
+    if (error) {
+      if (!isMissingFeatureTable(error.message) && !isMissingEmailsColumn(error.message)) {
+        console.error("getChurchFeatureEmailFlags:", error.message);
+      }
+      return emails;
+    }
+
+    for (const row of data ?? []) {
+      const key = row.feature_key as string;
+      if (isFeatureKey(key)) emails[key] = row.emails_enabled !== false;
+    }
+  } catch (error) {
+    // The admin page starts this outside its Promise.all, so it must not reject.
+    console.error("getChurchFeatureEmailFlags:", error);
+  }
+
+  return emails;
+}
+
 /**
  * The subset of `churchIds` that still has `key` switched on.
  *

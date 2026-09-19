@@ -102,7 +102,13 @@ test("the attendance client components import no server module values", () => {
   // which reaches the service-role client and `next/headers`. Typecheck and the
   // tests passed; only `next build` refused it. Types are erased, server actions
   // are references, and these modules are dependency-free.
-  const CLIENT_SAFE = new Set(["@/lib/maps/web-mercator", "@/lib/attendance/v2/setup-bounds", "@/lib/utils"]);
+  const CLIENT_SAFE = new Set([
+    "@/lib/maps/web-mercator",
+    "@/lib/attendance/v2/setup-bounds",
+    "@/lib/attendance/v2/setup-view",
+    "@/lib/attendance/v2/sunday-worship",
+    "@/lib/utils",
+  ]);
   const dir = "components/attendance";
   const files = readdirSync(dir).filter((file) => file.endsWith(".tsx"));
   assert.ok(files.length >= 6);
@@ -116,6 +122,8 @@ test("the attendance client components import no server module values", () => {
   }
 
   assert.doesNotMatch(read("lib/attendance/v2/setup-bounds.ts"), /^import /m);
+  assert.doesNotMatch(read("lib/attendance/v2/setup-view.ts"), /^import /m);
+  assert.doesNotMatch(read("lib/attendance/v2/sunday-worship.ts"), /^import /m);
 });
 
 test("Services and Setup are reachable from the Attendance tabs", () => {

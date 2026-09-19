@@ -41,6 +41,8 @@ const CHURCH_SELECT = `
   facebook_url,
   instagram_url,
   youtube_url,
+  tiktok_url,
+  x_url,
   livestream_url,
   stripe_charges_enabled
 `;
@@ -257,6 +259,8 @@ function mapProfile(church: ChurchRow, children: ProfileChildren): SiteProfile {
     facebookUrl: text(church, "facebook_url"),
     instagramUrl: text(church, "instagram_url"),
     youtubeUrl: text(church, "youtube_url"),
+    tiktokUrl: text(church, "tiktok_url"),
+    xUrl: text(church, "x_url"),
     livestreamUrl: text(church, "livestream_url"),
     serviceTimes: (children.serviceTimes ?? []).map((row) => ({
       label: row.label as string,

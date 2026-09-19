@@ -221,6 +221,53 @@ export type GiveCtaContent = {
   surface: SiteSurface;
 };
 
+/** The social networks the contact band draws an icon for, in display order. */
+export const SITE_SOCIAL_NETWORKS = [
+  "facebook",
+  "instagram",
+  "youtube",
+  "tiktok",
+  "x",
+] as const;
+export type SiteSocialNetwork = (typeof SITE_SOCIAL_NETWORKS)[number];
+
+export type SiteSocialLink = {
+  network: SiteSocialNetwork;
+  /** The icon-only link's accessible name, e.g. "Instagram". */
+  label: string;
+  href: string;
+};
+
+/**
+ * One column of the contact band: a heading over a single link.
+ *
+ * `label` is copy a church may reword. `text` and `href` come from the church
+ * profile, except the giving link's `text`, which is copy too. The column is
+ * drawn only when it has both, so a church without a phone number gets no
+ * empty Call column.
+ */
+export type ContactBandItem = {
+  label: string;
+  text: string | null;
+  href: string | null;
+};
+
+/**
+ * Email · Call · Give, with the church's social links under the phone number.
+ *
+ * Each column is an object in the defaults rather than null, so a reworded
+ * heading merges onto whatever the profile supplies instead of standing in for
+ * it — and a church that later removes its phone number is left with nothing
+ * to draw, not a heading over a dead link.
+ */
+export type ContactBandContent = {
+  email: ContactBandItem;
+  call: ContactBandItem;
+  give: ContactBandItem;
+  socials: SiteSocialLink[];
+  surface: SiteSurface;
+};
+
 export type FooterColumn = {
   heading: string;
   lines?: string[];
@@ -312,6 +359,8 @@ export type SiteProfile = {
   facebookUrl: string | null;
   instagramUrl: string | null;
   youtubeUrl: string | null;
+  tiktokUrl: string | null;
+  xUrl: string | null;
   livestreamUrl: string | null;
   serviceTimes: SiteProfileServiceTime[];
   staff: SiteProfileStaff[];

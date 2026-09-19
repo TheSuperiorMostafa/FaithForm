@@ -10,10 +10,12 @@ import type {
   AiKnowledge,
   ChurchProfile,
   ChurchProfileFormState,
+  ChurchRecurringEvent,
   ChurchServiceTime,
   ChurchStaffMember,
   ServiceTimeFormRow,
   StaffFormRow,
+  RecurringEventFormRow,
 } from "@/types/church-profile";
 import type { VoiceProfileSummary } from "@/types/voice-assistant";
 
@@ -101,10 +103,28 @@ function mapStaff(row: Record<string, unknown>): ChurchStaffMember {
   };
 }
 
+function mapRecurringEvent(row: Record<string, unknown>): ChurchRecurringEvent {
+  return {
+    id: row.id as string,
+    church_id: row.church_id as string,
+    name: row.name as string,
+    aliases: Array.isArray(row.aliases) ? row.aliases.filter((v): v is string => typeof v === "string") : [],
+    cadence: (row.cadence as string | null) ?? null,
+    description: (row.description as string | null) ?? null,
+    audience: (row.audience as string | null) ?? null,
+    tone: (row.tone as string | null) ?? null,
+    caption_notes: (row.caption_notes as string | null) ?? null,
+    visual_notes: (row.visual_notes as string | null) ?? null,
+    is_active: row.is_active !== false,
+    sort_order: (row.sort_order as number) ?? 0,
+  };
+}
+
 function mapChurchRow(
   row: Record<string, unknown>,
   serviceTimes: ChurchServiceTime[],
   staff: ChurchStaffMember[],
+  recurringEvents: ChurchRecurringEvent[],
 ): ChurchProfile {
   return {
     churchId: row.id as string,
@@ -146,6 +166,7 @@ function mapChurchRow(
     aiKnowledge: normalizeAiKnowledge(row.ai_knowledge),
     serviceTimes,
     staff,
+    recurringEvents,
   };
 }
 
@@ -205,6 +226,19 @@ export function profileToFormState(profile: ChurchProfile): ChurchProfileFormSta
       aiContactPriority: s.ai_contact_priority,
       isPublic: s.is_public,
     })),
+    recurringEvents: profile.recurringEvents.map((event) => ({
+      clientId: event.id,
+      id: event.id,
+      name: event.name,
+      aliases: event.aliases.join(", "),
+      cadence: event.cadence ?? "",
+      description: event.description ?? "",
+      audience: event.audience ?? "",
+      tone: event.tone ?? "",
+      captionNotes: event.caption_notes ?? "",
+      visualNotes: event.visual_notes ?? "",
+      isActive: event.is_active,
+    })),
   };
 }
 
@@ -245,6 +279,7 @@ export function emptyChurchProfileForm(churchName = ""): ChurchProfileFormState 
     aiKnowledge: {},
     serviceTimes: [],
     staff: [],
+    recurringEvents: [],
   });
 }
 
@@ -254,7 +289,7 @@ export async function getChurchProfile(
 ): Promise<ChurchProfile | null> {
   const client = supabase ?? db();
 
-  const [churchResult, serviceResult, staffResult] = await Promise.all([
+  const [churchResult, serviceResult, staffResult, recurringEventsResult] = await Promise.all([
     client.from("churches").select(CHURCH_SELECT).eq("id", churchId).maybeSingle(),
     client
       .from("church_service_times")
@@ -263,6 +298,11 @@ export async function getChurchProfile(
       .order("sort_order", { ascending: true }),
     client
       .from("church_staff")
+      .select("*")
+      .eq("church_id", churchId)
+      .order("sort_order", { ascending: true }),
+    client
+      .from("church_recurring_events")
       .select("*")
       .eq("church_id", churchId)
       .order("sort_order", { ascending: true }),
@@ -276,20 +316,25 @@ export async function getChurchProfile(
   const staff = (staffResult.data ?? []).map((row) =>
     mapStaff(row as Record<string, unknown>),
   );
+  const recurringEvents = (recurringEventsResult.data ?? []).map((row) =>
+    mapRecurringEvent(row as Record<string, unknown>),
+  );
 
   return mapChurchRow(
     churchResult.data as Record<string, unknown>,
     serviceTimes,
     staff,
+    recurringEvents,
   );
 }
 
 export type UpsertChurchProfileInput = Omit<
   ChurchProfileFormState,
-  "serviceTimes" | "staff"
+  "serviceTimes" | "staff" | "recurringEvents"
 > & {
   serviceTimes: ServiceTimeFormRow[];
   staff: StaffFormRow[];
+  recurringEvents: RecurringEventFormRow[];
 };
 
 function cleanOptional(value: string): string | null {
@@ -364,10 +409,72 @@ export async function upsertChurchProfile(
 
   await syncServiceTimes(churchId, input.serviceTimes, supabase);
   await syncStaff(churchId, input.staff, supabase);
+  await syncRecurringEvents(churchId, input.recurringEvents, supabase);
 
   const profile = await getChurchProfile(churchId, supabase);
   if (!profile) throw new Error("Failed to load church profile after save.");
   return profile;
+}
+
+async function syncRecurringEvents(
+  churchId: string,
+  rows: RecurringEventFormRow[],
+  supabase: SupabaseClient,
+) {
+  const { data: existing, error: readError } = await supabase
+    .from("church_recurring_events")
+    .select("id")
+    .eq("church_id", churchId);
+  if (readError) throw readError;
+
+  const existingIds = new Set((existing ?? []).map((row) => row.id as string));
+  const keptIds = new Set<string>();
+
+  for (let i = 0; i < rows.length; i += 1) {
+    const row = rows[i];
+    if (!row.name.trim()) continue;
+    const payload = {
+      church_id: churchId,
+      name: row.name.trim(),
+      aliases: row.aliases.split(",").map((alias) => alias.trim()).filter(Boolean),
+      cadence: cleanOptional(row.cadence),
+      description: cleanOptional(row.description),
+      audience: cleanOptional(row.audience),
+      tone: cleanOptional(row.tone),
+      caption_notes: cleanOptional(row.captionNotes),
+      visual_notes: cleanOptional(row.visualNotes),
+      is_active: row.isActive,
+      sort_order: i,
+    };
+
+    if (row.id && existingIds.has(row.id)) {
+      keptIds.add(row.id);
+      const { error } = await supabase
+        .from("church_recurring_events")
+        .update(payload)
+        .eq("id", row.id)
+        .eq("church_id", churchId);
+      if (error) throw error;
+    } else {
+      const { data, error } = await supabase
+        .from("church_recurring_events")
+        .insert(payload)
+        .select("id")
+        .single();
+      if (error) throw error;
+      keptIds.add(data.id as string);
+    }
+  }
+
+  const toDelete = Array.from(existingIds).filter((id) => !keptIds.has(id));
+  if (toDelete.length) {
+    const { error } = await supabase
+      .from("church_recurring_events")
+      .delete()
+      .in("id", toDelete)
+      .eq("church_id", churchId);
+    if (error) throw error;
+  }
 }
 
 export async function getChurchAnnouncementFacebookSchedule(

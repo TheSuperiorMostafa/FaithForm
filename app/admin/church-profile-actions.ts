@@ -58,6 +58,20 @@ const staffSchema = z.object({
   isPublic: z.boolean(),
 });
 
+const recurringEventSchema = z.object({
+  clientId: z.string(),
+  id: z.string().uuid().optional(),
+  name: z.string().trim().min(1).max(160),
+  aliases: z.string().max(800),
+  cadence: z.string().max(300),
+  description: z.string().max(3000),
+  audience: z.string().max(500),
+  tone: z.string().max(500),
+  captionNotes: z.string().max(2000),
+  visualNotes: z.string().max(2000),
+  isActive: z.boolean(),
+});
+
 const saveSchema = z
   .object({
     name: z.string().trim().min(2, "Church name is required").max(120),
@@ -92,6 +106,7 @@ const saveSchema = z
     aiKnowledge: z.record(z.string(), z.string()),
     serviceTimes: z.array(serviceTimeSchema),
     staff: z.array(staffSchema),
+    recurringEvents: z.array(recurringEventSchema),
   })
   .superRefine((data, ctx) => {
     const hasOpenDay = Object.values(data.officeHours).some((d) => d.enabled);

@@ -3,7 +3,10 @@ import { loadChurchProfileForAdmin } from "@/app/admin/church-profile-actions";
 import { ChurchDetailTabs } from "@/components/admin/church-detail-tabs";
 import { OpenChurchDashboardButton } from "@/components/admin/open-church-dashboard-button";
 import { PageHeader } from "@/components/admin/page-header";
-import { getChurchFeatureState } from "@/lib/features/access";
+import {
+  getChurchFeatureEmailFlags,
+  getChurchFeatureState,
+} from "@/lib/features/access";
 import type { FeatureKey } from "@/lib/features/catalog";
 import { listRetellAgents } from "@/lib/integrations/retell-client";
 import { hasChurchRetellKey } from "@/lib/integrations/retell-key";
@@ -24,6 +27,7 @@ import {
 } from "@/lib/sites/domain-queries";
 import { getDomainProvider } from "@/lib/sites/domains";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getChurchSmsStatus } from "@/lib/sms/church-sender";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -81,6 +85,12 @@ export default async function AdminChurchDetailPage({
       typeof query.page === "string" ? query.page : undefined,
     ),
   };
+
+  // Started alongside the reads below; awaited on its own so this line stays
+  // out of their destructuring.
+  const smsStatusPromise = getChurchSmsStatus(id, createAdminClient());
+  // Same pattern. Never rejects: a failed read shows every Emails switch on.
+  const featureEmailsPromise = getChurchFeatureEmailFlags(id, createAdminClient());
 
   const [
     detail,
@@ -146,6 +156,7 @@ export default async function AdminChurchDetailPage({
         activityFilters={activityFilters}
         featureFlags={featureState.flags}
         featureNotices={featureState.notices}
+        featureEmails={await featureEmailsPromise}
         featurePermissionsByMemberId={featurePermissionsByMemberId}
         profileForm={profileForm}
         domains={domains}
@@ -158,6 +169,7 @@ export default async function AdminChurchDetailPage({
         hasRetellKey={hasRetellKey}
         retellAgents={retellAgents.agents}
         retellAgentsError={retellAgents.error}
+        smsStatus={await smsStatusPromise}
       />
     </div>
   );

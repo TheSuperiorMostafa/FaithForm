@@ -14,7 +14,11 @@ export function PageRenderer({ page }: { page: ResolvedPage }) {
     // The outer element carries the tokens too, so the letterboxing either side
     // of the 1280px column is the church's own ink rather than whatever the app
     // shell's <body> happens to be set to.
-    <div className="site-page" style={page.tokens as React.CSSProperties}>
+    <div
+      className="site-page"
+      data-theme={page.themeKey}
+      style={page.tokens as React.CSSProperties}
+    >
       <div data-site={page.slug}>
         {page.customCss ? (
           // Sanitised in lib/sites/resolve.ts. It can only ever load here, on

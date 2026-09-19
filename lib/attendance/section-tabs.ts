@@ -12,6 +12,9 @@ import type { FeatureKey } from "@/lib/features/catalog";
  * own feature: marking a service is volunteer work (`attendance`), who gets a
  * follow-up text is the pastor's (`attendance_follow_up`), and the room desk is
  * its own grant (`checkin`). A member sees exactly the tabs they can open.
+ *
+ * The order is the week's order: mark who came, follow up with who didn't,
+ * then the services themselves and the automatic check-in that feeds them.
  */
 const TABS: { feature: FeatureKey; tab: SectionLinkTab }[] = [
   {
@@ -19,20 +22,24 @@ const TABS: { feature: FeatureKey; tab: SectionLinkTab }[] = [
     tab: { label: "Weekly", href: "/dashboard/attendance", match: "exact" },
   },
   {
-    feature: "attendance",
-    tab: { label: "Services", href: "/dashboard/attendance/services", match: "prefix" },
-  },
-  {
-    feature: "checkin",
-    tab: { label: "Kids check-in", href: "/dashboard/checkin", match: "prefix" },
-  },
-  {
     feature: "attendance_follow_up",
     tab: { label: "Follow-up", href: "/dashboard/attendance/follow-up", match: "prefix" },
   },
   {
     feature: "attendance",
-    tab: { label: "Setup", href: "/dashboard/attendance/setup", match: "prefix" },
+    tab: { label: "Services", href: "/dashboard/attendance/services", match: "prefix" },
+  },
+  {
+    feature: "attendance",
+    tab: {
+      label: "Automatic Attendance",
+      href: "/dashboard/attendance/setup",
+      match: "prefix",
+    },
+  },
+  {
+    feature: "checkin",
+    tab: { label: "Kids check-in", href: "/dashboard/checkin", match: "prefix" },
   },
 ];
 

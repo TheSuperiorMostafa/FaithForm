@@ -8,20 +8,40 @@ import {
   CALL_URGENCIES,
   CALLER_MOODS,
   CALL_CLASSIFICATIONS,
+  NAMES_FROM_TRANSCRIPT_ONLY,
   PHONE_CALL_SCORING_VERSION,
+  WRITTEN_FIELD_GUIDE,
+  type ScoringChurchContext,
 } from "@/lib/integrations/phone-call-scoring-prompt";
 import { createAdminClient } from "@/lib/supabase/admin";
+
+/** A written field's guide plus the name rule, which applies to all of them. */
+function writtenField(guide: string): string {
+  return `${guide} ${NAMES_FROM_TRANSCRIPT_ONLY}`;
+}
 
 export const phoneCallScoreSchema = z.object({
   call_type: z.enum(CALL_CLASSIFICATIONS),
   score: z.number().min(1).max(10),
   label: z.enum(CALL_LABELS),
-  summary: z.string().min(1).max(2000),
+  summary: z
+    .string()
+    .min(1)
+    .max(2000)
+    .describe(writtenField(WRITTEN_FIELD_GUIDE.summary)),
   caller_mood: z.enum(CALLER_MOODS),
-  flag_reason: z.string().max(1000).nullable(),
+  flag_reason: z
+    .string()
+    .max(1000)
+    .nullable()
+    .describe(writtenField(WRITTEN_FIELD_GUIDE.flag_reason)),
   notify_pastor: z.boolean(),
   urgency: z.enum(CALL_URGENCIES),
-  missing_knowledge: z.string().max(1000).nullable(),
+  missing_knowledge: z
+    .string()
+    .max(1000)
+    .nullable()
+    .describe(writtenField(WRITTEN_FIELD_GUIDE.missing_knowledge)),
 });
 
 export type PhoneCallScoreBreakdown = z.infer<typeof phoneCallScoreSchema> & {
@@ -53,37 +73,59 @@ function buildNoEngagementBreakdown(reason: string): PhoneCallScoreBreakdown {
 }
 
 /**
- * Who the model is being asked to judge. Without this the rubric has to talk
- * about "the assistant" in the abstract, and a transcript that opens with the
- * assistant's own greeting gets read as the caller speaking.
+ * What the model may be told about the assistant, from the church's saved
+ * settings.
+ *
+ * A linked agent is built by hand in Retell, and FaithForm never sends it the
+ * saved name or voice, so for that agent neither says anything about who
+ * actually answered. Both are left out rather than passed along as facts:
+ * passing the name along is how call summaries came to credit calls to a name
+ * nobody on the line had used.
  */
+export function scoringContextFromSettings(
+  church: { name?: unknown } | null | undefined,
+  settings:
+    | { assistant_name?: unknown; voice_gender?: unknown; agent_mode?: unknown }
+    | null
+    | undefined,
+): ScoringChurchContext {
+  const churchName =
+    typeof church?.name === "string" && church.name.trim()
+      ? church.name.trim()
+      : "the church";
+
+  if (settings?.agent_mode === "linked") {
+    return { churchName, assistantNameHint: null, voiceGender: null };
+  }
+
+  const assistantName =
+    typeof settings?.assistant_name === "string"
+      ? settings.assistant_name.trim()
+      : "";
+  const voiceGender = settings?.voice_gender;
+
+  return {
+    churchName,
+    assistantNameHint: assistantName || null,
+    voiceGender:
+      voiceGender === "female" || voiceGender === "male" ? voiceGender : null,
+  };
+}
+
 async function loadScoringContext(
   churchId: string,
   client: SupabaseClient,
-): Promise<{
-  assistantName: string;
-  churchName: string;
-  voiceGender: "male" | "female" | null;
-}> {
+): Promise<ScoringChurchContext> {
   const [{ data: church }, { data: settings }] = await Promise.all([
     client.from("churches").select("name").eq("id", churchId).maybeSingle(),
     client
       .from("voice_assistant_settings")
-      .select("assistant_name, voice_gender")
+      .select("assistant_name, voice_gender, agent_mode")
       .eq("church_id", churchId)
       .maybeSingle(),
   ]);
 
-  const voiceGender = settings?.voice_gender as string | null | undefined;
-
-  return {
-    assistantName:
-      (settings?.assistant_name as string | null)?.trim() ||
-      "the church's AI receptionist",
-    churchName: (church?.name as string | null)?.trim() || "the church",
-    voiceGender:
-      voiceGender === "female" || voiceGender === "male" ? voiceGender : null,
-  };
+  return scoringContextFromSettings(church, settings);
 }
 
 /**

@@ -331,7 +331,7 @@ export function ServiceOccurrencesBoard({
             Services
           </h1>
           <p className="text-sm text-muted-foreground">
-            Every service you hold, on any day. Pick one to see who came and how
+            Your Sunday worship services. Pick one to see who came and how
             they checked in.
           </p>
         </div>
@@ -350,7 +350,7 @@ export function ServiceOccurrencesBoard({
                 href="/dashboard/attendance/setup"
                 className="font-semibold text-accent hover:underline"
               >
-                Check-in setup
+                Automatic Attendance
               </Link>
               , and your services appear here.
             </CardDescription>

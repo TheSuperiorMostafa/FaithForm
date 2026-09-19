@@ -143,6 +143,9 @@ public final class AutomaticAttendanceModel {
     public private(set) var selectedChurch: AttendanceChurch?
     /// Why the selected church is not being watched while others are.
     public private(set) var selectedChurchBlocker: AutomaticAttendanceBlocker?
+    /// The church a blocked setup is about. Named on screen, because a person
+    /// can belong to several churches and the refusal is one church's.
+    public private(set) var blockedChurchName: String?
     /// The selected church's next service, from its configuration.
     public private(set) var nextService: UpcomingService?
     /// The last automatic check-in at the selected church, from the server's
@@ -252,6 +255,9 @@ public final class AutomaticAttendanceModel {
             accuracy: accuracy,
             previous: step
         )
+        // The name belongs to the refusal it came with; once the screen has
+        // moved on to another state, it no longer describes anything.
+        if case .blocked = step {} else { blockedChurchName = nil }
     }
 
     /// The church the screen is about. Changes what "next service", "last
@@ -280,6 +286,7 @@ public final class AutomaticAttendanceModel {
     /// The person tapped "Turn on automatic check-in". Shows the explanation.
     /// **Does not prompt.**
     public func begin() {
+        blockedChurchName = nil
         step = .introduction
     }
 
@@ -304,16 +311,21 @@ public final class AutomaticAttendanceModel {
         }
 
         authorization = await authorizer.currentAuthorization()
-        switch await service.eligibility() {
+        // The church on screen answers first: its refusal is the one the
+        // person is asking about.
+        let report = await service.eligibilityReport(preferring: selectedChurch?.slug)
+        switch report.eligibility {
         case .refused(let reason):
             // No church can use it. Consent that nothing can act on is
-            // withdrawn again, and the person is told why — without a single
-            // location prompt having been raised.
+            // withdrawn again, and the person is told why — and by which
+            // church — without a single location prompt having been raised.
             let withdrawn = try? await consent.setAutoAttendanceConsent("revoked")
             await service.consentWithdrawn(authorizationVersion: withdrawn?.authorizationVersion)
             await refresh()
+            blockedChurchName = report.church?.name
             step = .blocked(AutomaticAttendanceBlocker.from(refusal: reason))
         case .available, .unknown:
+            blockedChurchName = nil
             await advanceFromPermission()
         }
     }

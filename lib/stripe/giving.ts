@@ -1,8 +1,28 @@
 import type Stripe from "stripe";
+import { isChurchFeatureEmailEnabled } from "@/lib/features/access";
 import { nextWeekdayAnchorUnix } from "@/lib/giving/branding";
 import { chargeCentsWithFeeCoverage } from "@/lib/giving/fees";
 import { applicationFeeAmount } from "@/lib/stripe/config";
 import { getStripe } from "@/lib/stripe/client";
+import {
+  fetchInvoicePaymentIntentId,
+  invoiceClientSecret,
+  invoicePaymentIntentId,
+} from "@/lib/stripe/invoice-shape";
+
+/**
+ * Whether to ask Stripe to email the donor its own receipt (`receipt_email`).
+ *
+ * Stripe sends that receipt from the church's account, in live mode only, and
+ * knows nothing of FaithForm's switches, so it is withheld here when a platform
+ * admin turns Giving's emails off. Withholding it costs the webhook nothing: a
+ * one-time gift also carries the donor's email in `metadata.donor_email`, which
+ * the webhook falls back to, and a recurring gift's comes from the invoice's
+ * `customer_email` and the subscription's metadata.
+ */
+function stripeReceiptsEnabled(churchId: string): Promise<boolean> {
+  return isChurchFeatureEmailEnabled(churchId, "giving");
+}
 
 export type GivingPaymentMetadata = {
   churchId: string;
@@ -70,12 +90,14 @@ export async function createConnectedPaymentIntent(
     coverFees: input.coverFees,
   });
 
+  const stripeReceipt = await stripeReceiptsEnabled(input.churchId);
+
   return stripe.paymentIntents.create(
     {
       amount: chargeAmount,
       currency: input.currency ?? "usd",
       automatic_payment_methods: { enabled: true },
-      receipt_email: input.donorEmail,
+      ...(stripeReceipt ? { receipt_email: input.donorEmail } : {}),
       metadata,
       ...(fee > 0 ? { application_fee_amount: fee } : {}),
     },
@@ -172,7 +194,10 @@ export async function createConnectedSubscription(
     payment_settings: {
       save_default_payment_method: "on_subscription",
     },
-    expand: ["latest_invoice.payment_intent"],
+    // The client secret for the first payment. `latest_invoice.payment_intent`
+    // can't be expanded from API version 2025-03-31.basil on, and this SDK pins
+    // a later version, so asking for it fails the whole request.
+    expand: ["latest_invoice.confirmation_secret"],
     metadata: subscriptionMetadata,
   };
 
@@ -188,27 +213,50 @@ export async function createConnectedSubscription(
     stripeAccount: input.stripeAccountId,
   });
 
-  const invoice = subscription.latest_invoice as
-    | (Stripe.Invoice & {
-        payment_intent?: Stripe.PaymentIntent | string | null;
-      })
-    | null;
-  const paymentIntent = invoice?.payment_intent ?? null;
+  const invoice =
+    typeof subscription.latest_invoice === "object"
+      ? subscription.latest_invoice
+      : null;
 
-  if (typeof paymentIntent === "object" && paymentIntent !== null) {
-    await stripe.paymentIntents.update(
-      paymentIntent.id,
-      { receipt_email: input.donorEmail },
-      { stripeAccount: input.stripeAccountId },
+  if (invoice && (await stripeReceiptsEnabled(input.churchId))) {
+    await addFirstPaymentReceiptEmail(
+      stripe,
+      invoice,
+      input.donorEmail,
+      input.stripeAccountId,
     );
   }
 
-  const clientSecret =
-    typeof paymentIntent === "object" && paymentIntent !== null
-      ? paymentIntent.client_secret
-      : null;
+  return { subscription, clientSecret: invoiceClientSecret(invoice), customerId };
+}
 
-  return { subscription, clientSecret, customerId };
+/**
+ * Asks Stripe to email its own receipt for a recurring gift's first payment,
+ * as it does for a one-time gift. Renewals never had this.
+ *
+ * Best effort. The subscription already exists by now, so failing here would
+ * show the donor an error for a gift they could still complete.
+ */
+async function addFirstPaymentReceiptEmail(
+  stripe: Stripe,
+  invoice: Stripe.Invoice,
+  donorEmail: string,
+  stripeAccountId: string,
+): Promise<void> {
+  try {
+    const paymentIntentId =
+      invoicePaymentIntentId(invoice) ??
+      (await fetchInvoicePaymentIntentId(stripe, invoice.id, stripeAccountId));
+    if (!paymentIntentId) return;
+
+    await stripe.paymentIntents.update(
+      paymentIntentId,
+      { receipt_email: donorEmail },
+      { stripeAccount: stripeAccountId },
+    );
+  } catch {
+    /* the donor still gets FaithForm's receipt from the webhook */
+  }
 }
 
 export async function createBillingPortalSession(

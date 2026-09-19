@@ -42,15 +42,17 @@ function parseApiError(result: SmsMobileApiResponse["result"]): string {
   return result?.note ?? `SMS delivery failed (${String(code)})`;
 }
 
-export function isSmsMobileApiConfigured(): boolean {
-  return Boolean(process.env.SMS_MOBILE_API_KEY?.trim());
-}
-
+/**
+ * Sends through SMSMobileAPI, which texts from the handset its app runs on.
+ * The key decides whose phone that is, so it is always the church's own key
+ * (see `getChurchSmsSender`), never a server-wide default.
+ */
 export async function sendSmsMobileApi(input: {
+  apiKey: string;
   recipients: string;
   message: string;
 }): Promise<SmsMobileApiResult> {
-  const apikey = process.env.SMS_MOBILE_API_KEY?.trim();
+  const apikey = input.apiKey.trim();
   if (!apikey) {
     return { ok: false, error: "SMS is not configured" };
   }

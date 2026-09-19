@@ -18,6 +18,8 @@ type SocialPreviewRequest = {
   notes?: string;
   googleEventId?: string | null;
   announcementId?: string | null;
+  /** Caption only: the church has uploaded its own image. */
+  skipImage?: boolean;
 };
 
 export async function POST(request: Request) {
@@ -48,6 +50,7 @@ export async function POST(request: Request) {
       notes: body.notes?.trim(),
       googleEventId: body.googleEventId ?? null,
       announcementId: body.announcementId ?? null,
+      skipImage: body.skipImage === true,
     });
 
     return NextResponse.json({ preview });

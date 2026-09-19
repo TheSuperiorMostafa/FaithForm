@@ -1,4 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  checkFacebookScheduleTime,
+  normalizeFacebookPostTime,
+} from "@/lib/announcements/facebook-schedule";
 import { provisionFacebookLiveRtmpUrl } from "@/lib/integrations/facebook-live";
 import {
   exchangeForLongLivedUserToken,
@@ -13,7 +17,6 @@ import {
 import { markIntegrationNeedsReconnect, saveIntegration } from "@/lib/integrations/tokens";
 import type { FacebookIntegrationMetadata } from "@/lib/integrations/types";
 import { setStreamRelayDestination } from "@/lib/stream/relay";
-import { shiftYmd, toYMD, zonedDateTimeToUtcMs } from "@/lib/utils/dates";
 
 export {
   FacebookReconnectRequiredError,
@@ -118,10 +121,40 @@ export async function exchangeFacebookCode(
 
 export type FacebookAnnouncementPostOptions = {
   message: string;
-  imagePng?: ArrayBuffer;
-  /** Unix timestamp (seconds) for scheduled publish; omit for immediate post */
+  /** The flyer as stored: an AI-made PNG, or the church's own JPEG or PNG. */
+  image?: ArrayBuffer;
+  /**
+   * Unix seconds to schedule the post for. Omit it to post immediately. That
+   * is the caller's explicit choice, never a fallback: a time Facebook would
+   * refuse throws instead of going out now.
+   */
   scheduledPublishTime?: number;
 };
+
+/**
+ * What a flyer's bytes really are, for the multipart part Facebook reads.
+ *
+ * Every upload used to be labelled image/png. That was true of the AI flyers,
+ * but not of a church's own design, which is usually a JPEG. The bytes are
+ * checked rather than the stored path, so an older object labelled wrongly is
+ * still sent correctly.
+ */
+export function facebookImagePart(bytes: ArrayBuffer): {
+  contentType: "image/jpeg" | "image/png" | "image/webp";
+  filename: string;
+} {
+  const head = new Uint8Array(bytes, 0, Math.min(12, bytes.byteLength));
+  const ascii = (from: number, to: number) =>
+    String.fromCharCode(...Array.from(head.subarray(from, to)));
+
+  if (head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff) {
+    return { contentType: "image/jpeg", filename: "announcement.jpg" };
+  }
+  if (ascii(0, 4) === "RIFF" && ascii(8, 12) === "WEBP") {
+    return { contentType: "image/webp", filename: "announcement.webp" };
+  }
+  return { contentType: "image/png", filename: "announcement.png" };
+}
 
 export type FacebookPostResult = {
   postId: string;
@@ -139,21 +172,31 @@ export async function postAnnouncementToFacebookPage(
   options: FacebookAnnouncementPostOptions,
   supabase?: SupabaseClient,
 ): Promise<FacebookPostResult> {
+  const scheduled = options.scheduledPublishTime !== undefined;
+
+  // Checked here, right before the request, as well as when the form was
+  // submitted: making a graphic can take long enough to use up a tight lead.
+  // Facebook's own refusal is cryptic, so this refuses first, in plain words.
+  if (scheduled) {
+    const check = checkFacebookScheduleTime(options.scheduledPublishTime! * 1000);
+    if (!check.ok) throw new Error(check.error);
+  }
+
   const { token, pageId } = await getFacebookPageAccessToken(
     churchId,
     supabase,
   );
-  const scheduled = Boolean(options.scheduledPublishTime);
 
   const send = async (accessToken: string): Promise<Response> => {
-    if (options.imagePng) {
+    if (options.image) {
+      const part = facebookImagePart(options.image);
       const form = new FormData();
       form.append("message", options.message);
       form.append("access_token", accessToken);
       form.append(
         "source",
-        new Blob([options.imagePng], { type: "image/png" }),
-        "announcement.png",
+        new Blob([options.image], { type: part.contentType }),
+        part.filename,
       );
       if (scheduled && options.scheduledPublishTime) {
         form.append("published", "false");
@@ -286,57 +329,15 @@ export async function postToFacebookPage(
   return { postId: result.postId, url: result.url };
 }
 
-/** Facebook requires scheduled posts to be at least ~10 minutes in the future. */
-const FACEBOOK_MIN_SCHEDULE_LEAD_MS = 10 * 60 * 1000;
-
-const DEFAULT_ANNOUNCEMENT_FACEBOOK_POST_TIME = "09:00";
-
-export type FacebookScheduleOptions = {
-  /** HH:mm in the church timezone. */
-  postTime?: string;
-  /** IANA timezone for the church. */
-  timezone?: string;
-};
-
 /**
- * Schedule announcement Facebook posts for the day before the event at the
- * church's configured time. Posts immediately when that slot has already passed.
+ * The Church Profile's announcement post time, as "HH:mm".
+ *
+ * When a post goes out is decided in lib/announcements/facebook-schedule.ts.
+ * It used to be decided here, where a day-before slot that had passed turned
+ * silently into an immediate post.
  */
-export function resolveFacebookScheduledPublishTime(
-  startAtIso: string,
-  options?: FacebookScheduleOptions,
-): number | undefined {
-  const startMs = new Date(startAtIso).getTime();
-  if (Number.isNaN(startMs)) return undefined;
-
-  const timezone = options?.timezone?.trim() || "America/New_York";
-  const postTime = normalizePostTime(
-    options?.postTime ?? DEFAULT_ANNOUNCEMENT_FACEBOOK_POST_TIME,
-  );
-
-  const eventDate = toYMD(new Date(startAtIso), timezone);
-  const publishDate = shiftYmd(eventDate, -1);
-  const scheduledMs = zonedDateTimeToUtcMs(publishDate, postTime, timezone);
-  const now = Date.now();
-
-  if (scheduledMs - now < FACEBOOK_MIN_SCHEDULE_LEAD_MS) {
-    return undefined;
-  }
-
-  return Math.floor(scheduledMs / 1000);
-}
-
-function normalizePostTime(value: string): string {
-  const trimmed = value.trim();
-  const match = trimmed.match(/^(\d{1,2}):(\d{2})/);
-  if (!match) return DEFAULT_ANNOUNCEMENT_FACEBOOK_POST_TIME;
-  const hours = Math.min(23, Math.max(0, Number(match[1])));
-  const minutes = Math.min(59, Math.max(0, Number(match[2])));
-  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
-}
-
 export function formatAnnouncementFacebookPostTime(
   postTime: string | null | undefined,
 ): string {
-  return normalizePostTime(postTime ?? DEFAULT_ANNOUNCEMENT_FACEBOOK_POST_TIME);
+  return normalizeFacebookPostTime(postTime);
 }

@@ -1,9 +1,10 @@
 "use server";
 
 import { revalidatePath, revalidateTag } from "next/cache";
+import { z } from "zod";
 
 import { requireSuperAdmin } from "@/lib/auth/superadmin";
-import { isFeatureKey } from "@/lib/features/catalog";
+import { FEATURE_KEYS, getFeature, isFeatureKey } from "@/lib/features/catalog";
 import { churchFeatureCacheTag } from "@/lib/features/access";
 import {
   isDisabledReason,
@@ -88,6 +89,80 @@ export async function setChurchFeature(
   revalidatePath(`/admin/churches/${churchId}`);
   revalidateTag(churchFeatureCacheTag(churchId));
   // The church's own dashboard reads these flags for nav and route guards.
+  revalidatePath("/dashboard", "layout");
+
+  return { ok: true };
+}
+
+const featureEmailsSchema = z.object({
+  churchId: z.string().trim().min(1, "Missing church."),
+  featureKey: z.enum(FEATURE_KEYS, "Unknown feature."),
+  enabled: z.boolean(),
+});
+
+/**
+ * Turns one feature's email on or off for a church without touching the
+ * feature itself — receipts can stop while giving keeps taking gifts.
+ *
+ * Only `emails_enabled` (plus who and when) is written, so the upsert cannot
+ * clobber `enabled` or the reason a feature is off. A church with no row yet
+ * gets one whose `enabled` takes the column default, which is on.
+ */
+export async function setChurchFeatureEmails(
+  churchId: string,
+  featureKey: string,
+  enabled: boolean,
+): Promise<FeatureToggleResult> {
+  const user = await requireSuperAdmin();
+
+  const parsed = featureEmailsSchema.safeParse({ churchId, featureKey, enabled });
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid request.",
+    };
+  }
+  const input = parsed.data;
+
+  const feature = getFeature(input.featureKey);
+  if (!feature.emails) {
+    return { ok: false, error: `${feature.label} doesn't send any email.` };
+  }
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("church_features").upsert(
+    {
+      church_id: input.churchId,
+      feature_key: input.featureKey,
+      emails_enabled: input.enabled,
+      updated_at: new Date().toISOString(),
+      updated_by: user.id,
+    },
+    { onConflict: "church_id,feature_key" },
+  );
+
+  if (error) {
+    // Reads treat the missing column as "on", so an unapplied migration only
+    // shows up here. Name it rather than pass on PostgREST's wording.
+    if (/emails_enabled/i.test(error.message)) {
+      return {
+        ok: false,
+        error:
+          "Email switches aren't set up in this database yet — migration 0085 hasn't been applied.",
+      };
+    }
+    if (/church_features/i.test(error.message)) {
+      return {
+        ok: false,
+        error:
+          "Feature flags aren't set up in this database yet — migration 0041 hasn't been applied. Run `pnpm db:team-access`.",
+      };
+    }
+    return { ok: false, error: error.message };
+  }
+
+  revalidatePath(`/admin/churches/${input.churchId}`);
+  revalidateTag(churchFeatureCacheTag(input.churchId));
   revalidatePath("/dashboard", "layout");
 
   return { ok: true };

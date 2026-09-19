@@ -1,3 +1,4 @@
+import { getGivePageUrl } from "@/lib/site-url";
 import { defineSection } from "@/lib/sites/contract";
 import type { GiveCtaContent } from "@/types/site";
 
@@ -33,7 +34,11 @@ export const giveCtaSection = defineSection<GiveCtaContent>({
     surface: "canvas",
   },
   derive: (profile) => ({
-    href: `/give/${profile.slug}`,
+    // Absolute, because the giving page lives on the app's host. A relative
+    // `/give/<slug>` is fine on /sites/<slug>, but on a church's subdomain or
+    // own domain the tenant rewrite turns it into /sites/<slug>/give/<slug>,
+    // which does not exist.
+    href: getGivePageUrl(profile.slug),
     ...(profile.address
       ? {
           note: `Prefer to mail a check? ${[

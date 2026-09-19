@@ -464,6 +464,7 @@ export function resolvePage(input: {
 
   return {
     slug: profile.slug,
+    themeKey: theme.key,
     title: page.title?.trim() || profile.name,
     metaDescription:
       page.metaDescription?.trim() || profile.tagline || profile.description || null,

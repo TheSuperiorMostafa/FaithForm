@@ -2,8 +2,13 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { z } from "zod";
 import { logActivity } from "@/lib/activity/log";
 import { calendarEditFor } from "@/lib/announcements/calendar-edit";
+import {
+  checkFacebookScheduleTime,
+  suggestFacebookSchedule,
+} from "@/lib/announcements/facebook-schedule";
 import {
   addToEmailQueue,
   removeFromEmailQueue,
@@ -25,7 +30,6 @@ import { generateEmergencySocialGraphic, downloadSocialGraphic } from "@/lib/soc
 import {
   deleteFacebookPost,
   postAnnouncementToFacebookPage,
-  resolveFacebookScheduledPublishTime,
 } from "@/lib/integrations/facebook";
 import { isMissingFacebookScheduleColumn } from "@/lib/queries/announcements";
 import {
@@ -51,6 +55,47 @@ async function requireChurchAndUser() {
   if (!churchId) return { supabase, user: null, churchId: null };
 
   return { supabase, user, churchId };
+}
+
+/**
+ * When the Facebook post goes out, as the form chose it.
+ *
+ * `suggested` means the form never said. That is a page opened before the
+ * choice existed, and it gets the time today's form would have suggested.
+ * None of the three turns into an unannounced "now".
+ */
+type FacebookTiming =
+  | { mode: "now" }
+  | { mode: "schedule"; scheduledAtMs: number }
+  | { mode: "suggested" };
+
+const facebookTimingSchema = z.object({
+  mode: z.enum(["now", "schedule"]),
+  // A malformed time falls through to the schedule check, which says what to
+  // fix in the same words the form uses.
+  scheduledAt: z.iso.datetime({ offset: true }).optional().catch(undefined),
+});
+
+function parseFacebookTiming(
+  formData: FormData,
+): { ok: true; timing: FacebookTiming } | { ok: false; error: string } {
+  const mode = formData.get("facebook_post_mode");
+  if (mode === null) return { ok: true, timing: { mode: "suggested" } };
+
+  const parsed = facebookTimingSchema.safeParse({
+    mode,
+    scheduledAt: formData.get("facebook_scheduled_at") ?? undefined,
+  });
+  if (!parsed.success) {
+    return { ok: false, error: "Choose when the Facebook post should go out." };
+  }
+  if (parsed.data.mode === "now") return { ok: true, timing: { mode: "now" } };
+
+  // Checked in UTC before anything is saved, so a time Facebook would refuse
+  // comes back to the form instead of half-publishing the announcement.
+  const check = checkFacebookScheduleTime(parsed.data.scheduledAt);
+  if (!check.ok) return { ok: false, error: check.error };
+  return { ok: true, timing: { mode: "schedule", scheduledAtMs: check.scheduledAtMs } };
 }
 
 function parsePublishForm(formData: FormData) {
@@ -95,6 +140,11 @@ function parsePublishForm(formData: FormData) {
     return { ok: false as const, error: "End must be after start" };
   }
 
+  const facebookTiming = parseFacebookTiming(formData);
+  if (pushToFacebook && !facebookTiming.ok) {
+    return { ok: false as const, error: facebookTiming.error };
+  }
+
   const calendarEdit = calendarEditFor({
     title,
     location,
@@ -126,6 +176,9 @@ function parsePublishForm(formData: FormData) {
       calendarChanged: Boolean(googleEventId) && calendarEdit.changed,
       calendarEndAt: calendarEdit.endAt,
       facebookCaption,
+      facebookTiming: facebookTiming.ok
+        ? facebookTiming.timing
+        : ({ mode: "suggested" } as FacebookTiming),
       socialGraphicPath,
       socialGraphicUrl,
       mobileVisibility,
@@ -330,13 +383,15 @@ export async function publishAnnouncement(
     } else {
       try {
         let message = payload.facebookCaption;
-        let imagePng: ArrayBuffer | undefined;
+        // An AI-made flyer or the church's own upload. Facebook is told its
+        // real type from its bytes.
+        let image: ArrayBuffer | undefined;
 
         if (payload.socialGraphicPath) {
           if (!payload.socialGraphicPath.startsWith(`${ctx.churchId}/`)) {
             throw new Error("Invalid social graphic path");
           }
-          imagePng = await downloadSocialGraphic(payload.socialGraphicPath);
+          image = await downloadSocialGraphic(payload.socialGraphicPath);
         }
 
         // Server actions run in UTC — dates must render in the church's zone.
@@ -354,8 +409,8 @@ export async function publishAnnouncement(
           });
         }
 
-        if (!imagePng) {
-          imagePng = await generateEmergencySocialGraphic(ctx.supabase, ctx.churchId, {
+        if (!image) {
+          image = await generateEmergencySocialGraphic(ctx.supabase, ctx.churchId, {
             title: payload.title,
             when: formatDateTimeRange(
               payload.startAt,
@@ -370,20 +425,35 @@ export async function publishAnnouncement(
           });
         }
 
-        const scheduledPublishTime = resolveFacebookScheduledPublishTime(
-          payload.startAt,
-          await getChurchAnnouncementFacebookSchedule(
+        // The form chose: a time already checked, or now. A form that never
+        // said gets the time today's form would suggest. Posting now is never
+        // a fallback for a time that did not work.
+        let publishAtMs: number | undefined;
+        if (payload.facebookTiming.mode === "schedule") {
+          publishAtMs = payload.facebookTiming.scheduledAtMs;
+        } else if (payload.facebookTiming.mode === "suggested") {
+          const schedule = await getChurchAnnouncementFacebookSchedule(
             ctx.churchId,
             ctx.supabase,
-          ),
-        );
+          );
+          const suggestion = suggestFacebookSchedule({
+            startAt: payload.startAt,
+            allDay: payload.allDay,
+            timeZone: schedule.timezone,
+            postTime: schedule.postTime,
+          });
+          if (suggestion?.mode === "schedule") {
+            publishAtMs = suggestion.scheduledAtMs;
+          }
+        }
 
         const result = await postAnnouncementToFacebookPage(
           ctx.churchId,
           {
             message,
-            imagePng,
-            scheduledPublishTime,
+            image,
+            scheduledPublishTime:
+              publishAtMs === undefined ? undefined : Math.floor(publishAtMs / 1000),
           },
           ctx.supabase,
         );
@@ -503,6 +573,30 @@ export async function publishAnnouncement(
   };
 }
 
+export type FacebookPostDefaults =
+  | { ok: true; timeZone: string; postTime: string }
+  | { ok: false; error: string };
+
+/**
+ * The church's time zone and Church Profile post time.
+ *
+ * The form uses them to suggest the same Facebook time the server would, and
+ * to show it on the church's own clock rather than the viewer's.
+ */
+export async function getFacebookPostDefaults(): Promise<FacebookPostDefaults> {
+  const ctx = await requireChurchAndUser();
+  if (!ctx.churchId || !ctx.user) return { ok: false, error: "No church linked" };
+
+  const featureError = await featureActionError("announcements", ctx.supabase);
+  if (featureError) return { ok: false, error: featureError };
+
+  const schedule = await getChurchAnnouncementFacebookSchedule(
+    ctx.churchId,
+    ctx.supabase,
+  );
+  return { ok: true, timeZone: schedule.timezone, postTime: schedule.postTime };
+}
+
 export async function createWeeklyAnnouncementDraftAction(options?: {
   force?: boolean;
 }) {
@@ -514,7 +608,7 @@ export async function createWeeklyAnnouncementDraftAction(options?: {
 
   const auth = await getChurchAuth(ctx.supabase);
   if (!auth?.isAdmin) {
-    return { error: "Only church admins can create weekly Gmail drafts." };
+    return { error: "Only church admins can create the weekly email." };
   }
 
   const result = await createWeeklyAnnouncementGmailDraft(ctx.churchId, {
@@ -548,7 +642,7 @@ export type UnsubmitAnnouncementResult = {
 /**
  * Rewinds a submitted announcement back to the pending queue.
  *
- * - Clears it from the weekly Gmail draft (`push_to_team`).
+ * - Clears it from the weekly email (`push_to_team`).
  * - Deletes the Facebook post when it is still *scheduled*.
  * - Leaves an already-published Facebook post alone and says so, rather than
  *   silently removing something members may already have seen.
@@ -719,7 +813,7 @@ export async function deleteAnnouncement(id: string) {
 // every provider is handled in one place and admin rights are enforced.
 
 /**
- * Puts an event in — or takes it out of — this week's Gmail draft.
+ * Puts an event in — or takes it out of — this week's email.
  *
  * Membership is an explicit choice rather than a consequence of the date, so a
  * church can announce something a fortnight out in this Sunday's email. The

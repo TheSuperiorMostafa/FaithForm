@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition, type TransitionStartFunction } from "react";
-import { AlertTriangle, Apple, ExternalLink, Info } from "lucide-react";
+import { AlertTriangle, Apple, Check, ExternalLink, Info } from "lucide-react";
 
 import {
   connectAppleCalendarAction,
@@ -399,6 +399,9 @@ function AppleIdForm({
     });
   }
 
+  const chosenName =
+    calendars?.find((calendar) => calendar.url === chosen)?.name ?? null;
+
   function connect() {
     if (!chosen) return;
     setError(null);
@@ -472,33 +475,60 @@ function AppleIdForm({
 
       {calendars && (
         <div className="flex flex-col gap-2">
-          <Label>Which calendar holds church events?</Label>
-          <div className="flex flex-col gap-2">
+          <Label id="apple_calendar_choice">
+            Which calendar holds church events?
+          </Label>
+          <div
+            role="radiogroup"
+            aria-labelledby="apple_calendar_choice"
+            className="flex flex-col gap-2"
+          >
             {calendars.map((calendar) => {
               const active = chosen === calendar.url;
               return (
                 <button
                   key={calendar.url}
                   type="button"
-                  aria-pressed={active}
+                  role="radio"
+                  aria-checked={active}
                   onClick={() => setChosen(calendar.url)}
                   className={cn(
-                    "rounded-xl border px-4 py-3 text-left transition-all",
+                    "flex items-start gap-3 rounded-xl border-2 px-4 py-3 text-left transition-all",
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                     active
-                      ? "border-accent/60 bg-accent/10 shadow-sm"
-                      : "border-border bg-background hover:border-accent/40 hover:bg-accent/5",
+                      ? "border-accent bg-[color:color-mix(in_srgb,var(--accent)_15%,transparent)] shadow-sm ring-2 ring-[color:color-mix(in_srgb,var(--accent)_30%,transparent)]"
+                      : "border-border bg-background hover:bg-muted/60",
                   )}
                 >
-                  <span className="block text-sm font-semibold text-foreground">
-                    {calendar.name}
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors",
+                      active
+                        ? "border-accent bg-accent text-accent-foreground"
+                        : "border-muted-foreground/40 bg-background",
+                    )}
+                  >
+                    {active && <Check className="size-3" strokeWidth={3} />}
                   </span>
-                  {!calendar.writable && (
-                    <span className="mt-0.5 block text-xs text-muted-foreground">
-                      Read-only. Events show up here, but new ones have to be
-                      added in Apple Calendar.
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center gap-2">
+                      <span className="block text-sm font-semibold text-foreground">
+                        {calendar.name}
+                      </span>
+                      {active && (
+                        <span className="rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-accent-foreground">
+                          Selected
+                        </span>
+                      )}
                     </span>
-                  )}
+                    {!calendar.writable && (
+                      <span className="mt-0.5 block text-xs text-muted-foreground">
+                        Read-only. Events show up here, but new ones have to be
+                        added in Apple Calendar.
+                      </span>
+                    )}
+                  </span>
                 </button>
               );
             })}
@@ -515,7 +545,11 @@ function AppleIdForm({
       <div className="flex flex-wrap gap-2">
         {calendars ? (
           <Button type="button" onClick={connect} disabled={pending || !chosen}>
-            {pending ? "Connecting…" : "Connect this calendar"}
+            {pending
+              ? "Connecting…"
+              : chosenName
+                ? `Connect “${chosenName}”`
+                : "Connect this calendar"}
           </Button>
         ) : (
           <Button

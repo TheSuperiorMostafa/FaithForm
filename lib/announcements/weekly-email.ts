@@ -5,10 +5,21 @@ import {
   type WeeklyEmailEvent,
 } from "@/lib/email/announcement-template";
 import { loadAttachmentsForSend } from "@/lib/announcements/attachments";
+import {
+  createWeeklyEmailDraft,
+  NO_WEEKLY_EMAIL_CHANNEL_MESSAGE,
+  resolveWeeklyEmailChannel,
+  selectWeeklyDraftChurchIds,
+  WEEKLY_EMAIL_SWITCHED_OFF_MESSAGE,
+  type WeeklyEmailChannel,
+} from "@/lib/announcements/email-delivery";
 import { listEmailQueue } from "@/lib/announcements/email-queue";
+import {
+  churchIdsWithFeatureEmailOff,
+  isChurchFeatureEmailEnabled,
+} from "@/lib/features/access";
 import { listChurchCalendarEvents } from "@/lib/integrations/calendar";
-import { createGmailDraft } from "@/lib/integrations/gmail";
-import { hasIntegration } from "@/lib/integrations/tokens";
+import { ICloudMailError } from "@/lib/integrations/icloud-mail";
 import type { CalendarEventPreview } from "@/lib/integrations/types";
 import { getAnnouncementEmailSettings } from "@/lib/queries/announcement-email-settings";
 import type { AnnouncementRow } from "@/lib/queries/announcements";
@@ -113,12 +124,40 @@ export type WeeklyDraftResult =
       ok: true;
       draftId: string;
       draftUrl: string;
+      /** The mailbox the draft was made in. */
+      provider: WeeklyEmailChannel;
       eventCount: number;
       skipped: boolean;
       reason?: string;
     }
   | { ok: false; error: string; skipped?: boolean; reason?: string };
 
+/**
+ * What a church is told when its mailbox would not take the draft.
+ *
+ * Only the message is ever read from a Gmail error: googleapis errors carry
+ * the request they failed on, OAuth bearer token included.
+ */
+function draftFailureMessage(channel: WeeklyEmailChannel, err: unknown): string {
+  if (err instanceof ICloudMailError) return err.message;
+
+  const detail = err instanceof Error ? err.message : "";
+  console.error(`[weekly-email] ${channel} draft failed:`, detail || err);
+
+  if (channel === "icloud") {
+    return "iCloud Mail wouldn't save this week's email. Try again in a moment.";
+  }
+  return detail
+    ? `Google email wouldn't save this week's draft. ${detail}`
+    : "Google email wouldn't save this week's draft. Try again in a moment.";
+}
+
+/**
+ * Makes this week's announcement email as a draft, in Gmail or iCloud Mail.
+ *
+ * The name is from when Gmail was the only mailbox, and callers know it by
+ * that name. Which mailbox it uses is `resolveWeeklyEmailChannel`'s call.
+ */
 export async function createWeeklyAnnouncementGmailDraft(
   churchId: string,
   options?: {
@@ -129,6 +168,18 @@ export async function createWeeklyAnnouncementGmailDraft(
 ): Promise<WeeklyDraftResult> {
   const supabase = options?.supabase ?? createAdminClient();
   const now = options?.now ?? new Date();
+
+  // A platform admin can switch a church's announcement email off without
+  // switching announcements off. That stops the email being made by hand as
+  // well as by the Monday run.
+  if (!(await isChurchFeatureEmailEnabled(churchId, "announcements"))) {
+    return {
+      ok: false,
+      skipped: true,
+      reason: "email_switched_off",
+      error: WEEKLY_EMAIL_SWITCHED_OFF_MESSAGE,
+    };
+  }
 
   const { data: church } = await supabase
     .from("churches")
@@ -161,16 +212,13 @@ export async function createWeeklyAnnouncementGmailDraft(
       ok: false,
       skipped: true,
       reason: "already_created",
-      error: "A Gmail draft for this week was already created.",
+      error: "This week's email has already been created.",
     };
   }
 
-  const googleConnected = await hasIntegration(churchId, "google", supabase);
-  if (!googleConnected) {
-    return {
-      ok: false,
-      error: "Google is not connected for this church.",
-    };
+  const channel = await resolveWeeklyEmailChannel(churchId, supabase);
+  if (!channel) {
+    return { ok: false, error: NO_WEEKLY_EMAIL_CHANNEL_MESSAGE };
   }
 
   // Look well past the current week: the queue can hold an event a fortnight
@@ -179,8 +227,8 @@ export async function createWeeklyAnnouncementGmailDraft(
     new Date(week.weekStartISO).getTime() + QUEUE_HORIZON_DAYS * 86_400_000,
   ).toISOString();
 
-  // The draft is a Gmail draft, so Google has to be connected — but the events
-  // in it come from every calendar the church has linked.
+  // The draft lands in one mailbox, but the events in it come from every
+  // calendar the church has linked.
   const [calendar, queued] = await Promise.all([
     listChurchCalendarEvents(churchId, week.weekStartISO, horizonEnd, supabase),
     listEmailQueue(churchId, week.weekStartKey, supabase),
@@ -272,16 +320,22 @@ export async function createWeeklyAnnouncementGmailDraft(
 
   const attachments = await loadAttachmentsForSend(churchId, supabase);
 
-  const draft = await createGmailDraft(
-    churchId,
-    {
-      to: settings.to ?? undefined,
-      subject: rendered.subject,
-      bodyHtml: rendered.bodyHtml,
-      attachments,
-    },
-    supabase,
-  );
+  let draft: { draftId: string; draftUrl: string };
+  try {
+    draft = await createWeeklyEmailDraft(
+      channel,
+      churchId,
+      {
+        to: settings.to ?? undefined,
+        subject: rendered.subject,
+        bodyHtml: rendered.bodyHtml,
+        attachments,
+      },
+      supabase,
+    );
+  } catch (err) {
+    return { ok: false, error: draftFailureMessage(channel, err) };
+  }
 
   const { markWeeklyAnnouncementDraftCreated } = await import(
     "@/lib/queries/announcement-email-settings"
@@ -297,6 +351,7 @@ export async function createWeeklyAnnouncementGmailDraft(
     ok: true,
     draftId: draft.draftId,
     draftUrl: draft.draftUrl,
+    provider: channel,
     eventCount: emailEvents.length,
     skipped: false,
   };
@@ -306,9 +361,10 @@ export async function createWeeklyAnnouncementGmailDraft(
  * Local weekdays on which an automatic draft may be created (Mon–Wed).
  *
  * Monday is the intended day. Tuesday and Wednesday act as a catch-up window
- * so a failed run — an expired Google token, a deploy, a cron blip — still
- * produces that week's draft instead of silently skipping the week. The
- * per-church `weekStartKey` guard keeps it to one draft per week regardless.
+ * so a failed run — an expired Google token, iCloud Mail not answering, a
+ * deploy, a cron blip — still produces that week's draft instead of silently
+ * skipping the week. The per-church `weekStartKey` guard keeps it to one
+ * draft per week regardless.
  */
 const AUTO_DRAFT_LOCAL_WEEKDAYS = new Set([1, 2, 3]);
 
@@ -323,21 +379,23 @@ export async function runWeeklyAnnouncementDraftsForAllChurches(
   const supabase = createAdminClient();
   const now = options?.now ?? new Date();
 
+  // Metadata only, never tokens: whether each connection still works is
+  // settled church by church when its draft is made.
   const { data: integrations, error } = await supabase
     .from("church_integrations")
-    .select("church_id")
-    .eq("provider", "google");
+    .select("church_id, provider, metadata")
+    .in("provider", ["google", "apple"]);
 
   if (error || !integrations?.length) {
     return { processed: 0, created: 0, skipped: 0, errors: [] };
   }
 
-  const churchIds = Array.from(
-    new Set(
-      (integrations ?? [])
-        .map((row) => row.church_id as string)
-        .filter(Boolean),
-    ),
+  const churchIds = selectWeeklyDraftChurchIds(
+    integrations.map((row) => ({
+      churchId: row.church_id as string,
+      provider: row.provider as string,
+      metadata: (row.metadata as Record<string, unknown> | null) ?? null,
+    })),
   );
 
   if (churchIds.length === 0) {
@@ -375,6 +433,11 @@ export async function runWeeklyAnnouncementDraftsForAllChurches(
     }
   }
 
+  // And churches that keep announcements but have had its email switched off.
+  for (const churchId of await churchIdsWithFeatureEmailOff("announcements")) {
+    disabledChurchIds.add(churchId);
+  }
+
   let created = 0;
   let skipped = 0;
   const errors: Array<{ churchId: string; error: string }> = [];
@@ -397,18 +460,26 @@ export async function runWeeklyAnnouncementDraftsForAllChurches(
       continue;
     }
 
-    const result = await createWeeklyAnnouncementGmailDraft(churchId, {
-      force: options?.force,
-      now,
-      supabase,
-    });
+    // One church's failure must not cost every church after it its email.
+    try {
+      const result = await createWeeklyAnnouncementGmailDraft(churchId, {
+        force: options?.force,
+        now,
+        supabase,
+      });
 
-    if (result.ok) {
-      created++;
-    } else if (result.skipped) {
-      skipped++;
-    } else {
-      errors.push({ churchId, error: result.error });
+      if (result.ok) {
+        created++;
+      } else if (result.skipped) {
+        skipped++;
+      } else {
+        errors.push({ churchId, error: result.error });
+      }
+    } catch (err) {
+      errors.push({
+        churchId,
+        error: err instanceof Error ? err.message : "Could not create the weekly email.",
+      });
     }
   }
 

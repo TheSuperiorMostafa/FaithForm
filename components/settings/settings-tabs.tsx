@@ -120,16 +120,42 @@ function SettingsTabsInner({
       </TabsContent>
 
       <TabsContent value="general" className="mt-0">
+        {/* Two independent columns: a grid row would hold Resources below the
+            full height of the branding card and leave a gap under Display. */}
         <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Display</CardTitle>
-              <CardDescription>Light and dark mode.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ThemeToggle variant="segmented" />
-            </CardContent>
-          </Card>
+          <div className="flex flex-col gap-4">
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Display</CardTitle>
+                <CardDescription>Light and dark mode.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ThemeToggle variant="segmented" />
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base">Resources</CardTitle>
+                <CardDescription>Documents and support.</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-2 sm:grid-cols-2">
+                {allowedFeatures.includes("library") && (
+                  <Link
+                    href="/dashboard/library"
+                    className="rounded-lg border border-border bg-background px-4 py-2.5 text-center text-sm font-semibold text-foreground transition-colors hover:border-accent hover:bg-accent/10"
+                  >
+                    Documents
+                  </Link>
+                )}
+                <Link
+                  href="/dashboard/support"
+                  className="rounded-lg border border-border bg-background px-4 py-2.5 text-center text-sm font-semibold text-foreground transition-colors hover:border-accent hover:bg-accent/10"
+                >
+                  Support
+                </Link>
+              </CardContent>
+            </Card>
+          </div>
 
           <Card>
             <CardHeader className="pb-3">
@@ -151,29 +177,6 @@ function SettingsTabsInner({
                   Ask a church admin to update the app logo and colors.
                 </p>
               )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base">Resources</CardTitle>
-              <CardDescription>Documents and support.</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-2 sm:grid-cols-2">
-              {allowedFeatures.includes("library") && (
-                <Link
-                  href="/dashboard/library"
-                  className="rounded-lg border border-border bg-background px-4 py-2.5 text-center text-sm font-semibold text-foreground transition-colors hover:border-accent hover:bg-accent/10"
-                >
-                  Documents
-                </Link>
-              )}
-              <Link
-                href="/dashboard/support"
-                className="rounded-lg border border-border bg-background px-4 py-2.5 text-center text-sm font-semibold text-foreground transition-colors hover:border-accent hover:bg-accent/10"
-              >
-                Support
-              </Link>
             </CardContent>
           </Card>
         </div>

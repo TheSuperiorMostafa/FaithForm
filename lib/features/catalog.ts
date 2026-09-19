@@ -66,6 +66,16 @@ export type FeatureDefinition = {
    * invisible to the public.
    */
   publicImpact?: string;
+  /**
+   * The email this feature sends for a church, in the words a platform admin
+   * reads beside its Emails switch. That switch silences only these messages
+   * and leaves the feature itself running (`church_features.emails_enabled`).
+   *
+   * Absent means the feature sends no email of its own, so it gets no switch.
+   * Sign-in links are deliberately never listed: a donor must always be able to
+   * reach and manage their own gifts.
+   */
+  emails?: string;
 };
 
 export const FEATURES: FeatureDefinition[] = [
@@ -110,10 +120,11 @@ export const FEATURES: FeatureDefinition[] = [
     key: "announcements",
     label: "Announcements",
     description:
-      "Calendar queue, Facebook publishing, and the weekly Gmail draft.",
+      "Calendar queue, Facebook publishing, and the weekly email draft.",
     href: "/dashboard/announcements",
     icon: Megaphone,
     routes: ["/dashboard/announcements"],
+    emails: "The weekly announcement email",
   },
   {
     key: "sermon_builder",
@@ -150,6 +161,7 @@ export const FEATURES: FeatureDefinition[] = [
     routes: ["/dashboard/giving"],
     publicImpact:
       "Takes the public giving page offline and stops new gifts. Existing recurring gifts keep running: donors can still pause or cancel them, but not restart or raise one.",
+    emails: "Donation receipts and failed-payment notices",
   },
   {
     key: "library",
@@ -169,6 +181,7 @@ export const FEATURES: FeatureDefinition[] = [
     routes: ["/dashboard/website"],
     publicImpact:
       "Takes the church's public site offline on every connected domain, and stops the Visit form accepting messages.",
+    emails: "Contact form notices to your church",
   },
   {
     key: "member_app",

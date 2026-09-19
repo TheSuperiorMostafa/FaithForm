@@ -13,14 +13,15 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  AttentionBadge,
   ClassificationBadge,
   LegacyScoreBadge,
+  UrgentBadge,
 } from "@/components/voice-assistant/scoring-explainer";
 import {
   describeCallScore,
-  isLegacyCallScore,
+  isOutdatedCallScore,
   LEGACY_SCORE_NOTE,
+  OLDER_SCORE_NOTE,
 } from "@/lib/utils/call-score";
 import {
   formatCallDuration,
@@ -54,7 +55,10 @@ export function RecentCallsBlock({
     total: number;
   } | null>(null);
 
-  const legacyCount = calls.filter(isLegacyCallScore).length;
+  // Every call scored under older rules, not only the "Not yet sorted" ones:
+  // calls scored before names had to come from the transcript need reading
+  // again too, even though their kind and score look current.
+  const olderCount = calls.filter(isOutdatedCallScore).length;
 
   const handleImport = () => {
     startTransition(async () => {
@@ -78,8 +82,8 @@ export function RecentCallsBlock({
     startRescore(async () => {
       let done = 0;
       let failed = 0;
-      let remaining = legacyCount;
-      setProgress({ done: 0, total: legacyCount });
+      let remaining = olderCount;
+      setProgress({ done: 0, total: olderCount });
 
       for (let round = 0; round < MAX_RESCORE_ROUNDS; round++) {
         const result = await rescoreLegacyPhoneCalls();
@@ -119,20 +123,20 @@ export function RecentCallsBlock({
         <div>
           <CardTitle>Call log</CardTitle>
           <p className="mt-1 text-xs text-muted-foreground">
-            Calls are saved here automatically. Ones that still need a person are
-            flagged.
+            Calls are saved here automatically. A call from someone in crisis is
+            marked Urgent.
           </p>
         </div>
         {isAdmin && (
           <div className="flex shrink-0 flex-wrap justify-end gap-2">
-            {legacyCount > 0 && (
+            {olderCount > 0 && (
               <Button
                 type="button"
                 variant="outline"
                 size="sm"
                 disabled={rescoring}
                 onClick={handleRescoreLegacy}
-                title={LEGACY_SCORE_NOTE}
+                title={OLDER_SCORE_NOTE}
               >
                 <Sparkles
                   className={`mr-1.5 size-3.5 ${rescoring ? "animate-pulse" : ""}`}
@@ -140,7 +144,7 @@ export function RecentCallsBlock({
                 />
                 {rescoring && progress
                   ? `Re-scoring ${Math.min(progress.done + 1, progress.total)} of ${progress.total}…`
-                  : `Re-score ${legacyCount} older call${legacyCount === 1 ? "" : "s"}`}
+                  : `Re-score ${olderCount} older call${olderCount === 1 ? "" : "s"}`}
               </Button>
             )}
             {hasAgent && (
@@ -222,7 +226,7 @@ export function RecentCallsBlock({
                               classification={score.classification}
                             />
                           )}
-                          <AttentionBadge view={score} />
+                          <UrgentBadge view={score} />
                         </span>
                       </td>
                       <td className="py-2.5 pr-4 tabular-nums">

@@ -208,7 +208,7 @@ export function AnnouncementCalendarQueue({
                     >
                       <Button variant="outline" size="sm">
                         <Mail className="size-4" strokeWidth={1.75} />
-                        Gmail drafts
+                        Email drafts
                       </Button>
                     </a>
                   </div>

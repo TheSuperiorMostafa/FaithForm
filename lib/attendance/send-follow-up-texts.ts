@@ -1,6 +1,7 @@
 import { getFollowUpMessageTemplates } from "@/lib/queries/follow-up-settings";
-import { isSmsConfigured, sendSms, smsSenderNumber } from "@/lib/sms/send-sms";
+import { getChurchSmsSender } from "@/lib/sms/church-sender";
 import { pickFollowUpMessage } from "@/lib/sms/follow-up-messages";
+import { sendSms } from "@/lib/sms/send-sms";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -19,6 +20,18 @@ export type FollowUpSender = {
   userId: string | null;
   name: string | null;
 };
+
+/** What actually happened, so the page never says "sent" when nothing went out. */
+export type FollowUpSendSummary = {
+  sent: number;
+  failed: number;
+  skipped: number;
+  /** True when the church has no texting phone of its own, so nothing was sent. */
+  notConnected: boolean;
+};
+
+export const TEXTING_NOT_CONNECTED =
+  "No texting phone is connected for this church yet";
 
 function isMissingDeliveryColumn(message: string): boolean {
   return /follow_up_(sent_at|error|sms_id)/i.test(message);
@@ -78,11 +91,21 @@ export async function sendAttendanceFollowUpTexts(
   churchId: string,
   members: FollowUpMember[],
   sender: FollowUpSender,
-): Promise<void> {
-  if (members.length === 0) return;
+): Promise<FollowUpSendSummary> {
+  const summary: FollowUpSendSummary = {
+    sent: 0,
+    failed: 0,
+    skipped: 0,
+    notConnected: false,
+  };
+  if (members.length === 0) return summary;
 
   const admin = createAdminClient();
-  const templates = await getFollowUpMessageTemplates(churchId, admin);
+  const [templates, smsSender] = await Promise.all([
+    getFollowUpMessageTemplates(churchId, admin),
+    // This church's own phone, never a shared one (lib/sms/church-sender.ts).
+    getChurchSmsSender(churchId, admin),
+  ]);
 
   const logBase = (member: FollowUpMember, message: string) => ({
     church_id: churchId,
@@ -92,27 +115,29 @@ export async function sendAttendanceFollowUpTexts(
     recipient_name: member.fullName?.trim() || member.firstName,
     recipient_phone: member.phone,
     message,
-    sender_phone: smsSenderNumber(),
+    sender_phone: smsSender?.fromNumber ?? null,
     sender_user_id: sender.userId,
     sender_name: sender.name,
   });
 
-  if (!isSmsConfigured()) {
+  if (!smsSender) {
     console.warn(
-      "[attendance-follow-up] SMS is not configured — follow-ups saved but texts were not sent.",
+      `[attendance-follow-up] church ${churchId} has no texting phone connected — follow-ups saved but texts were not sent.`,
     );
+    summary.notConnected = true;
     for (const member of members) {
       if (!member.entryId) continue;
       await recordOutcome(admin, member.entryId, {
-        follow_up_error: "SMS is not configured on the server",
+        follow_up_error: TEXTING_NOT_CONNECTED,
       });
       await logAttempt(admin, {
         ...logBase(member, "(not sent)"),
         status: "skipped",
-        error: "SMS is not configured on the server",
+        error: TEXTING_NOT_CONNECTED,
       });
+      summary.skipped += 1;
     }
-    return;
+    return summary;
   }
 
   for (const member of members) {
@@ -127,6 +152,7 @@ export async function sendAttendanceFollowUpTexts(
         status: "skipped",
         error: "No phone number on file",
       });
+      summary.skipped += 1;
       continue;
     }
 
@@ -135,7 +161,7 @@ export async function sendAttendanceFollowUpTexts(
       member.consecutiveAbsent,
       templates,
     );
-    const result = await sendSms(member.phone, message);
+    const result = await sendSms(smsSender, member.phone, message);
 
     if (result.ok) {
       const sentUpdate: Record<string, unknown> = {
@@ -150,8 +176,9 @@ export async function sendAttendanceFollowUpTexts(
         ...logBase(member, message),
         status: "sent",
         sms_id: result.messageId,
-        sender_phone: result.from ?? smsSenderNumber(),
+        sender_phone: result.from ?? smsSender.fromNumber,
       });
+      summary.sent += 1;
     } else {
       await recordOutcome(admin, member.entryId, {
         follow_up_error: result.error,
@@ -160,8 +187,11 @@ export async function sendAttendanceFollowUpTexts(
         ...logBase(member, message),
         status: "failed",
         error: result.error,
-        sender_phone: result.from ?? smsSenderNumber(),
+        sender_phone: result.from ?? smsSender.fromNumber,
       });
+      summary.failed += 1;
     }
   }
+
+  return summary;
 }

@@ -10,9 +10,9 @@ import {
   syncRetellPhoneForChurch,
 } from "@/lib/integrations/retell-phone";
 import { importRetellCallsForChurch } from "@/lib/integrations/retell-calls";
-import { PHONE_CALL_SCORING_VERSION } from "@/lib/integrations/phone-call-scoring-prompt";
 import { scorePhoneCallIfNeeded } from "@/lib/integrations/score-phone-call";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isOutdatedScoreBreakdown } from "@/lib/utils/call-score";
 import {
   getPhoneCallById,
   upsertVoiceAssistantSettings,
@@ -21,6 +21,7 @@ import {
   SPEAKING_PACES,
   VOICE_GENDERS,
   VOICE_TONES,
+  type PhoneCallScoreBreakdown,
 } from "@/types/voice-assistant";
 import { createClient } from "@/lib/supabase/server";
 
@@ -202,12 +203,16 @@ export type RescoreLegacyCallsResult =
 const LEGACY_RESCORE_BATCH = 5;
 
 /**
- * Judge one round of calls the retired rubric scored, under the current one.
+ * Judge one round of calls scored under older rules, under the current ones.
  *
- * Migration 0070 converted their numbers but could not invent the kind of call
- * each was, or whether anyone still needs to ring back, because the old rubric
- * never asked. Until they are re-scored the log shows a converted rank with no
- * kind and the old reasoning beside it, which reads as wrong because it is.
+ * That covers two kinds of call. Ones the retired rubric scored: migration
+ * 0070 converted their numbers but could not invent the kind of call each was,
+ * because the old rubric never asked, so the log shows a converted rank with
+ * no kind and the old reasoning beside it. And ones scored before names had to
+ * come from the transcript, whose summaries can credit the call to the saved
+ * assistant name even when nobody on the line used it. Both are fixed only by
+ * reading the call again, and the version stamp is what tells them apart from
+ * calls that are already current.
  */
 export async function rescoreLegacyPhoneCalls(): Promise<RescoreLegacyCallsResult> {
   const auth = await requireChurchAuth();
@@ -232,13 +237,11 @@ export async function rescoreLegacyPhoneCalls(): Promise<RescoreLegacyCallsResul
     return { error: "Could not load the older calls." };
   }
 
-  const legacy = (data ?? []).filter((row) => {
-    const version = (row.score_breakdown as { version?: unknown } | null)
-      ?.version;
-    return typeof version !== "number" || version < PHONE_CALL_SCORING_VERSION;
-  });
+  const older = (data ?? []).filter((row) =>
+    isOutdatedScoreBreakdown(row.score_breakdown as PhoneCallScoreBreakdown | null),
+  );
 
-  const batch = legacy.slice(0, LEGACY_RESCORE_BATCH);
+  const batch = older.slice(0, LEGACY_RESCORE_BATCH);
   const results = await Promise.allSettled(
     batch.map((row) =>
       scorePhoneCallIfNeeded(row.id as string, { force: true, admin }),
@@ -258,7 +261,7 @@ export async function rescoreLegacyPhoneCalls(): Promise<RescoreLegacyCallsResul
     ok: true,
     rescored,
     failed: batch.length - rescored,
-    remaining: legacy.length - rescored,
+    remaining: older.length - rescored,
   };
 }
 

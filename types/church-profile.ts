@@ -68,6 +68,21 @@ export type ChurchStaffMember = {
   is_public: boolean;
 };
 
+export type ChurchRecurringEvent = {
+  id: string;
+  church_id: string;
+  name: string;
+  aliases: string[];
+  cadence: string | null;
+  description: string | null;
+  audience: string | null;
+  tone: string | null;
+  caption_notes: string | null;
+  visual_notes: string | null;
+  is_active: boolean;
+  sort_order: number;
+};
+
 export type ChurchProfile = {
   churchId: string;
   name: string;
@@ -104,6 +119,7 @@ export type ChurchProfile = {
   aiKnowledge: AiKnowledge;
   serviceTimes: ChurchServiceTime[];
   staff: ChurchStaffMember[];
+  recurringEvents: ChurchRecurringEvent[];
 };
 
 export type ChurchProfileFormState = {
@@ -139,6 +155,22 @@ export type ChurchProfileFormState = {
   aiKnowledge: AiKnowledge;
   serviceTimes: ServiceTimeFormRow[];
   staff: StaffFormRow[];
+  recurringEvents: RecurringEventFormRow[];
+};
+
+export type RecurringEventFormRow = {
+  clientId: string;
+  id?: string;
+  name: string;
+  /** Comma-separated alternate calendar titles. */
+  aliases: string;
+  cadence: string;
+  description: string;
+  audience: string;
+  tone: string;
+  captionNotes: string;
+  visualNotes: string;
+  isActive: boolean;
 };
 
 export type ServiceTimeFormRow = {
@@ -166,6 +198,21 @@ export type StaffFormRow = {
   aiContactPriority: number;
   isPublic: boolean;
 };
+
+export function newRecurringEventRow(): RecurringEventFormRow {
+  return {
+    clientId: crypto.randomUUID(),
+    name: "",
+    aliases: "",
+    cadence: "",
+    description: "",
+    audience: "",
+    tone: "",
+    captionNotes: "",
+    visualNotes: "",
+    isActive: true,
+  };
+}
 
 export const AI_KNOWLEDGE_FIELDS: {
   key: AiKnowledgeKey;

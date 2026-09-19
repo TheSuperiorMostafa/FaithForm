@@ -1,14 +1,17 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
+  ArrowLeft,
   Calendar,
   CalendarPlus,
   Check,
   ChevronLeft,
   ChevronRight,
   Loader2,
+  MapPin,
 } from "lucide-react";
 import { AnnouncementSubmittedView } from "@/components/announcements/announcement-submitted-view";
 import { AnnouncementVerifyForm } from "@/components/announcements/announcement-verify-form";
@@ -27,7 +30,9 @@ import {
   addMonths,
   buildMonthGridCells,
   eventOverlapsDay,
-  formatEventTime,
+  eventStartDay,
+  formatDayAgendaHeading,
+  formatEventStart,
   formatMonthYear,
   getMonthWindow,
   getWeekdayLabels,
@@ -46,12 +51,29 @@ type MonthCalendarProps = {
   calendarConnected: boolean;
   /** False when the only calendar is a read-only iCloud link. */
   canCreateEvents: boolean;
-  /** Google specifically: the weekly draft is a Gmail draft. */
+  /** Google specifically: the weekly email is a Gmail draft. */
   googleConnected: boolean;
+  /**
+   * Whether this church can make the weekly email at all — through Gmail or
+   * iCloud Mail. Falls back to `googleConnected` when not given.
+   */
+  emailAvailable?: boolean;
   facebookConnected: boolean;
 };
 
 const MAX_CHIPS_PER_CELL = 4;
+
+/*
+ * Tints of the church's accent. Theme colours are plain `var(--accent)` hex
+ * values, and Tailwind 3 cannot put an opacity modifier on those: `bg-accent/15`
+ * compiles to nothing, which is why the selected day used to show no highlight
+ * at all. `color-mix` does the same job for real.
+ */
+const NEEDS_VERIFY_TINT =
+  "border-[color:color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color:color-mix(in_srgb,var(--accent)_15%,transparent)] text-foreground";
+const NEEDS_VERIFY_HOVER =
+  "hover:bg-[color:color-mix(in_srgb,var(--accent)_25%,transparent)]";
+const SUBMITTED_TINT = "border-border bg-secondary text-secondary-foreground";
 
 function eventChipClassName(opts: {
   published: boolean;
@@ -60,14 +82,27 @@ function eventChipClassName(opts: {
   const { published, selected } = opts;
   return cn(
     "flex w-full flex-col gap-0.5 rounded-md border px-1.5 py-1 text-left leading-tight transition-colors",
-    published
-      ? "border-border/70 bg-secondary/90 text-secondary-foreground"
-      : "border-accent/60 bg-accent/15 text-foreground hover:bg-accent/25",
+    published ? SUBMITTED_TINT : cn(NEEDS_VERIFY_TINT, NEEDS_VERIFY_HOVER),
     selected &&
       "ring-2 ring-accent ring-offset-1 ring-offset-background shadow-sm",
   );
 }
 
+/** The day the calendar lands on for a month: today in this month, else the 1st. */
+function defaultDayForMonth(year: number, monthIndex: number): Date {
+  const now = new Date();
+  return now.getFullYear() === year && now.getMonth() === monthIndex
+    ? startOfDay(now)
+    : new Date(year, monthIndex, 1);
+}
+
+/**
+ * The month grid and the announcement panel beside it are one control: the
+ * panel always describes the selected day. Clicking a day lists that day's
+ * events (or offers to create one); clicking an event opens it. Nothing from a
+ * previously selected day can stay on screen, because the open event is looked
+ * up among the selected day's events rather than kept as its own copy.
+ */
 export function MonthCalendar({
   churchId,
   initialYear,
@@ -78,8 +113,10 @@ export function MonthCalendar({
   calendarConnected,
   canCreateEvents,
   googleConnected,
+  emailAvailable,
   facebookConnected,
 }: MonthCalendarProps) {
+  const router = useRouter();
   const [year, setYear] = useState(initialYear);
   const [monthIndex, setMonthIndex] = useState(initialMonthIndex);
   const [events, setEvents] = useState(initialEvents);
@@ -93,17 +130,64 @@ export function MonthCalendar({
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedDay, setSelectedDay] = useState<Date>(() => startOfDay(new Date()));
-  const [selectedEvent, setSelectedEvent] = useState<CalendarEventPreview | null>(
-    () => pickAnnouncementEvent(initialEvents, initialPublishedByGoogleId),
-  );
+  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const shownMonth = useRef({ year: initialYear, monthIndex: initialMonthIndex });
+  shownMonth.current = { year, monthIndex };
 
-  const defaults = { googleConnected, facebookConnected };
+  // The weekly queue above publishes too, then refreshes the page. Take the
+  // fresh submitted state, and the fresh events when this month is still the
+  // one on screen, so a publish there shows up here without a reload.
+  const firstRender = useRef(true);
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    setPublishedByGoogleId(initialPublishedByGoogleId);
+    setPublishedAnnouncements(initialPublishedAnnouncements);
+    if (
+      shownMonth.current.year === initialYear &&
+      shownMonth.current.monthIndex === initialMonthIndex
+    ) {
+      setEvents(initialEvents);
+    }
+  }, [
+    initialEvents,
+    initialPublishedByGoogleId,
+    initialPublishedAnnouncements,
+    initialYear,
+    initialMonthIndex,
+  ]);
+
+  const defaults = {
+    googleConnected,
+    facebookConnected,
+    emailAvailable: emailAvailable ?? googleConnected,
+  };
   const today = useMemo(() => new Date(), []);
 
   const cells = useMemo(
     () => buildMonthGridCells(year, monthIndex, today),
     [year, monthIndex, today],
   );
+
+  const eventsForDay = useCallback(
+    (day: Date) =>
+      events
+        .filter((e) => eventOverlapsDay(e, day))
+        .sort((a, b) => {
+          // All-day events first, then by start time.
+          if (Boolean(a.allDay) !== Boolean(b.allDay)) return a.allDay ? -1 : 1;
+          return new Date(a.startAt).getTime() - new Date(b.startAt).getTime();
+        }),
+    [events],
+  );
+
+  const dayEvents = eventsForDay(selectedDay);
+  const selectedEvent = selectedEventId
+    ? (dayEvents.find((e) => e.googleEventId === selectedEventId) ?? null)
+    : null;
 
   const fetchMonth = useCallback(
     async (y: number, m: number, preferredGoogleId?: string) => {
@@ -119,17 +203,18 @@ export function MonthCalendar({
           throw new Error(data.error ?? "Failed to load calendar");
         }
         const nextEvents: CalendarEventPreview[] = data.events ?? [];
-        const nextPublished = data.publishedByGoogleId ?? {};
-        const nextPublishedRows = data.publishedAnnouncements ?? {};
         setEvents(nextEvents);
-        setPublishedByGoogleId(nextPublished);
-        setPublishedAnnouncements(nextPublishedRows);
-        const preferred = preferredGoogleId
-          ? nextEvents.find((e) => e.googleEventId === preferredGoogleId)
-          : undefined;
-        setSelectedEvent(
-          preferred ?? pickAnnouncementEvent(nextEvents, nextPublished),
-        );
+        setPublishedByGoogleId(data.publishedByGoogleId ?? {});
+        setPublishedAnnouncements(data.publishedAnnouncements ?? {});
+        if (preferredGoogleId) {
+          const preferred = nextEvents.find(
+            (e) => e.googleEventId === preferredGoogleId,
+          );
+          if (preferred) {
+            setSelectedDay(eventStartDay(preferred));
+            setSelectedEventId(preferred.googleEventId);
+          }
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load calendar");
       } finally {
@@ -139,9 +224,11 @@ export function MonthCalendar({
     [],
   );
 
-  const goToMonth = (y: number, m: number) => {
+  const goToMonth = (y: number, m: number, day?: Date) => {
     setYear(y);
     setMonthIndex(m);
+    setSelectedDay(day ?? defaultDayForMonth(y, m));
+    setSelectedEventId(null);
     void fetchMonth(y, m);
   };
 
@@ -159,40 +246,40 @@ export function MonthCalendar({
     const now = new Date();
     const y = now.getFullYear();
     const m = now.getMonth();
-    setSelectedDay(startOfDay(now));
     if (y !== year || m !== monthIndex) {
-      goToMonth(y, m);
+      goToMonth(y, m, startOfDay(now));
+      return;
     }
+    setSelectedDay(startOfDay(now));
+    setSelectedEventId(null);
   };
 
-  const handleChipClick = (event: CalendarEventPreview) => {
-    setSelectedDay(startOfDay(new Date(event.startAt)));
-    setSelectedEvent(event);
+  /** On small screens the panel sits under the grid; bring it into view. */
+  const revealPanel = () => {
+    const panel = panelRef.current;
+    if (!panel || typeof window === "undefined") return;
+    if (window.matchMedia("(min-width: 1280px)").matches) return;
+    panel.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   const handleDayClick = (day: Date) => {
-    const normalized = startOfDay(day);
-    setSelectedDay(normalized);
-    const dayEvents = events
-      .filter((e) => eventOverlapsDay(e, normalized))
-      .sort(
-        (a, b) =>
-          new Date(a.startAt).getTime() - new Date(b.startAt).getTime(),
-      );
-    if (dayEvents.length > 0) {
-      const preferred =
-        dayEvents.find((e) => !publishedByGoogleId[e.googleEventId]) ??
-        dayEvents[0]!;
-      setSelectedEvent(preferred);
-    }
+    setSelectedDay(startOfDay(day));
+    setSelectedEventId(null);
+    revealPanel();
+  };
+
+  /** A chip opens its event on the day it was clicked, even mid-way through a multi-day event. */
+  const handleChipClick = (event: CalendarEventPreview, day: Date) => {
+    setSelectedDay(startOfDay(day));
+    setSelectedEventId(event.googleEventId);
+    revealPanel();
   };
 
   const handlePublished = (announcement: AnnouncementRow) => {
     if (!selectedEvent?.googleEventId) return;
-    const googleEventId = selectedEvent.googleEventId;
 
     // Prefer the Google event id from the submitted announcement when present.
-    const eventId = announcement.google_event_id ?? googleEventId;
+    const eventId = announcement.google_event_id ?? selectedEvent.googleEventId;
 
     const updatedEvent: CalendarEventPreview = {
       ...selectedEvent,
@@ -217,26 +304,28 @@ export function MonthCalendar({
       const without = prev.filter((e) => e.googleEventId !== eventId);
       return [...without, updatedEvent];
     });
-    setSelectedEvent(updatedEvent);
 
-    const eventDate = new Date(updatedEvent.startAt);
-    const y = eventDate.getFullYear();
-    const m = eventDate.getMonth();
-    setSelectedDay(startOfDay(eventDate));
+    const eventDay = eventStartDay(updatedEvent);
+    setSelectedDay(eventDay);
+    setSelectedEventId(eventId);
 
-    // Refetch so Google Calendar patches (and published maps) stay in sync.
+    const y = eventDay.getFullYear();
+    const m = eventDay.getMonth();
     if (y !== year || m !== monthIndex) {
       setYear(y);
       setMonthIndex(m);
     }
+    // Refetch so calendar patches (and published maps) stay in sync, and
+    // refresh the page so the weekly queue above picks up the change.
     void fetchMonth(y, m, eventId);
+    router.refresh();
   };
 
   const handleEventCreated = (event: CalendarEventPreview) => {
-    const eventDate = new Date(event.startAt);
-    const y = eventDate.getFullYear();
-    const m = eventDate.getMonth();
-    setSelectedDay(startOfDay(eventDate));
+    const eventDay = eventStartDay(event);
+    const y = eventDay.getFullYear();
+    const m = eventDay.getMonth();
+    setSelectedDay(eventDay);
 
     if (y !== year || m !== monthIndex) {
       setYear(y);
@@ -250,18 +339,8 @@ export function MonthCalendar({
         ? prev
         : [...prev, event],
     );
-    setSelectedEvent(event);
+    setSelectedEventId(event.googleEventId);
   };
-
-  const eventsForDay = (day: Date) =>
-    events
-      .filter((e) => eventOverlapsDay(e, day))
-      .sort(
-        (a, b) =>
-          new Date(a.startAt).getTime() - new Date(b.startAt).getTime(),
-      );
-
-  const agendaEvents = eventsForDay(selectedDay);
 
   const selectedIsPublished = selectedEvent
     ? Boolean(publishedByGoogleId[selectedEvent.googleEventId])
@@ -270,6 +349,8 @@ export function MonthCalendar({
   const selectedAnnouncement = selectedEvent
     ? publishedAnnouncements[selectedEvent.googleEventId]
     : null;
+
+  const dayHeading = formatDayAgendaHeading(selectedDay);
 
   if (!calendarConnected) {
     return (
@@ -365,9 +446,9 @@ export function MonthCalendar({
 
             <div className="grid grid-cols-7">
               {cells.map((cell) => {
-                const dayEvents = eventsForDay(cell.date);
-                const visible = dayEvents.slice(0, MAX_CHIPS_PER_CELL);
-                const overflow = dayEvents.length - visible.length;
+                const cellEvents = eventsForDay(cell.date);
+                const visible = cellEvents.slice(0, MAX_CHIPS_PER_CELL);
+                const overflow = cellEvents.length - visible.length;
                 const isSelected =
                   startOfDay(cell.date).getTime() ===
                   startOfDay(selectedDay).getTime();
@@ -377,12 +458,23 @@ export function MonthCalendar({
                     key={cell.date.toISOString()}
                     type="button"
                     onClick={() => handleDayClick(cell.date)}
+                    aria-pressed={isSelected}
+                    aria-label={`${formatDayAgendaHeading(cell.date)}, ${
+                      cellEvents.length === 0
+                        ? "no events"
+                        : `${cellEvents.length} event${cellEvents.length === 1 ? "" : "s"}`
+                    }`}
                     className={cn(
-                      "min-h-[7rem] border-b border-r border-border p-1.5 text-left transition-all hover:bg-accent/10 sm:min-h-[9rem] lg:min-h-[10.5rem] xl:min-h-[11rem]",
-                      !cell.isCurrentMonth && "bg-muted/20",
-                      cell.isToday && !isSelected && "ring-2 ring-inset ring-accent/50",
+                      "min-h-[7rem] border-b border-r border-border p-1.5 text-left transition-all sm:min-h-[9rem] lg:min-h-[10.5rem] xl:min-h-[11rem]",
+                      !isSelected &&
+                        "hover:bg-[color:color-mix(in_srgb,var(--accent)_10%,transparent)]",
+                      !cell.isCurrentMonth &&
+                        "bg-[color:color-mix(in_srgb,var(--muted)_45%,transparent)]",
+                      cell.isToday &&
+                        !isSelected &&
+                        "ring-2 ring-inset ring-[color:color-mix(in_srgb,var(--accent)_55%,transparent)]",
                       isSelected &&
-                        "bg-accent/30 shadow-[inset_0_0_0_2px_hsl(var(--accent))] ring-2 ring-accent",
+                        "bg-[color:color-mix(in_srgb,var(--accent)_22%,transparent)] ring-2 ring-inset ring-accent",
                     )}
                   >
                     <span
@@ -401,6 +493,7 @@ export function MonthCalendar({
                           publishedByGoogleId[event.googleEventId],
                         );
                         const selected =
+                          isSelected &&
                           selectedEvent?.googleEventId === event.googleEventId;
                         return (
                           <span
@@ -409,13 +502,13 @@ export function MonthCalendar({
                             tabIndex={0}
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleChipClick(event);
+                              handleChipClick(event, cell.date);
                             }}
                             onKeyDown={(e) => {
                               if (e.key === "Enter" || e.key === " ") {
                                 e.preventDefault();
                                 e.stopPropagation();
-                                handleChipClick(event);
+                                handleChipClick(event, cell.date);
                               }
                             }}
                             className={eventChipClassName({ published, selected })}
@@ -430,7 +523,7 @@ export function MonthCalendar({
                                   !published && "text-accent",
                                 )}
                               >
-                                {formatEventTime(event.startAt)}
+                                {formatEventStart(event)}
                               </span>
                             </span>
                             <span className="line-clamp-2 text-[11px] font-semibold text-foreground sm:text-xs">
@@ -453,125 +546,166 @@ export function MonthCalendar({
 
           <p className="text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1.5">
-              <span className="inline-block size-2.5 rounded border border-accent/60 bg-accent/15" />
+              <span className={cn("inline-block size-2.5 rounded border", NEEDS_VERIFY_TINT)} />
               Needs verify
             </span>
             <span className="mx-2">·</span>
             <span className="inline-flex items-center gap-1.5">
-              <span className="inline-block size-2.5 rounded border border-border/70 bg-secondary/90" />
+              <span className={cn("inline-block size-2.5 rounded border", SUBMITTED_TINT)} />
               <Check className="size-3 text-accent" />
               Submitted
             </span>
           </p>
-
-          <section className="flex flex-col gap-2 rounded-xl border border-border bg-card p-4">
-            <h3 className="text-sm font-semibold text-foreground">
-              Events on{" "}
-              {selectedDay.toLocaleDateString(undefined, {
-                weekday: "long",
-                month: "long",
-                day: "numeric",
-              })}
-            </h3>
-            {agendaEvents.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No events this day.</p>
-            ) : (
-              <ul className="flex flex-col gap-2">
-                {agendaEvents.map((event) => {
-                  const published = Boolean(
-                    publishedByGoogleId[event.googleEventId],
-                  );
-                  const selected =
-                    selectedEvent?.googleEventId === event.googleEventId;
-                  return (
-                    <li key={event.googleEventId}>
-                      <button
-                        type="button"
-                        onClick={() => handleChipClick(event)}
-                        className={cn(
-                          "w-full rounded-lg border px-3 py-2.5 text-left text-sm transition-colors",
-                          published
-                            ? "border-border/70 bg-secondary/90 text-secondary-foreground hover:bg-secondary"
-                            : "border-accent/60 bg-accent/15 text-foreground hover:bg-accent/25",
-                          selected && "ring-2 ring-accent",
-                        )}
-                      >
-                        <span className="flex items-center gap-1.5">
-                          {published && (
-                            <Check className="size-3.5 shrink-0 text-accent" />
-                          )}
-                          <span className="text-sm font-bold tabular-nums text-accent">
-                            {formatEventTime(event.startAt)}
-                          </span>
-                        </span>
-                        <span className="mt-0.5 block font-semibold text-foreground">
-                          {event.title}
-                        </span>
-                        <span className="mt-0.5 block text-xs text-muted-foreground">
-                          {event.location ? `${event.location} · ` : ""}
-                          {published ? "Submitted — view details" : "Tap to verify"}
-                        </span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </section>
         </div>
 
-        <Card className="w-full xl:sticky xl:top-4 xl:self-start">
-          <CardHeader>
-            <CardTitle>Announcement details</CardTitle>
-            <CardDescription>
-              {selectedIsPublished
-                ? "Review what was submitted for this event."
-                : "Select a calendar event and verify the prefilled details."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {selectedEvent && selectedIsPublished ? (
-              selectedAnnouncement ? (
-                <AnnouncementSubmittedView
-                  announcement={selectedAnnouncement}
-                  eventHtmlLink={selectedEvent.htmlLink}
-                />
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  This event was submitted. Switch months or refresh to load saved
-                  details.
-                </p>
-              )
-            ) : selectedEvent ? (
-              <AnnouncementVerifyForm
-                key={selectedEvent.googleEventId}
-                churchId={churchId}
-                event={selectedEvent}
-                defaults={defaults}
-                publishedAnnouncementId={
-                  publishedByGoogleId[selectedEvent.googleEventId]
-                }
-                onPublished={handlePublished}
-              />
+        <div ref={panelRef} className="w-full scroll-mt-4 xl:sticky xl:top-4 xl:self-start">
+          <Card>
+            {selectedEvent ? (
+              <>
+                <CardHeader className="gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedEventId(null)}
+                    className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    <ArrowLeft className="size-4" />
+                    {dayEvents.length > 1
+                      ? `All ${dayEvents.length} events on ${dayHeading}`
+                      : `Back to ${dayHeading}`}
+                  </button>
+                  <CardTitle>Announcement details</CardTitle>
+                  <CardDescription>
+                    {selectedIsPublished
+                      ? "Review what was submitted for this event."
+                      : "Verify the prefilled details, then publish."}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {selectedIsPublished ? (
+                    selectedAnnouncement ? (
+                      <AnnouncementSubmittedView
+                        announcement={selectedAnnouncement}
+                        eventHtmlLink={selectedEvent.htmlLink}
+                      />
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        This event was submitted. Switch months or refresh to
+                        load saved details.
+                      </p>
+                    )
+                  ) : (
+                    <AnnouncementVerifyForm
+                      key={selectedEvent.googleEventId}
+                      churchId={churchId}
+                      event={selectedEvent}
+                      defaults={defaults}
+                      publishedAnnouncementId={
+                        publishedByGoogleId[selectedEvent.googleEventId]
+                      }
+                      onPublished={handlePublished}
+                    />
+                  )}
+                </CardContent>
+              </>
             ) : (
-              <div className="flex flex-col items-center gap-4 rounded-xl border border-dashed border-border px-4 py-10 text-center">
-                <p className="text-sm text-muted-foreground">
-                  {events.length === 0
-                    ? canCreateEvents
-                      ? "No events on your calendar yet. Create one to announce it."
-                      : "No events on your calendar yet. Add one in Apple Calendar and it will show up here within a few minutes."
-                    : "Click a day or event on the calendar to get started."}
-                </p>
-                {canCreateEvents && (
-                  <Button type="button" onClick={() => setCreateOpen(true)}>
-                    <CalendarPlus className="size-4" strokeWidth={1.75} />
-                    New event
-                  </Button>
-                )}
-              </div>
+              <>
+                <CardHeader>
+                  <CardTitle>{dayHeading}</CardTitle>
+                  <CardDescription>
+                    {dayEvents.length === 0
+                      ? "Nothing on the calendar this day."
+                      : dayEvents.length === 1
+                        ? "1 event this day. Choose it to announce it."
+                        : `${dayEvents.length} events this day. Choose one to announce it.`}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {dayEvents.length > 0 ? (
+                    <div className="flex flex-col gap-3">
+                      <ul className="flex flex-col gap-2">
+                        {dayEvents.map((event) => {
+                          const published = Boolean(
+                            publishedByGoogleId[event.googleEventId],
+                          );
+                          return (
+                            <li key={event.googleEventId}>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setSelectedEventId(event.googleEventId)
+                                }
+                                className={cn(
+                                  "group flex w-full items-start gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
+                                  published
+                                    ? cn(SUBMITTED_TINT, "hover:brightness-95")
+                                    : cn(NEEDS_VERIFY_TINT, NEEDS_VERIFY_HOVER),
+                                )}
+                              >
+                                <span className="min-w-0 flex-1">
+                                  <span className="flex items-center gap-1.5">
+                                    {published && (
+                                      <Check className="size-3.5 shrink-0 text-accent" />
+                                    )}
+                                    <span className="text-sm font-bold tabular-nums text-accent">
+                                      {formatEventStart(event)}
+                                    </span>
+                                  </span>
+                                  <span className="mt-0.5 block font-semibold text-foreground">
+                                    {event.title}
+                                  </span>
+                                  {event.location ? (
+                                    <span className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+                                      <MapPin className="size-3 shrink-0" />
+                                      <span className="truncate">{event.location}</span>
+                                    </span>
+                                  ) : null}
+                                </span>
+                                <span className="shrink-0 self-center text-xs font-medium text-muted-foreground group-hover:text-foreground">
+                                  {published ? "View" : "Verify"}
+                                </span>
+                              </button>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                      {canCreateEvents && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="self-start"
+                          onClick={() => setCreateOpen(true)}
+                        >
+                          <CalendarPlus className="size-4" strokeWidth={1.75} />
+                          Add another event this day
+                        </Button>
+                      )}
+                    </div>
+                  ) : canCreateEvents ? (
+                    <button
+                      type="button"
+                      onClick={() => setCreateOpen(true)}
+                      className="flex w-full flex-col items-center gap-3 rounded-xl border border-dashed border-border px-4 py-10 text-center transition-colors hover:border-accent hover:bg-[color:color-mix(in_srgb,var(--accent)_6%,transparent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    >
+                      <CalendarPlus
+                        className="size-6 text-accent"
+                        strokeWidth={1.75}
+                      />
+                      <span className="text-sm font-semibold text-foreground">
+                        Create a new event for this day.
+                      </span>
+                    </button>
+                  ) : (
+                    <p className="rounded-xl border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
+                      Nothing on this day. Add an event in Apple Calendar and
+                      it will show up here within a few minutes.
+                    </p>
+                  )}
+                </CardContent>
+              </>
             )}
-          </CardContent>
-        </Card>
+          </Card>
+        </div>
       </div>
 
       <CreateEventDialog
@@ -582,11 +716,4 @@ export function MonthCalendar({
       />
     </div>
   );
-}
-
-function pickAnnouncementEvent(
-  events: CalendarEventPreview[],
-  publishedByGoogleId: Record<string, string>,
-): CalendarEventPreview | null {
-  return events.find((event) => !publishedByGoogleId[event.googleEventId]) ?? null;
 }

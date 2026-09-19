@@ -196,6 +196,9 @@
     <string name="auto_attendance_church_disabled_body">Automatic check-in is not switched on for your church.</string>
     <string name="auto_attendance_no_campus_title">Your church has not added a location</string>
     <string name="auto_attendance_no_campus_body">Automatic check-in needs your church to add where it meets.</string>
+    <string name="auto_attendance_no_link_title_named">%1$s needs to confirm who you are</string>
+    <string name="auto_attendance_church_disabled_title_named">%1$s has not set up automatic check-in</string>
+    <string name="auto_attendance_no_campus_title_named">%1$s has not added a location</string>
     <string name="auto_attendance_consent_missing_title">Automatic check-in is not turned on</string>
     <string name="auto_attendance_consent_missing_body">Turn it on to be checked in when you arrive.</string>
     <string name="auto_attendance_offline_title">FaithForm could not check</string>

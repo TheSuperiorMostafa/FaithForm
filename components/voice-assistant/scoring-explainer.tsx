@@ -43,13 +43,15 @@ export function LegacyScoreBadge() {
   );
 }
 
-export function AttentionBadge({ view }: { view: CallScoreView }) {
-  if (!view.needsAttention) return null;
-  return (
-    <Badge variant={view.urgency === "high" ? "destructive" : "warning"}>
-      {view.urgency === "high" ? "Urgent" : "Needs a reply"}
-    </Badge>
-  );
+/**
+ * Red, and only for a caller in crisis. The amber badge that used to share
+ * this spot marked every call the rubric thought someone should answer, and a
+ * pilot church asked for it to go. A crisis is a different signal, so it keeps
+ * its badge.
+ */
+export function UrgentBadge({ view }: { view: CallScoreView }) {
+  if (!view.urgent) return null;
+  return <Badge variant="destructive">Urgent</Badge>;
 }
 
 /**
@@ -114,13 +116,19 @@ export function ScoringExplainer() {
           </ul>
         </div>
 
-        <p className="border-t border-border pt-3 text-muted-foreground">
-          Calls flagged <strong className="text-foreground">Needs a reply</strong>{" "}
-          are the ones a person at the church still has to act on: someone in
-          crisis, an unresolved request, a building matter, or anyone waiting to
-          hear back. Routine questions the assistant answered in full are not
-          flagged.
-        </p>
+        <div className="space-y-2 border-t border-border pt-3 text-muted-foreground">
+          <p>
+            Calls marked <strong className="text-foreground">Urgent</strong>{" "}
+            are ones where the caller sounded like they were in crisis: in
+            distress, grieving a death, worried about someone&rsquo;s safety, or
+            needing help right away. Those are worth reading first.
+          </p>
+          <p>
+            Summaries call your phone assistant &ldquo;the assistant&rdquo;
+            unless it said its name on the call, and they only name a caller
+            who gave their own name.
+          </p>
+        </div>
 
         <p className="text-xs text-muted-foreground">
           Calls scored before this rubric shipped are marked{" "}
@@ -129,7 +137,8 @@ export function ScoringExplainer() {
           1–10, not a judgement this rubric made. Use{" "}
           <strong className="font-medium text-foreground">Re-score older calls</strong>{" "}
           above to judge them properly; it sorts each one by kind and replaces
-          the old reasoning.
+          the old reasoning. The same button also refreshes calls scored
+          before the latest update to these rules.
         </p>
       </CardContent>
     </Card>

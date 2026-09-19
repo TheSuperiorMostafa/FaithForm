@@ -5,10 +5,13 @@ import {
   getInvitationsForSettings,
 } from "@/app/dashboard/settings/faithform-actions";
 import { getPendingJoinRequests } from "@/app/dashboard/people/claim-actions";
+import { AutomaticCheckinSummaryCard } from "@/components/attendance/automatic-checkin-summary-card";
 import { JoinRequestsPanel } from "@/components/people/join-requests-panel";
 import { FaithFormVisibilityCard } from "@/components/settings/faithform-visibility-card";
 import { VisitorInvitationsCard } from "@/components/settings/visitor-invitations-card";
+import { readChurchAutomaticReadiness } from "@/lib/attendance/v2/geofence-config";
 import { getChurchAuth } from "@/lib/auth/church";
+import { getFeatureAccess } from "@/lib/features/access";
 import { getChurchDiscoverySettings } from "@/lib/queries/faithform-settings";
 
 export const dynamic = "force-dynamic";
@@ -36,12 +39,15 @@ export default async function MemberAppPage() {
     );
   }
 
-  const [discovery, campuses, invitationPage, relationships] =
+  const [discovery, campuses, invitationPage, relationships, readiness, access] =
     await Promise.all([
       getChurchDiscoverySettings(auth.churchId),
       getCampusesForSettings(),
       getInvitationsForSettings(),
       getPendingJoinRequests(),
+      // The same readiness the phones get; a failure only hides the card.
+      readChurchAutomaticReadiness(auth.churchId).catch(() => null),
+      getFeatureAccess(),
     ]);
 
   const joinRequests = relationships.items.filter(
@@ -61,6 +67,17 @@ export default async function MemberAppPage() {
       </div>
 
       <JoinRequestsPanel requests={joinRequests} />
+      {readiness ? (
+        <AutomaticCheckinSummaryCard
+          problem={readiness.problem}
+          watching={readiness.regions.map((region) => ({
+            campusName: region.campusName,
+            radiusMeters: region.radiusMeters,
+          }))}
+          nextWindow={readiness.windows[0] ?? null}
+          canOpenSetup={access?.allowed.includes("attendance") ?? false}
+        />
+      ) : null}
       <FaithFormVisibilityCard
         isAdmin={auth.isAdmin}
         isDiscoverable={discovery.isDiscoverable}

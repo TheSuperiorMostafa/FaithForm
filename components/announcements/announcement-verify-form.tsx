@@ -1,15 +1,39 @@
 "use client";
 
-import { useCallback, useState, useTransition } from "react";
-import { Calendar, ChevronDown, ChevronUp, RefreshCw, Smartphone } from "lucide-react";
-import { publishAnnouncement } from "@/app/dashboard/announcements/actions";
+import { useCallback, useReducer, useRef, useState, useTransition } from "react";
+import {
+  Calendar,
+  ChevronDown,
+  ChevronUp,
+  ImagePlus,
+  Loader2,
+  RefreshCw,
+  Smartphone,
+  Sparkles,
+} from "lucide-react";
+import {
+  getFacebookPostDefaults,
+  publishAnnouncement,
+} from "@/app/dashboard/announcements/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  checkFacebookScheduleTime,
+  DEFAULT_FACEBOOK_POST_TIME,
+  describeFacebookPostTime,
+  describeTimeZone,
+  fromZonedInputValue,
+  suggestFacebookSchedule,
+  toZonedInputValue,
+  type FacebookPostMode,
+  type FacebookScheduleSuggestion,
+} from "@/lib/announcements/facebook-schedule";
 import type { CalendarQueueItem, AnnouncementRow } from "@/lib/queries/announcements";
 import { hasLeftAppFeed } from "@/lib/faithform/feed-window";
+import { downscaleForUpload } from "@/lib/sites/downscale-image";
 import {
   fromDateInputValue,
   fromDatetimeLocalValue,
@@ -20,6 +44,11 @@ import {
 type IntegrationDefaults = {
   googleConnected: boolean;
   facebookConnected: boolean;
+  /**
+   * Whether the church has a way to send the weekly email: Google, or Apple.
+   * Callers that predate Apple email leave it out, and Google decides alone.
+   */
+  emailAvailable?: boolean;
 };
 
 type SocialPreviewPayload = {
@@ -38,6 +67,152 @@ type AnnouncementVerifyFormProps = {
   onPublished?: (announcement: AnnouncementRow) => void;
   compact?: boolean;
 };
+
+/** The image posted to Facebook, which is also the app poster. */
+type Graphic = { url: string; path: string; source: "ai" | "upload" };
+
+type GraphicState = {
+  current: Graphic | null;
+  /** The last AI flyer, kept while the church's own image shows so switching back is instant. */
+  setAsideAi: Graphic | null;
+  /** The AI flyer on screen has old event details drawn into it. */
+  aiStale: boolean;
+  /** Finished uploads. An AI flyer requested before one of them must not replace it. */
+  uploads: number;
+};
+
+type GraphicAction =
+  | { type: "ai-ready"; url: string; path: string; uploadsAtRequest: number }
+  | { type: "uploaded"; url: string; path: string }
+  | { type: "restore-ai" }
+  | { type: "details-changed" };
+
+const NO_GRAPHIC: GraphicState = {
+  current: null,
+  setAsideAi: null,
+  aiStale: false,
+  uploads: 0,
+};
+
+/**
+ * Keeps a church's own image from being replaced behind its back.
+ *
+ * An AI flyer takes a while to draw, and the church can upload its own design
+ * in the meantime. Whichever answer arrived last used to win, so a slow flyer
+ * could land on top of the upload. Now only the church's own choice replaces
+ * its image, and a flyer that finishes late is kept aside instead.
+ */
+function graphicReducer(state: GraphicState, action: GraphicAction): GraphicState {
+  switch (action.type) {
+    case "ai-ready": {
+      const flyer: Graphic = { url: action.url, path: action.path, source: "ai" };
+      if (state.uploads !== action.uploadsAtRequest && state.current?.source === "upload") {
+        return { ...state, setAsideAi: flyer };
+      }
+      return { ...state, current: flyer, setAsideAi: null, aiStale: false };
+    }
+    case "uploaded":
+      return {
+        current: { url: action.url, path: action.path, source: "upload" },
+        setAsideAi:
+          state.current?.source === "ai" && !state.aiStale ? state.current : state.setAsideAi,
+        aiStale: false,
+        uploads: state.uploads + 1,
+      };
+    case "restore-ai":
+      return state.setAsideAi
+        ? { ...state, current: state.setAsideAi, setAsideAi: null, aiStale: false }
+        : state;
+    case "details-changed":
+      // Only a flyer FaithForm drew has the date and time baked into it, so
+      // only that one goes stale, along with any flyer set aside. Keeping the
+      // church's own design up to date is up to the church.
+      return {
+        ...state,
+        aiStale: state.current?.source === "ai" ? true : state.aiStale,
+        setAsideAi: null,
+      };
+  }
+}
+
+async function readUploadError(res: Response): Promise<string> {
+  // A body over the platform's limit is refused before the route runs, and
+  // that refusal is not JSON.
+  if (res.status === 413) return "That image is too large. Try one under 4MB.";
+  try {
+    const data = (await res.json()) as { error?: string };
+    return data.error ?? "Could not upload that image.";
+  } catch {
+    return `Could not upload that image (${res.status}).`;
+  }
+}
+
+/** The viewer's own zone. Read only after a click, so server and browser renders never disagree. */
+function viewerTimeZone(): string {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York";
+  } catch {
+    return "America/New_York";
+  }
+}
+
+type PostDefaults = { timeZone: string; postTime: string };
+
+type FacebookTimingView = {
+  /** The church's zone, which the picker reads and writes in. */
+  zone: string;
+  /** The church's clock isn't the viewer's, so the picker says which it is. */
+  zoneName: string | null;
+  mode: FacebookPostMode;
+  /** "YYYY-MM-DDTHH:mm" on the church's clock. */
+  value: string;
+  ms: number | null;
+  /** Why the suggestion moved off the day-before slot. Null once the church picks a time. */
+  adjusted: FacebookScheduleSuggestion["adjusted"] | null;
+  /** The event starts before any time Facebook would take, so "now" was suggested. */
+  suggestedNow: boolean;
+};
+
+function resolveFacebookTiming(input: {
+  startIso: string | null;
+  allDay: boolean;
+  postDefaults: PostDefaults | null;
+  postMode: FacebookPostMode | null;
+  postAt: string | null;
+}): FacebookTimingView | null {
+  if (!input.postDefaults) return null;
+
+  const zone = input.postDefaults.timeZone;
+  const suggestion = input.startIso
+    ? suggestFacebookSchedule({
+        startAt: input.startIso,
+        allDay: input.allDay,
+        timeZone: zone,
+        postTime: input.postDefaults.postTime,
+      })
+    : null;
+
+  const value =
+    input.postAt ?? (suggestion ? toZonedInputValue(suggestion.scheduledAtMs, zone) : "");
+  const ms = value ? fromZonedInputValue(value, zone) : null;
+
+  // Compared by name at that moment, not by id: a viewer in America/Louisville
+  // and a church in America/New_York share a clock, and a note saying otherwise
+  // would only confuse.
+  const at = ms ?? Date.now();
+  const churchZoneName = describeTimeZone(at, zone);
+  const zoneName = churchZoneName === describeTimeZone(at, viewerTimeZone()) ? null : churchZoneName;
+
+  return {
+    zone,
+    zoneName,
+    mode: input.postMode ?? suggestion?.mode ?? "schedule",
+    value,
+    ms,
+    adjusted: input.postAt === null ? (suggestion?.adjusted ?? null) : null,
+    suggestedNow: input.postMode === null && suggestion?.mode === "now",
+  };
+}
 
 export function AnnouncementVerifyForm({
   churchId,
@@ -81,142 +256,268 @@ export function AnnouncementVerifyForm({
     "followers",
   );
 
+  // Google sends it today and Apple will too; the caller says which the church
+  // has. Without that, Google is the only way the email goes out.
+  const emailAvailable = defaults.emailAvailable ?? defaults.googleConnected;
+
   const [facebookCaption, setFacebookCaption] = useState("");
-  const [socialGraphicUrl, setSocialGraphicUrl] = useState<string | null>(null);
-  const [socialGraphicPath, setSocialGraphicPath] = useState<string | null>(null);
+  const [graphic, dispatchGraphic] = useReducer(graphicReducer, NO_GRAPHIC);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [captionLoading, setCaptionLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewWarning, setPreviewWarning] = useState<string | null>(null);
-  const [previewStale, setPreviewStale] = useState(false);
+  /** The caption was written for event details that have since changed. */
+  const [captionStale, setCaptionStale] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const fetchSocialPreview = useCallback(async () => {
-    const startIso = allDay
-      ? fromDateInputValue(startAt)
-      : fromDatetimeLocalValue(startAt);
-    if (!startIso || !title.trim()) {
-      setPreviewError("Add a title and start time to generate a Facebook preview.");
-      return;
-    }
+  // When the Facebook post goes out. While these are null the form follows
+  // the suggestion, which moves with the event. A choice the church makes
+  // stays until the event's date changes.
+  const [postDefaults, setPostDefaults] = useState<PostDefaults | null>(null);
+  const [postMode, setPostMode] = useState<FacebookPostMode | null>(null);
+  const [postAt, setPostAt] = useState<string | null>(null);
 
-    const endIso = !allDay && endAt ? fromDatetimeLocalValue(endAt) : null;
+  const currentGraphic = graphic.current;
+  const usingUpload = currentGraphic?.source === "upload";
+  const aiStale = currentGraphic?.source === "ai" && graphic.aiStale;
 
-    setPreviewLoading(true);
-    setPreviewError(null);
-    setPreviewWarning(null);
-
-    try {
-      const res = await fetch("/api/announcements/social-preview", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: title.trim(),
-          location: location.trim(),
-          startAt: startIso,
-          endAt: endIso,
-          allDay,
-          notes: notes.trim() || undefined,
-          googleEventId: event.googleEventId,
-          announcementId: publishedAnnouncementId ?? undefined,
-        }),
-      });
-
-      const data = (await res.json()) as {
-        preview?: SocialPreviewPayload;
-        error?: string;
-      };
-
-      if (!res.ok || !data.preview) {
-        throw new Error(data.error ?? "Could not generate Facebook preview");
+  /**
+   * Asks for a caption, and for a flyer too unless `kind` is "caption".
+   *
+   * `replaceCaption` is false when switching back to an AI image, so a caption
+   * the church has already edited is kept.
+   */
+  const fetchSocialPreview = useCallback(
+    async (kind: "full" | "caption" = "full", replaceCaption = true) => {
+      const startIso = allDay
+        ? fromDateInputValue(startAt)
+        : fromDatetimeLocalValue(startAt);
+      if (!startIso || !title.trim()) {
+        setPreviewError("Add a title and start time to generate a Facebook preview.");
+        return;
       }
 
-      setFacebookCaption(data.preview.facebookCaption);
-      setSocialGraphicUrl(data.preview.graphicUrl);
-      setSocialGraphicPath(data.preview.graphicPath);
-      setPreviewWarning(data.preview.warning ?? null);
-      setPreviewStale(false);
-    } catch (err) {
-      setPreviewError(
-        err instanceof Error ? err.message : "Could not generate Facebook preview",
+      const endIso = !allDay && endAt ? fromDatetimeLocalValue(endAt) : null;
+      const setLoading = kind === "full" ? setPreviewLoading : setCaptionLoading;
+      const uploadsAtRequest = graphic.uploads;
+
+      setLoading(true);
+      setPreviewError(null);
+      if (kind === "full") setPreviewWarning(null);
+
+      try {
+        const res = await fetch("/api/announcements/social-preview", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: title.trim(),
+            location: location.trim(),
+            startAt: startIso,
+            endAt: endIso,
+            allDay,
+            notes: notes.trim() || undefined,
+            googleEventId: event.googleEventId,
+            announcementId: publishedAnnouncementId ?? undefined,
+            skipImage: kind === "caption",
+          }),
+        });
+
+        const data = (await res.json()) as {
+          preview?: SocialPreviewPayload;
+          error?: string;
+        };
+
+        if (!res.ok || !data.preview) {
+          throw new Error(data.error ?? "Could not generate Facebook preview");
+        }
+
+        if (replaceCaption) {
+          setFacebookCaption(data.preview.facebookCaption);
+          setCaptionStale(false);
+        }
+        if (kind === "full") {
+          dispatchGraphic({
+            type: "ai-ready",
+            url: data.preview.graphicUrl,
+            path: data.preview.graphicPath,
+            uploadsAtRequest,
+          });
+          setPreviewWarning(data.preview.warning ?? null);
+        }
+      } catch (err) {
+        setPreviewError(
+          err instanceof Error ? err.message : "Could not generate Facebook preview",
+        );
+      } finally {
+        setLoading(false);
+      }
+    },
+    [
+      allDay,
+      startAt,
+      endAt,
+      title,
+      location,
+      notes,
+      event.googleEventId,
+      publishedAnnouncementId,
+      graphic.uploads,
+    ],
+  );
+
+  const loadPostDefaults = async () => {
+    if (postDefaults) return;
+    // Without the church's own settings the viewer's clock and 9:00 AM still
+    // give a sensible suggestion, and the server checks whatever is sent.
+    const fallback = { timeZone: viewerTimeZone(), postTime: DEFAULT_FACEBOOK_POST_TIME };
+    try {
+      const result = await getFacebookPostDefaults();
+      setPostDefaults(
+        result.ok ? { timeZone: result.timeZone, postTime: result.postTime } : fallback,
       );
-    } finally {
-      setPreviewLoading(false);
+    } catch {
+      setPostDefaults(fallback);
     }
-  }, [
-    allDay,
-    startAt,
-    endAt,
-    title,
-    location,
-    notes,
-    event.googleEventId,
-    publishedAnnouncementId,
-  ]);
+  };
 
   const handleFacebookToggle = (checked: boolean) => {
     setPushToFacebook(checked);
     if (checked && defaults.facebookConnected) {
-      void fetchSocialPreview();
+      void loadPostDefaults();
+      if (usingUpload) {
+        // The church's own image stays. Only a missing caption gets written.
+        if (!facebookCaption.trim()) void fetchSocialPreview("caption");
+      } else {
+        void fetchSocialPreview();
+      }
     }
     if (!checked && !shareInApp) {
       setPreviewError(null);
       setPreviewWarning(null);
-      setPreviewStale(false);
     }
   };
 
   const handleShareInAppToggle = (checked: boolean) => {
     setShareInApp(checked);
-    if (checked && !socialGraphicPath) {
+    if (checked && !currentGraphic) {
       void fetchSocialPreview();
     }
   };
 
-  const markPreviewStale = () => {
-    if ((pushToFacebook || shareInApp) && socialGraphicPath) {
-      setPreviewStale(true);
+  const markDetailsChanged = () => {
+    dispatchGraphic({ type: "details-changed" });
+    if (facebookCaption.trim()) setCaptionStale(true);
+  };
+
+  const handleStartChange = (next: string) => {
+    setStartAt(next);
+    // A post time picked for the old date says nothing about the new one.
+    setPostAt(null);
+    markDetailsChanged();
+  };
+
+  const handleGraphicFile = async (file: File) => {
+    setUploading(true);
+    setUploadError(null);
+    try {
+      const body = new FormData();
+      // A phone photo is often bigger than the 4MB a request can carry.
+      body.append("file", await downscaleForUpload(file));
+
+      const res = await fetch("/api/announcements/graphic-upload", {
+        method: "POST",
+        body,
+      });
+      if (!res.ok) throw new Error(await readUploadError(res));
+
+      const data = (await res.json()) as { graphicUrl?: string; graphicPath?: string };
+      if (!data.graphicUrl || !data.graphicPath) {
+        throw new Error("Could not upload that image.");
+      }
+
+      dispatchGraphic({ type: "uploaded", url: data.graphicUrl, path: data.graphicPath });
+      setPreviewError(null);
+      // The image is the church's own; FaithForm still writes the caption.
+      if (pushToFacebook && !facebookCaption.trim() && !previewLoading && !captionLoading) {
+        void fetchSocialPreview("caption");
+      }
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Could not upload that image.");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
+  };
+
+  const switchToAiImage = () => {
+    setUploadError(null);
+    if (graphic.setAsideAi) {
+      dispatchGraphic({ type: "restore-ai" });
+      return;
+    }
+    // Nothing kept aside, or it went stale: draw a new flyer. A caption the
+    // church edited is kept unless it describes old details.
+    void fetchSocialPreview("full", captionStale || !facebookCaption.trim());
   };
 
   const posterAltText = [title.trim(), location.trim()].filter(Boolean).join(". ");
 
+  const startIso = allDay ? fromDateInputValue(startAt) : fromDatetimeLocalValue(startAt);
+  const endIso = !allDay && endAt ? fromDatetimeLocalValue(endAt) : null;
+
   // Read from the form as it is now, so moving the date forward clears it.
-  const alreadyOver = hasLeftAppFeed({
-    startAt: allDay ? fromDateInputValue(startAt) : fromDatetimeLocalValue(startAt),
-    endAt: !allDay && endAt ? fromDatetimeLocalValue(endAt) : null,
-    allDay,
-  });
+  const alreadyOver = hasLeftAppFeed({ startAt: startIso, endAt: endIso, allDay });
+
+  // Worked out only while the Facebook panel is open, since it reads the clock
+  // and the viewer's zone.
+  const facebookTiming =
+    pushToFacebook && defaults.facebookConnected
+      ? resolveFacebookTiming({ startIso, allDay, postDefaults, postMode, postAt })
+      : null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setSuccess(null);
 
-    const startIso = allDay
-      ? fromDateInputValue(startAt)
-      : fromDatetimeLocalValue(startAt);
     if (!startIso) {
       setError(allDay ? "Event date is required" : "Start time is required");
       return;
     }
-    const endIso = !allDay && endAt ? fromDatetimeLocalValue(endAt) : null;
 
     if (pushToFacebook && !facebookCaption.trim()) {
       setError("Generate or enter a Facebook caption before publishing.");
       return;
     }
 
-    if (pushToFacebook && !socialGraphicPath) {
-      setError("Generate a Facebook graphic before publishing.");
+    if (pushToFacebook && !currentGraphic) {
+      setError("Generate or upload a Facebook image before publishing.");
       return;
     }
 
-    // The graphic has the date and time baked into the image by the model, so
+    // An AI flyer has the date and time baked into the image by the model, so
     // publishing after an edit would post a flyer announcing the old ones.
-    if (pushToFacebook && previewStale) {
+    if (pushToFacebook && aiStale) {
       setError(
         "The event changed after this graphic was made — regenerate it before publishing.",
       );
       return;
+    }
+
+    if (pushToFacebook && !facebookTiming) {
+      setError("Still loading your Facebook post time. Try again in a moment.");
+      return;
+    }
+
+    // Checked against the clock now, not when the form last drew.
+    if (facebookTiming?.mode === "schedule") {
+      const check = checkFacebookScheduleTime(facebookTiming.ms);
+      if (!check.ok) {
+        setError(check.error);
+        return;
+      }
     }
 
     const formData = new FormData();
@@ -248,13 +549,17 @@ export function AnnouncementVerifyForm({
     if (pushToFacebook) {
       formData.set("facebook_caption", facebookCaption.trim());
     }
-    // The flyer is the app poster as well as the Facebook graphic. Persist it
-    // whenever we have one, not only when Facebook is on.
-    if (socialGraphicPath) {
-      formData.set("social_graphic_path", socialGraphicPath);
+    if (pushToFacebook && facebookTiming) {
+      formData.set("facebook_post_mode", facebookTiming.mode);
+      if (facebookTiming.mode === "schedule" && facebookTiming.ms !== null) {
+        formData.set("facebook_scheduled_at", new Date(facebookTiming.ms).toISOString());
+      }
     }
-    if (socialGraphicUrl) {
-      formData.set("social_graphic_url", socialGraphicUrl);
+    // The image is the app poster as well as the Facebook graphic. Persist it
+    // whenever we have one, not only when Facebook is on.
+    if (currentGraphic) {
+      formData.set("social_graphic_path", currentGraphic.path);
+      formData.set("social_graphic_url", currentGraphic.url);
     }
 
     startTransition(async () => {
@@ -274,12 +579,16 @@ export function AnnouncementVerifyForm({
               : "In the FaithForm app for everyone who has added your church.",
         );
       }
+      // Says exactly what Facebook was asked to do, on the church's clock.
       if (result.facebookScheduledAt) {
         parts.push(
-          `Facebook post scheduled for ${new Date(result.facebookScheduledAt).toLocaleString()}.`,
+          `Facebook post scheduled for ${describeFacebookPostTime(
+            Date.parse(result.facebookScheduledAt),
+            facebookTiming?.zone,
+          )}.`,
         );
       } else if (result.facebookUrl) {
-        parts.push("Posted to Facebook.");
+        parts.push("Posted to Facebook now.");
       }
       if (result.queuedForWeeklyEmail) {
         parts.push("Queued for this week's team email.");
@@ -307,6 +616,7 @@ export function AnnouncementVerifyForm({
         google_event_id: event.googleEventId,
         google_calendar_id: event.calendarId,
         facebook_post_id: result.facebookUrl ? "posted" : null,
+        facebook_scheduled_publish_time: result.facebookScheduledAt ?? null,
         gmail_draft_id: null,
         published_at: new Date().toISOString(),
         last_publish_error:
@@ -316,6 +626,18 @@ export function AnnouncementVerifyForm({
       });
     });
   };
+
+  const graphicControls = (generateLabel: string) => (
+    <GraphicControls
+      usingUpload={usingUpload}
+      generating={previewLoading}
+      uploading={uploading}
+      generateLabel={generateLabel}
+      onUpload={() => fileInputRef.current?.click()}
+      onGenerate={() => void fetchSocialPreview()}
+      onUseAi={switchToAiImage}
+    />
+  );
 
   return (
     <form
@@ -345,7 +667,7 @@ export function AnnouncementVerifyForm({
           value={title}
           onChange={(e) => {
             setTitle(e.target.value);
-            markPreviewStale();
+            markDetailsChanged();
           }}
           required
         />
@@ -358,7 +680,7 @@ export function AnnouncementVerifyForm({
           value={location}
           onChange={(e) => {
             setLocation(e.target.value);
-            markPreviewStale();
+            markDetailsChanged();
           }}
           placeholder="Location"
         />
@@ -374,10 +696,7 @@ export function AnnouncementVerifyForm({
               id={`date-${event.googleEventId}`}
               type="date"
               value={startAt}
-              onChange={(e) => {
-                setStartAt(e.target.value);
-                markPreviewStale();
-              }}
+              onChange={(e) => handleStartChange(e.target.value)}
               required
               className="w-full min-w-0 tabular-nums"
             />
@@ -392,10 +711,7 @@ export function AnnouncementVerifyForm({
               label="Start"
               value={startAt}
               required
-              onChange={(next) => {
-                setStartAt(next);
-                markPreviewStale();
-              }}
+              onChange={handleStartChange}
             />
             <DateTimeField
               idPrefix={`end-${event.googleEventId}`}
@@ -403,7 +719,7 @@ export function AnnouncementVerifyForm({
               value={endAt}
               onChange={(next) => {
                 setEndAt(next);
-                markPreviewStale();
+                markDetailsChanged();
               }}
             />
           </div>
@@ -419,7 +735,7 @@ export function AnnouncementVerifyForm({
           disabled={!defaults.facebookConnected}
           hint={
             defaults.facebookConnected
-              ? "Creates a Facebook post with an AI caption and branded graphic. Schedules for the day before the event at your Church Profile post time."
+              ? "Posts to your Facebook Page with a caption and an image, made by AI or your own design. You choose when it goes out."
               : "Connect Facebook in Settings"
           }
         />
@@ -428,11 +744,11 @@ export function AnnouncementVerifyForm({
           label="Include in weekly email?"
           checked={pushToTeam}
           onCheckedChange={setPushToTeam}
-          disabled={!defaults.googleConnected}
+          disabled={!emailAvailable}
           hint={
-            defaults.googleConnected
-              ? "Adds this event to Monday's Gmail draft with the rest of this week's calendar."
-              : "Connect Google in Settings"
+            emailAvailable
+              ? "Adds this event to Monday's weekly email with the rest of this week's calendar."
+              : "Connect Google or Apple in Settings to include this in the weekly email."
           }
         />
         <ToggleRow
@@ -448,6 +764,18 @@ export function AnnouncementVerifyForm({
           warning={alreadyOver}
         />
       </ul>
+
+      {/* One picker serves both panels; only one of them offers it at a time. */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) void handleGraphicFile(file);
+        }}
+      />
 
       {shareInApp && (
         <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-4">
@@ -490,66 +818,61 @@ export function AnnouncementVerifyForm({
               </span>
             </label>
           </fieldset>
-          <div className="flex items-center justify-between gap-3">
+          {pushToFacebook && defaults.facebookConnected ? (
+            // The Facebook panel owns the image while it is open, so its
+            // controls are not offered twice.
             <p className="text-xs text-muted-foreground">
-              A poster makes the calendar worth opening. Generate one even if you
-              are not posting to Facebook.
+              {"The Facebook image below is the app's poster too."}
             </p>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => void fetchSocialPreview()}
-              disabled={previewLoading}
-            >
-              <RefreshCw
-                className={`mr-2 size-4 ${previewLoading ? "animate-spin" : ""}`}
-              />
-              {previewLoading ? "Generating…" : socialGraphicUrl ? "Regenerate" : "Make a poster"}
-            </Button>
-          </div>
-          {previewStale && (
-            <p className="text-xs text-amber-700 dark:text-amber-300">
-              Event details changed — regenerate for an updated poster.
-            </p>
-          )}
-          {socialGraphicUrl && !pushToFacebook && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={socialGraphicUrl}
-              alt={posterAltText || "Event poster preview"}
-              className="w-full rounded-md border border-border"
-            />
+          ) : (
+            <>
+              <p className="text-xs text-muted-foreground">
+                A poster makes the calendar worth opening. Make one or upload
+                your own, even if you are not posting to Facebook.
+              </p>
+              {graphicControls(currentGraphic ? "Regenerate" : "Make a poster")}
+              {uploadError && (
+                <p className="text-sm text-destructive" role="alert">
+                  {uploadError}
+                </p>
+              )}
+              {previewError && (
+                <p className="text-sm text-destructive" role="alert">
+                  {previewError}
+                </p>
+              )}
+              {aiStale && (
+                <p className="text-xs text-amber-700 dark:text-amber-300">
+                  Event details changed — regenerate for an updated poster.
+                </p>
+              )}
+              {currentGraphic && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={currentGraphic.url}
+                  alt={posterAltText || "Event poster preview"}
+                  className="w-full rounded-md border border-border"
+                />
+              )}
+            </>
           )}
         </div>
       )}
 
       {pushToFacebook && defaults.facebookConnected && (
         <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold">Facebook preview</p>
-              <p className="text-xs text-muted-foreground">
-                Edit the caption or regenerate if event details changed.
-              </p>
-            </div>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => void fetchSocialPreview()}
-              disabled={previewLoading}
-            >
-              <RefreshCw
-                className={`mr-2 size-4 ${previewLoading ? "animate-spin" : ""}`}
-              />
-              {previewLoading ? "Generating…" : "Regenerate"}
-            </Button>
+          <div>
+            <p className="text-sm font-semibold">Facebook post</p>
+            <p className="text-xs text-muted-foreground">
+              Check the caption, choose the image, and pick when it goes out.
+            </p>
           </div>
 
-          {previewStale && (
-            <p className="text-xs text-amber-700 dark:text-amber-300">
-              Event details changed — regenerate for an updated graphic and caption.
+          {graphicControls("Regenerate")}
+
+          {uploadError && (
+            <p className="text-sm text-destructive" role="alert">
+              {uploadError}
             </p>
           )}
 
@@ -559,19 +882,46 @@ export function AnnouncementVerifyForm({
             </p>
           )}
 
-          {previewWarning && (
+          {previewWarning && !usingUpload && (
             <p className="text-xs text-muted-foreground">{previewWarning}</p>
           )}
 
-          {previewLoading && !socialGraphicUrl && (
+          {aiStale && (
+            <p className="text-xs text-amber-700 dark:text-amber-300">
+              Event details changed — regenerate for an updated graphic and caption.
+            </p>
+          )}
+
+          {usingUpload && captionStale && facebookCaption.trim() && (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs text-amber-700 dark:text-amber-300">
+                Event details changed — check the caption still matches.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="xs"
+                onClick={() => void fetchSocialPreview("caption")}
+                disabled={captionLoading || previewLoading}
+              >
+                {captionLoading ? "Rewriting…" : "Rewrite caption"}
+              </Button>
+            </div>
+          )}
+
+          {previewLoading && !currentGraphic && (
             <div className="aspect-[1200/630] w-full animate-pulse rounded-md bg-muted" />
           )}
 
-          {socialGraphicUrl && (
+          {currentGraphic && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={socialGraphicUrl}
-              alt="Facebook post graphic preview"
+              src={currentGraphic.url}
+              alt={
+                usingUpload
+                  ? "Your uploaded image for Facebook"
+                  : "Facebook post graphic preview"
+              }
               className="w-full rounded-md border border-border"
             />
           )}
@@ -585,13 +935,66 @@ export function AnnouncementVerifyForm({
               value={facebookCaption}
               onChange={(e) => setFacebookCaption(e.target.value)}
               placeholder={
-                previewLoading
+                previewLoading || captionLoading
                   ? "Generating caption…"
                   : "Your Facebook post caption will appear here."
               }
               rows={6}
-              disabled={previewLoading && !facebookCaption}
+              disabled={(previewLoading || captionLoading) && !facebookCaption}
             />
+          </div>
+
+          <div className="border-t border-border pt-3">
+            {facebookTiming ? (
+              <fieldset className="flex flex-col gap-2">
+                <legend className="text-sm font-medium">Facebook post time</legend>
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name={`fb-when-${event.googleEventId}`}
+                    value="schedule"
+                    checked={facebookTiming.mode === "schedule"}
+                    onChange={() => setPostMode("schedule")}
+                    className="mt-1"
+                  />
+                  <span className="font-medium">
+                    {facebookTiming.ms !== null
+                      ? `Schedule for ${describeFacebookPostTime(facebookTiming.ms, facebookTiming.zone)}`
+                      : "Schedule for a date and time"}
+                  </span>
+                </label>
+                {facebookTiming.mode === "schedule" && (
+                  <FacebookScheduleField
+                    idPrefix={`fb-post-${event.googleEventId}`}
+                    timing={facebookTiming}
+                    edited={postAt !== null}
+                    onChange={setPostAt}
+                  />
+                )}
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="radio"
+                    name={`fb-when-${event.googleEventId}`}
+                    value="now"
+                    checked={facebookTiming.mode === "now"}
+                    onChange={() => setPostMode("now")}
+                    className="mt-1"
+                  />
+                  <span>
+                    <span className="font-medium">Post now</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {facebookTiming.suggestedNow
+                        ? "The event starts before Facebook could schedule it, so it goes live as soon as you submit."
+                        : "Goes live on your Page as soon as you submit."}
+                    </span>
+                  </span>
+                </label>
+              </fieldset>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Finding your Church Profile post time…
+              </p>
+            )}
           </div>
         </div>
       )}
@@ -613,7 +1016,7 @@ export function AnnouncementVerifyForm({
           value={notes}
           onChange={(e) => {
             setNotes(e.target.value);
-            markPreviewStale();
+            markDetailsChanged();
           }}
           placeholder="Extra notes for email or Facebook…"
           rows={3}
@@ -631,10 +1034,141 @@ export function AnnouncementVerifyForm({
         </p>
       )}
 
-      <Button type="submit" disabled={pending || (pushToFacebook && previewLoading)} className="w-full">
+      <Button
+        type="submit"
+        disabled={
+          pending ||
+          uploading ||
+          (pushToFacebook && (previewLoading || captionLoading))
+        }
+        className="w-full"
+      >
         {pending ? "Submitting…" : "Verify & submit"}
       </Button>
     </form>
+  );
+}
+
+/**
+ * Upload, regenerate, or switch back to an AI image.
+ *
+ * Designs made in Canva and the like were the reason for the upload option:
+ * a church with its own flyer could only post one FaithForm drew.
+ */
+function GraphicControls({
+  usingUpload,
+  generating,
+  uploading,
+  generateLabel,
+  onUpload,
+  onGenerate,
+  onUseAi,
+}: {
+  usingUpload: boolean;
+  generating: boolean;
+  uploading: boolean;
+  generateLabel: string;
+  onUpload: () => void;
+  onGenerate: () => void;
+  onUseAi: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={onUpload}
+          disabled={uploading}
+        >
+          {uploading ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <ImagePlus className="size-4" />
+          )}
+          {uploading
+            ? "Uploading…"
+            : usingUpload
+              ? "Upload a different image"
+              : "Upload your own image"}
+        </Button>
+        {usingUpload ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onUseAi}
+            disabled={generating || uploading}
+          >
+            <Sparkles className={`size-4 ${generating ? "animate-pulse" : ""}`} />
+            {generating ? "Generating…" : "Use an AI image instead"}
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onGenerate}
+            disabled={generating || uploading}
+          >
+            <RefreshCw className={`size-4 ${generating ? "animate-spin" : ""}`} />
+            {generating ? "Generating…" : generateLabel}
+          </Button>
+        )}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {usingUpload
+          ? "Your own image is posted exactly as you designed it. FaithForm won't replace it unless you choose an AI image."
+          : "Have a design already? Upload a JPG, PNG, or WebP. It is never cropped."}
+      </p>
+    </div>
+  );
+}
+
+/** The date and time picker under "Schedule for …", and why it shows that time. */
+function FacebookScheduleField({
+  idPrefix,
+  timing,
+  edited,
+  onChange,
+}: {
+  idPrefix: string;
+  timing: FacebookTimingView;
+  edited: boolean;
+  onChange: (value: string) => void;
+}) {
+  const check = checkFacebookScheduleTime(timing.ms);
+  const hint =
+    timing.adjusted === "none"
+      ? "The day before the event, at your Church Profile post time."
+      : timing.adjusted === "too-soon"
+        ? "It's too late to post the day before, so this is the soonest time Facebook can take it."
+        : timing.adjusted === "too-far"
+          ? "Facebook schedules posts up to 30 days ahead, so this is the latest it allows."
+          : null;
+
+  return (
+    <div className="flex flex-col gap-1 pl-6">
+      <DateTimeField
+        idPrefix={idPrefix}
+        label="Facebook post"
+        hideLabel
+        value={timing.value}
+        onChange={onChange}
+      />
+      {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
+      {timing.zoneName && (
+        <p className="text-xs text-muted-foreground">
+          {`Times are ${timing.zoneName}, your church's time zone.`}
+        </p>
+      )}
+      {edited && !check.ok && (
+        <p className="text-xs text-destructive" role="alert">
+          {check.error}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -654,12 +1188,15 @@ export function AnnouncementVerifyForm({
 function DateTimeField({
   idPrefix,
   label,
+  hideLabel = false,
   value,
   required = false,
   onChange,
 }: {
   idPrefix: string;
   label: string;
+  /** Keeps the label for screen readers only, where a legend already says it. */
+  hideLabel?: boolean;
   value: string;
   required?: boolean;
   onChange: (value: string) => void;
@@ -672,7 +1209,9 @@ function DateTimeField({
 
   return (
     <div className="flex flex-col gap-1">
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      {!hideLabel && (
+        <span className="text-xs font-medium text-muted-foreground">{label}</span>
+      )}
       <div className="grid grid-cols-[1fr_auto] gap-2">
         <Input
           id={`${idPrefix}-date`}

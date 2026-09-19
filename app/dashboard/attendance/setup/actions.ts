@@ -23,6 +23,12 @@ import {
   type SetupServiceTime,
 } from "@/lib/attendance/v2/setup";
 import { geocodeAddress, type GeocodeMatch } from "@/lib/attendance/v2/geocode";
+import {
+  readChurchAutomaticReadiness,
+  type ChurchAutomaticReadiness,
+  type GeofenceWindow,
+} from "@/lib/attendance/v2/geofence-config";
+import { checkMyPhone, type PhoneCheck } from "@/lib/attendance/v2/phone-check";
 
 /**
  * Check-in setup: automatic check-in, the check-in window, arrival rules,
@@ -49,7 +55,7 @@ async function requireSetupViewer(): Promise<SetupContext> {
 async function requireSetupAdmin(): Promise<SetupContext> {
   const context = await requireSetupViewer();
   if (!context.isAdmin) {
-    throw new VisitorError("forbidden", "Only a church admin can change check-in setup.");
+    throw new VisitorError("forbidden", "Only a church admin can change Automatic Attendance.");
   }
   return context;
 }
@@ -62,10 +68,70 @@ function revalidateSetup() {
   revalidatePath("/dashboard/website/details");
 }
 
-export async function getCheckinSetup(): Promise<VisitorResult<AttendanceSetupState>> {
+/** Everything the setup screen shows, read in one pass. */
+export type CheckinSetupView = {
+  state: AttendanceSetupState;
+  /**
+   * What a phone is told about this church right now, from the same function
+   * the phones' own requests use — so the page cannot say "ready" while the
+   * phones are refused.
+   */
+  readiness: {
+    problem: ChurchAutomaticReadiness["problem"];
+    switchedOn: boolean;
+    featureEnabled: boolean;
+    watching: { campusName: string; radiusMeters: number }[];
+    windows: GeofenceWindow[];
+  };
+  /** The signed-in person's own phone, checked the way the app checks it. */
+  phone: PhoneCheck | null;
+  /** The church's address from its profile, to look the building up in one tap. */
+  churchAddress: string | null;
+  churchName: string;
+};
+
+export async function getCheckinSetup(): Promise<VisitorResult<CheckinSetupView>> {
   try {
-    const { churchId } = await requireSetupViewer();
-    return { ok: true, data: await getAttendanceSetupState(churchId) };
+    const { churchId, userId } = await requireSetupViewer();
+    const admin = createAdminClient();
+
+    const [state, readiness, phone, { data: church }] = await Promise.all([
+      getAttendanceSetupState(churchId, { client: admin }),
+      readChurchAutomaticReadiness(churchId, { client: admin }),
+      // A failure here must not take the whole setup page with it.
+      checkMyPhone({ userId, churchId, client: admin }).catch(() => null),
+      admin
+        .from("churches")
+        .select("name, address, city, state, zip")
+        .eq("id", churchId)
+        .maybeSingle(),
+    ]);
+
+    const churchAddress =
+      [church?.address, church?.city, church?.state, church?.zip]
+        .filter((part): part is string => typeof part === "string" && part.trim() !== "")
+        .map((part) => part.trim())
+        .join(", ") || null;
+
+    return {
+      ok: true,
+      data: {
+        state,
+        readiness: {
+          problem: readiness.problem,
+          switchedOn: readiness.switchedOn,
+          featureEnabled: readiness.featureEnabled,
+          watching: readiness.regions.map((region) => ({
+            campusName: region.campusName,
+            radiusMeters: region.radiusMeters,
+          })),
+          windows: readiness.windows.slice(0, 6),
+        },
+        phone,
+        churchAddress,
+        churchName: (church?.name as string | undefined)?.trim() || "your church",
+      },
+    };
   } catch (error) {
     return toVisitorResult(error);
   }

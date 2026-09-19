@@ -79,7 +79,7 @@ export function AnnouncementSubmittedView({
             )}
             {announcement.push_to_team && (
               <span className="rounded-full bg-muted px-2.5 py-0.5 text-xs font-medium">
-                Gmail draft
+                Email draft
               </span>
             )}
             {!announcement.push_to_facebook && !announcement.push_to_team && (
@@ -129,7 +129,7 @@ export function AnnouncementSubmittedView({
           >
             <Button variant="outline" size="sm">
               <Mail className="size-4" />
-              Gmail drafts
+              Email drafts
             </Button>
           </a>
         )}

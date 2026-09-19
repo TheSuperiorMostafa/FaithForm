@@ -58,6 +58,28 @@ function assertSecureStreamUrl(
   }
 }
 
+/** `live` or `test`, from a Stripe key's prefix; null when it isn't one. */
+export function stripeKeyMode(key: string | undefined): "live" | "test" | null {
+  const match = /^(?:sk|rk|pk)_(live|test)_/.exec(key?.trim() ?? "");
+  return match ? (match[1] as "live" | "test") : null;
+}
+
+/**
+ * A live secret key with a test publishable key, or the reverse. Nothing else
+ * notices: the server creates each payment in one mode and the browser looks
+ * for it in the other, so every gift fails at the payment step, in front of a
+ * donor, instead of here at deploy time. Unrecognised keys are left to the
+ * other checks.
+ */
+export function stripeKeysMismatched(
+  secretKey: string | undefined,
+  publishableKey: string | undefined,
+): boolean {
+  const secret = stripeKeyMode(secretKey);
+  const publishable = stripeKeyMode(publishableKey);
+  return secret !== null && publishable !== null && secret !== publishable;
+}
+
 let validated = false;
 
 export class ProductionEnvError extends Error {
@@ -166,6 +188,18 @@ export function assertProductionEnv(): void {
       "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY",
       process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
     );
+  }, failedChecks);
+  recordCheck("stripe-key-mode", () => {
+    if (
+      stripeKeysMismatched(
+        process.env.STRIPE_SECRET_KEY,
+        process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY,
+      )
+    ) {
+      throw new Error(
+        "Production env STRIPE_SECRET_KEY and NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY are from different Stripe modes",
+      );
+    }
   }, failedChecks);
   recordCheck("RESEND_API_KEY", () => {
     assertValue("RESEND_API_KEY", process.env.RESEND_API_KEY);

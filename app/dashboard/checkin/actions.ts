@@ -809,14 +809,16 @@ export async function lookupHouseholdForOverride(
 
   const supabase = createClient();
   const today = localDateInTimeZone(context.auth.churchTimezone);
-  const households = await findHouseholdsByPersonName(
+  const searchResult = await findHouseholdsByPersonName(
     context.auth.churchId,
     term,
     supabase,
+    { withChildrenCheckedInOn: today, limit: 8 },
   );
+  if (!searchResult.ok) return fail(searchResult.error);
 
   const results = await Promise.all(
-    households.slice(0, 8).map(async (household) => {
+    searchResult.households.map(async (household) => {
       const sessions = await getHouseholdOpenSessions(
         context.auth.churchId,
         household.id,

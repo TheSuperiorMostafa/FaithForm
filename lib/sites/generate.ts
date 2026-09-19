@@ -245,6 +245,16 @@ export function buildSections(
   const hasStaff = profile.staff.length > 0;
   const hasTimes = profile.serviceTimes.length > 0;
   const hasStatements = Boolean(profile.missionStatement || profile.visionStatement);
+  const hasContact = Boolean(
+    profile.email ||
+      profile.phone ||
+      profile.givingEnabled ||
+      profile.facebookUrl ||
+      profile.instagramUrl ||
+      profile.youtubeUrl ||
+      profile.tiktokUrl ||
+      profile.xUrl,
+  );
 
   // Programs fall back to the service times, which the profile always knows.
   // Counts are capped here rather than in the schema: the layout is a 3-column
@@ -442,6 +452,15 @@ export function buildSections(
             }
           : {}),
       },
+    },
+    {
+      type: "contact_band",
+      // Directly above the footer, whose map is where a visitor looks for the
+      // church's address; this puts every other way to reach it on the same
+      // screen. Everything in it comes from the profile, so it starts hidden
+      // only when there is nothing yet to show.
+      isVisible: hasContact,
+      props: { anchor: "contact" },
     },
     {
       type: "footer_map",

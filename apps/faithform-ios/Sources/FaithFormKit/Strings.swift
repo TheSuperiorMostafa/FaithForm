@@ -372,6 +372,15 @@ public enum L {
     public static var autoAttendanceNoCampusBody: String {
         t("auto_attendance_no_campus_body", "Automatic check-in needs your church to add where it meets.")
     }
+    public static var autoAttendanceNoLinkTitleNamed: String {
+        t("auto_attendance_no_link_title_named", "%@ needs to confirm who you are")
+    }
+    public static var autoAttendanceChurchDisabledTitleNamed: String {
+        t("auto_attendance_church_disabled_title_named", "%@ has not set up automatic check-in")
+    }
+    public static var autoAttendanceNoCampusTitleNamed: String {
+        t("auto_attendance_no_campus_title_named", "%@ has not added a location")
+    }
     public static var autoAttendanceConsentMissingTitle: String {
         t("auto_attendance_consent_missing_title", "Automatic check-in is not turned on")
     }

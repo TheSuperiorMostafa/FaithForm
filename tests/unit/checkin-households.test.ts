@@ -208,7 +208,11 @@ test("only household dependents can be checked in or checked out", () => {
   assert.match(actions, /relationship !== "dependent"/);
   assert.match(
     readFileSync("app/dashboard/checkin/page.tsx", "utf8"),
-    /listDependentMemberIds/,
+    /listCheckinChildren/,
+  );
+  assert.match(
+    readFileSync("lib/checkin/roster-search.ts", "utf8"),
+    /relationship === "dependent"/,
   );
 });
 

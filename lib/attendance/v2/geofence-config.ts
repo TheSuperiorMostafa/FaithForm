@@ -1,7 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { VisitorError } from "@/lib/faithform/errors";
 import { getVisitorAccount } from "@/lib/faithform/account";
 import { isChurchFeatureEnabled } from "@/lib/features/access";
 import {
@@ -173,6 +172,168 @@ export type GeofenceConfigResult =
   | { ok: false; reason: GeofenceConfigRefusal };
 
 /**
+ * Whether a church, on its own, can have its people checked in automatically —
+ * everything about gate 5 that does not depend on who is asking.
+ *
+ * One function, used both by the phones' configuration and by the dashboard's
+ * readiness checks, so what the dashboard says a phone will get is what a
+ * phone gets. They were separate before, and a church could be shown a campus
+ * "on the map" while every phone was told it had none.
+ */
+export type ChurchAutomaticReadiness = {
+  /** The church's own switch (`attendance_policies.geofence_enabled`). */
+  switchedOn: boolean;
+  /** The platform-level Attendance feature for this church. */
+  featureEnabled: boolean;
+  /** Campuses a phone would be told to watch: active, public and positioned. */
+  regions: GeofenceRegion[];
+  /** Check-in windows in the next seven days that take automatic check-ins. */
+  windows: GeofenceWindow[];
+  /**
+   * The first thing stopping it, in the order a church fixes them: switching
+   * it on, then saying where it is. Null when a linked, consenting person
+   * would be given a configuration.
+   */
+  problem: Extract<GeofenceConfigRefusal, "geofence_disabled" | "no_campus_configured"> | null;
+  policy: {
+    qrEnabled: boolean;
+    manualEnabled: boolean;
+    requiresConfirmation: boolean;
+    minDwellSeconds: number;
+    maxLocationAccuracyM: number;
+    policyVersion: number;
+  } | null;
+};
+
+/**
+ * What stops a church, in the order it fixes them: switching automatic
+ * check-in on (and the platform allowing it), then putting a campus on the map.
+ *
+ * Switching on comes first. A church that had not turned automatic check-in on
+ * was told "no location" whenever it also had no campus — true, but not the
+ * reason, and it sent people looking for a map they had filled in at a
+ * different church.
+ */
+export function readinessProblem(input: {
+  switchedOn: boolean;
+  featureEnabled: boolean;
+  regionCount: number;
+}): ChurchAutomaticReadiness["problem"] {
+  if (!input.switchedOn || !input.featureEnabled) return "geofence_disabled";
+  if (input.regionCount === 0) return "no_campus_configured";
+  return null;
+}
+
+export async function readChurchAutomaticReadiness(
+  churchId: string,
+  options?: { client?: SupabaseClient; now?: Date },
+): Promise<ChurchAutomaticReadiness> {
+  const admin = options?.client ?? createAdminClient();
+  const now = options?.now ?? new Date();
+
+  // Upcoming windows only, and bounded. A client does not need the whole year.
+  const horizon = new Date(now);
+  horizon.setUTCDate(horizon.getUTCDate() + 7);
+
+  const [{ data: policy }, featureEnabled, { data: campuses }, { data: occurrences }] =
+    await Promise.all([
+      // The policy that will actually judge an attempt.
+      admin
+        .from("attendance_policies")
+        .select(
+          "geofence_enabled, qr_enabled, manual_enabled, requires_confirmation, min_dwell_seconds, max_location_accuracy_m, policy_version",
+        )
+        .eq("church_id", churchId)
+        .is("campus_id", null)
+        .is("service_time_id", null)
+        .maybeSingle(),
+      // A platform admin switching Attendance off for the church switches this
+      // off too. The church's own toggle is not the only way it can stop.
+      isChurchFeatureEnabled(churchId, "attendance"),
+      // Only active, public, positioned campuses can be monitored.
+      admin
+        .from("church_campuses")
+        .select("id, name, latitude, longitude, geofence_radius_m, is_active, is_public")
+        .eq("church_id", churchId)
+        .eq("is_active", true)
+        // Filtered here as well as below. Filtering hidden campuses only after
+        // the limit let them use up places in it, so a church with many hidden
+        // campuses could be told it had none.
+        .eq("is_public", true)
+        .not("latitude", "is", null)
+        .not("longitude", "is", null)
+        // Ordered, so which twenty is the same on every request and on both
+        // platforms. An unordered limit let the database pick a different set
+        // from one refresh to the next, which the clients would read as moved
+        // regions.
+        .order("id", { ascending: true })
+        // Both platforms cap how many regions an app may register; a church
+        // with more campuses than this needs a proximity strategy the clients
+        // own.
+        .limit(20),
+      admin
+        .from("service_occurrences")
+        .select(
+          "id, label, starts_at_utc, ends_at_utc, checkin_opens_at_utc, checkin_closes_at_utc, timezone",
+        )
+        .eq("church_id", churchId)
+        .in("status", ["scheduled", "active"])
+        // Only services that will accept an automatic check-in. A window whose
+        // own snapshot has automatic check-in off would send phones to ask a
+        // question the server has already answered no.
+        .eq("policy_snapshot->sources->>geofence", "true")
+        .gte("checkin_closes_at_utc", now.toISOString())
+        .lte("starts_at_utc", horizon.toISOString())
+        .order("starts_at_utc", { ascending: true })
+        .limit(50),
+    ]);
+
+  const regions: GeofenceRegion[] = ((campuses ?? []) as Record<string, unknown>[])
+    .filter((campus) => campus.is_active && campus.is_public)
+    .map((campus) => ({
+      // Stable across refreshes so the OS updates rather than re-registers.
+      regionId: `faithform.campus.${campus.id as string}`,
+      campusName: campus.name as string,
+      latitude: Number(campus.latitude),
+      longitude: Number(campus.longitude),
+      radiusMeters: Number(campus.geofence_radius_m ?? 150),
+    }));
+
+  const windows: GeofenceWindow[] = ((occurrences ?? []) as Record<string, unknown>[]).map(
+    (occurrence) => ({
+      occurrenceId: occurrence.id as string,
+      label: occurrence.label as string,
+      startsAt: occurrence.starts_at_utc as string,
+      endsAt: occurrence.ends_at_utc as string,
+      checkinOpensAt: occurrence.checkin_opens_at_utc as string,
+      checkinClosesAt: occurrence.checkin_closes_at_utc as string,
+      timezone: occurrence.timezone as string,
+    }),
+  );
+
+  const switchedOn = Boolean(policy?.geofence_enabled);
+  const problem = readinessProblem({ switchedOn, featureEnabled, regionCount: regions.length });
+
+  return {
+    switchedOn,
+    featureEnabled,
+    regions,
+    windows,
+    problem,
+    policy: policy
+      ? {
+          qrEnabled: Boolean(policy.qr_enabled),
+          manualEnabled: Boolean(policy.manual_enabled),
+          requiresConfirmation: Boolean(policy.requires_confirmation ?? true),
+          minDwellSeconds: Number(policy.min_dwell_seconds ?? 120),
+          maxLocationAccuracyM: Number(policy.max_location_accuracy_m ?? 100),
+          policyVersion: Number(policy.policy_version ?? 1),
+        }
+      : null,
+  };
+}
+
+/**
  * Builds the configuration for one account and one church.
  *
  * Five independent gates, every one re-derived rather than cached:
@@ -181,8 +342,8 @@ export type GeofenceConfigResult =
  *   2. It holds a usable relationship with this church.
  *   3. It holds an **active verified People link** for this church.
  *   4. Automatic-attendance consent is currently `granted`.
- *   5. The church has geofence attendance enabled and at least one active,
- *      positioned campus.
+ *   5. The church has automatic check-in switched on and at least one active,
+ *      public, positioned campus (`readChurchAutomaticReadiness`).
  *
  * Failing any of them returns a typed refusal, and the client removes whatever
  * regions it had registered.
@@ -225,112 +386,29 @@ export async function buildGeofenceConfiguration(
     return { ok: false, reason: "consent_required" };
   }
 
-  // Gate 5. Only active, public, positioned campuses can be monitored.
-  const { data: campuses } = await admin
-    .from("church_campuses")
-    .select("id, name, latitude, longitude, geofence_radius_m, is_active, is_public")
-    .eq("church_id", churchId)
-    .eq("is_active", true)
-    // Filtered here as well as below. Filtering hidden campuses only after the
-    // limit let them use up places in it, so a church with many hidden
-    // campuses could be told it had none.
-    .eq("is_public", true)
-    .not("latitude", "is", null)
-    .not("longitude", "is", null)
-    // Ordered, so which twenty is the same on every request and on both
-    // platforms. An unordered limit let the database pick a different set from
-    // one refresh to the next, which the clients would read as moved regions.
-    .order("id", { ascending: true })
-    // Both platforms cap how many regions an app may register; a church with
-    // more campuses than this needs a proximity strategy the clients own.
-    .limit(20);
-
-  const positioned = ((campuses ?? []) as Record<string, unknown>[]).filter(
-    (campus) => campus.is_active && campus.is_public,
-  );
-
-  if (positioned.length === 0) {
-    return { ok: false, reason: "no_campus_configured" };
+  // Gate 5.
+  const readiness = await readChurchAutomaticReadiness(churchId, { client: admin, now });
+  if (readiness.problem || !readiness.policy) {
+    return { ok: false, reason: readiness.problem ?? "geofence_disabled" };
   }
 
-  // The policy that will actually judge an attempt.
-  const { data: policy } = await admin
-    .from("attendance_policies")
-    .select(
-      "geofence_enabled, qr_enabled, manual_enabled, requires_confirmation, min_dwell_seconds, max_location_accuracy_m, policy_version",
-    )
-    .eq("church_id", churchId)
-    .is("campus_id", null)
-    .is("service_time_id", null)
-    .maybeSingle();
-
-  if (!policy?.geofence_enabled) {
-    return { ok: false, reason: "geofence_disabled" };
-  }
-
-  // A platform admin switching Attendance off for the church switches this off
-  // too. The church's own toggle above is not the only way it can stop.
-  if (!(await isChurchFeatureEnabled(churchId, "attendance"))) {
-    return { ok: false, reason: "geofence_disabled" };
-  }
-
-  // Upcoming windows only, and bounded. A client does not need the whole year.
-  const horizon = new Date(now);
-  horizon.setUTCDate(horizon.getUTCDate() + 7);
-
-  const { data: occurrences } = await admin
-    .from("service_occurrences")
-    .select(
-      "id, label, starts_at_utc, ends_at_utc, checkin_opens_at_utc, checkin_closes_at_utc, timezone",
-    )
-    .eq("church_id", churchId)
-    .in("status", ["scheduled", "active"])
-    // Only services that will accept an automatic check-in. A window whose own
-    // snapshot has automatic check-in off would send phones to ask a question
-    // the server has already answered no.
-    .eq("policy_snapshot->sources->>geofence", "true")
-    .gte("checkin_closes_at_utc", now.toISOString())
-    .lte("starts_at_utc", horizon.toISOString())
-    .order("starts_at_utc", { ascending: true })
-    .limit(50);
-
-  const regions: GeofenceRegion[] = positioned.map((campus) => ({
-    // Stable across refreshes so the OS updates rather than re-registers.
-    regionId: `faithform.campus.${campus.id as string}`,
-    campusName: campus.name as string,
-    latitude: Number(campus.latitude),
-    longitude: Number(campus.longitude),
-    radiusMeters: Number(campus.geofence_radius_m ?? 150),
-  }));
-
-  const windows: GeofenceWindow[] = ((occurrences ?? []) as Record<string, unknown>[]).map(
-    (occurrence) => ({
-      occurrenceId: occurrence.id as string,
-      label: occurrence.label as string,
-      startsAt: occurrence.starts_at_utc as string,
-      endsAt: occurrence.ends_at_utc as string,
-      checkinOpensAt: occurrence.checkin_opens_at_utc as string,
-      checkinClosesAt: occurrence.checkin_closes_at_utc as string,
-      timezone: occurrence.timezone as string,
-    }),
-  );
+  const { regions, windows, policy } = readiness;
 
   const base = {
     churchSlug,
     regions,
     windows,
     sources: {
-      geofence: Boolean(policy.geofence_enabled),
-      qr: Boolean(policy.qr_enabled),
-      manual: Boolean(policy.manual_enabled),
+      geofence: readiness.switchedOn,
+      qr: policy.qrEnabled,
+      manual: policy.manualEnabled,
     },
-    requiresConfirmation: Boolean(policy.requires_confirmation ?? true),
-    minDwellSeconds: Number(policy.min_dwell_seconds ?? 120),
-    maxLocationAccuracyM: Number(policy.max_location_accuracy_m ?? 100),
+    requiresConfirmation: policy.requiresConfirmation,
+    minDwellSeconds: policy.minDwellSeconds,
+    maxLocationAccuracyM: policy.maxLocationAccuracyM,
     // Folds in the account's authorization version, so blocking, leaving, link
     // revocation or consent withdrawal all change the version a client holds.
-    configVersion:
-      Number(policy.policy_version ?? 1) * 1000 + account.authorizationVersion,
+    configVersion: policy.policyVersion * 1000 + account.authorizationVersion,
     // Derived from the windows just built, so it moves only when something a
     // client would act on moves.
     expiresAt: resolveExpiry(now, windows),

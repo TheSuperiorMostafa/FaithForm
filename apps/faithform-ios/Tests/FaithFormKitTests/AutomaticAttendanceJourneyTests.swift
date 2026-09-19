@@ -370,6 +370,67 @@ struct SetupJourneyTests {
         #expect(model.step == .foregroundEducation)
     }
 
+    @Test("when every church refuses, the one on screen answers, by name")
+    func refusalIsTheChurchOnScreen() async {
+        // Grace sorts first by address. Before, its answer was shown whatever
+        // church the person was looking at — "no location" for a church that
+        // had one, because a different church did not.
+        let states: [String: GeofenceConfigurationState] = [
+            "grace": .refused("no_campus_configured"),
+            "hope": .refused("no_people_link"),
+        ]
+        let stack = AttendanceStack.make(location: FakeLocation(), states: states, notifier: FakeNotifier())
+        await signedIn(stack, churches: [grace, hope])
+        let model = stack.model()
+        await model.select(church: hope)
+
+        model.begin()
+        await model.acceptIntroduction()
+
+        #expect(model.step == .blocked(.noPeopleLink))
+        #expect(model.blockedChurchName == "Hope Chapel")
+        #expect(model.status.blockedChurchName == "Hope Chapel")
+        #expect(AutomaticAttendanceStatusView.title(for: .noPeopleLink, churchName: "Hope Chapel").contains("Hope Chapel"))
+    }
+
+    @Test("with no church on screen, the first by address answers, and says which")
+    func refusalWithoutSelection() async {
+        let stack = AttendanceStack.make(
+            location: FakeLocation(),
+            states: ["grace": .refused("no_campus_configured"), "hope": .refused("geofence_disabled")],
+            notifier: FakeNotifier()
+        )
+        await signedIn(stack, churches: [hope, grace])
+        let report = await stack.service.eligibilityReport(preferring: nil)
+        #expect(report.eligibility == .refused("no_campus_configured"))
+        #expect(report.church == grace)
+
+        // A preference for a church that did not refuse falls back the same way.
+        let unknown = await stack.service.eligibilityReport(preferring: "nowhere")
+        #expect(unknown.church == grace)
+
+        // And one church that offers it is still enough, whichever is preferred.
+        await stack.source.set("hope", .available(churchConfiguration("hope")))
+        let available = await stack.service.eligibilityReport(preferring: "grace")
+        #expect(available.eligibility == .available)
+        #expect(available.church == nil)
+    }
+
+    @Test("starting setup again forgets the church an old refusal named")
+    func blockedNameIsForgotten() async {
+        let stack = AttendanceStack.make(
+            location: FakeLocation(), states: ["grace": .refused("no_campus_configured")], notifier: FakeNotifier()
+        )
+        await signedIn(stack)
+        let model = stack.model()
+        model.begin()
+        await model.acceptIntroduction()
+        #expect(model.blockedChurchName == "Grace Community")
+
+        model.begin()
+        #expect(model.blockedChurchName == nil)
+    }
+
     @Test("a dropped connection while checking the churches does not end setup")
     func offlineEligibilityContinues() async {
         let stack = AttendanceStack.make(location: FakeLocation(), states: ["grace": .unavailable], notifier: FakeNotifier())
@@ -575,6 +636,25 @@ struct SetupJourneyTests {
             titles.insert(title)
         }
         #expect(titles.count >= AutomaticAttendanceBlocker.allCases.count - 1)
+    }
+
+    @Test("a church's refusal names the church; the device's own do not")
+    func churchRefusalsAreNamed() {
+        for blocker in [AutomaticAttendanceBlocker.noPeopleLink, .churchDisabled, .noCampus] {
+            let named = AutomaticAttendanceStatusView.title(for: blocker, churchName: "Hope Chapel")
+            #expect(named.contains("Hope Chapel"), "\(blocker) does not say which church")
+            #expect(!named.contains("%@"), "\(blocker) left its placeholder unfilled")
+            #expect(
+                AutomaticAttendanceStatusView.title(for: blocker, churchName: nil)
+                    == AutomaticAttendanceStatusView.title(for: blocker)
+            )
+        }
+        for blocker in [AutomaticAttendanceBlocker.locationDenied, .reducedAccuracy, .needsAlwaysAuthorization] {
+            #expect(
+                AutomaticAttendanceStatusView.title(for: blocker, churchName: "Hope Chapel")
+                    == AutomaticAttendanceStatusView.title(for: blocker)
+            )
+        }
     }
 
     @Test("no permission or notification copy leans on guilt or misdirection")

@@ -105,11 +105,28 @@ public struct AutomaticAttendanceSnapshot: Equatable, Sendable {
 public enum AttendanceEligibility: Equatable, Sendable {
     /// At least one church offers it to this account.
     case available
-    /// None does. The reason is the first church's.
+    /// None does. The reason is one church's — see `AttendanceEligibilityReport`
+    /// for which.
     case refused(String)
     /// It could not be found out. Setup continues rather than giving up on a
     /// dropped connection.
     case unknown
+}
+
+/// Eligibility, and the church a refusal came from.
+///
+/// A person can belong to several churches and each answers for itself, so a
+/// refusal on its own ("your church has not added a location") was ambiguous —
+/// and was routinely about the wrong one.
+public struct AttendanceEligibilityReport: Equatable, Sendable {
+    public let eligibility: AttendanceEligibility
+    /// The church whose answer `eligibility` is. Nil unless it is a refusal.
+    public let church: AttendanceChurch?
+
+    public init(eligibility: AttendanceEligibility, church: AttendanceChurch? = nil) {
+        self.eligibility = eligibility
+        self.church = church
+    }
 }
 
 /// The app's one way into automatic check-in.
@@ -335,20 +352,41 @@ public actor AutomaticAttendanceService {
     /// account. Used between consent and the first prompt, so nobody is asked
     /// for their location all the time by a church that could not use it.
     public func eligibility() async -> AttendanceEligibility {
-        guard let account, !settings.churches.isEmpty else { return .refused("not_enrolled") }
+        await eligibilityReport(preferring: nil).eligibility
+    }
+
+    /// Whether any church offers automatic check-in to this account, and when
+    /// none does, which church's answer to show.
+    ///
+    /// Every church the account can read is asked, and one that offers it is
+    /// enough. When all of them refuse, the answer shown is the preferred
+    /// church's — the one on screen — if it refused, and otherwise the first by
+    /// web address. The first by address alone told people *their* church had
+    /// "no location" when the church without one was a test church or one they
+    /// merely followed.
+    public func eligibilityReport(preferring churchSlug: String?) async -> AttendanceEligibilityReport {
+        guard let account, !settings.churches.isEmpty else {
+            return AttendanceEligibilityReport(eligibility: .refused("not_enrolled"))
+        }
         let states = await reconciler.preflight(
             partition: account.partition,
             churchSlugs: settings.churches.map(\.slug)
         )
         if states.values.contains(where: { if case .available = $0 { return true } else { return false } }) {
-            return .available
+            return AttendanceEligibilityReport(eligibility: .available)
         }
-        if states.values.contains(.unavailable) { return .unknown }
-        let first = settings.churches.map(\.slug).sorted().compactMap { slug -> String? in
-            if case .refused(let reason) = states[slug] { return reason }
-            return nil
-        }.first
-        return .refused(first ?? "not_enrolled")
+        if states.values.contains(.unavailable) {
+            return AttendanceEligibilityReport(eligibility: .unknown)
+        }
+
+        let byAddress = settings.churches.sorted { $0.slug < $1.slug }
+        let ordered = byAddress.filter { $0.slug == churchSlug } + byAddress.filter { $0.slug != churchSlug }
+        for church in ordered {
+            if case .refused(let reason) = states[church.slug] {
+                return AttendanceEligibilityReport(eligibility: .refused(reason), church: church)
+            }
+        }
+        return AttendanceEligibilityReport(eligibility: .refused("not_enrolled"))
     }
 
     /// Turns automatic check-in on on this device. Consent must already be

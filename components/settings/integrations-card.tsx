@@ -32,7 +32,7 @@ export type IntegrationsCardProps = {
 type Provider = "google" | "facebook" | "youtube" | "apple";
 
 const CONNECT_SUCCESS: Record<string, string> = {
-  google_connected: "Google Calendar and Gmail connected.",
+  google_connected: "Google Calendar and email connected.",
   facebook_connected: "Facebook Page connected.",
   youtube_connected: "YouTube channel connected.",
   apple_connected: "iCloud Calendar connected.",
@@ -81,7 +81,7 @@ export function IntegrationsCard({ isAdmin, status }: IntegrationsCardProps) {
           <CardTitle>Integrations</CardTitle>
           <CardDescription>
             Only church admins can connect Google Calendar, iCloud Calendar,
-            Gmail, Facebook, and YouTube.
+            email, Facebook, and YouTube.
           </CardDescription>
         </CardHeader>
       </Card>
@@ -111,8 +111,8 @@ export function IntegrationsCard({ isAdmin, status }: IntegrationsCardProps) {
           <CardTitle>Calendar & email</CardTitle>
           <CardDescription>
             Prefill announcements from the calendar your church already keeps —
-            Google, iCloud, or both — and draft the weekly email in Gmail. One
-            Google connection covers Calendar and Gmail together.
+            Google, iCloud, or both — and draft the weekly email in the connected
+            mailbox. One Google connection covers its calendar and email together.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
@@ -134,14 +134,14 @@ export function IntegrationsCard({ isAdmin, status }: IntegrationsCardProps) {
 
           <IntegrationRow
             icon={<Mail className="size-5 text-accent" strokeWidth={1.75} />}
-            name="Gmail"
+            name="Google email"
             connected={status.google.connected}
             needsReconnect={status.google.needsReconnect}
             reconnectReason={status.google.reconnectReason}
             detail={
               status.google.connected
                 ? `Drafts sent from ${status.google.email ?? "your Google account"}`
-                : "Connect Google to enable Gmail drafts"
+                : "Connect Google to enable email drafts"
             }
             connectHref={`/api/integrations/google/connect?return_to=${returnTo}`}
             onDisconnect={() => handleDisconnect("google", "Google")}

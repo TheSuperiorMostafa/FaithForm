@@ -101,7 +101,7 @@ export function UnsubmitAnnouncementButton({
                 <span aria-hidden className="text-accent">
                   •
                 </span>
-                Removed from this week&apos;s Gmail draft.
+                Removed from this week&apos;s email draft.
               </li>
               <li className="flex gap-2">
                 <span aria-hidden className="text-accent">

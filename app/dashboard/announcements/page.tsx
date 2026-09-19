@@ -82,7 +82,7 @@ export default async function AnnouncementsPage() {
           </h1>
           <p className="text-sm text-muted-foreground">
             Review this week&apos;s queue, verify events, and publish to
-            Facebook. Team emails roll into one Monday Gmail draft.
+            Facebook. Team emails roll into one Monday email draft.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

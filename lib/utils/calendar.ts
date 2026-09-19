@@ -1,3 +1,5 @@
+import { allDaySpan } from "@/lib/integrations/all-day";
+
 /** Start of local calendar day (00:00:00.000). */
 export function startOfDay(date: Date): Date {
   const d = new Date(date);
@@ -362,15 +364,33 @@ export function addMonths(year: number, monthIndex: number, delta: number): {
 type EventWithRange = {
   startAt: string;
   endAt: string | null;
+  /** A date-only event: `startAt` is midnight UTC on that date, not a time. */
+  allDay?: boolean;
 };
+
+/** A local calendar day as `YYYY-MM-DD`. */
+function localDayKey(day: Date): string {
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${day.getFullYear()}-${pad(day.getMonth() + 1)}-${pad(day.getDate())}`;
+}
 
 /**
  * True if the event overlaps the given calendar day (local time).
+ *
+ * An all-day event is compared by date, not instant: it is stored as midnight
+ * UTC with an exclusive end, which read as a local instant would spill onto
+ * the evening before anywhere west of Greenwich.
  */
 export function eventOverlapsDay(
   event: EventWithRange,
   day: Date,
 ): boolean {
+  if (event.allDay) {
+    const { start, end } = allDaySpan(event.startAt, event.endAt);
+    const key = localDayKey(day);
+    return key >= start && key < end;
+  }
+
   const dayStart = startOfDay(day);
   const dayEnd = endOfDay(day);
   const eventStart = new Date(event.startAt);
@@ -379,11 +399,30 @@ export function eventOverlapsDay(
   return eventStart.getTime() <= dayEnd.getTime() && eventEnd.getTime() >= dayStart.getTime();
 }
 
+/**
+ * The local day an event starts on. An all-day event's date is read in UTC
+ * (see `eventOverlapsDay`), so "Saturday, all day" stays on Saturday.
+ */
+export function eventStartDay(event: EventWithRange): Date {
+  if (event.allDay) {
+    const [y, m, d] = allDaySpan(event.startAt, event.endAt).start
+      .split("-")
+      .map(Number);
+    return new Date(y!, m! - 1, d!);
+  }
+  return startOfDay(new Date(event.startAt));
+}
+
 export function formatEventTime(iso: string): string {
   return new Date(iso).toLocaleTimeString(undefined, {
     hour: "numeric",
     minute: "2-digit",
   });
+}
+
+/** The time to print for an event: "All day" when it has no time at all. */
+export function formatEventStart(event: EventWithRange): string {
+  return event.allDay ? "All day" : formatEventTime(event.startAt);
 }
 
 export function formatDayAgendaHeading(date: Date): string {

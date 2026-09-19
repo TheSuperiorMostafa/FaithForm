@@ -8,6 +8,7 @@ import {
   getRecordByDate,
   listRecordedServices,
 } from "@/lib/queries/attendance";
+import { getChurchSmsStatus } from "@/lib/sms/church-sender";
 import { createClient } from "@/lib/supabase/server";
 import { isValidDateParam } from "@/lib/utils/dates";
 
@@ -54,9 +55,10 @@ export default async function AttendanceFollowUpPage({
       ? requested
       : services[0].serviceDate;
 
-  const [record, presence] = await Promise.all([
+  const [record, presence, texting] = await Promise.all([
     getRecordByDate(supabase, auth.churchId, selectedDate),
     getPresenceOnDate(supabase, auth.churchId, selectedDate),
+    getChurchSmsStatus(auth.churchId),
   ]);
   // Marked absent, but checked in by the app, a code, the kiosk or a room:
   // they were there, and a "we missed you" text would be wrong.
@@ -104,6 +106,7 @@ export default async function AttendanceFollowUpPage({
       services={services}
       selectedDate={selectedDate}
       candidates={candidates}
+      textingConnected={texting.connected}
     />
   );
 }

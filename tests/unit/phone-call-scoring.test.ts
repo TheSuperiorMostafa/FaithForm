@@ -5,12 +5,20 @@ import test from "node:test";
 import {
   buildPhoneCallScoringSystem,
   CLASSIFICATION_DESCRIPTIONS,
+  FIRST_SORTED_SCORING_VERSION,
+  NAMES_FROM_TRANSCRIPT_ONLY,
   PHONE_CALL_SCORING_VERSION,
 } from "@/lib/integrations/phone-call-scoring-prompt";
+import {
+  phoneCallScoreSchema,
+  scoringContextFromSettings,
+} from "@/lib/integrations/score-phone-call";
 import {
   describeCallScore,
   formatCallScore,
   isLegacyCallScore,
+  isOutdatedCallScore,
+  isOutdatedScoreBreakdown,
 } from "@/lib/utils/call-score";
 import type { PhoneCallRow } from "@/types/voice-assistant";
 
@@ -33,6 +41,20 @@ const migration = readFileSync(
   "supabase/migrations/0070_phone_call_scoring_v2.sql",
   "utf8",
 );
+const detailView = readFileSync(
+  "components/voice-assistant/call-detail-view.tsx",
+  "utf8",
+);
+const callLogPage = readFileSync("app/dashboard/call-log/page.tsx", "utf8");
+const csvExport = readFileSync(
+  "app/api/dashboard/voice-assistant/calls/export/route.ts",
+  "utf8",
+);
+const scoringPrompt = readFileSync(
+  "lib/integrations/phone-call-scoring-prompt.ts",
+  "utf8",
+);
+const callScore = readFileSync("lib/utils/call-score.ts", "utf8");
 
 function call(overrides: Partial<PhoneCallRow> = {}): PhoneCallRow {
   return {
@@ -60,25 +82,152 @@ function call(overrides: Partial<PhoneCallRow> = {}): PhoneCallRow {
 // The rubric itself
 // ---------------------------------------------------------------------------
 
-test("the prompt names both parties, so a greeting is not read as the caller", () => {
+test("the prompt says which transcript label is which party, so a greeting is not read as the caller", () => {
   const system = buildPhoneCallScoringSystem({
-    assistantName: "Katherine",
     churchName: "Louisville Grace Church",
+    assistantNameHint: "Katherine",
     voiceGender: "female",
   });
 
-  assert.match(system, /Katherine is the AGENT who answers the phone/);
-  assert.match(system, /The other party is the CALLER/);
   assert.match(
     system,
-    /if the transcript opens with a greeting from Louisville Grace Church, that is Katherine/,
+    /Lines that start with "Agent:" are the church's AI phone assistant/,
   );
+  assert.match(system, /Lines that start with "User:" are the caller/);
+  assert.match(
+    system,
+    /A greeting from Louisville Grace Church is the assistant speaking, not the caller introducing themselves/,
+  );
+});
+
+test("the saved assistant name is a hint the transcript has to confirm, never a fact", () => {
+  // A pilot church read "Vonda" all over its call summaries and nobody knew
+  // who that was. Version 2 told the model the saved name was the agent and to
+  // name it in every summary, whether or not anyone on the call said it.
+  const system = buildPhoneCallScoringSystem({
+    churchName: "Louisville Grace Church",
+    assistantNameHint: "Vonda",
+    voiceGender: "female",
+  });
+
+  assert.doesNotMatch(system, /as the agent/i);
+  assert.doesNotMatch(system, /Vonda is/);
+  assert.match(system, /Refer to the assistant as "the assistant"/);
+
+  // The name appears on exactly one line, and that line makes it conditional
+  // on the assistant saying it in the transcript.
+  const lines = system.split("\n").filter((line) => line.includes("Vonda"));
+  assert.equal(lines.length, 1);
+  assert.match(
+    lines[0],
+    /That is a hint, not a fact about this call: use "Vonda" only if an "Agent:" line in this transcript has the assistant say it/,
+  );
+});
+
+test("callers and everyone else are named only when the transcript names them", () => {
+  const system = buildPhoneCallScoringSystem({
+    churchName: "Grace",
+    assistantNameHint: null,
+  });
+
+  assert.match(
+    system,
+    /Use the caller's name only if the caller says it in the transcript/,
+  );
+  assert.match(system, /only if that name is said in the transcript/);
+  assert.match(system, /Never invent, guess, or fill in a name/);
+  assert.match(
+    system,
+    /A name that appears only in Retell's summary, or only in these instructions, does not count/,
+  );
+});
+
+test("a church with no saved name gets no name in the prompt at all", () => {
+  const system = buildPhoneCallScoringSystem({
+    churchName: "Grace",
+    assistantNameHint: null,
+  });
+
+  assert.doesNotMatch(system, /The church calls its assistant/);
+  // The old fallback phrase read like a title and got repeated as one.
+  assert.doesNotMatch(system, /AI receptionist/);
+});
+
+test("a linked agent's saved name and voice never reach the prompt", () => {
+  // A linked agent is built in Retell and FaithForm never sends it either
+  // setting, so neither says anything about who answered the phone.
+  const context = scoringContextFromSettings(
+    { name: "Louisville Grace Church" },
+    { assistant_name: "Vonda", voice_gender: "female", agent_mode: "linked" },
+  );
+
+  assert.deepEqual(context, {
+    churchName: "Louisville Grace Church",
+    assistantNameHint: null,
+    voiceGender: null,
+  });
+
+  const system = buildPhoneCallScoringSystem(context);
+  assert.doesNotMatch(system, /Vonda/);
+  assert.doesNotMatch(system, /\bherself\b|\bhimself\b/);
+});
+
+test("a managed agent's saved name is passed along as a hint", () => {
+  assert.deepEqual(
+    scoringContextFromSettings(
+      { name: "  Grace Church " },
+      { assistant_name: "  Katherine ", voice_gender: "female", agent_mode: "managed" },
+    ),
+    {
+      churchName: "Grace Church",
+      assistantNameHint: "Katherine",
+      voiceGender: "female",
+    },
+  );
+  assert.deepEqual(scoringContextFromSettings(null, null), {
+    churchName: "the church",
+    assistantNameHint: null,
+    voiceGender: null,
+  });
+  assert.equal(
+    scoringContextFromSettings({ name: "Grace" }, { assistant_name: "   " })
+      .assistantNameHint,
+    null,
+  );
+});
+
+test("the scorer reads the agent mode, so a linked church's name is dropped", () => {
+  assert.match(scorer, /\.select\("assistant_name, voice_gender, agent_mode"\)/);
+  assert.match(scorer, /return scoringContextFromSettings\(church, settings\)/);
+});
+
+test("the name rule covers every field the model writes, not just the summary", () => {
+  const system = buildPhoneCallScoringSystem({
+    churchName: "Grace",
+    assistantNameHint: "Katherine",
+  });
+
+  assert.match(
+    system,
+    /These rules apply to every field you write: summary, flag_reason, and missing_knowledge/,
+  );
+  assert.match(system, /STEP 4: Write it up, following the NAMES rules in every field/);
+
+  // Repeated on the output schema, where the model reads it as it writes.
+  const written = ["summary", "flag_reason", "missing_knowledge"] as const;
+  for (const field of written) {
+    const description = phoneCallScoreSchema.shape[field].description ?? "";
+    assert.ok(
+      description.includes(NAMES_FROM_TRANSCRIPT_ONLY),
+      `${field} carries the name rule`,
+    );
+  }
 });
 
 test("a refused scam is scored as a win for the church, not a failed call", () => {
   const system = buildPhoneCallScoringSystem({
-    assistantName: "Katherine",
     churchName: "Louisville Grace Church",
+    assistantNameHint: "Katherine",
     voiceGender: "female",
   });
 
@@ -91,18 +240,18 @@ test("a refused scam is scored as a win for the church, not a failed call", () =
 
 test("pronouns follow the church's own voice setting rather than a default", () => {
   const female = buildPhoneCallScoringSystem({
-    assistantName: "Katherine",
     churchName: "Grace",
+    assistantNameHint: "Katherine",
     voiceGender: "female",
   });
   const male = buildPhoneCallScoringSystem({
-    assistantName: "Samuel",
     churchName: "Grace",
+    assistantNameHint: "Samuel",
     voiceGender: "male",
   });
   const unset = buildPhoneCallScoringSystem({
-    assistantName: "Ash",
     churchName: "Grace",
+    assistantNameHint: "Ash",
     voiceGender: null,
   });
 
@@ -166,9 +315,102 @@ test("a call scored under the current rubric reads out of 10", () => {
   assert.equal(view.outOf, 10);
   assert.equal(formatCallScore(view), "9 / 10");
   assert.equal(view.classificationLabel, "Real call");
-  assert.equal(view.needsAttention, true);
-  assert.equal(view.urgencyLabel, "Needs a reply");
+  // Someone should ring back, but nobody is in crisis, so nothing is flagged.
+  assert.equal(view.urgent, false);
   assert.equal(view.summary, "A member asked about the food pantry hours.");
+});
+
+test("only a caller in crisis is marked urgent", () => {
+  const scored = (
+    urgency: "high" | "normal" | "low",
+    notifyPastor: boolean,
+  ) =>
+    call({
+      ai_score: 7,
+      scored_at: "2026-09-01T15:05:00.000Z",
+      call_classification: "real",
+      notify_pastor: notifyPastor,
+      urgency,
+      score_breakdown: {
+        version: PHONE_CALL_SCORING_VERSION,
+        score: 7,
+        call_type: "real",
+        notify_pastor: notifyPastor,
+        urgency,
+      },
+    });
+
+  assert.equal(describeCallScore(scored("high", true)).urgent, true);
+  assert.equal(describeCallScore(scored("normal", true)).urgent, false);
+  assert.equal(describeCallScore(scored("low", false)).urgent, false);
+  // A robocall that sounds urgent is not someone the church needs to hear
+  // about, and the rubric says so with notify_pastor.
+  assert.equal(describeCallScore(scored("high", false)).urgent, false);
+
+  // A database without migration 0070 has only the breakdown to go on.
+  const preMigration = call({
+    ai_score: 6,
+    scored_at: "2026-09-01T15:05:00.000Z",
+    score_breakdown: {
+      version: PHONE_CALL_SCORING_VERSION,
+      score: 6,
+      call_type: "real",
+      notify_pastor: true,
+      urgency: "high",
+    },
+  });
+  assert.equal(describeCallScore(preMigration).urgent, true);
+});
+
+test("calls scored by the previous prompt are offered for re-scoring but still read as sorted", () => {
+  // Version 2 wrote the summaries that named the assistant by its saved name.
+  // Their kind and score are real judgements, so they keep their colour and
+  // their kind, but the re-score button has to pick them up.
+  assert.ok(PHONE_CALL_SCORING_VERSION > 2);
+  assert.equal(FIRST_SORTED_SCORING_VERSION, 2);
+
+  const previousPrompt = call({
+    ai_score: 8,
+    scored_at: "2026-09-01T15:05:00.000Z",
+    call_classification: "real",
+    score_breakdown: {
+      version: 2,
+      score: 8,
+      call_type: "real",
+      summary: "Vonda answered and gave the service times.",
+    },
+  });
+
+  assert.equal(isLegacyCallScore(previousPrompt), false);
+  assert.equal(isOutdatedCallScore(previousPrompt), true);
+
+  const view = describeCallScore(previousPrompt);
+  assert.equal(view.legacy, false);
+  assert.equal(view.classificationLabel, "Real call");
+  assert.notEqual(view.toneClass, "text-muted-foreground");
+
+  // A call the current prompt judged is not offered again, and a call nobody
+  // has scored yet is left to the scorer rather than the re-score button.
+  assert.equal(
+    isOutdatedCallScore(
+      call({
+        ai_score: 8,
+        scored_at: "2026-09-18T15:05:00.000Z",
+        score_breakdown: { version: PHONE_CALL_SCORING_VERSION, score: 8 },
+      }),
+    ),
+    false,
+  );
+  assert.equal(isOutdatedCallScore(call()), false);
+
+  // The action sees only the breakdown, and has to agree with the button.
+  assert.equal(isOutdatedScoreBreakdown({ version: 2, score: 8 }), true);
+  assert.equal(isOutdatedScoreBreakdown({ version: 1, score: 7 }), true);
+  assert.equal(isOutdatedScoreBreakdown(null), true);
+  assert.equal(
+    isOutdatedScoreBreakdown({ version: PHONE_CALL_SCORING_VERSION, score: 8 }),
+    false,
+  );
 });
 
 test("a call the retired rubric scored is shown on the converted 1–10 scale, uncoloured", () => {
@@ -240,9 +482,13 @@ test("older calls can be re-scored in one sitting, a round at a time", () => {
   // be cut off, and the button loops until the action reports none left.
   assert.match(actions, /export async function rescoreLegacyPhoneCalls\(/);
   assert.match(actions, /force: true, admin/);
-  assert.match(actions, /version < PHONE_CALL_SCORING_VERSION/);
+  // The button's count and the action's pick use one rule, so every call
+  // scored under an older prompt, not only the unsorted ones, is re-scored.
+  assert.match(actions, /isOutdatedScoreBreakdown\(/);
+  assert.match(callsBlock, /calls\.filter\(isOutdatedCallScore\)/);
   assert.match(callsBlock, /rescoreLegacyPhoneCalls\(\)/);
-  assert.match(callsBlock, /Re-score \$\{legacyCount\} older call/);
+  assert.match(callsBlock, /Re-score \$\{olderCount\} older call/);
+  assert.match(callsBlock, /title=\{OLDER_SCORE_NOTE\}/);
   assert.match(callsBlock, /remaining === 0 \|\| result\.rescored === 0/);
 });
 
@@ -257,7 +503,67 @@ test("an unscored call shows a dash rather than a zero", () => {
 
   assert.equal(view.value, null);
   assert.equal(formatCallScore(view), "");
-  assert.equal(view.needsAttention, false);
+  assert.equal(view.urgent, false);
+});
+
+// ---------------------------------------------------------------------------
+// "Needs a reply" is gone from every phone surface
+// ---------------------------------------------------------------------------
+
+/** Comments may record the history; only what reaches a church is checked. */
+function withoutComments(source: string): string {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/^\s*\/\/.*$/gm, "");
+}
+
+test("no phone log surface says a call needs a reply", () => {
+  // A pilot church asked for it to go. The flag is still saved; it is just
+  // never shown.
+  const surfaces = {
+    callsBlock,
+    explainer,
+    detailView,
+    callLogPage,
+    csvExport,
+    scoringPrompt,
+    callScore,
+  };
+  for (const [name, source] of Object.entries(surfaces)) {
+    assert.doesNotMatch(
+      withoutComments(source),
+      /needs? a reply/i,
+      `${name} says "needs a reply"`,
+    );
+  }
+  assert.doesNotMatch(explainer, /AttentionBadge/);
+});
+
+test("the log still marks a crisis, and nothing else about urgency", () => {
+  assert.match(explainer, /export function UrgentBadge/);
+  assert.match(explainer, /if \(!view\.urgent\) return null/);
+  assert.match(callsBlock, /<UrgentBadge view=\{score\} \/>/);
+  assert.match(detailView, /<UrgentBadge view=\{score\} \/>/);
+  // The detail page's Urgency row read "Needs a reply" on most real calls.
+  assert.doesNotMatch(detailView, />Urgency</);
+});
+
+test("the header no longer counts calls waiting on a reply", () => {
+  assert.doesNotMatch(callLogPage, /notify_pastor/);
+  assert.doesNotMatch(callLogPage, /calls need/);
+});
+
+test("the CSV marks urgent calls and drops the reply columns", () => {
+  assert.doesNotMatch(csvExport, /"Needs a reply"/);
+  assert.doesNotMatch(csvExport, /"Urgency"/);
+  assert.match(csvExport, /"Urgent",/);
+  assert.match(csvExport, /score\.urgent \? "Yes" : ""/);
+});
+
+test("the notify_pastor flag is still saved, only no longer shown", () => {
+  assert.match(scorer, /notify_pastor: z\.boolean\(\)/);
+  assert.match(scorer, /notify_pastor: breakdown\.notify_pastor/);
+  assert.match(scorer, /urgency: breakdown\.urgency/);
 });
 
 test("the migration rescales old scores rather than dropping them", () => {

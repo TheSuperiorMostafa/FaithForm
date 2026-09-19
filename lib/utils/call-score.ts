@@ -1,13 +1,16 @@
 import {
   CLASSIFICATION_DESCRIPTIONS,
   CLASSIFICATION_LABELS,
+  FIRST_SORTED_SCORING_VERSION,
   PHONE_CALL_SCORING_VERSION,
-  URGENCY_LABELS,
   type CallClassification,
   type CallerMood,
   type CallUrgency,
 } from "@/lib/integrations/phone-call-scoring-prompt";
-import type { PhoneCallRow } from "@/types/voice-assistant";
+import type {
+  PhoneCallRow,
+  PhoneCallScoreBreakdown,
+} from "@/types/voice-assistant";
 
 /**
  * One place that decides what a scored call looks like on screen.
@@ -18,6 +21,10 @@ import type { PhoneCallRow } from "@/types/voice-assistant";
  * rank, not a verdict the current rubric made. Every read goes through here so
  * a converted row is shown uncoloured and says so, rather than each component
  * guessing.
+ *
+ * A row can also be out of date without being legacy: sorted and scored by
+ * today's rubric, but under an earlier prompt. Its kind and number are real,
+ * so it is shown normally; only the re-score button treats it as older.
  */
 export type CallScoreView = {
   /** Rounded, on the 1–10 scale (or 0–100 for a row 0070 never converted). */
@@ -38,9 +45,14 @@ export type CallScoreView = {
   /** The fact the assistant did not have, when that was the problem. */
   missingKnowledge: string | null;
   callerMood: CallerMood | null;
-  needsAttention: boolean;
-  urgency: CallUrgency | null;
-  urgencyLabel: string | null;
+  /**
+   * A caller in crisis: distress, a bereavement, a safety worry, someone in
+   * immediate need. It is the only urgency the log shows. A pilot church
+   * asked for the "Needs a reply" flag to go, so the rubric's other urgency
+   * levels and its notify_pastor flag are still saved on the row but never
+   * shown.
+   */
+  urgent: boolean;
   /** Badge colouring, keyed off the band the score falls in. */
   toneClass: string;
 };
@@ -48,6 +60,13 @@ export type CallScoreView = {
 /** Shown wherever a converted score appears, so nobody reads it as a verdict. */
 export const LEGACY_SCORE_NOTE =
   "Scored before calls were sorted by kind. The number is the old ranking converted to 1–10, not a judgement the current rubric made. Re-score to judge it properly.";
+
+/**
+ * On the re-score button, which covers converted rows and also calls scored
+ * under an earlier version of today's rules.
+ */
+export const OLDER_SCORE_NOTE =
+  "These calls were scored under older rules. Re-scoring reads each call again and writes a fresh score and summary.";
 
 function toNumber(value: number | null): number | null {
   if (value == null) return null;
@@ -75,16 +94,45 @@ function toneFor(score: number | null, legacy: boolean): string {
   return "text-red-600 dark:text-red-400";
 }
 
-/** True for a row the current rubric has not judged, whatever the old one said. */
+function scoreVersion(
+  breakdown: PhoneCallScoreBreakdown | null | undefined,
+): number | null {
+  return typeof breakdown?.version === "number" ? breakdown.version : null;
+}
+
+/**
+ * True for a row the retired 0–100 rubric scored: it has no kind, and its
+ * number is a converted rank rather than a verdict.
+ */
 export function isLegacyCallScore(call: PhoneCallRow): boolean {
-  const version =
-    typeof call.score_breakdown?.version === "number"
-      ? call.score_breakdown.version
-      : null;
+  const version = scoreVersion(call.score_breakdown);
   return (
     call.scored_at != null &&
-    (version === null || version < PHONE_CALL_SCORING_VERSION)
+    (version === null || version < FIRST_SORTED_SCORING_VERSION)
   );
+}
+
+/**
+ * True for a breakdown written under older rules than today's. Both the
+ * button's count and the action that re-scores go through this, so they
+ * always agree on which calls are older.
+ */
+export function isOutdatedScoreBreakdown(
+  breakdown: PhoneCallScoreBreakdown | null | undefined,
+): boolean {
+  const version = scoreVersion(breakdown);
+  return version === null || version < PHONE_CALL_SCORING_VERSION;
+}
+
+/**
+ * True for a scored call that "Re-score older calls" should judge again: a
+ * legacy row, or one whose summary was written before names had to come from
+ * the transcript.
+ */
+export function isOutdatedCallScore(
+  call: Pick<PhoneCallRow, "scored_at" | "score_breakdown">,
+): boolean {
+  return call.scored_at != null && isOutdatedScoreBreakdown(call.score_breakdown);
 }
 
 export function describeCallScore(call: PhoneCallRow): CallScoreView {
@@ -95,6 +143,8 @@ export function describeCallScore(call: PhoneCallRow): CallScoreView {
     call.call_classification ?? (breakdown?.call_type as CallClassification | undefined) ?? null;
 
   const urgency = call.urgency ?? (breakdown?.urgency as CallUrgency | undefined) ?? null;
+  const notifyPastor =
+    call.notify_pastor ?? (breakdown?.notify_pastor as boolean | undefined) ?? false;
 
   const value = toNumber(call.ai_score);
 
@@ -116,10 +166,9 @@ export function describeCallScore(call: PhoneCallRow): CallScoreView {
     flagReason: firstString(breakdown?.flag_reason),
     missingKnowledge: firstString(breakdown?.missing_knowledge),
     callerMood: (breakdown?.caller_mood as CallerMood | undefined) ?? null,
-    needsAttention:
-      call.notify_pastor ?? (breakdown?.notify_pastor as boolean | undefined) ?? false,
-    urgency,
-    urgencyLabel: urgency ? URGENCY_LABELS[urgency] : null,
+    // The same condition that turned the old badge red. notify_pastor still
+    // guards it, so a robocall that sounds urgent never turns red.
+    urgent: urgency === "high" && notifyPastor === true,
     toneClass: toneFor(legacy ? null : value, legacy),
   };
 }

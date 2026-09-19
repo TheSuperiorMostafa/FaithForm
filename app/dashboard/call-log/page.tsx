@@ -20,8 +20,6 @@ export default async function CallLogPage() {
     getVoiceAgentSyncStatus(auth.churchId, supabase),
   ]);
 
-  const needsAttention = calls.filter((call) => call.notify_pastor).length;
-
   return (
     <>
       <header>
@@ -31,15 +29,6 @@ export default async function CallLogPage() {
         <p className="mt-1 text-sm text-muted-foreground">
           Every call your phone assistant answered: who rang, what they wanted,
           and how it was handled.
-          {needsAttention > 0 && (
-            <>
-              {" "}
-              <strong className="font-semibold text-foreground">
-                {needsAttention} {needsAttention === 1 ? "call needs" : "calls need"}{" "}
-                a reply.
-              </strong>
-            </>
-          )}
         </p>
       </header>
 

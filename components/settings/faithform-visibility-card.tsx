@@ -247,7 +247,7 @@ export function FaithFormVisibilityCard({
               href="/dashboard/attendance/setup#locations"
               className="font-semibold text-accent hover:underline"
             >
-              Check-in setup
+              Automatic Attendance
             </Link>
             . A hidden campus is never used for automatic check-in.
           </CardDescription>

@@ -42,8 +42,7 @@ export async function GET() {
     "Call type",
     "Score",
     "Out of",
-    "Needs a reply",
-    "Urgency",
+    "Urgent",
     "Caller mood",
     "Summary",
     "What went wrong",
@@ -66,8 +65,9 @@ export async function GET() {
       // Two rubrics share this table; a bare number in a spreadsheet with no
       // scale beside it is the one place that difference goes unnoticed.
       escapeCsv(score.value != null ? String(score.outOf) : ""),
-      escapeCsv(score.needsAttention ? "Yes" : "No"),
-      escapeCsv(score.urgencyLabel),
+      // The export says what the log says: a crisis is marked, and nothing
+      // else about urgency or who should reply is.
+      escapeCsv(score.urgent ? "Yes" : ""),
       escapeCsv(score.callerMood),
       escapeCsv(score.summary),
       escapeCsv(score.flagReason),

@@ -156,6 +156,13 @@ export type ResolvedSection = {
 /** Everything a single page render needs, produced by the resolver. */
 export type ResolvedPage = {
   slug: string;
+  /**
+   * The format (`site_themes.key`) the page renders in. Tokens carry most of a
+   * format; this is for what tokens cannot say — a different header, a
+   * different card shape — which a format's own stylesheet targets through
+   * `[data-theme="<key>"]`.
+   */
+  themeKey: string;
   title: string;
   metaDescription: string | null;
   /** Flattened CSS custom properties for the page wrapper. */

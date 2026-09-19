@@ -132,7 +132,7 @@ export function GivingCard({
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
+        <div className="grid gap-4">
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-2">
               {statusBadge(profile.stripeOnboardingStatus)}

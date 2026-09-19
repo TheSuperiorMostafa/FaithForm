@@ -11,13 +11,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import type { ChurchMember } from "@/lib/queries/members";
+import {
+  buildRosterSearchIndex,
+  searchRoster,
+  type CheckinChild,
+} from "@/lib/checkin/roster-search";
 import type { CheckinSessionRow, ChurchLocation } from "@/types/checkin";
 
 type RosterBoardProps = {
   sessions: CheckinSessionRow[];
   locations: ChurchLocation[];
-  members: ChurchMember[];
+  members: CheckinChild[];
   /** member id → the room an admin set as their usual place. */
   defaultLocationByMember: Record<string, string>;
   serviceDate: string;
@@ -64,17 +68,11 @@ export function RosterBoard({
     [sessions],
   );
 
-  const candidates = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    return members
-      .filter((m) => !checkedInMemberIds.has(m.id))
-      .filter((m) =>
-        term
-          ? `${m.first_name} ${m.last_name}`.toLowerCase().includes(term)
-          : true,
-      )
-      .slice(0, 50);
-  }, [members, search, checkedInMemberIds]);
+  const searchIndex = useMemo(() => buildRosterSearchIndex(members), [members]);
+  const searchResult = useMemo(
+    () => searchRoster(searchIndex, search, { checkedInIds: checkedInMemberIds }),
+    [searchIndex, search, checkedInMemberIds],
+  );
 
   const byLocation = useMemo(() => {
     const groups = new Map<string, CheckinSessionRow[]>();
@@ -92,6 +90,8 @@ export function RosterBoard({
   // than chooses.
   function handleSelectMember(memberId: string) {
     setSelectedMember(memberId);
+    const member = members.find((candidate) => candidate.id === memberId);
+    if (member) setSearch(`${member.firstName} ${member.lastName}`);
     const preferred = defaultLocationByMember[memberId];
     if (preferred) setSelectedLocation(preferred);
   }
@@ -169,22 +169,33 @@ export function RosterBoard({
             />
             {search.trim() && (
               <div className="max-h-44 overflow-y-auto rounded-lg border border-border">
-                {candidates.length === 0 ? (
+                {searchResult.matches.length === 0 ? (
                   <p className="px-3 py-2 text-sm text-muted-foreground">
-                    Nobody left to check in by that name.
+                    {searchResult.alreadyCheckedIn.length > 0
+                      ? `${searchResult.alreadyCheckedIn[0].child.firstName} is already checked in.`
+                      : "Nobody left to check in by that name."}
                   </p>
                 ) : (
-                  candidates.map((member) => (
+                  searchResult.matches.map(({ child: member, viaGuardian }) => (
                     <button
                       key={member.id}
                       type="button"
                       onClick={() => handleSelectMember(member.id)}
-                      className={`flex w-full items-center justify-between px-3 py-2 text-left text-sm transition-colors hover:bg-muted ${
-                        selectedMember === member.id ? "bg-accent/15 font-semibold" : ""
+                      className={`flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm transition-colors hover:bg-muted ${
+                        selectedMember === member.id
+                          ? "bg-accent font-semibold text-accent-foreground"
+                          : ""
                       }`}
                     >
-                      <span>
-                        {member.first_name} {member.last_name}
+                      <span className="min-w-0">
+                        <span className="block">
+                          {member.firstName} {member.lastName}
+                        </span>
+                        {viaGuardian ? (
+                          <span className="block text-xs opacity-75">via {viaGuardian}</span>
+                        ) : member.householdName ? (
+                          <span className="block text-xs opacity-75">{member.householdName}</span>
+                        ) : null}
                       </span>
                       {defaultLocationByMember[member.id] && (
                         <span className="text-xs text-muted-foreground">
@@ -198,6 +209,11 @@ export function RosterBoard({
                     </button>
                   ))
                 )}
+                {searchResult.more > 0 ? (
+                  <p className="border-t border-border px-3 py-2 text-xs text-muted-foreground">
+                    {searchResult.more} more match{searchResult.more === 1 ? "" : "es"}. Keep typing to narrow the list.
+                  </p>
+                ) : null}
               </div>
             )}
           </div>

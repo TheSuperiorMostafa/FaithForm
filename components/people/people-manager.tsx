@@ -77,13 +77,16 @@ export function PeopleManager({
     });
 
     if (query) {
+      // Numbers are stored as +15025551234 and shown as 502-555-1234; compare
+      // digits so "502-555", "(502) 555" and "5025551234" all find the person.
+      const queryDigits = query.replace(/\D/g, "");
       list = list.filter((member) => {
         const fullName = `${member.first_name} ${member.last_name}`.toLowerCase();
-        const phone = member.phone ?? "";
+        const phoneDigits = (member.phone ?? "").replace(/\D/g, "");
         const email = member.email ?? "";
         return (
           fullName.includes(query) ||
-          phone.includes(query) ||
+          (queryDigits.length > 0 && phoneDigits.includes(queryDigits)) ||
           email.toLowerCase().includes(query)
         );
       });
@@ -366,7 +369,7 @@ export function PeopleManager({
                         </span>
                       )}
                       {isOnApp(member.id) ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary dark:bg-accent/15 dark:text-accent">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-brand-navy/10 px-2 py-0.5 text-xs font-semibold text-primary dark:bg-brand-gold/15 dark:text-accent">
                           <Smartphone className="size-3" aria-hidden />
                           On the app
                         </span>

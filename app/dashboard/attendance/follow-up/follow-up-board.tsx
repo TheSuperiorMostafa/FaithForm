@@ -27,6 +27,8 @@ type FollowUpBoardProps = {
   services: RecordedService[];
   selectedDate: string;
   candidates: FollowUpCandidate[];
+  /** Whether this church has its own texting phone. Without one, nothing is sent. */
+  textingConnected: boolean;
 };
 
 function streakBadge(weeks: number): string | null {
@@ -39,6 +41,7 @@ export function FollowUpBoard({
   services,
   selectedDate,
   candidates,
+  textingConnected,
 }: FollowUpBoardProps) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -96,11 +99,18 @@ export function FollowUpBoard({
       }
 
       setSelected(new Set());
-      setMessage(
-        `Follow-up sent to ${result.requested} ${
-          result.requested === 1 ? "person" : "people"
-        }.`,
-      );
+      const people = (n: number) => `${n} ${n === 1 ? "person" : "people"}`;
+      if (result.notConnected) {
+        setError(
+          `Saved ${people(result.requested)} for follow-up, but no texts went out: your church's texting phone isn't connected yet.`,
+        );
+      } else if (result.sent < result.requested) {
+        setMessage(
+          `Texted ${people(result.sent)}. ${people(result.requested - result.sent)} could not be texted — see the message log.`,
+        );
+      } else {
+        setMessage(`Follow-up sent to ${people(result.sent)}.`);
+      }
       router.refresh();
     });
   }
@@ -127,6 +137,20 @@ export function FollowUpBoard({
           Message log
         </Button>
       </header>
+
+      {!textingConnected && (
+        <div
+          role="status"
+          className="flex items-start gap-3 rounded-xl border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200"
+        >
+          <AlertCircle className="mt-0.5 size-4 shrink-0" strokeWidth={2} />
+          <p>
+            Texting isn&rsquo;t connected for your church yet, so follow-ups
+            are saved but no texts go out. Contact FaithForm support to connect
+            your church&rsquo;s own phone.
+          </p>
+        </div>
+      )}
 
       <div className="flex flex-col gap-2">
         <label

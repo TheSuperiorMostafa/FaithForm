@@ -1471,3 +1471,153 @@
     transform: none;
   }
 }
+
+/* ==========================================================================
+ * CONTACT BAND
+ *
+ * Email · Call · Give above the footer's map, with the social links under the
+ * phone number (or in a row of their own when there is no number). It is one
+ * block at the end of the file so a format can restyle it from its own
+ * stylesheet, under [data-theme="<key>"], without this file changing. Those
+ * overrides target these class names, so keep them stable:
+ *
+ *   .contact-band            the <section>, which also carries the surface
+ *   .contact-band__inner     the row of columns
+ *   .contact-band__item      one column, plus --email / --call / --give
+ *   .contact-band__icon      the glyph above the heading
+ *   .contact-band__label     EMAIL / CALL / GIVE
+ *   .contact-band__value     the address, the number, "Give online"
+ *   .contact-band__socials   the list of social links
+ *   .contact-band__social    one icon-only social link
+ * ======================================================================= */
+
+.contact-band {
+  padding-top: calc(var(--site-section-y) * 0.8);
+  padding-bottom: calc(var(--site-section-y) * 0.8);
+  text-align: center;
+}
+
+.contact-band__inner {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 44px 32px;
+}
+
+/* Equal columns sharing the row, capped so that two of them do not drift to
+ * the far edges of a wide page. The minimum makes a narrow screen wrap a
+ * column onto the next line before it squeezes a long email address. */
+.contact-band__item {
+  flex: 1 1 0;
+  min-width: 220px;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.contact-band__icon {
+  display: inline-flex;
+  color: var(--site-fg);
+  margin-bottom: 14px;
+}
+
+.contact-band__icon svg {
+  display: block;
+  width: 24px;
+  height: 24px;
+}
+
+.contact-band__label {
+  font-family: var(--site-font-display);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--site-fg);
+  margin-bottom: 10px;
+}
+
+.contact-band__value {
+  font-size: 15.5px;
+  line-height: 1.5;
+  color: var(--site-fg-soft);
+  text-decoration: none;
+  overflow-wrap: anywhere;
+  transition: color 0.18s;
+}
+
+.contact-band__value:hover {
+  color: var(--site-fg);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.contact-band__socials {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2px;
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+}
+
+/* The row of its own, when there is no phone number to sit under. */
+.contact-band > .contact-band__socials {
+  margin-top: 40px;
+}
+
+.contact-band > .contact-band__socials:first-child {
+  margin-top: 0;
+}
+
+/* A 34px target around a 17px mark: quiet on the page, still easy to tap. */
+.contact-band__social {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  color: var(--site-fg-soft);
+  transition: color 0.18s, background 0.18s;
+}
+
+.contact-band__social svg {
+  display: block;
+  width: 17px;
+  height: 17px;
+}
+
+.contact-band__social:hover {
+  color: var(--site-fg);
+  background: color-mix(in srgb, var(--site-fg) 10%, transparent);
+}
+
+.contact-band a:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 3px;
+}
+
+@media (max-width: 860px) {
+  .contact-band__inner {
+    gap: 40px 24px;
+  }
+}
+
+@media (max-width: 560px) {
+  .contact-band__inner {
+    flex-direction: column;
+    align-items: center;
+    gap: 40px;
+  }
+
+  .contact-band__item {
+    flex: none;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+  }
+}

@@ -1,42 +1,17 @@
+import type { ChurchSmsSender } from "@/lib/sms/church-sender";
 import { toE164 } from "@/lib/sms/phone";
-import {
-  isSmsMobileApiConfigured,
-  sendSmsMobileApi,
-} from "@/lib/sms/sms-mobile-api";
+import { sendSmsMobileApi } from "@/lib/sms/sms-mobile-api";
 
 export type SendSmsResult =
   | { ok: true; messageId: string | null; from: string | null }
   | { ok: false; error: string; from: string | null };
 
-/**
- * The line texts leave on, for the follow-up log. Twilio has an explicit from
- * number; SMS Mobile API sends from the church's own linked handset, which the
- * API never reports back, so it is configured here when known.
- */
-export function smsSenderNumber(): string | null {
-  if (isSmsMobileApiConfigured()) {
-    return process.env.SMS_MOBILE_API_NUMBER?.trim() || null;
-  }
-  return process.env.TWILIO_FROM_NUMBER?.trim() || null;
-}
-
-function twilioConfigured(): boolean {
-  return Boolean(
-    process.env.TWILIO_ACCOUNT_SID &&
-      process.env.TWILIO_AUTH_TOKEN &&
-      process.env.TWILIO_FROM_NUMBER,
-  );
-}
-
-export function isSmsConfigured(): boolean {
-  return isSmsMobileApiConfigured() || twilioConfigured();
-}
-
-async function sendViaTwilio(to: string, message: string): Promise<SendSmsResult> {
-  const accountSid = process.env.TWILIO_ACCOUNT_SID!;
-  const authToken = process.env.TWILIO_AUTH_TOKEN!;
-  const from = process.env.TWILIO_FROM_NUMBER!;
-
+async function sendViaTwilio(
+  sender: Extract<ChurchSmsSender, { gateway: "twilio" }>,
+  to: string,
+  message: string,
+): Promise<SendSmsResult> {
+  const { accountSid, authToken, fromNumber: from } = sender;
   const body = new URLSearchParams({ To: to, From: from, Body: message });
 
   const response = await fetch(
@@ -63,23 +38,31 @@ async function sendViaTwilio(to: string, message: string): Promise<SendSmsResult
   return { ok: true, messageId: null, from };
 }
 
+/**
+ * Texts one person from one church's phone.
+ *
+ * The sender is always passed in — resolved per church by
+ * `getChurchSmsSender` — so there is no path that texts a church's members
+ * from a phone that isn't theirs.
+ */
 export async function sendSms(
+  sender: ChurchSmsSender,
   phone: string,
   message: string,
 ): Promise<SendSmsResult> {
   const to = toE164(phone);
   if (!to) {
-    return { ok: false, error: "Invalid phone number on file", from: null };
+    return { ok: false, error: "Invalid phone number on file", from: sender.fromNumber };
   }
 
-  if (isSmsMobileApiConfigured()) {
-    const result = await sendSmsMobileApi({ recipients: to, message });
-    return { ...result, from: smsSenderNumber() };
+  if (sender.gateway === "twilio") {
+    return sendViaTwilio(sender, to, message);
   }
 
-  if (twilioConfigured()) {
-    return sendViaTwilio(to, message);
-  }
-
-  return { ok: false, error: "SMS is not configured", from: null };
+  const result = await sendSmsMobileApi({
+    apiKey: sender.apiKey,
+    recipients: to,
+    message,
+  });
+  return { ...result, from: sender.fromNumber };
 }

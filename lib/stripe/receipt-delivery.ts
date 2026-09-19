@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sendDonationReceiptEmail } from "@/lib/email/giving";
+import { isChurchFeatureEmailEnabled } from "@/lib/features/access";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 function fundName(
@@ -9,10 +10,21 @@ function fundName(
   return (Array.isArray(value) ? value[0]?.name : value.name) ?? null;
 }
 
+/** Whether a church's Giving may send email. Swappable so a test needs no database. */
+export type GivingEmailCheck = (churchId: string) => Promise<boolean>;
+
+const givingEmailsEnabled: GivingEmailCheck = (churchId) =>
+  isChurchFeatureEmailEnabled(churchId, "giving");
+
+/**
+ * Returns `disabled` when a platform admin has switched Giving's emails off for
+ * the donation's church; the receipt is then closed for good (see below).
+ */
 export async function deliverDonationReceipt(
   donationId: string,
   client: SupabaseClient = createAdminClient(),
-): Promise<"sent" | "deferred" | "skipped"> {
+  emailsEnabled: GivingEmailCheck = givingEmailsEnabled,
+): Promise<"sent" | "deferred" | "skipped" | "disabled"> {
   const { data: claimRows, error: claimError } = await client.rpc(
     "claim_donation_receipt",
     { p_donation_id: donationId, p_lease_seconds: 300 },
@@ -31,6 +43,29 @@ export async function deliverDonationReceipt(
     .eq("id", donationId)
     .eq("status", "succeeded")
     .maybeSingle();
+
+  // Emails off is a decision, not a delivery failure, so the receipt is closed
+  // as terminal rather than left retryable: otherwise the 15-minute retry cron
+  // would re-claim it up to twelve times. Turning emails back on later does not
+  // send receipts for gifts made while they were off.
+  if (
+    donation?.church_id &&
+    !(await emailsEnabled(donation.church_id as string))
+  ) {
+    const { error: disabledError } = await client.rpc(
+      "complete_donation_receipt",
+      {
+        p_donation_id: donationId,
+        p_claim_token: claim.claim_token,
+        p_sent: false,
+        p_error_code: "emails_disabled",
+        p_next_retry_at: null,
+        p_terminal: true,
+      },
+    );
+    if (disabledError) throw new Error("receipt_completion_failed");
+    return "disabled";
+  }
 
   const { data: church } = donation?.church_id
     ? await client
@@ -96,6 +131,10 @@ export async function deliverDonationReceipt(
   return sent ? "sent" : "deferred";
 }
 
+/**
+ * The 15-minute cron's sweep. Receipts for churches with Giving's emails off
+ * come through here once and leave as terminal, via `deliverDonationReceipt`.
+ */
 export async function retryPendingDonationReceipts(limit = 25): Promise<{
   attempted: number;
   sent: number;

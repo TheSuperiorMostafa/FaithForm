@@ -158,7 +158,7 @@ export function CheckinDisplayPanel({
           this kind of check-in isn&rsquo;t on. Turn on &ldquo;Scan a code&rdquo;
           in{" "}
           <Link href="/dashboard/attendance/setup" className="font-semibold underline">
-            Check-in setup
+            Automatic Attendance
           </Link>
           . It applies to services whose check-in hasn&rsquo;t opened yet.
         </p>
@@ -209,7 +209,7 @@ export function CheckinDisplayPanel({
               Check-in stations are turned off for this service. Turn on
               &ldquo;Welcome desk kiosk&rdquo; in{" "}
               <Link href="/dashboard/attendance/setup" className="font-semibold text-accent hover:underline">
-                Check-in setup
+                Automatic Attendance
               </Link>{" "}
               before setting one up.
             </p>

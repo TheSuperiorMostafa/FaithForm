@@ -1,0 +1,106 @@
+/*
+ * The "wood" format.
+ *
+ * Every rule here is scoped to [data-theme="wood"] (set on .site-page by
+ * PageRenderer), so this file can never change how another format renders.
+ * Tokens (colours, fonts, radii) come from the site_themes row; this file is
+ * for what tokens cannot say.
+ */
+
+[data-theme="wood"] {
+  background:
+    radial-gradient(circle at 50% 0, rgba(200, 150, 30, 0.1), transparent 38%),
+    var(--site-canvas);
+}
+
+[data-theme="wood"] .site-nav {
+  background: linear-gradient(176deg, #2b1a0c, #170d06);
+  border-bottom-color: color-mix(in srgb, var(--site-accent) 35%, transparent);
+  color: #f6e7c4;
+}
+
+[data-theme="wood"] .site-nav-title,
+[data-theme="wood"] .site-footer-title {
+  font-family: var(--site-font-display);
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+[data-theme="wood"] .site-nav-sub,
+[data-theme="wood"] .site-footer-sub,
+[data-theme="wood"] .site-eyebrow {
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+}
+
+[data-theme="wood"] .site-hero {
+  position: relative;
+  isolation: isolate;
+  background:
+    radial-gradient(50% 48% at 50% 2%, rgba(255, 222, 166, 0.38), transparent 72%),
+    linear-gradient(176deg, #7a5028 0%, #54341a 34%, #331e0e 66%, #170d06 100%);
+}
+
+[data-theme="wood"] .site-hero::before {
+  content: "";
+  position: absolute;
+  inset: 42px clamp(20px, 7vw, 90px) 0;
+  z-index: -1;
+  border: 1px solid color-mix(in srgb, var(--site-accent) 42%, transparent);
+  border-bottom: 0;
+  border-radius: 999px 999px 0 0;
+  pointer-events: none;
+}
+
+[data-theme="wood"] .site-display-xl {
+  letter-spacing: 0.02em;
+  line-height: 1.12;
+  text-shadow: 0 10px 40px rgba(0, 0, 0, 0.65);
+}
+
+[data-theme="wood"] .site-display,
+[data-theme="wood"] .site-card-title,
+[data-theme="wood"] .site-staff-name,
+[data-theme="wood"] .site-sermon-title {
+  font-weight: 600;
+}
+
+[data-theme="wood"] .site-accent-text {
+  color: #e9cf92;
+}
+
+[data-theme="wood"] .site-btn {
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+[data-theme="wood"] .site-card,
+[data-theme="wood"] .site-staff-card,
+[data-theme="wood"] .site-panel {
+  box-shadow: none;
+}
+
+[data-theme="wood"] .site-card {
+  border-top: 3px solid var(--site-accent);
+}
+
+[data-theme="wood"] .site-surface-ink,
+[data-theme="wood"] .site-surface-ink-strong {
+  background-image: linear-gradient(176deg, #2b1a0c, #170d06);
+}
+
+[data-theme="wood"] .site-strip {
+  border-color: color-mix(in srgb, var(--site-accent) 34%, transparent);
+}
+
+[data-theme="wood"] .site-figure,
+[data-theme="wood"] .site-staff-photo,
+[data-theme="wood"] .site-sermon-stage {
+  border: 1px solid color-mix(in srgb, var(--site-accent) 45%, transparent);
+}
+
+@media (max-width: 720px) {
+  [data-theme="wood"] .site-hero::before {
+    inset: 24px 14px 0;
+  }
+}

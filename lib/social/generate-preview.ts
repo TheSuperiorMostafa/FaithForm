@@ -23,6 +23,12 @@ export type GenerateSocialPreviewInput = {
   notes?: string;
   googleEventId?: string | null;
   announcementId?: string | null;
+  /**
+   * Writes the caption only. Used when the church is posting its own design,
+   * so no flyer is drawn or stored, and `graphicUrl` and `graphicPath` come
+   * back empty.
+   */
+  skipImage?: boolean;
 };
 
 export type SocialPreviewResult = {
@@ -140,6 +146,19 @@ export async function generateSocialPreview(
 
   const draftKey = buildDraftKey(input);
   const flyerHeadline = resolveFlyerHeadline(input.title, object.headline);
+
+  if (input.skipImage) {
+    return {
+      headline: flyerHeadline,
+      facebookCaption: object.facebookCaption,
+      backgroundTag: object.backgroundTag,
+      templateKey: object.templateKey,
+      graphicUrl: "",
+      graphicPath: "",
+      usedAiImage: false,
+      modelUsed,
+    };
+  }
 
   const graphic = await generateSocialGraphic(supabase, branding, {
     churchId: input.churchId,

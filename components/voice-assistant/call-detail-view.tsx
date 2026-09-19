@@ -7,9 +7,9 @@ import { rescorePhoneCall } from "@/app/dashboard/voice-assistant/actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  AttentionBadge,
   ClassificationBadge,
   LegacyScoreBadge,
+  UrgentBadge,
 } from "@/components/voice-assistant/scoring-explainer";
 import { describeCallScore, LEGACY_SCORE_NOTE } from "@/lib/utils/call-score";
 import {
@@ -116,7 +116,7 @@ export function CallDetailView({ call, isAdmin }: CallDetailViewProps) {
                 ) : (
                   ""
                 )}
-                <AttentionBadge view={score} />
+                <UrgentBadge view={score} />
               </dd>
             </div>
           </dl>
@@ -157,12 +157,6 @@ export function CallDetailView({ call, isAdmin }: CallDetailViewProps) {
                   <dd className="mt-0.5 text-sm capitalize">
                     {score.callerMood}
                   </dd>
-                </div>
-              )}
-              {score.urgencyLabel && (
-                <div>
-                  <dt className="text-xs text-muted-foreground">Urgency</dt>
-                  <dd className="mt-0.5 text-sm">{score.urgencyLabel}</dd>
                 </div>
               )}
               {score.flagReason && (

@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { VisitorError } from "@/lib/faithform/errors";
 import { isValidTimeZone } from "@/lib/faithform/schemas";
+import { isSundayWorshipOccurrence } from "@/lib/attendance/v2/sunday-worship";
 
 /**
  * Service occurrences.
@@ -269,7 +270,14 @@ export async function listOccurrences(
  * The board used to list every occurrence newest-first, and occurrences are
  * generated sixty days ahead, so its first page was services two months away
  * and today's service was not on it.
+ *
+ * Only Sunday worship is listed (see `isSundayWorshipOccurrence`). Which rows
+ * those are cannot be asked of PostgREST, so each side reads a wider page and
+ * keeps the first matches.
  */
+/** How many rows each side of the board reads before keeping Sunday worship. */
+const BOARD_SCAN_LIMIT = 120;
+
 export async function listBoardOccurrences(
   churchId: string,
   options?: { now?: Date; client?: SupabaseClient; upcomingLimit?: number; recentLimit?: number },
@@ -285,7 +293,7 @@ export async function listBoardOccurrences(
       .gte("checkin_closes_at_utc", now)
       .order("starts_at_utc", { ascending: true })
       .order("id", { ascending: true })
-      .limit(Math.min(options?.upcomingLimit ?? 8, 50)),
+      .limit(BOARD_SCAN_LIMIT),
     admin
       .from("service_occurrences")
       .select(OCCURRENCE_COLUMNS)
@@ -293,16 +301,22 @@ export async function listBoardOccurrences(
       .lt("checkin_closes_at_utc", now)
       .order("starts_at_utc", { ascending: false })
       .order("id", { ascending: false })
-      .limit(Math.min(options?.recentLimit ?? 20, 50)),
+      .limit(BOARD_SCAN_LIMIT),
   ]);
 
   if (upcoming.error || recent.error) {
     throw new VisitorError("unavailable", "Could not load services.");
   }
 
+  const sundayWorship = (rows: unknown[] | null, limit: number) =>
+    ((rows ?? []) as Record<string, unknown>[])
+      .map(mapOccurrence)
+      .filter(isSundayWorshipOccurrence)
+      .slice(0, limit);
+
   return {
-    upcoming: ((upcoming.data ?? []) as Record<string, unknown>[]).map(mapOccurrence),
-    recent: ((recent.data ?? []) as Record<string, unknown>[]).map(mapOccurrence),
+    upcoming: sundayWorship(upcoming.data, Math.min(options?.upcomingLimit ?? 8, 50)),
+    recent: sundayWorship(recent.data, Math.min(options?.recentLimit ?? 20, 50)),
   };
 }
 

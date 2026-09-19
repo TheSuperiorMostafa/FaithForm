@@ -11,7 +11,14 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 export type SendFollowUpsResult =
-  | { ok: true; requested: number }
+  | {
+      ok: true;
+      requested: number;
+      /** Texts that actually went out. */
+      sent: number;
+      /** The church has no texting phone of its own, so nothing was sent. */
+      notConnected: boolean;
+    }
   | { ok: false; error: string };
 
 /**
@@ -153,8 +160,9 @@ export async function sendFollowUps(input: {
     (memberRows ?? []).map((row) => [row.id as string, row]),
   );
 
+  let summary: Awaited<ReturnType<typeof sendAttendanceFollowUpTexts>>;
   try {
-    await sendAttendanceFollowUpTexts(
+    summary = await sendAttendanceFollowUpTexts(
       auth.churchId,
       eligible.map((entry) => {
         const member = memberById.get(entry.member_id as string);
@@ -189,5 +197,10 @@ export async function sendFollowUps(input: {
   revalidatePath(`/dashboard/attendance/${input.serviceDate}`);
   revalidatePath("/dashboard/attendance");
 
-  return { ok: true, requested: eligible.length };
+  return {
+    ok: true,
+    requested: eligible.length,
+    sent: summary.sent,
+    notConnected: summary.notConnected,
+  };
 }

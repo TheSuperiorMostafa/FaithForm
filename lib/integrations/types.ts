@@ -76,6 +76,17 @@ export type AppleIntegrationMetadata = IntegrationHealthMetadata & {
   calendar_name?: string;
   /** Where discovery landed, so a reconnect can skip a round trip. */
   calendar_home_url?: string;
+  /**
+   * The church's iCloud Mail address, for drafting the weekly announcement
+   * email in iCloud Mail. Asked for separately because iCloud Mail signs in
+   * with the mail address, which is often not the Apple ID. Uses the same
+   * app-specific password as the calendar; only an Apple ID connection has one.
+   */
+  mail_address?: string;
+  /** The church turned "Create the weekly email in iCloud Mail" on. */
+  mail_enabled?: boolean;
+  /** When FaithForm last signed in with `mail_address` and found Drafts. */
+  mail_verified_at?: string;
 };
 
 export type StreamIntegrationMetadata = IntegrationHealthMetadata & {

@@ -1,0 +1,92 @@
+/*
+ * The "light" format.
+ *
+ * Every rule here is scoped to [data-theme="light"] (set on .site-page by
+ * PageRenderer), so this file can never change how another format renders.
+ * Tokens (colours, fonts, radii) come from the site_themes row; this file is
+ * for what tokens cannot say.
+ */
+
+[data-theme="light"] {
+  max-width: none;
+}
+
+[data-theme="light"] .site-nav {
+  background: color-mix(in srgb, var(--site-ink-strong) 86%, transparent);
+  border-bottom-color: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  backdrop-filter: blur(16px);
+}
+
+[data-theme="light"] .site-nav-inner,
+[data-theme="light"] .site-hero-body,
+[data-theme="light"] .site-section > *,
+[data-theme="light"] .site-footer-grid,
+[data-theme="light"] .site-strip {
+  max-width: var(--site-max-width);
+  margin-left: auto;
+  margin-right: auto;
+}
+
+[data-theme="light"] .site-hero {
+  min-height: min(760px, 82vh);
+  display: grid;
+  align-items: end;
+  background:
+    linear-gradient(90deg, rgba(4, 32, 47, 0.9), rgba(4, 32, 47, 0.38) 62%, rgba(4, 32, 47, 0.62)),
+    var(--site-ink);
+}
+
+[data-theme="light"] .site-display {
+  font-weight: 600;
+}
+
+[data-theme="light"] .site-display-xl {
+  letter-spacing: -0.015em;
+  line-height: 0.98;
+}
+
+[data-theme="light"] .site-eyebrow {
+  letter-spacing: 0.2em;
+}
+
+[data-theme="light"] .site-btn {
+  min-height: 48px;
+  padding-inline: 28px;
+}
+
+[data-theme="light"] .site-card,
+[data-theme="light"] .site-staff-card,
+[data-theme="light"] .site-panel {
+  box-shadow: 0 22px 60px rgba(6, 44, 64, 0.08);
+}
+
+[data-theme="light"] .site-staff-photo,
+[data-theme="light"] .site-figure,
+[data-theme="light"] .site-sermon-stage {
+  border-radius: var(--site-radius-card);
+  overflow: hidden;
+}
+
+[data-theme="light"] .site-strip {
+  transform: translateY(-34px);
+  position: relative;
+  z-index: 2;
+  border-radius: var(--site-radius-panel);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--site-ink);
+  box-shadow: 0 24px 70px rgba(6, 44, 64, 0.14);
+  backdrop-filter: blur(18px);
+}
+
+[data-theme="light"] .site-strip-label {
+  color: var(--site-gold);
+}
+
+[data-theme="light"] .site-strip-cell {
+  border-color: color-mix(in srgb, var(--site-ink) 10%, transparent);
+}
+
+[data-theme="light"] .contact-band__inner {
+  border-radius: var(--site-radius-panel);
+}

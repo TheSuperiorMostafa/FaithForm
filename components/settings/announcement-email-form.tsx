@@ -73,7 +73,7 @@ export function AnnouncementEmailForm({
       <CardHeader>
         <CardTitle>Weekly announcement email</CardTitle>
         <p className="text-sm text-muted-foreground">
-          FaithForm creates one Gmail draft every Monday with this week&apos;s
+          FaithForm creates one email draft every Monday with this week&apos;s
           upcoming events. Use placeholders:{" "}
           <code className="rounded bg-muted px-1 py-0.5 text-xs">
             {ANNOUNCEMENT_EMAIL_SUBJECT_PLACEHOLDER}
@@ -109,7 +109,7 @@ export function AnnouncementEmailForm({
           <div className="flex items-center justify-between gap-4 rounded-lg border border-border p-4">
             <div>
               <Label htmlFor="weekly_email_enabled" className="font-semibold">
-                Monday Gmail drafts
+                Monday email drafts
               </Label>
               <p className="text-sm text-muted-foreground">
                 Automatically queue one draft each Monday for the current week.

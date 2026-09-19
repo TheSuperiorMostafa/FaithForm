@@ -24,8 +24,13 @@ import { ChurchVoiceAgentPanel } from "@/components/admin/church-voice-agent-pan
 import { ChurchWebsitePanel } from "@/components/admin/church-website-panel";
 import { InviteChurchAdminCard } from "@/components/admin/invite-church-admin-card";
 import { OpenChurchDashboardButton } from "@/components/admin/open-church-dashboard-button";
+import { ChurchSmsPanel } from "@/components/admin/church-sms-panel";
 import { ChurchProfileForm } from "@/components/church-profile/church-profile-form";
-import type { FeatureFlags, FeatureNotices } from "@/lib/features/access";
+import type {
+  FeatureEmailFlags,
+  FeatureFlags,
+  FeatureNotices,
+} from "@/lib/features/access";
 import { getFeature, type FeatureKey } from "@/lib/features/catalog";
 import type {
   AdminActivityFilters,
@@ -38,6 +43,7 @@ import type {
 } from "@/lib/sites/domain-queries";
 import type { ChurchProfileFormState } from "@/types/church-profile";
 import type { RetellAgentSummary } from "@/lib/integrations/retell-client";
+import type { ChurchSmsStatus } from "@/lib/sms/church-sender";
 import type { VoiceAssistantSettings } from "@/types/voice-assistant";
 
 type ChurchDetailTabsProps = {
@@ -46,6 +52,8 @@ type ChurchDetailTabsProps = {
   activityFilters: AdminActivityFilters & { range: NonNullable<AdminActivityFilters["range"]> };
   featureFlags: FeatureFlags;
   featureNotices: FeatureNotices;
+  /** Each feature's Emails switch. Absent reads as every email on. */
+  featureEmails?: FeatureEmailFlags;
   /** church_users.id → granted features, for the Users tab. */
   featurePermissionsByMemberId: Record<string, FeatureKey[]>;
   /** Church identity, services, staff and AI knowledge: we own this, not the church. */
@@ -64,6 +72,8 @@ type ChurchDetailTabsProps = {
   retellAgents: RetellAgentSummary[];
   /** Why the agent list is empty, when it is. Null means it simply is empty. */
   retellAgentsError: string | null;
+  /** The church's own texting phone for follow-ups (never the key). */
+  smsStatus: ChurchSmsStatus;
 };
 
 function MemberAccessCell({
@@ -101,6 +111,7 @@ export function ChurchDetailTabs({
   activityFilters,
   featureFlags,
   featureNotices,
+  featureEmails,
   featurePermissionsByMemberId,
   profileForm,
   domains,
@@ -111,6 +122,7 @@ export function ChurchDetailTabs({
   hasRetellKey,
   retellAgents,
   retellAgentsError,
+  smsStatus,
 }: ChurchDetailTabsProps) {
   const openDomainRequests = domainRequests.filter((request) =>
     ["submitted", "in_review", "awaiting_church", "in_progress"].includes(
@@ -270,6 +282,7 @@ export function ChurchDetailTabs({
           churchName={detail.church.name}
           flags={featureFlags}
           notices={featureNotices}
+          emails={featureEmails}
         />
       </TabsContent>
 
@@ -367,6 +380,11 @@ export function ChurchDetailTabs({
       </TabsContent>
 
       <TabsContent value="integrations" className="grid gap-4 md:grid-cols-2">
+        <ChurchSmsPanel
+          churchId={detail.church.id}
+          churchName={detail.church.name}
+          status={smsStatus}
+        />
         {detail.integrations.map((integration) => (
           <Card key={integration.provider}>
             <CardHeader>

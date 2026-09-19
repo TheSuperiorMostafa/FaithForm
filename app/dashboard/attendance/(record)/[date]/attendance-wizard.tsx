@@ -7,6 +7,7 @@ import { ArrowLeft, Check, Plus, Search, Smartphone } from "lucide-react";
 
 import { addMember, submitAttendance } from "./actions";
 import { Button } from "@/components/ui/button";
+import { PhoneInput } from "@/components/ui/phone-input";
 import { describePresence, type PresenceMethod } from "@/lib/attendance/presence";
 import type { AttendanceMember } from "@/lib/queries/attendance";
 import { formatServiceDate } from "@/lib/utils/dates";
@@ -246,7 +247,7 @@ export function AttendanceWizard({
           Mark each member as present or absent.
         </p>
         {checkedInCount > 0 ? (
-          <p className="flex items-start gap-2 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm text-foreground dark:border-accent/30 dark:bg-accent/10">
+          <p className="flex items-start gap-2 rounded-xl border border-brand-navy/20 bg-brand-navy/5 px-4 py-3 text-sm text-foreground dark:border-brand-gold/30 dark:bg-brand-gold/10">
             <Smartphone className="mt-0.5 size-4 shrink-0 text-primary dark:text-accent" aria-hidden />
             <span>
               {checkedInCount === 1
@@ -569,11 +570,10 @@ export function AttendanceWizard({
                 <label htmlFor="new-phone" className="text-base font-semibold">
                   Phone (optional)
                 </label>
-                <input
+                <PhoneInput
                   id="new-phone"
-                  type="tel"
                   value={newPhone}
-                  onChange={(e) => setNewPhone(e.target.value)}
+                  onValueChange={setNewPhone}
                   className="min-h-12 rounded-[10px] border-[1.5px] border-border bg-background px-4 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 />
               </div>

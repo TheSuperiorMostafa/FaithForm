@@ -2,11 +2,17 @@ import type Stripe from "stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { upsertGivingDonor } from "@/lib/giving/donors";
 import { sendFailedPaymentEmail } from "@/lib/email/giving";
+import { isChurchFeatureEmailEnabled } from "@/lib/features/access";
 import {
   markChurchDeauthorized,
   syncChurchFromStripeAccount,
 } from "@/lib/stripe/connect";
 import { getStripe } from "@/lib/stripe/client";
+import {
+  fetchInvoicePaymentIntentId,
+  invoicePaymentIntentId,
+  invoiceSubscriptionId,
+} from "@/lib/stripe/invoice-shape";
 import type { DonationStatus, GiftType, SubscriptionStatus } from "@/types/giving";
 import { deliverDonationReceipt } from "@/lib/stripe/receipt-delivery";
 import {
@@ -579,20 +585,15 @@ async function handleInvoice(
   connectedAccount?: string,
   eventCreated = 0,
 ) {
-  const invoiceExt = invoice as Stripe.Invoice & {
-    subscription?: string | Stripe.Subscription | null;
-  };
-
   const churchId = await churchIdForStripeAccount(
     connectedAccount,
     invoice.metadata?.church_id,
   );
   if (!churchId) return;
 
-  const subId =
-    typeof invoiceExt.subscription === "string"
-      ? invoiceExt.subscription
-      : invoiceExt.subscription?.id ?? null;
+  // Read from either API version's shape: the endpoint that delivered this
+  // event may be pinned older or newer than the SDK. See invoice-shape.ts.
+  const subId = invoiceSubscriptionId(invoice);
 
   let donorName: string | null = null;
   let donorEmail: string | null = invoice.customer_email;
@@ -621,13 +622,16 @@ async function handleInvoice(
     }
   }
 
-  const invoicePi = (
-    invoice as Stripe.Invoice & {
-      payment_intent?: string | Stripe.PaymentIntent | null;
-    }
-  ).payment_intent;
+  // The payment intent is what ties this invoice to the row its own
+  // payment_intent.* event wrote. An old-shape payload names it; a basil-or-
+  // later one never does (`payments` is includable, and webhooks don't
+  // include), so ask Stripe. A failed lookup throws and the event is retried:
+  // guessing "none" would record a second donation for the same money.
   const piId =
-    typeof invoicePi === "string" ? invoicePi : invoicePi?.id ?? null;
+    invoicePaymentIntentId(invoice) ??
+    (connectedAccount
+      ? await fetchInvoicePaymentIntentId(getStripe(), invoice.id, connectedAccount)
+      : null);
 
   const amountCents = invoice.amount_paid || invoice.amount_due;
   const giftType = subId ? "recurring" : "one_time";
@@ -653,7 +657,15 @@ async function handleInvoice(
 
   await maybeSendDonationReceipt(donationId, status);
 
-  if (!succeeded && subId && donorEmail && connectedAccount) {
+  if (
+    !succeeded &&
+    subId &&
+    donorEmail &&
+    connectedAccount &&
+    // Giving's emails switched off in the control center: the failure is still
+    // recorded above, and the donor portal still shows it. Only the email stops.
+    (await isChurchFeatureEmailEnabled(churchId, "giving"))
+  ) {
     const admin = createAdminClient();
     const { data: church } = await admin
       .from("churches")

@@ -179,6 +179,8 @@ public struct AutomaticAttendanceStatus: Equatable, Sendable {
     public var watchedChurchNames: [String]
     public var churchName: String?
     public var churchBlocker: AutomaticAttendanceBlocker?
+    /// The church a blocked setup is about, when the refusal was one church's.
+    public var blockedChurchName: String?
     public var notificationsOff: Bool
     public var nextService: AutomaticAttendanceModel.UpcomingService?
     public var lastCheckIn: AutomaticAttendanceModel.RecentCheckIn?
@@ -193,6 +195,7 @@ public struct AutomaticAttendanceStatus: Equatable, Sendable {
         watchedChurchNames: [String] = [],
         churchName: String? = nil,
         churchBlocker: AutomaticAttendanceBlocker? = nil,
+        blockedChurchName: String? = nil,
         notificationsOff: Bool = false,
         nextService: AutomaticAttendanceModel.UpcomingService? = nil,
         lastCheckIn: AutomaticAttendanceModel.RecentCheckIn? = nil,
@@ -206,6 +209,7 @@ public struct AutomaticAttendanceStatus: Equatable, Sendable {
         self.watchedChurchNames = watchedChurchNames
         self.churchName = churchName
         self.churchBlocker = churchBlocker
+        self.blockedChurchName = blockedChurchName
         self.notificationsOff = notificationsOff
         self.nextService = nextService
         self.lastCheckIn = lastCheckIn
@@ -225,6 +229,7 @@ extension AutomaticAttendanceModel {
             watchedChurchNames: watchedChurchNames,
             churchName: selectedChurch?.name,
             churchBlocker: selectedChurchBlocker,
+            blockedChurchName: blockedChurchName,
             // Only worth saying when a church may ask. Denied is the one
             // state in which the question can never be delivered.
             notificationsOff: notificationStatus == .denied,
@@ -452,7 +457,7 @@ public struct AutomaticAttendanceStatusView: View {
         switch status.step {
         case .ready: return L.autoAttendanceReadyTitle
         case .requestingConsent: return L.autoAttendanceSaving
-        case .blocked(let blocker): return Self.title(for: blocker)
+        case .blocked(let blocker): return Self.title(for: blocker, churchName: status.blockedChurchName)
         default: return L.autoAttendanceOffTitle
         }
     }
@@ -482,6 +487,20 @@ public struct AutomaticAttendanceStatusView: View {
         case .noCampus: return L.autoAttendanceNoCampusTitle
         case .unavailable: return L.autoAttendanceOfflineTitle
         case .locationNotRequested: return L.autoAttendanceNeedsPermissionTitle
+        }
+    }
+
+    /// A church's own refusal says which church. Someone can belong to
+    /// several, each answers for itself, and "your church has not added a
+    /// location" sent people looking at a map they had already filled in — at
+    /// a different church. Refusals about this device stay as they are.
+    public static func title(for blocker: AutomaticAttendanceBlocker, churchName: String?) -> String {
+        guard let churchName, !churchName.isEmpty else { return title(for: blocker) }
+        switch blocker {
+        case .noPeopleLink: return String(format: L.autoAttendanceNoLinkTitleNamed, churchName)
+        case .churchDisabled: return String(format: L.autoAttendanceChurchDisabledTitleNamed, churchName)
+        case .noCampus: return String(format: L.autoAttendanceNoCampusTitleNamed, churchName)
+        default: return title(for: blocker)
         }
     }
 

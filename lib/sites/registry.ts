@@ -1,4 +1,5 @@
 import { aboutTextSection } from "@/components/sites/sections/about-text";
+import { contactBandSection } from "@/components/sites/sections/contact-band";
 import { customEmbedSection } from "@/components/sites/sections/custom-embed";
 import { eventsListSection } from "@/components/sites/sections/events-list";
 import { footerMapSection } from "@/components/sites/sections/footer-map";
@@ -31,6 +32,7 @@ const MASTERS: ErasedSectionMaster[] = [
   visitCtaSection,
   sermonFeedSection,
   giveCtaSection,
+  contactBandSection,
   footerMapSection,
   customEmbedSection,
 ];
