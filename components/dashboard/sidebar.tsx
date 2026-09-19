@@ -166,12 +166,9 @@ export function Sidebar({
     >
       {/* Brand header */}
       <div className="relative h-[72px] shrink-0 border-b border-sidebar">
-        <div
-          className={cn(
-            "flex h-full items-center px-3",
-            collapsed ? "justify-center" : "gap-3 pr-4",
-          )}
-        >
+        {/* Always left-anchored so the logo stays put while the width animates;
+            14px inset centers it on the nav icons (nav p-3 + half of size-11). */}
+        <div className="flex h-full items-center gap-3 pl-3.5 pr-4">
           <div className="flex size-10 shrink-0 items-center justify-center">
             <Logo size={40} priority className="shadow-lg shadow-black/20" />
           </div>
