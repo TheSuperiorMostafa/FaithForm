@@ -18,6 +18,7 @@ import {
 import { AnnouncementSubmittedView } from "@/components/announcements/announcement-submitted-view";
 import { AnnouncementVerifyForm } from "@/components/announcements/announcement-verify-form";
 import { CreateEventDialog } from "@/components/announcements/create-event-dialog";
+import { DeleteEventButton } from "@/components/announcements/delete-event-button";
 import {
   EventAttendanceEditor,
   type EventAttendanceCampus,
@@ -55,6 +56,8 @@ type MonthCalendarProps = {
   initialEvents: CalendarEventPreview[];
   initialPublishedByGoogleId: Record<string, string>;
   initialPublishedAnnouncements: Record<string, AnnouncementRow>;
+  /** Events put in this week's email from the weekly queue. */
+  initialEmailQueuedEventIds?: string[];
   /** Any calendar at all — Google, iCloud, or both. */
   calendarConnected: boolean;
   /** False when the only calendar is a read-only iCloud link. */
@@ -122,6 +125,7 @@ export function MonthCalendar({
   initialEvents,
   initialPublishedByGoogleId,
   initialPublishedAnnouncements,
+  initialEmailQueuedEventIds,
   calendarConnected,
   canCreateEvents,
   googleConnected,
@@ -145,6 +149,11 @@ export function MonthCalendar({
   const [attendanceByEventId, setAttendanceByEventId] = useState(
     initialAttendanceByEventId,
   );
+  const [emailQueuedIds, setEmailQueuedIds] = useState(
+    () => new Set(initialEmailQueuedEventIds ?? []),
+  );
+  /** The published event whose "publish somewhere else" form is open. */
+  const [addingChannelsFor, setAddingChannelsFor] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -165,6 +174,7 @@ export function MonthCalendar({
     }
     setPublishedByGoogleId(initialPublishedByGoogleId);
     setPublishedAnnouncements(initialPublishedAnnouncements);
+    setEmailQueuedIds(new Set(initialEmailQueuedEventIds ?? []));
     if (
       shownMonth.current.year === initialYear &&
       shownMonth.current.monthIndex === initialMonthIndex
@@ -175,6 +185,7 @@ export function MonthCalendar({
     initialEvents,
     initialPublishedByGoogleId,
     initialPublishedAnnouncements,
+    initialEmailQueuedEventIds,
     initialYear,
     initialMonthIndex,
   ]);
@@ -226,6 +237,7 @@ export function MonthCalendar({
         setPublishedByGoogleId(data.publishedByGoogleId ?? {});
         setPublishedAnnouncements(data.publishedAnnouncements ?? {});
         setAttendanceByEventId(data.attendanceByEventId ?? {});
+        setEmailQueuedIds(new Set(data.emailQueuedEventIds ?? []));
         if (preferredGoogleId) {
           const preferred = nextEvents.find(
             (e) => e.googleEventId === preferredGoogleId,
@@ -338,6 +350,27 @@ export function MonthCalendar({
     // Refetch so calendar patches (and published maps) stay in sync, and
     // refresh the page so the weekly queue above picks up the change.
     void fetchMonth(y, m, eventId);
+    router.refresh();
+  };
+
+  const handleChannelsAdded = (announcement: AnnouncementRow) => {
+    setAddingChannelsFor(null);
+    handlePublished(announcement);
+  };
+
+  /** Takes a deleted event off the grid at once; the refresh confirms it. */
+  const handleEventDeleted = (eventId: string) => {
+    const without = <T,>(record: Record<string, T>) => {
+      const next = { ...record };
+      delete next[eventId];
+      return next;
+    };
+    setEvents((prev) => prev.filter((e) => e.googleEventId !== eventId));
+    setPublishedByGoogleId(without);
+    setPublishedAnnouncements(without);
+    setAttendanceByEventId(without);
+    setSelectedEventId(null);
+    setAddingChannelsFor(null);
     router.refresh();
   };
 
@@ -600,30 +633,68 @@ export function MonthCalendar({
             {selectedEvent ? (
               <>
                 <CardHeader className="gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedEventId(null)}
-                    className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
-                  >
-                    <ArrowLeft className="size-4" />
-                    {dayEvents.length > 1
-                      ? `All ${dayEvents.length} events on ${dayHeading}`
-                      : `Back to ${dayHeading}`}
-                  </button>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedEventId(null)}
+                      className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      <ArrowLeft className="size-4" />
+                      {dayEvents.length > 1
+                        ? `All ${dayEvents.length} events on ${dayHeading}`
+                        : `Back to ${dayHeading}`}
+                    </button>
+                    {isAdmin && (
+                      <DeleteEventButton
+                        key={selectedEvent.googleEventId}
+                        event={selectedEvent}
+                        announcement={selectedAnnouncement}
+                        queuedForWeeklyEmail={emailQueuedIds.has(
+                          selectedEvent.googleEventId,
+                        )}
+                        attendance={attendanceByEventId[selectedEvent.googleEventId]}
+                        onDeleted={handleEventDeleted}
+                      />
+                    )}
+                  </div>
                   <CardTitle>Announcement details</CardTitle>
                   <CardDescription>
                     {selectedIsPublished
-                      ? "Review what was submitted for this event."
+                      ? "See where this event is published, or publish it somewhere else."
                       : "Verify the prefilled details, then publish."}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
                   {selectedIsPublished ? (
                     selectedAnnouncement ? (
-                      <AnnouncementSubmittedView
-                        announcement={selectedAnnouncement}
-                        eventHtmlLink={selectedEvent.htmlLink}
-                      />
+                      addingChannelsFor === selectedEvent.googleEventId ? (
+                        <AnnouncementVerifyForm
+                          key={`add-${selectedEvent.googleEventId}`}
+                          churchId={churchId}
+                          event={selectedEvent}
+                          defaults={defaults}
+                          publishedAnnouncementId={selectedAnnouncement.id}
+                          addChannelsTo={selectedAnnouncement}
+                          queuedForWeeklyEmail={emailQueuedIds.has(
+                            selectedEvent.googleEventId,
+                          )}
+                          onPublished={handleChannelsAdded}
+                          onCancel={() => setAddingChannelsFor(null)}
+                        />
+                      ) : (
+                        <AnnouncementSubmittedView
+                          announcement={selectedAnnouncement}
+                          eventHtmlLink={selectedEvent.htmlLink}
+                          calendarSource={selectedEvent.source}
+                          queuedForWeeklyEmail={emailQueuedIds.has(
+                            selectedEvent.googleEventId,
+                          )}
+                          isAdmin={isAdmin}
+                          onPublishMore={() =>
+                            setAddingChannelsFor(selectedEvent.googleEventId)
+                          }
+                        />
+                      )
                     ) : (
                       <p className="text-sm text-muted-foreground">
                         This event was submitted. Switch months or refresh to

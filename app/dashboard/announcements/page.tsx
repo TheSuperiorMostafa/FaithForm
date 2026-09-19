@@ -131,6 +131,7 @@ export default async function AnnouncementsPage() {
           facebookConnected={facebookConnected}
           isAdmin={auth.isAdmin}
           publishedPromise={publishedPromise}
+          queuedItemsPromise={queuedItemsPromise}
         />
       </Suspense>
 
@@ -243,6 +244,7 @@ async function CalendarSection({
   facebookConnected,
   isAdmin,
   publishedPromise,
+  queuedItemsPromise,
 }: {
   churchId: string;
   year: number;
@@ -256,6 +258,7 @@ async function CalendarSection({
   facebookConnected: boolean;
   isAdmin: boolean;
   publishedPromise: PublishedPromise;
+  queuedItemsPromise: ReturnType<typeof listEmailQueue>;
 }) {
   const supabase = createClient();
   const monthPromise = calendarConnected
@@ -267,12 +270,14 @@ async function CalendarSection({
         connected,
       )
     : Promise.resolve({ events: [], errors: [], connected });
-  const [published, month, campuses, attendancePolicy] = await Promise.all([
-    publishedPromise,
-    monthPromise,
-    listCampuses(churchId),
-    getChurchAttendancePolicy(churchId),
-  ]);
+  const [published, month, campuses, attendancePolicy, queuedItems] =
+    await Promise.all([
+      publishedPromise,
+      monthPromise,
+      listCampuses(churchId),
+      getChurchAttendancePolicy(churchId),
+      queuedItemsPromise,
+    ]);
   const attendanceByEventId = await listEventAttendanceSettings(
     churchId,
     month.events.map((event) => event.googleEventId),
@@ -301,6 +306,7 @@ async function CalendarSection({
         initialEvents={month.events}
         initialPublishedByGoogleId={publishedByGoogleId}
         initialPublishedAnnouncements={publishedAnnouncements}
+        initialEmailQueuedEventIds={queuedItems.map((item) => item.googleEventId)}
         initialAttendanceByEventId={attendanceByEventId}
         attendanceCampuses={campuses.filter((campus) => campus.isActive).map((campus) => ({
           id: campus.id,

@@ -11,9 +11,11 @@ import {
   Smartphone,
   Sparkles,
 } from "lucide-react";
+import { toast } from "sonner";
 import {
   getFacebookPostDefaults,
   publishAnnouncement,
+  publishToMoreChannels,
 } from "@/app/dashboard/announcements/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +34,7 @@ import {
   type FacebookScheduleSuggestion,
 } from "@/lib/announcements/facebook-schedule";
 import type { CalendarQueueItem, AnnouncementRow } from "@/lib/queries/announcements";
+import { publishedChannels } from "@/lib/announcements/published-channels";
 import { hasLeftAppFeed } from "@/lib/faithform/feed-window";
 import { downscaleForUpload } from "@/lib/sites/downscale-image";
 import {
@@ -66,10 +69,22 @@ type AnnouncementVerifyFormProps = {
   publishedAnnouncementId?: string | null;
   onPublished?: (announcement: AnnouncementRow) => void;
   compact?: boolean;
+  /**
+   * An announcement that is already published. The form then publishes it to
+   * the places it is not in yet, and leaves its details and the places it is
+   * already in exactly as they are.
+   */
+  addChannelsTo?: AnnouncementRow;
+  /** In this week's email through the weekly queue rather than by publishing. */
+  queuedForWeeklyEmail?: boolean;
+  onCancel?: () => void;
 };
 
-/** The image posted to Facebook, which is also the app poster. */
-type Graphic = { url: string; path: string; source: "ai" | "upload" };
+/**
+ * The image posted to Facebook, which is also the app poster. `saved` is the
+ * one already published with the announcement, kept like the church's own.
+ */
+type Graphic = { url: string; path: string; source: "ai" | "upload" | "saved" };
 
 type GraphicState = {
   current: Graphic | null;
@@ -214,14 +229,55 @@ function resolveFacebookTiming(input: {
   };
 }
 
+/** What was published, standing in for the calendar's copy of the event. */
+function eventFromAnnouncement(
+  event: CalendarQueueItem,
+  announcement: AnnouncementRow,
+): CalendarQueueItem {
+  return {
+    ...event,
+    title: announcement.title,
+    location: announcement.event_location ?? "",
+    startAt: announcement.start_at,
+    endAt: announcement.end_at,
+    allDay: Boolean(announcement.all_day),
+    description: announcement.body,
+  };
+}
+
+function savedGraphicState(announcement: AnnouncementRow | undefined): GraphicState {
+  if (!announcement?.social_graphic_url || !announcement.social_graphic_path) {
+    return NO_GRAPHIC;
+  }
+  return {
+    ...NO_GRAPHIC,
+    current: {
+      url: announcement.social_graphic_url,
+      path: announcement.social_graphic_path,
+      source: "saved",
+    },
+  };
+}
+
 export function AnnouncementVerifyForm({
   churchId,
-  event,
+  event: calendarEvent,
   defaults,
   publishedAnnouncementId,
   onPublished,
   compact = false,
+  addChannelsTo,
+  queuedForWeeklyEmail = false,
+  onCancel,
 }: AnnouncementVerifyFormProps) {
+  const addingChannels = Boolean(addChannelsTo);
+  const event = addChannelsTo
+    ? eventFromAnnouncement(calendarEvent, addChannelsTo)
+    : calendarEvent;
+  // Where it already is. Those switches show as on and cannot be changed here.
+  const already = addChannelsTo
+    ? publishedChannels(addChannelsTo, { queuedForWeeklyEmail })
+    : null;
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -248,12 +304,15 @@ export function AnnouncementVerifyForm({
     !allDay && event.endAt ? toDatetimeLocalValue(event.endAt) : "",
   );
   const [pushToFacebook, setPushToFacebook] = useState(false);
-  const [pushToTeam, setPushToTeam] = useState(true);
+  // Adding places starts with nothing chosen: the church picks where next.
+  const [pushToTeam, setPushToTeam] = useState(!addingChannels);
   // An event that already happened is not on the app's Home feed, so sharing
   // it there is opt-in. The calendar grid shows the tail of last month, and
   // publishing one of those days looked like a publish that went nowhere.
   const [shareInApp, setShareInApp] = useState(
-    () => !hasLeftAppFeed({ startAt: event.startAt, endAt: event.endAt, allDay }),
+    () =>
+      !addingChannels &&
+      !hasLeftAppFeed({ startAt: event.startAt, endAt: event.endAt, allDay }),
   );
   const [appAudience, setAppAudience] = useState<"followers" | "members">(
     "followers",
@@ -264,7 +323,11 @@ export function AnnouncementVerifyForm({
   const emailAvailable = defaults.emailAvailable ?? defaults.googleConnected;
 
   const [facebookCaption, setFacebookCaption] = useState("");
-  const [graphic, dispatchGraphic] = useReducer(graphicReducer, NO_GRAPHIC);
+  const [graphic, dispatchGraphic] = useReducer(
+    graphicReducer,
+    addChannelsTo,
+    savedGraphicState,
+  );
   const [previewLoading, setPreviewLoading] = useState(false);
   const [captionLoading, setCaptionLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -283,7 +346,10 @@ export function AnnouncementVerifyForm({
   const [postAt, setPostAt] = useState<string | null>(null);
 
   const currentGraphic = graphic.current;
-  const usingUpload = currentGraphic?.source === "upload";
+  // The church's own image or the one already published: either way it is
+  // kept until the church chooses another.
+  const usingUpload =
+    currentGraphic?.source === "upload" || currentGraphic?.source === "saved";
   const aiStale = currentGraphic?.source === "ai" && graphic.aiStale;
 
   /**
@@ -523,6 +589,11 @@ export function AnnouncementVerifyForm({
       }
     }
 
+    if (addChannelsTo && already) {
+      submitNewChannels(addChannelsTo, already);
+      return;
+    }
+
     const formData = new FormData();
     formData.set("church_id", churchId);
     formData.set("title", title.trim());
@@ -630,9 +701,73 @@ export function AnnouncementVerifyForm({
     });
   };
 
+  /** Sends only the places it is not in yet; the details stay as published. */
+  const submitNewChannels = (
+    announcement: AnnouncementRow,
+    current: NonNullable<typeof already>,
+  ) => {
+    const addFacebook = pushToFacebook && !current.facebook.published;
+    const addTeam = pushToTeam && !current.weeklyEmail.published;
+    const addApp = shareInApp && !current.app.published;
+    if (!addFacebook && !addTeam && !addApp) {
+      setError("Choose at least one new place to publish it.");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.set("announcement_id", announcement.id);
+    formData.set("push_to_facebook", addFacebook ? "true" : "false");
+    formData.set("push_to_team", addTeam ? "true" : "false");
+    formData.set("mobile_visibility", addApp ? appAudience : "none");
+    if (posterAltText) formData.set("poster_alt_text", posterAltText);
+    if (addFacebook) {
+      formData.set("facebook_caption", facebookCaption.trim());
+      if (facebookTiming) {
+        formData.set("facebook_post_mode", facebookTiming.mode);
+        if (facebookTiming.mode === "schedule" && facebookTiming.ms !== null) {
+          formData.set("facebook_scheduled_at", new Date(facebookTiming.ms).toISOString());
+        }
+      }
+    }
+    if (currentGraphic) {
+      formData.set("social_graphic_path", currentGraphic.path);
+      formData.set("social_graphic_url", currentGraphic.url);
+    }
+
+    startTransition(async () => {
+      const result = await publishToMoreChannels(formData);
+      if (!result.ok) {
+        setError(result.errors.join(" "));
+        return;
+      }
+
+      const added: string[] = [];
+      if (addApp && (result.announcement?.mobile_visibility ?? "none") !== "none") {
+        added.push(alreadyOver ? "the app's Schedule calendar" : "the FaithForm app");
+      }
+      if (result.facebookScheduledAt) {
+        added.push(
+          `Facebook (scheduled for ${describeFacebookPostTime(
+            Date.parse(result.facebookScheduledAt),
+            facebookTiming?.zone,
+          )})`,
+        );
+      } else if (result.facebookUrl) {
+        added.push("Facebook");
+      }
+      if (result.queuedForWeeklyEmail) added.push("the weekly email");
+
+      if (added.length > 0) toast.success(`Published to ${added.join(", ")}.`);
+      for (const problem of result.errors) toast.error(problem, { duration: 10000 });
+
+      if (result.announcement) onPublished?.(result.announcement);
+    });
+  };
+
   const graphicControls = (generateLabel: string) => (
     <GraphicControls
       usingUpload={usingUpload}
+      usingSaved={currentGraphic?.source === "saved"}
       generating={previewLoading}
       uploading={uploading}
       generateLabel={generateLabel}
@@ -647,125 +782,172 @@ export function AnnouncementVerifyForm({
       onSubmit={handleSubmit}
       className={compact ? "flex flex-col gap-4" : "flex flex-col gap-5"}
     >
-      {!compact && (
+      {addingChannels && (
+        <div>
+          <p className="font-semibold">Publish somewhere else</p>
+          <p className="text-sm text-muted-foreground">
+            Turn on the places to add. Where it is already published stays
+            exactly as it is.
+          </p>
+        </div>
+      )}
+
+      {!compact && !addingChannels && (
         <div className="flex items-center gap-2 rounded-lg border border-accent/25 bg-accent/10 px-3 py-2 text-sm font-medium text-muted-foreground">
           <Calendar className="size-4 shrink-0 text-accent" strokeWidth={1.75} />
           Prefilled from your calendar
         </div>
       )}
 
-      {/* Said up front, so an edit here is not mistaken for an edit to the
-          calendar: a link connection cannot write back to iCloud. */}
-      {event.readOnly && (
-        <p className="text-xs text-muted-foreground">
-          This event comes from your iCloud calendar link. Changes here update
-          the announcement only; change the event itself in Apple Calendar.
-        </p>
-      )}
-
-      <div className="flex flex-col gap-2">
-        <Label htmlFor={`title-${event.googleEventId}`}>Title</Label>
-        <Input
-          id={`title-${event.googleEventId}`}
-          value={title}
-          onChange={(e) => {
-            setTitle(e.target.value);
-            markDetailsChanged();
-          }}
-          required
-        />
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <Label htmlFor={`where-${event.googleEventId}`}>Where</Label>
-        <Input
-          id={`where-${event.googleEventId}`}
-          value={location}
-          onChange={(e) => {
-            setLocation(e.target.value);
-            markDetailsChanged();
-          }}
-          placeholder="Location"
-        />
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <Label htmlFor={allDay ? `date-${event.googleEventId}` : undefined}>
-          When
-        </Label>
-        {allDay ? (
-          <div className="flex flex-col gap-1">
-            <Input
-              id={`date-${event.googleEventId}`}
-              type="date"
-              value={startAt}
-              onChange={(e) => handleStartChange(e.target.value)}
-              required
-              className="w-full min-w-0 tabular-nums"
-            />
+      {!addingChannels && (
+        <>
+          {/* Said up front, so an edit here is not mistaken for an edit to the
+              calendar: a link connection cannot write back to iCloud. */}
+          {event.readOnly && (
             <p className="text-xs text-muted-foreground">
-              All-day event — no start or end time.
+              This event comes from your iCloud calendar link. Changes here update
+              the announcement only; change the event itself in Apple Calendar.
             </p>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-3">
-            <DateTimeField
-              idPrefix={`start-${event.googleEventId}`}
-              label="Start"
-              value={startAt}
-              required
-              onChange={handleStartChange}
-            />
-            <DateTimeField
-              idPrefix={`end-${event.googleEventId}`}
-              label="End"
-              value={endAt}
-              onChange={(next) => {
-                setEndAt(next);
+          )}
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor={`title-${event.googleEventId}`}>Title</Label>
+            <Input
+              id={`title-${event.googleEventId}`}
+              value={title}
+              onChange={(e) => {
+                setTitle(e.target.value);
                 markDetailsChanged();
               }}
+              required
             />
           </div>
-        )}
-      </div>
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor={`where-${event.googleEventId}`}>Where</Label>
+            <Input
+              id={`where-${event.googleEventId}`}
+              value={location}
+              onChange={(e) => {
+                setLocation(e.target.value);
+                markDetailsChanged();
+              }}
+              placeholder="Location"
+            />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor={allDay ? `date-${event.googleEventId}` : undefined}>
+              When
+            </Label>
+            {allDay ? (
+              <div className="flex flex-col gap-1">
+                <Input
+                  id={`date-${event.googleEventId}`}
+                  type="date"
+                  value={startAt}
+                  onChange={(e) => handleStartChange(e.target.value)}
+                  required
+                  className="w-full min-w-0 tabular-nums"
+                />
+                <p className="text-xs text-muted-foreground">
+                  All-day event — no start or end time.
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <DateTimeField
+                  idPrefix={`start-${event.googleEventId}`}
+                  label="Start"
+                  value={startAt}
+                  required
+                  onChange={handleStartChange}
+                />
+                <DateTimeField
+                  idPrefix={`end-${event.googleEventId}`}
+                  label="End"
+                  value={endAt}
+                  onChange={(next) => {
+                    setEndAt(next);
+                    markDetailsChanged();
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        </>
+      )}
 
       <ul className="flex flex-col gap-3">
-        <ToggleRow
-          id={`fb-${event.googleEventId}`}
-          label="Shared to FB?"
-          checked={pushToFacebook}
-          onCheckedChange={handleFacebookToggle}
-          disabled={!defaults.facebookConnected}
-          hint={
-            defaults.facebookConnected
-              ? "Posts to your Facebook Page with a caption and an image, made by AI or your own design. You choose when it goes out."
-              : "Connect Facebook in Settings"
-          }
-        />
-        <ToggleRow
-          id={`team-${event.googleEventId}`}
-          label="Include in weekly email?"
-          checked={pushToTeam}
-          onCheckedChange={setPushToTeam}
-          disabled={!emailAvailable}
-          hint={
-            emailAvailable
-              ? "Adds this event to Monday's weekly email with the rest of this week's calendar."
-              : "Connect Google or Apple in Settings to include this in the weekly email."
-          }
-        />
-        <ToggleRow
-          id={`app-${event.googleEventId}`}
-          label="Share in the FaithForm app"
-          checked={shareInApp}
-          onCheckedChange={handleShareInAppToggle}
-          hint={
-            alreadyOver
-              ? "This event already happened, so the app won't show it on Home or send a notification. It would only appear on the Schedule calendar for its month."
-              : "Shows this event on the church's Home feed and Schedule calendar."
-          }
-          warning={alreadyOver}
-        />
+        {already?.facebook.published ? (
+          <ToggleRow
+            id={`fb-${event.googleEventId}`}
+            label="Shared to FB?"
+            checked
+            onCheckedChange={() => undefined}
+            disabled
+            hint="Already posted to your Facebook Page."
+          />
+        ) : (
+          <ToggleRow
+            id={`fb-${event.googleEventId}`}
+            label="Shared to FB?"
+            checked={pushToFacebook}
+            onCheckedChange={handleFacebookToggle}
+            disabled={!defaults.facebookConnected}
+            hint={
+              defaults.facebookConnected
+                ? "Posts to your Facebook Page with a caption and an image, made by AI or your own design. You choose when it goes out."
+                : "Connect Facebook in Settings"
+            }
+          />
+        )}
+        {already?.weeklyEmail.published ? (
+          <ToggleRow
+            id={`team-${event.googleEventId}`}
+            label="Include in weekly email?"
+            checked
+            onCheckedChange={() => undefined}
+            disabled
+            hint="Already in the weekly email."
+          />
+        ) : (
+          <ToggleRow
+            id={`team-${event.googleEventId}`}
+            label="Include in weekly email?"
+            checked={pushToTeam}
+            onCheckedChange={setPushToTeam}
+            disabled={!emailAvailable}
+            hint={
+              emailAvailable
+                ? "Adds this event to Monday's weekly email with the rest of this week's calendar."
+                : "Connect Google or Apple in Settings to include this in the weekly email."
+            }
+          />
+        )}
+        {already?.app.published ? (
+          <ToggleRow
+            id={`app-${event.googleEventId}`}
+            label="Share in the FaithForm app"
+            checked
+            onCheckedChange={() => undefined}
+            disabled
+            hint="Already in the FaithForm app."
+          />
+        ) : (
+          <ToggleRow
+            id={`app-${event.googleEventId}`}
+            label="Share in the FaithForm app"
+            checked={shareInApp}
+            onCheckedChange={handleShareInAppToggle}
+            hint={
+              alreadyOver
+                ? "This event already happened, so the app won't show it on Home or send a notification. It would only appear on the Schedule calendar for its month."
+                : "Shows this event on the church's Home feed and Schedule calendar."
+            }
+            warning={alreadyOver}
+          />
+        )}
       </ul>
 
       {/* One picker serves both panels; only one of them offers it at a time. */}
@@ -1002,19 +1184,21 @@ export function AnnouncementVerifyForm({
         </div>
       )}
 
-      <button
-        type="button"
-        className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-        onClick={() => setShowNotes((v) => !v)}
-      >
-        {showNotes ? (
-          <ChevronUp className="size-4" strokeWidth={1.75} />
-        ) : (
-          <ChevronDown className="size-4" strokeWidth={1.75} />
-        )}
-        Add details (optional)
-      </button>
-      {showNotes && (
+      {!addingChannels && (
+        <button
+          type="button"
+          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+          onClick={() => setShowNotes((v) => !v)}
+        >
+          {showNotes ? (
+            <ChevronUp className="size-4" strokeWidth={1.75} />
+          ) : (
+            <ChevronDown className="size-4" strokeWidth={1.75} />
+          )}
+          Add details (optional)
+        </button>
+      )}
+      {showNotes && !addingChannels && (
         <Textarea
           value={notes}
           onChange={(e) => {
@@ -1037,17 +1221,36 @@ export function AnnouncementVerifyForm({
         </p>
       )}
 
-      <Button
-        type="submit"
-        disabled={
-          pending ||
-          uploading ||
-          (pushToFacebook && (previewLoading || captionLoading))
-        }
-        className="w-full"
-      >
-        {pending ? "Submitting…" : "Verify & submit"}
-      </Button>
+      <div className="flex flex-col gap-2">
+        <Button
+          type="submit"
+          disabled={
+            pending ||
+            uploading ||
+            (pushToFacebook && (previewLoading || captionLoading))
+          }
+          className="w-full"
+        >
+          {addingChannels
+            ? pending
+              ? "Publishing…"
+              : "Publish to the new places"
+            : pending
+              ? "Submitting…"
+              : "Verify & submit"}
+        </Button>
+        {onCancel && (
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={onCancel}
+            disabled={pending}
+            className="w-full"
+          >
+            Cancel
+          </Button>
+        )}
+      </div>
     </form>
   );
 }
@@ -1060,6 +1263,7 @@ export function AnnouncementVerifyForm({
  */
 function GraphicControls({
   usingUpload,
+  usingSaved,
   generating,
   uploading,
   generateLabel,
@@ -1068,6 +1272,8 @@ function GraphicControls({
   onUseAi,
 }: {
   usingUpload: boolean;
+  /** The image already published with this event. */
+  usingSaved: boolean;
   generating: boolean;
   uploading: boolean;
   generateLabel: string;
@@ -1121,9 +1327,11 @@ function GraphicControls({
         )}
       </div>
       <p className="text-xs text-muted-foreground">
-        {usingUpload
-          ? "Your own image is posted exactly as you designed it. FaithForm won't replace it unless you choose an AI image."
-          : "Have a design already? Upload a JPG, PNG, or WebP. It is never cropped."}
+        {usingSaved
+          ? "This is the image already published with this event. FaithForm won't replace it unless you upload another or choose an AI image."
+          : usingUpload
+            ? "Your own image is posted exactly as you designed it. FaithForm won't replace it unless you choose an AI image."
+            : "Have a design already? Upload a JPG, PNG, or WebP. It is never cropped."}
       </p>
     </div>
   );

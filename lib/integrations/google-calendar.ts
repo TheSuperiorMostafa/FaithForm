@@ -66,6 +66,7 @@ export async function listCalendarEventsInRange(
         allDay,
         description: calendarDescriptionText(event.description),
         htmlLink: event.htmlLink ?? undefined,
+        recurring: Boolean(event.recurringEventId),
       };
     });
 }
@@ -208,6 +209,52 @@ export async function patchCalendarEvent(
     }
     throw err;
   }
+}
+
+/**
+ * Deletes one event from the church's calendar.
+ *
+ * Events are listed with `singleEvents`, so a repeating event arrives as one
+ * instance id per date, and deleting that id cancels that date alone. The
+ * calendar is the church's own, read on the server rather than taken from the
+ * browser, since that is the only calendar events are ever listed from. An
+ * event already gone counts as deleted.
+ */
+export async function deleteCalendarEvent(
+  churchId: string,
+  googleEventId: string,
+  supabase?: SupabaseClient,
+): Promise<void> {
+  const auth = await getGoogleAuthClient(churchId, supabase);
+  const calendar = google.calendar({ version: "v3", auth });
+  const calendarId = await getChurchCalendarId(churchId, supabase);
+
+  try {
+    await calendar.events.delete({
+      calendarId,
+      eventId: googleEventId,
+      sendUpdates: "none",
+    });
+  } catch (err) {
+    if (isInvalidGrantError(err)) {
+      await markIntegrationNeedsReconnect(
+        churchId,
+        "google",
+        "Google access was revoked or expired. Reconnect Google in Settings.",
+        supabase,
+      );
+      throw new GoogleReconnectRequiredError();
+    }
+    const status = googleErrorStatus(err);
+    if (status === 404 || status === 410) return;
+    throw err;
+  }
+}
+
+function googleErrorStatus(err: unknown): number | null {
+  const shaped = err as { code?: unknown; status?: unknown; response?: { status?: unknown } };
+  const status = Number(shaped?.response?.status ?? shaped?.status ?? shaped?.code);
+  return Number.isFinite(status) ? status : null;
 }
 
 /** `dateTime` is cleared so the event is only ever one kind or the other. */

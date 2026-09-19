@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { listEmailQueue } from "@/lib/announcements/email-queue";
 import { getChurchAuth } from "@/lib/auth/church";
 import { AppleReconnectRequiredError } from "@/lib/integrations/apple-calendar";
 import {
@@ -17,6 +18,7 @@ import {
   listEventAttendanceSettings,
   saveEventAttendance,
 } from "@/lib/attendance/v2/event-attendance";
+import { getMondayWeekWindowInTimeZone } from "@/lib/utils/calendar";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -72,10 +74,12 @@ export async function GET(request: Request) {
   }
 
   try {
-    const [calendar, publishedByGoogleId, publishedList] = await Promise.all([
+    const week = getMondayWeekWindowInTimeZone(new Date(), auth.churchTimezone);
+    const [calendar, publishedByGoogleId, publishedList, queued] = await Promise.all([
       listChurchCalendarEvents(auth.churchId, startISO, endISO, supabase),
       getPublishedAnnouncementsByGoogleId(supabase, auth.churchId),
       getPublishedAnnouncements(supabase, auth.churchId),
+      listEmailQueue(auth.churchId, week.weekStartKey, supabase),
     ]);
 
     const publishedAnnouncements: Record<string, (typeof publishedList)[number]> =
@@ -97,6 +101,7 @@ export async function GET(request: Request) {
       publishedByGoogleId,
       publishedAnnouncements,
       attendanceByEventId,
+      emailQueuedEventIds: queued.map((item) => item.googleEventId),
       // One calendar failing still returns the other's events; the client
       // shows this beside them rather than instead of them.
       calendarError: calendar.errors.join(" ") || null,

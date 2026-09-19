@@ -28,6 +28,8 @@ export type AnnouncementRow = {
   facebook_caption?: string | null;
   social_graphic_url?: string | null;
   social_graphic_path?: string | null;
+  /** Who sees it in the FaithForm app. `none` is not in the app at all. */
+  mobile_visibility?: MobileVisibility;
   gmail_draft_id: string | null;
   published_at: string | null;
   last_publish_error: string | null;
@@ -35,6 +37,8 @@ export type AnnouncementRow = {
   updated_at: string;
   computed_status?: AnnouncementStatus;
 };
+
+export type MobileVisibility = "none" | "public" | "followers" | "members";
 
 export type CalendarQueueItem = CalendarEventPreview & {
   announcementId?: string;
@@ -44,18 +48,22 @@ export type CalendarQueueItem = CalendarEventPreview & {
 /**
  * Column list for a full announcement row.
  *
- * `facebook_scheduled_publish_time` arrived in migration 0014 and `all_day` in
- * 0066, and a database can be missing either. Naming an absent column makes
+ * `facebook_scheduled_publish_time` arrived in migration 0014, the social
+ * graphic in 0023, `mobile_visibility` in 0054 and `all_day` in 0066, and a
+ * database can be missing any of them. Naming an absent column makes
  * PostgREST reject the whole query, so every one of these reads returned
  * nothing at all — the Submitted list simply never appeared, with no error
  * anywhere. Each optional column is therefore dropped and the read retried;
  * `mapAnnouncementRow` already defaults every one of them.
  */
 const ANNOUNCEMENT_COLUMNS =
-  "id, church_id, title, body, start_at, end_at, all_day, event_location, is_ready, push_to_app, push_to_facebook, push_to_team, status, google_event_id, google_calendar_id, facebook_post_id, facebook_scheduled_publish_time, gmail_draft_id, published_at, last_publish_error, created_at, updated_at, event_title, event_date, notes";
+  "id, church_id, title, body, start_at, end_at, all_day, event_location, is_ready, push_to_app, push_to_facebook, push_to_team, status, google_event_id, google_calendar_id, facebook_post_id, facebook_scheduled_publish_time, social_graphic_url, social_graphic_path, mobile_visibility, gmail_draft_id, published_at, last_publish_error, created_at, updated_at, event_title, event_date, notes";
 
 const OPTIONAL_ANNOUNCEMENT_COLUMNS = [
   "facebook_scheduled_publish_time",
+  "social_graphic_url",
+  "social_graphic_path",
+  "mobile_visibility",
   "all_day",
 ] as const;
 
@@ -202,6 +210,12 @@ export function buildCalendarQueue(
     .map((e) => ({ ...e, published: false }));
 }
 
+function toMobileVisibility(value: unknown): MobileVisibility {
+  return value === "public" || value === "followers" || value === "members"
+    ? value
+    : "none";
+}
+
 function mapAnnouncementRow(row: Record<string, unknown>): AnnouncementRow {
   const title = (row.title as string) || (row.event_title as string) || "";
   const body = (row.body as string) || (row.notes as string) || "";
@@ -227,6 +241,9 @@ function mapAnnouncementRow(row: Record<string, unknown>): AnnouncementRow {
     facebook_post_id: (row.facebook_post_id as string | null) ?? null,
     facebook_scheduled_publish_time:
       (row.facebook_scheduled_publish_time as string | null) ?? null,
+    social_graphic_url: (row.social_graphic_url as string | null) ?? null,
+    social_graphic_path: (row.social_graphic_path as string | null) ?? null,
+    mobile_visibility: toMobileVisibility(row.mobile_visibility),
     gmail_draft_id: (row.gmail_draft_id as string | null) ?? null,
     published_at: (row.published_at as string | null) ?? null,
     last_publish_error: (row.last_publish_error as string | null) ?? null,

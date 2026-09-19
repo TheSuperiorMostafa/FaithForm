@@ -311,3 +311,53 @@ export async function syncEventAttendanceDetails(input: {
     next: updated,
   });
 }
+
+/**
+ * Turns check-in off for an event that was deleted from the calendar.
+ *
+ * Only while check-in has not opened: once it has, people may already be
+ * checked in, and that attendance stays on record as it was.
+ */
+export async function cancelEventAttendanceForDeletedEvent(input: {
+  churchId: string;
+  actorUserId: string;
+  calendarEventId: string;
+  client?: SupabaseClient;
+}): Promise<void> {
+  const admin = input.client ?? createAdminClient();
+  const { data } = await admin
+    .from("service_occurrences")
+    .select(EVENT_COLUMNS)
+    .eq("church_id", input.churchId)
+    .eq("calendar_event_id", input.calendarEventId)
+    .neq("status", "cancelled");
+
+  for (const previous of (data ?? []) as Record<string, unknown>[]) {
+    if (Date.parse(previous.checkin_opens_at_utc as string) <= Date.now()) continue;
+
+    const now = new Date().toISOString();
+    const { data: cancelled, error } = await admin
+      .from("service_occurrences")
+      .update({
+        status: "cancelled",
+        cancelled_at: now,
+        cancelled_by: input.actorUserId,
+        cancellation_reason: "Calendar event deleted",
+        updated_at: now,
+      })
+      .eq("id", previous.id as string)
+      .eq("church_id", input.churchId)
+      .select(EVENT_COLUMNS)
+      .single();
+    if (error || !cancelled) continue;
+
+    await admin.from("event_attendance_setup_events").insert({
+      church_id: input.churchId,
+      calendar_event_id: input.calendarEventId,
+      actor_user_id: input.actorUserId,
+      action: "disabled",
+      previous,
+      next: cancelled,
+    });
+  }
+}

@@ -139,6 +139,12 @@ export type CalendarEventPreview = {
    * change it. Edits to the event itself happen in Apple Calendar.
    */
   readOnly?: boolean;
+  /**
+   * One date of a repeating event. Deleting it from FaithForm removes only
+   * this date on Google, and is refused on iCloud, where the series is one
+   * file.
+   */
+  recurring?: boolean;
 };
 
 export type CalendarSource = "google" | "apple";

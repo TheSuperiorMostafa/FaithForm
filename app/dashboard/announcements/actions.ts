@@ -13,6 +13,7 @@ import {
   addToEmailQueue,
   removeFromEmailQueue,
 } from "@/lib/announcements/email-queue";
+import { facebookPostUrl } from "@/lib/announcements/published-channels";
 import { createWeeklyAnnouncementGmailDraft } from "@/lib/announcements/weekly-email";
 import { getChurchAuth } from "@/lib/auth/church";
 import { featureActionError } from "@/lib/features/guard";
@@ -22,19 +23,27 @@ import {
 } from "@/lib/faithform/push/publish-hook";
 import { createClient } from "@/lib/supabase/server";
 import {
+  AppleReconnectRequiredError,
   isAppleEventId,
   isReadOnlyAppleEventId,
 } from "@/lib/integrations/apple-calendar";
-import { patchChurchCalendarEvent } from "@/lib/integrations/calendar";
+import {
+  deleteChurchCalendarEvent,
+  patchChurchCalendarEvent,
+} from "@/lib/integrations/calendar";
+import { GoogleReconnectRequiredError } from "@/lib/integrations/google-oauth";
 import { generateEmergencySocialGraphic, downloadSocialGraphic } from "@/lib/social/generate-graphic";
 import {
   deleteFacebookPost,
   postAnnouncementToFacebookPage,
 } from "@/lib/integrations/facebook";
-import { isMissingFacebookScheduleColumn } from "@/lib/queries/announcements";
 import {
   buildFacebookPostMessage,
   formatDateTimeRange,
+  getAnnouncement,
+  isMissingFacebookScheduleColumn,
+  type AnnouncementRow,
+  type MobileVisibility,
 } from "@/lib/queries/announcements";
 import { getChurchAnnouncementFacebookSchedule } from "@/lib/queries/church-profile";
 import { getChurchTimezone } from "@/lib/queries/attendance";
@@ -42,7 +51,10 @@ import { hasIntegration } from "@/lib/integrations/tokens";
 import { getCurrentChurchId } from "@/lib/auth/current-church";
 import type { PublishResult } from "@/lib/integrations/types";
 import { getMondayWeekWindowInTimeZone } from "@/lib/utils/calendar";
-import { syncEventAttendanceDetails } from "@/lib/attendance/v2/event-attendance";
+import {
+  cancelEventAttendanceForDeletedEvent,
+  syncEventAttendanceDetails,
+} from "@/lib/attendance/v2/event-attendance";
 
 async function requireChurchAndUser() {
   const supabase = createClient();
@@ -187,6 +199,107 @@ function parsePublishForm(formData: FormData) {
       pinnedUntil,
       posterAltText,
     },
+  };
+}
+
+/**
+ * Posts one event to the church's Facebook Page, when the form chose.
+ *
+ * Throws with a message the form can show as it is. Recording the post id
+ * against the announcement is left to the caller.
+ */
+async function postEventToFacebook(
+  ctx: { supabase: ReturnType<typeof createClient>; churchId: string },
+  input: {
+    title: string;
+    location: string;
+    startAt: string;
+    endAt: string | null;
+    allDay: boolean;
+    notes: string;
+    caption: string;
+    socialGraphicPath: string;
+    timing: FacebookTiming;
+  },
+): Promise<{ postId: string; url: string; scheduledAt?: string }> {
+  const fbConnected = await hasIntegration(ctx.churchId, "facebook", ctx.supabase);
+  if (!fbConnected) throw new Error("Facebook is not connected — skipped post.");
+
+  let message = input.caption;
+  // An AI-made flyer or the church's own upload. Facebook is told its real
+  // type from its bytes.
+  let image: ArrayBuffer | undefined;
+
+  if (input.socialGraphicPath) {
+    if (!input.socialGraphicPath.startsWith(`${ctx.churchId}/`)) {
+      throw new Error("Invalid social graphic path");
+    }
+    image = await downloadSocialGraphic(input.socialGraphicPath);
+  }
+
+  // Server actions run in UTC — dates must render in the church's zone.
+  const timeZone = await getChurchTimezone(ctx.supabase, ctx.churchId);
+
+  if (!message) {
+    message = buildFacebookPostMessage({
+      title: input.title,
+      location: input.location,
+      startAt: input.startAt,
+      endAt: input.endAt,
+      notes: input.notes,
+      timeZone,
+      allDay: input.allDay,
+    });
+  }
+
+  if (!image) {
+    image = await generateEmergencySocialGraphic(ctx.supabase, ctx.churchId, {
+      title: input.title,
+      when: formatDateTimeRange(input.startAt, input.endAt, timeZone, input.allDay),
+      location: input.location,
+      startAt: input.startAt,
+      endAt: input.endAt,
+      allDay: input.allDay,
+    });
+  }
+
+  // The form chose: a time already checked, or now. A form that never said
+  // gets the time today's form would suggest. Posting now is never a fallback
+  // for a time that did not work.
+  let publishAtMs: number | undefined;
+  if (input.timing.mode === "schedule") {
+    publishAtMs = input.timing.scheduledAtMs;
+  } else if (input.timing.mode === "suggested") {
+    const schedule = await getChurchAnnouncementFacebookSchedule(
+      ctx.churchId,
+      ctx.supabase,
+    );
+    const suggestion = suggestFacebookSchedule({
+      startAt: input.startAt,
+      allDay: input.allDay,
+      timeZone: schedule.timezone,
+      postTime: schedule.postTime,
+    });
+    if (suggestion?.mode === "schedule") {
+      publishAtMs = suggestion.scheduledAtMs;
+    }
+  }
+
+  const result = await postAnnouncementToFacebookPage(
+    ctx.churchId,
+    {
+      message,
+      image,
+      scheduledPublishTime:
+        publishAtMs === undefined ? undefined : Math.floor(publishAtMs / 1000),
+    },
+    ctx.supabase,
+  );
+
+  return {
+    postId: result.postId,
+    url: result.url,
+    scheduledAt: result.scheduledPublishTime ?? undefined,
   };
 }
 
@@ -374,100 +487,25 @@ export async function publishAnnouncement(
   }
 
   if (payload.pushToFacebook) {
-    const fbConnected = await hasIntegration(
-      ctx.churchId,
-      "facebook",
-      ctx.supabase,
-    );
-    if (!fbConnected) {
-      errors.push("Facebook is not connected — skipped post.");
-    } else {
-      try {
-        let message = payload.facebookCaption;
-        // An AI-made flyer or the church's own upload. Facebook is told its
-        // real type from its bytes.
-        let image: ArrayBuffer | undefined;
-
-        if (payload.socialGraphicPath) {
-          if (!payload.socialGraphicPath.startsWith(`${ctx.churchId}/`)) {
-            throw new Error("Invalid social graphic path");
-          }
-          image = await downloadSocialGraphic(payload.socialGraphicPath);
-        }
-
-        // Server actions run in UTC — dates must render in the church's zone.
-        const timeZone = await getChurchTimezone(ctx.supabase, ctx.churchId);
-
-        if (!message) {
-          message = buildFacebookPostMessage({
-            title: payload.title,
-            location: payload.location,
-            startAt: payload.startAt,
-            endAt: payload.endAt,
-            notes: payload.notes,
-            timeZone,
-            allDay: payload.allDay,
-          });
-        }
-
-        if (!image) {
-          image = await generateEmergencySocialGraphic(ctx.supabase, ctx.churchId, {
-            title: payload.title,
-            when: formatDateTimeRange(
-              payload.startAt,
-              payload.endAt,
-              timeZone,
-              payload.allDay,
-            ),
-            location: payload.location,
-            startAt: payload.startAt,
-            endAt: payload.endAt,
-            allDay: payload.allDay,
-          });
-        }
-
-        // The form chose: a time already checked, or now. A form that never
-        // said gets the time today's form would suggest. Posting now is never
-        // a fallback for a time that did not work.
-        let publishAtMs: number | undefined;
-        if (payload.facebookTiming.mode === "schedule") {
-          publishAtMs = payload.facebookTiming.scheduledAtMs;
-        } else if (payload.facebookTiming.mode === "suggested") {
-          const schedule = await getChurchAnnouncementFacebookSchedule(
-            ctx.churchId,
-            ctx.supabase,
-          );
-          const suggestion = suggestFacebookSchedule({
-            startAt: payload.startAt,
-            allDay: payload.allDay,
-            timeZone: schedule.timezone,
-            postTime: schedule.postTime,
-          });
-          if (suggestion?.mode === "schedule") {
-            publishAtMs = suggestion.scheduledAtMs;
-          }
-        }
-
-        const result = await postAnnouncementToFacebookPage(
-          ctx.churchId,
-          {
-            message,
-            image,
-            scheduledPublishTime:
-              publishAtMs === undefined ? undefined : Math.floor(publishAtMs / 1000),
-          },
-          ctx.supabase,
-        );
-        facebookPostId = result.postId;
-        facebookUrl = result.url;
-        if (result.scheduledPublishTime) {
-          facebookScheduledAt = result.scheduledPublishTime;
-        }
-      } catch (err) {
-        errors.push(
-          err instanceof Error ? err.message : "Facebook post failed",
-        );
-      }
+    try {
+      const result = await postEventToFacebook(ctx, {
+        title: payload.title,
+        location: payload.location,
+        startAt: payload.startAt,
+        endAt: payload.endAt,
+        allDay: payload.allDay,
+        notes: payload.notes,
+        caption: payload.facebookCaption,
+        socialGraphicPath: payload.socialGraphicPath,
+        timing: payload.facebookTiming,
+      });
+      facebookPostId = result.postId;
+      facebookUrl = result.url;
+      facebookScheduledAt = result.scheduledAt;
+    } catch (err) {
+      errors.push(
+        err instanceof Error ? err.message : "Facebook post failed",
+      );
     }
   }
 
@@ -819,6 +857,333 @@ export async function deleteAnnouncement(id: string) {
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/announcements");
   return { success: true };
+}
+
+/** Columns a database may be missing: 0014's schedule time, 0023's social preview. */
+const OPTIONAL_UPDATE_COLUMNS = [
+  "facebook_scheduled_publish_time",
+  "facebook_caption",
+  "social_graphic_path",
+  "social_graphic_url",
+  "social_preview_generated_at",
+];
+
+/**
+ * Updates one announcement, dropping whichever optional columns this database
+ * turns out not to have rather than losing the whole write.
+ */
+async function updateAnnouncementRow(
+  supabase: ReturnType<typeof createClient>,
+  churchId: string,
+  id: string,
+  data: Record<string, unknown>,
+): Promise<string | null> {
+  const row = { ...data };
+  for (let attempt = 0; attempt <= OPTIONAL_UPDATE_COLUMNS.length; attempt++) {
+    if (Object.keys(row).length === 0) return null;
+    const { error } = await supabase
+      .from("announcements")
+      .update(row)
+      .eq("id", id)
+      .eq("church_id", churchId);
+    if (!error) return null;
+
+    const missing = Object.keys(row).filter(
+      (column) =>
+        OPTIONAL_UPDATE_COLUMNS.includes(column) &&
+        new RegExp(column, "i").test(error.message),
+    );
+    if (missing.length === 0) return error.message;
+    for (const column of missing) delete row[column];
+  }
+  return null;
+}
+
+export type PublishToMoreChannelsResult = PublishResult & {
+  /** The announcement as saved afterwards, so the panel can show where it is now. */
+  announcement?: AnnouncementRow;
+};
+
+/**
+ * Publishes an event that is already out to the places it is not in yet.
+ *
+ * Only the places asked for, and only those it is missing from. Nothing it is
+ * already in is touched: a Facebook post that exists is never posted twice,
+ * the app is not re-notified, and the details stay as they were published.
+ */
+export async function publishToMoreChannels(
+  formData: FormData,
+): Promise<PublishToMoreChannelsResult> {
+  const ctx = await requireChurchAndUser();
+  if (!ctx.churchId || !ctx.user) {
+    return { ok: false, errors: ["No church linked"] };
+  }
+
+  const featureError = await featureActionError("announcements", ctx.supabase);
+  if (featureError) return { ok: false, errors: [featureError] };
+
+  const announcementId = String(formData.get("announcement_id") ?? "").trim();
+  const announcement = announcementId
+    ? await getAnnouncement(ctx.supabase, ctx.churchId, announcementId)
+    : null;
+  if (!announcement) return { ok: false, errors: ["Announcement not found."] };
+  if (announcement.status !== "published") {
+    return { ok: false, errors: ["This event has not been published yet."] };
+  }
+
+  const inApp = (announcement.mobile_visibility ?? "none") !== "none";
+  const visibilityRaw = String(formData.get("mobile_visibility") ?? "none").trim();
+  const appVisibility: MobileVisibility =
+    visibilityRaw === "public" || visibilityRaw === "followers" || visibilityRaw === "members"
+      ? visibilityRaw
+      : "none";
+
+  const addFacebook =
+    formData.get("push_to_facebook") === "true" && !announcement.facebook_post_id;
+  const addTeam = formData.get("push_to_team") === "true" && !announcement.push_to_team;
+  const addApp = appVisibility !== "none" && !inApp;
+
+  if (!addFacebook && !addTeam && !addApp) {
+    return { ok: false, errors: ["Choose at least one new place to publish it."] };
+  }
+
+  const timing = parseFacebookTiming(formData);
+  if (addFacebook && !timing.ok) return { ok: false, errors: [timing.error] };
+
+  const socialGraphicPath = String(formData.get("social_graphic_path") ?? "").trim();
+  const socialGraphicUrl = String(formData.get("social_graphic_url") ?? "").trim();
+  if (socialGraphicPath && !socialGraphicPath.startsWith(`${ctx.churchId}/`)) {
+    return { ok: false, errors: ["Invalid social graphic path"] };
+  }
+
+  const errors: string[] = [];
+
+  // The saved image is the app poster. A new one replaces it only while the
+  // app is not showing it yet; otherwise it goes to Facebook alone.
+  if (
+    socialGraphicPath &&
+    socialGraphicUrl &&
+    socialGraphicPath !== announcement.social_graphic_path &&
+    (!inApp || !announcement.social_graphic_path)
+  ) {
+    await updateAnnouncementRow(ctx.supabase, ctx.churchId, announcement.id, {
+      social_graphic_path: socialGraphicPath,
+      social_graphic_url: socialGraphicUrl,
+      social_preview_generated_at: new Date().toISOString(),
+    });
+  }
+
+  if (addApp) {
+    const posterAltText = String(formData.get("poster_alt_text") ?? "").trim() || null;
+    const mobileResult = await applyMobilePublication({
+      churchId: ctx.churchId,
+      announcementId: announcement.id,
+      title: announcement.title,
+      body: announcement.body || null,
+      visibility: appVisibility,
+      isPinned: false,
+      pinnedUntil: null,
+      posterAltText,
+      startAt: announcement.start_at,
+      endAt: announcement.end_at,
+      allDay: Boolean(announcement.all_day),
+    });
+    if (!mobileResult.applied) {
+      errors.push(
+        mobileResult.unavailableReason === "migration_0054_missing"
+          ? "The app feed is unavailable — run `pnpm db:faithform-push`."
+          : "Could not publish to the app.",
+      );
+    }
+  }
+
+  const changes: Record<string, unknown> = {};
+  let queuedForWeeklyEmail = false;
+
+  if (addTeam) {
+    const googleConnected = await hasIntegration(ctx.churchId, "google", ctx.supabase);
+    if (googleConnected) {
+      changes.push_to_team = true;
+      queuedForWeeklyEmail = true;
+    } else {
+      errors.push("Google is not connected — weekly email not queued.");
+    }
+  }
+
+  let facebookUrl: string | undefined;
+  let facebookScheduledAt: string | undefined;
+
+  if (addFacebook) {
+    const facebookCaption = String(formData.get("facebook_caption") ?? "").trim();
+    try {
+      const result = await postEventToFacebook(ctx, {
+        title: announcement.title,
+        location: announcement.event_location ?? "",
+        startAt: announcement.start_at,
+        endAt: announcement.end_at,
+        allDay: Boolean(announcement.all_day),
+        notes: announcement.body,
+        caption: facebookCaption,
+        socialGraphicPath: socialGraphicPath || announcement.social_graphic_path || "",
+        timing: timing.ok ? timing.timing : { mode: "suggested" },
+      });
+      facebookUrl = result.url;
+      facebookScheduledAt = result.scheduledAt;
+      changes.push_to_facebook = true;
+      changes.facebook_post_id = result.postId;
+      changes.facebook_caption = facebookCaption || null;
+      changes.facebook_scheduled_publish_time = result.scheduledAt ?? null;
+    } catch (err) {
+      errors.push(err instanceof Error ? err.message : "Facebook post failed");
+    }
+  }
+
+  // The note describes this publish. An old failure the church has just
+  // fixed, such as Facebook not being connected, should not linger.
+  changes.last_publish_error = errors.length > 0 ? errors.join(" ") : null;
+
+  const saveError = await updateAnnouncementRow(
+    ctx.supabase,
+    ctx.churchId,
+    announcement.id,
+    changes,
+  );
+  if (saveError) errors.push(saveError);
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/announcements");
+
+  const saved = await getAnnouncement(ctx.supabase, ctx.churchId, announcement.id);
+
+  return {
+    ok: true,
+    announcementId: announcement.id,
+    facebookUrl,
+    facebookScheduledAt,
+    queuedForWeeklyEmail,
+    errors,
+    announcement: saved ?? undefined,
+  };
+}
+
+export type DeleteCalendarEventResult =
+  | {
+      ok: true;
+      /** Set when a live Facebook post was left up, so the church can remove it. */
+      facebookUrl?: string;
+      warnings: string[];
+    }
+  | { ok: false; error: string };
+
+/**
+ * Deletes an event from the church calendar, and takes it down from every
+ * place FaithForm published it.
+ *
+ * The calendar goes first. If it refuses, nothing else is touched, so an event
+ * that is still on the calendar never loses its announcement. After that the
+ * app listing and any notification not yet sent are withdrawn, a scheduled
+ * Facebook post is cancelled, it leaves the weekly email, check-in that has
+ * not opened is turned off, and the announcement is deleted. A Facebook post
+ * that is already live is deleted only when the church says so.
+ */
+export async function deleteCalendarEvent(input: {
+  eventId: string;
+  deleteLiveFacebookPost?: boolean;
+}): Promise<DeleteCalendarEventResult> {
+  const ctx = await requireChurchAndUser();
+  if (!ctx.churchId || !ctx.user) return { ok: false, error: "No church linked" };
+
+  const featureError = await featureActionError("announcements", ctx.supabase);
+  if (featureError) return { ok: false, error: featureError };
+
+  const auth = await getChurchAuth(ctx.supabase);
+  if (!auth?.isAdmin) {
+    return { ok: false, error: "Only church admins can delete events." };
+  }
+
+  const eventId = input.eventId.trim();
+  if (!eventId) return { ok: false, error: "Choose an event to delete." };
+
+  try {
+    await deleteChurchCalendarEvent(ctx.churchId, eventId, ctx.supabase);
+  } catch (err) {
+    if (err instanceof GoogleReconnectRequiredError) {
+      return { ok: false, error: "Google needs to be reconnected in Settings." };
+    }
+    if (err instanceof AppleReconnectRequiredError) {
+      return { ok: false, error: "iCloud needs to be reconnected in Settings." };
+    }
+    return {
+      ok: false,
+      error: err instanceof Error ? err.message : "Could not delete the event.",
+    };
+  }
+
+  const warnings: string[] = [];
+  let facebookUrl: string | undefined;
+
+  const { data: rows } = await ctx.supabase
+    .from("announcements")
+    .select("id")
+    .eq("church_id", ctx.churchId)
+    .eq("google_event_id", eventId);
+
+  for (const { id } of (rows ?? []) as { id: string }[]) {
+    const announcement = await getAnnouncement(ctx.supabase, ctx.churchId, id);
+    const postId = announcement?.facebook_post_id;
+
+    if (postId) {
+      const scheduledAt = announcement?.facebook_scheduled_publish_time ?? null;
+      const stillScheduled =
+        Boolean(scheduledAt) && new Date(scheduledAt!).getTime() > Date.now();
+
+      if (stillScheduled || input.deleteLiveFacebookPost) {
+        const result = await deleteFacebookPost(ctx.churchId, postId, ctx.supabase);
+        if (!result.ok) {
+          warnings.push(`The Facebook post could not be removed: ${result.error}`);
+          facebookUrl = facebookPostUrl(postId);
+        }
+      } else {
+        facebookUrl = facebookPostUrl(postId);
+      }
+    }
+
+    await withdrawMobilePublication(ctx.churchId, id).catch(() => undefined);
+
+    const { error } = await ctx.supabase
+      .from("announcements")
+      .delete()
+      .eq("id", id)
+      .eq("church_id", ctx.churchId);
+    if (error) {
+      warnings.push(`The event was deleted, but its announcement could not be: ${error.message}`);
+    }
+  }
+
+  // Every week's email, not just this one: it may have been queued ahead.
+  const { error: queueError } = await ctx.supabase
+    .from("announcement_email_queue")
+    .delete()
+    .eq("church_id", ctx.churchId)
+    .eq("google_event_id", eventId);
+  if (queueError && !/announcement_email_queue/i.test(queueError.message)) {
+    warnings.push("The event was deleted, but it may still be listed in the weekly email.");
+  }
+
+  try {
+    await cancelEventAttendanceForDeletedEvent({
+      churchId: ctx.churchId,
+      actorUserId: ctx.user.id,
+      calendarEventId: eventId,
+    });
+  } catch {
+    warnings.push("The event was deleted, but its check-in could not be turned off.");
+  }
+
+  revalidatePath("/dashboard");
+  revalidatePath("/dashboard/announcements");
+
+  return { ok: true, facebookUrl, warnings };
 }
 
 // Disconnecting moved to app/dashboard/settings/integration-actions.ts, where

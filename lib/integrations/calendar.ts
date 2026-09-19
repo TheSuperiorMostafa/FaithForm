@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
+  deleteAppleCalendarEvent,
   insertAppleCalendarEvent,
   isAppleEventId,
   listAppleCalendarEventsInRange,
@@ -8,6 +9,7 @@ import {
   READ_ONLY_ICLOUD_MESSAGE,
 } from "@/lib/integrations/apple-calendar";
 import {
+  deleteCalendarEvent,
   insertCalendarEvent,
   listCalendarEventsInRange,
   patchCalendarEvent,
@@ -162,4 +164,18 @@ export async function patchChurchCalendarEvent(
     },
     supabase,
   );
+}
+
+/** Deletes an event from whichever calendar it actually lives on. */
+export async function deleteChurchCalendarEvent(
+  churchId: string,
+  eventId: string,
+  supabase?: SupabaseClient,
+): Promise<void> {
+  if (isAppleEventId(eventId)) {
+    await deleteAppleCalendarEvent(churchId, eventId, supabase);
+    return;
+  }
+
+  await deleteCalendarEvent(churchId, eventId, supabase);
 }

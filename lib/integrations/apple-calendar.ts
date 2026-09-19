@@ -422,6 +422,7 @@ export function eventsFromAppleFeed(
     description: calendarDescriptionText(occurrence.description),
     source: "apple" as const,
     readOnly: true,
+    recurring: recurring.has(occurrence.uid),
   }));
 }
 
@@ -531,6 +532,7 @@ async function queryCalendarEvents(
         allDay: occurrence.allDay,
         description: calendarDescriptionText(occurrence.description),
         source: "apple",
+        recurring: recurring.has(occurrence.uid),
       });
     }
   }
@@ -770,6 +772,78 @@ export async function patchAppleCalendarEvent(
     if (err instanceof CalDavError && err.status === 412) {
       throw new CalDavError(
         "That event changed in Apple Calendar while you were editing. Reload and try again.",
+      );
+    }
+    throw err;
+  }
+}
+
+const REPEATING_ICLOUD_DELETE_MESSAGE =
+  "This is a repeating iCloud event. Delete it in Apple Calendar so you can choose which dates go.";
+
+/**
+ * Deletes a whole iCloud event.
+ *
+ * A repeating event is one file holding the entire series, so deleting it
+ * from here would take every week with it. That is refused, the same as an
+ * edit, and the church is sent to Apple Calendar. The event must also sit in
+ * the calendar the church connected: the Apple ID may hold other calendars
+ * FaithForm never showed, and nothing from them is deleted on its word.
+ */
+export async function deleteAppleCalendarEvent(
+  churchId: string,
+  eventId: string,
+  supabase?: SupabaseClient,
+): Promise<void> {
+  if (isReadOnlyAppleEventId(eventId)) {
+    throw new CalDavError(
+      "This event comes from your iCloud calendar link, so FaithForm cannot delete it. Delete it in Apple Calendar and it will disappear here.",
+    );
+  }
+
+  const parsedId = parseAppleEventId(eventId);
+  if (!parsedId) throw new CalDavError("That is not an iCloud event.");
+  if (parsedId.occurrenceId) throw new CalDavError(REPEATING_ICLOUD_DELETE_MESSAGE);
+
+  const connection = await getWritableAppleConnection(churchId, supabase);
+  const href = assertICloudUrl(parsedId.href);
+  const calendarPath = new URL(connection.calendarUrl).pathname.replace(/\/?$/, "/");
+  if (!new URL(href).pathname.startsWith(calendarPath)) {
+    throw new CalDavError("That event is not in the iCloud calendar FaithForm is connected to.");
+  }
+
+  let existing: { text: string; etag: string | null };
+  try {
+    existing = await calDavRequest(href, connection.credentials, {
+      method: "GET",
+      contentType: "text/calendar",
+    });
+  } catch (err) {
+    if (err instanceof CalDavAuthError) await flagReconnect(churchId, supabase);
+    if (err instanceof CalDavError && (err.status === 404 || err.status === 410)) return;
+    throw err;
+  }
+
+  if (
+    /^RRULE:/im.test(existing.text) ||
+    parseIcsEvents(existing.text).some((event) => event.rrule || event.recurrenceId)
+  ) {
+    throw new CalDavError(REPEATING_ICLOUD_DELETE_MESSAGE);
+  }
+
+  try {
+    await calDavRequest(href, connection.credentials, {
+      method: "DELETE",
+      contentType: "text/calendar",
+      // A change made in Apple Calendar since the read is not deleted blind.
+      headers: existing.etag ? { "If-Match": toEntityTag(existing.etag) } : {},
+    });
+  } catch (err) {
+    if (err instanceof CalDavAuthError) await flagReconnect(churchId, supabase);
+    if (err instanceof CalDavError && (err.status === 404 || err.status === 410)) return;
+    if (err instanceof CalDavError && err.status === 412) {
+      throw new CalDavError(
+        "That event changed in Apple Calendar a moment ago. Reload and try again.",
       );
     }
     throw err;
