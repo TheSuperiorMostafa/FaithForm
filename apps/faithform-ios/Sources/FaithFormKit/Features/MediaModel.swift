@@ -121,8 +121,6 @@ public final class MediaModel {
         }
         let live = await client.cachedLive(churchSlug: churchSlug, partition: partition)
         let liveValue = live.flatMap { $0.isDisplayable(now: now()) ? $0.value.live : nil }
-        let archiveStale = archive.freshness(now: now(), ttl: 300) != .fresh
-        let liveStale = live.map { $0.freshness(now: now(), ttl: 300) != .fresh } ?? false
         nextCursor = archive.value.nextCursor
         phase = .loaded(
             live: liveValue,
@@ -292,6 +290,18 @@ public final class MediaDetailModel {
 
     public func pause() async {
         await coordinator.pause()
+        playback = await coordinator.currentState()
+    }
+
+    /// Continues after a pause, without asking for a new grant.
+    public func resume() async {
+        await coordinator.play()
+        playback = await coordinator.currentState()
+    }
+
+    /// Moves to a point in the recording, in seconds from where it starts.
+    public func seek(to seconds: Double) async {
+        await coordinator.seek(to: seconds)
         playback = await coordinator.currentState()
     }
 

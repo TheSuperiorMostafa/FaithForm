@@ -1,3 +1,4 @@
+import { ServicePresentationLinker } from "@/components/live-streaming/service-presentation-linker";
 import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
@@ -87,6 +88,7 @@ export default async function SermonEditorPage({
           />
         </div>
       )}
+      {canShare && featuresEnabled && <div className="mx-auto w-full max-w-3xl"><ServicePresentationLinker sermonId={sermon.id} /></div>}
       {isSimple ? (
         <SimpleSermonDetail
           sermon={sermon}

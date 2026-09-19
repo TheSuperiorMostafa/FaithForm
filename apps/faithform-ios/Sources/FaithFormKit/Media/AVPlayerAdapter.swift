@@ -117,6 +117,7 @@ public actor AVPlayerAdapter: MediaPlayerFacade {
         #if os(iOS)
         switch command {
         case .load(let request):
+            capability = request.capability
             await load(request)
         case .play:
             // A failed item stays failed. Playing again means building the item
@@ -175,7 +176,9 @@ public actor AVPlayerAdapter: MediaPlayerFacade {
             asset = intercepted
         }
 
-        let item = AVPlayerItem(asset: asset)
+        // Duration is already supplied by the API. Do not hold first playback
+        // behind an extra duration scan of the asset.
+        let item = AVPlayerItem(asset: asset, automaticallyLoadedAssetKeys: [])
         if request.kind == .live {
             // After a stall, catch up to where the rest of the congregation is
             // rather than resuming a minute behind them.
@@ -223,7 +226,7 @@ public actor AVPlayerAdapter: MediaPlayerFacade {
         self.loader = loader
 
         let asset = AVURLAsset(url: interceptURL)
-        asset.resourceLoader.setDelegate(loader, queue: DispatchQueue(label: "faithform.media.loader"))
+        asset.resourceLoader.setDelegate(loader, queue: loader.queue)
         return asset
     }
 
@@ -328,6 +331,7 @@ public actor AVPlayerAdapter: MediaPlayerFacade {
             self.timeObserver = nil
         }
         item = nil
+        loader?.cancelAll()
         loader = nil
     }
 
@@ -417,114 +421,153 @@ public actor AVPlayerAdapter: MediaPlayerFacade {
 /// capability lives only in this object for as long as the session does. There
 /// is no download feature and no offline store — a `AVAssetDownloadTask` would
 /// be one, and there is none anywhere in this package.
-private final class CapabilityResourceLoader: NSObject, AVAssetResourceLoaderDelegate, @unchecked Sendable {
+private final class CapabilityResourceLoader: NSObject, AVAssetResourceLoaderDelegate, URLSessionDataDelegate, @unchecked Sendable {
+    // Resource-loader and URLSession callbacks share one serial queue. Only
+    // capability replacement crosses queues, guarded separately by the lock.
+    let queue = DispatchQueue(label: "faithform.media.loader")
     private let lock = NSLock()
     private var capability: String
     private let realScheme: String
     private let onFailure: @Sendable (PlayerFailure) -> Void
-    private let session: URLSession
-
-    init(
-        capability: String,
-        realScheme: String,
-        onFailure: @escaping @Sendable (PlayerFailure) -> Void
-    ) {
-        self.capability = capability
-        self.realScheme = realScheme
-        self.onFailure = onFailure
-
+    private var transfers: [Int: AVAssetResourceLoadingRequest] = [:]
+    private var stopped = false
+    private lazy var session: URLSession = {
         let configuration = URLSessionConfiguration.ephemeral
-        // **Nothing on disk.** An ephemeral session keeps no cache, no cookies
-        // and no credential store, so a capability and a segment cannot outlive
-        // the session that fetched them.
         configuration.urlCache = nil
         configuration.requestCachePolicy = .reloadIgnoringLocalAndRemoteCacheData
         configuration.httpCookieStorage = nil
         configuration.httpShouldSetCookies = false
-        self.session = URLSession(configuration: configuration)
+        let callbacks = OperationQueue()
+        callbacks.maxConcurrentOperationCount = 1
+        callbacks.underlyingQueue = queue
+        return URLSession(configuration: configuration, delegate: self, delegateQueue: callbacks)
+    }()
+    private var tasks: [Int: URLSessionDataTask] = [:]
+
+    init(capability: String, realScheme: String, onFailure: @escaping @Sendable (PlayerFailure) -> Void) {
+        self.capability = capability
+        self.realScheme = realScheme
+        self.onFailure = onFailure
         super.init()
     }
 
     func update(capability: String) {
-        lock.lock()
-        self.capability = capability
-        lock.unlock()
+        lock.withLock { self.capability = capability }
     }
 
-    private func currentCapability() -> String {
-        lock.lock()
-        defer { lock.unlock() }
-        return capability
+    func cancelAll() {
+        queue.async { [self] in
+            stopped = true
+            transfers.removeAll()
+            tasks.removeAll()
+            session.invalidateAndCancel()
+        }
     }
 
     func resourceLoader(
         _ resourceLoader: AVAssetResourceLoader,
-        shouldWaitForLoadingOfRequestedResource loadingRequest: AVAssetResourceLoadingRequest,
+        shouldWaitForLoadingOfRequestedResource loadingRequest: AVAssetResourceLoadingRequest
     ) -> Bool {
-        guard
-            let requestedURL = loadingRequest.request.url,
-            var components = URLComponents(url: requestedURL, resolvingAgainstBaseURL: false)
+        guard !stopped else { return false }
+        guard let requestedURL = loadingRequest.request.url,
+              var components = URLComponents(url: requestedURL, resolvingAgainstBaseURL: false)
         else { return false }
-
         components.scheme = realScheme
         guard let url = components.url else { return false }
-
         var request = URLRequest(url: url)
-        request.setValue("Bearer \(currentCapability())", forHTTPHeaderField: "Authorization")
+        request.setValue("Bearer \(lock.withLock { capability })", forHTTPHeaderField: "Authorization")
         request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
-
-        // Byte ranges, so a recording can be scrubbed. Without this the player
-        // downloads from zero on every seek and refuses to scrub at all.
-        if let dataRequest = loadingRequest.dataRequest, dataRequest.requestedOffset > 0
-            || dataRequest.requestedLength != Int.max {
-            let start = dataRequest.requestedOffset
-            let end = start + Int64(dataRequest.requestedLength) - 1
-            request.setValue("bytes=\(start)-\(end)", forHTTPHeaderField: "Range")
+        if let data = loadingRequest.dataRequest {
+            let start = max(data.requestedOffset, data.currentOffset)
+            if data.requestsAllDataToEndOfResource {
+                request.setValue("bytes=\(start)-", forHTTPHeaderField: "Range")
+            } else {
+                let end = data.requestedOffset + Int64(data.requestedLength) - 1
+                request.setValue("bytes=\(start)-\(max(start, end))", forHTTPHeaderField: "Range")
+            }
+        } else {
+            // Metadata needs headers, not the entire recording.
+            request.setValue("bytes=0-1", forHTTPHeaderField: "Range")
         }
-
-        session.dataTask(with: request) { [weak self] data, response, error in
-            guard let self else { return }
-
-            if error != nil {
-                // The transport's own message can name a host and a path.
-                // Only the class of failure crosses back.
-                loadingRequest.finishLoading(with: URLError(.cannotLoadFromNetwork))
-                self.onFailure(.network)
-                return
-            }
-
-            guard let http = response as? HTTPURLResponse else {
-                loadingRequest.finishLoading(with: URLError(.badServerResponse))
-                self.onFailure(.unknown)
-                return
-            }
-
-            guard (200...299).contains(http.statusCode) else {
-                loadingRequest.finishLoading(with: URLError(.badServerResponse))
-                self.onFailure(PlayerFailureMapping.from(statusCode: http.statusCode))
-                return
-            }
-
-            if let contentInformation = loadingRequest.contentInformationRequest {
-                // A UTI, not a MIME type: that is what this property is
-                // documented to hold, and a MIME string here leaves the asset
-                // unidentifiable.
-                contentInformation.contentType = Self.uniformType(
-                    forMIMEType: http.value(forHTTPHeaderField: "Content-Type")
-                )
-                contentInformation.isByteRangeAccessSupported = http.statusCode == 206
-                    || http.value(forHTTPHeaderField: "Accept-Ranges")?.lowercased() == "bytes"
-                // The **whole** resource's length. The first request is a
-                // two-byte probe, and a 206's own length would tell the player
-                // the recording is two bytes long.
-                contentInformation.contentLength = Self.totalLength(of: http)
-            }
-
-            if let data { loadingRequest.dataRequest?.respond(with: data) }
-            loadingRequest.finishLoading()
-        }.resume()
-
+        let task = session.dataTask(with: request)
+        transfers[task.taskIdentifier] = loadingRequest
+        tasks[task.taskIdentifier] = task
+        task.resume()
         return true
+    }
+
+    func resourceLoader(_ resourceLoader: AVAssetResourceLoader, didCancel loadingRequest: AVAssetResourceLoadingRequest) {
+        guard let id = transfers.first(where: { $0.value === loadingRequest })?.key else { return }
+        transfers.removeValue(forKey: id)
+        tasks.removeValue(forKey: id)?.cancel()
+    }
+
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive response: URLResponse,
+                    completionHandler: @escaping @Sendable (URLSession.ResponseDisposition) -> Void) {
+        guard let loading = transfers[dataTask.taskIdentifier], !loading.isCancelled else {
+            completionHandler(.cancel); return
+        }
+        guard let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) else {
+            fail(dataTask, failure: (response as? HTTPURLResponse).map { PlayerFailureMapping.from(statusCode: $0.statusCode) } ?? .unknown)
+            completionHandler(.cancel); return
+        }
+        let offset = loading.dataRequest.map { max($0.requestedOffset, $0.currentOffset) } ?? 0
+        // A server ignoring Range must never deliver byte zero at a seek offset.
+        let responseOffset = http.value(forHTTPHeaderField: "Content-Range")?
+            .split(separator: " ").last?.split(separator: "-").first.flatMap { Int64($0) }
+        guard (http.statusCode == 206 && responseOffset == offset) || (http.statusCode == 200 && offset == 0) else {
+            fail(dataTask, failure: .network); completionHandler(.cancel); return
+        }
+        if let info = loading.contentInformationRequest {
+            info.contentType = Self.uniformType(forMIMEType: http.value(forHTTPHeaderField: "Content-Type"))
+            info.isByteRangeAccessSupported = http.statusCode == 206 || http.value(forHTTPHeaderField: "Accept-Ranges")?.lowercased() == "bytes"
+            info.contentLength = Self.totalLength(of: http)
+        }
+        if loading.dataRequest == nil {
+            finish(dataTask); completionHandler(.cancel)
+        } else {
+            completionHandler(.allow)
+        }
+    }
+
+    func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
+        guard let loading = transfers[dataTask.taskIdentifier], !loading.isCancelled,
+              let requested = loading.dataRequest else { return }
+        // Feed AVFoundation as bytes arrive. A completion-handler data task
+        // buffers the entire range, delaying playback by minutes on long files.
+        if requested.requestsAllDataToEndOfResource {
+            requested.respond(with: data)
+        } else {
+            let remaining = max(0, requested.requestedOffset + Int64(requested.requestedLength) - max(requested.currentOffset, requested.requestedOffset))
+            requested.respond(with: Data(data.prefix(Int(min(Int64(data.count), remaining)))))
+            if requested.currentOffset >= requested.requestedOffset + Int64(requested.requestedLength) {
+                finish(dataTask)
+                dataTask.cancel()
+            }
+        }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        guard let loading = transfers[task.taskIdentifier] else { return }
+        if loading.isCancelled {
+            transfers.removeValue(forKey: task.taskIdentifier)
+            tasks.removeValue(forKey: task.taskIdentifier)
+        } else if error != nil {
+            fail(task, failure: .network)
+        } else {
+            finish(task)
+        }
+    }
+
+    private func finish(_ task: URLSessionTask) {
+        tasks.removeValue(forKey: task.taskIdentifier)
+        transfers.removeValue(forKey: task.taskIdentifier)?.finishLoading()
+    }
+
+    private func fail(_ task: URLSessionTask, failure: PlayerFailure) {
+        tasks.removeValue(forKey: task.taskIdentifier)
+        transfers.removeValue(forKey: task.taskIdentifier)?.finishLoading(with: URLError(.cannotLoadFromNetwork))
+        onFailure(failure)
     }
 
     /// `Content-Range: bytes 0-1/48213000` → 48213000; a 200's own length otherwise.

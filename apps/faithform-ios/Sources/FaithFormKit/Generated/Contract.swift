@@ -2542,7 +2542,50 @@ public struct GeofenceConfigResponse: Codable, Hashable, Sendable {
 
 /// Unknown additive fields are ignored by Codable, which is what lets a
 /// released client keep working when the server adds one.
+public struct LinkedPresentation: Codable, Hashable, Sendable {
+    public let presentationId: String
+    public let sermonId: String
+    public let title: String
+
+    public init(
+        presentationId: String,
+        sermonId: String,
+        title: String
+    ) {
+        self.presentationId = presentationId
+        self.sermonId = sermonId
+        self.title = title
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct LinkedService: Codable, Hashable, Sendable {
+    public let mediaId: String
+    public let kind: String
+    public let title: String
+    public let startsAt: String
+    public let posterUrl: String?
+
+    public init(
+        mediaId: String,
+        kind: String,
+        title: String,
+        startsAt: String,
+        posterUrl: String? = nil
+    ) {
+        self.mediaId = mediaId
+        self.kind = kind
+        self.title = title
+        self.startsAt = startsAt
+        self.posterUrl = posterUrl
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
 public struct LiveMedia: Codable, Hashable, Sendable {
+    public let presentation: LinkedPresentation?
     public let state: String
     public let mediaId: String
     public let kind: String
@@ -2557,6 +2600,7 @@ public struct LiveMedia: Codable, Hashable, Sendable {
     public let replayMediaId: String?
 
     public init(
+        presentation: LinkedPresentation? = nil,
         state: String,
         mediaId: String,
         kind: String,
@@ -2570,6 +2614,7 @@ public struct LiveMedia: Codable, Hashable, Sendable {
         churchTimezone: String,
         replayMediaId: String? = nil
     ) {
+        self.presentation = presentation
         self.state = state
         self.mediaId = mediaId
         self.kind = kind
@@ -2672,6 +2717,7 @@ public struct MediaPage: Codable, Hashable, Sendable {
 /// Unknown additive fields are ignored by Codable, which is what lets a
 /// released client keep working when the server adds one.
 public struct MediaDetail: Codable, Hashable, Sendable {
+    public let presentation: LinkedPresentation?
     public let mediaId: String
     public let kind: String
     public let title: String
@@ -2691,6 +2737,7 @@ public struct MediaDetail: Codable, Hashable, Sendable {
     public let churchTimezone: String
 
     public init(
+        presentation: LinkedPresentation? = nil,
         mediaId: String,
         kind: String,
         title: String,
@@ -2709,6 +2756,7 @@ public struct MediaDetail: Codable, Hashable, Sendable {
         churchName: String,
         churchTimezone: String
     ) {
+        self.presentation = presentation
         self.mediaId = mediaId
         self.kind = kind
         self.title = title
@@ -2852,6 +2900,7 @@ public struct SermonQuestion: Codable, Hashable, Sendable {
 /// Unknown additive fields are ignored by Codable, which is what lets a
 /// released client keep working when the server adds one.
 public struct SermonDetail: Codable, Hashable, Sendable {
+    public let linkedServices: [LinkedService]?
     public let sermonId: String
     public let title: String
     public let summary: String?
@@ -2867,6 +2916,7 @@ public struct SermonDetail: Codable, Hashable, Sendable {
     public let discussionQuestions: [SermonQuestion]
 
     public init(
+        linkedServices: [LinkedService]? = nil,
         sermonId: String,
         title: String,
         summary: String? = nil,
@@ -2881,6 +2931,7 @@ public struct SermonDetail: Codable, Hashable, Sendable {
         outline: SermonOutline? = nil,
         discussionQuestions: [SermonQuestion]
     ) {
+        self.linkedServices = linkedServices
         self.sermonId = sermonId
         self.title = title
         self.summary = summary
@@ -3074,6 +3125,7 @@ public struct PresentationRenditions: Codable, Hashable, Sendable {
 /// Unknown additive fields are ignored by Codable, which is what lets a
 /// released client keep working when the server adds one.
 public struct PresentationDetail: Codable, Hashable, Sendable {
+    public let linkedServices: [LinkedService]?
     public let presentationId: String
     public let sermonId: String
     public let version: Int
@@ -3091,6 +3143,7 @@ public struct PresentationDetail: Codable, Hashable, Sendable {
     public let renditions: PresentationRenditions
 
     public init(
+        linkedServices: [LinkedService]? = nil,
         presentationId: String,
         sermonId: String,
         version: Int,
@@ -3107,6 +3160,7 @@ public struct PresentationDetail: Codable, Hashable, Sendable {
         theme: PresentationTheme? = nil,
         renditions: PresentationRenditions
     ) {
+        self.linkedServices = linkedServices
         self.presentationId = presentationId
         self.sermonId = sermonId
         self.version = version

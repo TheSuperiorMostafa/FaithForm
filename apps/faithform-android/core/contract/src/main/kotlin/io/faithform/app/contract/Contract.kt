@@ -1524,7 +1524,32 @@ data class GeofenceConfigResponse(
  * which is what lets a released client keep working when the server adds one.
  */
 @Serializable
+data class LinkedPresentation(
+    val presentationId: String,
+    val sermonId: String,
+    val title: String
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class LinkedService(
+    val mediaId: String,
+    val kind: String,
+    val title: String,
+    val startsAt: String,
+    val posterUrl: String? = null
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
 data class LiveMedia(
+    val presentation: LinkedPresentation? = null,
     val state: String,
     val mediaId: String,
     val kind: String,
@@ -1588,6 +1613,7 @@ data class MediaPage(
  */
 @Serializable
 data class MediaDetail(
+    val presentation: LinkedPresentation? = null,
     val mediaId: String,
     val kind: String,
     val title: String,
@@ -1678,6 +1704,7 @@ data class SermonQuestion(
  */
 @Serializable
 data class SermonDetail(
+    val linkedServices: List<LinkedService>? = null,
     val sermonId: String,
     val title: String,
     val summary: String? = null,
@@ -1787,6 +1814,7 @@ data class PresentationRenditions(
  */
 @Serializable
 data class PresentationDetail(
+    val linkedServices: List<LinkedService>? = null,
     val presentationId: String,
     val sermonId: String,
     val version: Int,

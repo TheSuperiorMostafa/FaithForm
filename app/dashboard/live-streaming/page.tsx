@@ -1,3 +1,4 @@
+import { ServicePresentationLinker } from "@/components/live-streaming/service-presentation-linker";
 import { redirect } from "next/navigation";
 
 import { BroadcastControlCenter } from "@/components/live-streaming/broadcast/control-center";
@@ -63,6 +64,8 @@ export default async function LiveStreamingPage() {
           primaryColor: (churchRow.data?.giving_primary_color as string | null) ?? "#002D5F",
         }}
       />
+
+      {auth.isAdmin && <ServicePresentationLinker />}
 
       <ScheduleCard
         isAdmin={auth.isAdmin}

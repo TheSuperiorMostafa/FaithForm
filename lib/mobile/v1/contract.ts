@@ -866,8 +866,23 @@ export const liveMediaStateSchema = z.enum(["live", "upcoming", "recent_ended"])
  * `isLive: false`: a home screen must not render a frame around nothing, and an
  * absent object is much harder to accidentally draw than a falsy flag.
  */
+export const linkedPresentationSchema = z.object({
+  presentationId: z.string(),
+  sermonId: z.string(),
+  title: z.string(),
+}).meta({ id: "LinkedPresentation" });
+
+export const linkedServiceSchema = z.object({
+  mediaId: z.string(),
+  kind: mediaKindSchema,
+  title: z.string(),
+  startsAt: instant,
+  posterUrl: z.string().nullable(),
+}).meta({ id: "LinkedService" });
+
 export const liveMediaSchema = z
   .object({
+    presentation: linkedPresentationSchema.nullable().optional(),
     state: liveMediaStateSchema,
     /** Opaque. A `stream_events` id, but the client never needs to know that. */
     mediaId: z.string(),
@@ -936,6 +951,7 @@ export const mediaPageSchema = z
 
 export const mediaDetailSchema = z
   .object({
+    presentation: linkedPresentationSchema.nullable().optional(),
     mediaId: z.string(),
     kind: z.literal("recording"),
     title: z.string(),
@@ -1047,6 +1063,7 @@ export const sermonQuestionSchema = z
 
 export const sermonDetailSchema = z
   .object({
+    linkedServices: z.array(linkedServiceSchema).optional(),
     sermonId: z.string(),
     title: z.string(),
     summary: z.string().nullable(),
@@ -1133,6 +1150,7 @@ export const presentationRenditionsSchema = z
 
 export const presentationDetailSchema = z
   .object({
+    linkedServices: z.array(linkedServiceSchema).optional(),
     presentationId: z.string(),
     sermonId: z.string(),
     version: z.number().int(),
@@ -1941,6 +1959,8 @@ export const CONTRACT_SCHEMAS = {
   AttendanceSourceAvailability: attendanceSourceAvailabilitySchema,
   GeofenceConfiguration: geofenceConfigurationSchema,
   GeofenceConfigResponse: geofenceConfigResponseSchema,
+  LinkedPresentation: linkedPresentationSchema,
+  LinkedService: linkedServiceSchema,
   LiveMedia: liveMediaSchema,
   LiveMediaResponse: liveMediaResponseSchema,
   ArchiveItem: archiveItemSchema,

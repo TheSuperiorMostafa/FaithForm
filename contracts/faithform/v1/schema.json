@@ -4002,10 +4002,82 @@
         }
       }
     },
+    "LinkedPresentation": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "presentationId": {
+          "type": "string"
+        },
+        "sermonId": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "presentationId",
+        "sermonId",
+        "title"
+      ],
+      "additionalProperties": false
+    },
+    "LinkedService": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "mediaId": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "live",
+            "recording"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "startsAt": {
+          "type": "string",
+          "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+        },
+        "posterUrl": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "mediaId",
+        "kind",
+        "title",
+        "startsAt",
+        "posterUrl"
+      ],
+      "additionalProperties": false
+    },
     "LiveMedia": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "object",
       "properties": {
+        "presentation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LinkedPresentation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "state": {
           "type": "string",
           "enum": [
@@ -4081,7 +4153,29 @@
         "churchName",
         "churchTimezone"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "$defs": {
+        "LinkedPresentation": {
+          "type": "object",
+          "properties": {
+            "presentationId": {
+              "type": "string"
+            },
+            "sermonId": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "presentationId",
+            "sermonId",
+            "title"
+          ],
+          "additionalProperties": false
+        }
+      }
     },
     "LiveMediaResponse": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -4112,6 +4206,16 @@
         "LiveMedia": {
           "type": "object",
           "properties": {
+            "presentation": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/LinkedPresentation"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
             "state": {
               "type": "string",
               "enum": [
@@ -4186,6 +4290,26 @@
             "churchSlug",
             "churchName",
             "churchTimezone"
+          ],
+          "additionalProperties": false
+        },
+        "LinkedPresentation": {
+          "type": "object",
+          "properties": {
+            "presentationId": {
+              "type": "string"
+            },
+            "sermonId": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "presentationId",
+            "sermonId",
+            "title"
           ],
           "additionalProperties": false
         }
@@ -4439,6 +4563,16 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "object",
       "properties": {
+        "presentation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LinkedPresentation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "mediaId": {
           "type": "string"
         },
@@ -4558,7 +4692,29 @@
         "churchName",
         "churchTimezone"
       ],
-      "additionalProperties": false
+      "additionalProperties": false,
+      "$defs": {
+        "LinkedPresentation": {
+          "type": "object",
+          "properties": {
+            "presentationId": {
+              "type": "string"
+            },
+            "sermonId": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "presentationId",
+            "sermonId",
+            "title"
+          ],
+          "additionalProperties": false
+        }
+      }
     },
     "SermonListItem": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -5075,6 +5231,12 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "object",
       "properties": {
+        "linkedServices": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LinkedService"
+          }
+        },
         "sermonId": {
           "type": "string"
         },
@@ -5171,6 +5333,46 @@
       ],
       "additionalProperties": false,
       "$defs": {
+        "LinkedService": {
+          "type": "object",
+          "properties": {
+            "mediaId": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "live",
+                "recording"
+              ]
+            },
+            "title": {
+              "type": "string"
+            },
+            "startsAt": {
+              "type": "string",
+              "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+            },
+            "posterUrl": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "mediaId",
+            "kind",
+            "title",
+            "startsAt",
+            "posterUrl"
+          ],
+          "additionalProperties": false
+        },
         "SermonOutline": {
           "type": "object",
           "properties": {
@@ -5813,6 +6015,12 @@
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "object",
       "properties": {
+        "linkedServices": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LinkedService"
+          }
+        },
         "presentationId": {
           "type": "string"
         },
@@ -5905,6 +6113,46 @@
       ],
       "additionalProperties": false,
       "$defs": {
+        "LinkedService": {
+          "type": "object",
+          "properties": {
+            "mediaId": {
+              "type": "string"
+            },
+            "kind": {
+              "type": "string",
+              "enum": [
+                "live",
+                "recording"
+              ]
+            },
+            "title": {
+              "type": "string"
+            },
+            "startsAt": {
+              "type": "string",
+              "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+            },
+            "posterUrl": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "mediaId",
+            "kind",
+            "title",
+            "startsAt",
+            "posterUrl"
+          ],
+          "additionalProperties": false
+        },
         "PresentationPage": {
           "type": "object",
           "properties": {

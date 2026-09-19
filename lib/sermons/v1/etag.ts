@@ -59,6 +59,7 @@ export function presentationDetailEtag(
     kind: "presentation-detail",
     presentationId: detail.presentationId,
     contentHash: detail.contentHash,
+    linkedServices: detail.linkedServices ?? [],
     version: detail.version,
     scope,
   });

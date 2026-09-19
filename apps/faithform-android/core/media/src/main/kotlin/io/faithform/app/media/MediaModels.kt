@@ -217,6 +217,8 @@ fun MediaDetail.toCard() = MediaArchiveCard(
     seriesName = seriesName,
     speakers = speakers,
     churchTimezone = churchTimezone,
+    startOffsetSeconds = startOffsetSeconds,
+    presentation = presentation,
 )
 
 fun LiveMedia.toCard() = MediaLiveCard(
@@ -227,6 +229,8 @@ fun LiveMedia.toCard() = MediaLiveCard(
     posterUrl = posterUrl,
     churchName = churchName,
     churchTimezone = churchTimezone,
+    replayMediaId = replayMediaId,
+    presentation = presentation,
 )
 
 /**
@@ -286,6 +290,7 @@ class MediaDetailModel(
      * play after a pause must not ask for a new capability or lose the place.
      */
     suspend fun play() {
+        if (_state.value.playback is PlaybackSessionState.Preparing) return
         val current = coordinator.currentState()
         val sessionUnderWay = coordinator.currentSchedule() != null && (
             current is PlaybackSessionState.Paused ||
@@ -308,6 +313,7 @@ class MediaDetailModel(
      * failed needs a new item, not the old one played again.
      */
     suspend fun restart() {
+        _state.update { it.copy(playback = PlaybackSessionState.Preparing) }
         coordinator.start(churchSlug, kind, mediaId, partition.storageKey)
         publish()
         if (coordinator.currentState() is PlaybackSessionState.Buffering) {
@@ -318,6 +324,12 @@ class MediaDetailModel(
 
     suspend fun pause() {
         coordinator.pause()
+        publish()
+    }
+
+    /** Moves to a point in the recording, in milliseconds from where it starts. */
+    suspend fun seek(millis: Long) {
+        coordinator.seek(millis.coerceAtLeast(0))
         publish()
     }
 

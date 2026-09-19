@@ -9,6 +9,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.dp
 import io.faithform.app.ui.groups.GroupsHost
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -26,6 +27,7 @@ import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ScaffoldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -108,6 +110,8 @@ fun SignedInHost(
     val church = bootstrap.relationships.firstOrNull { it.churchSlug == selectedSlug }
     val partition = viewModel.partition(selectedSlug)
     val tabStates = rememberSaveableStateHolder()
+    var recordingFullScreen by remember { mutableStateOf(false) }
+    val hideChrome = recordingFullScreen && current == HostTab.WATCH
 
     // "Watch live" from any tab opens here, over the tabs and the bar, and
     // starts playing — the person asked to watch, not to be taken somewhere
@@ -122,6 +126,7 @@ fun SignedInHost(
                 resumePositions = container.resumePositions,
                 partition = partition,
                 onClose = viewModel::closeLive,
+                presentationClient = container.presentationClient,
             )
             return
         }
@@ -131,8 +136,9 @@ fun SignedInHost(
 
     Scaffold(
         containerColor = theme.palette.background,
+        contentWindowInsets = if (hideChrome) WindowInsets(0, 0, 0, 0) else ScaffoldDefaults.contentWindowInsets,
         bottomBar = {
-            NavigationBar(containerColor = theme.palette.surface) {
+            if (!hideChrome) NavigationBar(containerColor = theme.palette.surface) {
                 tabs.forEach { tab ->
                     val label = stringResource(tab.titleRes)
                     NavigationBarItem(
@@ -159,12 +165,12 @@ fun SignedInHost(
                 .consumeWindowInsets(inner)
                 .imePadding(),
         ) {
-            if (HostTab.GROUPS in tabs) Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (HostTab.GROUPS in tabs && !hideChrome) Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (current == HostTab.ACCOUNT) IconButton(onClick = { viewModel.selectTab(HostTab.HOME) }) { Icon(Icons.Outlined.ArrowBack, "Back to home") }
                 Text("Your community", style = MaterialTheme.typography.labelMedium, color = theme.palette.contentSecondary, modifier = Modifier.weight(1f))
                 IconButton(onClick = { viewModel.selectTab(HostTab.ACCOUNT) }) { Icon(Icons.Outlined.AccountCircle, "Your account") }
             }
-            if (isStale) StaleBanner(stringResource(R.string.offline_cached))
+            if (isStale && !hideChrome) StaleBanner(stringResource(R.string.offline_cached))
 
             tabStates.SaveableStateProvider(current.name) {
                 when (current) {
@@ -227,6 +233,7 @@ fun SignedInHost(
                             churchSlug = church.churchSlug,
                             partition = partition,
                             church = church,
+                            onFullScreenChanged = { recordingFullScreen = it },
                         )
                     }
 

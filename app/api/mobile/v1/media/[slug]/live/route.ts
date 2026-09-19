@@ -40,6 +40,8 @@ export const GET = optionalAuthRoute(
             live.posterUrl ?? "",
             live.countdownEnabled ? "1" : "0",
             live.publicationVersion,
+            live.replayMediaId ?? "",
+            live.presentation ?? null,
           ]
         : null,
       scope: userId ? "member" : "anonymous",

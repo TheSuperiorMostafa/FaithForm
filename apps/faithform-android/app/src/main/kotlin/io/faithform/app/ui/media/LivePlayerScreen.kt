@@ -1,20 +1,19 @@
 package io.faithform.app.ui.media
 
-import android.app.Activity
 import android.content.Context
-import android.content.ContextWrapper
-import android.view.accessibility.AccessibilityManager
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -22,13 +21,17 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Slideshow
+import androidx.compose.material3.TextButton
+import io.faithform.app.contract.LinkedPresentation
+import io.faithform.app.sermons.PresentationClient
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -48,26 +51,16 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
-import androidx.compose.ui.semantics.clearAndSetSemantics
-import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.ui.AspectRatioFrameLayout
-import androidx.media3.ui.PlayerView
 import io.faithform.app.R
 import io.faithform.app.WatchingLive
 import io.faithform.app.design.FaithFormTokens
@@ -110,9 +103,10 @@ fun LivePlayerScreen(
     resumePositions: ResumePositionStore,
     partition: CachePartition,
     onClose: () -> Unit,
+    presentationClient: PresentationClient? = null,
 ) {
     val appContext = LocalContext.current.applicationContext
-    val activity = LocalContext.current.findActivity()
+    val activity = LocalContext.current.findHostActivity()
     val card = watching.card
 
     // One session per tap on "Watch live", kept across rotation.
@@ -124,6 +118,8 @@ fun LivePlayerScreen(
     }
     val session = holder.value
     val model = session.model
+    val presentation by session.presentation.collectAsStateWithLifecycle()
+    var showPresentation by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(holder) { holder.launchOnce("start") { model.start() } }
 
@@ -139,56 +135,105 @@ fun LivePlayerScreen(
     }
     LifecycleEventEffect(Lifecycle.Event.ON_START) { holder.launch { model.enterForeground() } }
 
-    BackHandler(onBack = onClose)
-    ImmersiveWhileShown()
+    val landscape = isLandscape()
+    val toggleFullScreen = rememberFullScreenToggle()
+    BackHandler { if (landscape) toggleFullScreen(false) else onClose() }
+    SystemBarsHidden(immersive = landscape)
 
     val phase by model.phase.collectAsStateWithLifecycle()
     val player by session.adapter.videoPlayerState.collectAsStateWithLifecycle()
-    val touchExploring = remember(appContext) {
-        appContext.getSystemService(AccessibilityManager::class.java)?.isTouchExplorationEnabled == true
-    }
+    val touchExploring = touchExplorationEnabled()
 
     var controlsShown by rememberSaveable { mutableStateOf(true) }
     val showsControls = controlsShown || touchExploring || phase != LivePlayerModel.Phase.PLAYING
-    LaunchedEffect(phase, controlsShown) {
-        if (phase == LivePlayerModel.Phase.PLAYING && controlsShown) {
+    LaunchedEffect(phase, controlsShown, touchExploring) {
+        if (phase == LivePlayerModel.Phase.PLAYING && controlsShown && !touchExploring) {
             delay(3_000)
             controlsShown = false
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
-            // A tap on the picture shows or hides the controls. Not a click
-            // target: to TalkBack the picture is not a button, the controls are.
-            .pointerInput(Unit) { detectTapGestures(onTap = { controlsShown = !controlsShown }) },
-    ) {
-        VideoSurface(player = player, modifier = Modifier.fillMaxSize())
-
-        LiveStatus(
-            phase = phase,
-            onRetry = { holder.launch { model.retry() } },
-            onClose = onClose,
-            modifier = Modifier.align(Alignment.Center),
-        )
-
-        AnimatedVisibility(
-            visible = showsControls,
-            enter = fadeIn(),
-            exit = fadeOut(),
-            modifier = Modifier.fillMaxSize(),
+    val stage: @Composable (Modifier) -> Unit = { modifier ->
+        Box(
+            modifier = modifier.background(Color.Black)
+                .pointerInput(Unit) { detectTapGestures(onTap = { controlsShown = !controlsShown }) },
         ) {
-            LiveControls(
-                title = card.title,
+            VideoSurface(player = player, modifier = Modifier.fillMaxSize())
+            if (phase == LivePlayerModel.Phase.CONNECTING) {
+                StreamThumbnail(url = card.posterUrl, modifier = Modifier.fillMaxSize())
+                Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.35f)))
+            }
+            LiveStatus(
                 phase = phase,
+                onRetry = { holder.launch { model.retry() } },
                 onClose = onClose,
-                onPause = { holder.launch { model.pause() } },
-                onResume = { holder.launch { model.resume() } },
+                modifier = Modifier.align(Alignment.Center),
             )
+            AnimatedVisibility(
+                visible = showsControls,
+                enter = fadeIn(),
+                exit = fadeOut(),
+                modifier = Modifier.matchParentSize(),
+            ) {
+                LiveControls(
+                    title = card.title,
+                    phase = phase,
+                    fullScreen = landscape,
+                    onClose = onClose,
+                    onOpenPresentation = if (presentation != null && presentationClient != null) ({ showPresentation = true }) else null,
+                    onToggleFullScreen = { toggleFullScreen(!landscape) },
+                    onPause = { holder.launch { model.pause() } },
+                    onResume = { holder.launch { model.resume() } },
+                )
+            }
         }
     }
+    Box(Modifier.fillMaxSize().background(Color.Black)) {
+        if (landscape) {
+            stage(Modifier.fillMaxSize())
+        } else {
+            Column(Modifier.fillMaxSize().safeDrawingPadding().verticalScroll(rememberScrollState())) {
+                IconButton(onClick = onClose, modifier = Modifier.padding(horizontal = FaithFormTokens.Spacing.base)) {
+                    Icon(Icons.Filled.Close, stringResource(R.string.media_close_player), tint = Color.White)
+                }
+                stage(Modifier.fillMaxWidth().aspectRatio(16f / 9f))
+                Column(
+                    modifier = Modifier.padding(FaithFormTokens.Layout.screenPaddingHorizontal),
+                    verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm),
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm),
+                    ) {
+                        if (phase != LivePlayerModel.Phase.ENDED && phase != LivePlayerModel.Phase.UNAVAILABLE) {
+                            LiveBadge()
+                        }
+                        Text(
+                            stringResource(when (phase) {
+                                LivePlayerModel.Phase.ENDED -> R.string.media_live_ended
+                                LivePlayerModel.Phase.UNAVAILABLE -> R.string.media_live_unavailable
+                                else -> R.string.media_watching_live
+                            }),
+                            color = Color.White.copy(alpha = 0.75f),
+                            style = MaterialTheme.typography.labelLarge,
+                        )
+                    }
+                    Text(card.title, color = Color.White, style = MaterialTheme.typography.headlineMedium)
+                    if (presentation != null && presentationClient != null) {
+                        TextButton(onClick = { showPresentation = true }) {
+                            Text(stringResource(R.string.media_open_presentation), color = Color.White)
+                        }
+                    }
+                    Text(card.churchName, color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.bodyLarge)
+                }
+            }
+        }
+    }
+    val linked = presentation
+    if (showPresentation && linked != null && presentationClient != null) {
+        ServicePresentationSheet(presentationClient, watching.churchSlug, partition, linked.presentationId) { showPresentation = false }
+    }
+
 }
 
 /**
@@ -201,6 +246,7 @@ fun LivePlayerScreen(
 internal class LiveSession private constructor(
     val adapter: Media3PlayerAdapter,
     val model: LivePlayerModel,
+    val presentation: StateFlow<LinkedPresentation?>,
     private val scope: CoroutineScope,
 ) {
     fun release() {
@@ -219,6 +265,7 @@ internal class LiveSession private constructor(
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
             val adapter = Media3PlayerAdapter(context)
             val card = watching.card
+            val presentation = MutableStateFlow(card.presentation)
             val detail = MediaDetailModel(
                 client = client,
                 coordinator = MediaPlaybackCoordinator(client, adapter, resumePositions),
@@ -238,6 +285,7 @@ internal class LiveSession private constructor(
                     // ended" here and the hero disappearing there agree.
                     try {
                         val live = client.live(watching.churchSlug, partition).live
+                        presentation.value = live?.takeIf { it.mediaId == card.mediaId }?.presentation
                         if (live != null && live.mediaId == card.mediaId && live.state == "live") {
                             LiveAvailability.LIVE
                         } else {
@@ -252,32 +300,9 @@ internal class LiveSession private constructor(
                 scope = scope,
             )
             adapter.setEventHandler { event -> scope.launch { model.handle(event) } }
-            return LiveSession(adapter, model, scope)
+            return LiveSession(adapter, model, presentation, scope)
         }
     }
-}
-
-@androidx.annotation.OptIn(UnstableApi::class)
-@Composable
-private fun VideoSurface(player: androidx.media3.common.Player?, modifier: Modifier) {
-    AndroidView(
-        factory = { context ->
-            PlayerView(context).apply {
-                useController = false
-                resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                setShutterBackgroundColor(android.graphics.Color.BLACK)
-                setKeepContentOnPlayerReset(true)
-                // A service is watched, not glanced at: the screen stays on.
-                keepScreenOn = true
-                importantForAccessibility = android.view.View.IMPORTANT_FOR_ACCESSIBILITY_NO
-            }
-        },
-        // Re-run whenever the player changes: created by the first play,
-        // replaced after a release, gone when the screen closes.
-        update = { view -> view.player = player },
-        onRelease = { view -> view.player = null },
-        modifier = modifier,
-    )
 }
 
 @Composable
@@ -303,7 +328,7 @@ private fun LiveStatus(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.md),
             ) {
-                CircularProgressIndicator(color = Color.White)
+                VideoLoadingRing()
                 Text(text, color = Color.White.copy(alpha = 0.9f), textAlign = TextAlign.Center)
             }
         }
@@ -381,102 +406,66 @@ private fun LiveMessage(
 private fun LiveControls(
     title: String,
     phase: LivePlayerModel.Phase,
+    fullScreen: Boolean,
     onClose: () -> Unit,
+    onOpenPresentation: (() -> Unit)?,
+    onToggleFullScreen: () -> Unit,
     onPause: () -> Unit,
     onResume: () -> Unit,
 ) {
-    val liveBadge = stringResource(R.string.media_live_now_badge)
+    val playable = phase == LivePlayerModel.Phase.PLAYING || phase == LivePlayerModel.Phase.PAUSED
     Box(
-        Modifier
-            .fillMaxSize()
-            .background(
+        Modifier.fillMaxSize()
+            .then(if (playable) Modifier.background(
                 Brush.verticalGradient(
-                    0f to Color.Black.copy(alpha = 0.55f),
+                    0f to Color.Black.copy(alpha = 0.4f),
                     0.3f to Color.Transparent,
                     0.8f to Color.Transparent,
                     1f to Color.Black.copy(alpha = 0.35f),
                 ),
-            )
-            .safeDrawingPadding(),
+            ) else Modifier)
+            .then(if (fullScreen) Modifier.safeDrawingPadding() else Modifier),
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = FaithFormTokens.Spacing.md, vertical = FaithFormTokens.Spacing.sm),
+            modifier = Modifier.fillMaxWidth().padding(FaithFormTokens.Spacing.md),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.md),
         ) {
-            IconButton(
-                onClick = onClose,
-                modifier = Modifier.background(Color.Black.copy(alpha = 0.45f), CircleShape),
-            ) {
-                Icon(
-                    Icons.Filled.Close,
-                    contentDescription = stringResource(R.string.media_close_player),
-                    tint = Color.White,
-                )
+            if (fullScreen) {
+                IconButton(onClick = onClose, modifier = Modifier.background(Color.Black.copy(alpha = 0.4f), CircleShape)) {
+                    Icon(Icons.Filled.Close, stringResource(R.string.media_close_player), tint = Color.White)
+                }
             }
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm),
-                modifier = Modifier
-                    .background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(50))
-                    .padding(horizontal = FaithFormTokens.Spacing.sm, vertical = FaithFormTokens.Spacing.xs)
-                    .clearAndSetSemantics { contentDescription = liveBadge },
-            ) {
-                Box(Modifier.size(8.dp).background(Color.Red, CircleShape))
-                Text(liveBadge, style = MaterialTheme.typography.labelMedium, color = Color.White)
+            if (playable) {
+                LiveBadge(compact = !fullScreen)
+                if (fullScreen) {
+                    Text(title, color = Color.White, style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                }
             }
-            Text(
-                title,
-                style = MaterialTheme.typography.titleMedium,
-                color = Color.White,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-            Spacer(Modifier.size(FaithFormTokens.Spacing.sm))
         }
-
-        if (phase == LivePlayerModel.Phase.PLAYING || phase == LivePlayerModel.Phase.PAUSED) {
+        if (playable) {
             val playing = phase == LivePlayerModel.Phase.PLAYING
-            IconButton(
-                onClick = if (playing) onPause else onResume,
-                modifier = Modifier
-                    .align(Alignment.Center)
-                    .size(72.dp)
-                    .background(Color.Black.copy(alpha = 0.45f), CircleShape),
-            ) {
-                Icon(
-                    if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                    contentDescription = stringResource(if (playing) R.string.media_pause else R.string.media_play),
-                    tint = Color.White,
-                    modifier = Modifier.size(36.dp),
-                )
+            Box(Modifier.align(Alignment.Center)) {
+                RoundControl(
+                    size = if (fullScreen) 76.dp else 64.dp,
+                    label = stringResource(if (playing) R.string.media_pause else R.string.media_play),
+                    onClick = if (playing) onPause else onResume,
+                ) {
+                    Icon(if (playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                        contentDescription = null, tint = Color.White, modifier = Modifier.size(34.dp))
+                }
             }
         }
+        if (onOpenPresentation != null) {
+            IconButton(onClick = onOpenPresentation, modifier = Modifier.align(Alignment.BottomStart)) {
+                Icon(Icons.Filled.Slideshow, stringResource(R.string.media_open_presentation), tint = Color.White)
+            }
+        }
+        FullScreenControl(
+            fullScreen = fullScreen,
+            onClick = onToggleFullScreen,
+            modifier = Modifier.align(Alignment.BottomEnd).padding(horizontal = FaithFormTokens.Spacing.sm),
+        )
     }
-}
-
-/**
- * Hides the status and navigation bars while the player is up, and brings
- * them back when it closes. A swipe from the edge shows them for a moment,
- * as it does in every video app.
- */
-@Composable
-private fun ImmersiveWhileShown() {
-    val view = LocalView.current
-    DisposableEffect(view) {
-        val window = view.context.findActivity()?.window
-        val controller = window?.let { WindowCompat.getInsetsController(it, view) }
-        controller?.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        controller?.hide(WindowInsetsCompat.Type.systemBars())
-        onDispose { controller?.show(WindowInsetsCompat.Type.systemBars()) }
-    }
-}
-
-private tailrec fun Context.findActivity(): Activity? = when (this) {
-    is Activity -> this
-    is ContextWrapper -> baseContext.findActivity()
-    else -> null
 }

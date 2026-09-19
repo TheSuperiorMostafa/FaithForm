@@ -55,6 +55,12 @@ cat > "${WORK}${ROUTE}/index.m3u8" <<EOF
 ${ROUTE}/stream.m3u8
 EOF
 
+# A fast-start progressive recording for incremental loading and rotation tests.
+ffmpeg -nostdin -loglevel error -f lavfi -i "testsrc2=size=640x360:rate=24" \
+  -f lavfi -i "sine=frequency=440:sample_rate=48000" -t 90 \
+  -c:v libx264 -preset ultrafast -b:v 1000k -g 24 -pix_fmt yuv420p \
+  -c:a aac -b:a 64k -movflags +faststart "$WORK/proof-recording.mp4"
+
 # A live encoder, in real time: a test card and a tone, like a church's feed.
 ffmpeg -loglevel error -re \
   -f lavfi -i "testsrc2=size=1280x720:rate=30" \
@@ -78,6 +84,7 @@ for _ in $(seq 1 60); do
   fi
   sleep 0.5
 done
+kill -0 "$SERVER_PID" # Do not accidentally test against another run's server.
 curl -fsS "http://127.0.0.1:${PORT}${ROUTE}/index.m3u8" >/dev/null
 
 xcodegen generate --spec project.yml --quiet

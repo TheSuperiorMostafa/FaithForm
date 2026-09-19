@@ -5,8 +5,16 @@ import android.view.View
 import android.view.ViewGroup
 import androidx.activity.ComponentActivity
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import io.faithform.app.contract.LinkedPresentation
+import io.faithform.app.sermons.PresentationClient
+import org.junit.Assert.assertSame
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.media3.common.C
+import androidx.media3.common.Player
+import androidx.media3.common.Timeline
 import androidx.media3.ui.PlayerView
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -55,8 +63,7 @@ class LivePlaybackProofTest {
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
     private val partition = CachePartition("proof", "account-a", "grace", 1)
 
-    private fun client() = MediaClient(
-        ApiClient(
+    private fun api() = ApiClient(
             environment = ApiEnvironment("proof", origin!!),
             clientBuild = 1,
             transport = OkHttpExchange.transport(),
@@ -64,9 +71,9 @@ class LivePlaybackProofTest {
                 override suspend fun validAccessToken() = "proof"
                 override suspend fun invalidate() = Unit
             },
-        ),
-        ProjectionCache(PartitionedCache()),
-    )
+        )
+
+    private fun client() = MediaClient(api(), ProjectionCache(PartitionedCache()))
 
     @Test
     fun aLiveStreamPlaysThroughTheAdapterWithMovingPictures() = runBlocking {
@@ -97,10 +104,10 @@ class LivePlaybackProofTest {
                 ?.getTrackFormat(0)
         }
         assertTrue("no video track is playing", (video?.width ?: 0) > 0)
-        val before = withContext(Dispatchers.Main) { player!!.currentPosition }
+        val before = withContext(Dispatchers.Main) { player!!.streamPositionMillis() }
         delay(1_500)
-        val after = withContext(Dispatchers.Main) { player!!.currentPosition }
-        assertTrue("playback did not advance", after > before)
+        val after = withContext(Dispatchers.Main) { player!!.streamPositionMillis() }
+        assertTrue("playback did not advance: $before -> $after", after > before)
         assertFalse(events.any { it is PlayerEvent.Failed })
 
         adapter.send(PlayerCommand.Stop)
@@ -152,6 +159,51 @@ class LivePlaybackProofTest {
             Thread.sleep(holdSeconds * 1_000)
         }
     }
+
+    @Test
+    fun openingTheLinkedPresentationKeepsTheSameLivePlayerRunning() {
+        assumeTrue("no liveOrigin argument", origin != null)
+        val card = MediaLiveCard("live", "e1", "Sunday Worship", "2026-09-20T14:00:00Z", null,
+            "Grace Community", "America/New_York", presentation = LinkedPresentation("p1", "s1", "Sunday slides"))
+        rule.setContent {
+            LivePlayerScreen(
+                watching = WatchingLive("grace", card), client = client(),
+                resumePositions = InMemoryResumePositionStore(), partition = partition, onClose = {},
+                presentationClient = PresentationClient(api(), ProjectionCache(PartitionedCache())),
+            )
+        }
+        rule.waitUntil(20_000) {
+            rule.onAllNodesWithContentDescription(context.getString(R.string.media_pause)).fetchSemanticsNodes().isNotEmpty()
+        }
+        var player: Player? = null
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            player = rule.activity.window.decorView.findPlayerView()?.player
+        }
+        rule.onNodeWithText(context.getString(R.string.media_open_presentation)).performClick()
+        rule.waitUntil(15_000) {
+            rule.onAllNodesWithText("Grace in action").fetchSemanticsNodes().isNotEmpty()
+        }
+        var before = 0L
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            assertSame(player, rule.activity.window.decorView.findPlayerView()?.player)
+            assertTrue("opening slides paused the service", player!!.isPlaying)
+            before = player!!.streamPositionMillis()
+        }
+        Thread.sleep(1_500)
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            assertTrue("service stopped while reading slides", player!!.streamPositionMillis() > before)
+        }
+        rule.onNodeWithText(context.getString(R.string.media_back_to_service)).performClick()
+        InstrumentationRegistry.getInstrumentation().runOnMainSync {
+            assertSame(player, rule.activity.window.decorView.findPlayerView()?.player)
+        }
+    }
+
+    // currentPosition is relative to the sliding live window: it can decrease
+    // as old segments leave the playlist even while video keeps playing.
+    // Compare positions relative to the HLS period instead.
+    private fun Player.streamPositionMillis(): Long = currentPosition +
+        currentTimeline.getWindow(currentMediaItemIndex, Timeline.Window()).positionInFirstPeriodMs
 
     private fun View.findPlayerView(): PlayerView? {
         if (this is PlayerView) return this

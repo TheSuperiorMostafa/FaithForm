@@ -1,3 +1,4 @@
+import AVFoundation
 import SwiftUI
 import FaithFormKit
 
@@ -67,7 +68,9 @@ struct WatchTabView: View {
                         model: features.media,
                         onOpen: { path.append(.recording(mediaId: $0.mediaId)) },
                         // Full screen and playing, exactly as from Home.
-                        onWatchLive: { root.watchLive($0) }
+                        onWatchLive: { root.watchLive($0) },
+                        // "Today's service has ended" becomes its replay.
+                        onOpenRecording: { path.append(.recording(mediaId: $0)) }
                     )
                 case .sermons, .slides:
                     SermonListView(
@@ -192,7 +195,12 @@ private struct OnceModel<Model: AnyObject, Content: View>: View {
 }
 
 /// One past service.
+///
+/// Upright: the player across the top, the service's details beneath. Turned
+/// sideways — or after tapping full screen, which rotates even with rotation
+/// lock on — the player fills the screen and everything else steps aside.
 struct RecordingScreen: View {
+    @State private var showPresentation = false
     let features: ChurchFeatures
     let mediaId: String
 
@@ -201,14 +209,16 @@ struct RecordingScreen: View {
             make: { features.mediaDetail(mediaId: mediaId) },
             onCreate: { model in await Self.connect(model, to: features) }
         ) { model in
-            VStack(spacing: 0) {
-                VideoFrame(features: features)
-                MediaDetailScreen(model: model)
-            }
-            .navigationBarTitleDisplayMode(.inline)
-            // Reclaimed on every appearance, not only the first: the live
-            // player may have held the shared player's events in between.
-            .task { await Self.connect(model, to: features) }
+            RecordingLayout(model: model, player: features.player.videoPlayer, onOpenPresentation: { showPresentation = true })
+                .sheet(isPresented: $showPresentation) {
+                    if case let .loaded(detail) = model.phase, let presentation = detail.presentation {
+                        ServicePresentationSheet(features: features, presentationId: presentation.presentationId)
+                    }
+                }
+                .navigationBarTitleDisplayMode(.inline)
+                // Reclaimed on every appearance, not only the first: the live
+                // player may have held the shared player's events in between.
+                .task { await Self.connect(model, to: features) }
         }
     }
 
@@ -216,8 +226,7 @@ struct RecordingScreen: View {
     ///
     /// The player is shared by the church's screens, and only one is ever on
     /// top, so whichever appeared last is the one that hears it buffer, start,
-    /// and fail. Without this the model never learns playback started, and the
-    /// button never turns from Play into Pause.
+    /// and fail. Without this the model never learns playback started.
     static func connect(_ model: MediaDetailModel, to features: ChurchFeatures) async {
         await features.player.setEventHandler { event in
             Task { @MainActor in await model.handle(event) }
@@ -225,19 +234,58 @@ struct RecordingScreen: View {
     }
 }
 
-/// The picture, above a recording's details.
-///
-/// 16:9, because that is what a service is filmed in, and pinned above the
-/// scrolling text so the video stays in view while a person reads the summary.
-/// Black until Play: the surface displays the church's shared player and starts
-/// nothing itself.
-private struct VideoFrame: View {
-    let features: ChurchFeatures
+struct RecordingLayout: View {
+    let model: MediaDetailModel
+    let player: AVPlayer
+    var onOpenPresentation: (@MainActor () -> Void)? = nil
 
     var body: some View {
-        MediaVideoSurface(player: features.player.videoPlayer)
-            .aspectRatio(16.0 / 9.0, contentMode: .fit)
-            .frame(maxWidth: .infinity)
+        GeometryReader { geometry in
+            let landscape = geometry.size.width > geometry.size.height
+            VStack(spacing: 0) {
+                // Keep the same stage and AVPlayerLayer in both orientations.
+                stage(fullScreen: landscape)
+                    .frame(height: landscape ? geometry.size.height : geometry.size.width * 9 / 16)
+                if !landscape {
+                    if case let .loaded(detail) = model.phase, detail.presentation != nil, let onOpenPresentation {
+                        Button(L.mediaOpenPresentation, action: onOpenPresentation)
+                            .buttonStyle(.bordered).padding(.top)
+                    }
+                    MediaDetailScreen(model: model)
+                }
+            }
+            .ignoresSafeArea(edges: landscape ? .all : [])
+            .background(landscape ? Color.black : Color.clear)
+            .toolbar(landscape ? .hidden : .visible, for: .navigationBar)
+            .toolbar(landscape ? .hidden : .visible, for: .tabBar)
+            .statusBarHidden(landscape)
+            .persistentSystemOverlays(landscape ? .hidden : .automatic)
+        }
+        .task { await model.load() }
+        .onDisappear {
+            ScreenOrientation.enterPortrait()
+            // Only leaving the player screen ends the session, never hiding
+            // its metadata when the phone rotates.
+            Task { await model.stop() }
+        }
+    }
+
+    private func stage(fullScreen: Bool) -> some View {
+        let detail: MediaDetail? = {
+            if case let .loaded(detail) = model.phase { return detail }
+            return nil
+        }()
+        return RecordingStage(
+            model: model,
+            player: player,
+            posterUrl: detail?.posterUrl,
+            startOffset: Double(detail?.startOffsetSeconds ?? 0),
+            knownDuration: detail?.durationSeconds.map(Double.init),
+            isFullScreen: fullScreen,
+            onToggleFullScreen: {
+                if fullScreen { ScreenOrientation.enterPortrait() } else { ScreenOrientation.enterLandscape() }
+            }
+        )
     }
 }
 
@@ -248,8 +296,19 @@ struct SermonScreen: View {
 
     var body: some View {
         OnceModel(make: { features.sermonDetail(sermonId: sermonId) }) { model in
-            SermonDetailView(model: model)
-                .navigationBarTitleDisplayMode(.inline)
+            VStack(spacing: 0) {
+                if case let .loaded(detail) = model.phase {
+                    RelatedServices(features: features, services: detail.linkedServices ?? [])
+                }
+                SermonDetailView(model: model)
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .task {
+                while !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(30))
+                    if !Task.isCancelled { await model.load() }
+                }
+            }
         }
     }
 }
@@ -258,13 +317,25 @@ struct SermonScreen: View {
 struct PresentationScreen: View {
     let features: ChurchFeatures
     let presentationId: String
+    var showsLinkedServices = true
 
     var body: some View {
         OnceModel(
             make: { features.presentationDetail(presentationId: presentationId) },
             loading: .slides
         ) { model in
-            PresentationViewer(model: model)
+            VStack(spacing: 0) {
+                if showsLinkedServices, case let .loaded(detail) = model.phase {
+                    RelatedServices(features: features, services: detail.linkedServices ?? [])
+                }
+                PresentationViewer(model: model)
+            }
+            .task {
+                while showsLinkedServices && !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(30))
+                    if !Task.isCancelled { await model.load() }
+                }
+            }
         }
     }
 }

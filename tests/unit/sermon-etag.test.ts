@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { sermonArchiveEtag, sermonDetailEtag } from "@/lib/sermons/v1/etag";
+import { presentationDetailEtag, sermonArchiveEtag, sermonDetailEtag } from "@/lib/sermons/v1/etag";
 import { __testing } from "@/lib/sermons/v1/sermon-service";
 import type {
   SermonDetailDto,
@@ -118,4 +118,20 @@ test("publishedAt reaches a phone as a UTC instant ending in Z", () => {
   assert.equal(utcInstant("2026-09-13T14:03:22.123456+00:00"), "2026-09-13T14:03:22.123Z");
   assert.equal(utcInstant("2026-09-13T10:03:22-04:00"), "2026-09-13T14:03:22.000Z");
   assert.equal(utcInstant("2026-09-13T14:03:22Z"), "2026-09-13T14:03:22.000Z");
+});
+
+
+test("linked service changes invalidate cached notes and immutable slide decks", () => {
+  const live = { mediaId: "event1", kind: "live" as const, title: "Sunday", startsAt: "2026-09-20T14:00:00Z", posterUrl: null };
+  const recording = { ...live, mediaId: "recording1", kind: "recording" as const };
+  const deck = {
+    presentationId: "presentation1", sermonId: detail.sermonId, title: detail.title,
+    version: 1, contentHash: "same-slides", publishedAt: detail.publishedAt,
+    pageCount: 0, pages: [], scriptureRefs: [], seriesName: null, theme: null,
+    renditions: { slides: [] }, churchSlug: detail.churchSlug,
+    churchName: detail.churchName, churchTimezone: detail.churchTimezone,
+  };
+  const states = [[], [live], [recording]];
+  assert.equal(new Set(states.map(linkedServices => presentationDetailEtag({ ...deck, linkedServices }, "member"))).size, 3);
+  assert.equal(new Set(states.map(linkedServices => sermonDetailEtag({ ...detail, linkedServices }, "member"))).size, 3);
 });

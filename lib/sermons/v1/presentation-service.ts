@@ -1,3 +1,4 @@
+import { getLinkedServices, type LinkedServiceDto } from "@/lib/sermons/v1/service-links";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { VisitorError } from "@/lib/faithform/errors";
 import { isChurchFeatureEnabled } from "@/lib/features/access";
@@ -71,6 +72,7 @@ export type PresentationListItemDto = {
 };
 
 export type PresentationDetailDto = PresentationListItemDto & {
+  linkedServices?: LinkedServiceDto[];
   pages: PresentationPage[];
   theme: PresentationThemeSnapshot | null;
   renditions: { slides: Array<{ pageId: string; imagePath?: string; imageUrl?: string }>; pdfPath?: string };
@@ -245,6 +247,7 @@ export async function getPresentationDetail(input: {
   const pages = projectPages(row.manifest);
 
   return {
+    linkedServices: await getLinkedServices(input.churchSlug, relationshipState, { presentationId: input.presentationId }),
     ...projectListItem(row, input.churchSlug),
     pageCount: pages.length || Number(row.page_count ?? 0),
     pages,

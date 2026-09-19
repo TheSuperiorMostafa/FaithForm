@@ -1,3 +1,4 @@
+import { getLinkedServices, type LinkedServiceDto } from "@/lib/sermons/v1/service-links";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { VisitorError } from "@/lib/faithform/errors";
 import { isChurchFeatureEnabled } from "@/lib/features/access";
@@ -102,6 +103,7 @@ export type SermonListItemDto = {
 };
 
 export type SermonDetailDto = SermonListItemDto & {
+  linkedServices?: LinkedServiceDto[];
   outline: SermonOutlineDto | null;
   discussionQuestions: SermonQuestionDto[];
 };
@@ -307,6 +309,7 @@ export async function getSermonDetail(input: {
   if (!row) return null;
 
   return {
+    linkedServices: await getLinkedServices(input.churchSlug, relationshipState, { sermonId: input.sermonId }),
     ...projectListItem(row, input.churchSlug),
     outline: projectOutline(row.outline),
     discussionQuestions: projectQuestions(row.discussion_questions),

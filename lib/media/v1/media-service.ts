@@ -1,3 +1,4 @@
+import { getLinkedPresentation, type LinkedPresentationDto } from "@/lib/sermons/v1/service-links";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { VisitorError } from "@/lib/faithform/errors";
 import { getVisitorAccount } from "@/lib/faithform/account";
@@ -49,6 +50,7 @@ async function requireChurchSlug(slug: string): Promise<void> {
 export type LiveMediaState = "live" | "upcoming" | "recent_ended";
 
 export type LiveMediaDto = {
+  presentation?: LinkedPresentationDto | null;
   state: LiveMediaState;
   mediaId: string;
   kind: "live";
@@ -91,16 +93,21 @@ export async function getLiveMedia(input: {
   const row = ((data ?? []) as Record<string, unknown>[])[0];
   if (!row) return { live: null, version };
 
+  const thumbnail = await streamThumbnail(row.event_id as string, row.state as LiveMediaState);
+
   return {
     version,
     live: {
+      presentation: await getLinkedPresentation(input.churchSlug, relationshipState, "live", row.event_id as string),
       state: row.state as LiveMediaState,
       mediaId: row.event_id as string,
       kind: "live",
       title: row.title as string,
       startsAt: row.starts_at as string,
       countdownEnabled: Boolean(row.countdown_enabled),
-      posterUrl: (row.poster_url as string | null) ?? null,
+      // A picture of the service itself, taken from the stream, wins over any
+      // artwork: it is what a member will actually see when they tap.
+      posterUrl: thumbnail ?? (row.poster_url as string | null) ?? null,
       publicationVersion: Number(row.publication_version ?? 1),
       churchSlug: input.churchSlug,
       churchName: row.church_name as string,
@@ -108,6 +115,44 @@ export async function getLiveMedia(input: {
       replayMediaId: (row.replay_media_id as string | null) ?? null,
     },
   };
+}
+
+/**
+ * The newest frame the relay captured from this service's stream.
+ *
+ * While live, the latest one (refreshed every couple of minutes, so the card
+ * shows what is happening now); after it ends, the frame chosen for the
+ * recording. Frames are public images of a service that is itself published,
+ * and the event id came from the church-scoped projection above.
+ */
+async function streamThumbnail(eventId: string, state: LiveMediaState): Promise<string | null> {
+  if (state === "upcoming") return null;
+  const admin = createAdminClient();
+  const { data: recording } = await admin
+    .from("stream_recordings")
+    .select("id, auto_poster_url, mobile_poster_url")
+    .eq("stream_event_id", eventId)
+    .is("deleted_at", null)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!recording) return null;
+
+  if (state === "recent_ended") {
+    const chosen =
+      (recording.mobile_poster_url as string | null) ?? (recording.auto_poster_url as string | null);
+    if (chosen) return chosen;
+  }
+
+  const { data: frame } = await admin
+    .from("stream_recording_frames")
+    .select("public_url")
+    .eq("recording_id", recording.id as string)
+    .eq("status", "uploaded")
+    .order("captured_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return (frame?.public_url as string | null) ?? (recording.auto_poster_url as string | null) ?? null;
 }
 
 // ---------------------------------------------------------------------------
@@ -197,6 +242,7 @@ export async function getArchivePage(input: {
 // ---------------------------------------------------------------------------
 
 export type MediaDetailDto = ArchiveItemDto & {
+  presentation?: LinkedPresentationDto | null;
   chapters: string[];
   topics: string[];
   /** Where the trimmed recording starts inside the stored file. */
@@ -230,6 +276,7 @@ export async function getMediaDetail(input: {
   if (!row) return null;
 
   return {
+    presentation: await getLinkedPresentation(input.churchSlug, relationshipState, "recording", input.mediaId),
     mediaId: row.id as string,
     kind: "recording",
     title: row.title as string,

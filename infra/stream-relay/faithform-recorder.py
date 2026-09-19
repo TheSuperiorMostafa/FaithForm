@@ -42,7 +42,11 @@ RTSP_PORT = os.environ.get("RTSP_PORT", "8554")
 TAKES = Path(os.environ.get("FAITHFORM_TAKES_DIR", str(HOME / "mediamtx" / "recordings" / "takes")))
 PIDS = HOME / "mediamtx" / "pids"
 SEGMENT_SECONDS = 6
-FRAME_EVERY = 50  # one thumbnail candidate per ~5 minutes
+# Thumbnails: one early (~15s in, past the black of a stream starting) so the
+# live card has a picture almost at once, then one every ~2 minutes so it stays
+# current and a recording has frames to choose from.
+FRAME_EVERY = 20
+FRAME_OFFSET = 2
 BATCH = 10
 KEEP_DONE_DAYS = 7
 PATH_RE = re.compile(r"^live/[0-9a-fA-F-]{36}$")
@@ -180,7 +184,7 @@ def process_take(take_dir, final=False):
         for seg in batch:
             items.append({"kind": "segment", "seq": seg["seq"], "startedAt": seg["startedAt"],
                           "durationSec": seg["durationSec"], "bytes": (take_dir / seg["file"]).stat().st_size})
-            if seg["seq"] % FRAME_EVERY == 0 and str(seg["seq"]) not in state["frames"]:
+            if seg["seq"] % FRAME_EVERY == FRAME_OFFSET and str(seg["seq"]) not in state["frames"]:
                 items.append({"kind": "frame", "seq": seg["seq"], "startedAt": seg["startedAt"]})
         answer = call("/api/stream/relay/recording/prepare",
                       {"path": meta["path"], "takeId": meta["takeId"],

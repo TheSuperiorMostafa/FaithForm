@@ -13,6 +13,7 @@ struct LivePlayerScreen: View {
     let live: LiveMedia
     let onClose: @MainActor () -> Void
 
+    @State private var showPresentation = false
     @State private var model: LivePlayerModel?
 
     var body: some View {
@@ -22,10 +23,16 @@ struct LivePlayerScreen: View {
                     model: model,
                     player: features.player.videoPlayer,
                     live: live,
-                    onClose: onClose
+                    onClose: onClose,
+                    onOpenPresentation: presentationAction
                 )
             } else {
                 Color.black.ignoresSafeArea()
+            }
+        }
+        .sheet(isPresented: $showPresentation) {
+            if let presentation = currentPresentation {
+                ServicePresentationSheet(features: features, presentationId: presentation.presentationId)
             }
         }
         .task {
@@ -51,6 +58,18 @@ struct LivePlayerScreen: View {
             guard let model else { return }
             Task { await model.stop() }
         }
+    }
+
+    private var presentationAction: (@MainActor @Sendable () -> Void)? {
+        guard currentPresentation != nil else { return nil }
+        return { @MainActor in showPresentation = true }
+    }
+
+    private var currentPresentation: LinkedPresentation? {
+        if case let .loaded(current, _, _) = features.media.phase, let current, current.mediaId == live.mediaId {
+            return current.presentation
+        }
+        return live.presentation
     }
 
     private func makeModel() -> LivePlayerModel {

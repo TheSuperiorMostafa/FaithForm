@@ -4,6 +4,9 @@ import io.faithform.app.network.HttpResponse
 import io.faithform.app.network.ProjectionCache
 import io.faithform.app.network.RecordingTransport
 import io.faithform.app.storage.PartitionedCache
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -39,13 +42,31 @@ class MediaListModelTest {
 
     @Test
     fun `a live service is carried through with a watch button`() = runTest {
-        val (model, _) = model(ok(LIVE_ON), ok(archivePage()))
+        val linked = LIVE_ON.replace("\"posterUrl\":null", "\"posterUrl\":null,\"presentation\":{\"presentationId\":\"slides1\",\"sermonId\":\"sermon1\",\"title\":\"Sunday slides\"}")
+        val (model, _) = model(ok(linked), ok(archivePage()))
         model.load()
 
         val live = model.state.value.liveCard!!
         assertTrue(live.offersWatch)
         assertEquals("live-1", live.mediaId)
+        assertEquals("slides1", live.presentation?.presentationId)
         assertEquals(MediaScreenState.EmptyReason.NOTHING_PUBLISHED, model.state.value.emptyReason)
+    }
+
+    @Test
+    fun `an ended service links only to its published replay`() = runTest {
+        val ended = LIVE_ON.replace("\"state\":\"live\"", "\"state\":\"recent_ended\"")
+        val replay = ended.replace("\"posterUrl\":null", "\"posterUrl\":null,\"replayMediaId\":\"r1\"")
+        val (model, _) = model(ok(replay), ok(archivePage("r1")), ok(ended), ok(archivePage()))
+        model.load()
+        val card = model.state.value.liveCard!!
+        assertEquals("r1", card.replayMediaId)
+        assertTrue(card.offersReplay)
+        assertFalse(card.offersWatch)
+
+        model.refresh()
+        assertFalse(model.state.value.liveCard!!.offersReplay)
+        assertFalse(model.state.value.liveCard!!.offersWatch)
     }
 
     @Test
@@ -99,6 +120,28 @@ class MediaListModelTest {
 class MediaDetailModelTest {
 
     @Test
+    fun `waiting for a grant shows loading and ignores a second play tap`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        val granter = FakeGranter().apply { this.gate = gate }
+        val player = FakePlayer()
+        val model = MediaDetailModel(
+            client = MediaClient(api(RecordingTransport(mutableListOf())), ProjectionCache(PartitionedCache())),
+            coordinator = MediaPlaybackCoordinator(granter, player, InMemoryResumePositionStore()),
+            churchSlug = "grace",
+            mediaId = "r1",
+            kind = MediaPlaybackKind.RECORDING,
+            partition = PARTITION,
+        )
+        val play = launch(start = CoroutineStart.UNDISPATCHED) { model.play() }
+        assertTrue(model.state.value.isBuffering)
+        model.play()
+        assertEquals(1, granter.calls.size)
+        gate.complete(Unit)
+        play.join()
+        assertEquals(1, player.loadCount)
+    }
+
+    @Test
     fun `a recording loads its detail and plays through a fresh grant`() = runTest {
         val transport = RecordingTransport(mutableListOf(HttpResponse(200, envelope(DETAIL), emptyMap())))
         val client = MediaClient(api(transport), ProjectionCache(PartitionedCache()))
@@ -115,6 +158,7 @@ class MediaDetailModelTest {
 
         model.load()
         assertEquals("The road to Emmaus", model.state.value.detail?.title)
+        assertEquals(12, model.state.value.detail?.startOffsetSeconds)
         assertTrue(model.state.value.offersPlay)
 
         model.play()
@@ -128,6 +172,13 @@ class MediaDetailModelTest {
         model.play()
         assertEquals("resuming asked for a new capability", 1, granter.calls.size)
         assertEquals(1, player.loadCount)
+
+        // UI positions are relative to the trimmed service. The adapter adds
+        // the file offset exactly once, so the model must not add it here.
+        model.seek(15_000)
+        assertEquals(PlayerCommand.Seek(15_000), player.commands.last())
+        model.seek(-5_000)
+        assertEquals(PlayerCommand.Seek(0), player.commands.last())
     }
 
     @Test

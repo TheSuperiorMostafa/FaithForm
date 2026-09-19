@@ -120,12 +120,23 @@ struct LivePlaybackProofTests {
                 .faithformTheme(nil)
         )
         host.modalPresentationStyle = .fullScreen
-        let presenter = try #require(TopViewController.resolve())
-        presenter.present(host, animated: false)
+        let window = proofWindow(host, size: CGSize(width: 390, height: 700))
+        defer { window.isHidden = true }
 
         await model.start()
         #expect(await waitFor(seconds: 20) { model.phase == .playing })
         #expect((adapter.videoPlayer.currentItem?.presentationSize.width ?? 0) > 0)
+
+        let item = try #require(adapter.videoPlayer.currentItem)
+        let surface = try #require(videoSurface(in: host.view))
+        for size in [CGSize(width: 844, height: 390), CGSize(width: 390, height: 700)] {
+            host.view.frame = CGRect(origin: .zero, size: size)
+            host.view.layoutIfNeeded()
+            try await Task.sleep(for: .milliseconds(500))
+            #expect(videoSurface(in: host.view) === surface)
+            #expect(adapter.videoPlayer.currentItem === item)
+            #expect(model.phase == .playing)
+        }
 
         if Self.holdSeconds > 0 {
             print("LIVE_PROOF_ON_SCREEN")
@@ -135,6 +146,63 @@ struct LivePlaybackProofTests {
         await model.stop()
         host.dismiss(animated: false)
     }
+    @Test("recording starts before the response finishes and survives both rotations", .enabled(if: streamURL != nil))
+    func recordingStartupAndRotation() async throws {
+        let origin = try #require(Self.streamURL)
+        let url = try #require(URL(string: "/proof-recording.mp4", relativeTo: origin)?.absoluteURL)
+        let adapter = AVPlayerAdapter()
+        let granter = LocalGranter(url: url, rendition: .progressive)
+        let detail = MediaDetailModel(
+            client: MediaClient(api: APIClient(configuration: .init(
+                environment: APIEnvironment(key: "proof", baseURL: origin), clientBuild: 1
+            ), transport: StubTransport([]), tokens: nil), cache: PartitionedCache()),
+            coordinator: MediaPlaybackCoordinator(granter: granter, player: adapter, resumeStore: NoResumeStore()),
+            churchSlug: "grace", mediaId: "recording", partition: .init(
+                environment: "proof", accountId: "a", churchSlug: "grace", authorizationVersion: 1
+            )
+        )
+        await adapter.setEventHandler { event in Task { @MainActor in await detail.handle(event) } }
+        let host = UIHostingController(rootView: RecordingLayout(model: detail, player: adapter.videoPlayer).faithformTheme(nil))
+        let window = proofWindow(host, size: CGSize(width: 390, height: 700))
+        defer { window.isHidden = true }
+        try await Task.sleep(for: .milliseconds(200))
+        let start = Date()
+        await detail.play(kind: .recording)
+        // The fixture deliberately holds the response tail for 12 seconds.
+        #expect(await waitFor(seconds: 8) { detail.playback == .playing })
+        print("RECORDING_PROOF_STARTUP_SECONDS \(Date().timeIntervalSince(start))")
+        let item = try #require(adapter.videoPlayer.currentItem)
+        let surface = try #require(videoSurface(in: host.view))
+        let before = adapter.videoPlayer.currentTime().seconds
+        for size in [CGSize(width: 844, height: 390), CGSize(width: 390, height: 700)] {
+            host.view.frame = CGRect(origin: .zero, size: size)
+            host.view.setNeedsLayout()
+            host.view.layoutIfNeeded()
+            try await Task.sleep(for: .milliseconds(600))
+            #expect(videoSurface(in: host.view) === surface)
+            #expect(adapter.videoPlayer.currentItem === item)
+            #expect(detail.playback == .playing)
+        }
+        #expect(adapter.videoPlayer.currentTime().seconds > before)
+        #expect(await granter.requests == 1)
+        // Dismissing the screen must still stop playback.
+        host.willMove(toParent: nil)
+        host.view.removeFromSuperview()
+        host.removeFromParent()
+        #expect(await waitFor(seconds: 3) { adapter.videoPlayer.currentItem == nil })
+        await detail.stop()
+    }
+
+    @Test("service thumbnail loads before playback", .enabled(if: streamURL != nil))
+    func thumbnailLoads() async throws {
+        let origin = try #require(Self.streamURL)
+        let url = try #require(URL(string: "/proof-thumbnail.png?fresh=\(UUID())", relativeTo: origin)?.absoluteURL)
+        let host = UIHostingController(rootView: StreamThumbnail(url: url.absoluteString).faithformTheme(nil))
+        let window = proofWindow(host, size: CGSize(width: 320, height: 180))
+        defer { window.isHidden = true }
+        #expect(await waitFor(seconds: 5) { centerIsGreen(host.view) })
+    }
+
 }
 
 // MARK: - Doubles
@@ -147,13 +215,16 @@ private actor EventLog {
 
 private actor LocalGranter: PlaybackGranting {
     let url: URL
-    init(url: URL) { self.url = url }
+    let rendition: RenditionKind
+    private(set) var requests = 0
+    init(url: URL, rendition: RenditionKind = .hls) { self.url = url; self.rendition = rendition }
 
     func grant(churchSlug: String, kind: MediaPlaybackKind, mediaId: String) async throws -> GrantedPlayback {
-        GrantedPlayback(
+        requests += 1
+        return GrantedPlayback(
             capability: "unused",
             deliveryURL: url,
-            renditionKind: .hls,
+            renditionKind: rendition,
             expiresAt: Date().addingTimeInterval(300),
             refreshLeadSeconds: 60,
             startOffsetSeconds: 0
@@ -202,4 +273,42 @@ private func waitFor(seconds: Double, _ condition: @MainActor () async -> Bool) 
         try? await Task.sleep(for: .milliseconds(50))
     }
     return await condition()
+}
+
+@MainActor
+private func proofWindow<Content: View>(_ host: UIHostingController<Content>, size: CGSize) -> UIWindow {
+    let scene = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first!
+    let window = UIWindow(windowScene: scene)
+    let container = UIViewController()
+    window.rootViewController = container
+    window.windowLevel = .alert + 1
+    window.makeKeyAndVisible()
+    container.addChild(host)
+    container.view.addSubview(host.view)
+    host.view.frame = CGRect(origin: .zero, size: size)
+    host.didMove(toParent: container)
+    host.view.layoutIfNeeded()
+    return window
+}
+
+@MainActor
+private func videoSurface(in view: UIView) -> MediaVideoSurface.SurfaceView? {
+    if let surface = view as? MediaVideoSurface.SurfaceView { return surface }
+    return view.subviews.lazy.compactMap { videoSurface(in: $0) }.first
+}
+
+@MainActor
+private func centerIsGreen(_ view: UIView) -> Bool {
+    let image = UIGraphicsImageRenderer(bounds: view.bounds).image { _ in
+        view.drawHierarchy(in: view.bounds, afterScreenUpdates: true)
+    }
+    guard let cg = image.cgImage,
+          let pixelImage = cg.cropping(to: CGRect(x: cg.width / 2, y: cg.height / 2, width: 1, height: 1)) else { return false }
+    var pixel = [UInt8](repeating: 0, count: 4)
+    pixel.withUnsafeMutableBytes { bytes in
+        let context = CGContext(data: bytes.baseAddress, width: 1, height: 1, bitsPerComponent: 8, bytesPerRow: 4,
+                                space: CGColorSpaceCreateDeviceRGB(), bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+        context.draw(pixelImage, in: CGRect(x: 0, y: 0, width: 1, height: 1))
+    }
+    return pixel[0] < 30 && pixel[1] > 220 && pixel[2] < 30
 }

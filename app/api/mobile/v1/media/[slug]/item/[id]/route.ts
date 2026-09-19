@@ -46,6 +46,7 @@ export const GET = optionalAuthRoute(
         detail.chapters.join("|"),
         detail.topics.join("|"),
         detail.startOffsetSeconds,
+        detail.presentation ?? null,
       ],
       scope: userId ? "member" : "anonymous",
     });

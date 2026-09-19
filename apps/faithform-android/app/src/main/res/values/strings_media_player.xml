@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Strings for the redesigned Watch player (P15). Kept beside strings.xml so it
+  can land independently; keys match iOS MediaStrings.swift one for one.
+-->
+<resources>
+    <string name="media_live_short">LIVE</string>
+    <string name="media_full_screen">Full screen</string>
+    <string name="media_exit_full_screen">Exit full screen</string>
+    <string name="media_skip_back">Back 15 seconds</string>
+    <string name="media_skip_forward">Forward 15 seconds</string>
+    <string name="media_watch_replay">Watch the replay</string>
+    <string name="media_replay_available">Replay available</string>
+    <string name="media_watching_live">Streaming live now</string>
+    <string name="media_loading_video">Loading video</string>
+    <string name="media_playback_position">Playback position</string>
+    <string name="media_play_service">Play service</string>
+    <string name="media_open_presentation">Open sermon presentation</string>
+    <string name="media_watch_recording">Watch recording</string>
+    <string name="media_back_to_service">Back to service</string>
+    <string name="media_return_for_recording">Return to the sermon for the published recording.</string>
+</resources>

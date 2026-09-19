@@ -1,5 +1,7 @@
 package io.faithform.app.media
 
+import io.faithform.app.contract.LinkedPresentation
+
 /**
  * What the Watch screen shows, as data.
  *
@@ -17,6 +19,9 @@ data class MediaLiveCard(
     val posterUrl: String?,
     val churchName: String,
     val churchTimezone: String,
+    /** The published recording of this same service, once there is one. */
+    val replayMediaId: String? = null,
+    val presentation: LinkedPresentation? = null,
 ) {
     val isLive: Boolean get() = state == "live"
     val isUpcoming: Boolean get() = state == "upcoming"
@@ -24,6 +29,9 @@ data class MediaLiveCard(
 
     /** Only a service that is actually on air offers a watch button. */
     val offersWatch: Boolean get() = isLive
+
+    /** An ended service offers its replay only once it is published. */
+    val offersReplay: Boolean get() = hasEnded && replayMediaId != null
 }
 
 data class MediaArchiveCard(
@@ -36,6 +44,9 @@ data class MediaArchiveCard(
     val seriesName: String?,
     val speakers: List<String>,
     val churchTimezone: String,
+    /** Where a trimmed single-file recording starts. Zero for a segmented one. */
+    val startOffsetSeconds: Int = 0,
+    val presentation: LinkedPresentation? = null,
 )
 
 sealed interface MediaListPhase {
