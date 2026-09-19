@@ -219,12 +219,10 @@ export function Sidebar({
 
       {/* Utility + user footer */}
       <div className="shrink-0 space-y-2 overflow-x-hidden border-t border-sidebar p-3">
-        <div
-          className={cn(
-            "flex gap-1.5",
-            collapsed ? "flex-col items-center" : "flex-row",
-          )}
-        >
+        {/* Stacked in both states so nothing reflows while the width animates;
+            the fixed 42px icon slot (+1px border, +p-3) centers each icon on
+            the nav icons, same as the brand logo. */}
+        <div className="flex flex-col gap-1.5">
           {footerUtilityNavItems.map((item) => {
             const active = isActive(pathname, item.href);
             const pending = pendingHref === item.href;
@@ -241,18 +239,26 @@ export function Sidebar({
                   setPendingHref(item.href);
                 }}
                 className={cn(
-                  "inline-flex min-w-0 items-center justify-center gap-1.5 rounded-lg border text-xs font-semibold transition-colors",
-                  collapsed ? "size-9" : "h-8 flex-1 px-2",
+                  "flex h-9 w-full min-w-0 items-center overflow-hidden rounded-lg border text-xs font-semibold transition-colors",
                   active || pending
                     ? "border-sidebar-accent/40 bg-sidebar-accent/15 text-sidebar-accent"
                     : "border-white/10 bg-white/5 text-white/75 hover:border-white/20 hover:bg-brand-lightGold/15 hover:text-white",
                 )}
               >
-                <Icon className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
-                <span className={cn(collapsed && "sr-only")}>{item.label}</span>
-                {pending && (
+                <span className="flex h-full w-[42px] shrink-0 items-center justify-center">
+                  <Icon className="size-4 shrink-0" strokeWidth={1.75} aria-hidden />
+                </span>
+                <span
+                  className={cn(
+                    "min-w-0 flex-1 truncate whitespace-nowrap pr-2 transition-opacity duration-200 ease-out motion-reduce:transition-none",
+                    collapsed ? "sr-only" : "opacity-100",
+                  )}
+                >
+                  {item.label}
+                </span>
+                {pending && !collapsed && (
                   <span
-                    className="size-1.5 animate-pulse rounded-full bg-sidebar-accent"
+                    className="mr-3 size-1.5 shrink-0 animate-pulse rounded-full bg-sidebar-accent"
                     aria-hidden
                   />
                 )}
@@ -261,18 +267,8 @@ export function Sidebar({
           })}
         </div>
 
-        <div
-          className={cn(
-            "flex h-[52px] min-w-0 items-center overflow-hidden rounded-xl border border-sidebar bg-white/5 p-2",
-            collapsed && "justify-center",
-          )}
-        >
-          <div
-            className={cn(
-              "flex shrink-0 items-center justify-center",
-              collapsed ? "size-9" : "size-11",
-            )}
-          >
+        <div className="flex h-[52px] min-w-0 items-center overflow-hidden rounded-xl border border-sidebar bg-white/5 py-2 pr-2">
+          <div className="flex h-full w-[42px] shrink-0 items-center justify-center">
             <div
               className="flex size-9 items-center justify-center rounded-full bg-sidebar-accent text-sm font-bold text-white"
               title={userEmail}
