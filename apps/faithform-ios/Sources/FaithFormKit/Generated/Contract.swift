@@ -1320,6 +1320,36 @@ public struct PublicServiceTime: Codable, Hashable, Sendable {
 
 /// Unknown additive fields are ignored by Codable, which is what lets a
 /// released client keep working when the server adds one.
+public struct ChurchSocialLink: Codable, Hashable, Sendable {
+    public let platform: String
+    public let url: String
+
+    public init(
+        platform: String,
+        url: String
+    ) {
+        self.platform = platform
+        self.url = url
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct ChurchQuickLink: Codable, Hashable, Sendable {
+    public let label: String
+    public let url: String
+
+    public init(
+        label: String,
+        url: String
+    ) {
+        self.label = label
+        self.url = url
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
 public struct ChurchProfile: Codable, Hashable, Sendable {
     public let slug: String
     public let name: String
@@ -1341,6 +1371,10 @@ public struct ChurchProfile: Codable, Hashable, Sendable {
     public let campuses: [PublicCampus]
     public let serviceTimes: [PublicServiceTime]
     public let relationshipState: RelationshipState?
+    public let about: String?
+    public let mapsUrl: String?
+    public let socialLinks: [ChurchSocialLink]?
+    public let quickLinks: [ChurchQuickLink]?
 
     public init(
         slug: String,
@@ -1362,7 +1396,11 @@ public struct ChurchProfile: Codable, Hashable, Sendable {
         publicProfileVersion: Int,
         campuses: [PublicCampus],
         serviceTimes: [PublicServiceTime],
-        relationshipState: RelationshipState? = nil
+        relationshipState: RelationshipState? = nil,
+        about: String? = nil,
+        mapsUrl: String? = nil,
+        socialLinks: [ChurchSocialLink]? = nil,
+        quickLinks: [ChurchQuickLink]? = nil
     ) {
         self.slug = slug
         self.name = name
@@ -1384,6 +1422,10 @@ public struct ChurchProfile: Codable, Hashable, Sendable {
         self.campuses = campuses
         self.serviceTimes = serviceTimes
         self.relationshipState = relationshipState
+        self.about = about
+        self.mapsUrl = mapsUrl
+        self.socialLinks = socialLinks
+        self.quickLinks = quickLinks
     }
 }
 

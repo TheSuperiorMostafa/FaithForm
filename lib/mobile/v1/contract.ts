@@ -312,7 +312,32 @@ export const publicServiceTimeSchema = z
   })
   .meta({ id: "PublicServiceTime" });
 
-/** The church profile shown before someone follows or joins. */
+/**
+ * One of the church's social profiles.
+ *
+ * `platform` is a plain string rather than an enum so a platform added later
+ * reaches older apps as a generic link instead of failing to decode. Today's
+ * values: instagram, facebook, youtube, tiktok, x, podcast.
+ */
+export const churchSocialLinkSchema = z
+  .object({
+    platform: z.string().min(1).max(40),
+    url,
+  })
+  .meta({ id: "ChurchSocialLink" });
+
+/** A destination the church chose to feature — "Plan a visit", "Prayer requests". */
+export const churchQuickLinkSchema = z
+  .object({
+    label: z.string().min(1).max(60),
+    url,
+  })
+  .meta({ id: "ChurchQuickLink" });
+
+/**
+ * A church's page in the app: what someone reads before adding it, and the
+ * church information screen afterwards.
+ */
 export const churchProfileSchema = z
   .object({
     slug: churchSlug,
@@ -336,6 +361,14 @@ export const churchProfileSchema = z
     serviceTimes: z.array(publicServiceTimeSchema),
     /** The caller's own relationship, if any. Null when signed out. */
     relationshipState: relationshipStateSchema.nullable(),
+    /** The longer "about us". Additive: older servers omit it. */
+    about: z.string().nullable().optional(),
+    /** A maps link the church chose, used ahead of a generated one. */
+    mapsUrl: url.nullable().optional(),
+    /** Ordered as the church wants them shown. Additive. */
+    socialLinks: z.array(churchSocialLinkSchema).optional(),
+    /** Ordered as the church wants them shown. Additive. */
+    quickLinks: z.array(churchQuickLinkSchema).optional(),
   })
   .meta({ id: "ChurchProfile" });
 
@@ -1340,6 +1373,8 @@ export const CONTRACT_SCHEMAS = {
   DiscoveryPage: discoveryPageSchema,
   PublicCampus: publicCampusSchema,
   PublicServiceTime: publicServiceTimeSchema,
+  ChurchSocialLink: churchSocialLinkSchema,
+  ChurchQuickLink: churchQuickLinkSchema,
   ChurchProfile: churchProfileSchema,
   OnboardingState: onboardingStateSchema,
   FeedItem: feedItemSchema,

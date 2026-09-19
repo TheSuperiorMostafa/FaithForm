@@ -1,5 +1,6 @@
 import { filterChurchIdsWithFeature } from "@/lib/features/access";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { appDetailsFrom, type ChurchAppDetails } from "@/lib/faithform/church-links";
 import { VisitorError } from "@/lib/faithform/errors";
 import {
   discoverySearchSchema,
@@ -207,6 +208,36 @@ export async function getPublicChurchProfile(
     publicProfileVersion: (row.public_profile_version as number | null) ?? 1,
     campuses: Array.from(byCampus.values()),
   };
+}
+
+/**
+ * Everything on a listed church's app page beyond the discovery profile: the
+ * longer "about", a maps link, social profiles, featured links, and service
+ * times recorded for the church as a whole (migration 0090's projections).
+ *
+ * Returns null — never throws — when the projections are not there yet, so a
+ * database that has not been migrated still serves the core profile.
+ */
+export async function getPublicChurchAppDetails(
+  slug: string,
+): Promise<ChurchAppDetails | null> {
+  const parsedSlug = churchSlugSchema.safeParse(slug);
+  if (!parsedSlug.success) return null;
+
+  const admin = createAdminClient();
+  const [page, services] = await Promise.all([
+    admin.rpc("public_church_app_page", { p_slug: parsedSlug.data }),
+    admin.rpc("public_church_services", { p_slug: parsedSlug.data }),
+  ]);
+  if (page.error) return null;
+
+  const row = ((page.data ?? []) as Record<string, unknown>[])[0];
+  if (!row) return null;
+
+  return appDetailsFrom(
+    row,
+    services.error ? [] : ((services.data ?? []) as Record<string, unknown>[]),
+  );
 }
 
 /**

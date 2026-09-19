@@ -5,7 +5,7 @@ import { ImageUp, Link2, Loader2, Trash2 } from "lucide-react";
 
 import type { Area } from "react-easy-crop";
 
-import { uploadSiteImage } from "@/app/dashboard/website/actions";
+import { uploadSiteImage, type UploadResult } from "@/app/dashboard/website/actions";
 import { ImageCropper } from "@/components/website-admin/image-cropper";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,6 +35,13 @@ export function ImageUploadField({
    * object-fit centre-crop for them.
    */
   aspect = "free",
+  /**
+   * Where the file goes. Defaults to the website's upload; the member app's
+   * church page passes its own, which is not gated on the Website feature.
+   */
+  uploadAction = uploadSiteImage,
+  /** Extra classes for the thumbnail, e.g. to keep a large preview compact. */
+  previewClassName,
 }: {
   label: string;
   value: string;
@@ -43,6 +50,8 @@ export function ImageUploadField({
   disabled?: boolean;
   className?: string;
   aspect?: ImageAspectKey;
+  uploadAction?: (data: FormData) => Promise<UploadResult>;
+  previewClassName?: string;
 }) {
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -72,7 +81,7 @@ export function ImageUploadField({
     }
 
     startTransition(async () => {
-      const result = await uploadSiteImage(data);
+      const result = await uploadAction(data);
       if (!result.ok) {
         setError(result.error);
         return;
@@ -167,6 +176,7 @@ export function ImageUploadField({
             className={cn(
               "w-full rounded-md border border-border bg-background",
               preset.ratio ? "object-cover" : "max-h-40 object-contain",
+              previewClassName,
             )}
             style={preset.ratio ? { aspectRatio: String(preset.ratio) } : undefined}
           />

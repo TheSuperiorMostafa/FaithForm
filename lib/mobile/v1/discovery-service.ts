@@ -1,10 +1,21 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { VisitorError } from "@/lib/faithform/errors";
 import { getVisitorAccount, ensureVisitorAccount } from "@/lib/faithform/account";
-import { discoverChurches, getPublicChurchProfile } from "@/lib/faithform/discovery";
+import {
+  discoverChurches,
+  getPublicChurchAppDetails,
+  getPublicChurchProfile,
+} from "@/lib/faithform/discovery";
+import {
+  getChurchProfileForMember,
+  getMemberChurchAppDetails,
+} from "@/lib/faithform/member-church-page";
 import { findNearbyChurches } from "@/lib/faithform/nearby";
 import type { RelationshipState } from "@/lib/faithform/relationship-state";
-import { publishedContentAccessState } from "@/lib/faithform/relationship-state";
+import {
+  grantsPublishedContentAccess,
+  publishedContentAccessState,
+} from "@/lib/faithform/relationship-state";
 import type {
   ChurchProfileDto,
   DiscoveredChurchDto,
@@ -172,14 +183,47 @@ export async function resolvePublishedContentRelationshipState(
   );
 }
 
+/**
+ * A church's page in the app.
+ *
+ * Listed churches are readable by anyone. A church that does not list itself
+ * — most of them, joined through an invitation link — is readable only by
+ * someone who has it as their church, and is otherwise the same 404 as a slug
+ * that does not exist.
+ */
 export async function getChurchProfile(
   userId: string | null,
   slug: string,
 ): Promise<ChurchProfileDto | null> {
-  const profile = await getPublicChurchProfile(slug);
+  const relationshipState = await resolveRelationshipState(userId, slug);
+  const isTheirChurch =
+    relationshipState !== null && grantsPublishedContentAccess(relationshipState);
+
+  // Only after the relationship check may the church be read directly.
+  let profile = await getPublicChurchProfile(slug);
+  if (!profile && isTheirChurch) profile = await getChurchProfileForMember(slug);
   if (!profile) return null;
 
-  const relationshipState = await resolveRelationshipState(userId, slug);
+  const details = isTheirChurch
+    ? await getMemberChurchAppDetails(slug)
+    : await getPublicChurchAppDetails(slug);
+
+  const campusServices = profile.campuses.flatMap((campus) =>
+    campus.services.map((service) => ({
+      campusSlug: campus.slug,
+      label: service.label,
+      dayOfWeek: service.dayOfWeek,
+      startTime: service.startTime,
+      kind: service.kind,
+    })),
+  );
+  const sameSlot = (a: { dayOfWeek: number; startTime: string }, b: typeof a) =>
+    a.dayOfWeek === b.dayOfWeek && a.startTime.slice(0, 5) === b.startTime.slice(0, 5);
+  // Church-wide times carry an empty campus slug: they belong to the church,
+  // not one campus. A time already listed under a campus is not repeated.
+  const churchWideServices = (details?.churchWideServices ?? [])
+    .filter((service) => !campusServices.some((listed) => sameSlot(listed, service)))
+    .map((service) => ({ campusSlug: "", ...service }));
 
   return {
     slug: profile.slug,
@@ -211,16 +255,12 @@ export async function getChurchProfile(
       timezone: campus.timezone,
       isPrimary: campus.isPrimary,
     })),
-    serviceTimes: profile.campuses.flatMap((campus) =>
-      campus.services.map((service) => ({
-        campusSlug: campus.slug,
-        label: service.label,
-        dayOfWeek: service.dayOfWeek,
-        startTime: service.startTime,
-        kind: service.kind,
-      })),
-    ),
+    serviceTimes: [...churchWideServices, ...campusServices],
     relationshipState,
+    about: details?.about ?? null,
+    mapsUrl: details?.mapsUrl ?? null,
+    socialLinks: details?.socialLinks ?? [],
+    quickLinks: details?.quickLinks ?? [],
   };
 }
 

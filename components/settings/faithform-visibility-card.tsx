@@ -20,7 +20,6 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 
@@ -33,23 +32,23 @@ export type FaithFormVisibilityCardProps = {
   campuses: Campus[];
 };
 
-const JOIN_POLICY_LABELS: Record<
-  FaithFormVisibilityCardProps["joinPolicy"],
-  { title: string; detail: string }
-> = {
-  open: {
-    title: "Anyone can join",
-    detail: "People who find you in the app become members straight away.",
+/**
+ * The app has one way in — a person adds their church — so the only real
+ * question is whether that needs an invitation. `approval_required` is kept
+ * as a stored value for app builds already installed, and reads as "Anyone".
+ */
+const ADD_POLICY_OPTIONS = [
+  {
+    key: "anyone",
+    title: "Anyone who finds you",
+    detail: "People can add your church from search or from your invitation link.",
   },
-  approval_required: {
-    title: "Approve each request",
-    detail: "Requests wait in People until someone on your team decides.",
+  {
+    key: "invite_only",
+    title: "Only with an invitation link",
+    detail: "Only people you send a link to can add your church.",
   },
-  invite_only: {
-    title: "Invitation only",
-    detail: "Only people you send a link to can join. You stay unlisted to everyone else.",
-  },
-};
+] as const;
 
 const BLANK_CAMPUS = {
   name: "",
@@ -185,7 +184,7 @@ export function FaithFormVisibilityCard({
           </div>
 
           <div className="flex flex-col gap-2">
-            <Label htmlFor="faithform-summary">What visitors see first</Label>
+            <Label htmlFor="faithform-summary">Search summary</Label>
             <Textarea
               id="faithform-summary"
               value={summary}
@@ -195,35 +194,56 @@ export function FaithFormVisibilityCard({
               placeholder="A sentence or two about who you are and what a first visit is like."
               onChange={(event) => setSummary(event.target.value)}
             />
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="faithform-join-policy">When someone asks to join</Label>
-            <Select
-              id="faithform-join-policy"
-              value={policy}
-              disabled={!isAdmin || pending}
-              onChange={(event) =>
-                setPolicy(
-                  event.target.value as FaithFormVisibilityCardProps["joinPolicy"],
-                )
-              }
-            >
-              {(
-                Object.keys(JOIN_POLICY_LABELS) as (keyof typeof JOIN_POLICY_LABELS)[]
-              ).map((key) => (
-                <option key={key} value={key}>
-                  {JOIN_POLICY_LABELS[key].title}
-                </option>
-              ))}
-            </Select>
             <p className="text-xs text-muted-foreground">
-              {JOIN_POLICY_LABELS[policy].detail}
+              Shown under your name in search results. Your full story goes in About on
+              the church page.
             </p>
           </div>
 
+          <fieldset className="flex flex-col gap-2" disabled={!isAdmin || pending}>
+            <legend className="mb-1 text-sm font-semibold">Who can add your church</legend>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {ADD_POLICY_OPTIONS.map((option) => {
+                const selected =
+                  option.key === "invite_only"
+                    ? policy === "invite_only"
+                    : policy !== "invite_only";
+                return (
+                  <label
+                    key={option.key}
+                    className={`flex cursor-pointer flex-col gap-1 rounded-xl border p-4 transition-colors ${
+                      selected
+                        ? "border-accent bg-accent/10"
+                        : "border-border bg-background hover:border-accent/50"
+                    }`}
+                  >
+                    <span className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                      <input
+                        type="radio"
+                        name="faithform-add-policy"
+                        className="size-4 accent-accent"
+                        checked={selected}
+                        onChange={() =>
+                          setPolicy(
+                            option.key === "invite_only"
+                              ? "invite_only"
+                              : joinPolicy === "invite_only"
+                                ? "open"
+                                : joinPolicy,
+                          )
+                        }
+                      />
+                      {option.title}
+                    </span>
+                    <span className="text-xs text-muted-foreground">{option.detail}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
+
           <p className="rounded-lg border border-border bg-muted/40 p-3 text-xs text-muted-foreground">
-            Following or joining in the app never gives anyone access to this
+            Adding your church in the app never gives anyone access to this
             dashboard. Staff access is managed on the Team tab.
           </p>
 

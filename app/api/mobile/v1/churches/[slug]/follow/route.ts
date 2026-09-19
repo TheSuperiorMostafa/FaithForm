@@ -1,23 +1,26 @@
 import { authenticatedRoute } from "@/lib/mobile/v1/handler";
-import { followChurch, leaveChurch } from "@/lib/faithform/relationships";
+import { addChurch, leaveChurch } from "@/lib/faithform/relationships";
 import { resolveRelationshipState } from "@/lib/mobile/v1/discovery-service";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Follow. Delegates entirely to Prompt 3's state machine — the join policy,
- * the blocked check, the idempotency and the audit trail all live there, and
- * this route adds nothing to them.
+ * Add this church as the person's church.
+ *
+ * One church per account: adding a church replaces the one they had. The path
+ * still says "follow" because installed app builds call it by that name. The
+ * join policy, the blocked check, idempotency and the audit trail all live in
+ * the relationship state machine; this route adds nothing to them.
  */
 export const POST = authenticatedRoute(
   { cache: "private-no-store" },
   async ({ userId, params }) => {
-    const relationship = await followChurch(userId, params.slug);
+    const relationship = await addChurch(userId, params.slug);
     return { data: { churchSlug: params.slug, state: relationship.state } };
   },
 );
 
-/** Unfollow. Same delegation. */
+/** Remove this church. The person is back to having no church. */
 export const DELETE = authenticatedRoute(
   { cache: "private-no-store" },
   async ({ userId, params }) => {

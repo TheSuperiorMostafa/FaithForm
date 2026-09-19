@@ -224,9 +224,13 @@ async function loadSelectedChurchSlug(
  * Dashboard staff belong in their church in the member app too.
  *
  * `church_users` is never written here — only read — so a pastor who already
- * runs the dashboard is not asked to search for, follow, or request to join
- * a congregation they are already in. Failures are swallowed: a missing staff
- * link must not take down bootstrap for a regular visitor.
+ * runs the dashboard is not asked to search for or add a congregation they are
+ * already in. Failures are swallowed: a missing staff link must not take down
+ * bootstrap for a regular visitor.
+ *
+ * One church per account: staff are placed in their church only while the
+ * account has none. Someone on staff who chose a different church in the app
+ * keeps that choice instead of being pulled back on every launch.
  */
 async function syncStaffChurchesIntoApp(
   admin: ReturnType<typeof createAdminClient>,
@@ -241,22 +245,28 @@ async function syncStaffChurchesIntoApp(
 
   if (error || !data?.length) return new Set();
 
-  const churchIds = [
-    ...new Set(
-      data
-        .map((row) => row.church_id as string | null)
-        .filter((id): id is string => Boolean(id)),
-    ),
-  ];
-
-  await Promise.allSettled(
-    churchIds.map((churchId) => admitStaffAsMember(account.id, churchId, userId)),
-  );
-  return new Set(
+  const adminChurchIds = new Set(
     data
       .filter((row) => row.role === "admin")
       .map((row) => row.church_id as string),
   );
+
+  const { count } = await admin
+    .from("visitor_church_relationships")
+    .select("id", { count: "exact", head: true })
+    .eq("account_id", account.id)
+    .in("state", ["following", "pending", "joined"]);
+
+  if (!count) {
+    // An admin's church first, when someone is staff at more than one.
+    const staffChurch =
+      data.find((row) => row.role === "admin" && row.church_id)?.church_id ??
+      data.find((row) => row.church_id)?.church_id;
+    if (staffChurch) {
+      await admitStaffAsMember(account.id, staffChurch as string, userId).catch(() => null);
+    }
+  }
+  return adminChurchIds;
 }
 
 /**

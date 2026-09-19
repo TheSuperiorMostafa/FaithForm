@@ -399,9 +399,12 @@ test("an unknown slug and a hidden church are indistinguishable", () => {
   assert.ok(!profile.includes("not_discoverable"));
 });
 
-test("following or joining requires a discoverable church", () => {
+test("adding or joining requires a discoverable church", () => {
+  // Adding a church is the app's one way in (the older "follow" route calls
+  // the same function).
+  assert.match(relationships, /export const followChurch = addChurch;/);
   const follow = relationships.slice(
-    relationships.indexOf("export async function followChurch"),
+    relationships.indexOf("export async function addChurch"),
     relationships.indexOf("export async function unfollowChurch"),
   );
   assert.match(follow, /if \(!church\.isDiscoverable\)/);
@@ -412,6 +415,49 @@ test("following or joining requires a discoverable church", () => {
     relationships.indexOf("export async function leaveChurch"),
   );
   assert.match(join, /if \(!church\.isDiscoverable\)/);
+});
+
+test("an unlisted church is read directly only for someone whose church it is", () => {
+  const service = read("lib/mobile/v1/discovery-service.ts");
+  const profile = service.slice(service.indexOf("export async function getChurchProfile"));
+  // The direct read sits behind the relationship check, and a signed-out or
+  // unrelated caller falls through to the same null as an unknown slug.
+  assert.match(
+    profile,
+    /isTheirChurch =\s+relationshipState !== null && grantsPublishedContentAccess\(relationshipState\)/,
+  );
+  assert.match(profile, /if \(!profile && isTheirChurch\) profile = await getChurchProfileForMember/);
+  assert.match(profile, /if \(!profile\) return null;/);
+
+  // The public extras come from projections that only answer for listed churches.
+  const migration = read("supabase/migrations/0090_one_church_per_account.sql");
+  for (const name of ["public_church_app_page", "public_church_services"]) {
+    const start = migration.indexOf(`create or replace function public.${name}(`);
+    const body = migration.slice(start, migration.indexOf("$$;", start));
+    assert.match(body, /security definer/);
+    assert.match(body, /c\.is_discoverable/);
+  }
+});
+
+test("every way into a church leaves the account with only that church", () => {
+  const slice = (from: string, to: string) =>
+    relationships.slice(relationships.indexOf(from), relationships.indexOf(to));
+  assert.match(
+    slice("export async function addChurch", "export async function unfollowChurch"),
+    /makeOnlyChurch\(account\.id, church\.id, userId\)/,
+  );
+  assert.match(
+    slice("export async function requestJoin", "export async function leaveChurch"),
+    /makeOnlyChurch\(account\.id, church\.id, userId\)/,
+  );
+  assert.match(
+    slice("export async function acceptJoinInvitation", "export function invitationFailure"),
+    /makeOnlyChurch\(account\.id, church\.id as string, userId\)/,
+  );
+  // Releasing the old church goes through the audited state machine.
+  const helper = slice("async function makeOnlyChurch", "export async function addChurch");
+  assert.match(helper, /applyTransition\(\{/);
+  assert.match(helper, /action: "leave"/);
 });
 
 test("listing a church publicly requires a public handle", () => {

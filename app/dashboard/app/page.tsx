@@ -6,21 +6,22 @@ import {
 } from "@/app/dashboard/settings/faithform-actions";
 import { getPendingJoinRequests } from "@/app/dashboard/people/claim-actions";
 import { AutomaticCheckinSummaryCard } from "@/components/attendance/automatic-checkin-summary-card";
+import { ChurchInfoEditor } from "@/components/member-app/church-info-editor";
 import { JoinRequestsPanel } from "@/components/people/join-requests-panel";
 import { FaithFormVisibilityCard } from "@/components/settings/faithform-visibility-card";
 import { VisitorInvitationsCard } from "@/components/settings/visitor-invitations-card";
 import { readChurchAutomaticReadiness } from "@/lib/attendance/v2/geofence-config";
 import { getChurchAuth } from "@/lib/auth/church";
 import { getFeatureAccess } from "@/lib/features/access";
+import { getChurchAppInfo } from "@/lib/queries/church-app-info";
 import { getChurchDiscoverySettings } from "@/lib/queries/faithform-settings";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Everything about your church in the member app, in one sidebar-visible
- * place: how people find you, who is waiting on a yes, and the invitation
- * links that admit someone directly. This used to live behind Settings, where
- * nobody thought to look for it.
+ * Your church in the member app, in one place: the church page people open
+ * from Home — edited beside a live phone — and then how people find and add
+ * your church.
  */
 export default async function MemberAppPage() {
   const auth = await getChurchAuth();
@@ -39,7 +40,7 @@ export default async function MemberAppPage() {
     );
   }
 
-  const [discovery, campuses, invitationPage, relationships, readiness, access] =
+  const [discovery, campuses, invitationPage, relationships, readiness, access, churchInfo] =
     await Promise.all([
       getChurchDiscoverySettings(auth.churchId),
       getCampusesForSettings(),
@@ -48,25 +49,78 @@ export default async function MemberAppPage() {
       // The same readiness the phones get; a failure only hides the card.
       readChurchAutomaticReadiness(auth.churchId).catch(() => null),
       getFeatureAccess(),
+      getChurchAppInfo(auth.churchId).catch(() => null),
     ]);
 
+  // The app no longer asks anyone to join, so new requests stop arriving.
+  // Requests made from older app builds still get an answer here.
   const joinRequests = relationships.items.filter(
     (relationship) => relationship.state === "pending",
   );
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
+    <div className="mx-auto flex w-full max-w-7xl flex-col gap-8">
       <div>
         <h1 className="border-l-4 border-accent pl-3 font-heading text-[26px] font-bold">
           Member App
         </h1>
         <p className="text-sm text-muted-foreground">
-          Your people&apos;s app for this church — invitation links first,
-          optional search listing, join requests, and what you publish.
+          Your church&apos;s page in the app — what people see when they tap
+          Church info — and how people find and add your church.
         </p>
       </div>
 
-      <JoinRequestsPanel requests={joinRequests} />
+      {joinRequests.length > 0 && <JoinRequestsPanel requests={joinRequests} />}
+
+      <section className="flex flex-col gap-4" aria-labelledby="church-page-heading">
+        <div>
+          <h2 id="church-page-heading" className="font-heading text-xl font-bold">
+            Church page
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Everything here shows on your church&apos;s page in the iPhone and
+            Android apps. The website and phone assistant use the same details.
+          </p>
+        </div>
+        {churchInfo ? (
+          <ChurchInfoEditor
+            initial={churchInfo.info}
+            context={churchInfo.context}
+            canEdit={auth.isAdmin}
+          />
+        ) : (
+          <p className="rounded-xl border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
+            Your church page could not be loaded right now. Refresh to try again.
+          </p>
+        )}
+      </section>
+
+      <section className="flex flex-col gap-4" aria-labelledby="church-access-heading">
+        <div>
+          <h2 id="church-access-heading" className="font-heading text-xl font-bold">
+            How people add your church
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Each person has one church in the app. Invitation links are the
+            easiest way in; listing in search is optional.
+          </p>
+        </div>
+        <div className="grid gap-5 lg:grid-cols-2">
+          <FaithFormVisibilityCard
+            isAdmin={auth.isAdmin}
+            isDiscoverable={discovery.isDiscoverable}
+            publicSummary={discovery.publicSummary}
+            joinPolicy={discovery.joinPolicy}
+            slug={discovery.slug}
+            campuses={campuses}
+          />
+          <VisitorInvitationsCard
+            isAdmin={auth.isAdmin}
+            invitations={invitationPage.items}
+          />
+        </div>
+      </section>
+
       {readiness ? (
         <AutomaticCheckinSummaryCard
           problem={readiness.problem}
@@ -78,18 +132,6 @@ export default async function MemberAppPage() {
           canOpenSetup={access?.allowed.includes("attendance") ?? false}
         />
       ) : null}
-      <FaithFormVisibilityCard
-        isAdmin={auth.isAdmin}
-        isDiscoverable={discovery.isDiscoverable}
-        publicSummary={discovery.publicSummary}
-        joinPolicy={discovery.joinPolicy}
-        slug={discovery.slug}
-        campuses={campuses}
-      />
-      <VisitorInvitationsCard
-        isAdmin={auth.isAdmin}
-        invitations={invitationPage.items}
-      />
     </div>
   );
 }

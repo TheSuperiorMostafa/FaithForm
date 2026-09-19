@@ -249,7 +249,61 @@ async function assertMemberAppEnabled(churchId: string): Promise<void> {
   throw new VisitorError("church_not_found", "Church not found.");
 }
 
-export async function followChurch(
+/** States in which a church is "your church" in the app. */
+const ACTIVE_STATES: RelationshipState[] = ["following", "pending", "joined"];
+
+/**
+ * One church per account.
+ *
+ * The app has no follow-versus-join distinction and no church switcher: a
+ * person has their church, and adding another one replaces it. This runs
+ * after the new relationship is written, so a refused or failed add leaves the
+ * person's current church exactly as it was. Each release goes through the
+ * state machine, so it is audited like any other leave, and it bumps the
+ * authorization version so no device keeps reading the old church's content.
+ */
+async function makeOnlyChurch(
+  accountId: string,
+  keepChurchId: string,
+  actorUserId: string | null,
+): Promise<void> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("visitor_church_relationships")
+    .select("church_id")
+    .eq("account_id", accountId)
+    .in("state", ACTIVE_STATES)
+    .neq("church_id", keepChurchId);
+
+  for (const row of (data ?? []) as { church_id: string }[]) {
+    const church = await resolveChurchById(admin, row.church_id);
+    if (!church) continue;
+    await applyTransition({
+      accountId,
+      church,
+      action: "leave",
+      actorType: "visitor",
+      actorUserId,
+      reason: "replaced by another church",
+    }).catch(() => {
+      // Already moved by a concurrent request; nothing left to release.
+    });
+  }
+
+  await admin
+    .from("visitor_accounts")
+    .update({ selected_church_id: keepChurchId, updated_at: new Date().toISOString() })
+    .eq("id", accountId);
+}
+
+/**
+ * Makes a church the person's church.
+ *
+ * Adding the church they already have is a success, not a conflict — whether
+ * they reached it by adding it, by an invitation, or as staff. Adding a
+ * different one replaces it (see `makeOnlyChurch`).
+ */
+export async function addChurch(
   userId: string,
   churchSlug: string,
 ): Promise<Relationship> {
@@ -257,20 +311,32 @@ export async function followChurch(
   const admin = createAdminClient();
   const church = await resolveChurchBySlug(admin, churchSlug);
 
-  // Following is only offered for a church that chose to be found.
+  const current = await loadRelationship(admin, account.id, church.id);
+  if (current && ACTIVE_STATES.includes(current.state)) {
+    await makeOnlyChurch(account.id, church.id, userId);
+    return current;
+  }
+
+  // Adding from search is only offered for a church that chose to be found.
+  // Everyone else arrives with an invitation.
   if (!church.isDiscoverable) {
     throw new VisitorError("church_not_found", "Church not found.");
   }
   await assertMemberAppEnabled(church.id);
 
-  return applyTransition({
+  const relationship = await applyTransition({
     accountId: account.id,
     church,
     action: "follow",
     actorType: "visitor",
     actorUserId: userId,
   });
+  await makeOnlyChurch(account.id, church.id, userId);
+  return relationship;
 }
+
+/** The older name, still served to app builds that say "follow". */
+export const followChurch = addChurch;
 
 export async function unfollowChurch(
   userId: string,
@@ -292,6 +358,9 @@ export async function unfollowChurch(
  * Honours the church's policy: `open` joins immediately, `approval_required`
  * creates a pending request, `invite_only` refuses. The policy is read from
  * the church row, never from the request.
+ *
+ * Current apps no longer offer joining — only adding a church. This stays for
+ * app builds already installed, under the same one-church rule.
  */
 export async function requestJoin(
   userId: string,
@@ -306,13 +375,15 @@ export async function requestJoin(
   }
   await assertMemberAppEnabled(church.id);
 
-  return applyTransition({
+  const relationship = await applyTransition({
     accountId: account.id,
     church,
     action: "request_join",
     actorType: "visitor",
     actorUserId: userId,
   });
+  await makeOnlyChurch(account.id, church.id, userId);
+  return relationship;
 }
 
 export async function leaveChurch(
@@ -382,7 +453,7 @@ export async function acceptJoinInvitation(
 
   // An invitation is its own authority: an invite_only or unlisted church is
   // exactly the case invitations exist for, so discoverability is not required.
-  return applyTransition({
+  const relationship = await applyTransition({
     accountId: account.id,
     church: {
       id: church.id as string,
@@ -395,6 +466,9 @@ export async function acceptJoinInvitation(
     hasValidInvitation: true,
     invitationId: result.invitation_id as string,
   });
+  // Following an invitation link is choosing that church.
+  await makeOnlyChurch(account.id, church.id as string, userId);
+  return relationship;
 }
 
 export function invitationFailure(reason: string): VisitorError {

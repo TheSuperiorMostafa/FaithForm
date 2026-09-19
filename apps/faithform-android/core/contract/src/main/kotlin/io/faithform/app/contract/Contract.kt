@@ -822,6 +822,26 @@ data class PublicServiceTime(
  * which is what lets a released client keep working when the server adds one.
  */
 @Serializable
+data class ChurchSocialLink(
+    val platform: String,
+    val url: String
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class ChurchQuickLink(
+    val label: String,
+    val url: String
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
 data class ChurchProfile(
     val slug: String,
     val name: String,
@@ -842,7 +862,11 @@ data class ChurchProfile(
     val publicProfileVersion: Int,
     val campuses: List<PublicCampus>,
     val serviceTimes: List<PublicServiceTime>,
-    val relationshipState: RelationshipState? = null
+    val relationshipState: RelationshipState? = null,
+    val about: String? = null,
+    val mapsUrl: String? = null,
+    val socialLinks: List<ChurchSocialLink>? = null,
+    val quickLinks: List<ChurchQuickLink>? = null
 )
 
 /**

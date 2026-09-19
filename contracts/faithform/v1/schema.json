@@ -1898,6 +1898,46 @@
       ],
       "additionalProperties": false
     },
+    "ChurchSocialLink": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "platform": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "url": {
+          "type": "string",
+          "maxLength": 2048
+        }
+      },
+      "required": [
+        "platform",
+        "url"
+      ],
+      "additionalProperties": false
+    },
+    "ChurchQuickLink": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "url": {
+          "type": "string",
+          "maxLength": 2048
+        }
+      },
+      "required": [
+        "label",
+        "url"
+      ],
+      "additionalProperties": false
+    },
     "ChurchProfile": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "object",
@@ -2077,6 +2117,39 @@
               "type": "null"
             }
           ]
+        },
+        "about": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "mapsUrl": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "socialLinks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ChurchSocialLink"
+          }
+        },
+        "quickLinks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ChurchQuickLink"
+          }
         }
       },
       "required": [
@@ -2220,6 +2293,44 @@
             "dayOfWeek",
             "startTime",
             "kind"
+          ],
+          "additionalProperties": false
+        },
+        "ChurchSocialLink": {
+          "type": "object",
+          "properties": {
+            "platform": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40
+            },
+            "url": {
+              "type": "string",
+              "maxLength": 2048
+            }
+          },
+          "required": [
+            "platform",
+            "url"
+          ],
+          "additionalProperties": false
+        },
+        "ChurchQuickLink": {
+          "type": "object",
+          "properties": {
+            "label": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 60
+            },
+            "url": {
+              "type": "string",
+              "maxLength": 2048
+            }
+          },
+          "required": [
+            "label",
+            "url"
           ],
           "additionalProperties": false
         }
