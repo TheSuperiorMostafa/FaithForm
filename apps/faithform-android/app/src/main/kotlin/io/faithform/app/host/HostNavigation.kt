@@ -84,6 +84,16 @@ object HostNavigation {
         val session = snapshot(bootstrap)
         return HostTab.entries.filter { tab ->
             when (tab) {
+                HostTab.CHECK_IN -> {
+                    val allowed = registry.resolve(
+                        scoped(tab.destination, selectedChurchSlug),
+                        session,
+                    ) is RouteResolution.Allowed
+                    val church = bootstrap.relationships.firstOrNull {
+                        it.churchSlug == selectedChurchSlug
+                    }
+                    allowed && church?.offersCheckIn != false
+                }
                 HostTab.WATCH -> {
                     val media = registry.resolve(scoped(tab.destination, selectedChurchSlug), session) is RouteResolution.Allowed
                     val sermons = sermonsAllowed(bootstrap, selectedChurchSlug, registry)
@@ -93,6 +103,10 @@ object HostNavigation {
             }
         }
     }
+
+    /** Older servers omit these additive fields and historically offered both. */
+    val ChurchRelationship.offersCheckIn: Boolean
+        get() = (automaticCheckInEnabled ?: true) || (codeCheckInEnabled ?: true)
 
     /**
      * Whether the selected church's sermons may open: the one gate the
@@ -181,6 +195,7 @@ object HostNavigation {
             bootstrap.relationships.firstOrNull { it.churchSlug == slug && it.canReadPublishedContent }
                 ?: return null
         }
+        if (destination is Destination.CheckIn && church?.offersCheckIn == false) return null
         if (registry.resolve(destination, snapshot(bootstrap)) !is RouteResolution.Allowed) return null
         val tab = tabFor(destination) ?: return null
         return LinkTarget(tab = tab, churchSlug = church?.churchSlug, destination = destination)

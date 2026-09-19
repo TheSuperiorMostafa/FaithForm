@@ -30,12 +30,13 @@ export type ServiceOccurrence = {
   status: "scheduled" | "active" | "completed" | "cancelled";
   generationSource: "schedule" | "manual" | "legacy_backfill";
   policyVersion: number;
+  calendarEventId: string | null;
 };
 
 const OCCURRENCE_COLUMNS = `
   id, church_id, campus_id, label, local_service_date, timezone,
   starts_at_utc, ends_at_utc, checkin_opens_at_utc, checkin_closes_at_utc,
-  status, generation_source, policy_version,
+  status, generation_source, policy_version, calendar_event_id,
   church_campuses ( name )
 `;
 
@@ -57,6 +58,7 @@ function mapOccurrence(row: Record<string, unknown>): ServiceOccurrence {
     status: row.status as ServiceOccurrence["status"],
     generationSource: row.generation_source as ServiceOccurrence["generationSource"],
     policyVersion: Number(row.policy_version ?? 1),
+    calendarEventId: (row.calendar_event_id as string | null) ?? null,
   };
 }
 
@@ -271,7 +273,8 @@ export async function listOccurrences(
  * generated sixty days ahead, so its first page was services two months away
  * and today's service was not on it.
  *
- * Only Sunday worship is listed (see `isSundayWorshipOccurrence`). Which rows
+ * Sunday worship and calendar events that explicitly count attendance are
+ * listed. Which rows
  * those are cannot be asked of PostgREST, so each side reads a wider page and
  * keeps the first matches.
  */
@@ -308,15 +311,17 @@ export async function listBoardOccurrences(
     throw new VisitorError("unavailable", "Could not load services.");
   }
 
-  const sundayWorship = (rows: unknown[] | null, limit: number) =>
+  const attendanceEvents = (rows: unknown[] | null, limit: number) =>
     ((rows ?? []) as Record<string, unknown>[])
       .map(mapOccurrence)
-      .filter(isSundayWorshipOccurrence)
+      .filter((occurrence) =>
+        Boolean(occurrence.calendarEventId) || isSundayWorshipOccurrence(occurrence),
+      )
       .slice(0, limit);
 
   return {
-    upcoming: sundayWorship(upcoming.data, Math.min(options?.upcomingLimit ?? 8, 50)),
-    recent: sundayWorship(recent.data, Math.min(options?.recentLimit ?? 20, 50)),
+    upcoming: attendanceEvents(upcoming.data, Math.min(options?.upcomingLimit ?? 8, 50)),
+    recent: attendanceEvents(recent.data, Math.min(options?.recentLimit ?? 20, 50)),
   };
 }
 

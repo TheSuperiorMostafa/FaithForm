@@ -28,10 +28,14 @@ internal fun relationship(
     slug: String,
     state: RelationshipState = RelationshipState.JOINED,
     canRead: Boolean = true,
+    automaticCheckInEnabled: Boolean? = null,
+    codeCheckInEnabled: Boolean? = null,
 ) = ChurchRelationship(
     churchSlug = slug,
     churchName = slug.replaceFirstChar { it.uppercase() },
     logoUrl = null,
+    automaticCheckInEnabled = automaticCheckInEnabled,
+    codeCheckInEnabled = codeCheckInEnabled,
     state = state,
     joinPolicy = JoinPolicy.OPEN,
     joinedAt = null,
@@ -99,6 +103,37 @@ class HostTabsTest {
         assertTrue(HostTab.WATCH in HostNavigation.availableTabs(withoutWatch, "grace", shippedRegistry))
         val withoutBoth = bootstrap(capabilities = bootstrap().enabledCapabilities - "watch" - "sermons")
         assertTrue(HostTab.WATCH !in HostNavigation.availableTabs(withoutBoth, "grace", shippedRegistry))
+    }
+
+    @Test
+    fun `check-in stays for either enabled method and disappears when both are off`() {
+        for (church in listOf(
+            relationship("grace", automaticCheckInEnabled = true, codeCheckInEnabled = false),
+            relationship("grace", automaticCheckInEnabled = false, codeCheckInEnabled = true),
+            relationship("grace"), // Cached bootstrap from an older server.
+        )) {
+            assertTrue(
+                HostTab.CHECK_IN in HostNavigation.availableTabs(
+                    bootstrap(relationships = listOf(church)),
+                    "grace",
+                    shippedRegistry,
+                ),
+            )
+        }
+
+        val neither = bootstrap(
+            relationships = listOf(
+                relationship("grace", automaticCheckInEnabled = false, codeCheckInEnabled = false),
+            ),
+        )
+        assertFalse(HostTab.CHECK_IN in HostNavigation.availableTabs(neither, "grace", shippedRegistry))
+        assertNull(
+            HostNavigation.resolveLink(
+                Destination.CheckIn("grace"),
+                neither,
+                shippedRegistry,
+            ),
+        )
     }
 
     @Test

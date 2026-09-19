@@ -13,6 +13,10 @@ import {
 } from "@/lib/queries/announcements";
 import { createClient } from "@/lib/supabase/server";
 import { featureAccessDenied } from "@/lib/features/guard";
+import {
+  listEventAttendanceSettings,
+  saveEventAttendance,
+} from "@/lib/attendance/v2/event-attendance";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,6 +27,7 @@ type CreateEventBody = {
   startAt?: string;
   endAt?: string | null;
   description?: string;
+  attendance?: Record<string, unknown>;
 };
 
 function isValidIso(value: string | null | undefined): value is string {
@@ -81,11 +86,17 @@ export async function GET(request: Request) {
       }
     }
 
+    const attendanceByEventId = await listEventAttendanceSettings(
+      auth.churchId,
+      calendar.events.map((event) => event.googleEventId),
+    );
+
     return NextResponse.json({
       connected: true,
       events: calendar.events,
       publishedByGoogleId,
       publishedAnnouncements,
+      attendanceByEventId,
       // One calendar failing still returns the other's events; the client
       // shows this beside them rather than instead of them.
       calendarError: calendar.errors.join(" ") || null,
@@ -163,7 +174,33 @@ export async function POST(request: Request) {
       { title, location, startAt, endAt, description },
       supabase,
     );
-    return NextResponse.json({ event }, { status: 201 });
+    let attendance = null;
+    let attendanceWarning: string | null = null;
+    if (body.attendance && body.attendance.enabled === true) {
+      try {
+        attendance = await saveEventAttendance({
+          churchId: auth.churchId,
+          churchTimezone: auth.churchTimezone,
+          actorUserId: auth.userId,
+          values: {
+            ...body.attendance,
+            calendarEventId: event.googleEventId,
+            calendarId: event.calendarId,
+            calendarSource: event.source ?? "google",
+            title: event.title,
+            startAt: event.startAt,
+            endAt: event.endAt,
+            allDay: Boolean(event.allDay),
+          },
+        });
+      } catch (attendanceError) {
+        attendanceWarning =
+          attendanceError instanceof Error
+            ? `The event was created, but attendance needs attention: ${attendanceError.message}`
+            : "The event was created, but attendance could not be enabled.";
+      }
+    }
+    return NextResponse.json({ event, attendance, attendanceWarning }, { status: 201 });
   } catch (err) {
     if (err instanceof GoogleReconnectRequiredError) {
       return NextResponse.json(

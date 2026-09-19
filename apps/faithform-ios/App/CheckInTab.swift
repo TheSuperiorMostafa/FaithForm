@@ -30,64 +30,20 @@ struct CheckInTabView: View {
     /// The setup sheet, opened only by a tap here.
     @State private var settingUp = false
 
+    private var showsAutomaticCheckIn: Bool {
+        root.selectedChurch?.automaticCheckInEnabled ?? true
+    }
+
+    private var showsCodeCheckIn: Bool {
+        root.selectedChurch?.codeCheckInEnabled ?? true
+    }
+
     var body: some View {
-        let model = features.checkIn
-
         NavigationStack {
-            VStack(spacing: 0) {
-                if isStale { OfflineBanner(message: L.offlineCached) }
-
-                if case .scanning = model.phase {
-                    // A viewfinder, so a person can see what they are pointing
-                    // at. Inert by construction: it displays a session the
-                    // scanner already started and cannot start, stop or read it.
-                    CheckInCameraPreview(session: features.scanner.previewSession)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 250)
-                        .clipShape(RoundedRectangle(cornerRadius: FaithFormTokens.Radius.lg, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: FaithFormTokens.Radius.lg, style: .continuous)
-                                .strokeBorder(theme.palette.brandAccent, lineWidth: FaithFormTokens.BorderWidth.emphasis)
-                        )
-                        .shadow(
-                            color: theme.palette.brandPrimary.opacity(0.15),
-                            radius: 8,
-                            y: 4
-                        )
-                        .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
-                        .padding(.top, FaithFormTokens.Spacing.base)
-                }
-
-                CheckInScannerScreen(
-                    model: model,
-                    onOpenSettings: {
-                        // Only offered for a camera the person denied — see
-                        // `CheckInScannerModel.offersSettings`.
-                        openSettings()
-                    },
-                    onDone: {
-                        Task { await model.reset() }
-                        root.select(.home)
-                    },
-                    footer: AnyView(
-                        AutomaticCheckInSection(
-                            model: attendance,
-                            onSetUp: {
-                                attendance.begin()
-                                settingUp = true
-                            },
-                            onResumeSetup: {
-                                settingUp = true
-                                Task { await attendance.resumeSetup() }
-                            },
-                            onOpenSettings: openSettings
-                        )
-                    )
-                )
-            }
+            checkInContent
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(theme.palette.background)
-            .navigationTitle(L.checkinScanTitle)
+            .navigationTitle(showsCodeCheckIn ? L.checkinScanTitle : L.autoAttendanceTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .principal) {
@@ -124,6 +80,7 @@ struct CheckInTabView: View {
                 if settingUp, !step.isSetup { settingUp = false }
             }
             .task(id: features.churchSlug) {
+                guard showsAutomaticCheckIn else { return }
                 await attendance.select(
                     church: AttendanceChurch(
                         slug: features.churchSlug,
@@ -134,21 +91,96 @@ struct CheckInTabView: View {
             // An arrival due within a few minutes is finished while this screen
             // is open, rather than waiting for a notification.
             .task(id: attendance.pending?.promptAt) {
+                guard showsAutomaticCheckIn else { return }
                 await attendance.holdOpenUntilDue()
             }
-            // A scanned code is handled by the coordinator on the camera's own
-            // callback, which the model does not observe. While a scan the
-            // person started is in progress, ask for its outcome a few times a
-            // second; the task ends, and stops asking, the moment it has one.
-            .task(id: Self.awaitsScan(model.phase)) {
-                guard Self.awaitsScan(model.phase) else { return }
-                while !Task.isCancelled {
-                    try? await Task.sleep(for: .milliseconds(250))
-                    await model.refresh()
-                    if !Self.awaitsScan(model.phase) { return }
+        }
+    }
+
+    @ViewBuilder
+    private var checkInContent: some View {
+        if showsCodeCheckIn {
+            codeCheckInContent
+        } else if showsAutomaticCheckIn {
+            VStack(spacing: 0) {
+                if isStale { OfflineBanner(message: L.offlineCached) }
+                ScrollView {
+                    AutomaticCheckInSection(
+                        model: attendance,
+                        onSetUp: {
+                            attendance.begin()
+                            settingUp = true
+                        },
+                        onResumeSetup: {
+                            settingUp = true
+                            Task { await attendance.resumeSetup() }
+                        },
+                        onOpenSettings: openSettings
+                    )
+                    .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
+                    .padding(.vertical, FaithFormTokens.Spacing.lg)
                 }
             }
         }
+    }
+
+    private var codeCheckInContent: some View {
+        let model = features.checkIn
+        return VStack(spacing: 0) {
+            if isStale { OfflineBanner(message: L.offlineCached) }
+
+            if case .scanning = model.phase {
+                // A viewfinder, so a person can see what they are pointing
+                // at. Inert by construction: it displays a session the
+                // scanner already started and cannot start, stop or read it.
+                CheckInCameraPreview(session: features.scanner.previewSession)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 250)
+                    .clipShape(RoundedRectangle(cornerRadius: FaithFormTokens.Radius.lg, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: FaithFormTokens.Radius.lg, style: .continuous)
+                            .strokeBorder(theme.palette.brandAccent, lineWidth: FaithFormTokens.BorderWidth.emphasis)
+                    )
+                    .shadow(color: theme.palette.brandPrimary.opacity(0.15), radius: 8, y: 4)
+                    .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
+                    .padding(.top, FaithFormTokens.Spacing.base)
+            }
+
+            CheckInScannerScreen(
+                model: model,
+                onOpenSettings: openSettings,
+                onDone: {
+                    Task { await model.reset() }
+                    root.select(.home)
+                },
+                footer: showsAutomaticCheckIn ? AnyView(automaticCheckInSection) : nil
+            )
+        }
+        // A scanned code is handled by the coordinator on the camera's own
+        // callback. Poll only while the church actually offers code check-in.
+        .task(id: Self.awaitsScan(model.phase)) {
+            guard Self.awaitsScan(model.phase) else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(250))
+                await model.refresh()
+                if !Self.awaitsScan(model.phase) { return }
+            }
+        }
+    }
+
+    private var automaticCheckInSection: some View {
+        AutomaticCheckInSection(
+            model: attendance,
+            onSetUp: {
+                attendance.begin()
+                settingUp = true
+            },
+            onResumeSetup: {
+                settingUp = true
+                Task { await attendance.resumeSetup() }
+            },
+            onOpenSettings: openSettings
+        )
     }
 
     private func openSettings() {

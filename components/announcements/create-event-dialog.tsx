@@ -15,6 +15,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  DEFAULT_EVENT_ATTENDANCE_DRAFT,
+  EventAttendanceFields,
+  type EventAttendanceCampus,
+  type EventAttendanceDraft,
+} from "@/components/announcements/event-attendance-editor";
+import type { AttendanceSetupPolicy } from "@/lib/attendance/v2/setup";
+import type { EventAttendanceSettings } from "@/lib/attendance/v2/event-attendance-types";
 import type { CalendarEventPreview } from "@/lib/integrations/types";
 import { fromDatetimeLocalValue } from "@/lib/utils/announcement-placeholders";
 
@@ -23,7 +31,9 @@ type CreateEventDialogProps = {
   onOpenChange: (open: boolean) => void;
   /** Day the calendar is focused on; used to prefill the date. */
   defaultDate: Date;
-  onCreated: (event: CalendarEventPreview) => void;
+  attendanceCampuses: EventAttendanceCampus[];
+  attendancePolicy: AttendanceSetupPolicy;
+  onCreated: (event: CalendarEventPreview, attendance?: EventAttendanceSettings | null) => void;
 };
 
 /** Build a `datetime-local` value from a date at a given local hour. */
@@ -38,6 +48,8 @@ export function CreateEventDialog({
   open,
   onOpenChange,
   defaultDate,
+  attendanceCampuses,
+  attendancePolicy,
   onCreated,
 }: CreateEventDialogProps) {
   const [title, setTitle] = useState("");
@@ -45,6 +57,9 @@ export function CreateEventDialog({
   const [endAt, setEndAt] = useState("");
   const [location, setLocation] = useState("");
   const [description, setDescription] = useState("");
+  const [attendance, setAttendance] = useState<EventAttendanceDraft>(
+    DEFAULT_EVENT_ATTENDANCE_DRAFT,
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [needsReconnect, setNeedsReconnect] = useState(false);
@@ -56,10 +71,15 @@ export function CreateEventDialog({
       setEndAt(datetimeLocalAt(defaultDate, 10));
       setLocation("");
       setDescription("");
+      setAttendance({
+        ...DEFAULT_EVENT_ATTENDANCE_DRAFT,
+        checkinOpensMinutesBefore: attendancePolicy.checkinOpensMinutesBefore,
+        checkinClosesMinutesAfter: attendancePolicy.checkinClosesMinutesAfter,
+      });
       setError(null);
       setNeedsReconnect(false);
     }
-  }, [open, defaultDate]);
+  }, [open, defaultDate, attendancePolicy]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -77,6 +97,10 @@ export function CreateEventDialog({
       return;
     }
     const endIso = fromDatetimeLocalValue(endAt);
+    if (attendance.enabled && !endIso) {
+      setError("Choose an end time before counting attendance.");
+      return;
+    }
     if (endIso && new Date(endIso).getTime() <= new Date(startIso).getTime()) {
       setError("The end time must be after the start time.");
       return;
@@ -93,6 +117,7 @@ export function CreateEventDialog({
           startAt: startIso,
           endAt: endIso,
           description: description.trim() || undefined,
+          attendance,
         }),
       });
       const data = await res.json();
@@ -100,7 +125,14 @@ export function CreateEventDialog({
         if (data?.reconnect) setNeedsReconnect(true);
         throw new Error(data?.error ?? "Failed to create the event.");
       }
-      onCreated(data.event as CalendarEventPreview);
+      onCreated(
+        data.event as CalendarEventPreview,
+        (data.attendance as EventAttendanceSettings | null) ?? null,
+      );
+      if (data.attendanceWarning) {
+        setError(data.attendanceWarning);
+        return;
+      }
       onOpenChange(false);
     } catch (err) {
       setError(
@@ -181,6 +213,14 @@ export function CreateEventDialog({
               placeholder="Optional details saved to the calendar event."
             />
           </div>
+
+          <EventAttendanceFields
+            value={attendance}
+            onChange={setAttendance}
+            campuses={attendanceCampuses}
+            policy={attendancePolicy}
+            disabled={submitting}
+          />
 
           {error && (
             <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">

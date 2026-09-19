@@ -12,10 +12,16 @@ import {
   ChevronRight,
   Loader2,
   MapPin,
+  Radio,
+  Users,
 } from "lucide-react";
 import { AnnouncementSubmittedView } from "@/components/announcements/announcement-submitted-view";
 import { AnnouncementVerifyForm } from "@/components/announcements/announcement-verify-form";
 import { CreateEventDialog } from "@/components/announcements/create-event-dialog";
+import {
+  EventAttendanceEditor,
+  type EventAttendanceCampus,
+} from "@/components/announcements/event-attendance-editor";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -26,6 +32,8 @@ import {
 } from "@/components/ui/card";
 import type { AnnouncementRow } from "@/lib/queries/announcements";
 import type { CalendarEventPreview } from "@/lib/integrations/types";
+import type { AttendanceSetupPolicy } from "@/lib/attendance/v2/setup";
+import type { EventAttendanceSettings } from "@/lib/attendance/v2/event-attendance-types";
 import {
   addMonths,
   buildMonthGridCells,
@@ -59,6 +67,10 @@ type MonthCalendarProps = {
    */
   emailAvailable?: boolean;
   facebookConnected: boolean;
+  initialAttendanceByEventId: Record<string, EventAttendanceSettings>;
+  attendanceCampuses: EventAttendanceCampus[];
+  attendancePolicy: AttendanceSetupPolicy;
+  isAdmin: boolean;
 };
 
 const MAX_CHIPS_PER_CELL = 4;
@@ -115,6 +127,10 @@ export function MonthCalendar({
   googleConnected,
   emailAvailable,
   facebookConnected,
+  initialAttendanceByEventId,
+  attendanceCampuses,
+  attendancePolicy,
+  isAdmin,
 }: MonthCalendarProps) {
   const router = useRouter();
   const [year, setYear] = useState(initialYear);
@@ -125,6 +141,9 @@ export function MonthCalendar({
   );
   const [publishedAnnouncements, setPublishedAnnouncements] = useState(
     initialPublishedAnnouncements,
+  );
+  const [attendanceByEventId, setAttendanceByEventId] = useState(
+    initialAttendanceByEventId,
   );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -206,6 +225,7 @@ export function MonthCalendar({
         setEvents(nextEvents);
         setPublishedByGoogleId(data.publishedByGoogleId ?? {});
         setPublishedAnnouncements(data.publishedAnnouncements ?? {});
+        setAttendanceByEventId(data.attendanceByEventId ?? {});
         if (preferredGoogleId) {
           const preferred = nextEvents.find(
             (e) => e.googleEventId === preferredGoogleId,
@@ -321,7 +341,10 @@ export function MonthCalendar({
     router.refresh();
   };
 
-  const handleEventCreated = (event: CalendarEventPreview) => {
+  const handleEventCreated = (
+    event: CalendarEventPreview,
+    attendance?: EventAttendanceSettings | null,
+  ) => {
     const eventDay = eventStartDay(event);
     const y = eventDay.getFullYear();
     const m = eventDay.getMonth();
@@ -340,6 +363,12 @@ export function MonthCalendar({
         : [...prev, event],
     );
     setSelectedEventId(event.googleEventId);
+    if (attendance) {
+      setAttendanceByEventId((previous) => ({
+        ...previous,
+        [event.googleEventId]: attendance,
+      }));
+    }
   };
 
   const selectedIsPublished = selectedEvent
@@ -492,6 +521,7 @@ export function MonthCalendar({
                         const published = Boolean(
                           publishedByGoogleId[event.googleEventId],
                         );
+                        const attendance = attendanceByEventId[event.googleEventId];
                         const selected =
                           isSelected &&
                           selectedEvent?.googleEventId === event.googleEventId;
@@ -516,6 +546,13 @@ export function MonthCalendar({
                             <span className="flex items-center gap-1">
                               {published && (
                                 <Check className="size-3 shrink-0 text-accent" />
+                              )}
+                              {attendance?.enabled && (
+                                attendance.automaticEnabled ? (
+                                  <Radio className="size-2.5 shrink-0 text-accent" />
+                                ) : (
+                                  <Users className="size-2.5 shrink-0 text-accent/80" />
+                                )
                               )}
                               <span
                                 className={cn(
@@ -605,6 +642,19 @@ export function MonthCalendar({
                       onPublished={handlePublished}
                     />
                   )}
+                  <EventAttendanceEditor
+                    event={selectedEvent}
+                    campuses={attendanceCampuses}
+                    policy={attendancePolicy}
+                    initial={attendanceByEventId[selectedEvent.googleEventId]}
+                    canEdit={isAdmin}
+                    onSaved={(settings) =>
+                      setAttendanceByEventId((previous) => ({
+                        ...previous,
+                        [selectedEvent.googleEventId]: settings,
+                      }))
+                    }
+                  />
                 </CardContent>
               </>
             ) : (
@@ -627,6 +677,7 @@ export function MonthCalendar({
                           const published = Boolean(
                             publishedByGoogleId[event.googleEventId],
                           );
+                          const attendance = attendanceByEventId[event.googleEventId];
                           return (
                             <li key={event.googleEventId}>
                               <button
@@ -642,13 +693,28 @@ export function MonthCalendar({
                                 )}
                               >
                                 <span className="min-w-0 flex-1">
-                                  <span className="flex items-center gap-1.5">
+                                  <span className="flex flex-wrap items-center gap-1.5">
                                     {published && (
                                       <Check className="size-3.5 shrink-0 text-accent" />
                                     )}
                                     <span className="text-sm font-bold tabular-nums text-accent">
                                       {formatEventStart(event)}
                                     </span>
+                                    {attendance?.enabled && (
+                                      <span className="inline-flex items-center gap-1 rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-medium text-accent">
+                                        {attendance.automaticEnabled ? (
+                                          <>
+                                            <Radio className="size-3" />
+                                            <span>Auto attendance</span>
+                                          </>
+                                        ) : (
+                                          <>
+                                            <Users className="size-3" />
+                                            <span>Attendance</span>
+                                          </>
+                                        )}
+                                      </span>
+                                    )}
                                   </span>
                                   <span className="mt-0.5 block font-semibold text-foreground">
                                     {event.title}
@@ -712,6 +778,8 @@ export function MonthCalendar({
         open={createOpen}
         onOpenChange={setCreateOpen}
         defaultDate={selectedDay}
+        attendanceCampuses={attendanceCampuses}
+        attendancePolicy={attendancePolicy}
         onCreated={handleEventCreated}
       />
     </div>

@@ -99,9 +99,21 @@ type RelationshipRow = {
   churches: unknown;
 };
 
+type ChurchCheckInMethods = {
+  automaticCheckInEnabled: boolean;
+  codeCheckInEnabled: boolean;
+};
+
+type CheckInPolicyRow = {
+  church_id: string;
+  geofence_enabled: boolean | null;
+  qr_enabled: boolean | null;
+};
+
 function projectRelationship(
   row: RelationshipRow,
   adminChurchIds: ReadonlySet<string> = new Set(),
+  checkInMethods: ReadonlyMap<string, ChurchCheckInMethods> = new Map(),
 ): ChurchRelationshipDto | null {
   const church = Array.isArray(row.churches) ? row.churches[0] : row.churches;
   const resolved = church as
@@ -121,6 +133,10 @@ function projectRelationship(
   if (!resolved?.slug) return null;
 
   const state = row.state as ChurchRelationshipDto["state"];
+  const methods = checkInMethods.get(resolved.id) ?? {
+    automaticCheckInEnabled: false,
+    codeCheckInEnabled: false,
+  };
   return {
     churchSlug: resolved.slug,
     churchName: resolved.name,
@@ -130,6 +146,7 @@ function projectRelationship(
       resolved.giving_accent_color,
     ),
     canManageBranding: adminChurchIds.has(resolved.id),
+    ...methods,
     state,
     joinPolicy: (resolved.join_policy ?? "approval_required") as ChurchRelationshipDto["joinPolicy"],
     joinedAt: row.joined_at,
@@ -138,6 +155,53 @@ function projectRelationship(
       state as Parameters<typeof grantsPublishedContentAccess>[0],
     ),
   };
+}
+
+function relationshipChurchIds(rows: readonly RelationshipRow[]): string[] {
+  return [
+    ...new Set(
+      rows
+        .map((row) => {
+          const church = Array.isArray(row.churches) ? row.churches[0] : row.churches;
+          return (church as { id?: string } | null)?.id;
+        })
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+}
+
+async function loadChurchCheckInMethods(
+  admin: ReturnType<typeof createAdminClient>,
+  churchIds: readonly string[],
+): Promise<Map<string, ChurchCheckInMethods>> {
+  if (churchIds.length === 0) return new Map();
+
+  const { data, error } = await admin
+    .from("attendance_policies")
+    .select("church_id, geofence_enabled, qr_enabled")
+    .in("church_id", [...churchIds]);
+
+  // A transient policy read must not make Check in disappear. Older clients
+  // showed both methods, so that is the safe compatibility fallback; a
+  // successful read with no policy row still correctly means both are off.
+  if (error) {
+    return new Map(
+      churchIds.map((churchId) => [
+        churchId,
+        { automaticCheckInEnabled: true, codeCheckInEnabled: true },
+      ]),
+    );
+  }
+
+  return new Map(
+    ((data ?? []) as CheckInPolicyRow[]).map((row) => [
+      row.church_id,
+      {
+        automaticCheckInEnabled: Boolean(row.geofence_enabled),
+        codeCheckInEnabled: Boolean(row.qr_enabled),
+      },
+    ]),
+  );
 }
 
 const RELATIONSHIP_SELECT =
@@ -219,8 +283,13 @@ export async function getBootstrap(userId: string): Promise<Bootstrap> {
     loadSelectedChurchSlug(account.selectedChurchId),
   ]);
 
-  const relationships = ((rows ?? []) as unknown as RelationshipRow[])
-    .map((row) => projectRelationship(row, adminChurchIds))
+  const relationshipRows = (rows ?? []) as unknown as RelationshipRow[];
+  const checkInMethods = await loadChurchCheckInMethods(
+    admin,
+    relationshipChurchIds(relationshipRows),
+  );
+  const relationships = relationshipRows
+    .map((row) => projectRelationship(row, adminChurchIds, checkInMethods))
     .filter((value): value is ChurchRelationshipDto => value !== null);
 
   return {
@@ -267,12 +336,16 @@ export async function listRelationshipsPage(
   if (error) throw new VisitorError("unavailable", "Could not load your churches.");
 
   const rows = (data ?? []) as unknown as (RelationshipRow & { id: string })[];
+  const checkInMethods = await loadChurchCheckInMethods(
+    admin,
+    relationshipChurchIds(rows),
+  );
   const hasMore = rows.length > input.limit;
   const page = hasMore ? rows.slice(0, input.limit) : rows;
 
   return {
     items: page
-      .map((row) => projectRelationship(row, adminChurchIds))
+      .map((row) => projectRelationship(row, adminChurchIds, checkInMethods))
       .filter((value): value is ChurchRelationshipDto => value !== null),
     nextCursorId: hasMore ? page[page.length - 1].id : null,
   };

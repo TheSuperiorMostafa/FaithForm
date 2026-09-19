@@ -341,8 +341,19 @@ final class RootModel {
         let scoped = Self.scoped(destination, to: selectedChurch?.churchSlug)
         let resolution = dependencies.registry(for: bootstrap)
             .resolve(scoped, session: Self.snapshot(bootstrap))
-        if case .allowed = resolution { return true }
+        if case .allowed = resolution {
+            if case .checkIn = scoped {
+                return selectedChurch.map(Self.offersCheckIn) ?? false
+            }
+            return true
+        }
         return false
+    }
+
+    /// Missing fields mean an older server, whose established behaviour was
+    /// to offer both methods. A current server sends explicit booleans.
+    nonisolated static func offersCheckIn(_ church: ChurchRelationship) -> Bool {
+        (church.automaticCheckInEnabled ?? true) || (church.codeCheckInEnabled ?? true)
     }
 
     /// The registry's view of this account.
@@ -478,6 +489,7 @@ final class RootModel {
             guard let match = bootstrap.relationships.first(where: { $0.churchSlug == slug }),
                   match.canReadPublishedContent
             else { return }
+            if case .checkIn = destination, !Self.offersCheckIn(match) { return }
             selectedChurch = match
             refreshFeatures()
         }

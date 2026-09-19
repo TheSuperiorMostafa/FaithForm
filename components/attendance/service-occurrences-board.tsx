@@ -328,11 +328,11 @@ export function ServiceOccurrencesBoard({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="border-l-4 border-accent pl-3 font-heading text-[26px] font-bold text-foreground">
-            Services
+            Events &amp; services
           </h1>
           <p className="text-sm text-muted-foreground">
-            Your Sunday worship services. Pick one to see who came and how
-            they checked in.
+            Every event that counts attendance, including Sunday services.
+            Pick one to see who came and how they checked in.
           </p>
         </div>
         <Button variant="outline" onClick={refreshHorizon} disabled={pending}>
@@ -343,16 +343,16 @@ export function ServiceOccurrencesBoard({
       {nothing && (
         <Card>
           <CardHeader className="pb-3">
-            <CardTitle className="text-base">No services yet</CardTitle>
+            <CardTitle className="text-base">No attendance events yet</CardTitle>
             <CardDescription>
-              Add your weekly service times in{" "}
+              Enable attendance on a calendar event, or add weekly service times in{" "}
               <Link
                 href="/dashboard/attendance/setup"
                 className="font-semibold text-accent hover:underline"
               >
                 Automatic Attendance
               </Link>
-              , and your services appear here.
+              , and they appear here.
             </CardDescription>
           </CardHeader>
         </Card>

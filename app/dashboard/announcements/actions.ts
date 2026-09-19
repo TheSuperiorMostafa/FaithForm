@@ -42,6 +42,7 @@ import { hasIntegration } from "@/lib/integrations/tokens";
 import { getCurrentChurchId } from "@/lib/auth/current-church";
 import type { PublishResult } from "@/lib/integrations/types";
 import { getMondayWeekWindowInTimeZone } from "@/lib/utils/calendar";
+import { syncEventAttendanceDetails } from "@/lib/attendance/v2/event-attendance";
 
 async function requireChurchAndUser() {
   const supabase = createClient();
@@ -505,6 +506,17 @@ export async function publishAnnouncement(
           },
           ctx.supabase,
         );
+        await syncEventAttendanceDetails({
+          churchId: ctx.churchId,
+          actorUserId: ctx.user.id,
+          calendarEventId: payload.googleEventId,
+          calendarId: payload.googleCalendarId,
+          calendarSource: onApple ? "apple" : "google",
+          title: payload.title,
+          startAt: payload.startAt,
+          endAt: payload.calendarEndAt,
+          allDay: payload.allDay,
+        });
       } catch (err) {
         errors.push(
           err instanceof Error ? err.message : `${label} update failed`,

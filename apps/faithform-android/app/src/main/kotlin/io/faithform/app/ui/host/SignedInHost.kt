@@ -47,6 +47,7 @@ import io.faithform.app.session.AppContainer
 import io.faithform.app.ui.account.AccountTab
 import io.faithform.app.ui.account.ChurchAppearanceScreen
 import io.faithform.app.ui.attendance.AutomaticAttendanceIntroScreen
+import io.faithform.app.ui.attendance.AutomaticCheckInEntry
 import io.faithform.app.ui.attendance.CheckInTab
 import io.faithform.app.ui.discovery.LocationProvider
 import io.faithform.app.ui.giving.GiveTab
@@ -168,12 +169,46 @@ fun SignedInHost(
                         partition = partition,
                     )
 
-                    HostTab.CHECK_IN -> TabScreen(title = stringResource(R.string.checkin_scan_title)) { content ->
-                        CheckInTab(
-                            api = container.apiClient,
-                            cameraPermission = cameraPermission,
-                            modifier = content,
-                        )
+                    HostTab.CHECK_IN -> {
+                        var showAutomaticCheckIn by rememberSaveable(selectedSlug) {
+                            mutableStateOf(false)
+                        }
+                        val showsAutomatic = church?.automaticCheckInEnabled ?: true
+                        val showsCode = church?.codeCheckInEnabled ?: true
+                        if (showAutomaticCheckIn && showsAutomatic) {
+                            TabScreen(
+                                title = stringResource(R.string.auto_attendance_title),
+                                onBack = { showAutomaticCheckIn = false },
+                            ) { _ ->
+                                AutomaticAttendanceIntroScreen(
+                                    onContinue = { showAutomaticCheckIn = false },
+                                    onNotNow = { showAutomaticCheckIn = false },
+                                )
+                            }
+                        } else {
+                            TabScreen(
+                                title = stringResource(
+                                    if (showsCode) R.string.checkin_scan_title
+                                    else R.string.auto_attendance_title,
+                                ),
+                            ) { content ->
+                                CheckInTab(
+                                    api = container.apiClient,
+                                    cameraPermission = cameraPermission,
+                                    showsCodeCheckIn = showsCode,
+                                    automaticCheckInContent = if (showsAutomatic) {
+                                        { automaticModifier ->
+                                            AutomaticCheckInEntry(
+                                                enabled = container.automaticAttendance?.settings?.enabled == true,
+                                                onOpen = { showAutomaticCheckIn = true },
+                                                modifier = automaticModifier,
+                                            )
+                                        }
+                                    } else null,
+                                    modifier = content,
+                                )
+                            }
+                        }
                     }
 
                     HostTab.WATCH -> if (church != null && partition != null) {
@@ -201,7 +236,9 @@ fun SignedInHost(
                         var showAutoCheckIn by rememberSaveable { mutableStateOf(false) }
                         var showChurchAppearance by rememberSaveable { mutableStateOf(false) }
                         val showsAuto =
-                            "attendance" in bootstrap.enabledCapabilities && selectedSlug != null
+                            "attendance" in bootstrap.enabledCapabilities &&
+                                selectedSlug != null &&
+                                (church?.automaticCheckInEnabled ?: true)
                         if (showChurchAppearance && church?.canManageBranding == true) {
                             TabScreen(
                                 title = stringResource(R.string.church_appearance_title),

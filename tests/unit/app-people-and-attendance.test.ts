@@ -205,7 +205,7 @@ test("Attendance is one set of tabs, each shown to whoever holds its grant", () 
   assert.deepEqual(labels(["attendance", "attendance_follow_up", "checkin"]), [
     "Weekly",
     "Follow-up",
-    "Services",
+    "Events",
     "Automatic Attendance",
     "Kids check-in",
   ]);

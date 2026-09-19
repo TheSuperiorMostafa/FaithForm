@@ -637,6 +637,8 @@ data class ChurchRelationship(
     val logoUrl: String? = null,
     val appTheme: ChurchAppTheme? = null,
     val canManageBranding: Boolean? = null,
+    val automaticCheckInEnabled: Boolean? = null,
+    val codeCheckInEnabled: Boolean? = null,
     val state: RelationshipState,
     val joinPolicy: JoinPolicy,
     val joinedAt: String? = null,

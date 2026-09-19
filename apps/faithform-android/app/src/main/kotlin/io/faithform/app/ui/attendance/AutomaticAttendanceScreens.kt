@@ -135,6 +135,49 @@ private fun PrivacyPoint(text: String) {
     }
 }
 
+/** Compact entry used when automatic check-in shares the Check in tab. */
+@Composable
+fun AutomaticCheckInEntry(
+    enabled: Boolean,
+    onOpen: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val theme = LocalFaithFormTheme.current
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(FaithFormTokens.Spacing.lg),
+    ) {
+        Column(
+            modifier = Modifier.padding(FaithFormTokens.Spacing.lg),
+            verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.md),
+        ) {
+            Text(
+                text = if (enabled) {
+                    stringResource(R.string.auto_attendance_ready_title)
+                } else {
+                    stringResource(R.string.auto_attendance_title)
+                },
+                style = MaterialTheme.typography.titleLarge,
+                color = theme.palette.contentPrimary,
+            )
+            Text(
+                text = stringResource(R.string.auto_attendance_intro_body),
+                style = MaterialTheme.typography.bodyMedium,
+                color = theme.palette.contentSecondary,
+            )
+            Button(onClick = onOpen, modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    stringResource(
+                        if (enabled) R.string.auto_attendance_status_label
+                        else R.string.auto_attendance_enable,
+                    ),
+                )
+            }
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Permission education
 // ---------------------------------------------------------------------------

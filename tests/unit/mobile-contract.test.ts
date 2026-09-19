@@ -64,6 +64,23 @@ test("every bootstrap fixture validates against the canonical schema", () => {
   }
 });
 
+test("bootstrap can describe each church's enabled check-in methods", () => {
+  const body = structuredClone(fixture("bootstrap-multi-church").data);
+  body.relationships[0].automaticCheckInEnabled = true;
+  body.relationships[0].codeCheckInEnabled = false;
+  body.relationships[1].automaticCheckInEnabled = false;
+  body.relationships[1].codeCheckInEnabled = true;
+
+  const parsed = bootstrapSchema.parse(body);
+  assert.deepEqual(
+    parsed.relationships.map((church) => [
+      church.automaticCheckInEnabled,
+      church.codeCheckInEnabled,
+    ]),
+    [[true, false], [false, true]],
+  );
+});
+
 test("every error fixture validates and carries a correlation id", () => {
   for (const name of fixtureNames.filter((n) => n.startsWith("error-"))) {
     const body = fixture(name);

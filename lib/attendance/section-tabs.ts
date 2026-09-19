@@ -27,7 +27,7 @@ const TABS: { feature: FeatureKey; tab: SectionLinkTab }[] = [
   },
   {
     feature: "attendance",
-    tab: { label: "Services", href: "/dashboard/attendance/services", match: "prefix" },
+    tab: { label: "Events", href: "/dashboard/attendance/services", match: "prefix" },
   },
   {
     feature: "attendance",

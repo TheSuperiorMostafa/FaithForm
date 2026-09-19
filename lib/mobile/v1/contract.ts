@@ -162,6 +162,9 @@ export const churchRelationshipSchema = z.object({
   appTheme: churchAppThemeSchema.nullable().optional(),
   /** Church admins may edit this church's appearance from the native app. */
   canManageBranding: z.boolean().optional(),
+  /** Which member-facing check-in methods this church has switched on. */
+  automaticCheckInEnabled: z.boolean().optional(),
+  codeCheckInEnabled: z.boolean().optional(),
   state: relationshipStateSchema,
   joinPolicy: joinPolicySchema,
   joinedAt: instant.nullable(),

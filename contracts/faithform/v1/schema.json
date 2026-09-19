@@ -663,6 +663,12 @@
         "canManageBranding": {
           "type": "boolean"
         },
+        "automaticCheckInEnabled": {
+          "type": "boolean"
+        },
+        "codeCheckInEnabled": {
+          "type": "boolean"
+        },
         "state": {
           "type": "string",
           "enum": [
@@ -1015,6 +1021,12 @@
             "canManageBranding": {
               "type": "boolean"
             },
+            "automaticCheckInEnabled": {
+              "type": "boolean"
+            },
+            "codeCheckInEnabled": {
+              "type": "boolean"
+            },
             "state": {
               "type": "string",
               "enum": [
@@ -1218,6 +1230,12 @@
               ]
             },
             "canManageBranding": {
+              "type": "boolean"
+            },
+            "automaticCheckInEnabled": {
+              "type": "boolean"
+            },
+            "codeCheckInEnabled": {
               "type": "boolean"
             },
             "state": {

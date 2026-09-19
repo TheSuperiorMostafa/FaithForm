@@ -978,6 +978,8 @@ public struct ChurchRelationship: Codable, Hashable, Sendable {
     public let logoUrl: String?
     public let appTheme: ChurchAppTheme?
     public let canManageBranding: Bool?
+    public let automaticCheckInEnabled: Bool?
+    public let codeCheckInEnabled: Bool?
     public let state: RelationshipState
     public let joinPolicy: JoinPolicy
     public let joinedAt: String?
@@ -990,6 +992,8 @@ public struct ChurchRelationship: Codable, Hashable, Sendable {
         logoUrl: String? = nil,
         appTheme: ChurchAppTheme? = nil,
         canManageBranding: Bool? = nil,
+        automaticCheckInEnabled: Bool? = nil,
+        codeCheckInEnabled: Bool? = nil,
         state: RelationshipState,
         joinPolicy: JoinPolicy,
         joinedAt: String? = nil,
@@ -1001,6 +1005,8 @@ public struct ChurchRelationship: Codable, Hashable, Sendable {
         self.logoUrl = logoUrl
         self.appTheme = appTheme
         self.canManageBranding = canManageBranding
+        self.automaticCheckInEnabled = automaticCheckInEnabled
+        self.codeCheckInEnabled = codeCheckInEnabled
         self.state = state
         self.joinPolicy = joinPolicy
         self.joinedAt = joinedAt

@@ -50,8 +50,15 @@ import kotlinx.coroutines.launch
 fun CheckInTab(
     api: ApiClient,
     cameraPermission: CameraPermissionRequester,
+    showsCodeCheckIn: Boolean,
+    automaticCheckInContent: (@Composable (Modifier) -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
+    if (!showsCodeCheckIn) {
+        automaticCheckInContent?.invoke(modifier)
+        return
+    }
+
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
@@ -119,5 +126,6 @@ fun CheckInTab(
                     .clip(RoundedCornerShape(FaithFormTokens.Radius.lg)),
             )
         },
+        footer = { automaticCheckInContent?.invoke(Modifier) },
     )
 }

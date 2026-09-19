@@ -21,6 +21,9 @@ import {
   type AnnouncementRow,
 } from "@/lib/queries/announcements";
 import { createClient } from "@/lib/supabase/server";
+import { listCampuses } from "@/lib/faithform/campuses";
+import { getChurchAttendancePolicy } from "@/lib/attendance/v2/setup";
+import { listEventAttendanceSettings } from "@/lib/attendance/v2/event-attendance";
 import {
   getMondayWeekWindowInTimeZone,
   getMonthWindowForDate,
@@ -126,6 +129,7 @@ export default async function AnnouncementsPage() {
           canCreateEvents={canCreateEvents}
           googleConnected={googleConnected}
           facebookConnected={facebookConnected}
+          isAdmin={auth.isAdmin}
           publishedPromise={publishedPromise}
         />
       </Suspense>
@@ -237,6 +241,7 @@ async function CalendarSection({
   canCreateEvents,
   googleConnected,
   facebookConnected,
+  isAdmin,
   publishedPromise,
 }: {
   churchId: string;
@@ -249,6 +254,7 @@ async function CalendarSection({
   canCreateEvents: boolean;
   googleConnected: boolean;
   facebookConnected: boolean;
+  isAdmin: boolean;
   publishedPromise: PublishedPromise;
 }) {
   const supabase = createClient();
@@ -261,10 +267,16 @@ async function CalendarSection({
         connected,
       )
     : Promise.resolve({ events: [], errors: [], connected });
-  const [published, month] = await Promise.all([
+  const [published, month, campuses, attendancePolicy] = await Promise.all([
     publishedPromise,
     monthPromise,
+    listCampuses(churchId),
+    getChurchAttendancePolicy(churchId),
   ]);
+  const attendanceByEventId = await listEventAttendanceSettings(
+    churchId,
+    month.events.map((event) => event.googleEventId),
+  );
   const publishedAnnouncements = Object.fromEntries(
     published
       .filter((row) => row.google_event_id)
@@ -289,6 +301,15 @@ async function CalendarSection({
         initialEvents={month.events}
         initialPublishedByGoogleId={publishedByGoogleId}
         initialPublishedAnnouncements={publishedAnnouncements}
+        initialAttendanceByEventId={attendanceByEventId}
+        attendanceCampuses={campuses.filter((campus) => campus.isActive).map((campus) => ({
+          id: campus.id,
+          name: campus.name,
+          address: [campus.addressLine1, campus.city].filter(Boolean).join(", ") || null,
+          hasCoordinates: campus.isPublic && campus.latitude !== null && campus.longitude !== null,
+        }))}
+        attendancePolicy={attendancePolicy}
+        isAdmin={isAdmin}
         calendarConnected={calendarConnected}
         canCreateEvents={canCreateEvents}
         googleConnected={googleConnected}

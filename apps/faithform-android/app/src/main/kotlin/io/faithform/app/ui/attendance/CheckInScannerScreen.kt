@@ -93,6 +93,7 @@ fun CheckInScannerScreen(
     onTryAgain: () -> Unit,
     modifier: Modifier = Modifier,
     preview: @Composable () -> Unit = {},
+    footer: @Composable () -> Unit = {},
 ) {
     val theme = LocalFaithFormTheme.current
     var selectedMode by remember { mutableStateOf(CheckInMode.SCAN) }
@@ -254,6 +255,8 @@ fun CheckInScannerScreen(
                 }
             }
         }
+
+        if (!isBusy && !isFinished) footer()
     }
 }
 

@@ -193,6 +193,24 @@ struct AppCompositionTests {
         #expect(!CheckInTabView.awaitsScan(.blocked(.cameraDenied)))
     }
 
+    @Test("check-in is offered only when the selected church enables a method")
+    func churchCheckInMethods() {
+        func church(automatic: Bool?, code: Bool?) -> ChurchRelationship {
+            ChurchRelationship(
+                churchSlug: "grace", churchName: "Grace", logoUrl: nil,
+                automaticCheckInEnabled: automatic, codeCheckInEnabled: code,
+                state: .joined, joinPolicy: .open, joinedAt: nil,
+                updatedAt: "2026-09-18T10:00:00Z", canReadPublishedContent: true
+            )
+        }
+
+        #expect(RootModel.offersCheckIn(church(automatic: true, code: false)))
+        #expect(RootModel.offersCheckIn(church(automatic: false, code: true)))
+        #expect(!RootModel.offersCheckIn(church(automatic: false, code: false)))
+        // A cached response from an older server has neither additive field.
+        #expect(RootModel.offersCheckIn(church(automatic: nil, code: nil)))
+    }
+
     @Test("every tab maps to a destination the app implements")
     @MainActor
     func tabsAreImplemented() {
