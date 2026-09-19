@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import { requireChurchAuth } from "@/lib/auth/church";
 import { featureAccessDenied } from "@/lib/features/guard";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { createAccountLink, refreshAccountFromStripe } from "@/lib/stripe/connect";
+import {
+  createAccountLink,
+  createConnectedAccount,
+  refreshAccountFromStripe,
+} from "@/lib/stripe/connect";
 import { isStripeConfigured } from "@/lib/stripe/client";
 
 export async function POST() {
@@ -32,11 +36,11 @@ export async function POST() {
   const admin = createAdminClient();
   const { data: church } = await admin
     .from("churches")
-    .select("id, stripe_account_id")
+    .select("id, name, stripe_account_id")
     .eq("id", auth.churchId)
     .single();
 
-  const stripeAccountId = church?.stripe_account_id as string | null;
+  let stripeAccountId = church?.stripe_account_id as string | null;
   if (!stripeAccountId) {
     return NextResponse.json(
       { error: "No Stripe account. Start onboarding first." },
@@ -44,7 +48,16 @@ export async function POST() {
     );
   }
 
-  await refreshAccountFromStripe(stripeAccountId);
+  // The stored account belongs to a platform the current key can't reach
+  // (e.g. after swapping Stripe keys): start a fresh connection instead.
+  if (!(await refreshAccountFromStripe(stripeAccountId))) {
+    const account = await createConnectedAccount(
+      church!.id as string,
+      church!.name as string,
+    );
+    stripeAccountId = account.id;
+  }
+
   const url = await createAccountLink(stripeAccountId, church!.id as string);
   return NextResponse.json({ url });
 }

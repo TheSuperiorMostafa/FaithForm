@@ -85,9 +85,15 @@ export async function syncStripeAccountStatus(): Promise<{ error?: string }> {
     return { error: "No Stripe account linked." };
   }
 
-  await refreshAccountFromStripe(accountId);
+  const account = await refreshAccountFromStripe(accountId);
   revalidatePath("/dashboard/settings");
   revalidatePath("/dashboard/giving");
+  if (!account) {
+    return {
+      error:
+        "Your Stripe connection is no longer valid. Connect Stripe again to keep accepting gifts.",
+    };
+  }
   return {};
 }
 

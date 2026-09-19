@@ -125,9 +125,53 @@ export async function createLoginLink(stripeAccountId: string): Promise<string> 
   return link.url;
 }
 
-export async function refreshAccountFromStripe(stripeAccountId: string) {
+/**
+ * Stripe answers `account_invalid` when the stored connected account does not
+ * belong to the platform behind the current secret key — typically after the
+ * platform's Stripe keys are swapped for a different Stripe account.
+ */
+function isAccountInaccessible(err: unknown): boolean {
+  const e = err as { code?: string; type?: string } | null;
+  return e?.code === "account_invalid";
+}
+
+/** Unlinks a connected account the current platform key can no longer reach. */
+async function forgetConnectedAccount(stripeAccountId: string) {
+  const admin = createAdminClient();
+  await admin
+    .from("churches")
+    .update({
+      stripe_account_id: null,
+      stripe_charges_enabled: false,
+      stripe_payouts_enabled: false,
+      stripe_details_submitted: false,
+      stripe_onboarding_status: "not_started",
+      stripe_requirements_due: [],
+      giving_enabled_at: null,
+    })
+    .eq("stripe_account_id", stripeAccountId);
+}
+
+/**
+ * Pulls the connected account's latest state into the church row. Returns null
+ * (and unlinks it) when the account is unreachable with the current key, so
+ * callers can start fresh onboarding instead of failing forever.
+ */
+export async function refreshAccountFromStripe(
+  stripeAccountId: string,
+): Promise<Stripe.Account | null> {
   const stripe = getStripe();
-  const account = await stripe.accounts.retrieve(stripeAccountId);
+  let account: Stripe.Account;
+  try {
+    account = await stripe.accounts.retrieve(stripeAccountId);
+  } catch (err) {
+    if (!isAccountInaccessible(err)) throw err;
+    console.warn(
+      `[stripe] connected account ${stripeAccountId} is not accessible with the current key; unlinking it`,
+    );
+    await forgetConnectedAccount(stripeAccountId);
+    return null;
+  }
   await syncChurchFromStripeAccount(account);
   return account;
 }

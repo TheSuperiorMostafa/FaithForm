@@ -46,14 +46,17 @@ export async function POST() {
 
   let stripeAccountId = church.stripe_account_id as string | null;
 
+  // A stored account the current key can't reach is unlinked and replaced.
+  if (stripeAccountId && !(await refreshAccountFromStripe(stripeAccountId))) {
+    stripeAccountId = null;
+  }
+
   if (!stripeAccountId) {
     const account = await createConnectedAccount(
       church.id as string,
       church.name as string,
     );
     stripeAccountId = account.id;
-  } else {
-    await refreshAccountFromStripe(stripeAccountId);
   }
 
   const url = await createAccountLink(stripeAccountId, church.id as string);
