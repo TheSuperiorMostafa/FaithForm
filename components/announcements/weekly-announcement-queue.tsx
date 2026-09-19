@@ -18,7 +18,7 @@ import {
   toggleEventInWeeklyEmail,
 } from "@/app/dashboard/announcements/actions";
 import { AnnouncementVerifyForm } from "@/components/announcements/announcement-verify-form";
-import { UnsubmitAnnouncementButton } from "@/components/announcements/unsubmit-announcement-button";
+import { PublishedSwitch } from "@/components/announcements/published-switch";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -333,9 +333,10 @@ export function WeeklyAnnouncementQueue({
                           </a>
                         )}
                         {isAdmin && event.published && event.announcementId && (
-                          <UnsubmitAnnouncementButton
+                          <PublishedSwitch
                             announcementId={event.announcementId}
                             title={event.title}
+                            label="Published"
                             facebookIsLive={isFacebookLive(
                               publishedById.get(event.announcementId),
                             )}
@@ -447,9 +448,10 @@ export function WeeklyAnnouncementQueue({
                       </a>
                     )}
                     {isAdmin && (
-                      <UnsubmitAnnouncementButton
+                      <PublishedSwitch
                         announcementId={item.id}
                         title={item.title}
+                        label="Published"
                         facebookIsLive={isFacebookLive(item)}
                       />
                     )}

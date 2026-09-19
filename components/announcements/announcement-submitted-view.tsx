@@ -11,7 +11,7 @@ import {
   Share2,
   Smartphone,
 } from "lucide-react";
-import { UnsubmitAnnouncementButton } from "@/components/announcements/unsubmit-announcement-button";
+import { PublishedSwitch } from "@/components/announcements/published-switch";
 import { Button } from "@/components/ui/button";
 import {
   describeAppAudience,
@@ -34,6 +34,8 @@ type AnnouncementSubmittedViewProps = {
   isAdmin?: boolean;
   /** Opens the form for publishing it to the places it is not in yet. */
   onPublishMore?: () => void;
+  /** Runs once it has gone back to the pending queue. */
+  onUnsubmitted?: () => void;
 };
 
 export function AnnouncementSubmittedView({
@@ -43,6 +45,7 @@ export function AnnouncementSubmittedView({
   queuedForWeeklyEmail = false,
   isAdmin = false,
   onPublishMore,
+  onUnsubmitted,
 }: AnnouncementSubmittedViewProps) {
   const channels = publishedChannels(announcement, { queuedForWeeklyEmail });
   const facebook = channels.facebook;
@@ -51,14 +54,28 @@ export function AnnouncementSubmittedView({
     <div className="flex flex-col gap-5">
       <div className="flex items-start gap-3 rounded-lg border border-green-200 bg-green-50 px-4 py-3 dark:border-green-500/30 dark:bg-green-500/10">
         <Check className="mt-0.5 size-5 shrink-0 text-green-700 dark:text-green-400" />
-        <div>
-          <p className="font-semibold text-green-800 dark:text-green-300">
+        <div className="min-w-0 flex-1">
+          <p
+            id={`published-${announcement.id}`}
+            className="font-semibold text-green-800 dark:text-green-300"
+          >
             Published
           </p>
           <p className="text-sm text-green-700/90 dark:text-green-300/90">
             This event was verified and sent to the places below.
+            {isAdmin && " Switch it off to unsubmit."}
           </p>
         </div>
+        {isAdmin && (
+          <PublishedSwitch
+            announcementId={announcement.id}
+            title={announcement.title}
+            facebookIsLive={facebook.published && !facebook.scheduledFor}
+            labelledBy={`published-${announcement.id}`}
+            onUnsubmitted={onUnsubmitted}
+            className="mt-0.5"
+          />
+        )}
       </div>
 
       <section className="flex flex-col gap-2" aria-labelledby={`where-${announcement.id}`}>
@@ -185,16 +202,6 @@ export function AnnouncementSubmittedView({
           </div>
         )}
       </dl>
-
-      {isAdmin && (
-        <div className="flex flex-wrap gap-2 border-t border-border pt-4">
-          <UnsubmitAnnouncementButton
-            announcementId={announcement.id}
-            title={announcement.title}
-            facebookIsLive={facebook.published && !facebook.scheduledFor}
-          />
-        </div>
-      )}
     </div>
   );
 }

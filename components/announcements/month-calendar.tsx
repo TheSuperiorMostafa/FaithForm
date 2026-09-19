@@ -358,6 +358,18 @@ export function MonthCalendar({
     handlePublished(announcement);
   };
 
+  /** Back to "needs verify" at once; the refresh the dialog starts confirms it. */
+  const handleUnsubmitted = (eventId: string) => {
+    const without = <T,>(record: Record<string, T>) => {
+      const next = { ...record };
+      delete next[eventId];
+      return next;
+    };
+    setPublishedByGoogleId(without);
+    setPublishedAnnouncements(without);
+    setAddingChannelsFor(null);
+  };
+
   /** Takes a deleted event off the grid at once; the refresh confirms it. */
   const handleEventDeleted = (eventId: string) => {
     const without = <T,>(record: Record<string, T>) => {
@@ -692,6 +704,9 @@ export function MonthCalendar({
                           isAdmin={isAdmin}
                           onPublishMore={() =>
                             setAddingChannelsFor(selectedEvent.googleEventId)
+                          }
+                          onUnsubmitted={() =>
+                            handleUnsubmitted(selectedEvent.googleEventId)
                           }
                         />
                       )
