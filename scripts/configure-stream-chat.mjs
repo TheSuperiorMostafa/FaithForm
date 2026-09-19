@@ -114,6 +114,10 @@ async function main() {
   }
 
   // 2. App settings.
+  const { app: currentApp } = await client.getAppSettings();
+  const existingHooks = (currentApp.event_hooks ?? []).filter(
+    (hook) => !(hook.hook_type === "webhook" && hook.webhook_url === WEBHOOK_URL),
+  );
   const appSettings = {
     multi_tenant_enabled: true,
     permission_version: "v2",
@@ -121,8 +125,10 @@ async function main() {
     disable_permissions_checks: false,
     enforce_unique_usernames: "no",
     async_url_enrich_enabled: true,
-    webhook_url: WEBHOOK_URL,
-    webhook_events: WEBHOOK_EVENTS,
+    event_hooks: [
+      ...existingHooks,
+      { enabled: true, hook_type: "webhook", webhook_url: WEBHOOK_URL, event_types: WEBHOOK_EVENTS },
+    ],
     push_config: { version: "v2", offline_only: false },
     image_upload_config: {
       allowed_mime_types: ["image/jpeg", "image/png", "image/heic", "image/heif", "image/webp", "image/gif"],
