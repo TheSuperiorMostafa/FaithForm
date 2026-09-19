@@ -27,6 +27,13 @@ export async function getLinkedPresentation(churchSlug: string, relationship: st
   const { data, error } = await createAdminClient().rpc("mobile_media_presentation", {
     p_church_slug: churchSlug, p_relationship_state: relationship, p_kind: kind, p_media_id: mediaId,
   });
+  // These optional links arrived in migration 0097. A deployment can serve
+  // media before that RPC is installed (or while PostgREST refreshes its schema).
+  // Omit the link, never the playable service, and keep other failures visible.
+  if (error?.code === "PGRST202") {
+    console.warn("mobile_media_presentation is unavailable; check migration 0097 and the schema cache.");
+    return null;
+  }
   if (error) throw new VisitorError("unavailable", "Related presentation is unavailable.");
   const row = data?.[0];
   return row ? { presentationId: row.presentation_id, sermonId: row.sermon_id, title: row.title } : null;
@@ -39,6 +46,10 @@ export async function getLinkedServices(churchSlug: string, relationship: string
     p_sermon_id: "sermonId" in source ? source.sermonId : null,
     p_presentation_id: "presentationId" in source ? source.presentationId : null,
   });
+  if (error?.code === "PGRST202") {
+    console.warn("mobile_sermon_services is unavailable; check migration 0097 and the schema cache.");
+    return [];
+  }
   if (error) throw new VisitorError("unavailable", "Related services are unavailable.");
   return (data ?? []).map((row: Record<string, unknown>) => ({
     mediaId: row.media_id as string, kind: row.kind as "live" | "recording", title: row.title as string,
