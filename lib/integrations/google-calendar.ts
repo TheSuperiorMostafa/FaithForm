@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { google } from "googleapis";
 import { allDaySpan } from "@/lib/integrations/all-day";
+import { calendarDescriptionText } from "@/lib/integrations/calendar-description";
 import {
   getGoogleAuthClient,
   GoogleReconnectRequiredError,
@@ -63,6 +64,7 @@ export async function listCalendarEventsInRange(
         startAt: start ? new Date(start).toISOString() : new Date().toISOString(),
         endAt: end ? new Date(end).toISOString() : null,
         allDay,
+        description: calendarDescriptionText(event.description),
         htmlLink: event.htmlLink ?? undefined,
       };
     });
@@ -128,6 +130,7 @@ export async function insertCalendarEvent(
     location: created.location ?? input.location ?? "",
     startAt: start ? new Date(start).toISOString() : input.startAt,
     endAt: end ? new Date(end).toISOString() : input.endAt,
+    description: calendarDescriptionText(created.description ?? input.description),
     htmlLink: created.htmlLink ?? undefined,
   };
 }

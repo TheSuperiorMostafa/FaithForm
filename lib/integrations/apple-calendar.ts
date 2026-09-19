@@ -11,6 +11,7 @@ import {
   type CalDavCredentials,
 } from "@/lib/integrations/caldav";
 import { allDaySpan } from "@/lib/integrations/all-day";
+import { calendarDescriptionText } from "@/lib/integrations/calendar-description";
 import {
   calendarNameFromIcs,
   CalendarFeedError,
@@ -418,6 +419,7 @@ export function eventsFromAppleFeed(
     startAt: occurrence.startAt,
     endAt: occurrence.endAt,
     allDay: occurrence.allDay,
+    description: calendarDescriptionText(occurrence.description),
     source: "apple" as const,
     readOnly: true,
   }));
@@ -527,6 +529,7 @@ async function queryCalendarEvents(
         startAt: occurrence.startAt,
         endAt: occurrence.endAt,
         allDay: occurrence.allDay,
+        description: calendarDescriptionText(occurrence.description),
         source: "apple",
       });
     }
@@ -677,6 +680,7 @@ export async function insertAppleCalendarEvent(
     location: input.location ?? "",
     startAt: start.toISOString(),
     endAt: input.endAt,
+    description: calendarDescriptionText(input.description),
     source: "apple",
   };
 }

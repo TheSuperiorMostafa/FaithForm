@@ -127,6 +127,11 @@ export type CalendarEventPreview = {
    * timezone turns "Saturday, all day" into Friday at 8pm.
    */
   allDay?: boolean;
+  /**
+   * What the church wrote about the event, as plain text. It prefills the
+   * announcement's details, which is what the phone apps show under Details.
+   */
+  description?: string;
   htmlLink?: string;
   source?: CalendarSource;
   /**

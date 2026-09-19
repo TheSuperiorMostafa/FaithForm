@@ -225,7 +225,11 @@ export function AnnouncementVerifyForm({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-  const [showNotes, setShowNotes] = useState(false);
+  // The calendar event's description is the announcement's details: what the
+  // phone apps show under Details and what the email carries. It used to start
+  // blank, so a description typed when creating the event never reached them.
+  const [notes, setNotes] = useState(() => event.description?.trim() ?? "");
+  const [showNotes, setShowNotes] = useState(() => Boolean(event.description?.trim()));
 
   // An all-day event has no time anyone chose — it is a date, and it is edited
   // as one. Feeding its midnight-UTC instant to a datetime-local picker showed
@@ -243,7 +247,6 @@ export function AnnouncementVerifyForm({
   const [endAt, setEndAt] = useState(
     !allDay && event.endAt ? toDatetimeLocalValue(event.endAt) : "",
   );
-  const [notes, setNotes] = useState("");
   const [pushToFacebook, setPushToFacebook] = useState(false);
   const [pushToTeam, setPushToTeam] = useState(true);
   // An event that already happened is not on the app's Home feed, so sharing
@@ -1018,7 +1021,7 @@ export function AnnouncementVerifyForm({
             setNotes(e.target.value);
             markDetailsChanged();
           }}
-          placeholder="Extra notes for email or Facebook…"
+          placeholder="Details shown in the app, email, and Facebook…"
           rows={3}
         />
       )}
