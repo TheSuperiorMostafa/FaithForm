@@ -14,12 +14,16 @@ private actor TestTokens: TokenProviding {
 }
 
 private func api(_ exchanges: [StubTransport.Exchange]) -> APIClient {
+    api(transport: StubTransport(exchanges))
+}
+
+private func api(transport: StubTransport) -> APIClient {
     APIClient(
         configuration: .init(
             environment: APIEnvironment(key: "test", baseURL: URL(string: "https://example.invalid")!),
             clientBuild: 7
         ),
-        transport: StubTransport(exchanges),
+        transport: transport,
         tokens: TestTokens()
     )
 }
@@ -108,60 +112,114 @@ struct ChurchProfileTests {
         #expect(model.phase == .notFound)
     }
 
-    @Test("the offered action follows the policy and the relationship")
-    func actionMatrix() {
-        // No relationship yet.
-        #expect(ChurchProfileModel.action(for: profile(joinPolicy: .open, relationship: nil)) == .follow)
-        #expect(ChurchProfileModel.action(for: profile(joinPolicy: .approvalRequired, relationship: nil)) == .follow)
-        #expect(ChurchProfileModel.action(for: profile(joinPolicy: .inviteOnly, relationship: nil)) == .invitationRequired)
+    @Test("the page offers exactly one action, first match wins")
+    func actionTable() {
+        func action(_ policy: JoinPolicy, _ state: RelationshipState?, other: Bool) -> ChurchAction {
+            ChurchProfileModel.action(for: profile(joinPolicy: policy, relationship: state), hasOtherChurch: other)
+        }
 
-        // Already following: the next step depends on whether joining is offered.
-        #expect(ChurchProfileModel.action(for: profile(joinPolicy: .open, relationship: .following)) == .joinImmediately)
-        #expect(ChurchProfileModel.action(for: profile(joinPolicy: .approvalRequired, relationship: .following)) == .requestToJoin)
-        #expect(ChurchProfileModel.action(for: profile(joinPolicy: .inviteOnly, relationship: .following)) == .invitationRequired)
+        // Blocked beats everything, including an invitation and another church.
+        for policy in [JoinPolicy.open, .approvalRequired, .inviteOnly] {
+            for other in [false, true] {
+                #expect(action(policy, .blocked, other: other) == .unavailable)
+            }
+        }
 
-        // Pending, joined, blocked.
-        #expect(ChurchProfileModel.action(for: profile(joinPolicy: .approvalRequired, relationship: .pending)) == .pending)
-        #expect(ChurchProfileModel.action(for: profile(joinPolicy: .open, relationship: .joined)) == .leave)
-        #expect(ChurchProfileModel.action(for: profile(joinPolicy: .open, relationship: .blocked)) == .unavailable)
+        // Following, pending and joined are all "your church" — no follow,
+        // join or leave any more — whatever the policy.
+        for state in [RelationshipState.following, .pending, .joined] {
+            for policy in [JoinPolicy.open, .approvalRequired, .inviteOnly] {
+                #expect(action(policy, state, other: false) == .current)
+                #expect(action(policy, state, other: true) == .current)
+            }
+        }
+
+        // No relationship: left, an unrecognised state, and none at all.
+        for state in [RelationshipState.left, .unknown("archived"), nil] {
+            #expect(action(.inviteOnly, state, other: false) == .invitationRequired)
+            #expect(action(.inviteOnly, state, other: true) == .invitationRequired)
+            #expect(action(.open, state, other: false) == .add)
+            #expect(action(.approvalRequired, state, other: false) == .add)
+            #expect(action(.unknown("new_policy"), state, other: false) == .add)
+            #expect(action(.open, state, other: true) == .replace)
+            #expect(action(.approvalRequired, state, other: true) == .replace)
+        }
     }
 
-    @Test("a service line renders the church's own day and time")
-    func serviceLine() {
-        let service = PublicServiceTime(
-            campusSlug: "east", label: "Morning", dayOfWeek: 0,
-            startTime: "10:00:00", kind: "regular"
-        )
-        let line = ChurchProfileView.serviceLine(service)
-        #expect(line.contains("Sunday"))
-        #expect(line.contains("10:00"))
-        // Seconds are never meaningful here.
-        #expect(!line.contains(":00:00"))
+    @Test("adding a church posts once, then re-reads the profile")
+    func addPostsAndRefreshes() async throws {
+        let transport = StubTransport([
+            .init(status: 200, body: envelope(#"{"churchSlug":"grace","state":"following"}"#)),
+            .init(status: 200, body: envelope(profileJSON(joinPolicy: "open", relationship: "following"))),
+        ])
+        let model = ChurchProfileModel(api: api(transport: transport), cache: PartitionedCache())
+
+        let added = await model.add(slug: "grace")
+
+        #expect(added)
+        #expect(model.actionError == nil)
+        #expect(!model.isActing)
+        let sent = await transport.received
+        #expect(sent.count == 2)
+        #expect(sent.first?.httpMethod == "POST")
+        #expect(sent.first?.url?.path == "/api/mobile/v1/churches/grace/follow")
+        #expect(sent.contains { $0.url?.path.hasSuffix("/join") == true } == false)
+        guard case let .loaded(loaded) = model.phase else {
+            Issue.record("expected the re-read profile, got \(model.phase)")
+            return
+        }
+        #expect(loaded.relationshipState == .following)
     }
 
-    @Test("an out-of-range day index does not crash")
-    func serviceLineClamps() {
-        let service = PublicServiceTime(
-            campusSlug: "east", label: "X", dayOfWeek: 99,
-            startTime: "10:00:00", kind: "regular"
-        )
-        #expect(!ChurchProfileView.serviceLine(service).isEmpty)
+    @Test("removing a church deletes it and does not re-read a page that may be gone")
+    func removeDeletes() async {
+        let transport = StubTransport([
+            .init(status: 200, body: envelope(#"{"churchSlug":"grace","state":"left"}"#)),
+        ])
+        let model = ChurchProfileModel(api: api(transport: transport), cache: PartitionedCache())
+
+        #expect(await model.remove(slug: "grace"))
+        let sent = await transport.received
+        #expect(sent.count == 1)
+        #expect(sent.first?.httpMethod == "DELETE")
+        #expect(sent.first?.url?.path == "/api/mobile/v1/churches/grace/follow")
     }
 
-    @Test("an address line skips empty parts rather than showing stray commas")
-    func addressLine() {
-        let full = PublicCampus(
-            slug: "east", name: "East", addressLine1: "1 Main St", city: "Louisville",
-            state: "KY", postalCode: "40202", latitude: nil, longitude: nil,
-            timezone: "UTC", isPrimary: true
-        )
-        #expect(ChurchProfileView.addressLine(full) == "1 Main St, Louisville, KY, 40202")
+    @Test("a refused add reports the server's sentence and returns false")
+    func addFailureIsInline() async {
+        let refused = Data("""
+        {"ok":false,"error":{"code":"blocked","message":"This church is not available to you.","retryable":false},"meta":{"apiVersion":"2026-08-24","apiMajor":1,"requestId":"r-9","minimumSupportedClientBuild":1}}
+        """.utf8)
+        let model = ChurchProfileModel(api: api([.init(status: 403, body: refused)]), cache: PartitionedCache())
 
-        let empty = PublicCampus(
-            slug: "e", name: "E", addressLine1: nil, city: nil, state: nil,
-            postalCode: nil, latitude: nil, longitude: nil, timezone: "UTC", isPrimary: false
-        )
-        #expect(ChurchProfileView.addressLine(empty) == nil)
+        #expect(await model.add(slug: "grace") == false)
+        #expect(model.actionError != nil)
+        #expect(!model.isActing)
+    }
+
+    @Test("the new profile fields decode, and older payloads without them still do")
+    func decodesChurchInfoFields() throws {
+        let withInfo = """
+        {"slug":"grace","name":"Grace","logoUrl":null,"coverImageUrl":null,"publicSummary":null,
+        "tagline":null,"denomination":null,"address":null,"city":null,"state":null,"postalCode":null,
+        "website":null,"phone":null,"email":null,"joinPolicy":"open","timezone":"UTC",
+        "publicProfileVersion":3,"campuses":[],"serviceTimes":[],"relationshipState":null,
+        "about":"We gather downtown.","mapsUrl":"https://maps.example/grace",
+        "socialLinks":[{"platform":"instagram","url":"https://instagram.com/grace"}],
+        "quickLinks":[{"label":"Plan a visit","url":"https://grace.example/visit"}]}
+        """
+        let decoded = try JSONDecoder.faithform.decode(
+            MobileSuccess<ChurchProfile>.self, from: envelope(withInfo)
+        ).data
+        #expect(decoded.about == "We gather downtown.")
+        #expect(decoded.socialLinks?.first?.platform == "instagram")
+        #expect(decoded.quickLinks?.first?.label == "Plan a visit")
+
+        let older = try JSONDecoder.faithform.decode(
+            MobileSuccess<ChurchProfile>.self, from: envelope(profileJSON(joinPolicy: "open"))
+        ).data
+        #expect(older.socialLinks == nil)
+        #expect(older.about == nil)
     }
 
     @Test("a cached profile renders offline, and a failure does not discard it")
@@ -186,6 +244,322 @@ struct ChurchProfileTests {
             Issue.record("cached profile must survive a failed refresh, got \(model.phase)")
             return
         }
+    }
+}
+
+@Suite("Church info page rules")
+struct ChurchInfoRuleTests {
+
+    private func service(
+        _ day: Int, _ time: String, _ label: String = "Worship", campus: String = ""
+    ) -> PublicServiceTime {
+        PublicServiceTime(campusSlug: campus, label: label, dayOfWeek: day, startTime: time, kind: "regular")
+    }
+
+    private func campus(
+        _ slug: String, _ name: String, primary: Bool = false,
+        address: String? = nil, latitude: Double? = nil, longitude: Double? = nil
+    ) -> PublicCampus {
+        PublicCampus(
+            slug: slug, name: name, addressLine1: address, city: address == nil ? nil : "Louisville",
+            state: address == nil ? nil : "KY", postalCode: nil,
+            latitude: latitude, longitude: longitude, timezone: "America/New_York", isPrimary: primary
+        )
+    }
+
+    private func info(
+        campuses: [PublicCampus] = [],
+        services: [PublicServiceTime] = [],
+        address: String? = nil,
+        website: String? = nil,
+        phone: String? = nil,
+        email: String? = nil,
+        about: String? = nil,
+        summary: String? = nil,
+        mapsUrl: String? = nil,
+        social: [ChurchSocialLink]? = nil,
+        links: [ChurchQuickLink]? = nil,
+        denomination: String? = nil,
+        city: String? = nil,
+        state: String? = nil
+    ) -> ChurchProfile {
+        ChurchProfile(
+            slug: "grace", name: "Grace", publicSummary: summary, denomination: denomination,
+            address: address, city: city, state: state, postalCode: nil,
+            website: website, phone: phone, email: email, joinPolicy: .open,
+            timezone: "America/New_York", publicProfileVersion: 1,
+            campuses: campuses, serviceTimes: services,
+            about: about, mapsUrl: mapsUrl, socialLinks: social, quickLinks: links
+        )
+    }
+
+    /// The system writes "9:00 AM" with a narrow no-break space.
+    private func plain(_ text: String) -> String {
+        text.replacingOccurrences(of: "\u{202F}", with: " ").replacingOccurrences(of: "\u{00A0}", with: " ")
+    }
+
+    // MARK: Times
+
+    @Test("service times follow the reader's clock style without converting zones")
+    func timeFormatting() {
+        let us = Locale(identifier: "en_US")
+        let uk = Locale(identifier: "en_GB")
+        #expect(plain(ChurchInfo.formattedTime("09:00:00", locale: us)) == "9:00 AM")
+        #expect(plain(ChurchInfo.formattedTime("18:30", locale: us)) == "6:30 PM")
+        #expect(ChurchInfo.formattedTime("09:00:00", locale: uk) == "09:00")
+        #expect(ChurchInfo.formattedTime("18:30", locale: uk) == "18:30")
+        // Whatever the device's own zone, midnight stays midnight.
+        #expect(ChurchInfo.formattedTime("00:00", locale: uk) == "00:00")
+        // Nonsense is shown as sent rather than dropped or guessed at.
+        #expect(ChurchInfo.formattedTime("soon", locale: us) == "soon")
+        #expect(ChurchInfo.formattedTime("25:00", locale: us) == "25:00")
+    }
+
+    @Test("a service line names the day and the time, and clamps a bad day")
+    func serviceLine() {
+        let line = plain(ChurchInfo.serviceLine(service(0, "10:00:00"), locale: Locale(identifier: "en_US")))
+        #expect(line == "Sunday · 10:00 AM")
+        #expect(ChurchInfo.serviceLine(service(99, "10:00"), locale: Locale(identifier: "en_GB")) == "Saturday · 10:00")
+        #expect(ChurchInfo.serviceLine(service(-3, "10:00"), locale: Locale(identifier: "en_GB")) == "Sunday · 10:00")
+    }
+
+    @Test("church-wide times come first; more than one campus groups the rest")
+    func serviceGroups() {
+        let east = campus("east", "East")
+        let west = campus("west", "West")
+        let services = [
+            service(0, "11:00", campus: "west"),
+            service(3, "19:00", "Midweek"),
+            service(0, "09:00", campus: "east"),
+            service(0, "08:00", "Prayer", campus: "gone"), // a campus no longer listed
+        ]
+
+        let grouped = ChurchInfo.serviceGroups(info(campuses: [east, west], services: services))
+        #expect(grouped.map(\.title) == [nil, "East", "West"])
+        #expect(grouped[0].services.map(\.label) == ["Prayer", "Midweek"], "church-wide, by day then time")
+        #expect(grouped[1].services.map(\.startTime) == ["09:00"])
+        #expect(grouped[2].services.map(\.startTime) == ["11:00"])
+
+        // One campus: a heading would only repeat the church.
+        let single = ChurchInfo.serviceGroups(info(campuses: [east], services: [
+            service(0, "09:00", campus: "east"), service(3, "19:00", "Midweek"),
+        ]))
+        #expect(single.count == 1)
+        #expect(single[0].title == nil)
+        #expect(single[0].services.map(\.label) == ["Midweek", "Worship"])
+
+        #expect(ChurchInfo.serviceGroups(info()).isEmpty)
+    }
+
+    // MARK: Next service
+
+    private let newYork = TimeZone(identifier: "America/New_York")!
+
+    /// A wall-clock moment in New York.
+    private func newYorkTime(_ year: Int, _ month: Int, _ day: Int, _ hour: Int, _ minute: Int = 0) -> Date {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = newYork
+        return calendar.date(from: DateComponents(year: year, month: month, day: day, hour: hour, minute: minute))!
+    }
+
+    @Test("the next service is the soonest one that has not started, in the church's zone")
+    func nextService() throws {
+        // Sunday 7 September 2025, 08:00 in New York.
+        let sundayMorning = newYorkTime(2025, 9, 7, 8)
+        let services = [
+            service(3, "19:00", "Midweek"),
+            service(0, "10:00", "Morning"),
+            service(0, "07:00", "Early"),
+        ]
+
+        let next = try #require(ChurchInfo.nextService(services, timeZone: newYork, now: sundayMorning))
+        #expect(next.service.label == "Morning")
+        #expect(next.daysUntil == 0)
+        #expect(next.startsAt == newYorkTime(2025, 9, 7, 10))
+
+        // After the last Sunday service: Wednesday, in three days.
+        let sundayNight = newYorkTime(2025, 9, 7, 21)
+        let midweek = try #require(ChurchInfo.nextService(services, timeZone: newYork, now: sundayNight))
+        #expect(midweek.service.label == "Midweek")
+        #expect(midweek.daysUntil == 3)
+
+        // Tuesday evening: Wednesday is tomorrow.
+        let tuesday = newYorkTime(2025, 9, 9, 20)
+        #expect(ChurchInfo.nextService(services, timeZone: newYork, now: tuesday)?.daysUntil == 1)
+
+        // A single weekly service that already started today is next week's.
+        let onlySunday = [service(0, "10:00")]
+        let afterIt = newYorkTime(2025, 9, 7, 10, 30)
+        #expect(ChurchInfo.nextService(onlySunday, timeZone: newYork, now: afterIt)?.daysUntil == 7)
+    }
+
+    @Test("today is the church's today, not the reader's")
+    func nextServiceUsesChurchZone() throws {
+        // Saturday 22:00 in New York is already Sunday 02:00 in UTC.
+        let saturdayNight = newYorkTime(2025, 9, 6, 22)
+        let sunday = [service(0, "09:00")]
+
+        let inChurchZone = try #require(ChurchInfo.nextService(sunday, timeZone: newYork, now: saturdayNight))
+        #expect(inChurchZone.daysUntil == 1)
+        #expect(inChurchZone.startsAt == newYorkTime(2025, 9, 7, 9))
+
+        let utc = TimeZone(identifier: "UTC")!
+        #expect(ChurchInfo.nextService(sunday, timeZone: utc, now: saturdayNight)?.daysUntil == 0)
+    }
+
+    @Test("no parseable service means no next service")
+    func nextServiceNeedsData() {
+        #expect(ChurchInfo.nextService([], timeZone: newYork, now: Date()) == nil)
+        #expect(ChurchInfo.nextService([service(9, "10:00"), service(0, "later")], timeZone: newYork, now: Date()) == nil)
+    }
+
+    @Test("relative days read naturally")
+    func relativeDays() {
+        #expect(ChurchInfo.relativeDay(0) == "Today")
+        #expect(ChurchInfo.relativeDay(1) == "Tomorrow")
+        #expect(ChurchInfo.relativeDay(3) == "In 3 days")
+        #expect(ChurchInfo.relativeDay(7) == "In 7 days")
+    }
+
+    // MARK: Quick actions and links
+
+    @Test("quick actions appear only with data, in a fixed order")
+    func quickActions() {
+        #expect(ChurchInfo.quickActions(info()).isEmpty)
+
+        let everything = ChurchInfo.quickActions(info(
+            address: "1 Main St", website: "https://grace.example",
+            phone: "+1 (502) 555-0134", email: "hello@grace.example"
+        ))
+        #expect(everything.map(\.kind) == [.directions, .call, .email, .website])
+        #expect(everything[1].url.absoluteString == "tel:+15025550134")
+        #expect(everything[2].url.absoluteString == "mailto:hello@grace.example")
+        #expect(everything[3].url.absoluteString == "https://grace.example")
+
+        let phoneOnly = ChurchInfo.quickActions(info(phone: "502.555.0134"))
+        #expect(phoneOnly.map(\.kind) == [.call])
+        #expect(phoneOnly[0].url.absoluteString == "tel:5025550134")
+    }
+
+    @Test("directions prefer the church's own maps link, then its address, then a campus")
+    func directions() throws {
+        let chosen = ChurchInfo.directionsURL(info(address: "1 Main St", mapsUrl: "https://maps.example/grace"))
+        #expect(chosen?.absoluteString == "https://maps.example/grace")
+
+        let address = try #require(ChurchInfo.directionsURL(info(address: "1 Main St & 2nd", city: "Louisville", state: "KY")))
+        #expect(address.absoluteString == "https://maps.apple.com/?q=1%20Main%20St%20%26%202nd%2C%20Louisville%2C%20KY")
+
+        // No church address: the main campus, by coordinates when it has them.
+        let viaCampus = ChurchInfo.directionsURL(info(campuses: [
+            campus("west", "West", address: "9 Oak Ave"),
+            campus("east", "East Campus", primary: true, latitude: 38.25, longitude: -85.75),
+        ]))
+        #expect(viaCampus?.absoluteString == "https://maps.apple.com/?ll=38.25,-85.75&q=East%20Campus")
+
+        // A campus with neither address nor coordinates gives nothing to open.
+        #expect(ChurchInfo.directionsURL(info(campuses: [campus("x", "X")])) == nil)
+        // A town alone is not an address to navigate to.
+        #expect(ChurchInfo.directionsURL(info(city: "Louisville", state: "KY")) == nil)
+    }
+
+    @Test("only web addresses the app understands are ever opened")
+    func urlSafety() {
+        #expect(ChurchInfo.webURL("javascript:alert(1)") == nil)
+        #expect(ChurchInfo.webURL("ftp://grace.example") == nil)
+        #expect(ChurchInfo.webURL("faithform://church/grace") == nil)
+        #expect(ChurchInfo.webURL("mailto:x@y.example") == nil)
+        #expect(ChurchInfo.webURL("https://user:secret@grace.example") == nil)
+        #expect(ChurchInfo.webURL("https://") == nil)
+        #expect(ChurchInfo.webURL("   ") == nil)
+        #expect(ChurchInfo.webURL("grace.example")?.absoluteString == "https://grace.example")
+        #expect(ChurchInfo.webURL("http://grace.example/a")?.absoluteString == "http://grace.example/a")
+        #expect(ChurchInfo.phoneURL("call us") == nil)
+        #expect(ChurchInfo.emailURL("not-an-email") == nil)
+        #expect(ChurchInfo.emailURL("a@b.example?bcc=x@y.example") == nil)
+    }
+
+    @Test("social profiles map to a name, a system glyph and a colour; the rest are links")
+    func socialStyles() {
+        let expected: [(String, String, String, String?)] = [
+            ("instagram", "Instagram", "camera", "#E1306C"),
+            ("facebook", "Facebook", "person.2.fill", "#1877F2"),
+            ("youtube", "YouTube", "play.rectangle.fill", "#FF0000"),
+            ("tiktok", "TikTok", "music.note", "#111111"),
+            ("x", "X", "at", "#111111"),
+            ("podcast", "Podcast", "mic.fill", "#8E44EF"),
+            ("mastodon", "Link", "link", nil),
+            ("", "Link", "link", nil),
+        ]
+        for (platform, title, symbol, color) in expected {
+            let style = ChurchInfo.socialStyle(platform)
+            #expect(style.title == title, "\(platform)")
+            #expect(style.symbol == symbol, "\(platform)")
+            #expect(style.colorHex == color, "\(platform)")
+        }
+
+        let items = ChurchInfo.socialItems(info(social: [
+            ChurchSocialLink(platform: "youtube", url: "https://youtube.com/@grace"),
+            ChurchSocialLink(platform: "instagram", url: "javascript:void(0)"),
+            ChurchSocialLink(platform: "facebook", url: "https://facebook.com/grace"),
+        ]))
+        #expect(items.map(\.style.title) == ["YouTube", "Facebook"], "the church's order, unsafe links dropped")
+    }
+
+    @Test("quick links show the host people recognise")
+    func quickLinks() {
+        let items = ChurchInfo.quickLinkItems(info(links: [
+            ChurchQuickLink(label: "Plan a visit", url: "https://www.grace.example/visit"),
+            ChurchQuickLink(label: "  ", url: "https://grace.example/blank"),
+            ChurchQuickLink(label: "Bad", url: "mailto:x@y.example"),
+        ]))
+        #expect(items.count == 1)
+        #expect(items[0].label == "Plan a visit")
+        #expect(items[0].host == "grace.example")
+    }
+
+    @Test("contact rows list phone, email and website, each tappable")
+    func contactRows() {
+        let rows = ChurchInfo.contactRows(info(
+            website: "https://www.grace.example/", phone: "(502) 555-0134", email: "hello@grace.example"
+        ))
+        #expect(rows.map(\.label) == [L.phoneLabel, L.emailLabel, L.websiteLabel])
+        #expect(rows[0].value == "(502) 555-0134")
+        #expect(rows[0].url.absoluteString == "tel:5025550134")
+        #expect(rows[2].value == "grace.example")
+        #expect(ChurchInfo.contactRows(info()).isEmpty)
+    }
+
+    // MARK: Identity
+
+    @Test("about falls back to the summary, and blank is nothing")
+    func aboutText() {
+        #expect(ChurchInfo.aboutText(info(about: "Long story", summary: "Short")) == "Long story")
+        #expect(ChurchInfo.aboutText(info(about: "  ", summary: "Short")) == "Short")
+        #expect(ChurchInfo.aboutText(info(about: nil, summary: "")) == nil)
+    }
+
+    @Test("the place line leaves out whatever is missing")
+    func placeLine() {
+        #expect(ChurchInfo.placeLine(info(denomination: "Baptist", city: "Louisville", state: "KY")) == "Baptist · Louisville, KY")
+        #expect(ChurchInfo.placeLine(info(city: "Louisville")) == "Louisville")
+        #expect(ChurchInfo.placeLine(info(denomination: "Baptist")) == "Baptist")
+        #expect(ChurchInfo.placeLine(info()) == nil)
+    }
+
+    @Test("an address line skips empty parts rather than showing stray commas")
+    func addressLine() {
+        let full = PublicCampus(
+            slug: "east", name: "East", addressLine1: "1 Main St", city: "Louisville",
+            state: "KY", postalCode: "40202", latitude: nil, longitude: nil,
+            timezone: "UTC", isPrimary: true
+        )
+        #expect(ChurchInfo.addressLine(full) == "1 Main St, Louisville, KY, 40202")
+
+        let empty = PublicCampus(
+            slug: "e", name: "E", addressLine1: nil, city: "", state: nil,
+            postalCode: nil, latitude: nil, longitude: nil, timezone: "UTC", isPrimary: false
+        )
+        #expect(ChurchInfo.addressLine(empty) == nil)
     }
 }
 

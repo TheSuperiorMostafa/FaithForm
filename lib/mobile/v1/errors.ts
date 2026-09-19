@@ -120,6 +120,7 @@ const DOMAIN_TO_MOBILE: Record<string, MobileErrorCode> = {
   unsupported_dependent_claim: "forbidden",
   rate_limited: "rate_limited",
   unavailable: "unavailable",
+  group_not_found: "not_found",
 };
 
 export function mobileCodeForDomainCode(domainCode: string): MobileErrorCode {

@@ -14,13 +14,9 @@ import FaithFormKit
 ///
 /// ## Five tabs, not six
 ///
-/// Home, Check in, Watch, Give and Account. An iPhone tab bar shows five; a
-/// sixth folds the last two into "More", which would have put Account — and
-/// with it sign-out and account deletion — behind a generic label. The old
-/// Church tab was the one that was not a destination, so switching and finding
-/// churches moved onto Home, beside the feed they change (see `HomeTabView`),
-/// and sermon notes joined recordings on Watch rather than taking a tab of their
-/// own (see `WatchTabView`).
+/// With Groups enabled: Home, Groups, Check in, Watch, Give. Account opens
+/// from the top bar. Otherwise Account retains its familiar bottom-tab entry.
+/// Church information and changing churches remain within Home.
 ///
 /// ## Reauthorization
 ///
@@ -46,6 +42,7 @@ struct RootView: View {
     /// Tabs whose content has been opened at least once this launch. Unopened
     /// tabs stay a blank placeholder so Watch/Give/Check-in are not built until
     /// they are selected.
+    @State private var accountOpen = false
     @State private var openedTabs: Set<RootTab> = [.home]
     /// True once this launch showed `LaunchLoadingView`. Returning visits with a
     /// snapshot never set it, so they skip the brand dwell.
@@ -162,6 +159,12 @@ struct RootView: View {
         }
         .animation(theme.animation(FaithFormTokens.Motion.standard), value: showsLaunchLockup)
         .animation(theme.animation(FaithFormTokens.Motion.standard), value: shellRevealed)
+        .sheet(isPresented: Binding(get: { model.state.bootstrap != nil && model.groupInvitationToken != nil }, set: { if !$0 { model.groupInvitationToken = nil } })) {
+            if let token = model.groupInvitationToken { GroupInvitationView(api: dependencies.api, token: token) { slug in
+                model.groupInvitationToken = nil
+                if let url = URL(string: "faithform://church/\(slug)/groups") { model.open(url) }
+            } }
+        }
         .task { await model.load() }
         .onChange(of: model.state.phase, initial: true) { _, phase in
             handleLaunchTiming(phase)
@@ -247,6 +250,19 @@ struct RootView: View {
                     .tag(tab)
             }
         }
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if available.contains(.groups) {
+                HStack {
+                    Text("Your community").font(.caption).foregroundStyle(theme.palette.contentSecondary)
+                    Spacer()
+                    Button { accountOpen = true } label: { Image(systemName: "person.crop.circle").font(.title3).frame(width: 44, height: 36) }.accessibilityLabel("Account and settings")
+                }.padding(.horizontal, 20).background(theme.palette.background)
+            }
+        }
+        .sheet(isPresented: $accountOpen) {
+            AccountTabView(dependencies: dependencies, root: model, bootstrap: bootstrap, isStale: isStale)
+                .presentationDragIndicator(.visible)
+        }
         .tint(theme.palette.brandAccent)
         .toolbarBackground(theme.palette.surface, for: .tabBar)
         .toolbarBackground(.visible, for: .tabBar)
@@ -275,7 +291,10 @@ struct RootView: View {
                 divider: theme.palette.divider
             )
         }
-        .onChange(of: model.selectedTab) { _, tab in openedTabs.insert(tab) }
+        .onChange(of: model.selectedTab) { _, tab in
+            if tab == .account && available.contains(.groups) { accountOpen = true; model.selectedTab = .home }
+            else { openedTabs.insert(tab) }
+        }
         .onChange(of: theme.palette.surface) { _, newSurface in
             applyTabBarAppearance(
                 surface: newSurface,
@@ -321,12 +340,11 @@ struct RootView: View {
             HomeTabView(
                 dependencies: dependencies,
                 root: model,
-                bootstrap: bootstrap,
                 isStale: isStale,
                 discovery: discovery
             )
 
-        case .checkIn, .watch, .give:
+        case .groups, .checkIn, .watch, .give:
             // Every church-scoped tab needs a church, and the registry only
             // offers one while a church is selected. The empty state covers the
             // instant between a relationship ending and the tab disappearing.
@@ -355,6 +373,8 @@ struct RootView: View {
     @ViewBuilder
     private func churchScreen(for tab: RootTab, features: ChurchFeatures, isStale: Bool) -> some View {
         switch tab {
+        case .groups:
+            GroupsTabView(model: features.groups)
         case .checkIn:
             CheckInTabView(
                 root: model,
@@ -380,6 +400,7 @@ struct RootView: View {
 /// destination enum would invite a sixth tab, and a sixth tab is "More".
 enum RootTab: Hashable, CaseIterable {
     case home
+    case groups
     case checkIn
     case watch
     case give
@@ -388,6 +409,7 @@ enum RootTab: Hashable, CaseIterable {
     var destination: Destination {
         switch self {
         case .home: return .home
+        case .groups: return .groups(churchSlug: "")
         case .checkIn: return .checkIn(churchSlug: "")
         case .watch: return .watch(churchSlug: "")
         case .give: return .give(churchSlug: "")
@@ -398,6 +420,7 @@ enum RootTab: Hashable, CaseIterable {
     var title: String {
         switch self {
         case .home: return L.tabHome
+        case .groups: return "Groups"
         case .checkIn: return L.tabCheckIn
         case .watch: return L.tabWatch
         case .give: return L.tabGive
@@ -408,6 +431,7 @@ enum RootTab: Hashable, CaseIterable {
     var symbol: String {
         switch self {
         case .home: return "house"
+        case .groups: return "person.3"
         case .checkIn: return "qrcode.viewfinder"
         case .watch: return "play.rectangle"
         case .give: return "heart"

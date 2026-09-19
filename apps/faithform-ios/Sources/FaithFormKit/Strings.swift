@@ -68,12 +68,10 @@ public enum L {
     }
 
     // MARK: - Relationship
-    public static var followChurch: String { t("follow_church", "Add this church") }
-    public static var followingChurch: String { t("following_church", "Added") }
-    public static var requestToJoin: String { t("request_to_join", "Request to Join") }
-    public static var joinChurch: String { t("join_church", "Join") }
+    //
+    // One church per account: a person adds a church, and adding a different
+    // one replaces it. There is no follow, join or leave in the app any more.
     public static var acceptInvitation: String { t("accept_invitation", "Accept Invitation") }
-    public static var leaveChurch: String { t("leave_church", "Leave") }
     public static var stateFollowing: String { t("state_following", "Added") }
     public static var statePending: String { t("state_pending", "Request pending") }
     public static var joinPendingHomeTitle: String {
@@ -85,15 +83,38 @@ public enum L {
     public static var stateJoined: String { t("state_joined", "Member") }
     public static var stateLeft: String { t("state_left", "Not added") }
     public static var stateBlocked: String { t("state_blocked", "Unavailable") }
-    public static var pendingExplainer: String {
-        t("pending_explainer", "Your request is with the church. Waiting for someone on staff to accept you. You can still see what they publish for people who have added them.")
-    }
     public static var inviteOnlyExplainer: String {
-        t("invite_only_explainer", "This church joins by invitation.")
+        t("invite_only_explainer", "This church adds people by invitation. Ask them for their link.")
     }
-    public static var addAnotherChurch: String { t("add_another_church", "Add another church") }
-    public static var switchChurch: String { t("switch_church", "Switch church") }
-    public static var chooseChurchTitle: String { t("choose_church_title", "Choose a church") }
+    public static var churchInfo: String { t("church_info", "Church info") }
+    public static var addChurch: String { t("add_church", "Add church") }
+    public static var makeMyChurch: String { t("make_my_church", "Make this my church") }
+    public static var yourChurch: String { t("your_church", "Your church") }
+    /// "%@" is the church being added: "Switch to Grace Community?"
+    public static var switchConfirmTitle: String {
+        t("switch_church_confirm_title", "Switch to %@?")
+    }
+    /// "%@" is the church being replaced.
+    public static var switchConfirmBody: String {
+        t("switch_church_confirm_body", "%@ will be replaced as your church. You can switch back anytime.")
+    }
+    public static var switchConfirmAction: String { t("switch_church_confirm_action", "Switch") }
+    public static var changeChurch: String { t("change_church", "Change church") }
+    public static var removeChurch: String { t("remove_church", "Remove church") }
+    /// "%@" is the church being removed: "Remove Grace Community?"
+    public static var removeChurchConfirmTitle: String {
+        t("remove_church_confirm_title", "Remove %@?")
+    }
+    public static var removeChurchConfirmBody: String {
+        t("remove_church_confirm_body", "You'll stop seeing their posts, events and services. You can add it again anytime.")
+    }
+    public static var removeChurchConfirmAction: String {
+        t("remove_church_confirm_action", "Remove")
+    }
+    public static var haveInvitationLink: String {
+        t("have_invitation_link", "I have an invitation link")
+    }
+    public static var cancel: String { t("cancel", "Cancel") }
 
     // MARK: - Home and feed
     public static var homeTitle: String { t("home_title", "Home") }
@@ -246,6 +267,30 @@ public enum L {
     public static var thursday: String { t("day_thursday", "Thursday") }
     public static var friday: String { t("day_friday", "Friday") }
     public static var saturday: String { t("day_saturday", "Saturday") }
+    public static var serviceTimesTitle: String { t("service_times_title", "Service times") }
+    public static var aboutTitle: String { t("about_title", "About") }
+    public static var connectTitle: String { t("connect_title", "Connect") }
+    public static var linksTitle: String { t("links_title", "Links") }
+    public static var locationsTitle: String { t("locations_title", "Locations") }
+    public static var contactTitle: String { t("contact_title", "Contact") }
+    public static var actionDirections: String { t("action_directions", "Directions") }
+    public static var actionCall: String { t("action_call", "Call") }
+    public static var actionEmail: String { t("action_email", "Email") }
+    public static var actionWebsite: String { t("action_website", "Website") }
+    public static var socialInstagram: String { t("social_instagram", "Instagram") }
+    public static var socialFacebook: String { t("social_facebook", "Facebook") }
+    public static var socialYoutube: String { t("social_youtube", "YouTube") }
+    public static var socialTiktok: String { t("social_tiktok", "TikTok") }
+    public static var socialX: String { t("social_x", "X") }
+    public static var socialPodcast: String { t("social_podcast", "Podcast") }
+    public static var socialLink: String { t("social_link", "Link") }
+    public static var readMore: String { t("read_more", "Read more") }
+    public static var showLess: String { t("show_less", "Show less") }
+    public static var nextService: String { t("next_service", "Next service") }
+    public static var today: String { t("today", "Today") }
+    public static var tomorrow: String { t("tomorrow", "Tomorrow") }
+    /// "%d" is a whole number of days, always 2 or more: "In 3 days".
+    public static var inDays: String { t("in_days", "In %d days") }
 
     // MARK: - Notifications, continued
     public static var notificationSettingsHint: String {

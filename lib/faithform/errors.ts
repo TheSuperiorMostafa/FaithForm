@@ -30,6 +30,9 @@ export const VISITOR_ERROR_CODES = [
   "unsupported_dependent_claim",
   "rate_limited",
   "unavailable",
+  // Groups (Prompt 14). A group the caller may not know exists answers the
+  // same as one that does not.
+  "group_not_found",
 ] as const;
 
 export type VisitorErrorCode = (typeof VISITOR_ERROR_CODES)[number];

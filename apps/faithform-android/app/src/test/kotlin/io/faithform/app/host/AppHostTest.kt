@@ -204,6 +204,7 @@ class AppManifestTest {
         // exists; the absent ones name features that do not.
         for (required in listOf(
             "android.permission.INTERNET",
+                "android.permission.WAKE_LOCK",
             "android.permission.CAMERA",
             "android.permission.ACCESS_FINE_LOCATION",
         )) {
@@ -226,7 +227,9 @@ class AppManifestTest {
             "RECEIVE_BOOT_COMPLETED",
             "POST_NOTIFICATIONS",
         )) {
-            assertFalse("$absent is declared and nothing needs it", manifest.contains(absent))
+            val permissions = Regex("<uses-permission[^>]*>").findAll(manifest)
+                .map { it.value }.filterNot { it.contains("tools:node=\"remove\"") }.joinToString()
+            assertFalse("$absent is declared and nothing needs it", permissions.contains(absent))
         }
     }
 

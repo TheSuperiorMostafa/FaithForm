@@ -160,8 +160,9 @@ final class RootModel {
 
     func load() async { await load(quiet: false) }
 
-    /// `quiet` refreshes in place after something changed — a join, an accepted
-    /// invitation — without collapsing the UI back to a spinner first.
+    /// `quiet` refreshes in place after something changed — a church added,
+    /// replaced or removed, an accepted invitation — without collapsing the UI
+    /// back to a spinner first.
     func load(quiet: Bool) async {
         guard let session = await dependencies.session.currentSession() else {
             state.apply(.signedOut)
@@ -302,11 +303,6 @@ final class RootModel {
         }
     }
 
-    /// The caller's current relationship with a church, as bootstrap knows it.
-    func relationshipState(for slug: String) -> RelationshipState? {
-        state.bootstrap?.relationships.first(where: { $0.churchSlug == slug })?.state
-    }
-
     /// The tabs available *right now*.
     ///
     /// Every one is resolved through `RouteRegistry`, against the current
@@ -314,9 +310,17 @@ final class RootModel {
     /// off, a relationship that was revoked, or a screen this platform does not
     /// implement all remove the tab on the next pass — which is why a tab list
     /// is computed rather than stored.
+    nonisolated static func tabCandidates(groupsEnabled: Bool) -> [RootTab] {
+        RootTab.allCases.filter { groupsEnabled ? $0 != .account : $0 != .groups }
+    }
+
     func availableTabs(bootstrap: Bootstrap) -> [RootTab] {
-        RootTab.allCases.filter { tab in
+        Self.tabCandidates(groupsEnabled: selectedChurch?.groupsEnabled == true && isAllowed(.groups(churchSlug: ""), in: bootstrap)).filter { tab in
             switch tab {
+            case .groups:
+                return selectedChurch?.groupsEnabled == true && isAllowed(tab.destination, in: bootstrap)
+            case .account:
+                return !(selectedChurch?.groupsEnabled == true && isAllowed(.groups(churchSlug: ""), in: bootstrap))
             case .watch:
                 // Watch holds two things — recordings and sermon notes — and is
                 // worth a tab if either is on.
@@ -378,19 +382,13 @@ final class RootModel {
         )
     }
 
-    func selectChurch(_ relationship: ChurchRelationship) {
-        selectedChurch = relationship
-        // A church switch changes the cache partition, and with it the whole
-        // feature container. Nothing from the previous church can be read
-        // afterwards, because neither the key nor the models are the same.
-        //
-        // The new church's cached rows are deliberately **kept**: they belong
-        // to this account and this church, and are what lets a switch back
-        // render at once instead of starting from a spinner.
-        refreshFeatures()
-    }
-
     /// Rebuilds `features` if, and only if, what it is keyed by changed.
+    ///
+    /// A change of church changes the cache partition, and with it the whole
+    /// feature container: nothing from the previous church can be read
+    /// afterwards, because neither the key nor the models are the same. That
+    /// church's cached rows are kept — they belong to this account and that
+    /// church, and let a change back render at once.
     ///
     /// Called after every selection change and every load. A quiet reload that
     /// changes nothing keeps the same models — and with them a scan in
@@ -453,6 +451,7 @@ final class RootModel {
 
         // An invitation is a credential, not a destination. Signed out it is
         // held for after sign-in; signed in it is redeemed on the spot.
+        if let token = GroupInvitationLink.token(from: url) { groupInvitationToken = token; return }
         if let token = InvitationLink.token(from: url) {
             onboarding.hold(invitationToken: token)
             if state.bootstrap != nil {
@@ -489,6 +488,7 @@ final class RootModel {
             guard let match = bootstrap.relationships.first(where: { $0.churchSlug == slug }),
                   match.canReadPublishedContent
             else { return }
+            if case .groups = destination, match.groupsEnabled != true { return }
             if case .checkIn = destination, !Self.offersCheckIn(match) { return }
             selectedChurch = match
             refreshFeatures()
@@ -515,6 +515,8 @@ final class RootModel {
     /// link is spent goodwill, not an error: refresh quietly and move on.
     /// Signed out, it goes to `AuthModel`, which owns the exchange and every
     /// sentence it can end in.
+    var groupInvitationToken: String?
+
     private func handleAuthCallback(_ outcome: AuthCallbackLink.Outcome) async {
         if await dependencies.session.currentSession() != nil {
             Self.log.event("auth_callback_ignored_signed_in")
@@ -527,6 +529,7 @@ final class RootModel {
     private static let log = FaithFormLog(category: "auth")
 
     func signOut() async {
+        groupInvitationToken = nil
         // The server side first, best-effort: it bumps the authorization
         // version so anything cached against the old one is unreadable
         // everywhere, not just on this device. Then everything local, across
@@ -615,6 +618,7 @@ final class RootModel {
         switch destination {
         case .checkIn: return .checkIn(churchSlug: slug)
         case .watch: return .watch(churchSlug: slug)
+        case .groups: return .groups(churchSlug: slug)
         case .give: return .give(churchSlug: slug)
         case .announcements: return .announcements(churchSlug: slug)
         case .sermonArchive: return .sermonArchive(churchSlug: slug)
@@ -626,11 +630,12 @@ final class RootModel {
     nonisolated static func tab(for destination: Destination) -> RootTab? {
         switch destination {
         case .home: return .home
-        // Finding and switching churches lives on Home now — see `HomeTabView`.
+        // The church's page, and finding another, live on Home — see `HomeTabView`.
         case .churchDiscovery, .church: return .home
         case .checkIn: return .checkIn
         // Sermon notes are the other half of Watch; `open` picks the section.
         case .watch, .sermonArchive: return .watch
+        case .groups: return .groups
         case .give: return .give
         case .account, .accountPrivacy: return .account
         // No tab. Announcements are reachable by link and have no screen of

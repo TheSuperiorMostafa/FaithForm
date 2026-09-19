@@ -14,10 +14,12 @@ import io.faithform.app.navigation.SessionSnapshot
  * One case per destination that has a screen, in the order iOS shows them —
  * `RootTab` in `apps/faithform-ios/App/RootView.swift`. Deliberately not one
  * case per [Destination]: announcements have no tab of their own; sermon notes
- * open inside Services (Watch) beside live and past recordings.
+ * open inside Services (Watch) beside live and past recordings; and a person
+ * has exactly one church, so its page ("Church info") and finding another
+ * live under Home rather than in a tab of their own.
  */
 enum class HostTab {
-    HOME, CHURCH, CHECK_IN, WATCH, GIVE, ACCOUNT;
+    HOME, GROUPS, CHECK_IN, WATCH, GIVE, ACCOUNT;
 
     /**
      * The destination a tab stands for. Church-scoped ones carry an empty slug
@@ -27,7 +29,7 @@ enum class HostTab {
     val destination: Destination
         get() = when (this) {
             HOME -> Destination.Home
-            CHURCH -> Destination.ChurchDiscovery
+            GROUPS -> Destination.Groups("")
             CHECK_IN -> Destination.CheckIn("")
             WATCH -> Destination.Watch("")
             GIVE -> Destination.Give("")
@@ -84,6 +86,7 @@ object HostNavigation {
         val session = snapshot(bootstrap)
         return HostTab.entries.filter { tab ->
             when (tab) {
+                HostTab.GROUPS -> bootstrap.relationships.firstOrNull { it.churchSlug == selectedChurchSlug }?.groupsEnabled == true && registry.resolve(scoped(tab.destination, selectedChurchSlug), session) is RouteResolution.Allowed
                 HostTab.CHECK_IN -> {
                     val allowed = registry.resolve(
                         scoped(tab.destination, selectedChurchSlug),
@@ -101,7 +104,7 @@ object HostNavigation {
                 }
                 else -> registry.resolve(scoped(tab.destination, selectedChurchSlug), session) is RouteResolution.Allowed
             }
-        }
+        }.let { tabs -> if (HostTab.GROUPS in tabs) tabs.filter { it != HostTab.ACCOUNT } else tabs }
     }
 
     /** Older servers omit these additive fields and historically offered both. */
@@ -131,6 +134,7 @@ object HostNavigation {
     fun scoped(destination: Destination, slug: String?): Destination {
         slug ?: return destination
         return when (destination) {
+            is Destination.Groups -> Destination.Groups(slug)
             is Destination.CheckIn -> Destination.CheckIn(slug)
             is Destination.Watch -> Destination.Watch(slug)
             is Destination.Give -> Destination.Give(slug)
@@ -143,12 +147,15 @@ object HostNavigation {
 
     /**
      * Which tab a destination lands on. Announcements have no tab; sermons open
-     * inside Services, which `AppViewModel.sermonsRequested` asks it to do.
+     * inside Services, which `AppViewModel.sermonsRequested` asks it to do. A
+     * church or discovery link lands on Home, where the church's page and the
+     * search for another now live.
      */
     fun tabFor(destination: Destination): HostTab? = when (destination) {
         is Destination.Home -> HostTab.HOME
-        is Destination.ChurchDiscovery, is Destination.Church -> HostTab.CHURCH
+        is Destination.ChurchDiscovery, is Destination.Church -> HostTab.HOME
         is Destination.SermonArchive -> HostTab.WATCH
+        is Destination.Groups -> HostTab.GROUPS
         is Destination.CheckIn -> HostTab.CHECK_IN
         is Destination.Watch -> HostTab.WATCH
         is Destination.Give -> HostTab.GIVE
@@ -195,6 +202,7 @@ object HostNavigation {
             bootstrap.relationships.firstOrNull { it.churchSlug == slug && it.canReadPublishedContent }
                 ?: return null
         }
+        if (destination is Destination.Groups && church?.groupsEnabled != true) return null
         if (destination is Destination.CheckIn && church?.offersCheckIn == false) return null
         if (registry.resolve(destination, snapshot(bootstrap)) !is RouteResolution.Allowed) return null
         val tab = tabFor(destination) ?: return null

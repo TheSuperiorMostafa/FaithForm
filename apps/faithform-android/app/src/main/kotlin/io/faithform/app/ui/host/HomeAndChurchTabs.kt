@@ -1,8 +1,24 @@
 package io.faithform.app.ui.host
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Church
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -11,64 +27,156 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.faithform.app.AppViewModel
 import io.faithform.app.R
-import io.faithform.app.contract.Bootstrap
 import io.faithform.app.contract.ChurchRelationship
-import io.faithform.app.contract.RelationshipState
-import io.faithform.app.network.ApiClient
-import io.faithform.app.network.ProjectionCache
+import io.faithform.app.design.FaithFormTokens
+import io.faithform.app.media.MediaListModel
 import io.faithform.app.session.AppContainer
 import io.faithform.app.storage.CachePartition
-import io.faithform.app.ui.church.ChurchChooserScreen
-import io.faithform.app.ui.church.chooserPhaseFor
+import io.faithform.app.ui.church.ChurchInfoHost
 import io.faithform.app.ui.discovery.EmptyState
 import io.faithform.app.ui.discovery.LocationProvider
 import io.faithform.app.ui.feed.AnnouncementDetailScreen
 import io.faithform.app.ui.feed.FeedModel
 import io.faithform.app.ui.feed.FeedPhase
+import io.faithform.app.ui.media.PollLiveStatus
 import io.faithform.app.ui.onboarding.FindChurchFlow
 import io.faithform.app.ui.schedule.HomeHostScreen
 import io.faithform.app.ui.schedule.ScheduleModel
 import io.faithform.app.ui.schedule.SchedulePhase
-import io.faithform.app.media.MediaClient
-import io.faithform.app.media.MediaListModel
-import io.faithform.app.ui.media.PollLiveStatus
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
+/** Where Home is: the feed, the church's page, or the search for a church. */
+private enum class HomeRoute { FEED, CHURCH_INFO, FIND }
+
 /**
- * Home: what the selected church has published, newest and pinned first.
+ * Home: what the account's church has published, newest and pinned first —
+ * and, behind the "Church info" button in its bar, that church's page.
  *
- * With no church selected there is nothing to show, and the honest thing is to
- * say so rather than render an empty feed.
+ * A person has exactly one church, so there is no church tab and no switcher.
+ * The church's page, and finding a different church from it ("Change church"),
+ * live under Home, exactly as on iOS. Adding a church from the search returns
+ * here, already showing the new church.
+ *
+ * With no church there is nothing to show, and the honest thing is to say so —
+ * with the way to find one — rather than render an empty feed.
  */
 @Composable
 fun HomeTab(
     appViewModel: AppViewModel,
-    api: ApiClient,
-    projections: ProjectionCache,
-    mediaClient: MediaClient,
+    container: AppContainer,
+    locationProvider: LocationProvider,
     church: ChurchRelationship?,
     partition: CachePartition?,
     modifier: Modifier = Modifier,
 ) {
-    if (church == null || partition == null) {
-        TabScreen(title = stringResource(R.string.tab_home), modifier = modifier) { content ->
+    var route by rememberSaveable { mutableStateOf(HomeRoute.FEED) }
+    // Back from the search returns to whichever page opened it.
+    var findReturnsTo by rememberSaveable { mutableStateOf(HomeRoute.FEED) }
+    val openFind: (HomeRoute) -> Unit = { from ->
+        findReturnsTo = from
+        route = HomeRoute.FIND
+    }
+
+    // A church that went away takes its page with it.
+    LaunchedEffect(church == null, route) {
+        if (church == null && route == HomeRoute.CHURCH_INFO) route = HomeRoute.FEED
+    }
+
+    when {
+        route == HomeRoute.FIND -> FindChurchFlow(
+            appViewModel = appViewModel,
+            container = container,
+            locationProvider = locationProvider,
+            showWelcome = false,
+            onExit = { route = findReturnsTo },
+            embeddedTitle = stringResource(if (church != null) R.string.change_church else R.string.find_a_church),
+            onChurchAdded = { route = HomeRoute.FEED },
+        )
+
+        route == HomeRoute.CHURCH_INFO && church != null -> ChurchInfoHost(
+            slug = church.churchSlug,
+            appViewModel = appViewModel,
+            container = container,
+            onBack = { route = HomeRoute.FEED },
+            // Their own church is never invitation-only to them; if the server
+            // ever says otherwise, the search is where invitations are entered.
+            onHaveInvitation = { openFind(HomeRoute.CHURCH_INFO) },
+            onChangeChurch = { openFind(HomeRoute.CHURCH_INFO) },
+            onChurchAdded = { route = HomeRoute.FEED },
+            onChurchRemoved = { route = HomeRoute.FEED },
+            modifier = modifier,
+        )
+
+        church == null || partition == null -> NoChurchHome(
+            onFindChurch = { openFind(HomeRoute.FEED) },
+            modifier = modifier,
+        )
+
+        else -> HomeFeed(
+            appViewModel = appViewModel,
+            container = container,
+            church = church,
+            partition = partition,
+            onOpenChurchInfo = { route = HomeRoute.CHURCH_INFO },
+            modifier = modifier,
+        )
+    }
+}
+
+@Composable
+private fun NoChurchHome(onFindChurch: () -> Unit, modifier: Modifier = Modifier) {
+    TabScreen(title = stringResource(R.string.tab_home), modifier = modifier) { content ->
+        Column(
+            modifier = content
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .padding(FaithFormTokens.Layout.screenPaddingHorizontal),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.base),
+        ) {
             EmptyState(
                 title = stringResource(R.string.no_church_title),
                 body = stringResource(R.string.no_church_body),
                 icon = Icons.Outlined.Church,
-                modifier = content,
             )
+            Button(
+                onClick = onFindChurch,
+                modifier = Modifier
+                    .widthIn(max = FaithFormTokens.Layout.contentMaxWidth)
+                    .fillMaxWidth()
+                    .heightIn(min = FaithFormTokens.TouchTarget.recommended),
+            ) {
+                Icon(
+                    Icons.Outlined.Search,
+                    contentDescription = null,
+                    modifier = Modifier.size(FaithFormTokens.IconSize.sizeMedium),
+                )
+                Spacer(Modifier.size(FaithFormTokens.Spacing.sm))
+                Text(stringResource(R.string.find_a_church))
+            }
         }
-        return
     }
+}
 
+@Composable
+private fun HomeFeed(
+    appViewModel: AppViewModel,
+    container: AppContainer,
+    church: ChurchRelationship,
+    partition: CachePartition,
+    onOpenChurchInfo: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val api = container.apiClient
+    val projections = container.projections
     val feed = rememberSessionModel("feed|${partition.storageKey}") {
         FeedModel(api, projections, church.churchSlug, partition)
     }
@@ -76,7 +184,7 @@ fun HomeTab(
         ScheduleModel(api, projections, church.churchSlug, partition)
     }
     val media = rememberSessionModel("home-media|${partition.storageKey}") {
-        MediaListModel(mediaClient, church.churchSlug, partition)
+        MediaListModel(container.mediaClient, church.churchSlug, partition)
     }
     LaunchedEffect(feed, schedule, media) {
         feed.launchOnce("load") { load() }
@@ -128,6 +236,11 @@ fun HomeTab(
         logoUrl = church.logoUrl,
         showChurchAvatar = true,
         modifier = modifier,
+        actions = {
+            IconButton(onClick = onOpenChurchInfo) {
+                Icon(Icons.Outlined.Info, contentDescription = stringResource(R.string.church_info))
+            }
+        },
     ) { content ->
         HomeHostScreen(
             feedPhase = phase,
@@ -140,63 +253,13 @@ fun HomeTab(
             onFeedReachedEnd = { feed.launch { loadMore() } },
             onRetrySchedule = { schedule.launch { refresh() } },
             modifier = content,
-            isJoinPending = church.state == RelationshipState.PENDING,
+            // There is no membership to wait for any more: a church is added
+            // at once, so Home never shows a "waiting for your church" banner.
+            isJoinPending = false,
             live = mediaState.liveCard,
             onWatchLive = appViewModel::watchLive,
             isRefreshing = refreshing,
             onRefresh = refreshAll,
         )
-    }
-}
-
-private enum class ChurchRoute { ROOT, FIND }
-
-/**
- * Church: which church the other tabs are about, and finding another.
- *
- * Rows are the account's relationships from bootstrap; tapping a readable one
- * selects it for every church-scoped tab. "Add another church" runs the same
- * find-a-church flow as first run, without the welcome. Sermons live under
- * Services, not here.
- */
-@Composable
-fun ChurchTab(
-    appViewModel: AppViewModel,
-    container: AppContainer,
-    locationProvider: LocationProvider,
-    bootstrap: Bootstrap,
-    selectedSlug: String?,
-    partition: CachePartition?,
-    modifier: Modifier = Modifier,
-) {
-    var route by rememberSaveable { mutableStateOf(ChurchRoute.ROOT) }
-
-    when {
-        route == ChurchRoute.FIND -> TabScreen(
-            title = stringResource(R.string.add_another_church),
-            onBack = { route = ChurchRoute.ROOT },
-            modifier = modifier,
-        ) { content ->
-            androidx.compose.foundation.layout.Box(content) {
-                FindChurchFlow(
-                    appViewModel = appViewModel,
-                    container = container,
-                    locationProvider = locationProvider,
-                    showWelcome = false,
-                    onExit = { route = ChurchRoute.ROOT },
-                )
-            }
-        }
-
-        else -> TabScreen(title = stringResource(R.string.tab_church), modifier = modifier) { content ->
-            ChurchChooserScreen(
-                phase = chooserPhaseFor(bootstrap.relationships),
-                selectedSlug = selectedSlug,
-                onSelect = appViewModel::selectChurch,
-                onAddAnother = { route = ChurchRoute.FIND },
-                modifier = content,
-                showTitle = false,
-            )
-        }
     }
 }

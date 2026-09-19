@@ -136,8 +136,8 @@ struct SkeletonAvatar: View {
 
 // MARK: - Shared cards
 
-/// A church-row card: avatar, name, summary, place. Used by discovery and
-/// the church chooser so those lists do not reflow when results arrive.
+/// A church-row card: avatar, name, summary, place. Used by discovery so the
+/// list does not reflow when results arrive.
 public struct SkeletonCard: View {
     public init() {}
 
@@ -161,25 +161,6 @@ struct DiscoveryCardSkeleton: View {
                         cornerRadius: FaithFormTokens.Radius.pill
                     )
                 }
-            }
-        }
-    }
-}
-
-struct ChooserRowSkeleton: View {
-    var body: some View {
-        FaithFormCard {
-            HStack(spacing: FaithFormTokens.Spacing.base) {
-                SkeletonAvatar()
-                VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.xs) {
-                    SkeletonBone(height: FaithFormTokens.Text.titleMedium.size, widthFraction: 0.7)
-                    SkeletonBone(
-                        height: 22,
-                        widthFraction: 0.32,
-                        cornerRadius: FaithFormTokens.Radius.pill
-                    )
-                }
-                Spacer(minLength: 0)
             }
         }
     }
@@ -353,55 +334,81 @@ struct DiscoveryResultsSkeleton: View {
     }
 }
 
+/// Matches the church info page: the cover edge to edge with the name over
+/// it, the glass action bar overlapping it, then the highlight card and a
+/// list card.
 struct ChurchProfileSkeleton: View {
     @Environment(\.faithformTheme) private var theme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
+        VStack(alignment: .leading, spacing: 0) {
             ZStack(alignment: .bottomLeading) {
-                RoundedRectangle(cornerRadius: FaithFormTokens.Radius.lg, style: .continuous)
+                Rectangle()
                     .fill(theme.palette.skeletonBase)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 160)
-                SkeletonAvatar(size: 64)
-                    .padding(FaithFormTokens.Spacing.base)
-                    .offset(y: 24)
-            }
-            .padding(.bottom, 24)
-
-            VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.sm) {
-                SkeletonBone(height: FaithFormTokens.Text.displayLarge.size, widthFraction: 0.72)
-                SkeletonBone(height: FaithFormTokens.Text.titleMedium.size, widthFraction: 0.5)
-                SkeletonBone(height: FaithFormTokens.Text.body.size, widthFraction: 1)
-                SkeletonBone(height: FaithFormTokens.Text.body.size, widthFraction: 0.88)
-                SkeletonBone(height: FaithFormTokens.Text.body.size, widthFraction: 0.64)
-            }
-
-            SkeletonBone(
-                height: FaithFormTokens.TouchTarget.recommended,
-                cornerRadius: FaithFormTokens.Radius.control
-            )
-
-            VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.md) {
-                SkeletonBone(height: FaithFormTokens.Text.label.size, widthFraction: 0.28)
-                FaithFormCard {
+                    .frame(height: 340)
+                HStack(spacing: FaithFormTokens.Spacing.base) {
+                    Circle()
+                        .fill(theme.palette.skeletonSheen)
+                        .frame(width: 76, height: 76)
                     VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.sm) {
-                        SkeletonBone(height: FaithFormTokens.Text.titleMedium.size, widthFraction: 0.44)
-                        SkeletonBone(height: FaithFormTokens.Text.bodySmall.size, widthFraction: 0.8)
-                        SkeletonBone(height: FaithFormTokens.Text.bodySmall.size, widthFraction: 0.52)
+                        SkeletonBone(
+                            height: FaithFormTokens.Text.displayLarge.size,
+                            widthFraction: 0.82,
+                            fill: theme.palette.skeletonSheen
+                        )
+                        SkeletonBone(
+                            height: FaithFormTokens.Text.titleMedium.size,
+                            widthFraction: 0.5,
+                            fill: theme.palette.skeletonSheen
+                        )
+                    }
+                }
+                .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
+                .padding(.bottom, 28 + FaithFormTokens.Spacing.lg)
+            }
+
+            VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
+                HStack(spacing: FaithFormTokens.Spacing.base) {
+                    ForEach(0..<4, id: \.self) { _ in
+                        VStack(spacing: FaithFormTokens.Spacing.sm) {
+                            Circle()
+                                .fill(theme.palette.skeletonBase)
+                                .frame(width: 40, height: 40)
+                            SkeletonBone(height: FaithFormTokens.Text.label.size, widthFraction: 0.7, alignment: .center)
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                }
+                .padding(FaithFormTokens.Spacing.base)
+                .background(
+                    RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        .fill(theme.palette.surface)
+                )
+                .padding(.top, -28)
+
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(theme.palette.skeletonBase)
+                    .frame(height: 132)
+
+                VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.sm) {
+                    SkeletonBone(height: FaithFormTokens.Text.label.size, widthFraction: 0.3)
+                    FaithFormCard {
+                        VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.md) {
+                            ForEach(0..<2, id: \.self) { _ in
+                                HStack(spacing: FaithFormTokens.Spacing.md) {
+                                    SkeletonAvatar(size: 44)
+                                    VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.xs) {
+                                        SkeletonBone(height: FaithFormTokens.Text.titleMedium.size, widthFraction: 0.6)
+                                        SkeletonBone(height: FaithFormTokens.Text.bodySmall.size, widthFraction: 0.4)
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
-        }
-        .skeletonShimmer()
-        .skeletonAccessible()
-    }
-}
-
-struct ChurchChooserSkeleton: View {
-    var body: some View {
-        VStack(spacing: FaithFormTokens.Spacing.md) {
-            ForEach(0..<2, id: \.self) { _ in ChooserRowSkeleton() }
+            .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
         }
         .skeletonShimmer()
         .skeletonAccessible()

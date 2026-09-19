@@ -6,12 +6,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
- * The church-profile action matrix and chooser rules, mirrored from the iOS
- * suite.
+ * The Church info page's action table, mirrored from the iOS suite.
  *
  * These live in `core:contract` rather than `app` so they run under
  * `gradlew test` on any runner — the rules are pure and deserve to be verified
- * without an Android SDK or an emulator.
+ * without an Android SDK or an emulator. (`app`'s own `ChurchModelsTest`
+ * asserts the shipped `ChurchActions` against the same table.)
  *
  * The logic under test is duplicated here rather than imported from `:app`,
  * because a pure-JVM module cannot depend on an Android module. That
@@ -19,29 +19,19 @@ import org.junit.Test
  * and this one encode the same specification and one of them will fail.
  */
 
-private enum class Action {
-    FOLLOW, REQUEST_TO_JOIN, JOIN_IMMEDIATELY, INVITATION_REQUIRED, PENDING, LEAVE, UNAVAILABLE
-}
+private enum class Action { ADD, SWITCH, CURRENT, INVITATION_REQUIRED, UNAVAILABLE }
 
-private fun actionFor(policy: JoinPolicy, relationship: RelationshipState?): Action =
-    when (relationship) {
-        RelationshipState.BLOCKED -> Action.UNAVAILABLE
-        RelationshipState.PENDING -> Action.PENDING
-        RelationshipState.JOINED -> Action.LEAVE
-        RelationshipState.FOLLOWING -> when (policy) {
-            JoinPolicy.OPEN -> Action.JOIN_IMMEDIATELY
-            JoinPolicy.APPROVAL_REQUIRED -> Action.REQUEST_TO_JOIN
-            JoinPolicy.INVITE_ONLY -> Action.INVITATION_REQUIRED
-            else -> Action.LEAVE
-        }
-        else -> when (policy) {
-            JoinPolicy.INVITE_ONLY -> Action.INVITATION_REQUIRED
-            else -> Action.FOLLOW
-        }
+/** First match wins. `left`, `unknown` and null are "no relationship". */
+private fun actionFor(policy: JoinPolicy, relationship: RelationshipState?, hasOtherChurch: Boolean): Action =
+    when {
+        relationship == RelationshipState.BLOCKED -> Action.UNAVAILABLE
+        relationship == RelationshipState.FOLLOWING ||
+            relationship == RelationshipState.PENDING ||
+            relationship == RelationshipState.JOINED -> Action.CURRENT
+        policy == JoinPolicy.INVITE_ONLY -> Action.INVITATION_REQUIRED
+        hasOtherChurch -> Action.SWITCH
+        else -> Action.ADD
     }
-
-private fun isSelectable(state: RelationshipState): Boolean =
-    state != RelationshipState.BLOCKED && state != RelationshipState.LEFT
 
 private fun addressLine(campus: PublicCampus): String? {
     val parts = listOfNotNull(
@@ -50,56 +40,55 @@ private fun addressLine(campus: PublicCampus): String? {
     return parts.takeIf { it.isNotEmpty() }?.joinToString(", ")
 }
 
-private val DAYS = listOf(
-    "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
-)
-
-private fun serviceLine(service: PublicServiceTime): String {
-    val index = service.dayOfWeek.coerceIn(0, 6)
-    return "${DAYS[index]} ${service.startTime.take(5)} · ${service.label}"
-}
+private val POLICIES = listOf(JoinPolicy.OPEN, JoinPolicy.APPROVAL_REQUIRED, JoinPolicy.INVITE_ONLY, JoinPolicy.UNKNOWN)
+private val NO_RELATIONSHIP = listOf(null, RelationshipState.LEFT, RelationshipState.UNKNOWN)
 
 class ChurchActionTest {
 
     @Test
-    fun `with no relationship the action follows the policy`() {
-        assertEquals(Action.FOLLOW, actionFor(JoinPolicy.OPEN, null))
-        assertEquals(Action.FOLLOW, actionFor(JoinPolicy.APPROVAL_REQUIRED, null))
-        assertEquals(Action.INVITATION_REQUIRED, actionFor(JoinPolicy.INVITE_ONLY, null))
-    }
-
-    @Test
-    fun `while following the next step depends on whether joining is offered`() {
-        assertEquals(
-            Action.JOIN_IMMEDIATELY,
-            actionFor(JoinPolicy.OPEN, RelationshipState.FOLLOWING)
-        )
-        assertEquals(
-            Action.REQUEST_TO_JOIN,
-            actionFor(JoinPolicy.APPROVAL_REQUIRED, RelationshipState.FOLLOWING)
-        )
-        assertEquals(
-            Action.INVITATION_REQUIRED,
-            actionFor(JoinPolicy.INVITE_ONLY, RelationshipState.FOLLOWING)
-        )
-    }
-
-    @Test
-    fun `pending joined and blocked each have one outcome regardless of policy`() {
-        for (policy in listOf(JoinPolicy.OPEN, JoinPolicy.APPROVAL_REQUIRED, JoinPolicy.INVITE_ONLY)) {
-            assertEquals(Action.PENDING, actionFor(policy, RelationshipState.PENDING))
-            assertEquals(Action.LEAVE, actionFor(policy, RelationshipState.JOINED))
-            assertEquals(Action.UNAVAILABLE, actionFor(policy, RelationshipState.BLOCKED))
+    fun `with no church yet, an open or approval church offers Add`() {
+        for (state in NO_RELATIONSHIP) {
+            assertEquals(Action.ADD, actionFor(JoinPolicy.OPEN, state, hasOtherChurch = false))
+            assertEquals(Action.ADD, actionFor(JoinPolicy.APPROVAL_REQUIRED, state, hasOtherChurch = false))
+            assertEquals(Action.ADD, actionFor(JoinPolicy.UNKNOWN, state, hasOtherChurch = false))
         }
     }
 
     @Test
-    fun `blocked and left churches cannot be switched to`() {
-        assertTrue(isSelectable(RelationshipState.JOINED))
-        assertTrue(isSelectable(RelationshipState.FOLLOWING))
-        assertTrue(isSelectable(RelationshipState.PENDING))
-        assertTrue(!isSelectable(RelationshipState.BLOCKED))
-        assertTrue(!isSelectable(RelationshipState.LEFT))
+    fun `with another church already theirs, the action is Switch`() {
+        for (state in NO_RELATIONSHIP) {
+            assertEquals(Action.SWITCH, actionFor(JoinPolicy.OPEN, state, hasOtherChurch = true))
+            assertEquals(Action.SWITCH, actionFor(JoinPolicy.APPROVAL_REQUIRED, state, hasOtherChurch = true))
+        }
+    }
+
+    @Test
+    fun `an invite-only church needs an invitation whether or not another church is theirs`() {
+        for (state in NO_RELATIONSHIP) {
+            for (other in listOf(false, true)) {
+                assertEquals(Action.INVITATION_REQUIRED, actionFor(JoinPolicy.INVITE_ONLY, state, other))
+            }
+        }
+    }
+
+    @Test
+    fun `following, pending and joined are all simply their church`() {
+        for (policy in POLICIES) {
+            for (state in listOf(RelationshipState.FOLLOWING, RelationshipState.PENDING, RelationshipState.JOINED)) {
+                for (other in listOf(false, true)) {
+                    assertEquals(Action.CURRENT, actionFor(policy, state, other))
+                }
+            }
+        }
+    }
+
+    @Test
+    fun `blocked wins over everything`() {
+        for (policy in POLICIES) {
+            for (other in listOf(false, true)) {
+                assertEquals(Action.UNAVAILABLE, actionFor(policy, RelationshipState.BLOCKED, other))
+            }
+        }
     }
 
     @Test
@@ -117,28 +106,6 @@ class ChurchActionTest {
             timezone = "UTC", isPrimary = false
         )
         assertNull(addressLine(empty))
-    }
-
-    @Test
-    fun `a service line renders the church's own day and time`() {
-        val service = PublicServiceTime(
-            campusSlug = "east", label = "Morning", dayOfWeek = 0,
-            startTime = "10:00:00", kind = "regular"
-        )
-        val line = serviceLine(service)
-        assertTrue(line.contains("Sunday"))
-        assertTrue(line.contains("10:00"))
-        // Seconds are never meaningful here.
-        assertTrue(!line.contains(":00:00"))
-    }
-
-    @Test
-    fun `an out-of-range day index is clamped rather than crashing`() {
-        val service = PublicServiceTime(
-            campusSlug = "east", label = "X", dayOfWeek = 99,
-            startTime = "10:00:00", kind = "regular"
-        )
-        assertTrue(serviceLine(service).isNotEmpty())
     }
 }
 

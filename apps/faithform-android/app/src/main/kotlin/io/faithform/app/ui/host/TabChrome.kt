@@ -4,6 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
@@ -34,7 +35,7 @@ import io.faithform.app.ui.church.ChurchAvatar
  * so the tab that knows where "back" leads is the one that handles it — the
  * arrow and the system back gesture call the same [onBack]. No insets are
  * applied here: the shell's scaffold has already placed the whole tab below
- * the status bar.
+ * the status bar. [actions] sit at the trailing end, like Home's "Church info".
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,6 +45,7 @@ fun TabScreen(
     showChurchAvatar: Boolean = false,
     onBack: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
+    actions: @Composable RowScope.() -> Unit = {},
     content: @Composable (Modifier) -> Unit,
 ) {
     val theme = LocalFaithFormTheme.current
@@ -81,11 +83,13 @@ fun TabScreen(
                     }
                 }
             },
+            actions = actions,
             windowInsets = WindowInsets(0),
             colors = TopAppBarDefaults.topAppBarColors(
                 containerColor = theme.palette.background,
                 titleContentColor = theme.palette.contentPrimary,
                 navigationIconContentColor = theme.palette.contentPrimary,
+                actionIconContentColor = theme.palette.contentPrimary,
             ),
         )
         content(Modifier.weight(1f))

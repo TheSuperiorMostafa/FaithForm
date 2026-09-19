@@ -165,6 +165,8 @@ export const churchRelationshipSchema = z.object({
   /** Which member-facing check-in methods this church has switched on. */
   automaticCheckInEnabled: z.boolean().optional(),
   codeCheckInEnabled: z.boolean().optional(),
+  /** This church offers Groups to its people. Older servers omit it. */
+  groupsEnabled: z.boolean().optional(),
   state: relationshipStateSchema,
   joinPolicy: joinPolicySchema,
   joinedAt: instant.nullable(),
@@ -1355,6 +1357,535 @@ export const givingReceiptSchema = z
   })
   .meta({ id: "GivingReceipt" });
 
+// ---------------------------------------------------------------------------
+// Prompt 14 — groups and messaging
+// ---------------------------------------------------------------------------
+//
+// Groups are addressed by their uuid (already a public handle, like a feed
+// item's id) inside a church addressed by its slug. Nothing here names a
+// People record, a staff role, an account, a church uuid, or a provider
+// secret. Enumerated values travel as strings and are decoded with each
+// platform's forward-compatible `fromWire`/`init(rawValue:)`, so a value
+// added later reaches a released app as "unknown" rather than a decode error.
+//
+// Chat identity: `chatUserId` is the opaque chat-provider id of a person —
+// what a message's author is called in the conversation itself — never a
+// FaithForm id. `userToken` is that person's own short-lived chat credential,
+// issued to them alone; `appKey` is the provider's public app key.
+
+export const groupTypeSummarySchema = z
+  .object({
+    id: z.string(),
+    name: z.string().max(60),
+    /** A key each platform maps to its own icon set. */
+    icon: z.string().max(40),
+  })
+  .meta({ id: "GroupTypeSummary" });
+
+export const groupLeaderSchema = z
+  .object({
+    name: z.string().max(120),
+    avatarUrl: url.nullable(),
+    /** `leader` — managers are not listed as leaders. */
+    groupRole: z.string().max(20),
+    chatUserId: z.string().max(40).nullable(),
+  })
+  .meta({ id: "GroupLeader" });
+
+export const groupEventSummarySchema = z
+  .object({
+    id: z.string(),
+    groupId: z.string(),
+    title: z.string().max(120),
+    startsAt: instant,
+    endsAt: instant,
+    timezone: z.string().max(64),
+    locationName: z.string().max(200).nullable(),
+    isCancelled: z.boolean(),
+    /** The caller's own answer: going, maybe, not_going. */
+    rsvp: z.string().max(20).nullable(),
+    goingCount: z.number().int(),
+  })
+  .meta({ id: "GroupEventSummary" });
+
+/**
+ * Where a group's conversation lives, for its members only. `state` is
+ * `ready`, `read_only` (archived, paused, or messaging turned off) or
+ * `unavailable` (not provisioned yet, or chat not configured).
+ */
+export const groupChatInfoSchema = z
+  .object({
+    cid: z.string().max(80),
+    channelType: z.string().max(20),
+    channelId: z.string().max(64),
+    state: z.string().max(20),
+    /** `everyone`, or `leaders` for an announcements-style group. */
+    postingPolicy: z.string().max(20),
+  })
+  .meta({ id: "GroupChatInfo" });
+
+export const groupSummarySchema = z
+  .object({
+    id: z.string(),
+    name: z.string().max(80),
+    /** At most 280 characters; the detail carries the whole description. */
+    summary: z.string().max(300).nullable(),
+    coverImageUrl: url.nullable(),
+    type: groupTypeSummarySchema.nullable(),
+    memberCount: z.number().int(),
+    capacity: z.number().int().nullable(),
+    enrollment: z.string().max(30),
+    visibility: z.string().max(20),
+    status: z.string().max(20),
+    /** "Every Tuesday at 7:00 PM". Null when the group has no schedule. */
+    scheduleText: z.string().max(120).nullable(),
+    /** 0 = Sunday. */
+    meetingDays: z.array(z.number().int()),
+    campusName: z.string().max(120).nullable(),
+    /** Only when the church chose to show where the group meets publicly. */
+    locationName: z.string().max(200).nullable(),
+    nextEvent: groupEventSummarySchema.nullable(),
+    /** member, requested, invited, not_member, banned. */
+    membershipState: z.string().max(20),
+    /** member, leader, manager — present only for members. */
+    groupRole: z.string().max(20).nullable(),
+    /** The one action the group page offers (see lib/groups/permissions.ts). */
+    joinAction: z.string().max(30),
+    chat: groupChatInfoSchema.nullable(),
+    isYouth: z.boolean(),
+    version: z.number().int(),
+  })
+  .meta({ id: "GroupSummary" });
+
+export const myGroupsSchema = z
+  .object({
+    items: z.array(groupSummarySchema),
+    /** Direct messages are allowed at this church, for this person. */
+    directMessagesEnabled: z.boolean(),
+    /** Chat is configured and switched on for this church. */
+    messagingAvailable: z.boolean(),
+  })
+  .meta({ id: "MyGroups" });
+
+export const groupDiscoveryPageSchema = z
+  .object({
+    items: z.array(groupSummarySchema),
+    nextCursor: z.string().nullable(),
+  })
+  .meta({ id: "GroupDiscoveryPage" });
+
+export const groupCampusOptionSchema = z
+  .object({ id: z.string(), name: z.string().max(120) })
+  .meta({ id: "GroupCampusOption" });
+
+export const groupFiltersSchema = z
+  .object({
+    types: z.array(groupTypeSummarySchema),
+    campuses: z.array(groupCampusOptionSchema),
+    /** Weekdays some listed group meets on, 0 = Sunday. */
+    days: z.array(z.number().int()),
+  })
+  .meta({ id: "GroupFilters" });
+
+export const groupCapabilitiesSchema = z
+  .object({
+    canViewMembers: z.boolean(),
+    canManageMembers: z.boolean(),
+    canManageRequests: z.boolean(),
+    canInvite: z.boolean(),
+    canManageRoles: z.boolean(),
+    canEditDetails: z.boolean(),
+    canManageEvents: z.boolean(),
+    canTakeAttendance: z.boolean(),
+    canModerateChat: z.boolean(),
+  })
+  .meta({ id: "GroupCapabilities" });
+
+export const groupScheduleSchema = z
+  .object({
+    text: z.string().max(120),
+    frequency: z.string().max(20),
+    dayOfWeek: z.number().int(),
+    startTime: z.string().max(5),
+    durationMinutes: z.number().int(),
+    timezone: z.string().max(64),
+  })
+  .meta({ id: "GroupSchedule" });
+
+/** Where a group meets. The address and link are for members unless public. */
+export const groupLocationSchema = z
+  .object({
+    name: z.string().max(200).nullable(),
+    address: z.string().max(500).nullable(),
+    onlineMeetingUrl: url.nullable(),
+    /** True when the church withholds the address from non-members. */
+    membersOnly: z.boolean(),
+  })
+  .meta({ id: "GroupLocation" });
+
+export const groupDetailSchema = z
+  .object({
+    group: groupSummarySchema,
+    description: z.string().max(4000).nullable(),
+    leaders: z.array(groupLeaderSchema),
+    schedules: z.array(groupScheduleSchema),
+    location: groupLocationSchema.nullable(),
+    upcomingEvents: z.array(groupEventSummarySchema),
+    capabilities: groupCapabilitiesSchema,
+    /** Leaders only; zero for everyone else. */
+    pendingRequestCount: z.number().int(),
+    /** The member's own choice for this group: default, all, mentions, muted. */
+    notificationLevel: z.string().max(20).nullable(),
+    isArchived: z.boolean(),
+    chatPosting: z.enum(["everyone", "leaders"]).optional(),
+    memberListVisibility: z.enum(["members", "leaders"]).optional(),
+  })
+  .meta({ id: "GroupDetail" });
+
+export const joinGroupRequestSchema = z
+  .object({ message: z.string().trim().max(500).optional() })
+  .meta({ id: "JoinGroupRequest" });
+
+/**
+ * A manager's edit of their own group. Visibility, the youth safety profile
+ * and the category stay with church staff, who answer for them. The edit is
+ * refused with `conflict` when `expectedVersion` is no longer current.
+ */
+export const updateGroupDetailsRequestSchema = z
+  .object({
+    expectedVersion: z.number().int(),
+    name: z.string().trim().min(1).max(80),
+    description: z.string().trim().max(4000).nullable(),
+    enrollment: z.enum(["open", "approval_required", "invitation_only", "closed"]),
+    capacity: z.number().int().min(1).max(5000).nullable(),
+    locationName: z.string().trim().max(200).nullable(),
+    locationAddress: z.string().trim().max(500).nullable(),
+    onlineMeetingUrl: z.string().trim().max(2048).nullable(),
+    chatPosting: z.enum(["everyone", "leaders"]),
+    memberListVisibility: z.enum(["members", "leaders"]),
+  })
+  .meta({ id: "UpdateGroupDetailsRequest" });
+
+/**
+ * What happened, and the page's new state. `outcome` is one of: joined,
+ * already_member, requested, already_requested, left, request_cancelled,
+ * full, closed, invitation_required, invitation_invalid, banned, not_found.
+ */
+export const groupJoinResultSchema = z
+  .object({
+    outcome: z.string().max(40),
+    group: groupSummarySchema.nullable(),
+  })
+  .meta({ id: "GroupJoinResult" });
+
+export const groupMemberSchema = z
+  .object({
+    membershipId: z.string(),
+    name: z.string().max(120),
+    avatarUrl: url.nullable(),
+    groupRole: z.string().max(20),
+    joinedAt: instant,
+    chatUserId: z.string().max(40).nullable(),
+    isYou: z.boolean(),
+  })
+  .meta({ id: "GroupMember" });
+
+export const groupMemberPageSchema = z
+  .object({
+    items: z.array(groupMemberSchema),
+    nextCursor: z.string().nullable(),
+    total: z.number().int(),
+  })
+  .meta({ id: "GroupMemberPage" });
+
+export const groupJoinRequestItemSchema = z
+  .object({
+    requestId: z.string(),
+    name: z.string().max(120),
+    avatarUrl: url.nullable(),
+    message: z.string().max(500).nullable(),
+    requestedAt: instant,
+  })
+  .meta({ id: "GroupJoinRequestItem" });
+
+export const groupJoinRequestPageSchema = z
+  .object({
+    items: z.array(groupJoinRequestItemSchema),
+    nextCursor: z.string().nullable(),
+  })
+  .meta({ id: "GroupJoinRequestPage" });
+
+export const decideGroupRequestSchema = z
+  .object({ decision: z.enum(["approve", "decline"]) })
+  .meta({ id: "DecideGroupRequest" });
+
+/** approved, declined, already_decided, full, requester_unavailable, banned, not_found. */
+export const groupCommandResultSchema = z
+  .object({ outcome: z.string().max(40) })
+  .meta({ id: "GroupCommandResult" });
+
+export const setGroupRoleRequestSchema = z
+  .object({ groupRole: z.enum(["member", "leader", "manager"]) })
+  .meta({ id: "SetGroupRoleRequest" });
+
+export const removeGroupMemberRequestSchema = z
+  .object({
+    ban: z.boolean().default(false),
+    reason: z.string().trim().max(500).optional(),
+  })
+  .meta({ id: "RemoveGroupMemberRequest" });
+
+export const groupInvitationSchema = z
+  .object({
+    url: url,
+    expiresAt: instant,
+    maxUses: z.number().int(),
+  })
+  .meta({ id: "GroupInvitation" });
+
+export const groupInvitationTokenRequestSchema = z
+  .object({ token: z.string().min(16).max(512) })
+  .meta({ id: "GroupInvitationTokenRequest" });
+
+/** Enough to say "Join Tuesday Night Men's Group at Grace" — nothing more. */
+export const groupInvitationPreviewSchema = z
+  .object({
+    groupId: z.string(),
+    groupName: z.string().max(80),
+    coverImageUrl: url.nullable(),
+    churchSlug,
+    churchName: z.string(),
+  })
+  .meta({ id: "GroupInvitationPreview" });
+
+export const groupEventRsvpCountsSchema = z
+  .object({ going: z.number().int(), maybe: z.number().int(), notGoing: z.number().int() })
+  .meta({ id: "GroupEventRsvpCounts" });
+
+export const groupEventAttendanceSummarySchema = z
+  .object({
+    taken: z.boolean(),
+    present: z.number().int(),
+    absent: z.number().int(),
+    guests: z.number().int(),
+    firstTimeGuests: z.number().int(),
+  })
+  .meta({ id: "GroupEventAttendanceSummary" });
+
+export const groupEventDetailSchema = z
+  .object({
+    event: groupEventSummarySchema,
+    groupName: z.string().max(80),
+    description: z.string().max(4000).nullable(),
+    locationAddress: z.string().max(500).nullable(),
+    onlineMeetingUrl: url.nullable(),
+    rsvpCounts: groupEventRsvpCountsSchema,
+    /** Leaders only. */
+    attendance: groupEventAttendanceSummarySchema.nullable(),
+    canEdit: z.boolean(),
+    canTakeAttendance: z.boolean(),
+  })
+  .meta({ id: "GroupEventDetail" });
+
+export const groupEventPageSchema = z
+  .object({
+    items: z.array(groupEventSummarySchema),
+    nextCursor: z.string().nullable(),
+  })
+  .meta({ id: "GroupEventPage" });
+
+export const upsertGroupEventRequestSchema = z
+  .object({
+    title: z.string().trim().min(1).max(120),
+    description: z.string().trim().max(4000).nullable().optional(),
+    startsAt: instant,
+    endsAt: instant,
+    /** IANA; the church's own zone when omitted. */
+    timezone: z.string().max(64).optional(),
+    locationName: z.string().trim().max(200).nullable().optional(),
+    locationAddress: z.string().trim().max(500).nullable().optional(),
+    onlineMeetingUrl: z.string().trim().max(2048).nullable().optional(),
+  })
+  .meta({ id: "UpsertGroupEventRequest" });
+
+export const groupEventRsvpRequestSchema = z
+  .object({ response: z.enum(["going", "maybe", "not_going"]) })
+  .meta({ id: "GroupEventRsvpRequest" });
+
+export const groupAttendanceEntrySchema = z
+  .object({
+    membershipId: z.string(),
+    name: z.string().max(120),
+    avatarUrl: url.nullable(),
+    groupRole: z.string().max(20),
+    present: z.boolean(),
+    /** False while the church has not yet confirmed who this person is. */
+    recordable: z.boolean(),
+  })
+  .meta({ id: "GroupAttendanceEntry" });
+
+export const groupAttendanceSheetSchema = z
+  .object({
+    eventId: z.string(),
+    title: z.string().max(120),
+    startsAt: instant,
+    timezone: z.string().max(64),
+    taken: z.boolean(),
+    entries: z.array(groupAttendanceEntrySchema),
+    presentCount: z.number().int(),
+    absentCount: z.number().int(),
+    guestCount: z.number().int(),
+    firstTimeGuestCount: z.number().int(),
+    notes: z.string().max(1000).nullable(),
+    /** Attendance can be recorded until this instant. */
+    recordableUntil: instant,
+    canRecord: z.boolean(),
+    /** Why not: too_early, too_late, cancelled. */
+    lockedReason: z.string().max(40).nullable(),
+  })
+  .meta({ id: "GroupAttendanceSheet" });
+
+export const submitGroupAttendanceRequestSchema = z
+  .object({
+    presentMembershipIds: z.array(z.string().max(64)).max(1000),
+    guestCount: z.number().int().min(0).max(1000),
+    firstTimeGuestCount: z.number().int().min(0).max(1000),
+    notes: z.string().trim().max(1000).nullable().optional(),
+  })
+  .meta({ id: "SubmitGroupAttendanceRequest" });
+
+export const chatSessionSchema = z
+  .object({
+    appKey: z.string().max(80),
+    /** Opaque tenant filter for native conversation lists. */
+    churchTeam: z.string().max(64),
+    chatUserId: z.string().max(40),
+    userToken: z.string().max(2048),
+    expiresAt: instant,
+    /** Messaging suspended in this church until this instant (or indefinitely when `suspended` and null). */
+    suspended: z.boolean(),
+    suspendedUntil: instant.nullable(),
+  })
+  .meta({ id: "ChatSession" });
+
+/** Where a chat push or link lands, re-authorized now. `kind`: group, direct. */
+export const chatRouteSchema = z
+  .object({
+    kind: z.string().max(20),
+    churchSlug,
+    groupId: z.string().nullable(),
+    cid: z.string().max(80),
+    messageId: z.string().max(128).nullable(),
+  })
+  .meta({ id: "ChatRoute" });
+
+export const groupNotificationSettingSchema = z
+  .object({
+    groupId: z.string(),
+    groupName: z.string().max(80),
+    /** default, all, mentions, muted. */
+    level: z.string().max(20),
+  })
+  .meta({ id: "GroupNotificationSetting" });
+
+export const messagingPreferencesSchema = z
+  .object({
+    /** all, mentions, off. */
+    level: z.string().max(20),
+    groups: z.array(groupNotificationSettingSchema),
+  })
+  .meta({ id: "MessagingPreferences" });
+
+export const setMessagingLevelRequestSchema = z
+  .object({ level: z.enum(["all", "mentions", "off"]) })
+  .meta({ id: "SetMessagingLevelRequest" });
+
+export const setGroupNotificationRequestSchema = z
+  .object({ level: z.enum(["default", "all", "mentions", "muted"]) })
+  .meta({ id: "SetGroupNotificationRequest" });
+
+export const messagingContactSchema = z
+  .object({
+    chatUserId: z.string().max(40),
+    name: z.string().max(120),
+    avatarUrl: url.nullable(),
+    /** "Leader · Wednesday Bible Study". */
+    context: z.string().max(160).nullable(),
+  })
+  .meta({ id: "MessagingContact" });
+
+export const messagingContactPageSchema = z
+  .object({
+    items: z.array(messagingContactSchema),
+    nextCursor: z.string().nullable(),
+  })
+  .meta({ id: "MessagingContactPage" });
+
+export const startDirectMessageRequestSchema = z
+  .object({ chatUserId: z.string().min(3).max(40) })
+  .meta({ id: "StartDirectMessageRequest" });
+
+/** `state`: ready, read_only, or pending (authorized; still being set up). */
+export const directConversationSchema = z
+  .object({
+    cid: z.string().max(80),
+    channelId: z.string().max(64),
+    state: z.string().max(20),
+  })
+  .meta({ id: "DirectConversation" });
+
+export const chatReportRequestSchema = z
+  .object({
+    cid: z.string().min(3).max(80),
+    messageId: z.string().max(128).optional(),
+    reportedChatUserId: z.string().max(40).optional(),
+    reason: z.enum(["spam", "harassment", "hate", "sexual", "violence", "self_harm", "inappropriate", "other"]),
+    details: z.string().trim().max(1000).optional(),
+  })
+  .meta({ id: "ChatReportRequest" });
+
+export const chatReportResultSchema = z
+  .object({ received: z.boolean() })
+  .meta({ id: "ChatReportResult" });
+
+export const chatBlockRequestSchema = z
+  .object({ chatUserId: z.string().min(3).max(40) })
+  .meta({ id: "ChatBlockRequest" });
+
+export const chatBlockedPersonSchema = z
+  .object({
+    chatUserId: z.string().max(40),
+    name: z.string().max(120),
+    blockedAt: instant,
+  })
+  .meta({ id: "ChatBlockedPerson" });
+
+export const chatBlockListSchema = z
+  .object({ items: z.array(chatBlockedPersonSchema) })
+  .meta({ id: "ChatBlockList" });
+
+/**
+ * A FaithForm thing shared into a conversation, resolved now for this reader.
+ * A message only ever carries `{kind, id}`; everything shown here is fetched
+ * and re-authorized on each read, so a deleted or private item renders as
+ * `available: false` rather than as what it once said.
+ */
+export const chatCardSchema = z
+  .object({
+    kind: z.string().max(40),
+    id: z.string().max(64),
+    available: z.boolean(),
+    title: z.string().max(200).nullable(),
+    subtitle: z.string().max(300).nullable(),
+    imageUrl: url.nullable(),
+    startsAt: instant.nullable(),
+    endsAt: instant.nullable(),
+    locationName: z.string().max(200).nullable(),
+    /** An in-app link the card opens. */
+    deepLink: z.string().max(512).nullable(),
+  })
+  .meta({ id: "ChatCard" });
+
 export const CONTRACT_SCHEMAS = {
   Deprecation: deprecationSchema,
   FieldIssue: fieldIssueSchema,
@@ -1437,6 +1968,58 @@ export const CONTRACT_SCHEMAS = {
   DonationStatusResult: donationStatusResultSchema,
   GivingHistoryPage: givingHistoryPageSchema,
   GivingReceipt: givingReceiptSchema,
+  GroupTypeSummary: groupTypeSummarySchema,
+  GroupLeader: groupLeaderSchema,
+  GroupEventSummary: groupEventSummarySchema,
+  GroupChatInfo: groupChatInfoSchema,
+  GroupSummary: groupSummarySchema,
+  MyGroups: myGroupsSchema,
+  GroupDiscoveryPage: groupDiscoveryPageSchema,
+  GroupCampusOption: groupCampusOptionSchema,
+  GroupFilters: groupFiltersSchema,
+  GroupCapabilities: groupCapabilitiesSchema,
+  GroupSchedule: groupScheduleSchema,
+  GroupLocation: groupLocationSchema,
+  GroupDetail: groupDetailSchema,
+  JoinGroupRequest: joinGroupRequestSchema,
+  UpdateGroupDetailsRequest: updateGroupDetailsRequestSchema,
+  GroupJoinResult: groupJoinResultSchema,
+  GroupMember: groupMemberSchema,
+  GroupMemberPage: groupMemberPageSchema,
+  GroupJoinRequestItem: groupJoinRequestItemSchema,
+  GroupJoinRequestPage: groupJoinRequestPageSchema,
+  DecideGroupRequest: decideGroupRequestSchema,
+  GroupCommandResult: groupCommandResultSchema,
+  SetGroupRoleRequest: setGroupRoleRequestSchema,
+  RemoveGroupMemberRequest: removeGroupMemberRequestSchema,
+  GroupInvitation: groupInvitationSchema,
+  GroupInvitationTokenRequest: groupInvitationTokenRequestSchema,
+  GroupInvitationPreview: groupInvitationPreviewSchema,
+  GroupEventRsvpCounts: groupEventRsvpCountsSchema,
+  GroupEventAttendanceSummary: groupEventAttendanceSummarySchema,
+  GroupEventDetail: groupEventDetailSchema,
+  GroupEventPage: groupEventPageSchema,
+  UpsertGroupEventRequest: upsertGroupEventRequestSchema,
+  GroupEventRsvpRequest: groupEventRsvpRequestSchema,
+  GroupAttendanceEntry: groupAttendanceEntrySchema,
+  GroupAttendanceSheet: groupAttendanceSheetSchema,
+  SubmitGroupAttendanceRequest: submitGroupAttendanceRequestSchema,
+  ChatSession: chatSessionSchema,
+  ChatRoute: chatRouteSchema,
+  GroupNotificationSetting: groupNotificationSettingSchema,
+  MessagingPreferences: messagingPreferencesSchema,
+  SetMessagingLevelRequest: setMessagingLevelRequestSchema,
+  SetGroupNotificationRequest: setGroupNotificationRequestSchema,
+  MessagingContact: messagingContactSchema,
+  MessagingContactPage: messagingContactPageSchema,
+  StartDirectMessageRequest: startDirectMessageRequestSchema,
+  DirectConversation: directConversationSchema,
+  ChatReportRequest: chatReportRequestSchema,
+  ChatReportResult: chatReportResultSchema,
+  ChatBlockRequest: chatBlockRequestSchema,
+  ChatBlockedPerson: chatBlockedPersonSchema,
+  ChatBlockList: chatBlockListSchema,
+  ChatCard: chatCardSchema,
 } as const;
 
 export const CONTRACT_ENUMS = {
@@ -1469,6 +2052,21 @@ export const CONTRACT_ENUMS = {
     "failed", "cancelled", "refunded", "disputed",
   ],
   GiftType: ["one_time", "recurring"],
+  GroupRole: ["member", "leader", "manager"],
+  GroupMembershipState: ["member", "requested", "invited", "not_member", "banned"],
+  GroupJoinAction: [
+    "join", "request", "cancel_request", "leave", "invitation_required", "full", "closed", "unavailable",
+  ],
+  GroupEnrollment: ["open", "approval_required", "invitation_only", "closed"],
+  GroupVisibility: ["public", "unlisted", "private"],
+  GroupNotificationLevel: ["default", "all", "mentions", "muted"],
+  MessagingLevel: ["all", "mentions", "off"],
+  GroupRsvp: ["going", "maybe", "not_going"],
+  GroupChatState: ["ready", "read_only", "unavailable"],
+  ChatReportReason: [
+    "spam", "harassment", "hate", "sexual", "violence", "self_harm", "inappropriate", "other",
+  ],
+  ChatCardKind: ["group_event", "church_event", "sermon"],
 } as const;
 
 export type Bootstrap = z.infer<typeof bootstrapSchema>;

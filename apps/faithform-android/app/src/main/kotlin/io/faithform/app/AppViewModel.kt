@@ -191,9 +191,9 @@ class AppViewModel(
     val churchContext: StateFlow<PendingChurchContext?> = _churchContext.asStateFlow()
 
     /**
-     * The church the church-scoped tabs are about. Chosen by
-     * [HostNavigation.adoptSelection] after every bootstrap, and by the person
-     * from the Church tab.
+     * The church the church-scoped tabs are about — the account's one church.
+     * Chosen by [HostNavigation.adoptSelection] after every bootstrap; adding
+     * a church replaces it server-side and the next bootstrap adopts it.
      */
     private val _selectedChurchSlug = MutableStateFlow<String?>(null)
     val selectedChurchSlug: StateFlow<String?> = _selectedChurchSlug.asStateFlow()
@@ -202,10 +202,10 @@ class AppViewModel(
     val selectedTab: StateFlow<HostTab> = _selectedTab.asStateFlow()
 
     /**
-     * True while a request to show sermon notes waits for the Church tab — set
-     * by a `faithform://church/<slug>/sermons` link or the entry on Home, after
-     * the church is selected, and consumed once by the tab. The Church tab's
-     * own sub-page is UI state, so this is how anything outside it asks.
+     * True while a request to show sermon notes waits for Services — set by a
+     * `faithform://church/<slug>/sermons` link or the entry on Home, after the
+     * church is selected, and consumed once by the tab. The tab's own pane is
+     * UI state, so this is how anything outside it asks.
      */
     private val _sermonsRequested = MutableStateFlow(false)
     val sermonsRequested: StateFlow<Boolean> = _sermonsRequested.asStateFlow()
@@ -293,13 +293,28 @@ class AppViewModel(
         load()
     }
 
-    /** Refreshes in place after something changed — a join, an accepted
-     * invitation — without collapsing the UI back to a spinner first. */
-    fun reloadQuietly() {
-        viewModelScope.launch { loadNow(quiet = true) }
+    /**
+     * Refreshes in place after something changed — a church added or removed,
+     * an accepted invitation — without collapsing the UI back to a spinner
+     * first.
+     *
+     * [preferring] names a church that has just become the account's church:
+     * it is selected once the new bootstrap confirms it is readable, even if
+     * the server's stored preference has not caught up. [onDone] runs once the
+     * new bootstrap is showing (or the reload failed), so a screen can wait for
+     * Home to be about the new church before it returns there.
+     */
+    fun reloadQuietly(preferring: String? = null, onDone: (() -> Unit)? = null) {
+        viewModelScope.launch {
+            try {
+                loadNow(quiet = true, preferring = preferring)
+            } finally {
+                onDone?.invoke()
+            }
+        }
     }
 
-    private suspend fun loadNow(quiet: Boolean) {
+    private suspend fun loadNow(quiet: Boolean, preferring: String? = null) {
         val session = sessions.current()
         if (session == null) {
             _state.value = LaunchPhase.SignedOut
@@ -356,7 +371,8 @@ class AppViewModel(
 
             _selectedChurchSlug.value = HostNavigation.adoptSelection(
                 bootstrap = bootstrap,
-                serverPreference = onboardingState?.selectedChurchSlug
+                serverPreference = preferring
+                    ?: onboardingState?.selectedChurchSlug
                     ?: bootstrap.profile.selectedChurchSlug,
                 current = _selectedChurchSlug.value,
             )?.churchSlug
@@ -547,7 +563,12 @@ class AppViewModel(
      * signed in it is redeemed on the spot. Every other link is an unknown or
      * a destination, and an unknown is dropped rather than half-navigated.
      */
+    private val _groupInvitationToken = MutableStateFlow<String?>(null)
+    val groupInvitationToken: StateFlow<String?> = _groupInvitationToken.asStateFlow()
+    fun dismissGroupInvitation() { _groupInvitationToken.value = null }
+
     fun handleDeepLink(raw: String) {
+        io.faithform.app.navigation.GroupInvitationLink.token(raw)?.let { _groupInvitationToken.value = it; return }
         // The email-confirmation callback. Exchanged exactly once; with a
         // session already on the device it degrades to a quiet refresh, so a
         // replayed or duplicate link cannot corrupt state.
@@ -617,7 +638,7 @@ class AppViewModel(
     }
 
     /**
-     * Opens [slug]'s sermon notes from outside the Church tab, through exactly
+     * Opens [slug]'s sermon notes from outside Services, through exactly
      * the gates a `…/sermons` link passes.
      */
     fun openSermons(slug: String) {
@@ -625,7 +646,7 @@ class AppViewModel(
         openDestination(Destination.SermonArchive(slug), ready.bootstrap)
     }
 
-    /** The Church tab has shown sermon notes; the request is spent. */
+    /** Services has shown sermon notes; the request is spent. */
     fun consumeSermonsRequest() {
         _sermonsRequested.value = false
     }
@@ -633,9 +654,7 @@ class AppViewModel(
     /**
      * Chooses the church the church-scoped tabs are about.
      *
-     * Only a church this account can read is selectable — a blocked or left
-     * row is shown so its absence is not mysterious, but it cannot be chosen.
-     * The choice applies at once and is then recorded on the server as the
+     * Only a church this account can read is selectable. The choice applies at once and is then recorded on the server as the
      * account's preference, so the same church is selected on the next device.
      * That write is a preference, not authorization: if it fails nothing is
      * undone, and every read still checks access on its own.
@@ -761,10 +780,17 @@ class AppViewModel(
     fun consumePendingDestination(): Destination? =
         pendingDestination.also { pendingDestination = null }
 
-    /** Redeems what a person pasted — a bare token or the full link. */
-    fun acceptInvitation(raw: String) {
+    /**
+     * Redeems what a person pasted — a bare token or the full link. Accepting
+     * makes that church the account's only church, server-side; [onAccepted]
+     * runs once the bootstrap that shows it is in.
+     */
+    fun acceptInvitation(raw: String, onAccepted: (() -> Unit)? = null) {
         viewModelScope.launch {
-            if (acceptInvitationNow(normalizeInvitation(raw))) loadNow(quiet = true)
+            if (acceptInvitationNow(normalizeInvitation(raw))) {
+                loadNow(quiet = true)
+                onAccepted?.invoke()
+            }
         }
     }
 
@@ -907,6 +933,7 @@ class AppViewModel(
     }
 
     fun signOut() {
+        _groupInvitationToken.value = null
         viewModelScope.launch {
             // The server side first, best-effort: it bumps the authorization
             // version so anything cached against the old one is detectably

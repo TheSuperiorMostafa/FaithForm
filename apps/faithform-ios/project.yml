@@ -43,6 +43,9 @@ settings:
     CODE_SIGN_STYLE: Automatic
 
 packages:
+  StreamChatSwiftUI:
+    url: https://github.com/GetStream/stream-chat-swiftui.git
+    exactVersion: 5.11.0
   FaithFormKit:
     path: .
 
@@ -61,6 +64,8 @@ targets:
           - Configuration/Local.xcconfig.example
           - Scripts/check-assets.sh
     dependencies:
+      - package: StreamChatSwiftUI
+        product: StreamChatSwiftUI
       - package: FaithFormKit
         product: FaithFormKit
     configFiles:

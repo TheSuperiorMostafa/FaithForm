@@ -1,3 +1,5 @@
+import { isMessagingHalfConfigured } from "@/lib/messaging/config";
+
 const PLACEHOLDER_PARTS = [
   "replace-me",
   "xxxxxxxx",
@@ -203,6 +205,19 @@ export function assertProductionEnv(): void {
   }, failedChecks);
   recordCheck("RESEND_API_KEY", () => {
     assertValue("RESEND_API_KEY", process.env.RESEND_API_KEY);
+  }, failedChecks);
+  // Group messaging (Prompt 14) is optional as a whole — without it Groups
+  // works and chat says it is unavailable — but never half-configured: a key
+  // without its secret passes every other check and fails only when a member
+  // opens a conversation.
+  recordCheck("STREAM_CHAT_API_SECRET", () => {
+    if (isMessagingHalfConfigured()) {
+      throw new Error("Production env STREAM_CHAT_API_KEY and STREAM_CHAT_API_SECRET must be set together");
+    }
+    if (process.env.STREAM_CHAT_API_SECRET?.trim()) {
+      assertSecret("STREAM_CHAT_API_SECRET", process.env.STREAM_CHAT_API_SECRET);
+      assertValue("STREAM_CHAT_API_KEY", process.env.STREAM_CHAT_API_KEY);
+    }
   }, failedChecks);
 
   if (failedChecks.length > 0) {

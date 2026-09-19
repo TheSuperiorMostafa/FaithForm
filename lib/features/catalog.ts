@@ -11,6 +11,7 @@ import {
   RadioTower,
   Smartphone,
   Users,
+  UsersRound,
   type LucideIcon,
 } from "lucide-react";
 
@@ -40,6 +41,7 @@ export const FEATURE_KEYS = [
   "library",
   "website",
   "member_app",
+  "groups",
 ] as const;
 
 export type FeatureKey = (typeof FEATURE_KEYS)[number];
@@ -104,6 +106,17 @@ export const FEATURES: FeatureDefinition[] = [
     href: "/dashboard/people",
     icon: Contact,
     routes: ["/dashboard/people"],
+  },
+  {
+    key: "groups",
+    label: "Groups",
+    description:
+      "Small groups, classes and teams: members, join requests, gatherings and attendance, group messaging, and moderation.",
+    href: "/dashboard/groups",
+    icon: UsersRound,
+    routes: ["/dashboard/groups"],
+    publicImpact:
+      "Hides Groups and group messages in the member app. Nothing is deleted: groups, members and conversations come back when Groups is turned on again.",
   },
   {
     key: "checkin",

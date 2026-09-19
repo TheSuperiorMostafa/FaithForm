@@ -255,6 +255,7 @@ android {
 }
 
 dependencies {
+    implementation("io.getstream:stream-chat-android-compose:6.18.0")
     implementation(project(":core:contract"))
     implementation(project(":core:network"))
     implementation(project(":core:navigation"))

@@ -11,6 +11,7 @@ import {
   Settings,
   Smartphone,
   Users,
+  UsersRound,
   type LucideIcon,
 } from "lucide-react";
 import type { FeatureKey } from "@/lib/features/catalog";
@@ -93,6 +94,13 @@ export const navItems: NavItem[] = [
     href: "/dashboard/people",
     icon: Contact,
     features: ["people"],
+  },
+  {
+    label: "Groups",
+    shortLabel: "Groups",
+    href: "/dashboard/groups",
+    icon: UsersRound,
+    features: ["groups"],
   },
   {
     label: "Announcements",

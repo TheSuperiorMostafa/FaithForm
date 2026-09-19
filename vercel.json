@@ -35,6 +35,12 @@
     },
     "app/api/stream/recordings/reconcile/route.ts": {
       "maxDuration": 60
+    },
+    "app/api/webhooks/messaging/sync/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/webhooks/groups/maintenance/route.ts": {
+      "maxDuration": 120
     }
   },
   "crons": [
@@ -69,6 +75,14 @@
     {
       "path": "/api/stream/recordings/reconcile",
       "schedule": "*/2 * * * *"
+    },
+    {
+      "path": "/api/webhooks/messaging/sync",
+      "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/webhooks/groups/maintenance",
+      "schedule": "30 5 * * *"
     }
   ]
 }

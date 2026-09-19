@@ -104,6 +104,7 @@ export async function startKioskSession(input: {
     .select("id, church_id, campus_id, checkin_closes_at_utc, status")
     .eq("id", input.occurrenceId)
     .eq("church_id", input.churchId)
+    .is("group_id", null)
     .maybeSingle();
 
   if (!occurrence || occurrence.status === "cancelled") return null;

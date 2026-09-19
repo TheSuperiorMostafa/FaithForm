@@ -277,6 +277,7 @@ export async function readChurchAutomaticReadiness(
           "id, label, starts_at_utc, ends_at_utc, checkin_opens_at_utc, checkin_closes_at_utc, timezone",
         )
         .eq("church_id", churchId)
+        .is("group_id", null)
         .in("status", ["scheduled", "active"])
         // Only services that will accept an automatic check-in. A window whose
         // own snapshot has automatic check-in off would send phones to ask a

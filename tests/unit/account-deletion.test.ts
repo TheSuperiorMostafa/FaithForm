@@ -13,6 +13,7 @@ import { BOOTSTRAP_SUPERADMIN_EMAILS } from "@/lib/auth/superadmin-emails";
 import {
   ACCOUNT_REFERENCES,
   AUTH_USER_CASCADES,
+  AUTH_USER_OWNED,
   type Reference,
 } from "../policies/account-references";
 
@@ -50,6 +51,7 @@ const EXTRA_REFERENCES: Record<string, Reference[]> = {
 const REFERENCES: Record<string, Reference[]> = {
   "auth.users": [
     ...AUTH_USER_CASCADES,
+    ...AUTH_USER_OWNED,
     { table: "visitor_people_link_events", column: "actor_user_id", action: "set null" },
   ],
   visitor_accounts: [...ACCOUNT_REFERENCES],

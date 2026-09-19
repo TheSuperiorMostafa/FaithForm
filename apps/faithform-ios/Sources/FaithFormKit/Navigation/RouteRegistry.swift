@@ -60,6 +60,7 @@ public struct RouteRegistry: Sendable {
         case .announcements: return "announcements"
         case .watch: return "watch"
         case .sermonArchive: return "sermons"
+        case .groups: return "groups"
         case .give: return "give"
         case .checkIn: return "checkIn"
         case .account: return "account"

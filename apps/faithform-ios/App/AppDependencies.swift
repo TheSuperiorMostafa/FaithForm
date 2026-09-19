@@ -226,6 +226,7 @@ final class AppDependencies {
         .church(slug: ""),
         .announcements(churchSlug: ""),
         .watch(churchSlug: ""),
+        .groups(churchSlug: ""),
         .give(churchSlug: ""),
         .checkIn(churchSlug: ""),
         .sermonArchive(churchSlug: ""),

@@ -508,6 +508,309 @@ enum class GiftType {
 }
 
 /**
+ * Forward-compatible: an unrecognised value decodes to [UNKNOWN] rather than
+ * throwing, so a server that adds a case cannot break a released build.
+ */
+@Serializable
+enum class GroupRole {
+    @SerialName("member") MEMBER,
+    @SerialName("leader") LEADER,
+    @SerialName("manager") MANAGER,
+    UNKNOWN;
+
+    companion object {
+        fun fromWire(value: String?): GroupRole =
+            entries.firstOrNull { it.wire == value } ?: UNKNOWN
+    }
+
+    val wire: String
+        get() = when (this) {
+            MEMBER -> "member"
+            LEADER -> "leader"
+            MANAGER -> "manager"
+            UNKNOWN -> "unknown"
+        }
+}
+
+/**
+ * Forward-compatible: an unrecognised value decodes to [UNKNOWN] rather than
+ * throwing, so a server that adds a case cannot break a released build.
+ */
+@Serializable
+enum class GroupMembershipState {
+    @SerialName("member") MEMBER,
+    @SerialName("requested") REQUESTED,
+    @SerialName("invited") INVITED,
+    @SerialName("not_member") NOT_MEMBER,
+    @SerialName("banned") BANNED,
+    UNKNOWN;
+
+    companion object {
+        fun fromWire(value: String?): GroupMembershipState =
+            entries.firstOrNull { it.wire == value } ?: UNKNOWN
+    }
+
+    val wire: String
+        get() = when (this) {
+            MEMBER -> "member"
+            REQUESTED -> "requested"
+            INVITED -> "invited"
+            NOT_MEMBER -> "not_member"
+            BANNED -> "banned"
+            UNKNOWN -> "unknown"
+        }
+}
+
+/**
+ * Forward-compatible: an unrecognised value decodes to [UNKNOWN] rather than
+ * throwing, so a server that adds a case cannot break a released build.
+ */
+@Serializable
+enum class GroupJoinAction {
+    @SerialName("join") JOIN,
+    @SerialName("request") REQUEST,
+    @SerialName("cancel_request") CANCEL_REQUEST,
+    @SerialName("leave") LEAVE,
+    @SerialName("invitation_required") INVITATION_REQUIRED,
+    @SerialName("full") FULL,
+    @SerialName("closed") CLOSED,
+    @SerialName("unavailable") UNAVAILABLE,
+    UNKNOWN;
+
+    companion object {
+        fun fromWire(value: String?): GroupJoinAction =
+            entries.firstOrNull { it.wire == value } ?: UNKNOWN
+    }
+
+    val wire: String
+        get() = when (this) {
+            JOIN -> "join"
+            REQUEST -> "request"
+            CANCEL_REQUEST -> "cancel_request"
+            LEAVE -> "leave"
+            INVITATION_REQUIRED -> "invitation_required"
+            FULL -> "full"
+            CLOSED -> "closed"
+            UNAVAILABLE -> "unavailable"
+            UNKNOWN -> "unknown"
+        }
+}
+
+/**
+ * Forward-compatible: an unrecognised value decodes to [UNKNOWN] rather than
+ * throwing, so a server that adds a case cannot break a released build.
+ */
+@Serializable
+enum class GroupEnrollment {
+    @SerialName("open") OPEN,
+    @SerialName("approval_required") APPROVAL_REQUIRED,
+    @SerialName("invitation_only") INVITATION_ONLY,
+    @SerialName("closed") CLOSED,
+    UNKNOWN;
+
+    companion object {
+        fun fromWire(value: String?): GroupEnrollment =
+            entries.firstOrNull { it.wire == value } ?: UNKNOWN
+    }
+
+    val wire: String
+        get() = when (this) {
+            OPEN -> "open"
+            APPROVAL_REQUIRED -> "approval_required"
+            INVITATION_ONLY -> "invitation_only"
+            CLOSED -> "closed"
+            UNKNOWN -> "unknown"
+        }
+}
+
+/**
+ * Forward-compatible: an unrecognised value decodes to [UNKNOWN] rather than
+ * throwing, so a server that adds a case cannot break a released build.
+ */
+@Serializable
+enum class GroupVisibility {
+    @SerialName("public") PUBLIC,
+    @SerialName("unlisted") UNLISTED,
+    @SerialName("private") PRIVATE,
+    UNKNOWN;
+
+    companion object {
+        fun fromWire(value: String?): GroupVisibility =
+            entries.firstOrNull { it.wire == value } ?: UNKNOWN
+    }
+
+    val wire: String
+        get() = when (this) {
+            PUBLIC -> "public"
+            UNLISTED -> "unlisted"
+            PRIVATE -> "private"
+            UNKNOWN -> "unknown"
+        }
+}
+
+/**
+ * Forward-compatible: an unrecognised value decodes to [UNKNOWN] rather than
+ * throwing, so a server that adds a case cannot break a released build.
+ */
+@Serializable
+enum class GroupNotificationLevel {
+    @SerialName("default") DEFAULT,
+    @SerialName("all") ALL,
+    @SerialName("mentions") MENTIONS,
+    @SerialName("muted") MUTED,
+    UNKNOWN;
+
+    companion object {
+        fun fromWire(value: String?): GroupNotificationLevel =
+            entries.firstOrNull { it.wire == value } ?: UNKNOWN
+    }
+
+    val wire: String
+        get() = when (this) {
+            DEFAULT -> "default"
+            ALL -> "all"
+            MENTIONS -> "mentions"
+            MUTED -> "muted"
+            UNKNOWN -> "unknown"
+        }
+}
+
+/**
+ * Forward-compatible: an unrecognised value decodes to [UNKNOWN] rather than
+ * throwing, so a server that adds a case cannot break a released build.
+ */
+@Serializable
+enum class MessagingLevel {
+    @SerialName("all") ALL,
+    @SerialName("mentions") MENTIONS,
+    @SerialName("off") OFF,
+    UNKNOWN;
+
+    companion object {
+        fun fromWire(value: String?): MessagingLevel =
+            entries.firstOrNull { it.wire == value } ?: UNKNOWN
+    }
+
+    val wire: String
+        get() = when (this) {
+            ALL -> "all"
+            MENTIONS -> "mentions"
+            OFF -> "off"
+            UNKNOWN -> "unknown"
+        }
+}
+
+/**
+ * Forward-compatible: an unrecognised value decodes to [UNKNOWN] rather than
+ * throwing, so a server that adds a case cannot break a released build.
+ */
+@Serializable
+enum class GroupRsvp {
+    @SerialName("going") GOING,
+    @SerialName("maybe") MAYBE,
+    @SerialName("not_going") NOT_GOING,
+    UNKNOWN;
+
+    companion object {
+        fun fromWire(value: String?): GroupRsvp =
+            entries.firstOrNull { it.wire == value } ?: UNKNOWN
+    }
+
+    val wire: String
+        get() = when (this) {
+            GOING -> "going"
+            MAYBE -> "maybe"
+            NOT_GOING -> "not_going"
+            UNKNOWN -> "unknown"
+        }
+}
+
+/**
+ * Forward-compatible: an unrecognised value decodes to [UNKNOWN] rather than
+ * throwing, so a server that adds a case cannot break a released build.
+ */
+@Serializable
+enum class GroupChatState {
+    @SerialName("ready") READY,
+    @SerialName("read_only") READ_ONLY,
+    @SerialName("unavailable") UNAVAILABLE,
+    UNKNOWN;
+
+    companion object {
+        fun fromWire(value: String?): GroupChatState =
+            entries.firstOrNull { it.wire == value } ?: UNKNOWN
+    }
+
+    val wire: String
+        get() = when (this) {
+            READY -> "ready"
+            READ_ONLY -> "read_only"
+            UNAVAILABLE -> "unavailable"
+            UNKNOWN -> "unknown"
+        }
+}
+
+/**
+ * Forward-compatible: an unrecognised value decodes to [UNKNOWN] rather than
+ * throwing, so a server that adds a case cannot break a released build.
+ */
+@Serializable
+enum class ChatReportReason {
+    @SerialName("spam") SPAM,
+    @SerialName("harassment") HARASSMENT,
+    @SerialName("hate") HATE,
+    @SerialName("sexual") SEXUAL,
+    @SerialName("violence") VIOLENCE,
+    @SerialName("self_harm") SELF_HARM,
+    @SerialName("inappropriate") INAPPROPRIATE,
+    @SerialName("other") OTHER,
+    UNKNOWN;
+
+    companion object {
+        fun fromWire(value: String?): ChatReportReason =
+            entries.firstOrNull { it.wire == value } ?: UNKNOWN
+    }
+
+    val wire: String
+        get() = when (this) {
+            SPAM -> "spam"
+            HARASSMENT -> "harassment"
+            HATE -> "hate"
+            SEXUAL -> "sexual"
+            VIOLENCE -> "violence"
+            SELF_HARM -> "self_harm"
+            INAPPROPRIATE -> "inappropriate"
+            OTHER -> "other"
+            UNKNOWN -> "unknown"
+        }
+}
+
+/**
+ * Forward-compatible: an unrecognised value decodes to [UNKNOWN] rather than
+ * throwing, so a server that adds a case cannot break a released build.
+ */
+@Serializable
+enum class ChatCardKind {
+    @SerialName("group_event") GROUP_EVENT,
+    @SerialName("church_event") CHURCH_EVENT,
+    @SerialName("sermon") SERMON,
+    UNKNOWN;
+
+    companion object {
+        fun fromWire(value: String?): ChatCardKind =
+            entries.firstOrNull { it.wire == value } ?: UNKNOWN
+    }
+
+    val wire: String
+        get() = when (this) {
+            GROUP_EVENT -> "group_event"
+            CHURCH_EVENT -> "church_event"
+            SERMON -> "sermon"
+            UNKNOWN -> "unknown"
+        }
+}
+
+/**
  * Unknown additive fields are ignored by the configured Json instance,
  * which is what lets a released client keep working when the server adds one.
  */
@@ -639,6 +942,7 @@ data class ChurchRelationship(
     val canManageBranding: Boolean? = null,
     val automaticCheckInEnabled: Boolean? = null,
     val codeCheckInEnabled: Boolean? = null,
+    val groupsEnabled: Boolean? = null,
     val state: RelationshipState,
     val joinPolicy: JoinPolicy,
     val joinedAt: String? = null,
@@ -1625,5 +1929,651 @@ data class GivingReceipt(
     val churchName: String,
     val paidAt: String,
     val giftType: String
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class GroupTypeSummary(
+    val id: String,
+    val name: String,
+    val icon: String
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class GroupLeader(
+    val name: String,
+    val avatarUrl: String? = null,
+    val groupRole: String,
+    val chatUserId: String? = null
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class GroupEventSummary(
+    val id: String,
+    val groupId: String,
+    val title: String,
+    val startsAt: String,
+    val endsAt: String,
+    val timezone: String,
+    val locationName: String? = null,
+    val isCancelled: Boolean,
+    val rsvp: String? = null,
+    val goingCount: Int
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class GroupChatInfo(
+    val cid: String,
+    val channelType: String,
+    val channelId: String,
+    val state: String,
+    val postingPolicy: String
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class GroupSummary(
+    val id: String,
+    val name: String,
+    val summary: String? = null,
+    val coverImageUrl: String? = null,
+    val type: GroupTypeSummary? = null,
+    val memberCount: Int,
+    val capacity: Int? = null,
+    val enrollment: String,
+    val visibility: String,
+    val status: String,
+    val scheduleText: String? = null,
+    val meetingDays: List<Int>,
+    val campusName: String? = null,
+    val locationName: String? = null,
+    val nextEvent: GroupEventSummary? = null,
+    val membershipState: String,
+    val groupRole: String? = null,
+    val joinAction: String,
+    val chat: GroupChatInfo? = null,
+    val isYouth: Boolean,
+    val version: Int
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class MyGroups(
+    val items: List<GroupSummary>,
+    val directMessagesEnabled: Boolean,
+    val messagingAvailable: Boolean
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class GroupDiscoveryPage(
+    val items: List<GroupSummary>,
+    val nextCursor: String? = null
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class GroupCampusOption(
+    val id: String,
+    val name: String
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class GroupFilters(
+    val types: List<GroupTypeSummary>,
+    val campuses: List<GroupCampusOption>,
+    val days: List<Int>
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class GroupCapabilities(
+    val canViewMembers: Boolean,
+    val canManageMembers: Boolean,
+    val canManageRequests: Boolean,
+    val canInvite: Boolean,
+    val canManageRoles: Boolean,
+    val canEditDetails: Boolean,
+    val canManageEvents: Boolean,
+    val canTakeAttendance: Boolean,
+    val canModerateChat: Boolean
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class GroupSchedule(
+    val text: String,
+    val frequency: String,
+    val dayOfWeek: Int,
+    val startTime: String,
+    val durationMinutes: Int,
+    val timezone: String
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class GroupLocation(
+    val name: String? = null,
+    val address: String? = null,
+    val onlineMeetingUrl: String? = null,
+    val membersOnly: Boolean
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class GroupDetail(
+    val group: GroupSummary,
+    val description: String? = null,
+    val leaders: List<GroupLeader>,
+    val schedules: List<GroupSchedule>,
+    val location: GroupLocation? = null,
+    val upcomingEvents: List<GroupEventSummary>,
+    val capabilities: GroupCapabilities,
+    val pendingRequestCount: Int,
+    val notificationLevel: String? = null,
+    val isArchived: Boolean,
+    val chatPosting: String? = null,
+    val memberListVisibility: String? = null
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class JoinGroupRequest(
+    val message: String? = null
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class UpdateGroupDetailsRequest(
+    val expectedVersion: Int,
+    val name: String,
+    val description: String? = null,
+    val enrollment: String,
+    val capacity: Int? = null,
+    val locationName: String? = null,
+    val locationAddress: String? = null,
+    val onlineMeetingUrl: String? = null,
+    val chatPosting: String,
+    val memberListVisibility: String
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class GroupJoinResult(
+    val outcome: String,
+    val group: GroupSummary? = null
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class GroupMember(
+    val membershipId: String,
+    val name: String,
+    val avatarUrl: String? = null,
+    val groupRole: String,
+    val joinedAt: String,
+    val chatUserId: String? = null,
+    val isYou: Boolean
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class GroupMemberPage(
+    val items: List<GroupMember>,
+    val nextCursor: String? = null,
+    val total: Int
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class GroupJoinRequestItem(
+    val requestId: String,
+    val name: String,
+    val avatarUrl: String? = null,
+    val message: String? = null,
+    val requestedAt: String
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class GroupJoinRequestPage(
+    val items: List<GroupJoinRequestItem>,
+    val nextCursor: String? = null
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class DecideGroupRequest(
+    val decision: String
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class GroupCommandResult(
+    val outcome: String
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class SetGroupRoleRequest(
+    val groupRole: String
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class RemoveGroupMemberRequest(
+    val ban: Boolean,
+    val reason: String? = null
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class GroupInvitation(
+    val url: String,
+    val expiresAt: String,
+    val maxUses: Int
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class GroupInvitationTokenRequest(
+    val token: String
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class GroupInvitationPreview(
+    val groupId: String,
+    val groupName: String,
+    val coverImageUrl: String? = null,
+    val churchSlug: String,
+    val churchName: String
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class GroupEventRsvpCounts(
+    val going: Int,
+    val maybe: Int,
+    val notGoing: Int
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class GroupEventAttendanceSummary(
+    val taken: Boolean,
+    val present: Int,
+    val absent: Int,
+    val guests: Int,
+    val firstTimeGuests: Int
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class GroupEventDetail(
+    val event: GroupEventSummary,
+    val groupName: String,
+    val description: String? = null,
+    val locationAddress: String? = null,
+    val onlineMeetingUrl: String? = null,
+    val rsvpCounts: GroupEventRsvpCounts,
+    val attendance: GroupEventAttendanceSummary? = null,
+    val canEdit: Boolean,
+    val canTakeAttendance: Boolean
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class GroupEventPage(
+    val items: List<GroupEventSummary>,
+    val nextCursor: String? = null
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class UpsertGroupEventRequest(
+    val title: String,
+    val description: String? = null,
+    val startsAt: String,
+    val endsAt: String,
+    val timezone: String? = null,
+    val locationName: String? = null,
+    val locationAddress: String? = null,
+    val onlineMeetingUrl: String? = null
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class GroupEventRsvpRequest(
+    val response: String
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class GroupAttendanceEntry(
+    val membershipId: String,
+    val name: String,
+    val avatarUrl: String? = null,
+    val groupRole: String,
+    val present: Boolean,
+    val recordable: Boolean
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class GroupAttendanceSheet(
+    val eventId: String,
+    val title: String,
+    val startsAt: String,
+    val timezone: String,
+    val taken: Boolean,
+    val entries: List<GroupAttendanceEntry>,
+    val presentCount: Int,
+    val absentCount: Int,
+    val guestCount: Int,
+    val firstTimeGuestCount: Int,
+    val notes: String? = null,
+    val recordableUntil: String,
+    val canRecord: Boolean,
+    val lockedReason: String? = null
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class SubmitGroupAttendanceRequest(
+    val presentMembershipIds: List<String>,
+    val guestCount: Int,
+    val firstTimeGuestCount: Int,
+    val notes: String? = null
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class ChatSession(
+    val appKey: String,
+    val churchTeam: String,
+    val chatUserId: String,
+    val userToken: String,
+    val expiresAt: String,
+    val suspended: Boolean,
+    val suspendedUntil: String? = null
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class ChatRoute(
+    val kind: String,
+    val churchSlug: String,
+    val groupId: String? = null,
+    val cid: String,
+    val messageId: String? = null
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class GroupNotificationSetting(
+    val groupId: String,
+    val groupName: String,
+    val level: String
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class MessagingPreferences(
+    val level: String,
+    val groups: List<GroupNotificationSetting>
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class SetMessagingLevelRequest(
+    val level: String
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class SetGroupNotificationRequest(
+    val level: String
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class MessagingContact(
+    val chatUserId: String,
+    val name: String,
+    val avatarUrl: String? = null,
+    val context: String? = null
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class MessagingContactPage(
+    val items: List<MessagingContact>,
+    val nextCursor: String? = null
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class StartDirectMessageRequest(
+    val chatUserId: String
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class DirectConversation(
+    val cid: String,
+    val channelId: String,
+    val state: String
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class ChatReportRequest(
+    val cid: String,
+    val messageId: String? = null,
+    val reportedChatUserId: String? = null,
+    val reason: String,
+    val details: String? = null
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class ChatReportResult(
+    val received: Boolean
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class ChatBlockRequest(
+    val chatUserId: String
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class ChatBlockedPerson(
+    val chatUserId: String,
+    val name: String,
+    val blockedAt: String
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class ChatBlockList(
+    val items: List<ChatBlockedPerson>
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class ChatCard(
+    val kind: String,
+    val id: String,
+    val available: Boolean,
+    val title: String? = null,
+    val subtitle: String? = null,
+    val imageUrl: String? = null,
+    val startsAt: String? = null,
+    val endsAt: String? = null,
+    val locationName: String? = null,
+    val deepLink: String? = null
 )
 

@@ -10,18 +10,31 @@ import io.faithform.app.network.MobileSuccess
 import io.faithform.app.network.ProjectionCache
 import io.faithform.app.storage.CachePartition
 import kotlin.coroutines.cancellation.CancellationException
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 
+/** Something the Church info page did that the screens around it must follow. */
+sealed interface ChurchProfileEvent {
+    /** This church is now the account's only church. */
+    data object Added : ChurchProfileEvent
+
+    /** The account no longer has a church. */
+    data object Removed : ChurchProfileEvent
+}
+
 /**
- * One church's public profile, and the actions a relationship allows.
+ * One church's page, and the two things a person can do about it: make it
+ * their church, or stop having it as their church.
  *
  * Mirrors the iOS `ChurchProfileModel` — same states, same rule that a reply
- * is never trusted as the new truth: after any action the profile is
- * re-fetched so what is shown is what the server would serve.
+ * is never trusted as the new truth: after adding, the profile is re-fetched
+ * so what is shown is what the server would serve.
  *
  * Cached first, so a church the person has already opened does not flash
  * a skeleton while the network confirms it.
@@ -40,8 +53,18 @@ class ChurchProfileViewModel(
     private val _isActing = MutableStateFlow(false)
     val isActing: StateFlow<Boolean> = _isActing.asStateFlow()
 
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
     private val _actionError = MutableStateFlow<String?>(null)
     val actionError: StateFlow<String?> = _actionError.asStateFlow()
+
+    /**
+     * One-shot outcomes. A channel rather than state, so a rotation cannot
+     * replay "added" and navigate twice.
+     */
+    private val _events = Channel<ChurchProfileEvent>(Channel.BUFFERED)
+    val events: Flow<ChurchProfileEvent> = _events.receiveAsFlow()
 
     private var etag: String? = null
 
@@ -53,6 +76,19 @@ class ChurchProfileViewModel(
 
     fun load() {
         viewModelScope.launch { refresh() }
+    }
+
+    /** Pull to refresh: the same fetch, with the indicator held while it runs. */
+    fun pullToRefresh() {
+        if (_isRefreshing.value) return
+        viewModelScope.launch {
+            _isRefreshing.value = true
+            try {
+                refresh()
+            } finally {
+                _isRefreshing.value = false
+            }
+        }
     }
 
     private suspend fun refresh() {
@@ -93,25 +129,37 @@ class ChurchProfileViewModel(
     private fun keepLoadedOr(fallback: ChurchProfilePhase): ChurchProfilePhase =
         _phase.value as? ChurchProfilePhase.Loaded ?: fallback
 
-    fun follow() = perform("api/mobile/v1/churches/$slug/follow", "POST")
-    fun requestJoin() = perform("api/mobile/v1/churches/$slug/join", "POST")
-    fun leave() = perform("api/mobile/v1/churches/$slug/follow", "DELETE")
+    /**
+     * Makes this the account's only church — `POST …/follow`. Any other church
+     * is released and this one selected, server-side, in the same request.
+     */
+    fun add() = perform("POST", ChurchProfileEvent.Added)
 
-    private fun perform(path: String, method: String) {
+    /** Leaves the account with no church — `DELETE …/follow`. */
+    fun remove() = perform("DELETE", ChurchProfileEvent.Removed)
+
+    private fun perform(method: String, success: ChurchProfileEvent) {
+        if (_isActing.value) return
         viewModelScope.launch {
             _isActing.value = true
             _actionError.value = null
             try {
                 api.send(
-                    path = path,
+                    path = "api/mobile/v1/churches/$slug/follow",
                     serializer = MobileSuccess.serializer(RelationshipReply.serializer()),
                     method = method
                 )
-                refresh()
+                // After a removal the page is about to be left for first run;
+                // re-fetching it could only flash "not found" for a church that
+                // is not listed publicly.
+                if (success == ChurchProfileEvent.Added) refresh()
+                _events.send(success)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (error: ApiException) {
                 _actionError.value = error.displayMessage
             } catch (error: Exception) {
-                _actionError.value = null
+                _actionError.value = ApiException.transport().displayMessage
             } finally {
                 _isActing.value = false
             }

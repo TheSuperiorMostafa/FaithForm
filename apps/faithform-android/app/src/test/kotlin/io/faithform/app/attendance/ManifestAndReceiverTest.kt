@@ -75,6 +75,7 @@ class ManifestAndReceiverTest {
                 // nothing else can reach `requestPermission`.
                 "android.permission.CAMERA",
                 "android.permission.INTERNET",
+                "android.permission.WAKE_LOCK",
             ),
             declared,
         )

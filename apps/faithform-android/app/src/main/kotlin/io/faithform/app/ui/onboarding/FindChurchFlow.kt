@@ -42,9 +42,7 @@ import io.faithform.app.contract.MobileErrorCode
 import io.faithform.app.design.FaithFormTokens
 import io.faithform.app.design.LocalFaithFormTheme
 import io.faithform.app.session.AppContainer
-import io.faithform.app.storage.CachePartition
-import io.faithform.app.ui.church.ChurchProfileScreen
-import io.faithform.app.ui.church.ChurchProfileViewModel
+import io.faithform.app.ui.church.ChurchInfoHost
 import io.faithform.app.ui.discovery.DiscoveryScreen
 import io.faithform.app.ui.discovery.DiscoveryViewModel
 import io.faithform.app.ui.discovery.LocationAuthorization
@@ -52,16 +50,18 @@ import io.faithform.app.ui.discovery.LocationEducationScreen
 import io.faithform.app.ui.discovery.LocationProvider
 import io.faithform.app.ui.discovery.WelcomeScreen
 import io.faithform.app.ui.components.FaithFormWorkingLabel
+import io.faithform.app.ui.host.TabScreen
 import kotlinx.coroutines.launch
 
 /**
  * The find-a-church journey: welcome (first run only) → search or invitation →
- * church profile → follow, join, or redeem.
+ * the church's page → add it (replacing any church they had), or redeem.
  *
- * One flow serves both entrances — first run, and "add another church" later —
- * so the two cannot drift. Navigation is Android-native: system back walks the
- * route stack, and signing out stays reachable the whole way through first
- * run, because a flow a person cannot leave is a dead end with extra steps.
+ * One flow serves both entrances — first run, and "Change church" / "Find your
+ * church" from Home later — so the two cannot drift. Navigation is
+ * Android-native: system back walks the route stack, and signing out stays
+ * reachable the whole way through first run, because a flow a person cannot
+ * leave is a dead end with extra steps.
  */
 private sealed interface FindChurchRoute {
     data object Welcome : FindChurchRoute
@@ -110,7 +110,19 @@ fun FindChurchFlow(
      * deletion to be reachable from inside the app, not only from a tab.
      */
     onDeleteAccount: (() -> Unit)? = null,
-    onExit: (() -> Unit)? = null
+    /** Back from the first screen. */
+    onExit: (() -> Unit)? = null,
+    /**
+     * Inside the tabs: the title of the bar drawn over search, with a back
+     * arrow. First run draws no bar.
+     */
+    embeddedTitle: String? = null,
+    /**
+     * A church was added (or an invitation accepted) and bootstrap reflects
+     * it. Inside the tabs this leaves the flow for Home; first run needs
+     * nothing, because the shell swaps to the tabs by itself.
+     */
+    onChurchAdded: (() -> Unit)? = null,
 ) {
     val start: FindChurchRoute =
         if (showWelcome) FindChurchRoute.Welcome else FindChurchRoute.Search
@@ -155,8 +167,18 @@ fun FindChurchFlow(
     }
 
     val atRoot = route == start
-    BackHandler(enabled = !atRoot || onExit != null) {
-        if (atRoot) onExit?.invoke() else back()
+    val goBack: () -> Unit = { if (atRoot) onExit?.invoke() else back() }
+    BackHandler(enabled = !atRoot || onExit != null, onBack = goBack)
+
+    // Inside the tabs, search and invitation entry sit under a bar with a back
+    // arrow. The church's page draws its own, over its cover.
+    @Composable
+    fun Chrome(content: @Composable (Modifier) -> Unit) {
+        if (embeddedTitle != null) {
+            TabScreen(title = embeddedTitle, onBack = goBack) { inner -> content(inner) }
+        } else {
+            content(Modifier.fillMaxSize())
+        }
     }
 
     when (val current = route) {
@@ -182,11 +204,11 @@ fun FindChurchFlow(
             }
         }
 
-        FindChurchRoute.Search -> {
+        FindChurchRoute.Search -> Chrome { inner ->
             val phase by discovery.phase.collectAsStateWithLifecycle()
             val query by discovery.query.collectAsStateWithLifecycle()
 
-            Column(Modifier.fillMaxSize().safeDrawingPadding()) {
+            Column(inner.fillMaxSize().safeDrawingPadding()) {
                 DiscoveryScreen(
                     phase = phase,
                     query = query,
@@ -211,75 +233,39 @@ fun FindChurchFlow(
             }
         }
 
-        FindChurchRoute.Education -> LocationEducationScreen(
-            onContinue = {
-                route = FindChurchRoute.Search
-                discovery.confirmNearby()
-            },
-            onSkip = {
-                // Declining is a first-class outcome: straight back to the
-                // search that needs no permission at all.
-                route = FindChurchRoute.Search
-                discovery.search()
+        FindChurchRoute.Education -> Chrome { inner ->
+            Box(inner) {
+                LocationEducationScreen(
+                    onContinue = {
+                        route = FindChurchRoute.Search
+                        discovery.confirmNearby()
+                    },
+                    onSkip = {
+                        // Declining is a first-class outcome: straight back to
+                        // the search that needs no permission at all.
+                        route = FindChurchRoute.Search
+                        discovery.search()
+                    }
+                )
             }
-        )
+        }
 
-        is FindChurchRoute.Church -> ChurchProfileHost(
+        is FindChurchRoute.Church -> ChurchInfoHost(
             slug = current.slug,
             appViewModel = appViewModel,
             container = container,
-            onAcceptInvitation = { route = FindChurchRoute.Invitation }
+            onBack = ::back,
+            onHaveInvitation = { route = FindChurchRoute.Invitation },
+            // Already searching: "Change church" is a step back to the results.
+            onChangeChurch = { route = FindChurchRoute.Search },
+            onChurchAdded = onChurchAdded,
         )
 
-        FindChurchRoute.Invitation -> InvitationEntryScreen(appViewModel)
-    }
-}
-
-@Composable
-private fun ChurchProfileHost(
-    slug: String,
-    appViewModel: AppViewModel,
-    container: AppContainer,
-    onAcceptInvitation: () -> Unit
-) {
-    val profile: ChurchProfileViewModel = viewModel(key = "church-profile-$slug") {
-        ChurchProfileViewModel(
-            api = container.apiClient,
-            cache = container.projections,
-            slug = slug,
-            partition = appViewModel.partition(slug)
-                ?: CachePartition.publicPartition(container.environmentKey),
-        )
-    }
-    LaunchedEffect(slug) { profile.load() }
-
-    val phase by profile.phase.collectAsStateWithLifecycle()
-    val isActing by profile.isActing.collectAsStateWithLifecycle()
-    val actionError by profile.actionError.collectAsStateWithLifecycle()
-
-    // A relationship created on this screen is not in bootstrap yet. Refresh
-    // quietly so home reflects it — and so first-run ends the moment a church
-    // exists.
-    LaunchedEffect(phase) {
-        val loaded = phase as? io.faithform.app.ui.church.ChurchProfilePhase.Loaded
-            ?: return@LaunchedEffect
-        val state = loaded.profile.relationshipState ?: return@LaunchedEffect
-        if (state != io.faithform.app.contract.RelationshipState.LEFT) {
-            appViewModel.reloadQuietly()
+        FindChurchRoute.Invitation -> Chrome { inner ->
+            Box(inner) {
+                InvitationEntryScreen(appViewModel, onAccepted = onChurchAdded)
+            }
         }
-    }
-
-    Column(Modifier.fillMaxSize().safeDrawingPadding()) {
-        ChurchProfileScreen(
-            phase = phase,
-            isActing = isActing,
-            actionError = actionError,
-            onFollow = profile::follow,
-            onRequestJoin = profile::requestJoin,
-            onLeave = profile::leave,
-            onAcceptInvitation = onAcceptInvitation,
-            onRetry = profile::load
-        )
     }
 }
 
@@ -289,7 +275,7 @@ private fun ChurchProfileHost(
  * hunts for something to paste.
  */
 @Composable
-fun InvitationEntryScreen(appViewModel: AppViewModel) {
+fun InvitationEntryScreen(appViewModel: AppViewModel, onAccepted: (() -> Unit)? = null) {
     val theme = LocalFaithFormTheme.current
     val invitationPhase by appViewModel.invitationPhase.collectAsStateWithLifecycle()
     val pendingToken by appViewModel.pendingInvitationToken.collectAsStateWithLifecycle()
@@ -350,7 +336,7 @@ fun InvitationEntryScreen(appViewModel: AppViewModel) {
         }
 
         Button(
-            onClick = { appViewModel.acceptInvitation(raw) },
+            onClick = { appViewModel.acceptInvitation(raw, onAccepted) },
             enabled = invitationPhase != InvitationPhase.Working && raw.trim().isNotEmpty(),
             modifier = Modifier
                 .fillMaxWidth()

@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -216,29 +215,6 @@ fun SkeletonCard(modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun ChooserRowSkeleton(modifier: Modifier = Modifier) {
-    SkeletonCardChrome(modifier) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.base),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            SkeletonAvatar()
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.xs),
-            ) {
-                SkeletonBone(height = 17.dp, widthFraction = 0.7f)
-                SkeletonBone(
-                    height = 22.dp,
-                    widthFraction = 0.32f,
-                    cornerRadius = FaithFormTokens.Radius.pill,
-                )
-            }
-        }
-    }
-}
-
-@Composable
 fun FeedCardSkeleton(modifier: Modifier = Modifier) {
     val theme = LocalFaithFormTheme.current
     val shape = RoundedCornerShape(FaithFormTokens.Radius.xl)
@@ -409,6 +385,10 @@ fun DiscoveryResultsSkeleton(modifier: Modifier = Modifier) {
     }
 }
 
+/**
+ * The Church info page while it loads: the full-bleed cover, the floating
+ * quick-action card over its edge, the next-service card and a list card.
+ */
 @Composable
 fun ChurchProfileSkeleton(modifier: Modifier = Modifier) {
     val theme = LocalFaithFormTheme.current
@@ -419,55 +399,33 @@ fun ChurchProfileSkeleton(modifier: Modifier = Modifier) {
             .skeletonShimmer(),
         verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.lg),
     ) {
-        Box {
-            Box(
-                Modifier
-                    .fillMaxWidth()
-                    .height(160.dp)
-                    .clip(RoundedCornerShape(FaithFormTokens.Radius.lg))
-                    .background(theme.palette.skeletonBase),
-            )
-            SkeletonAvatar(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(FaithFormTokens.Spacing.base)
-                    .offset(y = 24.dp),
-                size = 64.dp,
-            )
-        }
-        Spacer(Modifier.height(FaithFormTokens.Spacing.md))
-        Column(verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm)) {
-            SkeletonBone(height = 34.dp, widthFraction = 0.72f)
-            SkeletonBone(height = 17.dp, widthFraction = 0.5f)
-            SkeletonBone(height = 17.dp, widthFraction = 1f)
-            SkeletonBone(height = 17.dp, widthFraction = 0.88f)
-            SkeletonBone(height = 17.dp, widthFraction = 0.64f)
-        }
-        SkeletonBone(
-            height = FaithFormTokens.TouchTarget.recommended,
-            cornerRadius = FaithFormTokens.Radius.control,
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(260.dp)
+                .background(theme.palette.skeletonBase),
         )
-        Column(verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.md)) {
-            SkeletonBone(height = 13.dp, widthFraction = 0.28f)
-            SkeletonCardChrome {
-                SkeletonBone(height = 17.dp, widthFraction = 0.44f)
-                SkeletonBone(height = 15.dp, widthFraction = 0.8f)
-                SkeletonBone(height = 15.dp, widthFraction = 0.52f)
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = FaithFormTokens.Layout.screenPaddingHorizontal),
+            verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.lg),
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm)) {
+                SkeletonBone(height = 28.dp, widthFraction = 0.7f)
+                SkeletonBone(height = 17.dp, widthFraction = 0.45f)
+            }
+            SkeletonBone(height = 88.dp, cornerRadius = FaithFormTokens.Radius.xl)
+            SkeletonBone(height = 132.dp, cornerRadius = 20.dp)
+            Column(verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.md)) {
+                SkeletonBone(height = 13.dp, widthFraction = 0.28f)
+                SkeletonCardChrome {
+                    SkeletonBone(height = 17.dp, widthFraction = 0.44f)
+                    SkeletonBone(height = 15.dp, widthFraction = 0.8f)
+                    SkeletonBone(height = 15.dp, widthFraction = 0.52f)
+                }
             }
         }
-    }
-}
-
-@Composable
-fun ChurchChooserSkeleton(modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .then(skeletonLabel())
-            .skeletonShimmer(),
-        verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.md),
-    ) {
-        repeat(2) { ChooserRowSkeleton() }
     }
 }
 

@@ -32,6 +32,15 @@ export const ACCOUNT_OWNED: readonly Reference[] = [
   { table: "attendance_qr_scan_redemptions", column: "account_id", action: "cascade" },
   { table: "giving_donor_links", column: "account_id", action: "cascade" },
   { table: "giving_donation_attempts", column: "account_id", action: "cascade" },
+  // Groups (0091/0092). A membership or ban anchored to a People record is the
+  // church's and survives: a before-delete trigger on visitor_accounts nulls
+  // the account on those rows first, so the cascade below only removes what
+  // belonged to the app account alone — its own joins, requests and RSVPs.
+  { table: "group_memberships", column: "account_id", action: "cascade" },
+  { table: "group_join_requests", column: "account_id", action: "cascade" },
+  { table: "group_bans", column: "account_id", action: "cascade" },
+  { table: "group_event_rsvps", column: "account_id", action: "cascade" },
+  { table: "messaging_notification_preferences", column: "account_id", action: "cascade" },
 ];
 
 /**
@@ -46,6 +55,8 @@ export const KEPT_UNLINKED: readonly Reference[] = [
   { table: "attendance_attempts", column: "account_id", action: "set null" },
   { table: "attendance_qr_redemptions", column: "account_id", action: "set null" },
   { table: "checkin_sessions", column: "pre_checked_in_by_account_id", action: "set null" },
+  // A group's audit keeps the event, not the person.
+  { table: "group_audit_events", column: "subject_account_id", action: "set null" },
 ];
 
 export const ACCOUNT_REFERENCES: readonly Reference[] = [...ACCOUNT_OWNED, ...KEPT_UNLINKED];
@@ -62,4 +73,23 @@ export const AUTH_USER_CASCADES: readonly Reference[] = [
   { table: "platform_admins", column: "user_id", action: "cascade" },
   { table: "sermons", column: "created_by", action: "cascade" },
   { table: "dashboard_usage_daily", column: "user_id", action: "cascade" },
+];
+
+/**
+ * The person's own messaging data, keyed by sign-in because staff chat from
+ * the dashboard as well as members from the app. Removed *with* the Auth user,
+ * and deliberately **not** sign-in dependents: holding a chat identity, a
+ * block or a conversation must never be the reason an account deletion keeps
+ * someone's email address. Deleting the binding enqueues the provider-side
+ * deletion (0092 `messaging_before_binding_delete`), so the chat provider
+ * forgets them too.
+ */
+export const AUTH_USER_OWNED: readonly Reference[] = [
+  { table: "messaging_user_bindings", column: "user_id", action: "cascade" },
+  { table: "messaging_dm_channels", column: "user_low", action: "cascade" },
+  { table: "messaging_dm_channels", column: "user_high", action: "cascade" },
+  { table: "messaging_blocks", column: "blocker_user_id", action: "cascade" },
+  { table: "messaging_blocks", column: "blocked_user_id", action: "cascade" },
+  { table: "messaging_restrictions", column: "user_id", action: "cascade" },
+  { table: "group_staff_reads", column: "user_id", action: "cascade" },
 ];

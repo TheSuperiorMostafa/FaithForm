@@ -669,6 +669,9 @@
         "codeCheckInEnabled": {
           "type": "boolean"
         },
+        "groupsEnabled": {
+          "type": "boolean"
+        },
         "state": {
           "type": "string",
           "enum": [
@@ -1027,6 +1030,9 @@
             "codeCheckInEnabled": {
               "type": "boolean"
             },
+            "groupsEnabled": {
+              "type": "boolean"
+            },
             "state": {
               "type": "string",
               "enum": [
@@ -1236,6 +1242,9 @@
               "type": "boolean"
             },
             "codeCheckInEnabled": {
+              "type": "boolean"
+            },
+            "groupsEnabled": {
               "type": "boolean"
             },
             "state": {
@@ -6597,6 +6606,4131 @@
         "churchName",
         "paidAt",
         "giftType"
+      ],
+      "additionalProperties": false
+    },
+    "GroupTypeSummary": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 60
+        },
+        "icon": {
+          "type": "string",
+          "maxLength": 40
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "icon"
+      ],
+      "additionalProperties": false
+    },
+    "GroupLeader": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "avatarUrl": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "groupRole": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "chatUserId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 40
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "name",
+        "avatarUrl",
+        "groupRole",
+        "chatUserId"
+      ],
+      "additionalProperties": false
+    },
+    "GroupEventSummary": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "groupId": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "startsAt": {
+          "type": "string",
+          "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+        },
+        "endsAt": {
+          "type": "string",
+          "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+        },
+        "timezone": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "locationName": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 200
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "isCancelled": {
+          "type": "boolean"
+        },
+        "rsvp": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 20
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "goingCount": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "id",
+        "groupId",
+        "title",
+        "startsAt",
+        "endsAt",
+        "timezone",
+        "locationName",
+        "isCancelled",
+        "rsvp",
+        "goingCount"
+      ],
+      "additionalProperties": false
+    },
+    "GroupChatInfo": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "cid": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "channelType": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "channelId": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "state": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "postingPolicy": {
+          "type": "string",
+          "maxLength": 20
+        }
+      },
+      "required": [
+        "cid",
+        "channelType",
+        "channelId",
+        "state",
+        "postingPolicy"
+      ],
+      "additionalProperties": false
+    },
+    "GroupSummary": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 300
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "coverImageUrl": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GroupTypeSummary"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "memberCount": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "capacity": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enrollment": {
+          "type": "string",
+          "maxLength": 30
+        },
+        "visibility": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "status": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "scheduleText": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 120
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "meetingDays": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        },
+        "campusName": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 120
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "locationName": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 200
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "nextEvent": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GroupEventSummary"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "membershipState": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "groupRole": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 20
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "joinAction": {
+          "type": "string",
+          "maxLength": 30
+        },
+        "chat": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GroupChatInfo"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "isYouth": {
+          "type": "boolean"
+        },
+        "version": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "summary",
+        "coverImageUrl",
+        "type",
+        "memberCount",
+        "capacity",
+        "enrollment",
+        "visibility",
+        "status",
+        "scheduleText",
+        "meetingDays",
+        "campusName",
+        "locationName",
+        "nextEvent",
+        "membershipState",
+        "groupRole",
+        "joinAction",
+        "chat",
+        "isYouth",
+        "version"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "GroupTypeSummary": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string",
+              "maxLength": 60
+            },
+            "icon": {
+              "type": "string",
+              "maxLength": 40
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "icon"
+          ],
+          "additionalProperties": false
+        },
+        "GroupEventSummary": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "groupId": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "startsAt": {
+              "type": "string",
+              "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+            },
+            "endsAt": {
+              "type": "string",
+              "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+            },
+            "timezone": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "locationName": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "isCancelled": {
+              "type": "boolean"
+            },
+            "rsvp": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 20
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "goingCount": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "id",
+            "groupId",
+            "title",
+            "startsAt",
+            "endsAt",
+            "timezone",
+            "locationName",
+            "isCancelled",
+            "rsvp",
+            "goingCount"
+          ],
+          "additionalProperties": false
+        },
+        "GroupChatInfo": {
+          "type": "object",
+          "properties": {
+            "cid": {
+              "type": "string",
+              "maxLength": 80
+            },
+            "channelType": {
+              "type": "string",
+              "maxLength": 20
+            },
+            "channelId": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "state": {
+              "type": "string",
+              "maxLength": 20
+            },
+            "postingPolicy": {
+              "type": "string",
+              "maxLength": 20
+            }
+          },
+          "required": [
+            "cid",
+            "channelType",
+            "channelId",
+            "state",
+            "postingPolicy"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "MyGroups": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GroupSummary"
+          }
+        },
+        "directMessagesEnabled": {
+          "type": "boolean"
+        },
+        "messagingAvailable": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "items",
+        "directMessagesEnabled",
+        "messagingAvailable"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "GroupSummary": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string",
+              "maxLength": 80
+            },
+            "summary": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 300
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "coverImageUrl": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 2048
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/GroupTypeSummary"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "memberCount": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "capacity": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "enrollment": {
+              "type": "string",
+              "maxLength": 30
+            },
+            "visibility": {
+              "type": "string",
+              "maxLength": 20
+            },
+            "status": {
+              "type": "string",
+              "maxLength": 20
+            },
+            "scheduleText": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 120
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "meetingDays": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "campusName": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 120
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "locationName": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "nextEvent": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/GroupEventSummary"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "membershipState": {
+              "type": "string",
+              "maxLength": 20
+            },
+            "groupRole": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 20
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "joinAction": {
+              "type": "string",
+              "maxLength": 30
+            },
+            "chat": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/GroupChatInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "isYouth": {
+              "type": "boolean"
+            },
+            "version": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "summary",
+            "coverImageUrl",
+            "type",
+            "memberCount",
+            "capacity",
+            "enrollment",
+            "visibility",
+            "status",
+            "scheduleText",
+            "meetingDays",
+            "campusName",
+            "locationName",
+            "nextEvent",
+            "membershipState",
+            "groupRole",
+            "joinAction",
+            "chat",
+            "isYouth",
+            "version"
+          ],
+          "additionalProperties": false
+        },
+        "GroupTypeSummary": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string",
+              "maxLength": 60
+            },
+            "icon": {
+              "type": "string",
+              "maxLength": 40
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "icon"
+          ],
+          "additionalProperties": false
+        },
+        "GroupEventSummary": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "groupId": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "startsAt": {
+              "type": "string",
+              "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+            },
+            "endsAt": {
+              "type": "string",
+              "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+            },
+            "timezone": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "locationName": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "isCancelled": {
+              "type": "boolean"
+            },
+            "rsvp": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 20
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "goingCount": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "id",
+            "groupId",
+            "title",
+            "startsAt",
+            "endsAt",
+            "timezone",
+            "locationName",
+            "isCancelled",
+            "rsvp",
+            "goingCount"
+          ],
+          "additionalProperties": false
+        },
+        "GroupChatInfo": {
+          "type": "object",
+          "properties": {
+            "cid": {
+              "type": "string",
+              "maxLength": 80
+            },
+            "channelType": {
+              "type": "string",
+              "maxLength": 20
+            },
+            "channelId": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "state": {
+              "type": "string",
+              "maxLength": 20
+            },
+            "postingPolicy": {
+              "type": "string",
+              "maxLength": 20
+            }
+          },
+          "required": [
+            "cid",
+            "channelType",
+            "channelId",
+            "state",
+            "postingPolicy"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "GroupDiscoveryPage": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GroupSummary"
+          }
+        },
+        "nextCursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "GroupSummary": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string",
+              "maxLength": 80
+            },
+            "summary": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 300
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "coverImageUrl": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 2048
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/GroupTypeSummary"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "memberCount": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "capacity": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "enrollment": {
+              "type": "string",
+              "maxLength": 30
+            },
+            "visibility": {
+              "type": "string",
+              "maxLength": 20
+            },
+            "status": {
+              "type": "string",
+              "maxLength": 20
+            },
+            "scheduleText": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 120
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "meetingDays": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "campusName": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 120
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "locationName": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "nextEvent": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/GroupEventSummary"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "membershipState": {
+              "type": "string",
+              "maxLength": 20
+            },
+            "groupRole": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 20
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "joinAction": {
+              "type": "string",
+              "maxLength": 30
+            },
+            "chat": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/GroupChatInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "isYouth": {
+              "type": "boolean"
+            },
+            "version": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "summary",
+            "coverImageUrl",
+            "type",
+            "memberCount",
+            "capacity",
+            "enrollment",
+            "visibility",
+            "status",
+            "scheduleText",
+            "meetingDays",
+            "campusName",
+            "locationName",
+            "nextEvent",
+            "membershipState",
+            "groupRole",
+            "joinAction",
+            "chat",
+            "isYouth",
+            "version"
+          ],
+          "additionalProperties": false
+        },
+        "GroupTypeSummary": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string",
+              "maxLength": 60
+            },
+            "icon": {
+              "type": "string",
+              "maxLength": 40
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "icon"
+          ],
+          "additionalProperties": false
+        },
+        "GroupEventSummary": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "groupId": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "startsAt": {
+              "type": "string",
+              "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+            },
+            "endsAt": {
+              "type": "string",
+              "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+            },
+            "timezone": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "locationName": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "isCancelled": {
+              "type": "boolean"
+            },
+            "rsvp": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 20
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "goingCount": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "id",
+            "groupId",
+            "title",
+            "startsAt",
+            "endsAt",
+            "timezone",
+            "locationName",
+            "isCancelled",
+            "rsvp",
+            "goingCount"
+          ],
+          "additionalProperties": false
+        },
+        "GroupChatInfo": {
+          "type": "object",
+          "properties": {
+            "cid": {
+              "type": "string",
+              "maxLength": 80
+            },
+            "channelType": {
+              "type": "string",
+              "maxLength": 20
+            },
+            "channelId": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "state": {
+              "type": "string",
+              "maxLength": 20
+            },
+            "postingPolicy": {
+              "type": "string",
+              "maxLength": 20
+            }
+          },
+          "required": [
+            "cid",
+            "channelType",
+            "channelId",
+            "state",
+            "postingPolicy"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "GroupCampusOption": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 120
+        }
+      },
+      "required": [
+        "id",
+        "name"
+      ],
+      "additionalProperties": false
+    },
+    "GroupFilters": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "types": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GroupTypeSummary"
+          }
+        },
+        "campuses": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GroupCampusOption"
+          }
+        },
+        "days": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": -9007199254740991,
+            "maximum": 9007199254740991
+          }
+        }
+      },
+      "required": [
+        "types",
+        "campuses",
+        "days"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "GroupTypeSummary": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string",
+              "maxLength": 60
+            },
+            "icon": {
+              "type": "string",
+              "maxLength": 40
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "icon"
+          ],
+          "additionalProperties": false
+        },
+        "GroupCampusOption": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string",
+              "maxLength": 120
+            }
+          },
+          "required": [
+            "id",
+            "name"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "GroupCapabilities": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "canViewMembers": {
+          "type": "boolean"
+        },
+        "canManageMembers": {
+          "type": "boolean"
+        },
+        "canManageRequests": {
+          "type": "boolean"
+        },
+        "canInvite": {
+          "type": "boolean"
+        },
+        "canManageRoles": {
+          "type": "boolean"
+        },
+        "canEditDetails": {
+          "type": "boolean"
+        },
+        "canManageEvents": {
+          "type": "boolean"
+        },
+        "canTakeAttendance": {
+          "type": "boolean"
+        },
+        "canModerateChat": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "canViewMembers",
+        "canManageMembers",
+        "canManageRequests",
+        "canInvite",
+        "canManageRoles",
+        "canEditDetails",
+        "canManageEvents",
+        "canTakeAttendance",
+        "canModerateChat"
+      ],
+      "additionalProperties": false
+    },
+    "GroupSchedule": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "frequency": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "dayOfWeek": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "startTime": {
+          "type": "string",
+          "maxLength": 5
+        },
+        "durationMinutes": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "timezone": {
+          "type": "string",
+          "maxLength": 64
+        }
+      },
+      "required": [
+        "text",
+        "frequency",
+        "dayOfWeek",
+        "startTime",
+        "durationMinutes",
+        "timezone"
+      ],
+      "additionalProperties": false
+    },
+    "GroupLocation": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "name": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 200
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "address": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 500
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "onlineMeetingUrl": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "membersOnly": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "address",
+        "onlineMeetingUrl",
+        "membersOnly"
+      ],
+      "additionalProperties": false
+    },
+    "GroupDetail": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "group": {
+          "$ref": "#/$defs/GroupSummary"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 4000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "leaders": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GroupLeader"
+          }
+        },
+        "schedules": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GroupSchedule"
+          }
+        },
+        "location": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GroupLocation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "upcomingEvents": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GroupEventSummary"
+          }
+        },
+        "capabilities": {
+          "$ref": "#/$defs/GroupCapabilities"
+        },
+        "pendingRequestCount": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "notificationLevel": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 20
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "isArchived": {
+          "type": "boolean"
+        },
+        "chatPosting": {
+          "type": "string",
+          "enum": [
+            "everyone",
+            "leaders"
+          ]
+        },
+        "memberListVisibility": {
+          "type": "string",
+          "enum": [
+            "members",
+            "leaders"
+          ]
+        }
+      },
+      "required": [
+        "group",
+        "description",
+        "leaders",
+        "schedules",
+        "location",
+        "upcomingEvents",
+        "capabilities",
+        "pendingRequestCount",
+        "notificationLevel",
+        "isArchived"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "GroupSummary": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string",
+              "maxLength": 80
+            },
+            "summary": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 300
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "coverImageUrl": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 2048
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/GroupTypeSummary"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "memberCount": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "capacity": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "enrollment": {
+              "type": "string",
+              "maxLength": 30
+            },
+            "visibility": {
+              "type": "string",
+              "maxLength": 20
+            },
+            "status": {
+              "type": "string",
+              "maxLength": 20
+            },
+            "scheduleText": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 120
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "meetingDays": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "campusName": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 120
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "locationName": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "nextEvent": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/GroupEventSummary"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "membershipState": {
+              "type": "string",
+              "maxLength": 20
+            },
+            "groupRole": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 20
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "joinAction": {
+              "type": "string",
+              "maxLength": 30
+            },
+            "chat": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/GroupChatInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "isYouth": {
+              "type": "boolean"
+            },
+            "version": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "summary",
+            "coverImageUrl",
+            "type",
+            "memberCount",
+            "capacity",
+            "enrollment",
+            "visibility",
+            "status",
+            "scheduleText",
+            "meetingDays",
+            "campusName",
+            "locationName",
+            "nextEvent",
+            "membershipState",
+            "groupRole",
+            "joinAction",
+            "chat",
+            "isYouth",
+            "version"
+          ],
+          "additionalProperties": false
+        },
+        "GroupTypeSummary": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string",
+              "maxLength": 60
+            },
+            "icon": {
+              "type": "string",
+              "maxLength": 40
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "icon"
+          ],
+          "additionalProperties": false
+        },
+        "GroupEventSummary": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "groupId": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "startsAt": {
+              "type": "string",
+              "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+            },
+            "endsAt": {
+              "type": "string",
+              "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+            },
+            "timezone": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "locationName": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "isCancelled": {
+              "type": "boolean"
+            },
+            "rsvp": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 20
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "goingCount": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "id",
+            "groupId",
+            "title",
+            "startsAt",
+            "endsAt",
+            "timezone",
+            "locationName",
+            "isCancelled",
+            "rsvp",
+            "goingCount"
+          ],
+          "additionalProperties": false
+        },
+        "GroupChatInfo": {
+          "type": "object",
+          "properties": {
+            "cid": {
+              "type": "string",
+              "maxLength": 80
+            },
+            "channelType": {
+              "type": "string",
+              "maxLength": 20
+            },
+            "channelId": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "state": {
+              "type": "string",
+              "maxLength": 20
+            },
+            "postingPolicy": {
+              "type": "string",
+              "maxLength": 20
+            }
+          },
+          "required": [
+            "cid",
+            "channelType",
+            "channelId",
+            "state",
+            "postingPolicy"
+          ],
+          "additionalProperties": false
+        },
+        "GroupLeader": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "avatarUrl": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 2048
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "groupRole": {
+              "type": "string",
+              "maxLength": 20
+            },
+            "chatUserId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 40
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "name",
+            "avatarUrl",
+            "groupRole",
+            "chatUserId"
+          ],
+          "additionalProperties": false
+        },
+        "GroupSchedule": {
+          "type": "object",
+          "properties": {
+            "text": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "frequency": {
+              "type": "string",
+              "maxLength": 20
+            },
+            "dayOfWeek": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "startTime": {
+              "type": "string",
+              "maxLength": 5
+            },
+            "durationMinutes": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "timezone": {
+              "type": "string",
+              "maxLength": 64
+            }
+          },
+          "required": [
+            "text",
+            "frequency",
+            "dayOfWeek",
+            "startTime",
+            "durationMinutes",
+            "timezone"
+          ],
+          "additionalProperties": false
+        },
+        "GroupLocation": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "address": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 500
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "onlineMeetingUrl": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 2048
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "membersOnly": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "name",
+            "address",
+            "onlineMeetingUrl",
+            "membersOnly"
+          ],
+          "additionalProperties": false
+        },
+        "GroupCapabilities": {
+          "type": "object",
+          "properties": {
+            "canViewMembers": {
+              "type": "boolean"
+            },
+            "canManageMembers": {
+              "type": "boolean"
+            },
+            "canManageRequests": {
+              "type": "boolean"
+            },
+            "canInvite": {
+              "type": "boolean"
+            },
+            "canManageRoles": {
+              "type": "boolean"
+            },
+            "canEditDetails": {
+              "type": "boolean"
+            },
+            "canManageEvents": {
+              "type": "boolean"
+            },
+            "canTakeAttendance": {
+              "type": "boolean"
+            },
+            "canModerateChat": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "canViewMembers",
+            "canManageMembers",
+            "canManageRequests",
+            "canInvite",
+            "canManageRoles",
+            "canEditDetails",
+            "canManageEvents",
+            "canTakeAttendance",
+            "canModerateChat"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "JoinGroupRequest": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "message": {
+          "type": "string",
+          "maxLength": 500
+        }
+      },
+      "additionalProperties": false
+    },
+    "UpdateGroupDetailsRequest": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "expectedVersion": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 4000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "enrollment": {
+          "type": "string",
+          "enum": [
+            "open",
+            "approval_required",
+            "invitation_only",
+            "closed"
+          ]
+        },
+        "capacity": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "locationName": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 200
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "locationAddress": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 500
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "onlineMeetingUrl": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "chatPosting": {
+          "type": "string",
+          "enum": [
+            "everyone",
+            "leaders"
+          ]
+        },
+        "memberListVisibility": {
+          "type": "string",
+          "enum": [
+            "members",
+            "leaders"
+          ]
+        }
+      },
+      "required": [
+        "expectedVersion",
+        "name",
+        "description",
+        "enrollment",
+        "capacity",
+        "locationName",
+        "locationAddress",
+        "onlineMeetingUrl",
+        "chatPosting",
+        "memberListVisibility"
+      ],
+      "additionalProperties": false
+    },
+    "GroupJoinResult": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "outcome": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "group": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GroupSummary"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "outcome",
+        "group"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "GroupSummary": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string",
+              "maxLength": 80
+            },
+            "summary": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 300
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "coverImageUrl": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 2048
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/GroupTypeSummary"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "memberCount": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "capacity": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "enrollment": {
+              "type": "string",
+              "maxLength": 30
+            },
+            "visibility": {
+              "type": "string",
+              "maxLength": 20
+            },
+            "status": {
+              "type": "string",
+              "maxLength": 20
+            },
+            "scheduleText": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 120
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "meetingDays": {
+              "type": "array",
+              "items": {
+                "type": "integer",
+                "minimum": -9007199254740991,
+                "maximum": 9007199254740991
+              }
+            },
+            "campusName": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 120
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "locationName": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "nextEvent": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/GroupEventSummary"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "membershipState": {
+              "type": "string",
+              "maxLength": 20
+            },
+            "groupRole": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 20
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "joinAction": {
+              "type": "string",
+              "maxLength": 30
+            },
+            "chat": {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/GroupChatInfo"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "isYouth": {
+              "type": "boolean"
+            },
+            "version": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "summary",
+            "coverImageUrl",
+            "type",
+            "memberCount",
+            "capacity",
+            "enrollment",
+            "visibility",
+            "status",
+            "scheduleText",
+            "meetingDays",
+            "campusName",
+            "locationName",
+            "nextEvent",
+            "membershipState",
+            "groupRole",
+            "joinAction",
+            "chat",
+            "isYouth",
+            "version"
+          ],
+          "additionalProperties": false
+        },
+        "GroupTypeSummary": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string",
+              "maxLength": 60
+            },
+            "icon": {
+              "type": "string",
+              "maxLength": 40
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "icon"
+          ],
+          "additionalProperties": false
+        },
+        "GroupEventSummary": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "groupId": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "startsAt": {
+              "type": "string",
+              "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+            },
+            "endsAt": {
+              "type": "string",
+              "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+            },
+            "timezone": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "locationName": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "isCancelled": {
+              "type": "boolean"
+            },
+            "rsvp": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 20
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "goingCount": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "id",
+            "groupId",
+            "title",
+            "startsAt",
+            "endsAt",
+            "timezone",
+            "locationName",
+            "isCancelled",
+            "rsvp",
+            "goingCount"
+          ],
+          "additionalProperties": false
+        },
+        "GroupChatInfo": {
+          "type": "object",
+          "properties": {
+            "cid": {
+              "type": "string",
+              "maxLength": 80
+            },
+            "channelType": {
+              "type": "string",
+              "maxLength": 20
+            },
+            "channelId": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "state": {
+              "type": "string",
+              "maxLength": 20
+            },
+            "postingPolicy": {
+              "type": "string",
+              "maxLength": 20
+            }
+          },
+          "required": [
+            "cid",
+            "channelType",
+            "channelId",
+            "state",
+            "postingPolicy"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "GroupMember": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "membershipId": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "avatarUrl": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "groupRole": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "joinedAt": {
+          "type": "string",
+          "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+        },
+        "chatUserId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 40
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "isYou": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "membershipId",
+        "name",
+        "avatarUrl",
+        "groupRole",
+        "joinedAt",
+        "chatUserId",
+        "isYou"
+      ],
+      "additionalProperties": false
+    },
+    "GroupMemberPage": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GroupMember"
+          }
+        },
+        "nextCursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "total": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor",
+        "total"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "GroupMember": {
+          "type": "object",
+          "properties": {
+            "membershipId": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "avatarUrl": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 2048
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "groupRole": {
+              "type": "string",
+              "maxLength": 20
+            },
+            "joinedAt": {
+              "type": "string",
+              "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+            },
+            "chatUserId": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 40
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "isYou": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "membershipId",
+            "name",
+            "avatarUrl",
+            "groupRole",
+            "joinedAt",
+            "chatUserId",
+            "isYou"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "GroupJoinRequestItem": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "avatarUrl": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "message": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 500
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "requestedAt": {
+          "type": "string",
+          "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+        }
+      },
+      "required": [
+        "requestId",
+        "name",
+        "avatarUrl",
+        "message",
+        "requestedAt"
+      ],
+      "additionalProperties": false
+    },
+    "GroupJoinRequestPage": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GroupJoinRequestItem"
+          }
+        },
+        "nextCursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "GroupJoinRequestItem": {
+          "type": "object",
+          "properties": {
+            "requestId": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "avatarUrl": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 2048
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "message": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 500
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "requestedAt": {
+              "type": "string",
+              "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+            }
+          },
+          "required": [
+            "requestId",
+            "name",
+            "avatarUrl",
+            "message",
+            "requestedAt"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "DecideGroupRequest": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "decision": {
+          "type": "string",
+          "enum": [
+            "approve",
+            "decline"
+          ]
+        }
+      },
+      "required": [
+        "decision"
+      ],
+      "additionalProperties": false
+    },
+    "GroupCommandResult": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "outcome": {
+          "type": "string",
+          "maxLength": 40
+        }
+      },
+      "required": [
+        "outcome"
+      ],
+      "additionalProperties": false
+    },
+    "SetGroupRoleRequest": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "groupRole": {
+          "type": "string",
+          "enum": [
+            "member",
+            "leader",
+            "manager"
+          ]
+        }
+      },
+      "required": [
+        "groupRole"
+      ],
+      "additionalProperties": false
+    },
+    "RemoveGroupMemberRequest": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "ban": {
+          "default": false,
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 500
+        }
+      },
+      "required": [
+        "ban"
+      ],
+      "additionalProperties": false
+    },
+    "GroupInvitation": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "expiresAt": {
+          "type": "string",
+          "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+        },
+        "maxUses": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "url",
+        "expiresAt",
+        "maxUses"
+      ],
+      "additionalProperties": false
+    },
+    "GroupInvitationTokenRequest": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "token": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 512
+        }
+      },
+      "required": [
+        "token"
+      ],
+      "additionalProperties": false
+    },
+    "GroupInvitationPreview": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "groupId": {
+          "type": "string"
+        },
+        "groupName": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "coverImageUrl": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "churchSlug": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "churchName": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "groupId",
+        "groupName",
+        "coverImageUrl",
+        "churchSlug",
+        "churchName"
+      ],
+      "additionalProperties": false
+    },
+    "GroupEventRsvpCounts": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "going": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "maybe": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "notGoing": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "going",
+        "maybe",
+        "notGoing"
+      ],
+      "additionalProperties": false
+    },
+    "GroupEventAttendanceSummary": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "taken": {
+          "type": "boolean"
+        },
+        "present": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "absent": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "guests": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "firstTimeGuests": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "taken",
+        "present",
+        "absent",
+        "guests",
+        "firstTimeGuests"
+      ],
+      "additionalProperties": false
+    },
+    "GroupEventDetail": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "event": {
+          "$ref": "#/$defs/GroupEventSummary"
+        },
+        "groupName": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 4000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "locationAddress": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 500
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "onlineMeetingUrl": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "rsvpCounts": {
+          "$ref": "#/$defs/GroupEventRsvpCounts"
+        },
+        "attendance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GroupEventAttendanceSummary"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "canEdit": {
+          "type": "boolean"
+        },
+        "canTakeAttendance": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "event",
+        "groupName",
+        "description",
+        "locationAddress",
+        "onlineMeetingUrl",
+        "rsvpCounts",
+        "attendance",
+        "canEdit",
+        "canTakeAttendance"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "GroupEventSummary": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "groupId": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "startsAt": {
+              "type": "string",
+              "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+            },
+            "endsAt": {
+              "type": "string",
+              "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+            },
+            "timezone": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "locationName": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "isCancelled": {
+              "type": "boolean"
+            },
+            "rsvp": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 20
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "goingCount": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "id",
+            "groupId",
+            "title",
+            "startsAt",
+            "endsAt",
+            "timezone",
+            "locationName",
+            "isCancelled",
+            "rsvp",
+            "goingCount"
+          ],
+          "additionalProperties": false
+        },
+        "GroupEventRsvpCounts": {
+          "type": "object",
+          "properties": {
+            "going": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "maybe": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "notGoing": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "going",
+            "maybe",
+            "notGoing"
+          ],
+          "additionalProperties": false
+        },
+        "GroupEventAttendanceSummary": {
+          "type": "object",
+          "properties": {
+            "taken": {
+              "type": "boolean"
+            },
+            "present": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "absent": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "guests": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "firstTimeGuests": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "taken",
+            "present",
+            "absent",
+            "guests",
+            "firstTimeGuests"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "GroupEventPage": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GroupEventSummary"
+          }
+        },
+        "nextCursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "GroupEventSummary": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "groupId": {
+              "type": "string"
+            },
+            "title": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "startsAt": {
+              "type": "string",
+              "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+            },
+            "endsAt": {
+              "type": "string",
+              "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+            },
+            "timezone": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "locationName": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "isCancelled": {
+              "type": "boolean"
+            },
+            "rsvp": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 20
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "goingCount": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "id",
+            "groupId",
+            "title",
+            "startsAt",
+            "endsAt",
+            "timezone",
+            "locationName",
+            "isCancelled",
+            "rsvp",
+            "goingCount"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "UpsertGroupEventRequest": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 4000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "startsAt": {
+          "type": "string",
+          "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+        },
+        "endsAt": {
+          "type": "string",
+          "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+        },
+        "timezone": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "locationName": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 200
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "locationAddress": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 500
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "onlineMeetingUrl": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "title",
+        "startsAt",
+        "endsAt"
+      ],
+      "additionalProperties": false
+    },
+    "GroupEventRsvpRequest": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "response": {
+          "type": "string",
+          "enum": [
+            "going",
+            "maybe",
+            "not_going"
+          ]
+        }
+      },
+      "required": [
+        "response"
+      ],
+      "additionalProperties": false
+    },
+    "GroupAttendanceEntry": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "membershipId": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "avatarUrl": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "groupRole": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "present": {
+          "type": "boolean"
+        },
+        "recordable": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "membershipId",
+        "name",
+        "avatarUrl",
+        "groupRole",
+        "present",
+        "recordable"
+      ],
+      "additionalProperties": false
+    },
+    "GroupAttendanceSheet": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "eventId": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "startsAt": {
+          "type": "string",
+          "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+        },
+        "timezone": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "taken": {
+          "type": "boolean"
+        },
+        "entries": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GroupAttendanceEntry"
+          }
+        },
+        "presentCount": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "absentCount": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "guestCount": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "firstTimeGuestCount": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 1000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "recordableUntil": {
+          "type": "string",
+          "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+        },
+        "canRecord": {
+          "type": "boolean"
+        },
+        "lockedReason": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 40
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "eventId",
+        "title",
+        "startsAt",
+        "timezone",
+        "taken",
+        "entries",
+        "presentCount",
+        "absentCount",
+        "guestCount",
+        "firstTimeGuestCount",
+        "notes",
+        "recordableUntil",
+        "canRecord",
+        "lockedReason"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "GroupAttendanceEntry": {
+          "type": "object",
+          "properties": {
+            "membershipId": {
+              "type": "string"
+            },
+            "name": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "avatarUrl": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 2048
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "groupRole": {
+              "type": "string",
+              "maxLength": 20
+            },
+            "present": {
+              "type": "boolean"
+            },
+            "recordable": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "membershipId",
+            "name",
+            "avatarUrl",
+            "groupRole",
+            "present",
+            "recordable"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "SubmitGroupAttendanceRequest": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "presentMembershipIds": {
+          "maxItems": 1000,
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 64
+          }
+        },
+        "guestCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "firstTimeGuestCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 1000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "presentMembershipIds",
+        "guestCount",
+        "firstTimeGuestCount"
+      ],
+      "additionalProperties": false
+    },
+    "ChatSession": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "appKey": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "churchTeam": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "chatUserId": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "userToken": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "expiresAt": {
+          "type": "string",
+          "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+        },
+        "suspended": {
+          "type": "boolean"
+        },
+        "suspendedUntil": {
+          "anyOf": [
+            {
+              "type": "string",
+              "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "appKey",
+        "churchTeam",
+        "chatUserId",
+        "userToken",
+        "expiresAt",
+        "suspended",
+        "suspendedUntil"
+      ],
+      "additionalProperties": false
+    },
+    "ChatRoute": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "churchSlug": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "groupId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cid": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "messageId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "churchSlug",
+        "groupId",
+        "cid",
+        "messageId"
+      ],
+      "additionalProperties": false
+    },
+    "GroupNotificationSetting": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "groupId": {
+          "type": "string"
+        },
+        "groupName": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "level": {
+          "type": "string",
+          "maxLength": 20
+        }
+      },
+      "required": [
+        "groupId",
+        "groupName",
+        "level"
+      ],
+      "additionalProperties": false
+    },
+    "MessagingPreferences": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "level": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "groups": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/GroupNotificationSetting"
+          }
+        }
+      },
+      "required": [
+        "level",
+        "groups"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "GroupNotificationSetting": {
+          "type": "object",
+          "properties": {
+            "groupId": {
+              "type": "string"
+            },
+            "groupName": {
+              "type": "string",
+              "maxLength": 80
+            },
+            "level": {
+              "type": "string",
+              "maxLength": 20
+            }
+          },
+          "required": [
+            "groupId",
+            "groupName",
+            "level"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "SetMessagingLevelRequest": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": [
+            "all",
+            "mentions",
+            "off"
+          ]
+        }
+      },
+      "required": [
+        "level"
+      ],
+      "additionalProperties": false
+    },
+    "SetGroupNotificationRequest": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "level": {
+          "type": "string",
+          "enum": [
+            "default",
+            "all",
+            "mentions",
+            "muted"
+          ]
+        }
+      },
+      "required": [
+        "level"
+      ],
+      "additionalProperties": false
+    },
+    "MessagingContact": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "chatUserId": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "avatarUrl": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "context": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 160
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "chatUserId",
+        "name",
+        "avatarUrl",
+        "context"
+      ],
+      "additionalProperties": false
+    },
+    "MessagingContactPage": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/MessagingContact"
+          }
+        },
+        "nextCursor": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "items",
+        "nextCursor"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "MessagingContact": {
+          "type": "object",
+          "properties": {
+            "chatUserId": {
+              "type": "string",
+              "maxLength": 40
+            },
+            "name": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "avatarUrl": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 2048
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "context": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 160
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "chatUserId",
+            "name",
+            "avatarUrl",
+            "context"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "StartDirectMessageRequest": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "chatUserId": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 40
+        }
+      },
+      "required": [
+        "chatUserId"
+      ],
+      "additionalProperties": false
+    },
+    "DirectConversation": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "cid": {
+          "type": "string",
+          "maxLength": 80
+        },
+        "channelId": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "state": {
+          "type": "string",
+          "maxLength": 20
+        }
+      },
+      "required": [
+        "cid",
+        "channelId",
+        "state"
+      ],
+      "additionalProperties": false
+    },
+    "ChatReportRequest": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "cid": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 80
+        },
+        "messageId": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "reportedChatUserId": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "reason": {
+          "type": "string",
+          "enum": [
+            "spam",
+            "harassment",
+            "hate",
+            "sexual",
+            "violence",
+            "self_harm",
+            "inappropriate",
+            "other"
+          ]
+        },
+        "details": {
+          "type": "string",
+          "maxLength": 1000
+        }
+      },
+      "required": [
+        "cid",
+        "reason"
+      ],
+      "additionalProperties": false
+    },
+    "ChatReportResult": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "received": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "received"
+      ],
+      "additionalProperties": false
+    },
+    "ChatBlockRequest": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "chatUserId": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 40
+        }
+      },
+      "required": [
+        "chatUserId"
+      ],
+      "additionalProperties": false
+    },
+    "ChatBlockedPerson": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "chatUserId": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "blockedAt": {
+          "type": "string",
+          "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+        }
+      },
+      "required": [
+        "chatUserId",
+        "name",
+        "blockedAt"
+      ],
+      "additionalProperties": false
+    },
+    "ChatBlockList": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ChatBlockedPerson"
+          }
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "ChatBlockedPerson": {
+          "type": "object",
+          "properties": {
+            "chatUserId": {
+              "type": "string",
+              "maxLength": 40
+            },
+            "name": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "blockedAt": {
+              "type": "string",
+              "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+            }
+          },
+          "required": [
+            "chatUserId",
+            "name",
+            "blockedAt"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "ChatCard": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string",
+          "maxLength": 40
+        },
+        "id": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "available": {
+          "type": "boolean"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 200
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "subtitle": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 300
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "imageUrl": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "startsAt": {
+          "anyOf": [
+            {
+              "type": "string",
+              "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "endsAt": {
+          "anyOf": [
+            {
+              "type": "string",
+              "description": "RFC 3339 UTC instant, e.g. 2026-08-24T14:03:00Z"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "locationName": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 200
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "deepLink": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 512
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "kind",
+        "id",
+        "available",
+        "title",
+        "subtitle",
+        "imageUrl",
+        "startsAt",
+        "endsAt",
+        "locationName",
+        "deepLink"
       ],
       "additionalProperties": false
     }

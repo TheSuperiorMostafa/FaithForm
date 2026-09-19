@@ -8,6 +8,7 @@ import {
   ACCOUNT_OWNED,
   ACCOUNT_REFERENCES,
   AUTH_USER_CASCADES,
+  AUTH_USER_OWNED,
   KEPT_UNLINKED,
   type Reference,
 } from "./account-references";
@@ -153,7 +154,18 @@ test("the cascade stops at the account's own tables", () => {
 test("deleting an Auth user removes the app account, and only staff access and church records besides", () => {
   const { references } = declaredReferences(/auth\.users/);
   const cascades = references.filter((reference) => reference.action === "cascade");
-  assert.deepEqual(sortRefs(cascades), sortRefs(AUTH_USER_CASCADES));
+  // Two kinds of cascade, classified separately on purpose: the ones that
+  // keep a sign-in alive (staff access, church records) and the person's own
+  // messaging data, which goes with them and keeps nothing alive.
+  assert.deepEqual(sortRefs(cascades), sortRefs([...AUTH_USER_CASCADES, ...AUTH_USER_OWNED]));
+  const keepers = new Set(AUTH_USER_CASCADES.map((reference) => `${reference.table}.${reference.column}`));
+  for (const owned of AUTH_USER_OWNED) {
+    assert.ok(!keepers.has(`${owned.table}.${owned.column}`), `${owned.table} is in both lists`);
+    assert.ok(
+      owned.table.startsWith("messaging_") || owned.table === "group_staff_reads",
+      `${owned.table} is not messaging data; decide whether it keeps a sign-in alive`,
+    );
+  }
 });
 
 test("the deletion job checks every table an Auth delete would reach, before deleting", () => {

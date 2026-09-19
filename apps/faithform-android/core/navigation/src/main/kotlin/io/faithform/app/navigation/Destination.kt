@@ -34,6 +34,10 @@ sealed interface Destination {
         override val requiredCapability = "announcements"
         override val churchSlug get() = slug
     }
+    data class Groups(val slug: String) : Destination {
+        override val requiredCapability = "groups"
+        override val churchSlug get() = slug
+    }
     data class Watch(val slug: String) : Destination {
         override val requiredCapability = "watch"
         override val churchSlug get() = slug
@@ -104,6 +108,7 @@ object DeepLinkParser {
                     leaf.size > 1 -> null
                     else -> when (leaf[0].lowercase()) {
                         "announcements" -> Destination.Announcements(slug)
+                        "groups" -> Destination.Groups(slug)
                         "watch" -> Destination.Watch(slug)
                         "sermons" -> Destination.SermonArchive(slug)
                         "give" -> Destination.Give(slug)
@@ -151,6 +156,7 @@ class RouteRegistry(
         is Destination.ChurchDiscovery -> "discover"
         is Destination.Church -> "church"
         is Destination.Announcements -> "announcements"
+        is Destination.Groups -> "groups"
         is Destination.Watch -> "watch"
         is Destination.SermonArchive -> "sermons"
         is Destination.CheckIn -> "checkIn"
@@ -184,4 +190,8 @@ class RouteRegistry(
             ?: return RouteResolution.Rejected(RouteRejection.NOT_IMPLEMENTED)
         return resolve(destination, session)
     }
+}
+
+object GroupInvitationLink {
+    fun token(raw: String): String? = Regex("^faithform://group-invite/([A-Za-z0-9_-]{16,512})$").matchEntire(raw)?.groupValues?.get(1)
 }

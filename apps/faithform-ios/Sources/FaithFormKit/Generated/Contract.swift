@@ -763,6 +763,466 @@ public enum GiftType: RawRepresentable, Codable, Hashable, Sendable {
     }
 }
 
+/// Forward-compatible: an unrecognised value decodes to `.unknown`
+/// rather than failing, so a server that adds a case cannot break a
+/// released build.
+public enum GroupRole: RawRepresentable, Codable, Hashable, Sendable {
+    case member
+    case leader
+    case manager
+    case unknown(String)
+
+    public init(rawValue: String) {
+        switch rawValue {
+        case "member": self = .member
+        case "leader": self = .leader
+        case "manager": self = .manager
+        default: self = .unknown(rawValue)
+        }
+    }
+
+    public var rawValue: String {
+        switch self {
+        case .member: return "member"
+        case .leader: return "leader"
+        case .manager: return "manager"
+        case let .unknown(value): return value
+        }
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        self.init(rawValue: try container.decode(String.self))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+}
+
+/// Forward-compatible: an unrecognised value decodes to `.unknown`
+/// rather than failing, so a server that adds a case cannot break a
+/// released build.
+public enum GroupMembershipState: RawRepresentable, Codable, Hashable, Sendable {
+    case member
+    case requested
+    case invited
+    case notMember
+    case banned
+    case unknown(String)
+
+    public init(rawValue: String) {
+        switch rawValue {
+        case "member": self = .member
+        case "requested": self = .requested
+        case "invited": self = .invited
+        case "not_member": self = .notMember
+        case "banned": self = .banned
+        default: self = .unknown(rawValue)
+        }
+    }
+
+    public var rawValue: String {
+        switch self {
+        case .member: return "member"
+        case .requested: return "requested"
+        case .invited: return "invited"
+        case .notMember: return "not_member"
+        case .banned: return "banned"
+        case let .unknown(value): return value
+        }
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        self.init(rawValue: try container.decode(String.self))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+}
+
+/// Forward-compatible: an unrecognised value decodes to `.unknown`
+/// rather than failing, so a server that adds a case cannot break a
+/// released build.
+public enum GroupJoinAction: RawRepresentable, Codable, Hashable, Sendable {
+    case join
+    case request
+    case cancelRequest
+    case leave
+    case invitationRequired
+    case full
+    case closed
+    case unavailable
+    case unknown(String)
+
+    public init(rawValue: String) {
+        switch rawValue {
+        case "join": self = .join
+        case "request": self = .request
+        case "cancel_request": self = .cancelRequest
+        case "leave": self = .leave
+        case "invitation_required": self = .invitationRequired
+        case "full": self = .full
+        case "closed": self = .closed
+        case "unavailable": self = .unavailable
+        default: self = .unknown(rawValue)
+        }
+    }
+
+    public var rawValue: String {
+        switch self {
+        case .join: return "join"
+        case .request: return "request"
+        case .cancelRequest: return "cancel_request"
+        case .leave: return "leave"
+        case .invitationRequired: return "invitation_required"
+        case .full: return "full"
+        case .closed: return "closed"
+        case .unavailable: return "unavailable"
+        case let .unknown(value): return value
+        }
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        self.init(rawValue: try container.decode(String.self))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+}
+
+/// Forward-compatible: an unrecognised value decodes to `.unknown`
+/// rather than failing, so a server that adds a case cannot break a
+/// released build.
+public enum GroupEnrollment: RawRepresentable, Codable, Hashable, Sendable {
+    case `open`
+    case approvalRequired
+    case invitationOnly
+    case closed
+    case unknown(String)
+
+    public init(rawValue: String) {
+        switch rawValue {
+        case "open": self = .`open`
+        case "approval_required": self = .approvalRequired
+        case "invitation_only": self = .invitationOnly
+        case "closed": self = .closed
+        default: self = .unknown(rawValue)
+        }
+    }
+
+    public var rawValue: String {
+        switch self {
+        case .`open`: return "open"
+        case .approvalRequired: return "approval_required"
+        case .invitationOnly: return "invitation_only"
+        case .closed: return "closed"
+        case let .unknown(value): return value
+        }
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        self.init(rawValue: try container.decode(String.self))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+}
+
+/// Forward-compatible: an unrecognised value decodes to `.unknown`
+/// rather than failing, so a server that adds a case cannot break a
+/// released build.
+public enum GroupVisibility: RawRepresentable, Codable, Hashable, Sendable {
+    case `public`
+    case unlisted
+    case `private`
+    case unknown(String)
+
+    public init(rawValue: String) {
+        switch rawValue {
+        case "public": self = .`public`
+        case "unlisted": self = .unlisted
+        case "private": self = .`private`
+        default: self = .unknown(rawValue)
+        }
+    }
+
+    public var rawValue: String {
+        switch self {
+        case .`public`: return "public"
+        case .unlisted: return "unlisted"
+        case .`private`: return "private"
+        case let .unknown(value): return value
+        }
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        self.init(rawValue: try container.decode(String.self))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+}
+
+/// Forward-compatible: an unrecognised value decodes to `.unknown`
+/// rather than failing, so a server that adds a case cannot break a
+/// released build.
+public enum GroupNotificationLevel: RawRepresentable, Codable, Hashable, Sendable {
+    case `default`
+    case all
+    case mentions
+    case muted
+    case unknown(String)
+
+    public init(rawValue: String) {
+        switch rawValue {
+        case "default": self = .`default`
+        case "all": self = .all
+        case "mentions": self = .mentions
+        case "muted": self = .muted
+        default: self = .unknown(rawValue)
+        }
+    }
+
+    public var rawValue: String {
+        switch self {
+        case .`default`: return "default"
+        case .all: return "all"
+        case .mentions: return "mentions"
+        case .muted: return "muted"
+        case let .unknown(value): return value
+        }
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        self.init(rawValue: try container.decode(String.self))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+}
+
+/// Forward-compatible: an unrecognised value decodes to `.unknown`
+/// rather than failing, so a server that adds a case cannot break a
+/// released build.
+public enum MessagingLevel: RawRepresentable, Codable, Hashable, Sendable {
+    case all
+    case mentions
+    case off
+    case unknown(String)
+
+    public init(rawValue: String) {
+        switch rawValue {
+        case "all": self = .all
+        case "mentions": self = .mentions
+        case "off": self = .off
+        default: self = .unknown(rawValue)
+        }
+    }
+
+    public var rawValue: String {
+        switch self {
+        case .all: return "all"
+        case .mentions: return "mentions"
+        case .off: return "off"
+        case let .unknown(value): return value
+        }
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        self.init(rawValue: try container.decode(String.self))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+}
+
+/// Forward-compatible: an unrecognised value decodes to `.unknown`
+/// rather than failing, so a server that adds a case cannot break a
+/// released build.
+public enum GroupRsvp: RawRepresentable, Codable, Hashable, Sendable {
+    case going
+    case maybe
+    case notGoing
+    case unknown(String)
+
+    public init(rawValue: String) {
+        switch rawValue {
+        case "going": self = .going
+        case "maybe": self = .maybe
+        case "not_going": self = .notGoing
+        default: self = .unknown(rawValue)
+        }
+    }
+
+    public var rawValue: String {
+        switch self {
+        case .going: return "going"
+        case .maybe: return "maybe"
+        case .notGoing: return "not_going"
+        case let .unknown(value): return value
+        }
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        self.init(rawValue: try container.decode(String.self))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+}
+
+/// Forward-compatible: an unrecognised value decodes to `.unknown`
+/// rather than failing, so a server that adds a case cannot break a
+/// released build.
+public enum GroupChatState: RawRepresentable, Codable, Hashable, Sendable {
+    case ready
+    case readOnly
+    case unavailable
+    case unknown(String)
+
+    public init(rawValue: String) {
+        switch rawValue {
+        case "ready": self = .ready
+        case "read_only": self = .readOnly
+        case "unavailable": self = .unavailable
+        default: self = .unknown(rawValue)
+        }
+    }
+
+    public var rawValue: String {
+        switch self {
+        case .ready: return "ready"
+        case .readOnly: return "read_only"
+        case .unavailable: return "unavailable"
+        case let .unknown(value): return value
+        }
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        self.init(rawValue: try container.decode(String.self))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+}
+
+/// Forward-compatible: an unrecognised value decodes to `.unknown`
+/// rather than failing, so a server that adds a case cannot break a
+/// released build.
+public enum ChatReportReason: RawRepresentable, Codable, Hashable, Sendable {
+    case spam
+    case harassment
+    case hate
+    case sexual
+    case violence
+    case selfHarm
+    case inappropriate
+    case other
+    case unknown(String)
+
+    public init(rawValue: String) {
+        switch rawValue {
+        case "spam": self = .spam
+        case "harassment": self = .harassment
+        case "hate": self = .hate
+        case "sexual": self = .sexual
+        case "violence": self = .violence
+        case "self_harm": self = .selfHarm
+        case "inappropriate": self = .inappropriate
+        case "other": self = .other
+        default: self = .unknown(rawValue)
+        }
+    }
+
+    public var rawValue: String {
+        switch self {
+        case .spam: return "spam"
+        case .harassment: return "harassment"
+        case .hate: return "hate"
+        case .sexual: return "sexual"
+        case .violence: return "violence"
+        case .selfHarm: return "self_harm"
+        case .inappropriate: return "inappropriate"
+        case .other: return "other"
+        case let .unknown(value): return value
+        }
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        self.init(rawValue: try container.decode(String.self))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+}
+
+/// Forward-compatible: an unrecognised value decodes to `.unknown`
+/// rather than failing, so a server that adds a case cannot break a
+/// released build.
+public enum ChatCardKind: RawRepresentable, Codable, Hashable, Sendable {
+    case groupEvent
+    case churchEvent
+    case sermon
+    case unknown(String)
+
+    public init(rawValue: String) {
+        switch rawValue {
+        case "group_event": self = .groupEvent
+        case "church_event": self = .churchEvent
+        case "sermon": self = .sermon
+        default: self = .unknown(rawValue)
+        }
+    }
+
+    public var rawValue: String {
+        switch self {
+        case .groupEvent: return "group_event"
+        case .churchEvent: return "church_event"
+        case .sermon: return "sermon"
+        case let .unknown(value): return value
+        }
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        self.init(rawValue: try container.decode(String.self))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+}
+
 /// Unknown additive fields are ignored by Codable, which is what lets a
 /// released client keep working when the server adds one.
 public struct Deprecation: Codable, Hashable, Sendable {
@@ -980,6 +1440,7 @@ public struct ChurchRelationship: Codable, Hashable, Sendable {
     public let canManageBranding: Bool?
     public let automaticCheckInEnabled: Bool?
     public let codeCheckInEnabled: Bool?
+    public let groupsEnabled: Bool?
     public let state: RelationshipState
     public let joinPolicy: JoinPolicy
     public let joinedAt: String?
@@ -994,6 +1455,7 @@ public struct ChurchRelationship: Codable, Hashable, Sendable {
         canManageBranding: Bool? = nil,
         automaticCheckInEnabled: Bool? = nil,
         codeCheckInEnabled: Bool? = nil,
+        groupsEnabled: Bool? = nil,
         state: RelationshipState,
         joinPolicy: JoinPolicy,
         joinedAt: String? = nil,
@@ -1007,6 +1469,7 @@ public struct ChurchRelationship: Codable, Hashable, Sendable {
         self.canManageBranding = canManageBranding
         self.automaticCheckInEnabled = automaticCheckInEnabled
         self.codeCheckInEnabled = codeCheckInEnabled
+        self.groupsEnabled = groupsEnabled
         self.state = state
         self.joinPolicy = joinPolicy
         self.joinedAt = joinedAt
@@ -2905,6 +3368,1164 @@ public struct GivingReceipt: Codable, Hashable, Sendable {
         self.churchName = churchName
         self.paidAt = paidAt
         self.giftType = giftType
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct GroupTypeSummary: Codable, Hashable, Sendable {
+    public let id: String
+    public let name: String
+    public let icon: String
+
+    public init(
+        id: String,
+        name: String,
+        icon: String
+    ) {
+        self.id = id
+        self.name = name
+        self.icon = icon
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct GroupLeader: Codable, Hashable, Sendable {
+    public let name: String
+    public let avatarUrl: String?
+    public let groupRole: String
+    public let chatUserId: String?
+
+    public init(
+        name: String,
+        avatarUrl: String? = nil,
+        groupRole: String,
+        chatUserId: String? = nil
+    ) {
+        self.name = name
+        self.avatarUrl = avatarUrl
+        self.groupRole = groupRole
+        self.chatUserId = chatUserId
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct GroupEventSummary: Codable, Hashable, Sendable {
+    public let id: String
+    public let groupId: String
+    public let title: String
+    public let startsAt: String
+    public let endsAt: String
+    public let timezone: String
+    public let locationName: String?
+    public let isCancelled: Bool
+    public let rsvp: String?
+    public let goingCount: Int
+
+    public init(
+        id: String,
+        groupId: String,
+        title: String,
+        startsAt: String,
+        endsAt: String,
+        timezone: String,
+        locationName: String? = nil,
+        isCancelled: Bool,
+        rsvp: String? = nil,
+        goingCount: Int
+    ) {
+        self.id = id
+        self.groupId = groupId
+        self.title = title
+        self.startsAt = startsAt
+        self.endsAt = endsAt
+        self.timezone = timezone
+        self.locationName = locationName
+        self.isCancelled = isCancelled
+        self.rsvp = rsvp
+        self.goingCount = goingCount
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct GroupChatInfo: Codable, Hashable, Sendable {
+    public let cid: String
+    public let channelType: String
+    public let channelId: String
+    public let state: String
+    public let postingPolicy: String
+
+    public init(
+        cid: String,
+        channelType: String,
+        channelId: String,
+        state: String,
+        postingPolicy: String
+    ) {
+        self.cid = cid
+        self.channelType = channelType
+        self.channelId = channelId
+        self.state = state
+        self.postingPolicy = postingPolicy
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct GroupSummary: Codable, Hashable, Sendable {
+    public let id: String
+    public let name: String
+    public let summary: String?
+    public let coverImageUrl: String?
+    public let type: GroupTypeSummary?
+    public let memberCount: Int
+    public let capacity: Int?
+    public let enrollment: String
+    public let visibility: String
+    public let status: String
+    public let scheduleText: String?
+    public let meetingDays: [Int]
+    public let campusName: String?
+    public let locationName: String?
+    public let nextEvent: GroupEventSummary?
+    public let membershipState: String
+    public let groupRole: String?
+    public let joinAction: String
+    public let chat: GroupChatInfo?
+    public let isYouth: Bool
+    public let version: Int
+
+    public init(
+        id: String,
+        name: String,
+        summary: String? = nil,
+        coverImageUrl: String? = nil,
+        type: GroupTypeSummary? = nil,
+        memberCount: Int,
+        capacity: Int? = nil,
+        enrollment: String,
+        visibility: String,
+        status: String,
+        scheduleText: String? = nil,
+        meetingDays: [Int],
+        campusName: String? = nil,
+        locationName: String? = nil,
+        nextEvent: GroupEventSummary? = nil,
+        membershipState: String,
+        groupRole: String? = nil,
+        joinAction: String,
+        chat: GroupChatInfo? = nil,
+        isYouth: Bool,
+        version: Int
+    ) {
+        self.id = id
+        self.name = name
+        self.summary = summary
+        self.coverImageUrl = coverImageUrl
+        self.type = type
+        self.memberCount = memberCount
+        self.capacity = capacity
+        self.enrollment = enrollment
+        self.visibility = visibility
+        self.status = status
+        self.scheduleText = scheduleText
+        self.meetingDays = meetingDays
+        self.campusName = campusName
+        self.locationName = locationName
+        self.nextEvent = nextEvent
+        self.membershipState = membershipState
+        self.groupRole = groupRole
+        self.joinAction = joinAction
+        self.chat = chat
+        self.isYouth = isYouth
+        self.version = version
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct MyGroups: Codable, Hashable, Sendable {
+    public let items: [GroupSummary]
+    public let directMessagesEnabled: Bool
+    public let messagingAvailable: Bool
+
+    public init(
+        items: [GroupSummary],
+        directMessagesEnabled: Bool,
+        messagingAvailable: Bool
+    ) {
+        self.items = items
+        self.directMessagesEnabled = directMessagesEnabled
+        self.messagingAvailable = messagingAvailable
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct GroupDiscoveryPage: Codable, Hashable, Sendable {
+    public let items: [GroupSummary]
+    public let nextCursor: String?
+
+    public init(
+        items: [GroupSummary],
+        nextCursor: String? = nil
+    ) {
+        self.items = items
+        self.nextCursor = nextCursor
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct GroupCampusOption: Codable, Hashable, Sendable {
+    public let id: String
+    public let name: String
+
+    public init(
+        id: String,
+        name: String
+    ) {
+        self.id = id
+        self.name = name
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct GroupFilters: Codable, Hashable, Sendable {
+    public let types: [GroupTypeSummary]
+    public let campuses: [GroupCampusOption]
+    public let days: [Int]
+
+    public init(
+        types: [GroupTypeSummary],
+        campuses: [GroupCampusOption],
+        days: [Int]
+    ) {
+        self.types = types
+        self.campuses = campuses
+        self.days = days
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct GroupCapabilities: Codable, Hashable, Sendable {
+    public let canViewMembers: Bool
+    public let canManageMembers: Bool
+    public let canManageRequests: Bool
+    public let canInvite: Bool
+    public let canManageRoles: Bool
+    public let canEditDetails: Bool
+    public let canManageEvents: Bool
+    public let canTakeAttendance: Bool
+    public let canModerateChat: Bool
+
+    public init(
+        canViewMembers: Bool,
+        canManageMembers: Bool,
+        canManageRequests: Bool,
+        canInvite: Bool,
+        canManageRoles: Bool,
+        canEditDetails: Bool,
+        canManageEvents: Bool,
+        canTakeAttendance: Bool,
+        canModerateChat: Bool
+    ) {
+        self.canViewMembers = canViewMembers
+        self.canManageMembers = canManageMembers
+        self.canManageRequests = canManageRequests
+        self.canInvite = canInvite
+        self.canManageRoles = canManageRoles
+        self.canEditDetails = canEditDetails
+        self.canManageEvents = canManageEvents
+        self.canTakeAttendance = canTakeAttendance
+        self.canModerateChat = canModerateChat
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct GroupSchedule: Codable, Hashable, Sendable {
+    public let text: String
+    public let frequency: String
+    public let dayOfWeek: Int
+    public let startTime: String
+    public let durationMinutes: Int
+    public let timezone: String
+
+    public init(
+        text: String,
+        frequency: String,
+        dayOfWeek: Int,
+        startTime: String,
+        durationMinutes: Int,
+        timezone: String
+    ) {
+        self.text = text
+        self.frequency = frequency
+        self.dayOfWeek = dayOfWeek
+        self.startTime = startTime
+        self.durationMinutes = durationMinutes
+        self.timezone = timezone
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct GroupLocation: Codable, Hashable, Sendable {
+    public let name: String?
+    public let address: String?
+    public let onlineMeetingUrl: String?
+    public let membersOnly: Bool
+
+    public init(
+        name: String? = nil,
+        address: String? = nil,
+        onlineMeetingUrl: String? = nil,
+        membersOnly: Bool
+    ) {
+        self.name = name
+        self.address = address
+        self.onlineMeetingUrl = onlineMeetingUrl
+        self.membersOnly = membersOnly
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct GroupDetail: Codable, Hashable, Sendable {
+    public let group: GroupSummary
+    public let description: String?
+    public let leaders: [GroupLeader]
+    public let schedules: [GroupSchedule]
+    public let location: GroupLocation?
+    public let upcomingEvents: [GroupEventSummary]
+    public let capabilities: GroupCapabilities
+    public let pendingRequestCount: Int
+    public let notificationLevel: String?
+    public let isArchived: Bool
+    public let chatPosting: String?
+    public let memberListVisibility: String?
+
+    public init(
+        group: GroupSummary,
+        description: String? = nil,
+        leaders: [GroupLeader],
+        schedules: [GroupSchedule],
+        location: GroupLocation? = nil,
+        upcomingEvents: [GroupEventSummary],
+        capabilities: GroupCapabilities,
+        pendingRequestCount: Int,
+        notificationLevel: String? = nil,
+        isArchived: Bool,
+        chatPosting: String? = nil,
+        memberListVisibility: String? = nil
+    ) {
+        self.group = group
+        self.description = description
+        self.leaders = leaders
+        self.schedules = schedules
+        self.location = location
+        self.upcomingEvents = upcomingEvents
+        self.capabilities = capabilities
+        self.pendingRequestCount = pendingRequestCount
+        self.notificationLevel = notificationLevel
+        self.isArchived = isArchived
+        self.chatPosting = chatPosting
+        self.memberListVisibility = memberListVisibility
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct JoinGroupRequest: Codable, Hashable, Sendable {
+    public let message: String?
+
+    public init(
+        message: String? = nil
+    ) {
+        self.message = message
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct UpdateGroupDetailsRequest: Codable, Hashable, Sendable {
+    public let expectedVersion: Int
+    public let name: String
+    public let description: String?
+    public let enrollment: String
+    public let capacity: Int?
+    public let locationName: String?
+    public let locationAddress: String?
+    public let onlineMeetingUrl: String?
+    public let chatPosting: String
+    public let memberListVisibility: String
+
+    public init(
+        expectedVersion: Int,
+        name: String,
+        description: String? = nil,
+        enrollment: String,
+        capacity: Int? = nil,
+        locationName: String? = nil,
+        locationAddress: String? = nil,
+        onlineMeetingUrl: String? = nil,
+        chatPosting: String,
+        memberListVisibility: String
+    ) {
+        self.expectedVersion = expectedVersion
+        self.name = name
+        self.description = description
+        self.enrollment = enrollment
+        self.capacity = capacity
+        self.locationName = locationName
+        self.locationAddress = locationAddress
+        self.onlineMeetingUrl = onlineMeetingUrl
+        self.chatPosting = chatPosting
+        self.memberListVisibility = memberListVisibility
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct GroupJoinResult: Codable, Hashable, Sendable {
+    public let outcome: String
+    public let group: GroupSummary?
+
+    public init(
+        outcome: String,
+        group: GroupSummary? = nil
+    ) {
+        self.outcome = outcome
+        self.group = group
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct GroupMember: Codable, Hashable, Sendable {
+    public let membershipId: String
+    public let name: String
+    public let avatarUrl: String?
+    public let groupRole: String
+    public let joinedAt: String
+    public let chatUserId: String?
+    public let isYou: Bool
+
+    public init(
+        membershipId: String,
+        name: String,
+        avatarUrl: String? = nil,
+        groupRole: String,
+        joinedAt: String,
+        chatUserId: String? = nil,
+        isYou: Bool
+    ) {
+        self.membershipId = membershipId
+        self.name = name
+        self.avatarUrl = avatarUrl
+        self.groupRole = groupRole
+        self.joinedAt = joinedAt
+        self.chatUserId = chatUserId
+        self.isYou = isYou
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct GroupMemberPage: Codable, Hashable, Sendable {
+    public let items: [GroupMember]
+    public let nextCursor: String?
+    public let total: Int
+
+    public init(
+        items: [GroupMember],
+        nextCursor: String? = nil,
+        total: Int
+    ) {
+        self.items = items
+        self.nextCursor = nextCursor
+        self.total = total
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct GroupJoinRequestItem: Codable, Hashable, Sendable {
+    public let requestId: String
+    public let name: String
+    public let avatarUrl: String?
+    public let message: String?
+    public let requestedAt: String
+
+    public init(
+        requestId: String,
+        name: String,
+        avatarUrl: String? = nil,
+        message: String? = nil,
+        requestedAt: String
+    ) {
+        self.requestId = requestId
+        self.name = name
+        self.avatarUrl = avatarUrl
+        self.message = message
+        self.requestedAt = requestedAt
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct GroupJoinRequestPage: Codable, Hashable, Sendable {
+    public let items: [GroupJoinRequestItem]
+    public let nextCursor: String?
+
+    public init(
+        items: [GroupJoinRequestItem],
+        nextCursor: String? = nil
+    ) {
+        self.items = items
+        self.nextCursor = nextCursor
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct DecideGroupRequest: Codable, Hashable, Sendable {
+    public let decision: String
+
+    public init(
+        decision: String
+    ) {
+        self.decision = decision
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct GroupCommandResult: Codable, Hashable, Sendable {
+    public let outcome: String
+
+    public init(
+        outcome: String
+    ) {
+        self.outcome = outcome
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct SetGroupRoleRequest: Codable, Hashable, Sendable {
+    public let groupRole: String
+
+    public init(
+        groupRole: String
+    ) {
+        self.groupRole = groupRole
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct RemoveGroupMemberRequest: Codable, Hashable, Sendable {
+    public let ban: Bool
+    public let reason: String?
+
+    public init(
+        ban: Bool,
+        reason: String? = nil
+    ) {
+        self.ban = ban
+        self.reason = reason
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct GroupInvitation: Codable, Hashable, Sendable {
+    public let url: String
+    public let expiresAt: String
+    public let maxUses: Int
+
+    public init(
+        url: String,
+        expiresAt: String,
+        maxUses: Int
+    ) {
+        self.url = url
+        self.expiresAt = expiresAt
+        self.maxUses = maxUses
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct GroupInvitationTokenRequest: Codable, Hashable, Sendable {
+    public let token: String
+
+    public init(
+        token: String
+    ) {
+        self.token = token
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct GroupInvitationPreview: Codable, Hashable, Sendable {
+    public let groupId: String
+    public let groupName: String
+    public let coverImageUrl: String?
+    public let churchSlug: String
+    public let churchName: String
+
+    public init(
+        groupId: String,
+        groupName: String,
+        coverImageUrl: String? = nil,
+        churchSlug: String,
+        churchName: String
+    ) {
+        self.groupId = groupId
+        self.groupName = groupName
+        self.coverImageUrl = coverImageUrl
+        self.churchSlug = churchSlug
+        self.churchName = churchName
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct GroupEventRsvpCounts: Codable, Hashable, Sendable {
+    public let going: Int
+    public let maybe: Int
+    public let notGoing: Int
+
+    public init(
+        going: Int,
+        maybe: Int,
+        notGoing: Int
+    ) {
+        self.going = going
+        self.maybe = maybe
+        self.notGoing = notGoing
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct GroupEventAttendanceSummary: Codable, Hashable, Sendable {
+    public let taken: Bool
+    public let present: Int
+    public let absent: Int
+    public let guests: Int
+    public let firstTimeGuests: Int
+
+    public init(
+        taken: Bool,
+        present: Int,
+        absent: Int,
+        guests: Int,
+        firstTimeGuests: Int
+    ) {
+        self.taken = taken
+        self.present = present
+        self.absent = absent
+        self.guests = guests
+        self.firstTimeGuests = firstTimeGuests
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct GroupEventDetail: Codable, Hashable, Sendable {
+    public let event: GroupEventSummary
+    public let groupName: String
+    public let description: String?
+    public let locationAddress: String?
+    public let onlineMeetingUrl: String?
+    public let rsvpCounts: GroupEventRsvpCounts
+    public let attendance: GroupEventAttendanceSummary?
+    public let canEdit: Bool
+    public let canTakeAttendance: Bool
+
+    public init(
+        event: GroupEventSummary,
+        groupName: String,
+        description: String? = nil,
+        locationAddress: String? = nil,
+        onlineMeetingUrl: String? = nil,
+        rsvpCounts: GroupEventRsvpCounts,
+        attendance: GroupEventAttendanceSummary? = nil,
+        canEdit: Bool,
+        canTakeAttendance: Bool
+    ) {
+        self.event = event
+        self.groupName = groupName
+        self.description = description
+        self.locationAddress = locationAddress
+        self.onlineMeetingUrl = onlineMeetingUrl
+        self.rsvpCounts = rsvpCounts
+        self.attendance = attendance
+        self.canEdit = canEdit
+        self.canTakeAttendance = canTakeAttendance
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct GroupEventPage: Codable, Hashable, Sendable {
+    public let items: [GroupEventSummary]
+    public let nextCursor: String?
+
+    public init(
+        items: [GroupEventSummary],
+        nextCursor: String? = nil
+    ) {
+        self.items = items
+        self.nextCursor = nextCursor
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct UpsertGroupEventRequest: Codable, Hashable, Sendable {
+    public let title: String
+    public let description: String?
+    public let startsAt: String
+    public let endsAt: String
+    public let timezone: String?
+    public let locationName: String?
+    public let locationAddress: String?
+    public let onlineMeetingUrl: String?
+
+    public init(
+        title: String,
+        description: String? = nil,
+        startsAt: String,
+        endsAt: String,
+        timezone: String? = nil,
+        locationName: String? = nil,
+        locationAddress: String? = nil,
+        onlineMeetingUrl: String? = nil
+    ) {
+        self.title = title
+        self.description = description
+        self.startsAt = startsAt
+        self.endsAt = endsAt
+        self.timezone = timezone
+        self.locationName = locationName
+        self.locationAddress = locationAddress
+        self.onlineMeetingUrl = onlineMeetingUrl
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct GroupEventRsvpRequest: Codable, Hashable, Sendable {
+    public let response: String
+
+    public init(
+        response: String
+    ) {
+        self.response = response
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct GroupAttendanceEntry: Codable, Hashable, Sendable {
+    public let membershipId: String
+    public let name: String
+    public let avatarUrl: String?
+    public let groupRole: String
+    public let present: Bool
+    public let recordable: Bool
+
+    public init(
+        membershipId: String,
+        name: String,
+        avatarUrl: String? = nil,
+        groupRole: String,
+        present: Bool,
+        recordable: Bool
+    ) {
+        self.membershipId = membershipId
+        self.name = name
+        self.avatarUrl = avatarUrl
+        self.groupRole = groupRole
+        self.present = present
+        self.recordable = recordable
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct GroupAttendanceSheet: Codable, Hashable, Sendable {
+    public let eventId: String
+    public let title: String
+    public let startsAt: String
+    public let timezone: String
+    public let taken: Bool
+    public let entries: [GroupAttendanceEntry]
+    public let presentCount: Int
+    public let absentCount: Int
+    public let guestCount: Int
+    public let firstTimeGuestCount: Int
+    public let notes: String?
+    public let recordableUntil: String
+    public let canRecord: Bool
+    public let lockedReason: String?
+
+    public init(
+        eventId: String,
+        title: String,
+        startsAt: String,
+        timezone: String,
+        taken: Bool,
+        entries: [GroupAttendanceEntry],
+        presentCount: Int,
+        absentCount: Int,
+        guestCount: Int,
+        firstTimeGuestCount: Int,
+        notes: String? = nil,
+        recordableUntil: String,
+        canRecord: Bool,
+        lockedReason: String? = nil
+    ) {
+        self.eventId = eventId
+        self.title = title
+        self.startsAt = startsAt
+        self.timezone = timezone
+        self.taken = taken
+        self.entries = entries
+        self.presentCount = presentCount
+        self.absentCount = absentCount
+        self.guestCount = guestCount
+        self.firstTimeGuestCount = firstTimeGuestCount
+        self.notes = notes
+        self.recordableUntil = recordableUntil
+        self.canRecord = canRecord
+        self.lockedReason = lockedReason
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct SubmitGroupAttendanceRequest: Codable, Hashable, Sendable {
+    public let presentMembershipIds: [String]
+    public let guestCount: Int
+    public let firstTimeGuestCount: Int
+    public let notes: String?
+
+    public init(
+        presentMembershipIds: [String],
+        guestCount: Int,
+        firstTimeGuestCount: Int,
+        notes: String? = nil
+    ) {
+        self.presentMembershipIds = presentMembershipIds
+        self.guestCount = guestCount
+        self.firstTimeGuestCount = firstTimeGuestCount
+        self.notes = notes
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct ChatSession: Codable, Hashable, Sendable {
+    public let appKey: String
+    public let churchTeam: String
+    public let chatUserId: String
+    public let userToken: String
+    public let expiresAt: String
+    public let suspended: Bool
+    public let suspendedUntil: String?
+
+    public init(
+        appKey: String,
+        churchTeam: String,
+        chatUserId: String,
+        userToken: String,
+        expiresAt: String,
+        suspended: Bool,
+        suspendedUntil: String? = nil
+    ) {
+        self.appKey = appKey
+        self.churchTeam = churchTeam
+        self.chatUserId = chatUserId
+        self.userToken = userToken
+        self.expiresAt = expiresAt
+        self.suspended = suspended
+        self.suspendedUntil = suspendedUntil
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct ChatRoute: Codable, Hashable, Sendable {
+    public let kind: String
+    public let churchSlug: String
+    public let groupId: String?
+    public let cid: String
+    public let messageId: String?
+
+    public init(
+        kind: String,
+        churchSlug: String,
+        groupId: String? = nil,
+        cid: String,
+        messageId: String? = nil
+    ) {
+        self.kind = kind
+        self.churchSlug = churchSlug
+        self.groupId = groupId
+        self.cid = cid
+        self.messageId = messageId
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct GroupNotificationSetting: Codable, Hashable, Sendable {
+    public let groupId: String
+    public let groupName: String
+    public let level: String
+
+    public init(
+        groupId: String,
+        groupName: String,
+        level: String
+    ) {
+        self.groupId = groupId
+        self.groupName = groupName
+        self.level = level
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct MessagingPreferences: Codable, Hashable, Sendable {
+    public let level: String
+    public let groups: [GroupNotificationSetting]
+
+    public init(
+        level: String,
+        groups: [GroupNotificationSetting]
+    ) {
+        self.level = level
+        self.groups = groups
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct SetMessagingLevelRequest: Codable, Hashable, Sendable {
+    public let level: String
+
+    public init(
+        level: String
+    ) {
+        self.level = level
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct SetGroupNotificationRequest: Codable, Hashable, Sendable {
+    public let level: String
+
+    public init(
+        level: String
+    ) {
+        self.level = level
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct MessagingContact: Codable, Hashable, Sendable {
+    public let chatUserId: String
+    public let name: String
+    public let avatarUrl: String?
+    public let context: String?
+
+    public init(
+        chatUserId: String,
+        name: String,
+        avatarUrl: String? = nil,
+        context: String? = nil
+    ) {
+        self.chatUserId = chatUserId
+        self.name = name
+        self.avatarUrl = avatarUrl
+        self.context = context
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct MessagingContactPage: Codable, Hashable, Sendable {
+    public let items: [MessagingContact]
+    public let nextCursor: String?
+
+    public init(
+        items: [MessagingContact],
+        nextCursor: String? = nil
+    ) {
+        self.items = items
+        self.nextCursor = nextCursor
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct StartDirectMessageRequest: Codable, Hashable, Sendable {
+    public let chatUserId: String
+
+    public init(
+        chatUserId: String
+    ) {
+        self.chatUserId = chatUserId
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct DirectConversation: Codable, Hashable, Sendable {
+    public let cid: String
+    public let channelId: String
+    public let state: String
+
+    public init(
+        cid: String,
+        channelId: String,
+        state: String
+    ) {
+        self.cid = cid
+        self.channelId = channelId
+        self.state = state
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct ChatReportRequest: Codable, Hashable, Sendable {
+    public let cid: String
+    public let messageId: String?
+    public let reportedChatUserId: String?
+    public let reason: String
+    public let details: String?
+
+    public init(
+        cid: String,
+        messageId: String? = nil,
+        reportedChatUserId: String? = nil,
+        reason: String,
+        details: String? = nil
+    ) {
+        self.cid = cid
+        self.messageId = messageId
+        self.reportedChatUserId = reportedChatUserId
+        self.reason = reason
+        self.details = details
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct ChatReportResult: Codable, Hashable, Sendable {
+    public let received: Bool
+
+    public init(
+        received: Bool
+    ) {
+        self.received = received
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct ChatBlockRequest: Codable, Hashable, Sendable {
+    public let chatUserId: String
+
+    public init(
+        chatUserId: String
+    ) {
+        self.chatUserId = chatUserId
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct ChatBlockedPerson: Codable, Hashable, Sendable {
+    public let chatUserId: String
+    public let name: String
+    public let blockedAt: String
+
+    public init(
+        chatUserId: String,
+        name: String,
+        blockedAt: String
+    ) {
+        self.chatUserId = chatUserId
+        self.name = name
+        self.blockedAt = blockedAt
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct ChatBlockList: Codable, Hashable, Sendable {
+    public let items: [ChatBlockedPerson]
+
+    public init(
+        items: [ChatBlockedPerson]
+    ) {
+        self.items = items
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct ChatCard: Codable, Hashable, Sendable {
+    public let kind: String
+    public let id: String
+    public let available: Bool
+    public let title: String?
+    public let subtitle: String?
+    public let imageUrl: String?
+    public let startsAt: String?
+    public let endsAt: String?
+    public let locationName: String?
+    public let deepLink: String?
+
+    public init(
+        kind: String,
+        id: String,
+        available: Bool,
+        title: String? = nil,
+        subtitle: String? = nil,
+        imageUrl: String? = nil,
+        startsAt: String? = nil,
+        endsAt: String? = nil,
+        locationName: String? = nil,
+        deepLink: String? = nil
+    ) {
+        self.kind = kind
+        self.id = id
+        self.available = available
+        self.title = title
+        self.subtitle = subtitle
+        self.imageUrl = imageUrl
+        self.startsAt = startsAt
+        self.endsAt = endsAt
+        self.locationName = locationName
+        self.deepLink = deepLink
     }
 }
 

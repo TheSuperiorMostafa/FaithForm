@@ -182,6 +182,9 @@ export async function findOpenOccurrence(
       .from("service_occurrences")
       .select(OCCURRENCE_COLUMNS)
       .eq("church_id", churchId)
+      // Church services only: a group's gathering is never "the service
+      // that is open now" (0091).
+      .is("group_id", null)
       .in("status", ["scheduled", "active"])
       .lte("checkin_opens_at_utc", now)
       .gte("checkin_closes_at_utc", now)
@@ -238,6 +241,7 @@ export async function listOccurrences(
     .from("service_occurrences")
     .select(OCCURRENCE_COLUMNS)
     .eq("church_id", churchId)
+    .is("group_id", null)
     .order("starts_at_utc", { ascending: false })
     .order("id", { ascending: false })
     .limit(parsed.data.limit + 1);
@@ -293,6 +297,7 @@ export async function listBoardOccurrences(
       .from("service_occurrences")
       .select(OCCURRENCE_COLUMNS)
       .eq("church_id", churchId)
+      .is("group_id", null)
       .gte("checkin_closes_at_utc", now)
       .order("starts_at_utc", { ascending: true })
       .order("id", { ascending: true })
@@ -301,6 +306,7 @@ export async function listBoardOccurrences(
       .from("service_occurrences")
       .select(OCCURRENCE_COLUMNS)
       .eq("church_id", churchId)
+      .is("group_id", null)
       .lt("checkin_closes_at_utc", now)
       .order("starts_at_utc", { ascending: false })
       .order("id", { ascending: false })
@@ -430,7 +436,9 @@ export async function cancelOccurrence(input: {
     })
     .eq("id", input.occurrenceId)
     // Exact tenant predicate: an id from another church matches nothing.
-    .eq("church_id", input.churchId);
+    .eq("church_id", input.churchId)
+    // A group's gathering is cancelled from its group, not from Services.
+    .is("group_id", null);
 
   if (error) throw new VisitorError("unavailable", "Could not cancel that service.");
 

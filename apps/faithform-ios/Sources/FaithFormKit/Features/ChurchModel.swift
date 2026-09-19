@@ -10,18 +10,26 @@ public enum ChurchProfilePhase: Equatable, Sendable {
     case failed(String)
 }
 
-/// What the primary action on a profile should do right now, derived from the
-/// church's policy and the caller's own relationship.
+/// What the church page offers right now, derived from the church's policy,
+/// the caller's relationship with it, and whether the account already has a
+/// *different* church.
 ///
-/// Derived rather than stored, so a relationship that changed on the server
-/// cannot leave a stale button behind.
+/// One church per account: adding a church makes it the only one, so the
+/// choice is never follow-versus-join — it is "add", "replace the one you
+/// have", or nothing at all. Derived rather than stored, so a relationship
+/// that changed on the server cannot leave a stale button behind.
 public enum ChurchAction: Equatable, Sendable {
-    case follow
-    case requestToJoin
-    case joinImmediately
+    /// No church yet: "Add church".
+    case add
+    /// Another church is this account's church: "Make this my church", after
+    /// a confirmation that names the one being replaced.
+    case replace
+    /// This is already the account's church. No primary button; the page
+    /// offers changing or removing it instead.
+    case current
+    /// The church adds people by invitation only.
     case invitationRequired
-    case pending
-    case leave
+    /// Blocked. Explained, never actionable.
     case unavailable
 }
 
@@ -96,45 +104,66 @@ public final class ChurchProfileModel {
         }
     }
 
-    /// The action a profile should offer, given the policy and the relationship.
-    public static func action(for profile: ChurchProfile) -> ChurchAction {
+    /// The action the church page offers. First match wins:
+    ///
+    /// | Condition                             | Action               |
+    /// |---------------------------------------|----------------------|
+    /// | blocked                               | `unavailable`        |
+    /// | following, pending or joined          | `current`            |
+    /// | the church is invite-only             | `invitationRequired` |
+    /// | the account has a different church    | `replace`            |
+    /// | otherwise                             | `add`                |
+    ///
+    /// `left`, an unrecognised state and no state at all are "no relationship".
+    public static func action(for profile: ChurchProfile, hasOtherChurch: Bool) -> ChurchAction {
         switch profile.relationshipState {
         case .some(.blocked):
             return .unavailable
-        case .some(.pending):
-            return .pending
-        case .some(.joined):
-            return .leave
-        case .some(.following):
-            // Already following: the next step depends on whether joining is
-            // even offered.
-            switch profile.joinPolicy {
-            case .open: return .joinImmediately
-            case .approvalRequired: return .requestToJoin
-            case .inviteOnly: return .invitationRequired
-            default: return .leave
-            }
+        case .some(.following), .some(.pending), .some(.joined):
+            return .current
         default:
-            switch profile.joinPolicy {
-            case .inviteOnly: return .invitationRequired
-            default: return .follow
-            }
+            break
         }
+        if profile.joinPolicy == .inviteOnly { return .invitationRequired }
+        return hasOtherChurch ? .replace : .add
     }
 
-    public func follow(slug: String) async {
-        await perform(slug: slug, path: "api/mobile/v1/churches/\(slug)/follow", method: .post)
+    /// Makes this church the account's only church. The server releases any
+    /// other church and selects this one; it is idempotent for the church the
+    /// account already has.
+    ///
+    /// Returns whether the server agreed, so the host can move on only then.
+    @discardableResult
+    public func add(slug: String) async -> Bool {
+        await perform(
+            slug: slug,
+            path: "api/mobile/v1/churches/\(slug)/follow",
+            method: .post,
+            refreshAfter: true
+        )
     }
 
-    public func requestJoin(slug: String) async {
-        await perform(slug: slug, path: "api/mobile/v1/churches/\(slug)/join", method: .post)
+    /// Removes this church. The account has no church afterwards.
+    ///
+    /// The profile is deliberately not re-fetched: the host reloads the
+    /// account next, which ends on first-run, and a church that is not listed
+    /// publicly would answer "not found" for the instant in between.
+    @discardableResult
+    public func remove(slug: String) async -> Bool {
+        await perform(
+            slug: slug,
+            path: "api/mobile/v1/churches/\(slug)/follow",
+            method: .delete,
+            refreshAfter: false
+        )
     }
 
-    public func leave(slug: String) async {
-        await perform(slug: slug, path: "api/mobile/v1/churches/\(slug)/follow", method: .delete)
-    }
-
-    private func perform(slug: String, path: String, method: APIClient.Method) async {
+    private func perform(
+        slug: String,
+        path: String,
+        method: APIClient.Method,
+        refreshAfter: Bool
+    ) async -> Bool {
         isActing = true
         actionError = nil
         defer { isActing = false }
@@ -146,14 +175,20 @@ public final class ChurchProfileModel {
 
         do {
             _ = try await api.send(path, method: method, as: RelationshipReply.self)
-            // The reply is not trusted as the new truth: the profile is
-            // re-fetched so what is shown is what the server would serve.
-            etag = nil
-            await refresh(slug: slug)
+            if refreshAfter {
+                // The reply is not trusted as the new truth: the profile is
+                // re-fetched so what is shown is what the server would serve.
+                etag = nil
+                await refresh(slug: slug)
+            }
+            return true
         } catch let error as APIError {
+            if error.isCancellation { return false }
             actionError = error.displayMessage
+            return false
         } catch {
             actionError = nil
+            return false
         }
     }
 }

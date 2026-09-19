@@ -68,7 +68,7 @@ class MainActivity : ComponentActivity() {
      * Mirrors `AppDependencies.implementedDestinations` on iOS, entry for entry.
      */
     private val registry = RouteRegistry(
-        implemented = setOf(
+        implemented = setOf("groups",
             "home",
             "account",
             "accountPrivacy",

@@ -1,20 +1,21 @@
 import SwiftUI
 import FaithFormKit
 
-/// Home: the selected church's feed, and every way to change which church
-/// that is.
+/// Home: the account's church — its feed and schedule — and the door to
+/// everything about it.
 ///
-/// ## Why the church switcher lives here
+/// ## One church, and where it is changed
 ///
-/// It used to be its own tab. Six tabs is one more than an iPhone shows — the
-/// sixth and fifth collapse into a "More" list, which would have hidden Account,
-/// and with it sign-out and account deletion, one level down behind a generic
-/// label. Of the six, Church was the one that is not a destination: nobody opens
-/// the app to look at a list of their churches, they open it to see what one of
-/// them posted. So the switcher became a toolbar button on the feed it
-/// switches, and finding another church a button on that list — five tabs, and
-/// the church a person is looking at is one tap from the control that changes
-/// it.
+/// An account has exactly one church. The top-right "Church info" button opens
+/// that church's page (`ChurchProfileView` in its current-church mode), which
+/// is also where it is changed or removed. Changing it walks the same
+/// find-a-church search as first run; adding a church there replaces this one
+/// and comes straight back here, showing the new church.
+///
+/// There is no church tab: six tabs is one more than an iPhone shows, and the
+/// sixth would push Account — with sign-out and account deletion — behind
+/// "More". A church page is somewhere a person visits from their feed, not a
+/// destination of its own.
 struct HomeTabView: View {
     enum HomeSection: Hashable {
         case feed
@@ -22,9 +23,10 @@ struct HomeTabView: View {
     }
 
     enum Route: Hashable {
-        /// Your churches, with a way to find another.
-        case churches
-        /// Search and nearby, then a church's profile.
+        /// The church info page for one church — from the toolbar, the
+        /// account's own church.
+        case churchInfo(String)
+        /// Search and nearby, then a church's page.
         case search
         case announcement(FeedItem)
     }
@@ -32,7 +34,6 @@ struct HomeTabView: View {
     @Environment(\.faithformTheme) private var theme
     let dependencies: AppDependencies
     let root: RootModel
-    let bootstrap: Bootstrap
     let isStale: Bool
     let discovery: DiscoveryModel
 
@@ -69,28 +70,46 @@ struct HomeTabView: View {
                     }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { path.append(.churches) } label: {
-                        Label(L.switchChurch, systemImage: "building.2")
+                    if let church = root.selectedChurch {
+                        Button { path.append(.churchInfo(church.churchSlug)) } label: {
+                            Label(L.churchInfo, systemImage: "info.circle")
+                        }
+                        .accessibilityLabel(L.churchInfo)
                     }
                 }
             }
             .navigationDestination(for: Route.self) { route in
                 switch route {
-                case .churches:
-                    ChurchesScreen(
+                case let .churchInfo(slug):
+                    ChurchProfileHostView(
+                        slug: slug,
+                        dependencies: dependencies,
                         root: root,
-                        bootstrap: bootstrap,
-                        onSelected: { path.removeAll() },
-                        onFindAnother: { path.append(.search) }
+                        onChurchChanged: { path.removeAll() },
+                        onChangeChurch: changeChurch
                     )
                 case .search:
-                    DiscoverySearchView(dependencies: dependencies, root: root, discovery: discovery)
+                    DiscoverySearchView(
+                        dependencies: dependencies,
+                        root: root,
+                        discovery: discovery,
+                        // A new church replaces this one; Home shows it at once.
+                        onChurchChanged: { path.removeAll() }
+                    )
                 case let .announcement(item):
                     AnnouncementDetailView(item: item)
                         .modifier(AnnouncementZoomDestination(id: item.id, namespace: announcementTransition))
                 }
             }
         }
+    }
+
+    /// "Change church" on the church info page opens search. Offered only when
+    /// discovery is, like every other door in the app: a switched-off
+    /// capability is not a button that fails.
+    private var changeChurch: (@MainActor () -> Void)? {
+        guard root.isAllowed(.churchDiscovery) else { return nil }
+        return { @MainActor in path.append(.search) }
     }
 
     @ViewBuilder
@@ -121,7 +140,9 @@ struct HomeTabView: View {
                         model: features.feed,
                         churchName: church.churchName,
                         churchSlug: church.churchSlug,
-                        isJoinPending: church.state == .pending,
+                        // One church, no membership states: nothing is ever
+                        // "waiting to be accepted" any more.
+                        isJoinPending: false,
                         onOpenItem: { path.append(.announcement($0)) },
                         onRefresh: { await features.media.refreshLive() }
                     )
@@ -131,7 +152,7 @@ struct HomeTabView: View {
                         churchName: church.churchName,
                         churchSlug: church.churchSlug,
                         churchTimezone: features.schedule.churchTimezone,
-                        isJoinPending: church.state == .pending,
+                        isJoinPending: false,
                         onOpenItem: { path.append(.announcement($0)) },
                         onRefresh: { await features.media.refreshLive() }
                     )
@@ -158,54 +179,12 @@ struct HomeTabView: View {
             ScrollView {
                 VStack(spacing: FaithFormTokens.Spacing.lg) {
                     EmptyStateView(title: L.noChurchTitle, explanation: L.noChurchBody, symbol: "building.2")
-                    Button(L.findAChurch) {
-                        // With churches that cannot be read right now, the list
-                        // says why for each; with none at all, straight to search.
-                        path.append(bootstrap.relationships.isEmpty ? .search : .churches)
-                    }
+                    Button(L.findAChurch) { path.append(.search) }
                     .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
                 }
                 .padding(FaithFormTokens.Spacing.lg)
             }
             .navigationTitle(L.homeTitle)
         }
-    }
-}
-
-// MARK: - Your churches
-
-/// Every church this account has a relationship with, and the way to add one.
-///
-/// Multi-church by design: an account is never bound to one congregation.
-struct ChurchesScreen: View {
-    @Environment(\.faithformTheme) private var theme
-    let root: RootModel
-    let bootstrap: Bootstrap
-    let onSelected: @MainActor () -> Void
-    let onFindAnother: @MainActor () -> Void
-
-    var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
-                ChurchSwitcherView(
-                    relationships: bootstrap.relationships,
-                    selectedSlug: root.selectedChurch?.churchSlug,
-                    onSelect: {
-                        root.selectChurch($0)
-                        onSelected()
-                    }
-                )
-                // Offered only when discovery is, like every other door in the
-                // app: a switched-off capability is not a button that fails.
-                if root.isAllowed(.churchDiscovery) {
-                    Button(L.addAnotherChurch, action: onFindAnother)
-                        .buttonStyle(FaithFormButtonStyle(kind: .secondary, theme: theme))
-                }
-            }
-            .padding(FaithFormTokens.Spacing.lg)
-        }
-        .background(theme.palette.background)
-        .navigationTitle(L.yourChurches)
-        .navigationBarTitleDisplayMode(.inline)
     }
 }

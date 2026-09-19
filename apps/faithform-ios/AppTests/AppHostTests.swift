@@ -158,7 +158,8 @@ struct AppCompositionTests {
         // An iPhone tab bar shows five. A sixth folds the last two into "More",
         // which would put Account — sign-out and account deletion — one level
         // further down behind a generic label.
-        #expect(RootTab.allCases.count <= 5)
+        #expect(RootModel.tabCandidates(groupsEnabled: true) == [.home, .groups, .checkIn, .watch, .give])
+        #expect(RootModel.tabCandidates(groupsEnabled: false) == [.home, .checkIn, .watch, .give, .account])
         #expect(RootTab.allCases.last == .account)
     }
 

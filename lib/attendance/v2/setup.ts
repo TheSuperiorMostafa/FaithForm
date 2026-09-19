@@ -553,6 +553,7 @@ export async function getAttendanceSetupState(
           "id, label, timezone, starts_at_utc, ends_at_utc, checkin_opens_at_utc, checkin_closes_at_utc, policy_snapshot, campus_latitude, church_campuses ( name )",
         )
         .eq("church_id", churchId)
+        .is("group_id", null)
         .in("status", ["scheduled", "active"])
         .gte("checkin_closes_at_utc", now.toISOString())
         .order("starts_at_utc", { ascending: true })

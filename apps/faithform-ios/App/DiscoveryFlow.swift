@@ -1,12 +1,13 @@
 import SwiftUI
 import FaithFormKit
 
-/// The shared find-a-church journey: search (or nearby) → church profile →
-/// follow, join, or redeem an invitation.
+/// The shared find-a-church journey: search (or nearby) → the church's page →
+/// add it, make it your church in place of the one you have, or redeem an
+/// invitation.
 ///
 /// Used from two places — the first-run flow when an account has no church
-/// yet, and "Add another church" afterwards — so both walk the same path and
-/// neither can drift.
+/// yet, and "Change church" on the church info page afterwards — so both walk
+/// the same path and neither can drift.
 
 // MARK: - Search
 
@@ -23,6 +24,10 @@ struct DiscoverySearchView: View {
     let dependencies: AppDependencies
     let root: RootModel
     @Bindable var discovery: DiscoveryModel
+    /// After the account's church changed from a page opened here, and the
+    /// account reloaded. Home returns to its feed; first run needs nothing,
+    /// because the tabs replace it.
+    var onChurchChanged: @MainActor () -> Void = {}
 
     @State private var educationShown = false
     @State private var opened: OpenedChurch?
@@ -49,7 +54,18 @@ struct DiscoverySearchView: View {
             .presentationDetents([.medium])
         }
         .navigationDestination(item: $opened) { church in
-            ChurchProfileHostView(slug: church.slug, dependencies: dependencies, root: root)
+            ChurchProfileHostView(
+                slug: church.slug,
+                dependencies: dependencies,
+                root: root,
+                onChurchChanged: {
+                    opened = nil
+                    onChurchChanged()
+                },
+                // Someone who opened their own church from search is already
+                // choosing: "Change church" takes them back to the results.
+                onChangeChurch: { opened = nil }
+            )
         }
     }
 
@@ -67,30 +83,57 @@ struct DiscoverySearchView: View {
 
 // MARK: - Church profile host
 
-/// Loads one church's public profile and reacts when the person's relationship
-/// with it changes — a follow, a join, an accepted invitation — by refreshing
-/// the app's own account state, which is what moves first-run forward.
+/// Loads one church's page and wires what the host decides: which church the
+/// account has now, and where to go once that changes.
+///
+/// Every change — adding a church, replacing one, removing it, or redeeming an
+/// invitation — ends the same way: the account is reloaded quietly, so the
+/// selected church is the one the server now names, and then
+/// `onChurchChanged` moves the navigation on.
 struct ChurchProfileHostView: View {
     let slug: String
     let dependencies: AppDependencies
     let root: RootModel
+    var onChurchChanged: @MainActor () -> Void = {}
+    /// "Change church", on the account's own church. Nil leaves it out.
+    var onChangeChurch: (@MainActor () -> Void)?
 
     @State private var model: ChurchProfileModel
     @State private var invitationShown = false
 
-    init(slug: String, dependencies: AppDependencies, root: RootModel) {
+    init(
+        slug: String,
+        dependencies: AppDependencies,
+        root: RootModel,
+        onChurchChanged: @escaping @MainActor () -> Void = {},
+        onChangeChurch: (@MainActor () -> Void)? = nil
+    ) {
         self.slug = slug
         self.dependencies = dependencies
         self.root = root
+        self.onChurchChanged = onChurchChanged
+        self.onChangeChurch = onChangeChurch
         _model = State(
             initialValue: ChurchProfileModel(api: dependencies.api, cache: dependencies.cache)
         )
+    }
+
+    /// The account already has a church, and it is not this one — so adding
+    /// this one replaces it.
+    private var hasOtherChurch: Bool {
+        guard let current = root.selectedChurch else { return false }
+        return current.churchSlug != slug
     }
 
     var body: some View {
         ChurchProfileView(
             model: model,
             slug: slug,
+            hasOtherChurch: hasOtherChurch,
+            currentChurchName: root.selectedChurch?.churchName,
+            onChurchAdded: { await churchChanged() },
+            onChurchRemoved: { await churchChanged() },
+            onChangeChurch: onChangeChurch,
             onAcceptInvitation: { invitationShown = true }
         )
         .task {
@@ -104,24 +147,19 @@ struct ChurchProfileHostView: View {
                 )
             )
         }
-        .onChange(of: model.phase) { _, phase in
-            guard case let .loaded(profile) = phase,
-                  let relationship = profile.relationshipState,
-                  relationship != .left
-            else { return }
-            // Bootstrap does not know this relationship yet: it was created
-            // just now, on this screen. Refresh quietly so home reflects it —
-            // and so first-run ends the moment a church exists.
-            if root.relationshipState(for: slug) != relationship {
-                Task { await root.load(quiet: true) }
-            }
-        }
         .navigationDestination(isPresented: $invitationShown) {
             InvitationEntryView(model: root.onboarding) {
                 invitationShown = false
-                Task { await root.load(quiet: true) }
+                // Accepting an invitation makes that church the only one,
+                // exactly like adding it.
+                Task { await churchChanged() }
             }
         }
+    }
+
+    private func churchChanged() async {
+        await root.load(quiet: true)
+        onChurchChanged()
     }
 }
 
@@ -207,8 +245,8 @@ struct OnboardingFlowView: View {
             guard path.isEmpty else { return }
 
             // A church link named where this person was heading. Open that
-            // church, not a search box — but stop at its profile rather than
-            // joining for them. A link is an address, not consent, and the join
+            // church, not a search box — but stop at its page rather than
+            // adding it for them. A link is an address, not consent, and the
             // button is right there on the screen it opens.
             if let context = root.onboarding.churchContext, !context.isInvitation {
                 path = [.church(context.churchSlug)]

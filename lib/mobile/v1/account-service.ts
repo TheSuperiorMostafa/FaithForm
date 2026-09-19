@@ -16,6 +16,7 @@ import {
 import { grantsPublishedContentAccess } from "@/lib/faithform/relationship-state";
 import { createChurchAppTheme } from "@/lib/branding/church-theme";
 import { admitStaffAsMember } from "@/lib/faithform/relationships";
+import { filterChurchIdsWithFeature } from "@/lib/features/access";
 import { PRIVACY_VERSION, TERMS_VERSION } from "@/lib/legal/policy-versions";
 import { retireInstallationsForAccount } from "@/lib/faithform/push/installations";
 import type {
@@ -71,6 +72,10 @@ export const ENABLED_CAPABILITIES = [
   // Presentation archive (Prompt 10) reuses this capability; native viewers
   // live under Services → Messages → Slides.
   "sermons",
+  // Prompt 14. Groups, their gatherings and their conversations. Both apps
+  // register the destination; a church without the Groups feature reports
+  // `groupsEnabled: false` on its relationship, and the tab stays hidden.
+  "groups",
 ] as const;
 
 function projectProfile(
@@ -114,6 +119,7 @@ function projectRelationship(
   row: RelationshipRow,
   adminChurchIds: ReadonlySet<string> = new Set(),
   checkInMethods: ReadonlyMap<string, ChurchCheckInMethods> = new Map(),
+  groupsChurchIds: ReadonlySet<string> = new Set(),
 ): ChurchRelationshipDto | null {
   const church = Array.isArray(row.churches) ? row.churches[0] : row.churches;
   const resolved = church as
@@ -147,6 +153,7 @@ function projectRelationship(
     ),
     canManageBranding: adminChurchIds.has(resolved.id),
     ...methods,
+    groupsEnabled: groupsChurchIds.has(resolved.id),
     state,
     joinPolicy: (resolved.join_policy ?? "approval_required") as ChurchRelationshipDto["joinPolicy"],
     joinedAt: row.joined_at,
@@ -294,12 +301,13 @@ export async function getBootstrap(userId: string): Promise<Bootstrap> {
   ]);
 
   const relationshipRows = (rows ?? []) as unknown as RelationshipRow[];
-  const checkInMethods = await loadChurchCheckInMethods(
-    admin,
-    relationshipChurchIds(relationshipRows),
-  );
+  const churchIds = relationshipChurchIds(relationshipRows);
+  const [checkInMethods, groupsChurchIds] = await Promise.all([
+    loadChurchCheckInMethods(admin, churchIds),
+    filterChurchIdsWithFeature(churchIds, "groups"),
+  ]);
   const relationships = relationshipRows
-    .map((row) => projectRelationship(row, adminChurchIds, checkInMethods))
+    .map((row) => projectRelationship(row, adminChurchIds, checkInMethods, groupsChurchIds))
     .filter((value): value is ChurchRelationshipDto => value !== null);
 
   return {
@@ -346,16 +354,17 @@ export async function listRelationshipsPage(
   if (error) throw new VisitorError("unavailable", "Could not load your churches.");
 
   const rows = (data ?? []) as unknown as (RelationshipRow & { id: string })[];
-  const checkInMethods = await loadChurchCheckInMethods(
-    admin,
-    relationshipChurchIds(rows),
-  );
+  const churchIds = relationshipChurchIds(rows);
+  const [checkInMethods, groupsChurchIds] = await Promise.all([
+    loadChurchCheckInMethods(admin, churchIds),
+    filterChurchIdsWithFeature(churchIds, "groups"),
+  ]);
   const hasMore = rows.length > input.limit;
   const page = hasMore ? rows.slice(0, input.limit) : rows;
 
   return {
     items: page
-      .map((row) => projectRelationship(row, adminChurchIds, checkInMethods))
+      .map((row) => projectRelationship(row, adminChurchIds, checkInMethods, groupsChurchIds))
       .filter((value): value is ChurchRelationshipDto => value !== null),
     nextCursorId: hasMore ? page[page.length - 1].id : null,
   };

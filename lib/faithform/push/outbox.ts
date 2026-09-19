@@ -112,11 +112,19 @@ export async function cancelNotificationsForSubject(
 type OutboxJob = {
   id: string;
   church_id: string;
-  /** `announcement` unless a livestream or recording enqueued it (P15). */
-  subject_type?: "announcement" | "stream_event" | "stream_recording";
+  /** `announcement` unless a livestream or recording enqueued it (P15), or a group (P14). */
+  subject_type?:
+    | "announcement"
+    | "stream_event"
+    | "stream_recording"
+    | "group_join_request"
+    | "group_event";
+  kind?: string;
   subject_id: string;
   target_visibility: "public" | "followers" | "members";
-  topic: "announcements" | "events";
+  /** Named recipients (P14 group notifications); null for a broadcast. */
+  target_account_ids?: string[] | null;
+  topic: "announcements" | "events" | "groups";
   title: string;
   body: string | null;
   deep_link: string;
@@ -138,6 +146,10 @@ async function resolveRecipients(
   admin: SupabaseClient,
   job: OutboxJob,
 ): Promise<{ installationId: string; provider: "apns" | "fcm"; token: string }[]> {
+  if (job.target_account_ids && job.target_account_ids.length > 0) {
+    return resolveTargetedRecipients(admin, job, job.target_account_ids);
+  }
+
   const states =
     job.target_visibility === "members"
       ? ["joined"]
@@ -186,11 +198,84 @@ async function resolveRecipients(
     }));
 }
 
+/**
+ * Named recipients (a group's leaders, one requester, the people who said
+ * they were coming), re-checked now exactly as a broadcast is: the person
+ * still has a usable relationship with the church, has not switched their
+ * group messages off, and has a live installation.
+ */
+async function resolveTargetedRecipients(
+  admin: SupabaseClient,
+  job: OutboxJob,
+  accountIds: string[],
+): Promise<{ installationId: string; provider: "apns" | "fcm"; token: string }[]> {
+  const [{ data: relationships }, { data: switchedOff }] = await Promise.all([
+    admin
+      .from("visitor_church_relationships")
+      .select("account_id")
+      .eq("church_id", job.church_id)
+      .in("state", ["following", "pending", "joined"])
+      .in("account_id", accountIds),
+    admin
+      .from("messaging_notification_preferences")
+      .select("account_id")
+      .eq("church_id", job.church_id)
+      .eq("level", "off")
+      .in("account_id", accountIds),
+  ]);
+
+  const off = new Set((switchedOff ?? []).map((row) => row.account_id as string));
+  const eligible = (relationships ?? [])
+    .map((row) => row.account_id as string)
+    .filter((id) => !off.has(id));
+  if (eligible.length === 0) return [];
+
+  const { data: installations } = await admin
+    .from("visitor_device_installations")
+    .select("id, provider, provider_token")
+    .in("account_id", eligible)
+    .eq("is_enabled", true)
+    .is("invalidated_at", null)
+    .limit(1000);
+
+  return ((installations ?? []) as Record<string, unknown>[])
+    .filter((row) => Boolean(row.provider_token))
+    .map((row) => ({
+      installationId: row.id as string,
+      provider: row.provider as "apns" | "fcm",
+      token: row.provider_token as string,
+    }));
+}
+
 /** True when the subject is still publishable at the version we enqueued. */
 async function subjectIsStillCurrent(
   admin: SupabaseClient,
   job: OutboxJob,
 ): Promise<boolean> {
+  // "Maria asked to join…" only while the request is still waiting; "you're
+  // in" only once it was approved.
+  if (job.subject_type === "group_join_request") {
+    const { data } = await admin
+      .from("group_join_requests")
+      .select("status")
+      .eq("id", job.subject_id)
+      .eq("church_id", job.church_id)
+      .maybeSingle();
+    if (!data) return false;
+    return job.kind === "group_request_approved" ? data.status === "approved" : data.status === "pending";
+  }
+
+  // "Thursday's gathering is cancelled" only while it still is.
+  if (job.subject_type === "group_event") {
+    const { data } = await admin
+      .from("group_events")
+      .select("status")
+      .eq("id", job.subject_id)
+      .eq("church_id", job.church_id)
+      .maybeSingle();
+    return Boolean(data && data.status === "cancelled");
+  }
+
   // "Sunday Worship is live now" is only worth sending while it is.
   if (job.subject_type === "stream_event") {
     const { data } = await admin

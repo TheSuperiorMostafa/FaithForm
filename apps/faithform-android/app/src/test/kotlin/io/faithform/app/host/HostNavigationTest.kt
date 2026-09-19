@@ -10,9 +10,6 @@ import io.faithform.app.contract.VisitorProfile
 import io.faithform.app.navigation.DeepLinkParser
 import io.faithform.app.navigation.Destination
 import io.faithform.app.navigation.RouteRegistry
-import io.faithform.app.ui.church.ChooserPhase
-import io.faithform.app.ui.church.chooserPhaseFor
-import io.faithform.app.ui.church.isSelectable
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -72,17 +69,38 @@ internal fun bootstrap(
 internal val shippedRegistry = RouteRegistry(
     implemented = setOf(
         "home", "account", "accountPrivacy", "discover", "church",
-        "announcements", "watch", "give", "checkIn", "sermons",
+        "announcements", "watch", "give", "checkIn", "sermons", "groups",
     ),
 )
 
 class HostTabsTest {
+    @Test fun `groups replaces account in the bar only when enabled for this church`() {
+        val enabled = bootstrap(capabilities = listOf("account", "discovery", "groups", "watch", "attendance", "giving"), relationships = listOf(relationship("grace").copy(groupsEnabled = true)))
+        assertEquals(listOf(HostTab.HOME, HostTab.GROUPS, HostTab.CHECK_IN, HostTab.WATCH, HostTab.GIVE), HostNavigation.availableTabs(enabled, "grace", shippedRegistry))
+        assertEquals(HostTab.ACCOUNT, HostNavigation.resolveLink(Destination.Account, enabled, shippedRegistry)?.tab)
+        val disabled = enabled.copy(relationships = listOf(relationship("grace").copy(groupsEnabled = false)))
+        assertFalse(HostTab.GROUPS in HostNavigation.availableTabs(disabled, "grace", shippedRegistry))
+        assertNull(HostNavigation.resolveLink(Destination.Groups("grace"), disabled, shippedRegistry))
+    }
+    @Test fun `group invitation credentials reject paths queries and malformed tokens`() {
+        assertEquals("abcdefghijklmnop", io.faithform.app.navigation.GroupInvitationLink.token("faithform://group-invite/abcdefghijklmnop"))
+        listOf("https://group-invite/abcdefghijklmnop", "faithform://group-invite/short", "faithform://group-invite/abcdefghijklmnop?extra=1", "faithform://group-invite/abcdefghijklmnop/extra").forEach { assertNull(io.faithform.app.navigation.GroupInvitationLink.token(it)) }
+    }
+
 
     @Test
-    fun `every capability on, with a church selected, shows the six tabs in iOS order`() {
+    fun `every capability on, with a church selected, shows the five tabs in iOS order`() {
         assertEquals(
-            listOf(HostTab.HOME, HostTab.CHURCH, HostTab.CHECK_IN, HostTab.WATCH, HostTab.GIVE, HostTab.ACCOUNT),
+            listOf(HostTab.HOME, HostTab.CHECK_IN, HostTab.WATCH, HostTab.GIVE, HostTab.ACCOUNT),
             HostNavigation.availableTabs(bootstrap(), "grace", shippedRegistry),
+        )
+    }
+
+    @Test
+    fun `there is no church tab — a person has one church, and its page lives under Home`() {
+        assertEquals(
+            listOf("HOME", "GROUPS", "CHECK_IN", "WATCH", "GIVE", "ACCOUNT"),
+            HostTab.entries.map { it.name },
         )
     }
 
@@ -91,13 +109,15 @@ class HostTabsTest {
         for ((capability, tab) in listOf(
             "attendance" to HostTab.CHECK_IN,
             "giving" to HostTab.GIVE,
-            "discovery" to HostTab.CHURCH,
         )) {
             val withoutIt = bootstrap(capabilities = bootstrap().enabledCapabilities - capability)
             val tabs = HostNavigation.availableTabs(withoutIt, "grace", shippedRegistry)
             assertTrue("$tab survived without $capability", tab !in tabs)
-            assertEquals("$capability removed more than its tab", 5, tabs.size)
+            assertEquals("$capability removed more than its tab", 4, tabs.size)
         }
+        // Discovery no longer has a tab of its own to take away.
+        val withoutDiscovery = bootstrap(capabilities = bootstrap().enabledCapabilities - "discovery")
+        assertEquals(5, HostNavigation.availableTabs(withoutDiscovery, "grace", shippedRegistry).size)
         // Services stays when only watch is off, because messages (sermons) still resolve.
         val withoutWatch = bootstrap(capabilities = bootstrap().enabledCapabilities - "watch")
         assertTrue(HostTab.WATCH in HostNavigation.availableTabs(withoutWatch, "grace", shippedRegistry))
@@ -139,11 +159,11 @@ class HostTabsTest {
     @Test
     fun `church-scoped tabs need a church, and a readable one`() {
         val none = HostNavigation.availableTabs(bootstrap(relationships = emptyList()), null, shippedRegistry)
-        assertEquals(listOf(HostTab.HOME, HostTab.CHURCH, HostTab.ACCOUNT), none)
+        assertEquals(listOf(HostTab.HOME, HostTab.ACCOUNT), none)
 
         val revoked = bootstrap(relationships = listOf(relationship("grace", canRead = false)))
         assertEquals(
-            listOf(HostTab.HOME, HostTab.CHURCH, HostTab.ACCOUNT),
+            listOf(HostTab.HOME, HostTab.ACCOUNT),
             HostNavigation.availableTabs(revoked, "grace", shippedRegistry),
         )
     }
@@ -185,19 +205,17 @@ class ChurchSelectionTest {
     }
 
     @Test
-    fun `the chooser shows every relationship truthfully and lets only usable ones be picked`() {
-        val phase = chooserPhaseFor(
-            listOf(
-                relationship("grace"),
-                relationship("hope", RelationshipState.PENDING),
-                relationship("old", RelationshipState.LEFT, canRead = false),
-                relationship("closed", RelationshipState.BLOCKED, canRead = false),
+    fun `after adding a church, the new one is selected — the old one was released`() {
+        val replaced = bootstrap(
+            relationships = listOf(
+                relationship("grace", RelationshipState.LEFT, canRead = false),
+                relationship("hope", RelationshipState.FOLLOWING),
             ),
-        ) as ChooserPhase.Loaded
-        assertEquals(listOf("grace", "hope", "old", "closed"), phase.churches.map { it.slug })
-        assertEquals(RelationshipState.PENDING, phase.churches[1].state)
-        assertEquals(listOf(true, true, false, false), phase.churches.map { it.isSelectable() })
-        assertEquals(ChooserPhase.Empty, chooserPhaseFor(emptyList()))
+        )
+        // Even a stale preference or a stale local selection cannot keep the
+        // released church selected.
+        assertEquals("hope", HostNavigation.adoptSelection(replaced, serverPreference = "grace", current = "grace")?.churchSlug)
+        assertEquals("hope", HostNavigation.adoptSelection(replaced, serverPreference = "hope", current = "grace")?.churchSlug)
     }
 }
 
@@ -243,6 +261,14 @@ class DeepLinkTargetTest {
                 shippedRegistry,
             ),
         )
+    }
+
+    @Test
+    fun `church and discovery links land on Home, where the church's page and search now live`() {
+        assertEquals(LinkTarget(HostTab.HOME, "hope", Destination.Church("hope")), target("faithform://church/hope"))
+        assertEquals(LinkTarget(HostTab.HOME, null, Destination.ChurchDiscovery), target("faithform://discover"))
+        assertEquals(HostTab.HOME, HostNavigation.tabFor(Destination.Church("anywhere")))
+        assertEquals(HostTab.HOME, HostNavigation.tabFor(Destination.ChurchDiscovery))
     }
 
     @Test

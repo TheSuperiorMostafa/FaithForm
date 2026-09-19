@@ -13,6 +13,7 @@ public enum Destination: Hashable, Sendable {
     case announcements(churchSlug: String)
     case watch(churchSlug: String)
     case sermonArchive(churchSlug: String)
+    case groups(churchSlug: String)
     case give(churchSlug: String)
     /// The check-in scanner (Prompt 8).
     ///
@@ -34,6 +35,7 @@ public enum Destination: Hashable, Sendable {
         case .announcements: return "announcements"
         case .watch: return "watch"
         case .sermonArchive: return "sermons"
+        case .groups: return "groups"
         case .give: return "giving"
         case .checkIn: return "attendance"
         }
@@ -54,6 +56,7 @@ public enum Destination: Hashable, Sendable {
              let .announcements(slug),
              let .watch(slug),
              let .sermonArchive(slug),
+             let .groups(slug),
              let .give(slug),
              let .checkIn(slug):
             return slug
@@ -109,6 +112,7 @@ public enum DeepLinkParser {
             case "announcements": return .announcements(churchSlug: churchSlug)
             case "watch": return .watch(churchSlug: churchSlug)
             case "sermons": return .sermonArchive(churchSlug: churchSlug)
+            case "groups": return .groups(churchSlug: churchSlug)
             case "give": return .give(churchSlug: churchSlug)
             case "check-in": return .checkIn(churchSlug: churchSlug)
             default: return nil
@@ -121,5 +125,15 @@ public enum DeepLinkParser {
     static func isValidSlug(_ value: String) -> Bool {
         let range = NSRange(value.startIndex..., in: value)
         return slugPattern.firstMatch(in: value, range: range) != nil
+    }
+}
+
+/// Invitation credentials are held in memory until the person confirms joining.
+public enum GroupInvitationLink {
+    public static func token(from url: URL) -> String? {
+        guard url.scheme?.lowercased() == "faithform", url.host == "group-invite",
+              url.pathComponents.count == 2, url.query == nil, url.fragment == nil else { return nil }
+        let value = url.lastPathComponent
+        return value.range(of: "^[A-Za-z0-9_-]{16,512}$", options: .regularExpression) != nil ? value : nil
     }
 }

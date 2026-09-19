@@ -1,6 +1,13 @@
 package io.faithform.app.ui.host
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
+import androidx.compose.material3.IconButton
+import androidx.compose.material.icons.outlined.Groups
+import androidx.compose.material.icons.outlined.ArrowBack
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.dp
+import io.faithform.app.ui.groups.GroupsHost
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -9,7 +16,6 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountCircle
-import androidx.compose.material.icons.outlined.Church
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.OndemandVideo
@@ -25,6 +31,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
@@ -88,10 +95,15 @@ fun SignedInHost(
     val selectedSlug by viewModel.selectedChurchSlug.collectAsStateWithLifecycle()
     val selectedTab by viewModel.selectedTab.collectAsStateWithLifecycle()
 
+    val invitationToken by viewModel.groupInvitationToken.collectAsStateWithLifecycle()
+    invitationToken?.let { token -> io.faithform.app.ui.groups.GroupInvitationScreen(container.apiClient, token, viewModel::dismissGroupInvitation) { slug ->
+        viewModel.dismissGroupInvitation()
+        viewModel.handleDeepLink("faithform://church/$slug/groups")
+    } }
     val tabs = HostNavigation.availableTabs(bootstrap, selectedSlug, viewModel.registry)
     // A tab that stopped being available — a capability switched off, a church
     // switched to one that does not allow it — falls back to the first one.
-    val current = selectedTab.takeIf { it in tabs } ?: tabs.firstOrNull() ?: HostTab.ACCOUNT
+    val current = selectedTab.takeIf { it in tabs || it == HostTab.ACCOUNT } ?: tabs.firstOrNull() ?: HostTab.ACCOUNT
 
     val church = bootstrap.relationships.firstOrNull { it.churchSlug == selectedSlug }
     val partition = viewModel.partition(selectedSlug)
@@ -147,28 +159,24 @@ fun SignedInHost(
                 .consumeWindowInsets(inner)
                 .imePadding(),
         ) {
+            if (HostTab.GROUPS in tabs) Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (current == HostTab.ACCOUNT) IconButton(onClick = { viewModel.selectTab(HostTab.HOME) }) { Icon(Icons.Outlined.ArrowBack, "Back to home") }
+                Text("Your community", style = MaterialTheme.typography.labelMedium, color = theme.palette.contentSecondary, modifier = Modifier.weight(1f))
+                IconButton(onClick = { viewModel.selectTab(HostTab.ACCOUNT) }) { Icon(Icons.Outlined.AccountCircle, "Your account") }
+            }
             if (isStale) StaleBanner(stringResource(R.string.offline_cached))
 
             tabStates.SaveableStateProvider(current.name) {
                 when (current) {
                     HostTab.HOME -> HomeTab(
                         appViewModel = viewModel,
-                        api = container.apiClient,
-                        projections = container.projections,
-                        mediaClient = container.mediaClient,
+                        container = container,
+                        locationProvider = locationProvider,
                         church = church,
                         partition = partition,
                     )
 
-                    HostTab.CHURCH -> ChurchTab(
-                        appViewModel = viewModel,
-                        container = container,
-                        locationProvider = locationProvider,
-                        bootstrap = bootstrap,
-                        selectedSlug = selectedSlug,
-                        partition = partition,
-                    )
-
+                    HostTab.GROUPS -> if (church != null && partition != null) GroupsHost(container.apiClient, church.churchSlug, partition.toString())
                     HostTab.CHECK_IN -> {
                         var showAutomaticCheckIn by rememberSaveable(selectedSlug) {
                             mutableStateOf(false)
@@ -296,7 +304,7 @@ fun SignedInHost(
 private val HostTab.titleRes: Int
     get() = when (this) {
         HostTab.HOME -> R.string.tab_home
-        HostTab.CHURCH -> R.string.tab_church
+        HostTab.GROUPS -> R.string.tab_groups
         HostTab.CHECK_IN -> R.string.tab_check_in
         HostTab.WATCH -> R.string.tab_watch
         HostTab.GIVE -> R.string.tab_give
@@ -307,7 +315,7 @@ private val HostTab.titleRes: Int
 private val HostTab.icon: ImageVector
     get() = when (this) {
         HostTab.HOME -> Icons.Outlined.Home
-        HostTab.CHURCH -> Icons.Outlined.Church
+        HostTab.GROUPS -> Icons.Outlined.Groups
         HostTab.CHECK_IN -> Icons.Outlined.QrCodeScanner
         HostTab.WATCH -> Icons.Outlined.OndemandVideo
         HostTab.GIVE -> Icons.Outlined.FavoriteBorder
