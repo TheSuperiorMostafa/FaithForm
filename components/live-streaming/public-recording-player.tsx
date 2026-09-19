@@ -1,12 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { RecordingPlayer } from "@/components/live-streaming/recording-player";
 import { useViewTracking } from "@/lib/stream/use-view-tracking";
+import { useState } from "react";
 
 type PublicRecordingPlayerProps = {
   slug: string;
   recordingId: string;
-  playbackUrl: string | null;
+  title: string;
+  poster: string | null;
+  playback: { kind: "hls" | "progressive"; url: string } | null;
 };
 
 /**
@@ -18,7 +21,9 @@ type PublicRecordingPlayerProps = {
 export function PublicRecordingPlayer({
   slug,
   recordingId,
-  playbackUrl,
+  title,
+  poster,
+  playback,
 }: PublicRecordingPlayerProps) {
   const [started, setStarted] = useState(false);
 
@@ -36,22 +41,21 @@ export function PublicRecordingPlayer({
     enabled: started,
   });
 
-  if (!playbackUrl) {
+  if (!playback) {
     return (
       <p className="rounded-xl border border-border px-4 py-10 text-center text-sm text-muted-foreground">
-        This service isn&apos;t available to watch back.
+        This service isn&apos;t available to watch right now.
       </p>
     );
   }
 
   return (
-    <video
-      className="aspect-video w-full rounded-xl bg-black"
-      src={playbackUrl}
-      controls
-      preload="metadata"
-      playsInline
-      onPlay={() => setStarted(true)}
+    <RecordingPlayer
+      src={playback.url}
+      kind={playback.kind}
+      poster={poster}
+      title={title}
+      onFirstPlay={() => setStarted(true)}
     />
   );
 }

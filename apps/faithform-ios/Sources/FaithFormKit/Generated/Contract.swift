@@ -2091,6 +2091,7 @@ public struct LiveMedia: Codable, Hashable, Sendable {
     public let churchSlug: String
     public let churchName: String
     public let churchTimezone: String
+    public let replayMediaId: String?
 
     public init(
         state: String,
@@ -2103,7 +2104,8 @@ public struct LiveMedia: Codable, Hashable, Sendable {
         publicationVersion: Int,
         churchSlug: String,
         churchName: String,
-        churchTimezone: String
+        churchTimezone: String,
+        replayMediaId: String? = nil
     ) {
         self.state = state
         self.mediaId = mediaId
@@ -2116,6 +2118,7 @@ public struct LiveMedia: Codable, Hashable, Sendable {
         self.churchSlug = churchSlug
         self.churchName = churchName
         self.churchTimezone = churchTimezone
+        self.replayMediaId = replayMediaId
     }
 }
 

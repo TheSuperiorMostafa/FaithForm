@@ -100,27 +100,31 @@ FaithForm schedules simulated events; the relay publishes the uploaded file to t
 
 ## Recording
 
-`on-stream-ready.sh` records a local MP4. When the service ends, `on-stream-stop.sh`:
+Every authorized ingest is recorded by `faithform-recorder.py` (see
+`docs/faithform/P15_LIVESTREAM_RECORDING_LIFECYCLE.md`):
 
-1. asks FaithForm for a signed upload URL (`/api/stream/recording-upload-url`),
-2. `PUT`s the file straight to Supabase Storage — the app never sees the bytes,
-3. tells FaithForm where it landed (`/api/stream/recording-complete`).
+1. `on-stream-ready.sh` starts `faithform-recorder.py take <path>` detached, so
+   MediaMTX restarting the hook can never cut a recording short.
+2. ffmpeg writes 6-second fMP4 HLS segments (video copied, audio normalized to
+   AAC) under `~/mediamtx/recordings/takes/<take>/`.
+3. Every few seconds the recorder asks FaithForm what to do with each closed
+   segment (`/api/stream/relay/recording/prepare`), uploads it straight to
+   private storage with a one-off URL, and confirms (`.../commit`). Segments
+   outside any broadcast (preview before Go Live, after End) are skipped.
+4. `on-stream-stop.sh` runs `faithform-recorder.py stop <path>`; ffmpeg closes
+   its last segment and the recorder finishes uploading on its own.
 
-The local copy is kept. To upload something recorded before step 1 existed, or
-after a failed upload:
+Every call is signed (HMAC over timestamp, nonce and body); the shared secret
+never crosses the wire. Local files stay until FaithForm acknowledges them.
+
+Install the sweeper once, which resumes any take whose recorder died:
 
 ```bash
-STREAM_RELAY_WEBHOOK_SECRET=… ~/scripts/upload-recording.sh
+./infra/stream-relay/deploy.sh --install-recorder-cron
 ```
 
-With no arguments it walks `~/mediamtx/recordings` and uploads everything whose
-stream path it can read from the file name. Pass `<mtxPath> <file>` to do one.
-
-The app side needs the `stream-recordings` bucket to exist. From the repo:
-
-```bash
-pnpm storage:buckets
-```
+Deploy the app (and migration 0095) **before** the relay. Deploy outside
+service hours.
 
 ## Fan-out to YouTube and Facebook
 

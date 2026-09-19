@@ -32,6 +32,47 @@ import {
 import { isPreviewIngestActive } from "@/lib/stream/preview-ingest";
 import { getStreamShareLinks } from "@/lib/stream/share-links";
 import { publishToFaithForm } from "@/lib/media/v1/publication";
+import {
+  ensureRecordingForSession,
+  logRecordingEvent,
+  onBroadcastEnded,
+} from "@/lib/stream/recording-lifecycle";
+import type { SessionWindow } from "@/lib/stream/recording-model";
+import { productionLifecycleDeps } from "@/lib/stream/recording-runtime";
+import { notifyServiceLive } from "@/lib/stream/recording-notifications";
+import type { StreamSession } from "@/lib/stream/sessions";
+
+function sessionWindow(session: StreamSession): SessionWindow {
+  return {
+    id: session.id,
+    churchId: session.churchId,
+    streamEventId: session.streamEventId,
+    title: session.title,
+    createdAt: session.createdAt,
+    endedAt: session.endedAt,
+    status: session.status,
+  };
+}
+
+/**
+ * Every FaithForm livestream is recorded. The recording row is created here,
+ * at Go Live, so it carries the service's title, event and session from the
+ * first second. Deliberately not fatal: if this write fails, the relay path
+ * creates the same row (idempotently) the moment the first segment arrives,
+ * and the Live screen will not claim "Recording" until a segment is actually
+ * acknowledged.
+ */
+async function startRecordingFor(session: StreamSession): Promise<void> {
+  try {
+    await ensureRecordingForSession(productionLifecycleDeps(), sessionWindow(session));
+  } catch (error) {
+    logRecordingEvent("recording_create_deferred", {
+      churchId: session.churchId,
+      sessionId: session.id,
+      error: error instanceof Error ? error.message.slice(0, 200) : "unknown",
+    });
+  }
+}
 
 function getClient(supabase?: SupabaseClient) {
   return supabase ?? createAdminClient();
@@ -165,6 +206,8 @@ export async function startLiveBroadcast(
     client,
   );
 
+  await startRecordingFor(session);
+
   const previewActive = await isPreviewIngestActive(churchId, client);
   const now = new Date().toISOString();
 
@@ -197,7 +240,7 @@ export async function startLiveBroadcast(
 
   if (previewActive) {
     await transitionYouTubeBroadcastLive(churchId, client);
-    return updateStreamSession(
+    const live = await updateStreamSession(
       session.id,
       {
         status: "live",
@@ -206,6 +249,8 @@ export async function startLiveBroadcast(
       },
       client,
     );
+    await notifyServiceLive({ churchId, eventId: event.id, sessionId: session.id }).catch(() => false);
+    return live;
   }
 
   return updateStreamSession(
@@ -320,7 +365,23 @@ export async function endLiveBroadcast(
     .eq("church_id", churchId)
     .eq("status", "live");
 
-  return markStreamEnded(churchId, null, client);
+  const ended = await markStreamEnded(churchId, null, client);
+
+  // The recording keeps going without anyone watching: it moves to
+  // "Preparing", and the relay's remaining uploads and the reconciler carry it
+  // the rest of the way. Never fatal to ending the broadcast.
+  if (ended) {
+    try {
+      await onBroadcastEnded(productionLifecycleDeps(), churchId, ended.id);
+    } catch (error) {
+      logRecordingEvent("stream_end_deferred", {
+        churchId,
+        sessionId: ended.id,
+        error: error instanceof Error ? error.message.slice(0, 200) : "unknown",
+      });
+    }
+  }
+  return ended;
 }
 
 export async function onIngestStarted(churchId: string, supabase?: SupabaseClient) {
@@ -329,7 +390,8 @@ export async function onIngestStarted(churchId: string, supabase?: SupabaseClien
   if (!session) return null;
 
   await transitionYouTubeBroadcastLive(churchId, client);
-  return updateStreamSession(
+  const firstVideo = !session.ingestStartedAt;
+  const updated = await updateStreamSession(
     session.id,
     {
       status: "live",
@@ -338,6 +400,17 @@ export async function onIngestStarted(churchId: string, supabase?: SupabaseClien
     },
     client,
   );
+  // Members hear "live now" once video is actually arriving, not when a button
+  // was pressed on an empty stream. Deduplicated per broadcast in the outbox.
+  if (firstVideo && session.streamEventId) {
+    logRecordingEvent("broadcast_went_live", { churchId, sessionId: session.id });
+    await notifyServiceLive({
+      churchId,
+      eventId: session.streamEventId,
+      sessionId: session.id,
+    }).catch(() => false);
+  }
+  return updated;
 }
 
 export async function getLiveBroadcastStatus(

@@ -4047,6 +4047,16 @@
         },
         "churchTimezone": {
           "type": "string"
+        },
+        "replayMediaId": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       },
       "required": [
@@ -4143,6 +4153,16 @@
             },
             "churchTimezone": {
               "type": "string"
+            },
+            "replayMediaId": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
             }
           },
           "required": [

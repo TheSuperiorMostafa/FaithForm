@@ -32,6 +32,9 @@
     },
     "app/api/webhooks/accounts/deletion/route.ts": {
       "maxDuration": 60
+    },
+    "app/api/stream/recordings/reconcile/route.ts": {
+      "maxDuration": 60
     }
   },
   "crons": [
@@ -62,6 +65,10 @@
     {
       "path": "/api/webhooks/accounts/deletion",
       "schedule": "20 * * * *"
+    },
+    {
+      "path": "/api/stream/recordings/reconcile",
+      "schedule": "*/2 * * * *"
     }
   ]
 }

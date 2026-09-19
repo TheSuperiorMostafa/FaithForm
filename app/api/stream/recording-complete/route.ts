@@ -7,9 +7,20 @@ import {
 import { createStreamRecording } from "@/lib/stream/recordings";
 import { verifyRecording } from "@/lib/media/v1/rendition-check";
 import { parseStreamPath } from "@/lib/stream/relay";
-import { getActiveStreamSession } from "@/lib/stream/sessions";
+import { defaultRecordingTitle, pickSessionForSegment } from "@/lib/stream/recording-model";
+import { createSupabaseRecordingRepo } from "@/lib/stream/recording-repo";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+/**
+ * The legacy single-file recording callback.
+ *
+ * Kept for a relay that has not yet been redeployed with the segmented
+ * recorder (see docs/faithform/P15_LIVESTREAM_RECORDING_LIFECYCLE.md). It used
+ * to look up the church's *active* session — which had always ended by the
+ * time this ran — so every recording arrived orphaned and untitled. It now
+ * binds the file to the broadcast whose window contains it, by the time the
+ * relay encoded into the file name.
+ */
 export async function POST(request: Request) {
   const providedSecret = request.headers.get("x-stream-relay-secret");
   const expectedSecret = process.env.STREAM_RELAY_WEBHOOK_SECRET;
@@ -43,8 +54,7 @@ export async function POST(request: Request) {
   }
 
   // The row is what the Media page renders, so it must not exist unless the
-  // file behind it does. A recording announced without its upload is exactly
-  // what left the library stuck on "processing" with nothing to play.
+  // file behind it does.
   const admin = createAdminClient();
   const { data: signed } = await admin.storage
     .from(STREAM_RECORDINGS_BUCKET)
@@ -57,27 +67,52 @@ export async function POST(request: Request) {
     );
   }
 
-  const session = await getActiveStreamSession(parsed.churchId);
+  const durationSec =
+    typeof body.durationSec === "number" && Number.isFinite(body.durationSec) && body.durationSec > 0
+      ? body.durationSec
+      : null;
+
+  // `stream_<digest>-<epoch seconds>.mp4`: the epoch is when recording began.
+  const epoch = /-(\d{9,11})\.(mp4|mov|mkv)$/i.exec(body.storagePath)?.[1];
+  const startedAt = epoch ? new Date(Number(epoch) * 1000).toISOString() : null;
+
+  const repo = createSupabaseRecordingRepo(admin);
+  let session = null as Awaited<ReturnType<typeof repo.getSession>>;
+  if (startedAt) {
+    const until = new Date(Date.parse(startedAt) + (durationSec ?? 60) * 1000).toISOString();
+    session = pickSessionForSegment(
+      { startedAt, durationSec: durationSec ?? 60 },
+      await repo.listSessionsInRange(parsed.churchId, startedAt, until),
+    );
+  }
+
+  // A redeployed relay records the same broadcast as segments. Never make a
+  // second media item for one service.
+  if (session && (await repo.getRecordingForSession(parsed.churchId, session.id))) {
+    return NextResponse.json({ ok: true, duplicate: true });
+  }
+
+  const [church, event] = await Promise.all([
+    repo.getChurch(parsed.churchId),
+    session?.streamEventId ? repo.getEvent(parsed.churchId, session.streamEventId) : null,
+  ]);
+
   const recording = await createStreamRecording({
     churchId: parsed.churchId,
     streamSessionId: session?.id ?? null,
+    streamEventId: session?.streamEventId ?? null,
     storagePath: body.storagePath,
-    durationSec: body.durationSec ?? null,
-    title: session?.title ?? "Service recording",
+    durationSec,
+    title: defaultRecordingTitle(
+      event?.title ?? session?.title ?? null,
+      startedAt ?? new Date().toISOString(),
+      church?.timezone ?? "America/New_York",
+    ),
+    recordingStartedAt: startedAt,
   });
 
-  // Prove what actually landed, straight away.
-  //
-  // The upload above only shows a file exists; this reads its bytes and decides
-  // whether a phone could play it. Doing it here means the media page already
-  // knows by the time a staff member opens it, and a recording that arrived in
-  // an unplayable format says so rather than waiting to be discovered when
-  // somebody tries to publish it.
-  //
-  // Deliberately not fatal. A probe failure must not lose the recording — the
-  // row is the record that a service happened — so the verdict is simply left
-  // unwritten and taken again later. `mobile_playable` defaults to false, so an
-  // unverified recording is not publishable in the meantime.
+  // Prove what actually landed, straight away. Not fatal: the row is the
+  // record that a service happened, and the verdict is retaken later.
   await verifyRecording(
     {
       recordingId: recording.id,

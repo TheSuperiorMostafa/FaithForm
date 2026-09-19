@@ -879,6 +879,14 @@ export const liveMediaSchema = z
     churchName: z.string(),
     /** The church's zone. "Sunday 10am" means the church's Sunday. */
     churchTimezone: z.string(),
+    /**
+     * The same service, watchable again: the id of its published recording
+     * (an archive `mediaId`), present only on a `recent_ended` card and only
+     * once the recording is published to this visitor. Lets "Today's service
+     * has ended" become "Watch the replay" without a second list lookup — and
+     * without the live service and its replay looking like two unrelated items.
+     */
+    replayMediaId: z.string().nullable().optional(),
   })
   .meta({ id: "LiveMedia" });
 

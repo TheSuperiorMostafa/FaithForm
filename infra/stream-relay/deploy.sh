@@ -10,6 +10,7 @@
 #   ./infra/stream-relay/deploy.sh
 #   ./infra/stream-relay/deploy.sh --restart-ws-ingest
 #   ./infra/stream-relay/deploy.sh --restart-auth-proxy   # pick up auth-proxy.py
+#   ./infra/stream-relay/deploy.sh --install-recorder-cron  # once: the recording sweeper
 #   ./infra/stream-relay/deploy.sh --bootstrap     # also re-run bootstrap.sh
 #   RELAY_HOST=mostafa@stream.faithform.io ./infra/stream-relay/deploy.sh
 #
@@ -23,6 +24,7 @@ SRC="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BOOTSTRAP=0
 RESTART_WS_INGEST=0
 RESTART_AUTH_PROXY=0
+INSTALL_RECORDER_CRON=0
 
 for arg in "$@"; do
   case "$arg" in
@@ -30,6 +32,7 @@ for arg in "$@"; do
     --bootstrap) BOOTSTRAP=1 ;;
     --restart-ws-ingest) RESTART_WS_INGEST=1 ;;
     --restart-auth-proxy) RESTART_AUTH_PROXY=1 ;;
+    --install-recorder-cron) INSTALL_RECORDER_CRON=1 ;;
     *) echo "Unknown option: $arg" >&2; exit 1 ;;
   esac
 done
@@ -51,6 +54,12 @@ fi
 if [[ $RESTART_AUTH_PROXY -eq 1 ]]; then
   echo "→ restarting the MediaMTX auth bridge (MediaMTX keeps running)"
   ssh "$RELAY_HOST" 'bash ~/scripts/restart-auth-proxy.sh'
+fi
+
+if [[ $INSTALL_RECORDER_CRON -eq 1 ]]; then
+  # Resumes any recording whose uploader died (reboot, crash, app outage).
+  echo "→ installing the recorder sweep (every minute)"
+  ssh "$RELAY_HOST" '(crontab -l 2>/dev/null | grep -v faithform-recorder.py; echo "* * * * * set -a; . /etc/faithform-stream-relay.env; set +a; python3 \$HOME/scripts/faithform-recorder.py sweep >> \$HOME/mediamtx/logs/recorder.log 2>&1") | crontab -'
 fi
 
 if [[ $BOOTSTRAP -eq 1 ]]; then

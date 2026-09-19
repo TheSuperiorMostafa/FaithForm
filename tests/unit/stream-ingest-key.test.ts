@@ -4,10 +4,7 @@ import test from "node:test";
 
 const actions = readFileSync("app/dashboard/live-streaming/actions.ts", "utf8");
 const card = readFileSync("components/live-streaming/encoder-setup-card.tsx", "utf8");
-const dashboard = readFileSync(
-  "components/live-streaming/live-streaming-dashboard.tsx",
-  "utf8",
-);
+const dashboard = readFileSync("app/dashboard/live-streaming/setup/page.tsx", "utf8");
 const docs = readFileSync("components/live-streaming/encoder-docs-card.tsx", "utf8");
 
 /**
@@ -43,7 +40,19 @@ test("the key reaches the browser only as an action reply", () => {
 });
 
 test("the encoder instructions point at the permanent key", () => {
-  assert.match(docs, /stays the same forever/);
+  assert.match(docs, /stays the same until you replace it/);
   assert.match(docs, /Show stream key/);
   assert.doesNotMatch(docs, /fresh stream key/);
+});
+
+test("a revealed key hides itself, and replacing it is confirmed and refused while live", () => {
+  assert.match(card, /KEY_VISIBLE_MS/);
+  assert.match(card, /Replace stream key/);
+  const rotate = readFileSync("app/dashboard/live-streaming/recording-actions.ts", "utf8");
+  const fn = rotate.slice(rotate.indexOf("export async function rotateStreamKeyAction("));
+  assert.match(fn, /requireAdmin\(\)/);
+  assert.match(fn, /getActiveStreamSession/);
+  assert.match(fn, /assertRateLimit\(`stream:rotate-key:\$\{auth\.churchId\}`/);
+  assert.match(fn, /logAdminAction\(/);
+  assert.doesNotMatch(fn, /console\.(log|info)\([^)]*secret/i);
 });

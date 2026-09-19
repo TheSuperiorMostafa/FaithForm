@@ -60,6 +60,8 @@ export type LiveMediaDto = {
   churchSlug: string;
   churchName: string;
   churchTimezone: string;
+  /** The published recording of this service, once there is one (P15). */
+  replayMediaId: string | null;
 };
 
 /**
@@ -103,6 +105,7 @@ export async function getLiveMedia(input: {
       churchSlug: input.churchSlug,
       churchName: row.church_name as string,
       churchTimezone: (row.church_timezone as string) ?? "America/New_York",
+      replayMediaId: (row.replay_media_id as string | null) ?? null,
     },
   };
 }
@@ -367,7 +370,13 @@ export async function grantPlayback(input: {
   // Deliberately cheap — one signed-URL mint and a one-byte ranged GET —
   // because it runs on every acquisition and every refresh.
   // -----------------------------------------------------------------------
-  if (input.kind === "recording") {
+  const recordingIsHls = input.kind === "recording" && row.rendition_kind === "hls";
+
+  // A segmented recording (P15) is many immutable objects, not one mutable
+  // file: there is no single object whose identity could have drifted, and its
+  // segment manifest is bound to the verdict by the publish gate instead. The
+  // delivery route serves only segments that existed when it was verified.
+  if (input.kind === "recording" && !recordingIsHls) {
     const storagePath = (row.storage_path as string | null) ?? null;
     if (!storagePath) return null;
 
@@ -401,17 +410,17 @@ export async function grantPlayback(input: {
   // requests (see `playback-capability.ts`), so a live stream is addressed by a
   // path carrying a delivery token. Minted from the same decision as the
   // capability; the delivery route keeps re-authorizing while it plays.
-  const delivery =
-    input.kind === "live"
-      ? issueMediaDeliveryToken({
-          accountId: account.id,
-          churchSlug: input.churchSlug,
-          kind: "live",
-          mediaId: input.mediaId,
-          authorizationVersion: account.authorizationVersion,
-        })
-      : null;
-  if (input.kind === "live" && !delivery) {
+  const needsDeliveryPath = input.kind === "live" || recordingIsHls;
+  const delivery = needsDeliveryPath
+    ? issueMediaDeliveryToken({
+        accountId: account.id,
+        churchSlug: input.churchSlug,
+        kind: input.kind,
+        mediaId: input.mediaId,
+        authorizationVersion: account.authorizationVersion,
+      })
+    : null;
+  if (needsDeliveryPath && !delivery) {
     throw new VisitorError("unavailable", "Playback is unavailable.");
   }
 
@@ -423,13 +432,16 @@ export async function grantPlayback(input: {
     expiresAt: issued.expiresAt,
     // **Never the capability.** A recording's URL carries nothing; a live
     // stream's carries only its delivery token, in the path.
-    deliveryUrl: delivery
-      ? `/api/media/v1/live/${encodedSlug}/${encodedId}/${delivery.token}/index.m3u8`
-      : `/api/media/v1/recording/${encodedSlug}/${encodedId}`,
+    deliveryUrl:
+      input.kind === "live" && delivery
+        ? `/api/media/v1/live/${encodedSlug}/${encodedId}/${delivery.token}/index.m3u8`
+        : recordingIsHls && delivery
+          ? `/api/media/v1/recording/${encodedSlug}/${encodedId}/${delivery.token}/index.m3u8`
+          : `/api/media/v1/recording/${encodedSlug}/${encodedId}`,
     kind: input.kind,
     // Live is always HLS through the relay proxy. A recording reports the
-    // rendition its own verified metadata recorded — `progressive` today,
-    // because nothing in this repository packages a VOD playlist.
+    // rendition its verified metadata recorded: `hls` for a livestream
+    // recorded as segments (P15), `progressive` for a legacy single file.
     renditionKind:
       input.kind === "live"
         ? "hls"

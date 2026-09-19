@@ -112,6 +112,8 @@ export async function cancelNotificationsForSubject(
 type OutboxJob = {
   id: string;
   church_id: string;
+  /** `announcement` unless a livestream or recording enqueued it (P15). */
+  subject_type?: "announcement" | "stream_event" | "stream_recording";
   subject_id: string;
   target_visibility: "public" | "followers" | "members";
   topic: "announcements" | "events";
@@ -189,6 +191,44 @@ async function subjectIsStillCurrent(
   admin: SupabaseClient,
   job: OutboxJob,
 ): Promise<boolean> {
+  // "Sunday Worship is live now" is only worth sending while it is.
+  if (job.subject_type === "stream_event") {
+    const { data } = await admin
+      .from("stream_events")
+      .select("status, mobile_visibility, mobile_unpublished_at, mobile_revoked_at")
+      .eq("id", job.subject_id)
+      .eq("church_id", job.church_id)
+      .maybeSingle();
+    return Boolean(
+      data &&
+        data.status === "live" &&
+        data.mobile_visibility !== "none" &&
+        !data.mobile_unpublished_at &&
+        !data.mobile_revoked_at,
+    );
+  }
+
+  // "…is now available to watch" only while it is published and playable.
+  if (job.subject_type === "stream_recording") {
+    const { data } = await admin
+      .from("stream_recordings")
+      .select(
+        "status, mobile_playable, mobile_visibility, mobile_published_at, mobile_unpublished_at, deleted_at",
+      )
+      .eq("id", job.subject_id)
+      .eq("church_id", job.church_id)
+      .maybeSingle();
+    return Boolean(
+      data &&
+        data.status === "ready" &&
+        data.mobile_playable &&
+        data.mobile_visibility !== "none" &&
+        data.mobile_published_at &&
+        !data.mobile_unpublished_at &&
+        !data.deleted_at,
+    );
+  }
+
   const { data } = await admin
     .from("announcements")
     .select("status, is_ready, mobile_visibility, mobile_unpublished_at, publication_version")

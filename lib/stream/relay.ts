@@ -314,3 +314,26 @@ export async function clearStreamRelayDestinations(
     supabase,
   );
 }
+
+/**
+ * Replaces the church's permanent stream key.
+ *
+ * A targeted update of the key alone: the same row carries the RTMP
+ * destinations and the relay's heartbeat flags in `metadata`, and rewriting
+ * the whole row here could race a heartbeat and restore stale destinations.
+ * The old key stops authorizing new publishes immediately; an encoder already
+ * on air keeps its connection until it disconnects.
+ */
+export async function rotateStreamPublishSecret(
+  churchId: string,
+  supabase: SupabaseClient,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("church_integrations")
+    .update({ access_token: generateStreamConfigurationToken() })
+    .eq("church_id", churchId)
+    .eq("provider", STREAM_PROVIDER)
+    .neq("access_token", "")
+    .select("id");
+  return !error && Boolean(data?.length);
+}

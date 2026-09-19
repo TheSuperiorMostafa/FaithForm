@@ -1231,7 +1231,8 @@ data class LiveMedia(
     val publicationVersion: Int,
     val churchSlug: String,
     val churchName: String,
-    val churchTimezone: String
+    val churchTimezone: String,
+    val replayMediaId: String? = null
 )
 
 /**

@@ -9,7 +9,7 @@ export type StreamRecording = {
   title: string | null;
   storagePath: string;
   durationSec: number | null;
-  status: "processing" | "ready" | "published";
+  status: "recording" | "processing" | "ready" | "published" | "failed" | "deleted";
   trimStartSec: number;
   trimEndSec: number | null;
   publishedAt: string | null;
@@ -24,7 +24,7 @@ type Row = {
   title: string | null;
   storage_path: string;
   duration_sec: number | null;
-  status: "processing" | "ready" | "published";
+  status: "recording" | "processing" | "ready" | "published" | "failed" | "deleted";
   trim_start_sec: number;
   trim_end_sec: number | null;
   published_at: string | null;
@@ -75,6 +75,7 @@ export async function createStreamRecording(
     title?: string | null;
     storagePath: string;
     durationSec?: number | null;
+    recordingStartedAt?: string | null;
   },
   supabase?: SupabaseClient,
 ): Promise<StreamRecording> {
@@ -88,8 +89,14 @@ export async function createStreamRecording(
       title: input.title ?? null,
       storage_path: input.storagePath,
       duration_sec: input.durationSec ?? null,
-      // The relay only calls this once the file is uploaded, and churches no
-      // longer trim or publish, so a recording is watchable the moment it lands.
+      recording_started_at: input.recordingStartedAt ?? null,
+      // A single progressive file from a relay that predates segmented
+      // recording. It is complete the moment it lands; whether phones can play
+      // it is decided by the probe, and nothing is published until someone
+      // (or the church's auto-publish setting) publishes it.
+      source_kind: "file",
+      finalized_by: "legacy",
+      ready_at: new Date().toISOString(),
       status: "ready",
     })
     .select("*")

@@ -182,6 +182,8 @@ export async function listMediaItems(
         .from("stream_recordings")
         .select(columns)
         .eq("church_id", churchId)
+        // A deleted recording's row is kept for history; it is not media.
+        .is("deleted_at", null)
         .order("created_at", { ascending: false }),
     "listMediaItems",
   );

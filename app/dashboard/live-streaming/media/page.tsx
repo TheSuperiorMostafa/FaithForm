@@ -1,5 +1,4 @@
 import { redirect } from "next/navigation";
-import { FaithFormPublishingPanel } from "@/components/live-streaming/faithform-publishing-panel";
 import { MediaBrowseView } from "@/components/media/media-browse";
 import { getChurchAuth } from "@/lib/auth/church";
 import { DASHBOARD_MEDIA_LINKS, loadLibraryBrowse } from "@/lib/media/browse";
@@ -22,12 +21,10 @@ export default async function LiveStreamingMediaPage() {
       <div>
         <h2 className="font-heading text-lg font-bold">Library</h2>
         <p className="text-sm text-muted-foreground">
-          Every service you&apos;ve streamed. Open one to watch it, give it
-          artwork, tag it, or see how many people did.
+          Your services, organized into series. Open one to watch it, edit it,
+          or publish it.
         </p>
       </div>
-
-      <FaithFormPublishingPanel />
 
       <MediaBrowseView
         browse={browse}

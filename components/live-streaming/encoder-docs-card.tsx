@@ -8,6 +8,9 @@ import {
 import { BookOpen } from "lucide-react";
 
 const ENCODER_PRESETS = [
+  // Recordings are published to phones exactly as they were streamed, so the
+  // format is the one setting that matters most.
+  { label: "Video format", value: "H.264" },
   { label: "Resolution", value: "1920×1080 (1080p)" },
   { label: "Frame rate", value: "30 fps" },
   { label: "Keyframe interval", value: "2 seconds" },
@@ -21,7 +24,7 @@ const ENCODERS = [
     steps: [
       "Settings → Stream → Service: Custom",
       "Server: your FaithForm RTMP URL (shown above)",
-      "Stream key: press Show stream key in the Encoder settings card above and paste the whole value; it stays the same forever",
+      "Stream key: press Show stream key in the Connect your streaming software card and paste the whole value; it stays the same until you replace it",
       "Output → Video: 1920×1080, 30 fps; Output mode Advanced; Encoder x264 or NVENC; bitrate 6000 Kbps; keyframe 2 s",
     ],
   },
@@ -29,7 +32,7 @@ const ENCODERS = [
     name: "ATEM / Blackmagic",
     steps: [
       "Streaming → Service: Custom",
-      "Server URL and your church stream key from the Encoder settings card above",
+      "Server URL and your church stream key from the Connect your streaming software card",
       "Encoder: H.264, 1080p30, 6000 kbps, keyframe every 60 frames at 30 fps",
     ],
   },
@@ -37,7 +40,7 @@ const ENCODERS = [
     name: "vMix",
     steps: [
       "Add Output → External → destination RTMP",
-      "URL and your church stream key from the Encoder settings card above",
+      "URL and your church stream key from the Connect your streaming software card",
       "Streaming quality: 1080p, 30 fps, 6000 kbps",
     ],
   },
@@ -49,10 +52,10 @@ export function EncoderDocsCard() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base">
           <BookOpen className="size-4 text-accent" />
-          Encoder setup
+          Recommended settings
         </CardTitle>
         <CardDescription>
-          Recommended settings for stable syndication and HLS playback.
+          So your service streams smoothly and records in a format every phone can play.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -80,8 +83,7 @@ export function EncoderDocsCard() {
           </div>
         ))}
         <p className="text-xs text-muted-foreground">
-          SRT ingest is available on the relay when enabled — use the same stream
-          path with an SRT URL from your dashboard host.
+          Using SRT instead of RTMP? Contact FaithForm support and we&apos;ll help you set it up.
         </p>
       </CardContent>
     </Card>

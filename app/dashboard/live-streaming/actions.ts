@@ -237,6 +237,7 @@ export async function revealIngestKey(): Promise<RevealIngestKeyState> {
 
 export async function goLiveBroadcast(
   title?: string,
+  eventId?: string,
 ): Promise<StreamRelayActionState> {
   const gate = await requireStreamAccess();
   if (!gate.ok) return { ok: false, error: gate.error };
@@ -246,7 +247,12 @@ export async function goLiveBroadcast(
   }
 
   try {
-    await startLiveBroadcast(auth.churchId, auth.userId, { title });
+    // Going live for a scheduled service keeps its event, so the live card,
+    // the recording and the replay are one piece of content rather than three.
+    await startLiveBroadcast(auth.churchId, auth.userId, {
+      title,
+      eventId: eventId && /^[0-9a-f-]{36}$/i.test(eventId) ? eventId : undefined,
+    });
     await logAdminAction({
       churchId: auth.churchId,
       taskName: "Started live broadcast",

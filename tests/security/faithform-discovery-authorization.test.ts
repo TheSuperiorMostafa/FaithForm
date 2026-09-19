@@ -253,7 +253,8 @@ test("no Prompt 6-11 capability was introduced", () => {
     "service_occurrence",
     "geofence",
     "kiosk",
-    "stream_recordings",
+    // P15 deliberately lets the outbox re-check a published livestream
+    // recording before announcing it ("…is now available to watch").
     "giving_donations",
     "payment_intent",
     "ACCESS_BACKGROUND_LOCATION",

@@ -83,10 +83,17 @@ const SERVER_MEDIA_FILES = [
   "lib/stream/relay-upstream.ts",
   ...walk("app/api/media", new Set([".ts"])),
   ...walk("app/api/mobile/v1/media", new Set([".ts"])),
-  "app/dashboard/live-streaming/faithform-actions.ts",
+  "app/dashboard/live-streaming/recording-actions.ts",
+  "lib/stream/recording-publication.ts",
+  "lib/stream/recording-delivery.ts",
+  ...walk("app/api/stream/recordings", new Set([".ts"])),
 ];
 
-const CLIENT_MEDIA_FILES = ["components/live-streaming/faithform-publishing-panel.tsx"];
+const CLIENT_MEDIA_FILES = [
+  "components/live-streaming/recordings/recording-review.tsx",
+  "components/live-streaming/broadcast/post-live-panel.tsx",
+  "components/live-streaming/recording-player.tsx",
+];
 
 // ---------------------------------------------------------------------------
 // Non-vacuity
@@ -146,7 +153,10 @@ test("the capability never enters a URL; a live URL carries only its delivery to
   }
   assert.ok(!/\?\w+=/.test(url), "the delivery URL has a query string");
   assert.match(url, /\/\$\{delivery\.token\}\/index\.m3u8`/);
-  assert.match(grant, /const delivery =\s*input\.kind === "live"\s*\?\s*issueMediaDeliveryToken\(/);
+  // Live, and (P15) a recording delivered as HLS, are addressed by a delivery
+  // token in the path; a progressive recording carries nothing.
+  assert.match(grant, /const needsDeliveryPath = input\.kind === "live" \|\| recordingIsHls;/);
+  assert.match(grant, /const delivery = needsDeliveryPath\s*\?\s*issueMediaDeliveryToken\(/);
 
   // Domain-separated: its own format and its own sub-key, so neither token
   // can stand in for the other.
@@ -403,7 +413,7 @@ test("only a staff action sets a publication timestamp", () => {
 });
 
 test("publishing requires an admin and an exact tenant predicate", () => {
-  const actions = stripComments(read("app/dashboard/live-streaming/faithform-actions.ts"), "a.ts");
+  const actions = stripComments(read("app/dashboard/live-streaming/recording-actions.ts"), "a.ts");
   assert.match(actions, /if \(!auth\.isAdmin\)/);
   assert.match(actions, /const auth = await requireAdmin\(\)/);
 

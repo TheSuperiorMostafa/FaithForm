@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Fetches destination RTMP URLs from FaithForm, forwards the live feed, and records locally.
+# Fetches destination RTMP URLs from FaithForm, forwards the live feed, and starts the recorder.
 # Polls for new destinations so Go Live works after the encoder preview has started.
 
 set -euo pipefail
@@ -30,7 +30,6 @@ mkdir -p "$RECORD_DIR" "/home/mostafa/mediamtx/pids" "/home/mostafa/mediamtx/log
 
 PATH_DIGEST="$(printf '%s' "$MTX_PATH" | sha256sum | cut -c1-16)"
 SAFE_PATH="stream_${PATH_DIGEST}"
-RECORD_PID_FILE="/home/mostafa/mediamtx/pids/${SAFE_PATH}.record.pid"
 FANOUT_PID_FILE="/home/mostafa/mediamtx/pids/${SAFE_PATH}.fanout.pid"
 LOG_FILE="/home/mostafa/mediamtx/logs/${SAFE_PATH}.log"
 DEST_CACHE="/home/mostafa/mediamtx/pids/${SAFE_PATH}.destinations"
@@ -334,17 +333,12 @@ supervise_pushes() {
   done
 }
 
-RECORD_FILE="${RECORD_DIR}/${SAFE_PATH}-$(date +%s).mp4"
-echo "[relay] recording authorized stream" >>"$LOG_FILE"
-"$FFMPEG" -nostdin -loglevel warning \
-  -rtsp_transport tcp -timeout 5000000 \
-  -analyzeduration 10000000 -probesize 10000000 \
-  -i "$RTSP_URL" \
-  -map 0:v:0 -map 0:a:0\? \
-  -c copy -f mp4 -movflags +faststart "$RECORD_FILE" \
-  2> >("$LOG_SANITIZER" >>"$LOG_FILE") &
-echo $! >"$RECORD_PID_FILE"
-echo "$RECORD_FILE" >"${RECORD_DIR}/${SAFE_PATH}.latest"
+# Recording (P15): segmented, uploaded as it goes, and detached from this hook
+# so MediaMTX restarting or killing it can never cut a recording short. The
+# recorder guards against running twice for one path.
+echo "[relay] starting the segmented recorder" >>"$LOG_FILE"
+setsid nohup python3 /home/mostafa/scripts/faithform-recorder.py take "$MTX_PATH" \
+  >>"/home/mostafa/mediamtx/logs/recorder.log" 2>&1 < /dev/null &
 
 notify_lifecycle publish
 
