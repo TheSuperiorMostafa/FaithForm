@@ -320,6 +320,11 @@ test("People shows the photo someone set in the app, and initials without one", 
   const manager = read("components/people/people-manager.tsx");
   assert.match(manager, /<ProfileAvatar\s+url=\{appPhotos\[member\.id\] \?\? member\.photo_url\}/);
   assert.match(manager, /initials=\{getInitials\(member\.first_name, member\.last_name\)\}/);
+  // …and the open person carries it into the panel, which draws it bigger.
+  assert.match(manager, /photoUrl=\{[\s\S]*?appPhotos\[selectedMember\.id\] \?\? null/);
+  const panel = read("components/people/member-form-panel.tsx");
+  assert.match(panel, /size-16[^"]*rounded-full/);
+  assert.match(panel, /<ProfileAvatar\s+url=\{photoUrl \?\? member\.photo_url\}/);
 });
 
 

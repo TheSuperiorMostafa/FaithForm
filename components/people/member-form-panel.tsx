@@ -15,6 +15,7 @@ import { moveAppConnectionToPerson } from "@/app/dashboard/people/claim-actions"
 import { Button } from "@/components/ui/button";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { Select } from "@/components/ui/select";
+import { ProfileAvatar } from "@/components/dashboard/profile-avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   MemberCareSection,
@@ -36,10 +37,16 @@ type MemberFormPanelProps = {
   showAppStatus?: boolean;
   /** Set when this person is connected to an app account. */
   appConnection?: { linkedAt: string } | null;
+  /** The photo to show for this person, larger than the list's. */
+  photoUrl?: string | null;
   /** Who an app connection could be moved to: active, and not on the app. */
   moveTargets?: ChurchMember[];
   onAppConnectionMoved?: () => void;
 };
+
+function getInitials(firstName: string, lastName: string) {
+  return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
+}
 
 function formatDay(value: string | null | undefined): string | null {
   if (!value) return null;
@@ -221,6 +228,7 @@ export function MemberFormPanel({
   onReactivated,
   showAppStatus = false,
   appConnection = null,
+  photoUrl = null,
   moveTargets = [],
   onAppConnectionMoved,
 }: MemberFormPanelProps) {
@@ -456,21 +464,39 @@ export function MemberFormPanel({
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <h2 className="font-heading text-xl font-semibold text-foreground">
-            {readOnly
-              ? "Person details"
-              : isEdit && member
-                ? `${member.first_name} ${member.last_name}`.trim()
-                : "Add person"}
-          </h2>
-          <p className="mt-1 text-base text-muted-foreground">
-            {readOnly
-              ? "Phone numbers are managed by church admins."
-              : isEdit
-                ? "Details, care notes, documents and household in one place."
-                : "Phone numbers are used for attendance follow-up texts."}
-          </p>
+        <div className="flex min-w-0 items-start gap-4">
+          {/*
+            The list draws this person small; here there is room for a face.
+            Someone still being added has no photo and no name to draw one
+            from, so the circle waits until there is a person to show.
+          */}
+          {isEdit && member ? (
+            <div
+              className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-accent/15 text-xl font-bold text-accent"
+              aria-hidden
+            >
+              <ProfileAvatar
+                url={photoUrl ?? member.photo_url}
+                initials={getInitials(member.first_name, member.last_name)}
+              />
+            </div>
+          ) : null}
+          <div className="min-w-0">
+            <h2 className="font-heading text-xl font-semibold text-foreground">
+              {readOnly
+                ? "Person details"
+                : isEdit && member
+                  ? `${member.first_name} ${member.last_name}`.trim()
+                  : "Add person"}
+            </h2>
+            <p className="mt-1 text-base text-muted-foreground">
+              {readOnly
+                ? "Phone numbers are managed by church admins."
+                : isEdit
+                  ? "Details, care notes, documents and household in one place."
+                  : "Phone numbers are used for attendance follow-up texts."}
+            </p>
+          </div>
         </div>
         <button
           type="button"

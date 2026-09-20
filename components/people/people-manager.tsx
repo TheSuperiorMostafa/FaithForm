@@ -461,6 +461,11 @@ export function PeopleManager({
                     ? appConnections[selectedMember.id] ?? null
                     : null
                 }
+                photoUrl={
+                  panelMode === "edit" && selectedMember
+                    ? appPhotos[selectedMember.id] ?? null
+                    : null
+                }
                 moveTargets={members.filter(
                   (member) =>
                     member.is_active &&
