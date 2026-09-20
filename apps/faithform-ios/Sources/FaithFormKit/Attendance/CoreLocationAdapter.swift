@@ -143,6 +143,7 @@ public actor CoreLocationAdapter: NSObject, LocationAuthorizing, LocationSamplin
     /// to resume rather than crashing on a double resume.
     private var authorizationWaiters: [CheckedContinuation<LocationAuthorization, Never>] = []
     private var locationWaiters: [CheckedContinuation<LocationSample?, Never>] = []
+    private var locationRequestGeneration = 0
 
     /// Region events that arrived before anyone was listening.
     ///
@@ -265,6 +266,8 @@ public actor CoreLocationAdapter: NSObject, LocationAuthorizing, LocationSamplin
         guard currentAuthorization().hasAnyAccess else { return nil }
 
         return await withCheckedContinuation { continuation in
+            if locationWaiters.isEmpty { locationRequestGeneration += 1 }
+            let generation = locationRequestGeneration
             locationWaiters.append(continuation)
             manager.requestLocation()
 
@@ -273,9 +276,14 @@ public actor CoreLocationAdapter: NSObject, LocationAuthorizing, LocationSamplin
             // coordinates and the server bands it `unknown`, which fails closed.
             Task { [weak self] in
                 try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                await self?.resumeLocationWaiters(with: nil)
+                await self?.expireLocationRequest(generation: generation)
             }
         }
+    }
+
+    private func expireLocationRequest(generation: Int) {
+        guard generation == locationRequestGeneration else { return }
+        resumeLocationWaiters(with: nil)
     }
 
     // MARK: - RegionMonitoring
@@ -330,10 +338,29 @@ public actor CoreLocationAdapter: NSObject, LocationAuthorizing, LocationSamplin
         }
     }
 
-    public func requestStateForMonitoredRegions() {
+    public func requestStateForMonitoredRegions() async {
+        let identifiers = Set(manager.monitoredRegions.map(\.identifier))
+        guard !identifiers.isEmpty else { return }
         for region in manager.monitoredRegions where region is CLCircularRegion {
             manager.requestState(for: region)
         }
+        // Opening the app inside a small region may yield no boundary event,
+        // or an unknown region state. One fresh fix provides a foreground/setup
+        // fallback. It is only a trigger: the server still verifies attendance.
+        guard let sample = await requestOneShotLocation(timeout: 15), sample.isUsable,
+              abs(sample.capturedAt.timeIntervalSinceNow) <= 60 else { return }
+        let point = CLLocationCoordinate2D(latitude: sample.latitude, longitude: sample.longitude)
+        for case let region as CLCircularRegion in manager.monitoredRegions
+            where identifiers.contains(region.identifier) {
+            if region.contains(point) {
+                await deliver(regionIdentifier: region.identifier, transition: .inside)
+            }
+        }
+    }
+
+    fileprivate func monitoringStarted(identifier: String) {
+        guard let region = manager.monitoredRegions.first(where: { $0.identifier == identifier }) else { return }
+        manager.requestState(for: region)
     }
 
     // MARK: - Events
@@ -419,6 +446,12 @@ public actor CoreLocationAdapter: NSObject, LocationAuthorizing, LocationSamplin
         // anyway: an identifier is all this feature needs, and letting a
         // Core Location object travel further would give later code access to
         // geometry it has no reason to see.
+        func locationManager(_ manager: CLLocationManager, didStartMonitoringFor region: CLRegion) {
+            guard let owner else { return }
+            let identifier = region.identifier
+            Task { await owner.monitoringStarted(identifier: identifier) }
+        }
+
         func locationManager(_ manager: CLLocationManager, didEnterRegion region: CLRegion) {
             guard let owner else { return }
             let identifier = region.identifier

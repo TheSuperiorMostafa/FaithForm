@@ -200,6 +200,7 @@ export function CheckinSetup({
 
       <StatusCard
         live={live}
+        requiresConfirmation={policy.requiresConfirmation}
         doneCount={doneCount}
         watching={readiness.watching}
         nextWindow={nextWindow}
@@ -483,6 +484,7 @@ function LiveBadge({ live, switchedOn }: { live: boolean; switchedOn: boolean })
 
 function StatusCard({
   live,
+  requiresConfirmation,
   doneCount,
   watching,
   nextWindow,
@@ -493,6 +495,7 @@ function StatusCard({
   onContinue,
 }: {
   live: boolean;
+  requiresConfirmation: boolean;
   doneCount: number;
   watching: { campusName: string; radiusMeters: number }[];
   nextWindow: CheckinSetupView["readiness"]["windows"][number] | null;
@@ -518,7 +521,7 @@ function StatusCard({
           </h2>
           <p className="text-sm text-muted-foreground">
             {live
-              ? `Phones watch ${watching.map((campus) => campus.campusName).join(", ")}. People are counted when they arrive during a check-in window.`
+              ? `Phones watch ${watching.map((campus) => campus.campusName).join(", ")}. ${requiresConfirmation ? "People must confirm on their phone before attendance is counted." : "People are counted after their phone verifies arrival during a check-in window."}`
               : problem === "geofence_disabled" && featureEnabled
                 ? "Finish the steps below, then switch it on."
                 : problem === "no_campus_configured"

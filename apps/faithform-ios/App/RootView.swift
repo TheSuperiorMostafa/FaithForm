@@ -173,13 +173,15 @@ struct RootView: View {
         // check-in uses: regions are reconciled, the OS is asked whether the
         // device is inside one, and anything due is sent. It is also when a
         // permission changed in Settings shows up on screen.
-        .onChange(of: scenePhase) { _, phase in
-            guard phase == .active else { return }
-            let attendance = dependencies.attendance
-            let attendanceModel = dependencies.attendanceModel
-            Task {
-                await attendance.foreground()
-                await attendanceModel.refresh()
+        .task(id: scenePhase) {
+            guard scenePhase == .active else { return }
+            await dependencies.attendance.foreground()
+            await dependencies.attendanceModel.refresh()
+            await dependencies.attendanceModel.refreshHistory()
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: .seconds(5)) }
+                catch { return }
+                await dependencies.attendance.foregroundTick()
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: .faithformDeepLink)) { note in

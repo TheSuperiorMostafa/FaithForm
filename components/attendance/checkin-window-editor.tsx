@@ -93,7 +93,7 @@ export function CheckinWindowEditor({
         toast.error(result.message);
         return;
       }
-      toast.success("Check-in times saved. Upcoming services use them now.");
+      toast.success("Saved for services whose check-in has not opened yet.");
       onSaved();
     });
   };
@@ -184,19 +184,19 @@ export function CheckinWindowEditor({
 
         <div className="flex flex-col gap-2">
           <span className="text-sm font-semibold text-foreground">
-            Count someone automatically after they&apos;ve been there
+            How arrivals are counted
           </span>
           <Segmented
-            label="Count someone automatically after"
+            label="Arrival confirmation"
             options={arrivalOptions}
             value={draft.dwellSeconds}
             onChange={(dwellSeconds) => setDraft({ ...draft, dwellSeconds })}
             disabled={!isAdmin || pending}
           />
           <p className="text-xs text-muted-foreground">
-            A short wait means someone driving past or dropping a child off
-            isn&apos;t counted. Phones can take a little longer than this to
-            confirm.
+            {draft.dwellSeconds === 0
+              ? "Right away counts an opted-in person after their phone verifies they are inside the area during check-in. No confirmation tap is needed. This can include people dropping someone off."
+              : "After this wait, the phone asks the person to confirm they are attending. Attendance is counted only after they tap Check in. Choose Right away for fully automatic check-in."}
           </p>
         </div>
 

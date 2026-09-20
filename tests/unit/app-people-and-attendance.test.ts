@@ -14,6 +14,7 @@ import {
 } from "@/lib/attendance/presence";
 import { attendanceSectionTabs } from "@/lib/attendance/section-tabs";
 import { filterNavByFeatures, isNavItemActive, navItems } from "@/components/dashboard/nav-items";
+import { getAttendanceTrend } from "@/lib/queries/dashboard";
 import { getMembersForChurch } from "@/lib/queries/members";
 import {
   escapeLikePattern,
@@ -274,4 +275,22 @@ test("People shows who is on the app only where the church offers the app", () =
   assert.match(page, /showAppStatus\s*\?\s*listAppConnections\(supabase, auth\.churchId\)/);
   assert.match(page, /<PeopleClaimsPanel/);
   assert.match(page, /<AppMembersNotInPeoplePanel/);
+});
+
+
+test("dashboard attendance includes a Saturday automatic check-in without a weekly sheet", async () => {
+  const client = rpcClient({
+    attendance_presence_by_date: { data: [
+      { service_date: "2026-09-19", present: 1, absent: 0, checked_in: 1, automatic: 1, has_sheet: false },
+      { service_date: "2026-09-13", present: 3, absent: 0, checked_in: 0, automatic: 0, has_sheet: true },
+      { service_date: "2026-09-16", present: 0, absent: 0, checked_in: 0, automatic: 0, has_sheet: false },
+    ] },
+  });
+  const trend = await getAttendanceTrend(client, "church-1");
+  assert.deepEqual(trend.points.map(p => [p.serviceDate, p.present]), [
+    ["2026-09-13", 3], ["2026-09-19", 1],
+  ]);
+  assert.equal(trend.lastPresent, 1);
+  assert.equal(trend.lastServiceDate, "2026-09-19");
+  assert.equal(trend.points[1].weekLabel, "Sep 19");
 });

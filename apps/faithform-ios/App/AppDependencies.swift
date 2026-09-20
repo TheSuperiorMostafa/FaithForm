@@ -151,7 +151,10 @@ final class AppDependencies {
                 await service.permissionChanged()
             }
             await location.setRegionHandler { identifier, transition in
+                let lease = await AttendanceExecutionLease()
                 await service.handleRegion(identifier: identifier, transition: transition)
+                await model.refreshHistory()
+                await lease.end()
             }
             await service.start()
         }

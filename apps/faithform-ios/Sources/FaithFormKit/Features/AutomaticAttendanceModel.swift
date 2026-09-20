@@ -153,6 +153,7 @@ public final class AutomaticAttendanceModel {
     public private(set) var lastCheckIn: RecentCheckIn?
     /// An arrival still waiting on a verdict — the selected church's first.
     public private(set) var pending: PendingArrival?
+    public private(set) var activityMessage: String?
 
     public struct RecentCheckIn: Equatable, Sendable {
         public let occurrenceLabel: String
@@ -222,10 +223,13 @@ public final class AutomaticAttendanceModel {
             notificationStatus = await notifications.authorizationStatus()
         }
 
+        let previousPending = pending
         let snapshot = await service.snapshot()
         isEnabled = snapshot.settings.enabled
         monitoredRegionCount = snapshot.settings.enabled ? snapshot.outcome.monitoring : 0
 
+        activityMessage = snapshot.settings.enabled && snapshot.activityChurchSlug == selectedChurch?.slug
+            ? Self.message(for: snapshot.activity) : nil
         let refusals = snapshot.outcome.churchRefusals
         watchedChurchNames = snapshot.settings.enabled && snapshot.outcome.monitoring > 0
             ? snapshot.settings.churches
@@ -237,13 +241,15 @@ public final class AutomaticAttendanceModel {
             selectedChurchBlocker = snapshot.settings.enabled
                 ? refusals[selected.slug].map(AutomaticAttendanceBlocker.from(refusal:))
                 : nil
-            pending = snapshot.pending.first { $0.churchSlug == selected.slug } ?? snapshot.pending.first
+            pending = snapshot.pending.first { $0.churchSlug == selected.slug }
             nextService = await upcomingService(for: selected.slug)
         } else {
             selectedChurchBlocker = nil
             pending = snapshot.pending.first
             nextService = nil
         }
+
+        if previousPending != nil, pending == nil { await refreshHistory() }
 
         // A step the person is in the middle of is theirs; only a status is
         // recomputed underneath them.
@@ -278,6 +284,7 @@ public final class AutomaticAttendanceModel {
             return
         }
         guard let items = try? await history.history(churchSlug: church.slug, limit: 20) else { return }
+        guard selectedChurch?.slug == church.slug else { return }
         lastCheckIn = Self.lastAutomatic(in: items)
     }
 
@@ -551,6 +558,22 @@ public final class AutomaticAttendanceModel {
             return .ready
         case .some(let refusal):
             return .blocked(AutomaticAttendanceBlocker.from(refusal: refusal))
+        }
+    }
+
+    nonisolated public static func message(for phase: EvidencePhase) -> String? {
+        switch phase {
+        case .retrying: return L.autoAttendanceAttemptOffline
+        case .refused(let reason):
+            switch reason {
+            case .noOpenOccurrence, .windowClosed: return L.autoAttendanceAttemptClosed
+            case .insufficientAccuracy: return L.autoAttendanceAttemptAccuracy
+            case .outsideRegion: return L.autoAttendanceAttemptOutside
+            case .cancelled, .expired, .unknown: return L.autoAttendanceNotCheckedInBody
+            default: return nil // The readiness card explains authorization failures.
+            }
+        case .holding: return L.autoAttendanceAttemptRetry
+        default: return nil
         }
     }
 

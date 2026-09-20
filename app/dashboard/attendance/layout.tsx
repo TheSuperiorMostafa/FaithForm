@@ -1,3 +1,4 @@
+import { LiveAttendanceRefresh } from "@/components/attendance/live-attendance-refresh";
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { ShieldOff } from "lucide-react";
@@ -66,6 +67,7 @@ export default async function AttendanceLayout({
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-5">
+      <LiveAttendanceRefresh />
       {tabs.length > 1 && <SectionLinkTabs tabs={tabs} />}
       {children}
     </div>

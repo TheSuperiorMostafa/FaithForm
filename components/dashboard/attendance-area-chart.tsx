@@ -41,7 +41,7 @@ export function AttendanceAreaChart({ points }: AttendanceAreaChartProps) {
       role="img"
       aria-labelledby="attendance-chart-title attendance-chart-description"
     >
-      <title id="attendance-chart-title">Weekly attendance trend</title>
+      <title id="attendance-chart-title">Attendance by service day</title>
       <desc id="attendance-chart-description">
         {points
           .map((point) => `${point.weekLabel}: ${point.present} present`)

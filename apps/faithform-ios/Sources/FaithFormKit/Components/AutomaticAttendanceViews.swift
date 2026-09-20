@@ -185,6 +185,7 @@ public struct AutomaticAttendanceStatus: Equatable, Sendable {
     public var nextService: AutomaticAttendanceModel.UpcomingService?
     public var lastCheckIn: AutomaticAttendanceModel.RecentCheckIn?
     public var pending: PendingArrival?
+    public var activityMessage: String?
     public var isWorking: Bool
     public var now: Date
 
@@ -200,6 +201,7 @@ public struct AutomaticAttendanceStatus: Equatable, Sendable {
         nextService: AutomaticAttendanceModel.UpcomingService? = nil,
         lastCheckIn: AutomaticAttendanceModel.RecentCheckIn? = nil,
         pending: PendingArrival? = nil,
+        activityMessage: String? = nil,
         isWorking: Bool = false,
         now: Date = Date()
     ) {
@@ -214,6 +216,7 @@ public struct AutomaticAttendanceStatus: Equatable, Sendable {
         self.nextService = nextService
         self.lastCheckIn = lastCheckIn
         self.pending = pending
+        self.activityMessage = activityMessage
         self.isWorking = isWorking
         self.now = now
     }
@@ -236,6 +239,7 @@ extension AutomaticAttendanceModel {
             nextService: nextService,
             lastCheckIn: lastCheckIn,
             pending: pending,
+            activityMessage: activityMessage,
             isWorking: isWorking,
             now: Date()
         )
@@ -279,6 +283,14 @@ public struct AutomaticAttendanceStatusView: View {
     public var body: some View {
         VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.md) {
             header
+            if let message = status.activityMessage, status.isEnabled {
+                FaithFormCard {
+                    Text(message)
+                        .font(theme.font(FaithFormTokens.Text.body))
+                        .foregroundStyle(theme.palette.contentSecondary)
+                        .accessibilityAddTraits(.updatesFrequently)
+                }
+            }
             if let pending = status.pending, status.isEnabled {
                 PendingArrivalCard(
                     pending: pending,

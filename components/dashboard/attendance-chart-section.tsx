@@ -15,9 +15,10 @@ type AttendanceChartSectionProps = {
   churchId: string;
 };
 
-function formatLastSunday(date: string | null) {
+function formatLastService(date: string | null) {
   if (!date) return null;
-  return new Date(date).toLocaleDateString("en-US", {
+  return new Date(`${date}T12:00:00Z`).toLocaleDateString("en-US", {
+    timeZone: "UTC",
     weekday: "long",
     month: "short",
     day: "numeric",
@@ -29,7 +30,7 @@ export async function AttendanceChartSection({
 }: AttendanceChartSectionProps) {
   const supabase = createClient();
   const trend = await getAttendanceTrend(supabase, churchId);
-  const lastLabel = formatLastSunday(trend.lastServiceDate);
+  const lastLabel = formatLastService(trend.lastServiceDate);
 
   return (
     <Card>
@@ -43,7 +44,7 @@ export async function AttendanceChartSection({
             <CardDescription className="mt-1">
               {trend.lastPresent !== null && lastLabel ? (
                 <>
-                  Last Sunday:{" "}
+                  {lastLabel}:{" "}
                   <span className="font-medium text-foreground">
                     {trend.lastPresent} present
                   </span>
@@ -57,12 +58,12 @@ export async function AttendanceChartSection({
                       )}
                     >
                       {trend.vsFourWeekAvgPercent >= 0 ? "+" : ""}
-                      {trend.vsFourWeekAvgPercent}% vs 4-week avg
+                      {trend.vsFourWeekAvgPercent}% vs recent average
                     </span>
                   )}
                 </>
               ) : (
-                "Track weekly attendance to see your 12-week trend."
+                "Attendance from all service days appears here over the last 12 weeks."
               )}
             </CardDescription>
           </div>

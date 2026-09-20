@@ -293,6 +293,12 @@ export function CampusLocationEditor({
           <span className="text-sm font-semibold text-foreground">How close counts as arriving</span>
           <span className="text-sm font-semibold tabular-nums text-foreground">{radius} m</span>
         </div>
+        {radius < 100 ? (
+          <p className="text-xs text-amber-700 dark:text-amber-300">
+            This area is small for reliable phone detection. Use 100–150 m where practical,
+            with the pin centered on the building. Indoor GPS can miss a 50 m boundary.
+          </p>
+        ) : null}
         <Segmented
           label="Check-in area size"
           options={

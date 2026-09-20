@@ -441,6 +441,11 @@ public enum L {
     public static var autoAttendanceOpenSettings: String {
         t("auto_attendance_open_settings", "Open Settings")
     }
+    public static var autoAttendanceAttemptRetry: String { t("auto_attendance_attempt_retry", "Attendance is not confirmed yet. FaithForm is waiting briefly before checking again.") }
+    public static var autoAttendanceAttemptClosed: String { t("auto_attendance_attempt_closed", "Attendance has not been counted. There is no open check-in window at this church right now.") }
+    public static var autoAttendanceAttemptAccuracy: String { t("auto_attendance_attempt_accuracy", "Attendance has not been counted yet. Your phone could not verify a precise location. Move closer to the building or an entrance and reopen FaithForm.") }
+    public static var autoAttendanceAttemptOutside: String { t("auto_attendance_attempt_outside", "Attendance has not been counted. Your phone reported a location outside the check-in area.") }
+    public static var autoAttendanceAttemptOffline: String { t("auto_attendance_attempt_offline", "Attendance is not confirmed yet. FaithForm will retry when it can connect. Keep the app open to finish checking in.") }
     public static var autoAttendanceRecentTitle: String {
         t("auto_attendance_recent_title", "Last check-in")
     }

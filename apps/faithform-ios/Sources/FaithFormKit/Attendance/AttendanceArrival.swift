@@ -37,16 +37,6 @@ public enum ArrivalMode: String, Codable, Equatable, Sendable {
 /// Every decision here is a pure function of the server's configuration and a
 /// clock, so each one is reachable from a test on a plain macOS runner.
 public enum ArrivalPolicy {
-    /// The shortest stay this device waits for before checking anyone in
-    /// without asking.
-    ///
-    /// **Why a floor exists at all.** With `requiresConfirmation` off, the
-    /// server counts the first `detected` it receives — it enforces no dwell of
-    /// its own. A church that also set its dwell to zero would otherwise count
-    /// everyone whose car crossed the circle during a service. A minute is well
-    /// inside a service and well beyond a drive past.
-    public static let minimumAutomaticDwell: TimeInterval = 60
-
     /// How far ahead an early arrival is still worth holding on to.
     ///
     /// Bounded by the attempt's own lifetime, so nothing waits longer than the
@@ -59,7 +49,7 @@ public enum ArrivalPolicy {
 
     /// How long an automatic arrival waits before anything is submitted.
     public static func automaticDwell(minDwellSeconds: Int) -> TimeInterval {
-        max(TimeInterval(max(0, minDwellSeconds)), minimumAutomaticDwell)
+        TimeInterval(max(0, minDwellSeconds))
     }
 
     /// The window open at `now`, if the configuration lists one.

@@ -1,5 +1,6 @@
 import Foundation
 import UserNotifications
+import UIKit
 import FaithFormKit
 
 /// Where a tap on an automatic check-in notification lands.
@@ -61,5 +62,24 @@ final class AttendanceNotificationResponder: NSObject, UNUserNotificationCenterD
     private static func openCheckIn(churchSlug: String) {
         guard let url = URL(string: "faithform://church/\(churchSlug)/check-in") else { return }
         NotificationCenter.default.post(name: .faithformDeepLink, object: nil, userInfo: ["url": url])
+    }
+}
+
+/// Keep an arrival's short network operation alive if the phone locks during
+/// it. iOS owns the deadline; persisted attempts recover if time expires.
+@MainActor
+final class AttendanceExecutionLease {
+    private var identifier: UIBackgroundTaskIdentifier = .invalid
+
+    init() {
+        identifier = UIApplication.shared.beginBackgroundTask(withName: "Attendance check-in") { [weak self] in
+            self?.end()
+        }
+    }
+
+    func end() {
+        guard identifier != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(identifier)
+        identifier = .invalid
     }
 }

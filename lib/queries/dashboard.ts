@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getPresenceByDate, isSundayIsoDate } from "@/lib/attendance/presence";
+import { getPresenceByDate } from "@/lib/attendance/presence";
 import { createAdminClientOrNull } from "@/lib/supabase/admin";
 import {
   computeHoursSaved,
@@ -371,7 +371,7 @@ export async function getAttendanceTrend(
   const sinceDate = since.toISOString().slice(0, 10);
   const today = new Date().toISOString().slice(0, 10);
 
-  // Every Sunday anyone was recorded — on the weekly sheet, or checked in by
+  // Every day anyone was recorded — on the weekly sheet, or checked in by
   // the app, a code, the kiosk or a room — each person counted once. Without
   // migration 0083 the weekly sheets are all there is.
   const presence = await getPresenceByDate(supabase, churchId, sinceDate, today);
@@ -379,7 +379,7 @@ export async function getAttendanceTrend(
   let records: { service_date: string; total_present: number | null }[];
   if (presence) {
     records = Array.from(presence.entries())
-      .filter(([date, day]) => isSundayIsoDate(date) && (day.hasSheet || day.present > 0))
+      .filter(([, day]) => day.hasSheet || day.present > 0)
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, day]) => ({ service_date: date, total_present: day.present }));
   } else {
@@ -397,8 +397,9 @@ export async function getAttendanceTrend(
   }
 
   const points: AttendanceWeekPoint[] = records.map((r) => {
-    const d = new Date(r.service_date);
+    const d = new Date(`${r.service_date}T12:00:00Z`);
     const label = d.toLocaleDateString("en-US", {
+      timeZone: "UTC",
       month: "short",
       day: "numeric",
     });
