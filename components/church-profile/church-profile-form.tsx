@@ -1,5 +1,7 @@
 "use client";
 
+import { ImageCropper } from "@/components/website-admin/image-cropper";
+import type { Area } from "react-easy-crop";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 import {
@@ -73,6 +75,8 @@ export function ChurchProfileForm({
   const [baseline, setBaseline] = useState(initialForm);
   const [showErrors, setShowErrors] = useState(false);
   const [pending, startTransition] = useTransition();
+  const [cropPhoto, setCropPhoto] = useState<{ file: File; kind: "logo" | "cover" } | null>(null);
+  const [imageBusy, setImageBusy] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -109,10 +113,11 @@ export function ChurchProfileForm({
   // the sizes these fields advertise. Shrinking first is what keeps a photo
   // straight off a phone from failing at the framework, before either action
   // gets to answer with a message of its own.
-  const handleLogoUpload = async (file: File) => {
+  const handleLogoUpload = async (file: File, crop: Area) => {
     const fd = new FormData();
     fd.set("churchId", churchId);
-    fd.set("logo", await downscaleForUpload(file));
+    fd.set("crop", JSON.stringify(crop));
+    fd.set("logo", file);
     const result = await uploadChurchProfileLogo(fd);
     if ("error" in result) {
       toast.error(result.error);
@@ -122,10 +127,11 @@ export function ChurchProfileForm({
     toast.success("Logo uploaded.");
   };
 
-  const handleCoverUpload = async (file: File) => {
+  const handleCoverUpload = async (file: File, crop: Area) => {
     const fd = new FormData();
     fd.set("churchId", churchId);
-    fd.set("cover", await downscaleForUpload(file));
+    fd.set("crop", JSON.stringify(crop));
+    fd.set("cover", file);
     const result = await uploadChurchCoverImage(fd);
     if ("error" in result) {
       toast.error(result.error);
@@ -133,6 +139,17 @@ export function ChurchProfileForm({
     }
     patch({ coverImageUrl: result.coverUrl });
     toast.success("Cover image uploaded.");
+  };
+
+  const prepareCrop = async (file: File, kind: "logo" | "cover") => {
+    setImageBusy(true);
+    try {
+      if (file.size > 12 * 1024 * 1024) throw new Error("Too large");
+      const prepared = await downscaleForUpload(file);
+      if (prepared.size > 3_400_000) throw new Error("Too large");
+      setCropPhoto({ file: prepared, kind });
+    } catch { toast.error("Choose a readable image under 12 MB."); }
+    finally { setImageBusy(false); }
   };
 
   const handleSave = () => {
@@ -164,6 +181,11 @@ export function ChurchProfileForm({
 
   return (
     <div className="flex flex-col gap-6 pb-28">
+      {imageBusy && <p role="status">Preparing your image…</p>}
+      {cropPhoto && <ImageCropper file={cropPhoto.file} shape={{ label: cropPhoto.kind === "logo" ? "Church logo" : "Church cover", hint: "Position your image", ratio: cropPhoto.kind === "logo" ? 1 : 16 / 9 }} onCancel={() => setCropPhoto(null)} onConfirm={crop => {
+        const photo = cropPhoto; setCropPhoto(null); setImageBusy(true);
+        void (photo.kind === "logo" ? handleLogoUpload(photo.file, crop) : handleCoverUpload(photo.file, crop)).catch(() => toast.error("The image could not be saved.")).finally(() => setImageBusy(false));
+      }} />}
       {!isAdmin && (
         <Card>
           <CardContent className="p-4 text-sm text-muted-foreground">
@@ -258,10 +280,12 @@ export function ChurchProfileForm({
               {!readOnly && (
                 <Input
                   type="file"
+                  disabled={imageBusy}
                   accept="image/png,image/jpeg"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
-                    if (file) void handleLogoUpload(file);
+                    e.target.value = "";
+                    if (file) void prepareCrop(file, "logo");
                   }}
                 />
               )}
@@ -281,10 +305,12 @@ export function ChurchProfileForm({
               {!readOnly && (
                 <Input
                   type="file"
+                  disabled={imageBusy}
                   accept="image/png,image/jpeg,image/webp"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
-                    if (file) void handleCoverUpload(file);
+                    e.target.value = "";
+                    if (file) void prepareCrop(file, "cover");
                   }}
                 />
               )}

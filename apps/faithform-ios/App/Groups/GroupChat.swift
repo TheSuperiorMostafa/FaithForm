@@ -11,6 +11,7 @@ import StreamChatCommonUI
     private var stream: StreamChatSwiftUI.StreamChat?
     private var connecting: Task<Void, Error>?
     private let appearance = Appearance()
+    private var channels: [String: ChatChannelController] = [:]
     func updateTheme(_ theme: FaithFormTheme) { _ = groupChatAppearance(theme, appearance: appearance) }
     func connect(_ model: GroupsModel, theme: FaithFormTheme) async throws {
         updateTheme(theme)
@@ -21,16 +22,16 @@ import StreamChatCommonUI
             try Task.checkCancellation()
             var config = ChatClientConfig(apiKey: .init(auth.appKey)); config.isLocalStorageEnabled = false
             let chat = ChatClient(config: config)
-            let api = model.api; let route = "\(model.messagingPath)/session"
+            let tokens = GroupChatTokens(first: auth.userToken, api: model.api, route: "\(model.messagingPath)/session")
             do {
                 try await chat.connectUser(userInfo: .init(id: auth.chatUserId), tokenProvider: { completion in
                     Task {
-                        do { let response = try await api.send(route, method: .post, as: FaithFormKit.ChatSession.self); guard let fresh = response.value else { throw APIError(code: .unauthenticated, message: "Sign in again to continue.") }; completion(.success(try Token(rawValue: fresh.userToken))) }
+                        do { completion(.success(try await tokens.next())) }
                         catch { completion(.failure(error)) }
                     }
                 })
                 try Task.checkCancellation()
-                self.stream = StreamChatSwiftUI.StreamChat(chatClient: chat, appearance: appearance, utils: Utils(composerConfig: ComposerConfig(isVoiceRecordingEnabled: false, maxAttachmentSize: 25 * 1024 * 1024)))
+                self.stream = StreamChatSwiftUI.StreamChat(chatClient: chat, appearance: appearance, utils: Utils(messageListConfig: MessageListConfig(handleTabBarVisibility: false), composerConfig: ComposerConfig(isVoiceRecordingEnabled: false, maxAttachmentSize: 25 * 1024 * 1024), shouldSyncChannelControllerOnAppear: { $0.channel == nil }))
                 self.session = auth; self.client = chat
             } catch { await chat.disconnect(); throw error }
         }
@@ -38,10 +39,39 @@ import StreamChatCommonUI
         defer { connecting = nil }
         try await task.value
     }
+    func channel(for cid: String) async throws -> ChatChannelController {
+        if let cached = channels[cid] { return cached }
+        guard let client else { throw APIError(code: .unavailable, message: "Reconnect to continue.") }
+        let value = client.channelController(for: try ChannelId(cid: cid))
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            value.synchronize { error in
+                if let error { continuation.resume(throwing: error) } else { continuation.resume() }
+            }
+        }
+        try Task.checkCancellation()
+        guard self.client === client else { throw CancellationError() }
+        channels[cid] = value
+        return value
+    }
     func disconnect() {
+        channels.removeAll()
         connecting?.cancel(); connecting = nil
         let old = client; client = nil; session = nil; stream = nil
         Task { await old?.disconnect() }
+    }
+}
+
+/// Reuse the bootstrap token once, then request fresh tokens only for SDK refreshes.
+private actor GroupChatTokens {
+    var first: String?
+    let api: APIClient
+    let route: String
+    init(first: String, api: APIClient, route: String) { self.first = first; self.api = api; self.route = route }
+    func next() async throws -> Token {
+        if let first { self.first = nil; return try Token(rawValue: first) }
+        let response = try await api.send(route, method: .post, as: FaithFormKit.ChatSession.self)
+        guard let fresh = response.value else { throw APIError(code: .unauthenticated, message: "Sign in again to continue.") }
+        return try Token(rawValue: fresh.userToken)
     }
 }
 
@@ -51,7 +81,7 @@ struct SafetySelection: Identifiable { let id = UUID(); let cid: String; let use
     var styles = RegularStyles()
     let readOnly: Bool
     let report: (SafetySelection) -> Void
-    init(readOnly: Bool, report: @escaping (SafetySelection) -> Void) { self.readOnly = readOnly; self.report = report }
+    init(readOnly: Bool, report: @escaping (SafetySelection) -> Void) { self.readOnly = readOnly; self.report = report; styles.composerPlacement = .docked }
     func makeMessageActionsView(options: MessageActionsViewOptions) -> some View {
         var actions = MessageAction.defaultActions(for: .init(message: options.message, channel: options.channel, onFinish: options.onFinish, onError: options.onError)).filter { ![MessageActionId.flag, MessageActionId.block, MessageActionId.unblock, MessageActionId.mute, MessageActionId.unmute].contains($0.id) }
         if !options.message.isSentByCurrentUser {
@@ -64,7 +94,22 @@ struct SafetySelection: Identifiable { let id = UUID(); let cid: String; let use
     }
     @ViewBuilder func makeMessageComposerViewType(options: MessageComposerViewTypeOptions) -> some View {
         if readOnly { Text("This conversation is read-only.").font(.footnote).foregroundStyle(.secondary).frame(maxWidth: .infinity).padding() }
-        else { DefaultViewFactory.shared.makeMessageComposerViewType(options: options) }
+        else {
+            MessageComposerView(
+                viewFactory: self,
+                channelController: options.channelController,
+                messageController: options.messageController,
+                quotedMessage: options.quotedMessage,
+                editedMessage: options.editedMessage,
+                willSendMessage: options.willSendMessage
+            )
+        }
+    }
+    func makeChannelBarsVisibilityViewModifier(options: ChannelBarsVisibilityViewModifierOptions) -> some ViewModifier {
+        FaithFormConversationBars(shouldShowNavigation: options.shouldShow)
+    }
+    func makeChannelLoadingView(options: ChannelLoadingViewOptions) -> some View {
+        ConversationSkeleton()
     }
     func makeAttachmentPickerView(options: AttachmentPickerViewOptions) -> some View {
         GroupFilePicker(options: options)
@@ -73,6 +118,15 @@ struct SafetySelection: Identifiable { let id = UUID(); let cid: String; let use
         FaithFormConversationHeader(channel: options.channel)
     }
     func makeChannelListHeaderViewModifier(options: ChannelListHeaderViewModifierOptions) -> some ChannelListHeaderViewModifier { FaithFormChatListHeader(title: options.title) }
+}
+/// The conversation owns its chrome, including while reactions are presented.
+struct FaithFormConversationBars: ViewModifier {
+    let shouldShowNavigation: Bool
+    func body(content: Content) -> some View {
+        content
+            .toolbar(shouldShowNavigation ? .visible : .hidden, for: .navigationBar)
+            .toolbar(.hidden, for: .tabBar)
+    }
 }
 struct FaithFormConversationHeader: ChatChannelHeaderViewModifier {
     let channel: ChatChannel
@@ -98,10 +152,18 @@ struct GroupConversationView: View {
             if let controller, session.client != nil {
                 ChatChannelView(viewFactory: FaithFormChatFactory(readOnly: readOnly || session.session?.suspended == true, report: { safety = $0 }), channelController: controller)
             } else if failed { VStack { GroupEmpty(symbol: "bubble.left.and.bubble.right", title: "Let’s reconnect", message: "Messages are unavailable right now. Your group is still here."); Button("Try again") { retry += 1 } } }
-            else { ProgressView("Connecting your conversation…") }
-        }.navigationTitle(title).navigationBarTitleDisplayMode(.inline).toolbar(.visible, for: .navigationBar)
+            else { ConversationSkeleton() }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .background(theme.palette.background)
+        .toolbar(.hidden, for: .tabBar)
+        .navigationTitle(title).navigationBarTitleDisplayMode(.inline).toolbar(.visible, for: .navigationBar)
         .task(id: "\(cid)|\(retry)") {
-            do { failed = false; try await session.connect(model, theme: theme); guard let client = session.client else { return }; let value = client.channelController(for: try ChannelId(cid: cid)); try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in value.synchronize { error in if let error { continuation.resume(throwing: error) } else { continuation.resume() } } }; try Task.checkCancellation(); controller = value }
+            do {
+                failed = false
+                try await session.connect(model, theme: theme)
+                controller = try await session.channel(for: cid)
+            }
             catch is CancellationError {} catch { failed = true }
         }
         .onChange(of: theme.palette.background) { _, _ in session.updateTheme(theme) }
@@ -132,7 +194,7 @@ struct GroupMessagesView: View {
             if let list, session.client != nil {
                 ChatChannelListView(viewFactory: FaithFormChatFactory(readOnly: false, report: { _ in }), channelListController: list, title: "Messages", onItemTap: { channel in selected = DirectSelection(cid: channel.cid.rawValue, name: channel.name ?? "Conversation", readOnly: channel.isFrozen) }, embedInNavigationView: false)
             } else if failed { GroupEmpty(symbol: "bubble.left", title: "Messages are taking a moment", message: "Please check your connection and try again."); Button("Try again") { retry += 1 } }
-            else { ProgressView("Connecting messages…").frame(maxWidth: .infinity, maxHeight: .infinity) }
+            else { ConversationListSkeleton().padding(20).frame(maxHeight: .infinity, alignment: .top) }
         }
         .task(id: retry) {
             do { failed = false; try await session.connect(model, theme: theme); guard let client = session.client, let auth = session.session else { return }; let query = ChannelListQuery(filter: .and([.equal(.type, to: .custom("ff_dm")), .equal(.team, to: auth.churchTeam), .containMembers(userIds: [auth.chatUserId])])); list = client.channelListController(query: query) }
@@ -158,7 +220,7 @@ struct GroupContactsView: View {
         NavigationStack { List {
             FaithFormSearchField(placeholder: "Find someone", text: $query, onSubmit: {}).listRowSeparator(.hidden)
             GroupFeedback(model: model)
-            if loading { ProgressView("Finding people…") }
+            if loading { GroupPeopleSkeleton().listRowSeparator(.hidden) }
             else if contacts.isEmpty { GroupEmpty(symbol: "person.crop.circle.badge.plus", title: "No people found", message: "Your church’s messaging settings decide who you can contact. Try another name.") }
             ForEach(contacts, id: \.chatUserId) { person in Button { Task { await start(person) } } label: { VStack(alignment: .leading, spacing: 6) { Text(person.name).font(.headline); if let context = person.context { Text(context).font(.caption).foregroundStyle(.secondary) } } }.disabled(model.busy) }
             if cursor != nil { Button("More people") { Task { await load(more: true) } } }

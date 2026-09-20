@@ -12,7 +12,7 @@ import {
   upsertChurchProfile,
   type UpsertChurchProfileInput,
 } from "@/lib/queries/church-profile";
-import { validateImageBuffer } from "@/lib/security/validate-image";
+import { parseImageCrop, saveBrandingImage } from "@/lib/branding/images";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { SERVICE_TIME_KINDS } from "@/types/church-profile";
 
@@ -200,40 +200,23 @@ export async function saveChurchProfile(
 export async function uploadChurchProfileLogo(
   formData: FormData,
 ): Promise<{ ok: true; logoUrl: string } | { error: string }> {
-  await requireSuperAdmin();
+  const actor = await requireSuperAdmin();
 
   const churchId = formData.get("churchId")?.toString();
   if (!churchId) return { error: "Missing church." };
 
   const file = formData.get("logo") as File | null;
   if (!file || file.size === 0) return { error: "No file provided." };
-  if (file.size > 2 * 1024 * 1024) return { error: "Logo must be 2MB or smaller." };
+  if (file.size > 12 * 1024 * 1024) return { error: "Logo must be 12MB or smaller." };
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const validated = await validateImageBuffer(buffer);
-  if (!validated) return { error: "Logo must be a valid PNG or JPG image." };
-
-  const path = `${churchId}/logo.${validated.ext}`;
   const admin = createAdminClient();
-
-  const { error: uploadError } = await admin.storage
-    .from("church-logos")
-    .upload(path, validated.buffer, {
-      contentType: validated.contentType,
-      upsert: true,
-    });
-
-  if (uploadError) return { error: uploadError.message };
-
-  const { data: publicUrl } = admin.storage.from("church-logos").getPublicUrl(path);
-  const logoUrl = publicUrl.publicUrl;
-
-  const { error } = await admin
-    .from("churches")
-    .update({ logo_url: logoUrl })
-    .eq("id", churchId);
-
-  if (error) return { error: error.message };
+  const { data: church } = await admin.from("churches").select("logo_url").eq("id", churchId).maybeSingle();
+  if (!church) return { error: "Church not found." };
+  let logoUrl: string;
+  try {
+    const result = await saveBrandingImage(admin, { actorUserId: actor.id, churchId, kind: "logo", previousUrl: church.logo_url }, Buffer.from(await file.arrayBuffer()), parseImageCrop(formData.get("crop")));
+    logoUrl = result.url!;
+  } catch { return { error: "The logo could not be saved. Please try again." }; }
 
   revalidatePath(`/admin/churches/${churchId}`);
   revalidatePath("/dashboard", "layout");
@@ -243,40 +226,23 @@ export async function uploadChurchProfileLogo(
 export async function uploadChurchCoverImage(
   formData: FormData,
 ): Promise<{ ok: true; coverUrl: string } | { error: string }> {
-  await requireSuperAdmin();
+  const actor = await requireSuperAdmin();
 
   const churchId = formData.get("churchId")?.toString();
   if (!churchId) return { error: "Missing church." };
 
   const file = formData.get("cover") as File | null;
   if (!file || file.size === 0) return { error: "No file provided." };
-  if (file.size > 5 * 1024 * 1024) return { error: "Cover image must be 5MB or smaller." };
+  if (file.size > 12 * 1024 * 1024) return { error: "Cover image must be 12MB or smaller." };
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const validated = await validateImageBuffer(buffer);
-  if (!validated) return { error: "Cover must be a valid PNG or JPG image." };
-
-  const path = `${churchId}/cover.${validated.ext}`;
   const admin = createAdminClient();
-
-  const { error: uploadError } = await admin.storage
-    .from("church-covers")
-    .upload(path, validated.buffer, {
-      contentType: validated.contentType,
-      upsert: true,
-    });
-
-  if (uploadError) return { error: uploadError.message };
-
-  const { data: publicUrl } = admin.storage.from("church-covers").getPublicUrl(path);
-  const coverUrl = publicUrl.publicUrl;
-
-  const { error } = await admin
-    .from("churches")
-    .update({ cover_image_url: coverUrl })
-    .eq("id", churchId);
-
-  if (error) return { error: error.message };
+  const { data: church } = await admin.from("churches").select("cover_image_url").eq("id", churchId).maybeSingle();
+  if (!church) return { error: "Church not found." };
+  let coverUrl: string;
+  try {
+    const result = await saveBrandingImage(admin, { actorUserId: actor.id, churchId, kind: "cover", previousUrl: church.cover_image_url }, Buffer.from(await file.arrayBuffer()), parseImageCrop(formData.get("crop")));
+    coverUrl = result.url!;
+  } catch { return { error: "The cover could not be saved. Please try again." }; }
 
   revalidatePath(`/admin/churches/${churchId}`);
   return { ok: true, coverUrl };

@@ -1492,6 +1492,86 @@
       ],
       "additionalProperties": false
     },
+    "BrandingPhotoRequest": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "imageBase64": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1400000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "imageBase64"
+      ],
+      "additionalProperties": false
+    },
+    "BrandingPhotoResult": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "url": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "url"
+      ],
+      "additionalProperties": false
+    },
+    "ChurchBrandingState": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "canEdit": {
+          "type": "boolean"
+        },
+        "logoUrl": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "coverUrl": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "canEdit",
+        "logoUrl",
+        "coverUrl"
+      ],
+      "additionalProperties": false
+    },
     "SelectChurchRequest": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "object",

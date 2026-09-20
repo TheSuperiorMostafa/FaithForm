@@ -1,5 +1,6 @@
 "use server";
 
+import { parseImageCrop } from "@/lib/branding/images";
 import { revalidatePath } from "next/cache";
 import { requireGroupsStaff, runStaffAction, type StaffContext } from "@/lib/groups/staff/context";
 import * as groups from "@/lib/groups/staff/groups";
@@ -32,7 +33,7 @@ export async function uploadCover(id: string, form: FormData) {
   return action("cover", async ctx => {
     const file = form.get("cover");
     if (!(file instanceof File)) throw new VisitorError("invalid_input", "Choose an image first.");
-    return groups.uploadStaffGroupCover(ctx, id, file, null);
+    return groups.uploadStaffGroupCover(ctx, id, file, parseImageCrop(form.get("crop")));
   });
 }
 export async function removeCover(id: string) { return action("remove cover", ctx => groups.removeStaffGroupCover(ctx, id)); }

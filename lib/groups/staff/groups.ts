@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { saveBrandingImage } from "@/lib/branding/images";
 
 import { z } from "zod";
 
@@ -14,8 +14,6 @@ import {
 } from "@/lib/groups/types";
 import { StaffFieldError, loadStaffGroup, staffActor, type StaffContext } from "@/lib/groups/staff/context";
 import { dedupeKey, syncNow } from "@/lib/messaging/sync/worker";
-import { normalizeSiteImage } from "@/lib/security/validate-image";
-import { getAspect } from "@/lib/sites/image-aspects";
 
 /**
  * Groups as church staff manage them: the list, a group's settings, its
@@ -424,8 +422,15 @@ export async function setStaffGroupLifecycle(
   if (outcome === "not_archived") throw new VisitorError("conflict", "Archive a group before deleting it.");
 
   if (outcome === "deleted" && group.cover_image_url) {
-    const path = coverPathFromUrl(ctx.churchId, group.id, group.cover_image_url);
-    if (path) await ctx.admin.storage.from(COVER_BUCKET).remove([path]).catch(() => undefined);
+    for (const bucket of ["church-covers", "branding-images"]) {
+      const prefix = `${ctx.churchId}/groups/${group.id}/`;
+      const storage = ctx.admin.storage.from(bucket);
+      const urlPrefix = storage.getPublicUrl(prefix).data.publicUrl;
+      if (group.cover_image_url.startsWith(urlPrefix)) {
+        const name = group.cover_image_url.slice(urlPrefix.length);
+        if (/^[a-zA-Z0-9-]+\.(jpg|jpeg|png)$/.test(name)) await storage.remove([`${prefix}${name}`]).catch(() => undefined);
+      }
+    }
   }
   await syncNow([dedupeKey("group.channel", group.id), dedupeKey("group.members", group.id)], { budgetMs: 4_000 });
   return outcome as "archived" | "restored" | "deleted" | "unchanged";
@@ -435,22 +440,6 @@ export async function setStaffGroupLifecycle(
 // Cover image
 // ---------------------------------------------------------------------------
 
-const COVER_BUCKET = "church-covers";
-const MAX_COVER_BYTES = 12 * 1024 * 1024;
-
-function coverPrefix(churchId: string, groupId: string): string {
-  return `${churchId}/groups/${groupId}/`;
-}
-
-/** The storage path behind a cover URL — only when it is this group's own file. */
-function coverPathFromUrl(churchId: string, groupId: string, url: string): string | null {
-  const marker = `/object/public/${COVER_BUCKET}/`;
-  const index = url.indexOf(marker);
-  if (index < 0) return null;
-  const path = decodeURIComponent(url.slice(index + marker.length).split("?")[0] ?? "");
-  return path.startsWith(coverPrefix(churchId, groupId)) && !path.includes("..") ? path : null;
-}
-
 export async function uploadStaffGroupCover(
   ctx: StaffContext,
   groupId: string,
@@ -458,51 +447,14 @@ export async function uploadStaffGroupCover(
   crop: { x: number; y: number; width: number; height: number } | null,
 ): Promise<{ url: string }> {
   const group = await loadStaffGroup(ctx, groupId);
-  if (file.size === 0) throw new StaffFieldError("Choose an image to upload.", "cover");
-  if (file.size > MAX_COVER_BYTES) throw new StaffFieldError("That image is over 12MB. Please pick a smaller one.", "cover");
-
-  const aspect = getAspect("video");
-  const normalized = await normalizeSiteImage(Buffer.from(await file.arrayBuffer()), {
-    crop,
-    output: aspect.output,
-  });
-  if (!normalized) {
-    throw new StaffFieldError("That file doesn't look like an image we can use. Try a JPG, PNG, or HEIC photo.", "cover");
-  }
-
-  const path = `${coverPrefix(ctx.churchId, group.id)}${Date.now().toString(36)}-${randomUUID().slice(0, 8)}.${normalized.ext}`;
-  const { error } = await ctx.admin.storage
-    .from(COVER_BUCKET)
-    .upload(path, normalized.buffer, { contentType: normalized.contentType, upsert: false });
-  if (error) throw new VisitorError("unavailable", "That image could not be uploaded. Please try again.");
-  const url = ctx.admin.storage.from(COVER_BUCKET).getPublicUrl(path).data.publicUrl;
-
-  const { error: updateError } = await ctx.admin
-    .from("groups")
-    .update({ cover_image_url: url, cover_image_path: path, updated_by: ctx.userId })
-    .eq("id", group.id)
-    .eq("church_id", ctx.churchId);
-  if (updateError) {
-    await ctx.admin.storage.from(COVER_BUCKET).remove([path]).catch(() => undefined);
-    throw new VisitorError("unavailable", "That image could not be saved. Please try again.");
-  }
-  const previous = group.cover_image_url ? coverPathFromUrl(ctx.churchId, group.id, group.cover_image_url) : null;
-  if (previous) await ctx.admin.storage.from(COVER_BUCKET).remove([previous]).catch(() => undefined);
-  await syncNow([dedupeKey("group.channel", group.id)], { budgetMs: 2_000 });
-  return { url };
+  if (!file.size || file.size > 12 * 1024 * 1024) throw new StaffFieldError("Choose an image under 12 MB.", "cover");
+  const result = await saveBrandingImage(ctx.admin, { actorUserId: ctx.userId, churchId: ctx.churchId, groupId: group.id, kind: "cover", previousUrl: group.cover_image_url }, Buffer.from(await file.arrayBuffer()), crop);
+  return { url: result.url! };
 }
 
 export async function removeStaffGroupCover(ctx: StaffContext, groupId: string): Promise<void> {
   const group = await loadStaffGroup(ctx, groupId);
-  if (!group.cover_image_url) return;
-  await ctx.admin
-    .from("groups")
-    .update({ cover_image_url: null, cover_image_path: null, updated_by: ctx.userId })
-    .eq("id", group.id)
-    .eq("church_id", ctx.churchId);
-  const path = coverPathFromUrl(ctx.churchId, group.id, group.cover_image_url);
-  if (path) await ctx.admin.storage.from(COVER_BUCKET).remove([path]).catch(() => undefined);
-  await syncNow([dedupeKey("group.channel", group.id)], { budgetMs: 2_000 });
+  await saveBrandingImage(ctx.admin, { actorUserId: ctx.userId, churchId: ctx.churchId, groupId: group.id, kind: "cover", previousUrl: group.cover_image_url }, null);
 }
 
 // ---------------------------------------------------------------------------

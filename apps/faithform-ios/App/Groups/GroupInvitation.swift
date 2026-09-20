@@ -21,7 +21,7 @@ struct GroupInvitationView: View {
                     Text("You’re invited to join \(preview.churchName)’s group. You’ll need to belong to this church in the app before joining.").foregroundStyle(.secondary)
                     if accepted { Button("Go to my groups") { joined(preview.churchSlug) }.buttonStyle(.borderedProminent) }
                     else { Button(busy ? "Joining…" : "Accept invitation") { Task { await accept() } }.buttonStyle(.borderedProminent).disabled(busy) }
-                } else if error == nil { ProgressView("Opening your invitation…") }
+                } else if error == nil { GroupDetailSkeleton() }
                 if let error { Text(error).foregroundStyle(.red); if preview == nil { Button("Try again") { retry += 1 } } }
             }.padding(24) }.navigationTitle("You’re invited").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }

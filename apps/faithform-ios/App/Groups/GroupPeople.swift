@@ -2,6 +2,7 @@ import SwiftUI
 import FaithFormKit
 
 struct GroupMembersView: View {
+    @Environment(\.faithformTheme) private var theme
     @Bindable var model: GroupsModel
     let detail: GroupDetail
     @State private var members: [GroupMember] = []
@@ -10,30 +11,55 @@ struct GroupMembersView: View {
     @State private var selected: GroupMember?
     @State private var confirming: GroupMember?
     @State private var search = ""
+    @State private var loadError: String?
+    @State private var loadingMore = false
+    private var filteredMembers: [GroupMember] {
+        members.filter { search.trimmingCharacters(in: .whitespaces).isEmpty || $0.name.localizedCaseInsensitiveContains(search.trimmingCharacters(in: .whitespaces)) }
+    }
     var body: some View {
-        List {
-            FaithFormSearchField(placeholder: "Find someone", text: $search, onSubmit: {}).listRowSeparator(.hidden)
-            GroupFeedback(model: model)
-            if !loaded { ProgressView("Finding familiar faces…") }
-            ForEach(members.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) }, id: \.membershipId) { member in
-                HStack(spacing: 12) {
-                    Image(systemName: "person.crop.circle.fill").font(.title).foregroundStyle(.secondary)
-                    VStack(alignment: .leading, spacing: 5) { Text(member.name).font(.subheadline.weight(.semibold)); Text(member.isYou ? "You · \(member.groupRole.capitalized)" : member.groupRole.capitalized).font(.caption).foregroundStyle(.secondary) }
-                    Spacer()
-                    if !member.isYou {
-                        Menu {
-                            if member.chatUserId != nil { Button("Report or block", systemImage: "shield") { selected = member } }
-                            if detail.capabilities.canManageMembers { Button("Remove from group", role: .destructive) { confirming = member } }
-                            if detail.capabilities.canManageRoles {
-                                ForEach(["member", "leader", "manager"], id: \.self) { role in if role != member.groupRole { Button("Make \(role)") { Task { await changeRole(member, role: role) } } } }
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 20) {
+                GroupSectionHeading(eyebrow: "YOUR PEOPLE", title: "Better together", subtitle: "\(detail.group.memberCount) members. A place for every one of you.")
+                FaithFormSearchField(placeholder: "Find someone in this group", text: $search, onSubmit: {})
+                GroupFeedback(model: model)
+                if !loaded { FaithFormCard { GroupPeopleSkeleton() } }
+                else if let loadError { GroupRetryCard(message: loadError) { Task { await load() } } }
+                else if filteredMembers.isEmpty {
+                    FaithFormCard {
+                        GroupEmpty(symbol: search.isEmpty ? "person.2" : "magnifyingglass", title: search.isEmpty ? "Your people will be here" : "No matches yet", message: search.isEmpty ? "Group members will appear here as they join." : (cursor == nil ? "Try another name." : "Try another name or load more members below."))
+                    }
+                } else {
+                    ForEach(filteredMembers, id: \.membershipId) { member in
+                        FaithFormCard {
+                            HStack(spacing: 14) {
+                                GroupMemberAvatar(name: member.name, url: member.avatarUrl)
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text(member.name).font(.headline).foregroundStyle(theme.palette.contentPrimary)
+                                    Text(member.isYou ? "You · \(member.groupRole.capitalized)" : member.groupRole.capitalized)
+                                        .font(.caption.weight(.medium)).foregroundStyle(theme.palette.contentSecondary)
+                                }.frame(maxWidth: .infinity, alignment: .leading)
+                                if !member.isYou && (member.chatUserId != nil || detail.capabilities.canManageMembers || detail.capabilities.canManageRoles) {
+                                    Menu {
+                                        if member.chatUserId != nil { Button("Report or block", systemImage: "shield") { selected = member } }
+                                        if detail.capabilities.canManageMembers { Button("Remove from group", role: .destructive) { confirming = member } }
+                                        if detail.capabilities.canManageRoles {
+                                            ForEach(["member", "leader", "manager"], id: \.self) { role in if role != member.groupRole { Button("Make \(role)") { Task { await changeRole(member, role: role) } } } }
+                                        }
+                                    } label: { Image(systemName: "ellipsis").frame(width: 44, height: 44) }.accessibilityLabel("Actions for \(member.name)")
+                                }
                             }
-                        } label: { Image(systemName: "ellipsis").frame(width: 44, height: 44) }.accessibilityLabel("Actions for \(member.name)")
+                        }
                     }
                 }
-            }
-            if cursor != nil { Button("Load more members") { Task { await load(more: true) } } }
-            if loaded && members.isEmpty { Text("No members to show yet.").foregroundStyle(.secondary) }
-        }.listStyle(.plain).scrollContentBackground(.hidden)
+                if cursor != nil && loadError == nil {
+                    Button(loadingMore ? "Loading more…" : "Load more members") { Task { await load(more: true) } }
+                        .buttonStyle(.bordered).frame(maxWidth: .infinity).disabled(loadingMore)
+                }
+            }.padding(20).padding(.bottom, 16)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(theme.palette.background.ignoresSafeArea())
+        .foregroundStyle(theme.palette.contentPrimary)
         .task { await load() }.refreshable { await load() }
         .sheet(item: $selected) { member in if let userId = member.chatUserId, let cid = detail.group.chat?.cid { GroupSafetyView(model: model, cid: cid, userId: userId, name: member.name) } }
         .confirmationDialog("Remove this person?", isPresented: Binding(get: { confirming != nil }, set: { if !$0 { confirming = nil } }), titleVisibility: .visible) {
@@ -44,8 +70,15 @@ struct GroupMembersView: View {
         } message: { Text("They will lose access to the group and its conversation.") }
     }
     private func load(more: Bool = false) async {
-        do { let page = try await model.read("\(model.path)/\(detail.group.id)/members", query: more ? ["cursor": cursor ?? ""] : [:], as: GroupMemberPage.self); members = more ? members + page.items : page.items; cursor = page.nextCursor; loaded = true }
-        catch is CancellationError {} catch { model.error = GroupsModel.message(error); loaded = true }
+        if more { guard !loadingMore else { return }; loadingMore = true }
+        defer { if more { loadingMore = false } }
+        loadError = nil
+        do {
+            let page = try await model.read("\(model.path)/\(detail.group.id)/members", query: more ? ["cursor": cursor ?? ""] : [:], as: GroupMemberPage.self)
+            try Task.checkCancellation()
+            members = more ? members + page.items : page.items
+            cursor = page.nextCursor; loaded = true
+        } catch is CancellationError {} catch { loadError = GroupsModel.message(error); loaded = true }
     }
     private func changeRole(_ member: GroupMember, role: String) async {
         await model.perform("Role updated.") { let _: GroupCommandResult = try await model.send("\(model.path)/\(detail.group.id)/members/\(member.membershipId)", method: .patch, body: SetGroupRoleRequest(groupRole: role), as: GroupCommandResult.self); await load() }
@@ -65,7 +98,7 @@ struct GroupRequestsView: View {
     var body: some View {
         List {
             GroupFeedback(model: model)
-            if !loaded { ProgressView("Loading requests…") }
+            if !loaded { GroupPeopleSkeleton().listRowSeparator(.hidden) }
             if loaded && requests.isEmpty { GroupEmpty(symbol: "checkmark.circle", title: "All caught up", message: "New requests to join this group will appear here.") }
             ForEach(requests, id: \.requestId) { request in
                 VStack(alignment: .leading, spacing: 12) {
@@ -120,7 +153,7 @@ struct GroupPreferencesView: View {
                             preference(groupId == nil ? "off" : "muted", title: "Nothing for now", subtitle: "A little quiet. Catch up in the app.", symbol: "bell.slash")
                         }
                         Button { Task { await save() } } label: {
-                            HStack { if model.busy { ProgressView().tint(theme.palette.contentOnAccent) }; Text(model.busy ? "Saving…" : "Save preference").font(.headline) }
+                            HStack { Text(model.busy ? "Saving…" : "Save preference").font(.headline) }
                                 .frame(maxWidth: .infinity, minHeight: 52)
                                 .foregroundStyle(theme.palette.contentOnAccent)
                                 .background(theme.palette.brandAccent, in: Capsule())
@@ -135,7 +168,7 @@ struct GroupPreferencesView: View {
                             }.padding(18).frame(maxWidth: .infinity, alignment: .leading)
                                 .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 20))
                         }
-                    } else if model.error == nil { ProgressView("Loading preferences…").frame(maxWidth: .infinity) }
+                    } else if model.error == nil { GroupPreferencesSkeleton() }
                     else { Button("Try again") { Task { await load() } } }
                     GroupFeedback(model: model)
                 }.padding(24)

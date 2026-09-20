@@ -5,6 +5,18 @@ import UIKit
 @Suite("Profile photo crop")
 @MainActor
 struct ProfilePhotoTests {
+    @Test("Cover crops keep their wide aspect ratio and fit the upload budget")
+    func wideCover() throws {
+        let format = UIGraphicsImageRendererFormat(); format.scale = 1
+        let image = UIGraphicsImageRenderer(size: CGSize(width: 1200, height: 1600), format: format).image { _ in
+            UIColor.green.setFill(); UIRectFill(CGRect(x: 0, y: 0, width: 1200, height: 1600))
+        }
+        let data = try #require(renderProfilePhoto(image, zoom: 2, x: 0.5, y: -0.5, aspect: 16 / 9))
+        let output = try #require(UIImage(data: data)?.cgImage)
+        #expect(output.width == 1280 && output.height == 720)
+        #expect(data.count <= 1_000_000)
+    }
+
     @Test("Dragging right selects the left side and output is 512 pixels")
     func panDirection() throws {
         let format = UIGraphicsImageRendererFormat(); format.scale = 1

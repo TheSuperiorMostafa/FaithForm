@@ -76,10 +76,13 @@ private func decodeProfilePhoto(_ data: Data) throws -> UIImage {
     return UIImage(cgImage: image)
 }
 
-private struct ProfilePhotoCropper: View {
+struct ProfilePhotoCropper: View {
     @Environment(\.dismiss) private var dismiss
     @State var image: UIImage
     let save: (Data) async -> Bool
+    var aspect: CGFloat = 1
+    var circular = true
+    var title = "Edit profile photo"
     @State private var zoom: CGFloat = 1
     @State private var x: CGFloat = 0
     @State private var y: CGFloat = 0
@@ -96,24 +99,27 @@ private struct ProfilePhotoCropper: View {
                         .foregroundStyle(.secondary).multilineTextAlignment(.center)
                     GeometryReader { geometry in
                         let side = geometry.size.width
-                        let scale = max(side / image.size.width, side / image.size.height) * zoom
+                        let frameHeight = side / aspect
+                        let scale = max(side / image.size.width, frameHeight / image.size.height) * zoom
                         let width = image.size.width * scale
                         let height = image.size.height * scale
                         ZStack {
                             Image(uiImage: image).resizable()
                                 .frame(width: width, height: height)
-                                .offset(x: x * (width - side) / 2, y: y * (height - side) / 2)
+                                .offset(x: x * (width - side) / 2, y: y * (height - frameHeight) / 2)
+                            if circular {
                             Path { path in
                                 path.addRect(CGRect(x: 0, y: 0, width: side, height: side))
                                 path.addEllipse(in: CGRect(x: 0, y: 0, width: side, height: side))
                             }.fill(.black.opacity(0.6), style: FillStyle(eoFill: true))
                             Circle().strokeBorder(.white, lineWidth: 2)
+                            } else { Rectangle().strokeBorder(.white, lineWidth: 2) }
                         }
-                        .frame(width: side, height: side).clipped().contentShape(Rectangle())
+                        .frame(width: side, height: frameHeight).clipped().contentShape(Rectangle())
                         .gesture(DragGesture().onChanged { value in
                             if dragOrigin == nil { dragOrigin = CGSize(width: x, height: y) }
                             x = clamp((dragOrigin?.width ?? 0) + value.translation.width / max(1, (width - side) / 2))
-                            y = clamp((dragOrigin?.height ?? 0) + value.translation.height / max(1, (height - side) / 2))
+                            y = clamp((dragOrigin?.height ?? 0) + value.translation.height / max(1, (height - frameHeight) / 2))
                         }.onEnded { _ in dragOrigin = nil })
                         .simultaneousGesture(MagnifyGesture().onChanged { value in
                             if zoomOrigin == nil { zoomOrigin = zoom }
@@ -121,7 +127,7 @@ private struct ProfilePhotoCropper: View {
                         }.onEnded { _ in zoomOrigin = nil })
                         .accessibilityLabel("Profile photo crop preview")
                         .accessibilityHint("Use the zoom and position controls below to adjust the crop.")
-                    }.aspectRatio(1, contentMode: .fit)
+                    }.aspectRatio(aspect, contentMode: .fit)
                     Slider(value: $zoom, in: 1...4) { Text("Zoom") }
                         .accessibilityValue(String(format: "%.0f percent", zoom * 100))
                     DisclosureGroup("Adjust position") {
@@ -135,14 +141,14 @@ private struct ProfilePhotoCropper: View {
                         Spacer()
                         Button("Reset") { reset() }.frame(minHeight: 44)
                     }
-                    Text("Your profile photo is visible to people you interact with in FaithForm.")
+                    Text(circular ? "Your profile photo is visible to people you interact with in FaithForm." : "This image appears on the group or church profile.")
                         .font(.footnote).foregroundStyle(.secondary)
                     if failed { Text("Could not save your photo. Your crop is ready to try again.").foregroundStyle(.red) }
-                    if working { ProgressView("Saving photo…") }
+                    if working { Text("Saving photo…").accessibilityAddTraits(.updatesFrequently) }
                 }.padding().frame(maxWidth: 480).frame(maxWidth: .infinity)
                     .disabled(working)
             }
-            .navigationTitle("Edit profile photo")
+            .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(working) }
@@ -175,20 +181,75 @@ private struct ProfilePhotoCropper: View {
         reset()
     }
     private func croppedJPEG() -> Data? {
-        renderProfilePhoto(image, zoom: zoom, x: x, y: y)
+        renderProfilePhoto(image, zoom: zoom, x: x, y: y, aspect: aspect)
     }
 }
 
 @MainActor
-func renderProfilePhoto(_ image: UIImage, zoom: CGFloat, x: CGFloat, y: CGFloat) -> Data? {
-    let side: CGFloat = 512
-    let scale = max(side / image.size.width, side / image.size.height) * zoom
+func renderProfilePhoto(_ image: UIImage, zoom: CGFloat, x: CGFloat, y: CGFloat, aspect: CGFloat = 1) -> Data? {
+    let side: CGFloat = aspect == 1 ? 512 : 1280
+    let frameHeight = side / aspect
+    let scale = max(side / image.size.width, frameHeight / image.size.height) * zoom
     let width = image.size.width * scale, height = image.size.height * scale
     let format = UIGraphicsImageRendererFormat(); format.scale = 1; format.opaque = true
-    return UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format).image { _ in
-        UIColor.white.setFill(); UIRectFill(CGRect(x: 0, y: 0, width: side, height: side))
+    return UIGraphicsImageRenderer(size: CGSize(width: side, height: frameHeight), format: format).image { _ in
+        UIColor.white.setFill(); UIRectFill(CGRect(x: 0, y: 0, width: side, height: frameHeight))
         image.draw(in: CGRect(x: (side - width) / 2 + x * (width - side) / 2,
-                              y: (side - height) / 2 + y * (height - side) / 2,
+                              y: (frameHeight - height) / 2 + y * (height - frameHeight) / 2,
                               width: width, height: height))
     }.jpegData(compressionQuality: 0.85)
+}
+
+
+/// Shared group/church picker; cropping and compression happen before upload.
+struct BrandingPhotoControl: View {
+    let title: String
+    let aspect: CGFloat
+    let hasPhoto: Bool
+    let save: (Data?) async -> Bool
+    @State private var selection: PhotosPickerItem?
+    @State private var draft: PhotoDraft?
+    @State private var busy = false
+    @State private var failed = false
+    @State private var confirmRemoval = false
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            PhotosPicker(selection: $selection, matching: .images, preferredItemEncoding: .compatible) {
+                Label(hasPhoto ? "Change \(title)" : "Add \(title)", systemImage: "photo")
+            }.disabled(busy)
+            if hasPhoto { Button("Remove \(title)", role: .destructive) { confirmRemoval = true }.disabled(busy) }
+            if busy { Text("Preparing photo…").font(.footnote) }
+            if failed { Text("The photo was not changed. Please try again.").foregroundStyle(.red) }
+        }
+        .confirmationDialog("Remove \(title)?", isPresented: $confirmRemoval) {
+            Button("Remove photo", role: .destructive) { Task { busy = true; failed = !(await save(nil)); busy = false } }
+        }
+        .task(id: selection) {
+            guard let selection else { return }
+            busy = true; failed = false
+            do {
+                guard let data = try await selection.loadTransferable(type: Data.self), data.count <= 40_000_000 else { throw PhotoFailure.unreadable }
+                let image = try await Task.detached(priority: .userInitiated) { try decodeProfilePhoto(data) }.value
+                try Task.checkCancellation()
+                draft = PhotoDraft(image: image)
+            } catch { if !Task.isCancelled { failed = true } }
+            busy = false; self.selection = nil
+        }
+        .fullScreenCover(item: $draft) { draft in
+            ProfilePhotoCropper(image: draft.image, save: { data in
+                guard data.count <= 1_000_000 else { return false }
+                return await save(data)
+            }, aspect: aspect, circular: false, title: "Edit \(title)")
+        }
+    }
+}
+
+struct BrandingPhotoBody: Encodable, Sendable {
+    let imageBase64: String?
+    enum CodingKeys: String, CodingKey { case imageBase64 }
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        if let imageBase64 { try container.encode(imageBase64, forKey: .imageBase64) }
+        else { try container.encodeNil(forKey: .imageBase64) }
+    }
 }

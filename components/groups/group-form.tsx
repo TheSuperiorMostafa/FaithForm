@@ -1,7 +1,9 @@
 "use client";
+import { ImageCropper } from "@/components/website-admin/image-cropper";
+import { downscaleForUpload } from "@/lib/sites/downscale-image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Upload } from "lucide-react";
+import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { StaffGroupDetail, StaffGroupType } from "@/lib/groups/staff/groups";
 import { saveGroup, uploadCover, removeCover } from "@/app/dashboard/groups/actions";
@@ -32,5 +34,23 @@ export function GroupForm({ types, campuses, detail, close }: Props & { close?: 
 }
 export function CoverEditor({ detail }: { detail: StaffGroupDetail }) {
   const { pending, error, run } = useGroupAction();
-  return <form onSubmit={e => { e.preventDefault(); const data = new FormData(e.currentTarget); run(() => uploadCover(detail.group.id, data), "Cover updated"); }} className="g-panel space-y-4"><h3>Give your group a familiar face</h3><p className="g-row-sub">Choose a photo of your people or meeting place. Images are cropped to a wide cover.</p><Field label="Cover photo" hint="JPG, PNG or WebP, up to 12 MB."><input name="cover" type="file" accept="image/jpeg,image/png,image/webp" required disabled={pending} /></Field>{error && <Notice>{error}</Notice>}<div className="flex flex-wrap gap-3"><Button type="submit" disabled={pending}><Upload className="size-4" />{pending ? "Uploading…" : "Upload cover"}</Button>{detail.group.cover_image_url && <Button variant="ghost" disabled={pending} onClick={() => run(() => removeCover(detail.group.id), "Cover removed")}>Remove cover</Button>}</div></form>;
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [preparing, setPreparing] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
+  return <section className="g-panel space-y-4"><h3>Group photo</h3><p className="g-row-sub">Choose your photo, then position it in the frame.</p>
+    <Field label="Choose a photo" hint="JPG, PNG or WebP, up to 12 MB."><input type="file" accept="image/jpeg,image/png,image/webp" disabled={pending || preparing} onChange={async e => {
+      const file = e.target.files?.[0]; e.target.value = ""; if (!file) return;
+      setPreparing(true); setPhotoError(null);
+      try { if (file.size > 12 * 1024 * 1024) throw new Error("Choose an image under 12 MB."); const prepared = await downscaleForUpload(file); if (prepared.size > 3_400_000) throw new Error("Too large"); setPhoto(prepared); }
+      catch { setPhotoError("This photo could not be prepared. Choose an image under 12 MB."); }
+      finally { setPreparing(false); }
+    }} /></Field>
+    {(error || photoError) && <Notice>{error || photoError}</Notice>}
+    {(pending || preparing) && <p role="status">{preparing ? "Preparing photo…" : "Saving photo…"}</p>}
+    {detail.group.cover_image_url && <Button variant="ghost" disabled={pending} onClick={() => run(() => removeCover(detail.group.id), "Photo removed")}>Remove photo</Button>}
+    {photo && <ImageCropper file={photo} shape={{ label: "Group photo", hint: "Wide cover", ratio: 16 / 9 }} onCancel={() => setPhoto(null)} onConfirm={crop => {
+      const data = new FormData(); data.set("cover", photo); data.set("crop", JSON.stringify(crop)); setPhoto(null);
+      run(() => uploadCover(detail.group.id, data), "Group photo updated");
+    }} />}
+  </section>;
 }

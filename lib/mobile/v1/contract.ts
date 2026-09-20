@@ -249,6 +249,15 @@ export const profilePhotoResultSchema = z.object({
   avatarUrl: url.nullable(),
 }).meta({ id: "ProfilePhotoResult" });
 
+/** Cropped raster image; explicit null removes it. Tenant and owner are never client supplied. */
+export const brandingPhotoRequestSchema = z.object({
+  imageBase64: z.string().min(1).max(1_400_000).nullable(),
+}).strict().meta({ id: "BrandingPhotoRequest" });
+export const brandingPhotoResultSchema = z.object({ url: url.nullable() }).meta({ id: "BrandingPhotoResult" });
+export const churchBrandingStateSchema = z.object({
+  canEdit: z.boolean(), logoUrl: url.nullable(), coverUrl: url.nullable(),
+}).meta({ id: "ChurchBrandingState" });
+
 export const selectChurchRequestSchema = z.object({
   churchSlug: churchSlug.nullable(),
 }).meta({ id: "SelectChurchRequest" });
@@ -1934,6 +1943,9 @@ export const CONTRACT_SCHEMAS = {
   UpdateProfileRequest: updateProfileRequestSchema,
   UpdateProfilePhotoRequest: updateProfilePhotoRequestSchema,
   ProfilePhotoResult: profilePhotoResultSchema,
+  BrandingPhotoRequest: brandingPhotoRequestSchema,
+  BrandingPhotoResult: brandingPhotoResultSchema,
+  ChurchBrandingState: churchBrandingStateSchema,
   SelectChurchRequest: selectChurchRequestSchema,
   ConsentRequest: consentRequestSchema,
   AccountActionRequest: accountActionRequestSchema,

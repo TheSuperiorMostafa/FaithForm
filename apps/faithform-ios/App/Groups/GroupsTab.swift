@@ -29,11 +29,13 @@ struct GroupsTabView: View {
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 18) {
                             if section == "My groups" {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("LIFE TOGETHER").font(.system(size: 10, weight: .bold)).tracking(2).foregroundStyle(theme.palette.brandAccent)
-                                    Text("You belong here.").font(.system(size: 29, weight: .semibold, design: .rounded))
-                                    Text("Familiar faces. Meaningful conversations. A place to grow, together.").font(.subheadline).foregroundStyle(theme.palette.contentSecondary).lineSpacing(3)
-                                }.padding(.vertical, 12)
+                                if model.home?.items.isEmpty == true {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Text("LIFE TOGETHER").font(.system(size: 10, weight: .bold)).tracking(2).foregroundStyle(theme.palette.brandAccent)
+                                        Text("You belong here.").font(.system(size: 29, weight: .semibold, design: .rounded))
+                                        Text("Familiar faces. Meaningful conversations. A place to grow, together.").font(.subheadline).foregroundStyle(theme.palette.contentSecondary).lineSpacing(3)
+                                    }.padding(.vertical, 12)
+                                }
                             } else {
                                 Text("Find your people.").font(.system(size: 28, weight: .semibold, design: .rounded)).padding(.top, 12)
                                 Text("There’s a place for you in this community.").font(.subheadline).foregroundStyle(theme.palette.contentSecondary)
@@ -48,13 +50,18 @@ struct GroupsTabView: View {
                                 }
                             }
                             GroupFeedback(model: model)
-                            if model.loading { ProgressView("Finding your community…").frame(maxWidth: .infinity).padding(40) }
+                            if model.loading {
+                                if section == "My groups" { ConversationListSkeleton() } else { GroupListSkeleton() }
+                            }
                             else if displayed.isEmpty {
                                 GroupEmpty(symbol: "person.3", title: section == "My groups" ? "Your next connection starts here" : "No groups found", message: section == "My groups" ? "Explore groups and find a place that feels like you." : "Try a different name or category.")
                                 if section == "My groups" { Button("Discover groups") { section = "Discover" }.buttonStyle(.borderedProminent).frame(maxWidth: .infinity) }
                             } else {
                                 ForEach(displayed, id: \.id) { group in
-                                    NavigationLink(value: group.id) { GroupCard(group: group) }.buttonStyle(.plain)
+                                    NavigationLink(value: group.id) {
+                                        if section == "My groups" { GroupConversationRow(group: group) }
+                                        else { GroupCard(group: group) }
+                                    }.buttonStyle(.plain)
                                 }
                                 if section == "Discover", model.nextCursor != nil {
                                     Button("Show more groups") { Task { await model.discover(query: query, type: category, more: true) } }.frame(maxWidth: .infinity).disabled(model.loading)
@@ -68,9 +75,14 @@ struct GroupsTabView: View {
             .foregroundStyle(theme.palette.contentPrimary)
             .navigationTitle("Groups")
             .toolbar(.hidden, for: .navigationBar)
-            .navigationDestination(for: String.self) { id in GroupPage(model: model, groupId: id).toolbar(.visible, for: .navigationBar) }
+            .navigationDestination(for: String.self) { id in GroupPage(model: model, groupId: id, initialGroup: (model.home?.items ?? []).first { $0.id == id } ?? model.discovered.first { $0.id == id }).toolbar(.visible, for: .navigationBar) }
             .sheet(isPresented: $preferences) { GroupPreferencesView(model: model) }
             .task { await model.load() }
+            .task(id: model.home?.messagingAvailable) {
+                if model.home?.messagingAvailable == true {
+                    try? await chat.connect(model, theme: theme)
+                }
+            }
             .task(id: "\(section)|\(query)|\(category)") {
                 if section == "Discover" {
                     do { try await Task.sleep(for: .milliseconds(250)); try Task.checkCancellation(); await model.discover(query: query, type: category) } catch {}
@@ -154,5 +166,78 @@ struct GroupPanelView<Content: View>: View {
         }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
             .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 20))
             .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(theme.palette.border, lineWidth: theme.borderWidth))
+    }
+}
+
+
+/// Compact rows put every joined group's conversation within a single tap.
+struct GroupConversationRow: View {
+    let group: GroupSummary
+    @Environment(\.faithformTheme) private var theme
+    var body: some View {
+        HStack(spacing: 14) {
+            GroupCoverView(url: group.coverImageUrl, name: group.name)
+                .frame(width: 56, height: 56)
+                .clipShape(RoundedRectangle(cornerRadius: 18))
+            VStack(alignment: .leading, spacing: 6) {
+                Text(group.name).font(.headline).foregroundStyle(theme.palette.contentPrimary)
+                Text(group.chat == nil ? "\(group.memberCount) members" : "Open conversation · \(group.memberCount) members")
+                    .font(.subheadline).foregroundStyle(theme.palette.contentSecondary)
+                    .lineLimit(2)
+            }
+            Spacer(minLength: 0)
+            Image(systemName: "chevron.right").font(.caption.weight(.semibold))
+                .foregroundStyle(theme.palette.contentSecondary)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 22))
+        .accessibilityElement(children: .combine)
+    }
+}
+
+
+struct GroupSectionHeading: View {
+    let eyebrow: String
+    let title: String
+    let subtitle: String
+    @Environment(\.faithformTheme) private var theme
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Text(eyebrow).font(.caption2.weight(.bold)).tracking(2).foregroundStyle(theme.palette.brandAccent)
+            Text(title).font(theme.font(FaithFormTokens.Text.titleLarge)).foregroundStyle(theme.palette.contentPrimary)
+            Text(subtitle).font(.subheadline).foregroundStyle(theme.palette.contentSecondary).lineSpacing(3)
+        }.frame(maxWidth: .infinity, alignment: .leading).padding(.vertical, 6)
+    }
+}
+
+struct GroupRetryCard: View {
+    let message: String
+    let retry: () -> Void
+    var body: some View {
+        FaithFormCard {
+            VStack(spacing: 16) {
+                GroupEmpty(symbol: "wifi.exclamationmark", title: "Let’s try that again", message: message)
+                Button("Try again", action: retry).buttonStyle(.borderedProminent)
+            }.frame(maxWidth: .infinity).padding(.bottom, 12)
+        }
+    }
+}
+
+struct GroupMemberAvatar: View {
+    let name: String
+    let url: String?
+    @Environment(\.faithformTheme) private var theme
+    var body: some View {
+        ZStack {
+            Circle().fill(theme.palette.surfaceSunken)
+            Text(name.split(separator: " ").prefix(2).compactMap(\.first).map(String.init).joined().uppercased())
+                .font(.headline).foregroundStyle(theme.palette.brandAccent)
+            if let url, let imageURL = URL(string: url) {
+                AsyncImage(url: imageURL) { phase in
+                    if let image = phase.image { image.resizable().scaledToFill() }
+                }
+            }
+        }.frame(width: 48, height: 48).clipShape(Circle()).accessibilityHidden(true)
     }
 }

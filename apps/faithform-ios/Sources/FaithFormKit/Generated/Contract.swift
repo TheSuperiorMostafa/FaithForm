@@ -1642,6 +1642,48 @@ public struct ProfilePhotoResult: Codable, Hashable, Sendable {
 
 /// Unknown additive fields are ignored by Codable, which is what lets a
 /// released client keep working when the server adds one.
+public struct BrandingPhotoRequest: Codable, Hashable, Sendable {
+    public let imageBase64: String?
+
+    public init(
+        imageBase64: String? = nil
+    ) {
+        self.imageBase64 = imageBase64
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct BrandingPhotoResult: Codable, Hashable, Sendable {
+    public let url: String?
+
+    public init(
+        url: String? = nil
+    ) {
+        self.url = url
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct ChurchBrandingState: Codable, Hashable, Sendable {
+    public let canEdit: Bool
+    public let logoUrl: String?
+    public let coverUrl: String?
+
+    public init(
+        canEdit: Bool,
+        logoUrl: String? = nil,
+        coverUrl: String? = nil
+    ) {
+        self.canEdit = canEdit
+        self.logoUrl = logoUrl
+        self.coverUrl = coverUrl
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
 public struct SelectChurchRequest: Codable, Hashable, Sendable {
     public let churchSlug: String?
 

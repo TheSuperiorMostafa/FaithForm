@@ -953,3 +953,23 @@ test("the church summary counts what it says it counts", suiteOptions, async () 
     assert.equal(byMember.get(people[2].member_id)?.expected, 1);
   });
 });
+
+test("branding storage rejects client writes and active group lookup has a covering index", suiteOptions, async () => {
+  await withChurch(async (client, church) => {
+    const account = await appAccount(client, church.id, { state: "joined" });
+    const bucket = await one<{ public: boolean; file_size_limit: string; allowed_mime_types: string[] }>(client,
+      "select public, file_size_limit, allowed_mime_types from storage.buckets where id = 'branding-images'");
+    assert.equal(bucket.public, true);
+    assert.deepEqual(bucket.allowed_mime_types, ["image/jpeg", "image/png"]);
+    assert.equal(await asUser(client, account.userId, () => refused(client,
+      "insert into storage.objects (bucket_id, name) values ('branding-images', $1)", [`${church.id}/church/forged.jpg`]
+    )), true);
+    const indexes = await client.query("select indexdef from pg_indexes where schemaname = 'public' and indexname in ('group_memberships_church_account_active_idx', 'group_memberships_church_member_active_idx')");
+    assert.equal(indexes.rows.length, 2);
+    for (const row of indexes.rows) assert.match(String(row.indexdef), /INCLUDE \(group_id\).*status = 'active'/);
+    await client.query("set enable_seqscan = off");
+    const plan = await client.query("explain (format json) select group_id from public.group_memberships where church_id = $1 and account_id = $2 and status = 'active'", [church.id, account.accountId]);
+    assert.match(JSON.stringify(plan.rows), /group_memberships_church_account_active_idx/);
+    await client.query("reset enable_seqscan");
+  });
+});

@@ -1,3 +1,4 @@
+import { ChurchBrandingImages } from "@/components/settings/church-branding-images";
 import { SettingsTabs } from "@/components/settings/settings-tabs";
 import { getGivingFundsForSettings } from "@/app/dashboard/settings/giving-actions";
 import { listCommunicationAttachments } from "@/lib/announcements/attachments";
@@ -55,6 +56,8 @@ export default async function SettingsPage() {
       usesFeaturePermissionsColumn(),
     ]);
 
+  const { data: branding } = auth.isAdmin ? await supabase.from("churches").select("logo_url, cover_image_url").eq("id", auth.churchId).maybeSingle() : { data: null };
+
   const featureFlags = featureAccess?.flags ?? defaultFeatureFlags();
 
   // Grantable features are the ones the account has switched on.
@@ -71,6 +74,8 @@ export default async function SettingsPage() {
           church.
         </p>
       </div>
+
+      {auth.isAdmin && <ChurchBrandingImages logoUrl={branding?.logo_url ?? null} coverUrl={branding?.cover_image_url ?? null} />}
 
       <SettingsTabs
         isAdmin={auth.isAdmin}

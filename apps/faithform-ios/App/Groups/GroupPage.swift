@@ -4,25 +4,54 @@ import FaithFormKit
 struct GroupPage: View {
     @Bindable var model: GroupsModel
     let groupId: String
+    private let initialGroup: GroupSummary?
     @Environment(\.faithformTheme) private var theme
     @Environment(\.dismiss) private var dismiss
     @State private var detail: GroupDetail?
-    @State private var section = "Overview"
+    @State private var section = ""
     @State private var confirmLeave = false
     @State private var joinMessage = ""
     @State private var asking = false
     @State private var invite: String?
     @State private var preferences = false
     @State private var editing = false
+    init(model: GroupsModel, groupId: String, initialGroup: GroupSummary? = nil) {
+        self.model = model
+        self.groupId = groupId
+        self.initialGroup = initialGroup
+        _section = State(initialValue: initialGroup.map(Self.initialSection(for:)) ?? "")
+    }
+    private var conversationGroup: GroupSummary? { detail?.group ?? initialGroup }
     var body: some View {
         Group {
-            if let detail {
+            if section == "Chat", let group = conversationGroup, let chat = group.chat {
+                GroupConversationView(model: model, cid: chat.cid, title: group.name, readOnly: chat.state != "ready" || (chat.postingPolicy == "leaders" && group.groupRole == "member"))
+                    .toolbar {
+                        ToolbarItem(placement: .principal) {
+                            Button { section = "Overview" } label: {
+                                VStack(spacing: 2) {
+                                    HStack(spacing: 5) {
+                                        Text(group.name).font(.headline).lineLimit(1)
+                                        Image(systemName: "chevron.right").font(.caption2.weight(.semibold))
+                                    }
+                                    Text("\(group.memberCount) members · Group info")
+                                        .font(.caption2).foregroundStyle(theme.palette.contentSecondary)
+                                }
+                                .foregroundStyle(theme.palette.contentPrimary)
+                                .frame(minHeight: 44)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("\(group.name), group info")
+                            .accessibilityHint("Opens the overview, events and members")
+                            .accessibilityIdentifier("group-info-header")
+                        }
+                    }
+            } else if let detail {
                 VStack(spacing: 0) {
                     FaithFormPillSwitcher(selection: $section, options: groupSections(detail).map { .init($0, title: $0) }, accessibilityLabel: "Group section")
                         .padding(.horizontal, 20).padding(.vertical, 12)
-                    if section == "Chat", let chat = detail.group.chat {
-                        GroupConversationView(model: model, cid: chat.cid, title: detail.group.name, readOnly: chat.state != "ready" || (chat.postingPolicy == "leaders" && detail.group.groupRole == "member"))
-                    } else if section == "Members" {
+                    if section == "Members" {
                         GroupMembersView(model: model, detail: detail)
                     } else if section == "Events" {
                         GroupEventsView(model: model, detail: detail)
@@ -60,20 +89,21 @@ struct GroupPage: View {
                     }
                 }
             } else if model.error != nil { VStack { GroupFeedback(model: model); Button("Try again") { Task { await load() } } }.padding() }
-            else { ProgressView("Opening your group…") }
+            else { ScrollView { GroupDetailSkeleton().padding(20) } }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(theme.palette.background)
             .foregroundStyle(theme.palette.contentPrimary)
-        .navigationTitle(detail?.group.name ?? "Group").navigationBarTitleDisplayMode(.inline)
-        .toolbar { ToolbarItem(placement: .topBarTrailing) { if detail?.group.membershipState == "member" { Button { preferences = true } label: { Image(systemName: "bell") }.accessibilityLabel("Group notifications") } } }
+        .navigationTitle(conversationGroup?.name ?? "Group").navigationBarTitleDisplayMode(.inline)
+        .toolbar { ToolbarItem(placement: .topBarTrailing) { if section != "Chat" && detail?.group.membershipState == "member" { Button { preferences = true } label: { Image(systemName: "bell") }.accessibilityLabel("Group notifications") } } }
         .sheet(isPresented: $editing) { if let detail { GroupEditView(model: model, detail: detail) { Task { await load() } } } }
         .sheet(isPresented: $preferences) { GroupPreferencesView(model: model, groupId: groupId) }
-        .task { await load() }
+        .task(id: section) { if detail == nil && section != "Chat" { await load() } }
         .confirmationDialog("Leave this group?", isPresented: $confirmLeave, titleVisibility: .visible) { Button("Leave group", role: .destructive) { Task { if let group = detail?.group, await model.changeMembership(group) { dismiss() } } } } message: { Text("You will lose access to this group’s conversation. You can ask to join again later.") }
         .sheet(isPresented: $asking) { NavigationStack { Form { Section("Say hello (optional)") { TextField("What brings you to this group?", text: $joinMessage, axis: .vertical).lineLimit(3...5) }; GroupFeedback(model: model); Button("Send request") { Task { if let group = detail?.group, await model.changeMembership(group, message: joinMessage) { asking = false; await load() } } }.disabled(model.busy) }.navigationTitle("Ask to join").toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { asking = false } } } } }
     }
     private func groupSections(_ detail: GroupDetail) -> [String] {
-        ["Overview"] + (detail.group.chat != nil ? ["Chat"] : []) + ["Events"] + (detail.capabilities.canViewMembers ? ["Members"] : [])
+        (detail.group.chat != nil ? ["Chat"] : []) + ["Overview"] + ["Events"] + (detail.capabilities.canViewMembers ? ["Members"] : [])
     }
     @ViewBuilder private func membershipButton(_ group: GroupSummary) -> some View {
         switch group.joinAction {
@@ -84,8 +114,18 @@ struct GroupPage: View {
         default: Text(group.joinAction == "full" ? "This group is currently full." : group.joinAction == "invitation_required" ? "Ask a leader for an invitation to join." : "This group isn’t accepting members right now.").font(.subheadline).foregroundStyle(.secondary)
         }
     }
+    static func initialSection(for group: GroupSummary) -> String {
+        group.membershipState == "member" && group.chat != nil ? "Chat" : "Overview"
+    }
     private func load() async {
-        do { detail = try await model.read("\(model.path)/\(groupId)", as: GroupDetail.self) }
+        do {
+            let value = try await model.read("\(model.path)/\(groupId)", as: GroupDetail.self)
+            try Task.checkCancellation()
+            if section.isEmpty || !groupSections(value).contains(section) {
+                section = Self.initialSection(for: value.group)
+            }
+            detail = value
+        }
         catch is CancellationError {} catch { detail = nil; model.error = GroupsModel.message(error) }
     }
     private func makeInvite() async {

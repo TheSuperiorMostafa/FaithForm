@@ -70,9 +70,9 @@ export async function normalizeSiteImage(
   const maxEdge = options.maxEdge ?? 2400;
 
   try {
-    const metadata = await sharp(buffer, { failOn: "error" }).metadata();
+    const metadata = await sharp(buffer, { failOn: "error", limitInputPixels: 40_000_000 }).metadata();
     if (!metadata.width || !metadata.height) return null;
-    if (!metadata.format || !READABLE_FORMATS.has(metadata.format)) return null;
+    if (!metadata.format || !READABLE_FORMATS.has(metadata.format) || (metadata.pages ?? 1) > 1) return null;
 
     let pipeline = sharp(buffer).rotate();
 

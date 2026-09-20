@@ -1054,6 +1054,35 @@ data class ProfilePhotoResult(
  * which is what lets a released client keep working when the server adds one.
  */
 @Serializable
+data class BrandingPhotoRequest(
+    val imageBase64: String? = null
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class BrandingPhotoResult(
+    val url: String? = null
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class ChurchBrandingState(
+    val canEdit: Boolean,
+    val logoUrl: String? = null,
+    val coverUrl: String? = null
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
 data class SelectChurchRequest(
     val churchSlug: String? = null
 )

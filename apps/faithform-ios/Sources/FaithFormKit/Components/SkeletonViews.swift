@@ -592,3 +592,189 @@ public struct SlideSkeleton: View {
         .skeletonAccessible()
     }
 }
+
+/// Mirrors the group section picker, cover, and overview details.
+public struct GroupDetailSkeleton: View {
+    public init() {}
+
+    public var body: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            HStack(spacing: 8) {
+                ForEach(0..<3, id: \.self) { _ in
+                    SkeletonBone(height: 40, cornerRadius: FaithFormTokens.Radius.pill)
+                }
+            }
+            SkeletonBone(height: 190, cornerRadius: 22)
+            SkeletonBone(height: 24, widthFraction: 0.3)
+            SkeletonBone(height: 34, widthFraction: 0.75)
+            SkeletonBone(height: 16, widthFraction: 0.35)
+            VStack(spacing: 8) {
+                SkeletonBone(height: 16)
+                SkeletonBone(height: 16, widthFraction: 0.92)
+                SkeletonBone(height: 16, widthFraction: 0.64)
+            }
+            FaithFormCard {
+                VStack(alignment: .leading, spacing: 16) {
+                    SkeletonBone(height: 20, widthFraction: 0.45)
+                    SkeletonBone(height: 16, widthFraction: 0.8)
+                    SkeletonBone(height: 16, widthFraction: 0.6)
+                }
+            }
+        }
+        .skeletonShimmer()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Loading your group")
+    }
+}
+
+/// A full-height conversation with message bubbles and a bottom composer.
+public struct ConversationSkeleton: View {
+    public init() {}
+
+    public var body: some View {
+        VStack(spacing: 16) {
+            ViewThatFits(in: .vertical) {
+                bubbles
+                SkeletonBone(height: 54, widthFraction: 0.65)
+            }
+            Spacer(minLength: 0)
+            HStack(spacing: 12) {
+                SkeletonAvatar(size: 36)
+                SkeletonBone(height: 44, cornerRadius: FaithFormTokens.Radius.pill)
+            }
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .skeletonShimmer()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Loading your conversation")
+    }
+
+    private var bubbles: some View {
+        VStack(spacing: 18) {
+            ForEach(0..<4, id: \.self) { index in
+                SkeletonBone(
+                    height: index.isMultiple(of: 2) ? 64 : 44,
+                    widthFraction: index.isMultiple(of: 2) ? 0.76 : 0.58,
+                    cornerRadius: 18,
+                    alignment: index.isMultiple(of: 2) ? .leading : .trailing
+                )
+            }
+        }
+    }
+}
+
+
+public struct ConversationListSkeleton: View {
+    public init() {}
+
+    public var body: some View {
+        VStack(spacing: 24) {
+            ForEach(0..<5, id: \.self) { _ in
+                HStack(spacing: 12) {
+                    SkeletonAvatar(size: 48)
+                    VStack(alignment: .leading, spacing: 8) {
+                        SkeletonBone(height: 18, widthFraction: 0.55)
+                        SkeletonBone(height: 14, widthFraction: 0.9)
+                    }
+                }
+            }
+        }
+        .skeletonShimmer()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Loading your messages")
+    }
+}
+
+
+public struct GroupListSkeleton: View {
+    @Environment(\.faithformTheme) private var theme
+    public init() {}
+
+    public var body: some View {
+        VStack(spacing: 18) {
+            ForEach(0..<3, id: \.self) { _ in
+                VStack(spacing: 0) {
+                    SkeletonBone(height: 144, cornerRadius: 0)
+                    VStack(alignment: .leading, spacing: 12) {
+                        SkeletonBone(height: 14, widthFraction: 0.3)
+                        SkeletonBone(height: 22, widthFraction: 0.7)
+                        SkeletonBone(height: 14, widthFraction: 0.4)
+                        SkeletonBone(height: 14, widthFraction: 0.6)
+                    }
+                    .padding(18)
+                }
+                .background(theme.palette.surface)
+                .clipShape(RoundedRectangle(cornerRadius: 22))
+            }
+        }
+        .skeletonShimmer()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Loading your groups")
+    }
+}
+
+public struct GroupPeopleSkeleton: View {
+    public init() {}
+    public var body: some View {
+        GroupRowsSkeleton(label: "Loading people", avatar: true, rowHeight: 44, count: 6)
+    }
+}
+
+public struct GroupEventsSkeleton: View {
+    public init() {}
+    public var body: some View {
+        GroupRowsSkeleton(label: "Loading gatherings", avatar: false, rowHeight: 60, count: 4)
+    }
+}
+
+public struct GroupPreferencesSkeleton: View {
+    public init() {}
+    public var body: some View {
+        VStack(spacing: 10) {
+            ForEach(0..<4, id: \.self) { _ in
+                FaithFormCard {
+                    HStack(spacing: 14) {
+                        SkeletonAvatar(size: 28)
+                        VStack(alignment: .leading, spacing: 8) {
+                            SkeletonBone(height: 18, widthFraction: 0.55)
+                            SkeletonBone(height: 14, widthFraction: 0.85)
+                        }
+                        SkeletonAvatar(size: 22)
+                    }
+                    .frame(minHeight: 44)
+                }
+            }
+            SkeletonBone(height: 52, cornerRadius: FaithFormTokens.Radius.pill)
+        }
+        .skeletonShimmer()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Loading notification preferences")
+    }
+}
+
+private struct GroupRowsSkeleton: View {
+    let label: String
+    let avatar: Bool
+    let rowHeight: CGFloat
+    let count: Int
+    var body: some View {
+        VStack(spacing: 24) {
+            ForEach(0..<count, id: \.self) { _ in
+                HStack(spacing: 14) {
+                    if avatar { SkeletonAvatar(size: rowHeight) }
+                    else { SkeletonBone(height: rowHeight, cornerRadius: 14).frame(width: rowHeight) }
+                    VStack(alignment: .leading, spacing: 8) {
+                        SkeletonBone(height: 18, widthFraction: 0.65)
+                        SkeletonBone(height: 14, widthFraction: 0.45)
+                        if !avatar { SkeletonBone(height: 12, widthFraction: 0.3) }
+                    }
+                }
+            }
+        }
+        .padding(.vertical, 12)
+        .skeletonShimmer()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(label)
+    }
+}

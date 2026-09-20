@@ -100,6 +100,8 @@ struct ChurchProfileHostView: View {
 
     @State private var model: ChurchProfileModel
     @State private var invitationShown = false
+    @State private var branding: ChurchBrandingState?
+    @State private var editingImages = false
 
     init(
         slug: String,
@@ -136,6 +138,23 @@ struct ChurchProfileHostView: View {
             onChangeChurch: onChangeChurch,
             onAcceptInvitation: { invitationShown = true }
         )
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                if branding?.canEdit == true {
+                    Button { editingImages = true } label: { Image(systemName: "photo.badge.plus") }
+                        .accessibilityLabel("Edit church images")
+                }
+            }
+        }
+        .sheet(isPresented: $editingImages, onDismiss: { Task {
+            branding = try? await dependencies.api.send("api/mobile/v1/churches/\(slug)/branding", as: ChurchBrandingState.self).value
+            await model.refresh(slug: slug)
+        } }) {
+            if let branding { ChurchImagesEditor(api: dependencies.api, slug: slug, initial: branding) }
+        }
+        .task(id: slug) {
+            branding = try? await dependencies.api.send("api/mobile/v1/churches/\(slug)/branding", as: ChurchBrandingState.self).value
+        }
         .task {
             let accountId = await dependencies.session.currentSession()?.accountId
             await model.load(
@@ -259,5 +278,50 @@ struct OnboardingFlowView: View {
                 path = [.invitation]
             }
         }
+    }
+}
+
+
+struct ChurchImagesEditor: View {
+    let api: APIClient
+    let slug: String
+    @Environment(\.dismiss) private var dismiss
+    @State private var logo: String?
+    @State private var cover: String?
+    @State private var busy = false
+    @State private var message: String?
+    init(api: APIClient, slug: String, initial: ChurchBrandingState) {
+        self.api = api; self.slug = slug
+        _logo = State(initialValue: initial.logoUrl)
+        _cover = State(initialValue: initial.coverUrl)
+    }
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Church logo") {
+                    if let logo, let url = URL(string: logo) { AsyncImage(url: url) { image in image.resizable().scaledToFit() } placeholder: { Color.clear }.frame(height: 100) }
+                    BrandingPhotoControl(title: "church logo", aspect: 1, hasPhoto: logo != nil) { await save($0, kind: "logo") }
+                }
+                Section("Church cover") {
+                    GroupCoverView(url: cover, name: "Church").frame(height: 160).clipped()
+                    BrandingPhotoControl(title: "church cover", aspect: 16 / 9, hasPhoto: cover != nil) { await save($0, kind: "cover") }
+                }
+                if let message { Text(message).foregroundStyle(.secondary) }
+            }
+            .disabled(busy)
+            .navigationTitle("Church images")
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() }.disabled(busy) } }
+
+        }
+    }
+    private func save(_ data: Data?, kind: String) async -> Bool {
+        busy = true; message = nil; defer { busy = false }
+        do {
+            let result = try await api.send("api/mobile/v1/churches/\(slug)/branding", method: .put, body: BrandingPhotoBody(imageBase64: data?.base64EncodedString()), query: ["kind": kind], as: BrandingPhotoResult.self)
+            guard let value = result.value else { return false }
+            if kind == "logo" { logo = value.url } else { cover = value.url }
+            message = "Image saved."
+            return true
+        } catch { message = GroupsModel.message(error); return false }
     }
 }

@@ -15,7 +15,11 @@ struct GroupEditView: View {
     @State private var meetingUrl: String
     @State private var posting: String
     @State private var roster: String
+    @State private var photoURL: String?
+    @State private var version: Int
     init(model: GroupsModel, detail: GroupDetail, saved: @escaping () -> Void) {
+        _photoURL = State(initialValue: detail.group.coverImageUrl)
+        _version = State(initialValue: detail.group.version)
         self.model = model; self.detail = detail; self.saved = saved
         _name = State(initialValue: detail.group.name); _description = State(initialValue: detail.description ?? "")
         _enrollment = State(initialValue: detail.group.enrollment); _capacity = State(initialValue: detail.group.capacity.map(String.init) ?? "")
@@ -25,6 +29,19 @@ struct GroupEditView: View {
     }
     var body: some View {
         NavigationStack { Form {
+            Section("Group photo") {
+                GroupCoverView(url: photoURL, name: name).frame(height: 160).clipped()
+                BrandingPhotoControl(title: "group photo", aspect: 16 / 9, hasPhoto: photoURL != nil) { data in
+                    await model.perform("Group photo saved.") {
+                        let result = try await model.send("\(model.path)/\(detail.group.id)/photo", method: .put, body: BrandingPhotoBody(imageBase64: data?.base64EncodedString()), as: BrandingPhotoResult.self)
+                        photoURL = result.url
+                        let latest = try await model.read("\(model.path)/\(detail.group.id)", as: GroupDetail.self)
+                        version = latest.group.version
+                        saved()
+                        await model.load()
+                    }
+                }.disabled(model.busy)
+            }
             Section("Make people feel welcome") { TextField("Group name", text: $name); TextField("What’s your group about?", text: $description, axis: .vertical).lineLimit(3...8) }
             Section("Joining your group") {
                 Picker("Who can join?", selection: $enrollment) { Text("Anyone can join").tag("open"); Text("Leader approval").tag("approval_required"); Text("By invitation").tag("invitation_only"); Text("Closed for now").tag("closed") }
@@ -41,7 +58,7 @@ struct GroupEditView: View {
             ToolbarItem(placement: .confirmationAction) { Button(model.busy ? "Saving…" : "Save") { Task {
                 guard capacity.isEmpty || (Int(capacity).map { $0 > 0 } == true) else { model.error = "Enter a valid member limit or leave it blank."; return }
                 if await model.perform("Group details saved.", operation: {
-                    _ = try await model.send("\(model.path)/\(detail.group.id)", method: .patch, body: GroupEditBody(value: UpdateGroupDetailsRequest(expectedVersion: detail.group.version, name: name, description: description, enrollment: enrollment, capacity: Int(capacity), locationName: location, locationAddress: address, onlineMeetingUrl: meetingUrl, chatPosting: posting, memberListVisibility: roster)), as: GroupDetail.self)
+                    _ = try await model.send("\(model.path)/\(detail.group.id)", method: .patch, body: GroupEditBody(value: UpdateGroupDetailsRequest(expectedVersion: version, name: name, description: description, enrollment: enrollment, capacity: Int(capacity), locationName: location, locationAddress: address, onlineMeetingUrl: meetingUrl, chatPosting: posting, memberListVisibility: roster)), as: GroupDetail.self)
                 }) { saved(); dismiss() }
             } }.disabled(model.busy || name.trimmingCharacters(in: .whitespaces).isEmpty) }
         } }

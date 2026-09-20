@@ -57,6 +57,7 @@ const BUCKETS = [
   { name: "stream-recordings", public: false },
   { name: "church-logos", public: true },
   { name: "church-covers", public: true },
+  { name: "branding-images", public: true, fileSizeLimit: 12582912, allowedMimeTypes: ["image/jpeg", "image/png"] },
   { name: "social-graphics", public: true },
   // Church-uploaded sermon slide backgrounds. Public so PPTX export and the
   // theme picker can read the image without signing every URL.
@@ -84,6 +85,7 @@ for (const bucket of BUCKETS) {
 
   const { error } = await supabase.storage.createBucket(bucket.name, {
     public: bucket.public,
+    ...(bucket.fileSizeLimit ? { fileSizeLimit: bucket.fileSizeLimit, allowedMimeTypes: bucket.allowedMimeTypes } : {}),
   });
 
   if (error) {
