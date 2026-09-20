@@ -9,6 +9,7 @@ import {
   ChevronDown,
   ExternalLink,
   Globe,
+  Send,
   Loader2,
   MoreHorizontal,
   Scissors,
@@ -357,9 +358,9 @@ export function RecordingReview({
           ) : null}
 
           {canEdit && thumbnails.length > 0 ? (
-            <section className="flex flex-col gap-3">
+            <section className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-5 shadow-card sm:p-6">
               <div>
-                <h3 className="font-semibold">Thumbnail</h3>
+                <h3 className="font-heading font-semibold">Cover image</h3>
                 <p className="text-sm text-muted-foreground">Chosen automatically. Pick another if you like.</p>
               </div>
               <div role="radiogroup" aria-label="Thumbnail" className="grid grid-cols-3 gap-2 sm:grid-cols-4">
@@ -392,8 +393,12 @@ export function RecordingReview({
         </div>
 
         <div className="flex flex-col gap-5">
-          <fieldset disabled={!canEdit || pending} className="flex flex-col gap-4">
-            <legend className="sr-only">Details</legend>
+          <fieldset disabled={!canEdit || pending} className="flex min-w-0 flex-col gap-5 rounded-2xl border border-border bg-card p-5 shadow-card sm:p-6">
+            <legend className="sr-only">Recording details</legend>
+            <div>
+              <h3 className="font-heading text-lg font-semibold">Recording details</h3>
+              <p className="mt-1 text-sm leading-relaxed text-muted-foreground">Give your congregation a little context before they watch.</p>
+            </div>
             <Field id="rec-title" label="Title">
               <Input id="rec-title" value={title} onChange={(event) => setTitle(event.target.value)} maxLength={200} />
             </Field>
@@ -430,6 +435,8 @@ export function RecordingReview({
             <Field id="rec-description" label="Description" optional>
               <Textarea
                 id="rec-description"
+                placeholder="What was this service about?"
+                className="min-h-28 resize-y"
                 value={description}
                 onChange={(event) => setDescription(event.target.value)}
                 rows={3}
@@ -438,13 +445,21 @@ export function RecordingReview({
             </Field>
           </fieldset>
 
-          <section className="flex flex-col gap-3 rounded-2xl border border-border p-4">
-            <h3 className="font-semibold">{published ? "Published" : "Visible in"}</h3>
+          <section className="flex flex-col gap-5 rounded-2xl border border-border bg-card p-5 shadow-card sm:p-6">
+            <div className="flex items-start gap-3">
+              <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent">
+                <Send className="size-5" strokeWidth={1.75} aria-hidden />
+              </span>
+              <div>
+                <h3 className="font-heading text-lg font-semibold">{published ? "Publishing settings" : "Share your service"}</h3>
+                <p className="mt-1 text-sm leading-relaxed text-muted-foreground">Choose where your congregation can watch.</p>
+              </div>
+            </div>
             {published ? (
               <ul className="flex flex-col gap-1.5 text-sm">
                 {recording.app.published ? (
                   <li className="inline-flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
-                    <CheckCircle2 className="size-4" aria-hidden /> Faithful app
+                    <CheckCircle2 className="size-4" aria-hidden /> FaithForm app
                   </li>
                 ) : null}
                 {recording.website.published ? (
@@ -463,7 +478,8 @@ export function RecordingReview({
                 onChange={setToApp}
                 disabled={recording.app.published}
                 icon={<Smartphone className="size-4" aria-hidden />}
-                label="Faithful app"
+                label="FaithForm app"
+                hint="Watch from your church’s home in the app."
               />
               <Check
                 checked={toWebsite}
@@ -471,6 +487,7 @@ export function RecordingReview({
                 disabled={recording.website.published}
                 icon={<Globe className="size-4" aria-hidden />}
                 label="Church website"
+                hint="Make the recording available on the web."
               />
             </fieldset>
 
@@ -478,9 +495,9 @@ export function RecordingReview({
               type="button"
               onClick={() => setMoreOpen((open) => !open)}
               aria-expanded={moreOpen}
-              className="inline-flex w-fit items-center gap-1 text-sm font-medium text-primary underline-offset-4 hover:underline dark:text-accent"
+              className="flex w-full items-center justify-between gap-3 rounded-lg px-1 py-2 text-sm font-medium text-foreground transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              More options
+              Audience & more options
               <ChevronDown className={cn("size-4 transition-transform", moreOpen && "rotate-180")} aria-hidden />
             </button>
             {moreOpen ? (
@@ -530,7 +547,7 @@ export function RecordingReview({
             ) : null}
 
             {isAdmin ? (
-              <div className="flex flex-col gap-2 pt-2">
+              <div className="flex flex-col gap-3 border-t border-border pt-5">
                 {!published ||
                 (toApp && !recording.app.published) ||
                 (toWebsite && !recording.website.published) ||
@@ -539,9 +556,9 @@ export function RecordingReview({
                     size="lg"
                     onClick={publish}
                     disabled={pending || !recording.canPublish || (!toApp && !toWebsite)}
-                    className="gap-2"
+                    className="w-full gap-2"
                   >
-                    {pending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+                    {pending ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <Send className="size-4" aria-hidden />}
                     {published ? "Update publishing" : "Publish"}
                   </Button>
                 ) : dirty || poster !== (recording.chosenPosterUrl ?? recording.autoPosterUrl ?? null) ? (
@@ -599,7 +616,7 @@ export function RecordingReview({
           <DialogHeader>
             <DialogTitle>Unpublish this recording?</DialogTitle>
             <DialogDescription>
-              It will be removed from the Faithful app and your website. The recording itself stays saved, and you can
+              It will be removed from the FaithForm app and your website. The recording itself stays saved, and you can
               publish it again any time.
             </DialogDescription>
           </DialogHeader>
@@ -676,20 +693,29 @@ function Check({
   disabled?: boolean;
 }) {
   return (
-    <label className="flex cursor-pointer items-start gap-3 rounded-lg py-1">
+    <label className={cn(
+      "relative flex cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors focus-within:ring-2 focus-within:ring-ring has-[:disabled]:cursor-default has-[:disabled]:opacity-60",
+      checked ? "border-accent/60 bg-accent/5" : "border-border bg-background hover:border-accent/40",
+    )}>
       <input
         type="checkbox"
         checked={checked}
         disabled={disabled}
         onChange={(event) => onChange(event.target.checked)}
-        className="mt-0.5 size-5 shrink-0 accent-[var(--accent)]"
+        className="peer sr-only"
       />
-      <span className="flex flex-col">
+      <span aria-hidden className={cn(
+        "mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-md border transition-colors",
+        checked ? "border-accent bg-accent text-accent-foreground" : "border-muted-foreground/40 bg-card",
+      )}>
+        {checked ? <CheckCircle2 className="size-3.5" /> : null}
+      </span>
+      <span className="flex min-w-0 flex-col gap-1">
         <span className="inline-flex items-center gap-2 text-sm font-medium">
           {icon}
           {label}
         </span>
-        {hint ? <span className="text-xs text-muted-foreground">{hint}</span> : null}
+        {hint ? <span className="text-xs leading-relaxed text-muted-foreground">{hint}</span> : null}
       </span>
     </label>
   );
