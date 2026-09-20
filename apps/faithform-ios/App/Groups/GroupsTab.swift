@@ -14,8 +14,15 @@ struct GroupsTabView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                Picker("Groups section", selection: $section) { ForEach(sections, id: \.self) { Text($0).tag($0) } }
-                    .pickerStyle(.segmented).padding(.horizontal, 20).padding(.bottom, 14)
+                HStack {
+                    Text("Groups").font(theme.font(FaithFormTokens.Text.titleMedium))
+                    Spacer()
+                    Button { preferences = true } label: {
+                        Image(systemName: "bell").font(.title3).frame(width: 44, height: 44)
+                    }.accessibilityLabel("Messaging preferences")
+                }.foregroundStyle(theme.palette.contentPrimary).padding(.horizontal, 20)
+                FaithFormPillSwitcher(selection: $section, options: sections.map { .init($0, title: $0) }, accessibilityLabel: "Groups section")
+                    .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 14)
                 if section == "Messages" {
                     GroupMessagesView(model: model)
                 } else {
@@ -30,7 +37,7 @@ struct GroupsTabView: View {
                             } else {
                                 Text("Find your people.").font(.system(size: 28, weight: .semibold, design: .rounded)).padding(.top, 12)
                                 Text("There’s a place for you in this community.").font(.subheadline).foregroundStyle(theme.palette.contentSecondary)
-                                TextField("Search for a group…", text: $query).textFieldStyle(.roundedBorder).accessibilityLabel("Search groups")
+                                FaithFormSearchField(placeholder: "Search groups", text: $query, onSubmit: {})
                                 if let filters = model.filters, !filters.types.isEmpty {
                                     ScrollView(.horizontal, showsIndicators: false) {
                                         HStack {
@@ -58,9 +65,10 @@ struct GroupsTabView: View {
                 }
             }
             .background(theme.palette.background)
+            .foregroundStyle(theme.palette.contentPrimary)
             .navigationTitle("Groups")
-            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button { preferences = true } label: { Image(systemName: "slider.horizontal.3") }.accessibilityLabel("Messaging preferences") } }
-            .navigationDestination(for: String.self) { id in GroupPage(model: model, groupId: id) }
+            .toolbar(.hidden, for: .navigationBar)
+            .navigationDestination(for: String.self) { id in GroupPage(model: model, groupId: id).toolbar(.visible, for: .navigationBar) }
             .sheet(isPresented: $preferences) { GroupPreferencesView(model: model) }
             .task { await model.load() }
             .task(id: "\(section)|\(query)|\(category)") {
@@ -73,7 +81,7 @@ struct GroupsTabView: View {
     }
     private var displayed: [GroupSummary] { section == "Discover" ? model.discovered : model.home?.items ?? [] }
     private func refresh() async { await model.load(); if section == "Discover" { await model.discover(query: query, type: category) } }
-    private func groupFilter(_ title: String, id: String) -> some View { Button(title) { category = id }.font(.caption.weight(.semibold)).padding(.horizontal, 14).padding(.vertical, 9).background(category == id ? theme.palette.brandAccent.opacity(0.18) : theme.palette.surface, in: Capsule()).foregroundStyle(theme.palette.contentPrimary) }
+    private func groupFilter(_ title: String, id: String) -> some View { Button(title) { category = id }.font(.caption.weight(.semibold)).padding(.horizontal, 14).frame(minHeight: 44).background(category == id ? theme.palette.brandAccent : theme.palette.surfaceSunken, in: Capsule()).foregroundStyle(category == id ? theme.palette.contentOnAccent : theme.palette.contentSecondary).accessibilityAddTraits(category == id ? .isSelected : []) }
 }
 
 struct GroupCard: View {
@@ -88,6 +96,7 @@ struct GroupCard: View {
                     Spacer()
                     if group.membershipState == "requested" { GroupBadge(text: "Request sent") }
                     else if group.status == "archived" { GroupBadge(text: "Archived") }
+                    else if group.membershipState == "member" { GroupBadge(text: "Your group") }
                     else if group.isYouth { GroupBadge(text: "Youth group") }
                     else if group.enrollment == "open" { GroupBadge(text: "Open to join") }
                 }
@@ -113,7 +122,8 @@ struct GroupCoverView: View {
 }
 struct GroupBadge: View {
     let text: String
-    var body: some View { Text(text).font(.system(size: 10, weight: .semibold)).padding(.horizontal, 9).padding(.vertical, 5).background(Color.primary.opacity(0.05), in: Capsule()) }
+    @Environment(\.faithformTheme) private var theme
+    var body: some View { Text(text).font(.caption2.weight(.semibold)).foregroundStyle(theme.palette.contentSecondary).padding(.horizontal, 10).padding(.vertical, 6).background(theme.palette.surfaceSunken, in: Capsule()) }
 }
 struct GroupEmpty: View {
     let symbol: String; let title: String; let message: String
@@ -130,4 +140,19 @@ func groupDate(_ raw: String) -> String {
     let parser = ISO8601DateFormatter(); parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
     guard let date = parser.date(from: raw) ?? ISO8601DateFormatter().date(from: raw) else { return raw }
     return date.formatted(date: .abbreviated, time: .shortened)
+}
+
+struct GroupPanelView<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: Content
+    @Environment(\.faithformTheme) private var theme
+    init(_ title: String, @ViewBuilder content: () -> Content) { self.title = title; self.content = content() }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(title).font(.headline)
+            content
+        }.padding(20).frame(maxWidth: .infinity, alignment: .leading)
+            .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 20))
+            .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(theme.palette.border, lineWidth: theme.borderWidth))
+    }
 }

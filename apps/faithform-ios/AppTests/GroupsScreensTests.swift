@@ -28,11 +28,24 @@ struct GroupsScreensTests {
             window.overrideUserInterfaceStyle = scheme == .dark ? .dark : .light
             window.rootViewController = UIHostingController(rootView: GroupsTabView(model: model).faithformTheme().environment(\.colorScheme, scheme))
             window.makeKeyAndVisible()
-            try await Task.sleep(for: .seconds(2))
+            let deadline = ContinuousClock.now.advanced(by: .seconds(20))
+            while model.home == nil && model.error == nil && ContinuousClock.now < deadline {
+                try await Task.sleep(for: .milliseconds(100))
+            }
+            try await Task.sleep(for: .milliseconds(300))
             #expect(model.home?.items.first?.name == "The Table")
             #expect(model.error == nil)
             let picture = UIGraphicsImageRenderer(bounds: window.bounds).image { _ in window.drawHierarchy(in: window.bounds, afterScreenUpdates: true) }
             try #require(picture.pngData()).write(to: directory.appendingPathComponent(scheme == .dark ? "groups-dark.png" : "groups-light.png"))
+            let preferences = try JSONEncoder().encode(MessagingPreferences(level: "mentions", groups: []))
+            let blocks = try JSONEncoder().encode(ChatBlockList(items: []))
+            let preferencesAPI = APIClient(configuration: .init(environment: APIEnvironment(key: "groups-test", baseURL: URL(string: "https://example.invalid")!), clientBuild: 1), transport: StubTransport([.init(status: 200, body: envelope(preferences)), .init(status: 200, body: envelope(blocks))]), tokens: GroupTestTokens())
+            let preferencesModel = GroupsModel(api: preferencesAPI, churchSlug: "grace")
+            window.rootViewController = UIHostingController(rootView: GroupPreferencesView(model: preferencesModel).faithformTheme().environment(\.colorScheme, scheme))
+            try await Task.sleep(for: .seconds(1))
+            #expect(preferencesModel.error == nil)
+            let preferencesPicture = UIGraphicsImageRenderer(bounds: window.bounds).image { _ in window.drawHierarchy(in: window.bounds, afterScreenUpdates: true) }
+            try #require(preferencesPicture.pngData()).write(to: directory.appendingPathComponent(scheme == .dark ? "notifications-dark.png" : "notifications-light.png"))
             window.isHidden = true
         }
     }

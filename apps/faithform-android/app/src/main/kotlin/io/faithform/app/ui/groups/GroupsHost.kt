@@ -11,6 +11,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import io.faithform.app.ui.components.FaithFormPillSwitcher
+import io.faithform.app.ui.components.FaithFormPillOption
+import io.faithform.app.ui.components.FaithFormSearchField
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,22 +44,22 @@ import kotlinx.coroutines.launch
     if (selected != null) { GroupPage(store, chat, selected, onBack = { groupId = null }); return }
     LaunchedEffect(section, query, category) { if (section == "Discover") { delay(250); store.discover(query, category) } }
     LaunchedEffect(store.home?.directMessagesEnabled) { if (store.home?.directMessagesEnabled != true && section == "Messages") section = "My groups" }
-    TabScreen(title = "Groups", actions = { IconButton(onClick = { preferences = true }) { Icon(Icons.Outlined.Tune, "Messaging preferences") } }) { modifier ->
+    TabScreen(title = "Groups", actions = { IconButton(onClick = { preferences = true }) { Icon(Icons.Outlined.NotificationsNone, "Messaging preferences") } }) { modifier ->
         Column(modifier) {
             val sections = if (store.home?.directMessagesEnabled == true) listOf("My groups", "Discover", "Messages") else listOf("My groups", "Discover")
-            Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) { sections.forEach { name -> FilterChip(selected = section == name, onClick = { section = name }, label = { Text(name) }) } }
+            FaithFormPillSwitcher(options = sections.map { FaithFormPillOption(it, it) }, selected = section, onSelect = { section = it }, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp))
             if (section == "Messages") GroupMessages(store, chat)
             else LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text("LIFE TOGETHER", style = MaterialTheme.typography.labelSmall, color = theme.palette.brandAccent)
-                        Text(if (section == "My groups") "You belong here." else "Find your people.", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.SemiBold)
+                        Text(if (section == "My groups") "You belong here." else "Find your people.", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.SemiBold, color = theme.palette.contentPrimary)
                         Text(if (section == "My groups") "Familiar faces. Meaningful conversations. A place to grow, together." else "There’s a place for you in this community.", style = MaterialTheme.typography.bodyMedium, color = theme.palette.contentSecondary)
                     }
                 }
                 if (section == "Discover") {
-                    item { OutlinedTextField(query, { query = it }, label = { Text("Search groups") }, leadingIcon = { Icon(Icons.Outlined.Search, null) }, singleLine = true, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) }
-                    item { LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { item { FilterChip(category.isEmpty(), { category = "" }, label = { Text("All groups") }) }; items(store.filters?.types.orEmpty(), key = { it.id }) { type -> FilterChip(category == type.id, { category = type.id }, label = { Text(type.name) }) } } }
+                    item { FaithFormSearchField(query, { query = it }, "Search groups", onSearch = {}) }
+                    item { LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { item { FilterChip(category.isEmpty(), { category = "" }, label = { Text("All groups") }, shape = RoundedCornerShape(50), colors = FilterChipDefaults.filterChipColors(selectedContainerColor = theme.palette.brandAccent, selectedLabelColor = theme.palette.contentOnAccent)) }; items(store.filters?.types.orEmpty(), key = { it.id }) { type -> FilterChip(category == type.id, { category = type.id }, label = { Text(type.name) }, shape = RoundedCornerShape(50), colors = FilterChipDefaults.filterChipColors(selectedContainerColor = theme.palette.brandAccent, selectedLabelColor = theme.palette.contentOnAccent)) } } }
                 }
                 item { GroupFeedback(store) }
                 if (store.loading) item { Row(Modifier.fillMaxWidth().padding(32.dp), horizontalArrangement = Arrangement.Center) { CircularProgressIndicator() } }
@@ -77,7 +80,7 @@ import kotlinx.coroutines.launch
         Column {
             GroupCover(group.coverImageUrl, Modifier.height(145.dp))
             Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) { Text(group.type?.name ?: "Community", style = MaterialTheme.typography.labelSmall, color = theme.palette.contentSecondary); if (group.membershipState == "requested") GroupBadge("Request sent") else if (group.status == "archived") GroupBadge("Archived") else if (group.isYouth) GroupBadge("Youth group") else if (group.enrollment == "open") GroupBadge("Open to join") }
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) { Text(group.type?.name ?: "Community", style = MaterialTheme.typography.labelSmall, color = theme.palette.contentSecondary); if (group.membershipState == "requested") GroupBadge("Request sent") else if (group.status == "archived") GroupBadge("Archived") else if (group.membershipState == "member") GroupBadge("Your group") else if (group.isYouth) GroupBadge("Youth group") else if (group.enrollment == "open") GroupBadge("Open to join") }
                 Text(group.name, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
                 Text("${group.memberCount} members", style = MaterialTheme.typography.bodySmall, color = theme.palette.contentSecondary)
                 group.scheduleText?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = theme.palette.contentSecondary) }

@@ -3,13 +3,17 @@ import UniformTypeIdentifiers
 import FaithFormKit
 import StreamChat
 import StreamChatSwiftUI
+import StreamChatCommonUI
 
 @MainActor final class GroupChatSession: ObservableObject {
     @Published private(set) var client: ChatClient?
     @Published private(set) var session: FaithFormKit.ChatSession?
     private var stream: StreamChatSwiftUI.StreamChat?
     private var connecting: Task<Void, Error>?
-    func connect(_ model: GroupsModel) async throws {
+    private let appearance = Appearance()
+    func updateTheme(_ theme: FaithFormTheme) { _ = groupChatAppearance(theme, appearance: appearance) }
+    func connect(_ model: GroupsModel, theme: FaithFormTheme) async throws {
+        updateTheme(theme)
         if client != nil { return }
         if let connecting { return try await connecting.value }
         let task = Task { @MainActor in
@@ -26,7 +30,7 @@ import StreamChatSwiftUI
                     }
                 })
                 try Task.checkCancellation()
-                self.stream = StreamChatSwiftUI.StreamChat(chatClient: chat, utils: Utils(composerConfig: ComposerConfig(isVoiceRecordingEnabled: false, maxAttachmentSize: 25 * 1024 * 1024)))
+                self.stream = StreamChatSwiftUI.StreamChat(chatClient: chat, appearance: appearance, utils: Utils(composerConfig: ComposerConfig(isVoiceRecordingEnabled: false, maxAttachmentSize: 25 * 1024 * 1024)))
                 self.session = auth; self.client = chat
             } catch { await chat.disconnect(); throw error }
         }
@@ -65,7 +69,14 @@ struct SafetySelection: Identifiable { let id = UUID(); let cid: String; let use
     func makeAttachmentPickerView(options: AttachmentPickerViewOptions) -> some View {
         GroupFilePicker(options: options)
     }
+    func makeChannelHeaderViewModifier(options: ChannelHeaderViewModifierOptions) -> some ChatChannelHeaderViewModifier {
+        FaithFormConversationHeader(channel: options.channel)
+    }
     func makeChannelListHeaderViewModifier(options: ChannelListHeaderViewModifierOptions) -> some ChannelListHeaderViewModifier { FaithFormChatListHeader(title: options.title) }
+}
+struct FaithFormConversationHeader: ChatChannelHeaderViewModifier {
+    let channel: ChatChannel
+    func body(content: Content) -> some View { content }
 }
 struct FaithFormChatListHeader: ChannelListHeaderViewModifier {
     let title: String
@@ -73,6 +84,7 @@ struct FaithFormChatListHeader: ChannelListHeaderViewModifier {
 }
 
 struct GroupConversationView: View {
+    @Environment(\.faithformTheme) private var theme
     @Bindable var model: GroupsModel
     let cid: String; let title: String
     var readOnly = false
@@ -87,16 +99,19 @@ struct GroupConversationView: View {
                 ChatChannelView(viewFactory: FaithFormChatFactory(readOnly: readOnly || session.session?.suspended == true, report: { safety = $0 }), channelController: controller)
             } else if failed { VStack { GroupEmpty(symbol: "bubble.left.and.bubble.right", title: "Let’s reconnect", message: "Messages are unavailable right now. Your group is still here."); Button("Try again") { retry += 1 } } }
             else { ProgressView("Connecting your conversation…") }
-        }.navigationTitle(title)
+        }.navigationTitle(title).navigationBarTitleDisplayMode(.inline).toolbar(.visible, for: .navigationBar)
         .task(id: "\(cid)|\(retry)") {
-            do { failed = false; try await session.connect(model); guard let client = session.client else { return }; let value = client.channelController(for: try ChannelId(cid: cid)); try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in value.synchronize { error in if let error { continuation.resume(throwing: error) } else { continuation.resume() } } }; try Task.checkCancellation(); controller = value }
+            do { failed = false; try await session.connect(model, theme: theme); guard let client = session.client else { return }; let value = client.channelController(for: try ChannelId(cid: cid)); try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in value.synchronize { error in if let error { continuation.resume(throwing: error) } else { continuation.resume() } } }; try Task.checkCancellation(); controller = value }
             catch is CancellationError {} catch { failed = true }
         }
+        .onChange(of: theme.palette.background) { _, _ in session.updateTheme(theme) }
+        .onChange(of: theme.palette.brandAccent) { _, _ in session.updateTheme(theme) }
         .sheet(item: $safety) { selection in GroupSafetyView(model: model, cid: selection.cid, userId: selection.userId, name: selection.name, messageId: selection.messageId) }
     }
 }
 struct DirectSelection: Identifiable { let cid: String; let name: String; let readOnly: Bool; var id: String { cid } }
 struct GroupMessagesView: View {
+    @Environment(\.faithformTheme) private var theme
     @Bindable var model: GroupsModel
     @EnvironmentObject private var session: GroupChatSession
     @State private var list: ChatChannelListController?
@@ -106,22 +121,32 @@ struct GroupMessagesView: View {
     @State private var retry = 0
     var body: some View {
         VStack {
-            HStack { Text("A little encouragement goes a long way.").font(.caption).foregroundStyle(.secondary); Spacer(); Button { compose = true } label: { Image(systemName: "square.and.pencil").frame(width: 44, height: 44) }.accessibilityLabel("New message") }.padding(.horizontal, 20)
+            HStack(alignment: .center, spacing: 16) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Your conversations").font(.title3.weight(.semibold))
+                    Text("A little encouragement goes a long way.").font(.caption).foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
+                Button { compose = true } label: { Image(systemName: "square.and.pencil").frame(width: 48, height: 48).foregroundStyle(theme.palette.contentOnAccent).background(theme.palette.brandAccent, in: Circle()) }.accessibilityLabel("New message")
+            }.padding(.horizontal, 20).padding(.vertical, 12)
             if let list, session.client != nil {
                 ChatChannelListView(viewFactory: FaithFormChatFactory(readOnly: false, report: { _ in }), channelListController: list, title: "Messages", onItemTap: { channel in selected = DirectSelection(cid: channel.cid.rawValue, name: channel.name ?? "Conversation", readOnly: channel.isFrozen) }, embedInNavigationView: false)
             } else if failed { GroupEmpty(symbol: "bubble.left", title: "Messages are taking a moment", message: "Please check your connection and try again."); Button("Try again") { retry += 1 } }
             else { ProgressView("Connecting messages…").frame(maxWidth: .infinity, maxHeight: .infinity) }
         }
         .task(id: retry) {
-            do { failed = false; try await session.connect(model); guard let client = session.client, let auth = session.session else { return }; let query = ChannelListQuery(filter: .and([.equal(.type, to: .custom("ff_dm")), .equal(.team, to: auth.churchTeam), .containMembers(userIds: [auth.chatUserId])])); list = client.channelListController(query: query) }
+            do { failed = false; try await session.connect(model, theme: theme); guard let client = session.client, let auth = session.session else { return }; let query = ChannelListQuery(filter: .and([.equal(.type, to: .custom("ff_dm")), .equal(.team, to: auth.churchTeam), .containMembers(userIds: [auth.chatUserId])])); list = client.channelListController(query: query) }
             catch is CancellationError {} catch { failed = true }
         }
+        .onChange(of: theme.palette.background) { _, _ in session.updateTheme(theme) }
+        .onChange(of: theme.palette.brandAccent) { _, _ in session.updateTheme(theme) }
         .sheet(isPresented: $compose) { GroupContactsView(model: model, open: { selected = $0; compose = false }) }
         .navigationDestination(item: $selected) { selection in GroupConversationView(model: model, cid: selection.cid, title: selection.name, readOnly: selection.readOnly) }
     }
 }
 extension DirectSelection: Hashable {}
 struct GroupContactsView: View {
+    @Environment(\.faithformTheme) private var theme
     @Bindable var model: GroupsModel
     let open: (DirectSelection) -> Void
     @Environment(\.dismiss) private var dismiss
@@ -131,12 +156,13 @@ struct GroupContactsView: View {
     @State private var loading = true
     var body: some View {
         NavigationStack { List {
+            FaithFormSearchField(placeholder: "Find someone", text: $query, onSubmit: {}).listRowSeparator(.hidden)
             GroupFeedback(model: model)
             if loading { ProgressView("Finding people…") }
             else if contacts.isEmpty { GroupEmpty(symbol: "person.crop.circle.badge.plus", title: "No people found", message: "Your church’s messaging settings decide who you can contact. Try another name.") }
             ForEach(contacts, id: \.chatUserId) { person in Button { Task { await start(person) } } label: { VStack(alignment: .leading, spacing: 6) { Text(person.name).font(.headline); if let context = person.context { Text(context).font(.caption).foregroundStyle(.secondary) } } }.disabled(model.busy) }
             if cursor != nil { Button("More people") { Task { await load(more: true) } } }
-        }.navigationTitle("New message").searchable(text: $query, prompt: "Find someone").toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }.task(id: query) { do { try await Task.sleep(for: .milliseconds(250)); try Task.checkCancellation(); await load() } catch {} } }
+        }.listStyle(.plain).scrollContentBackground(.hidden).background(theme.palette.background).navigationTitle("New message").navigationBarTitleDisplayMode(.inline).toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }.task(id: query) { do { try await Task.sleep(for: .milliseconds(250)); try Task.checkCancellation(); await load() } catch {} } }
     }
     private func load(more: Bool = false) async {
         do { var params = ["q": query]; if more { params["cursor"] = cursor }; let page = try await model.read("\(model.messagingPath)/contacts", query: params, as: MessagingContactPage.self); try Task.checkCancellation(); contacts = more ? contacts + page.items : page.items; cursor = page.nextCursor; loading = false }
@@ -168,4 +194,35 @@ struct GroupFilePicker: View {
             }
         }
     }
+}
+
+/// Resolve chat surfaces from the same church palette as the surrounding app.
+@MainActor private func groupChatAppearance(_ theme: FaithFormTheme, appearance: Appearance) -> Appearance {
+    let colors = appearance.colorPalette
+    let palette = theme.palette
+    colors.accentPrimary = UIColor(palette.brandAccent)
+    colors.brand400 = UIColor(palette.brandAccent)
+    colors.brand500 = UIColor(palette.brandAccent)
+    colors.textPrimary = UIColor(palette.contentPrimary)
+    colors.textSecondary = UIColor(palette.contentSecondary)
+    colors.textTertiary = UIColor(theme.mutedContent)
+    colors.textOnAccent = UIColor(palette.contentOnAccent)
+    colors.textLink = UIColor(palette.brandAccent)
+    colors.backgroundCoreApp = UIColor(palette.background)
+    colors.backgroundCoreElevation0 = UIColor(palette.background)
+    colors.backgroundCoreElevation1 = UIColor(palette.background)
+    colors.backgroundCoreElevation2 = UIColor(palette.surface)
+    colors.backgroundCoreSurfaceDefault = UIColor(palette.surfaceSunken)
+    colors.backgroundCoreSurfaceSubtle = UIColor(palette.surfaceSunken)
+    colors.backgroundCoreSurfaceCard = UIColor(palette.surface)
+    colors.borderCoreDefault = UIColor(palette.border)
+    colors.borderCoreSubtle = UIColor(palette.divider)
+    colors.chatBackgroundIncoming = UIColor(palette.surface)
+    colors.chatBackgroundOutgoing = UIColor(palette.surfaceSunken)
+    colors.chatBorderIncoming = UIColor(palette.border)
+    colors.chatBorderOutgoing = UIColor(palette.border)
+    colors.chatTextIncoming = UIColor(palette.contentPrimary)
+    colors.chatTextOutgoing = UIColor(palette.contentPrimary)
+    colors.navigationBarBackground = UIColor(palette.background)
+    return appearance
 }

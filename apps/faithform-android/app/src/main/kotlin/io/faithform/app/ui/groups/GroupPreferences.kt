@@ -1,33 +1,63 @@
 package io.faithform.app.ui.groups
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.*
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.unit.dp
+import io.faithform.app.design.LocalFaithFormTheme
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import io.faithform.app.contract.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.*
 
 @Composable fun GroupPreferences(store: GroupsStore, groupId: String? = null, onDismiss: () -> Unit) {
+    val theme = LocalFaithFormTheme.current
     val scope = rememberCoroutineScope()
     var level by remember { mutableStateOf("all") }
     var blocked by remember { mutableStateOf<List<ChatBlockedPerson>>(emptyList()) }
     var loaded by remember { mutableStateOf(false) }
-    LaunchedEffect(groupId) { try { val prefs = store.read<MessagingPreferences>("${store.messagingPath}/preferences"); level = if (groupId == null) prefs.level else prefs.groups.firstOrNull { it.groupId == groupId }?.level ?: "default"; blocked = store.read<ChatBlockList>("${store.messagingPath}/blocks").items; loaded = true } catch (e: CancellationException) { throw e } catch (e: Exception) { store.error = GroupsStore.message(e) } }
-    GroupFormSheet("Your notifications", onDismiss) {
-        Text("Take part at your own pace. You can always read messages in the app.", style = MaterialTheme.typography.bodyMedium)
+    var retry by remember { mutableIntStateOf(0) }
+    LaunchedEffect(groupId, retry) { store.error = null; try { val prefs = store.read<MessagingPreferences>("${store.messagingPath}/preferences"); level = if (groupId == null) prefs.level else prefs.groups.firstOrNull { it.groupId == groupId }?.level ?: "default"; blocked = store.read<ChatBlockList>("${store.messagingPath}/blocks").items; loaded = true } catch (e: CancellationException) { throw e } catch (e: Exception) { store.error = GroupsStore.message(e) } }
+    GroupFormSheet("Notifications", onDismiss) {
+        Surface(shape = RoundedCornerShape(18.dp), color = theme.palette.surfaceSunken) { Icon(Icons.Outlined.NotificationsNone, null, tint = theme.palette.brandAccent, modifier = Modifier.padding(16.dp).size(26.dp)) }
+        Text("Stay close. On your terms.", style = MaterialTheme.typography.titleLarge)
+        Text("Choose what reaches you. Every conversation will still be here when you’re ready.", style = MaterialTheme.typography.bodyMedium, color = theme.palette.contentSecondary)
         if (loaded) {
             val options = listOfNotNull(if (groupId != null) "default" to "Use church preference" else null, "all" to "All messages", "mentions" to "Mentions only", (if (groupId == null) "off" else "muted") to "Nothing for now")
-            options.forEach { (value, title) -> Row(verticalAlignment = Alignment.CenterVertically) { RadioButton(level == value, { level = value }); Text(title) } }
-            Button(enabled = !store.busy, onClick = { scope.launch { if (store.action("Preference saved.") { val path = if (groupId == null) "${store.messagingPath}/preferences" else "${store.path}/$groupId/notifications"; store.send<MessagingPreferences>(path, buildJsonObject { put("level", level) }, "PUT") }) onDismiss() } }, modifier = Modifier.fillMaxWidth()) { Text("Save preference") }
+            Column(Modifier.selectableGroup(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                options.forEach { (value, title) ->
+                    val selected = level == value
+                    val description = when (value) { "default" -> "Follow your overall messaging setting."; "all" -> "Keep up with every conversation."; "mentions" -> "Only when someone mentions you."; else -> "A little quiet. Catch up in the app." }
+                    val icon = when (value) { "default" -> Icons.Outlined.Tune; "all" -> Icons.Outlined.ChatBubbleOutline; "mentions" -> Icons.Outlined.AlternateEmail; else -> Icons.Outlined.NotificationsOff }
+                    Surface(shape = RoundedCornerShape(20.dp), color = if (selected) theme.palette.surfaceSunken else theme.palette.surface,
+                        border = BorderStroke(theme.borderWidth, if (selected) theme.palette.brandAccent else theme.palette.border),
+                        modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).selectable(selected = selected, enabled = !store.busy, role = Role.RadioButton, onClick = { level = value })) {
+                        Row(Modifier.padding(16.dp).heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                            Icon(icon, null, tint = theme.palette.brandAccent)
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) { Text(title, style = MaterialTheme.typography.titleSmall); Text(description, style = MaterialTheme.typography.bodySmall, color = theme.palette.contentSecondary) }
+                            RadioButton(selected = selected, onClick = null)
+                        }
+                    }
+                }
+            }
+            Button(enabled = !store.busy, onClick = { scope.launch { if (store.action("Preference saved.") { val path = if (groupId == null) "${store.messagingPath}/preferences" else "${store.path}/$groupId/notifications"; store.send<MessagingPreferences>(path, buildJsonObject { put("level", level) }, "PUT") }) onDismiss() } }, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp), shape = RoundedCornerShape(50)) { Text(if (store.busy) "Saving…" else "Save preference") }
             if (groupId == null) {
                 Text("People you’ve blocked", style = MaterialTheme.typography.titleMedium)
                 if (blocked.isEmpty()) Text("No blocked people", style = MaterialTheme.typography.bodyMedium)
                 blocked.forEach { person -> Row(verticalAlignment = Alignment.CenterVertically) { Text(person.name, modifier = Modifier.weight(1f)); TextButton(enabled = !store.busy, onClick = { scope.launch { store.action("Person unblocked.") { val response = store.api.send("${store.messagingPath}/blocks", io.faithform.app.network.MobileSuccess.serializer(ChatBlockList.serializer()), method = "DELETE", query = mapOf("chatUserId" to person.chatUserId)); blocked = response.value?.items ?: blocked } } }) { Text("Unblock") } } }
             }
-        } else CircularProgressIndicator()
+        } else if (store.error == null) CircularProgressIndicator()
+        else TextButton(onClick = { retry++ }) { Text("Try again") }
         GroupFeedback(store)
     }
 }

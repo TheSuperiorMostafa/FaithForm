@@ -18,12 +18,8 @@ struct GroupPage: View {
         Group {
             if let detail {
                 VStack(spacing: 0) {
-                    Picker("Group section", selection: $section) {
-                        Text("Overview").tag("Overview")
-                        if detail.group.chat != nil { Text("Chat").tag("Chat") }
-                        Text("Events").tag("Events")
-                        if detail.capabilities.canViewMembers { Text("Members").tag("Members") }
-                    }.pickerStyle(.segmented).padding(.horizontal, 20).padding(.bottom, 12)
+                    FaithFormPillSwitcher(selection: $section, options: groupSections(detail).map { .init($0, title: $0) }, accessibilityLabel: "Group section")
+                        .padding(.horizontal, 20).padding(.vertical, 12)
                     if section == "Chat", let chat = detail.group.chat {
                         GroupConversationView(model: model, cid: chat.cid, title: detail.group.name, readOnly: chat.state != "ready" || (chat.postingPolicy == "leaders" && detail.group.groupRole == "member"))
                     } else if section == "Members" {
@@ -39,7 +35,7 @@ struct GroupPage: View {
                                 Label("\(detail.group.memberCount) members", systemImage: "person.2").font(.subheadline).foregroundStyle(.secondary)
                                 GroupFeedback(model: model)
                                 if let description = detail.description { Text(description).font(.body).foregroundStyle(theme.palette.contentSecondary).lineSpacing(5) }
-                                GroupBox("When & where") {
+                                GroupPanelView("When & where") {
                                     VStack(alignment: .leading, spacing: 14) {
                                         ForEach(detail.schedules, id: \.text) { Label($0.text, systemImage: "calendar").font(.subheadline) }
                                         if let location = detail.location {
@@ -52,7 +48,7 @@ struct GroupPage: View {
                                     }.frame(maxWidth: .infinity, alignment: .leading).padding(.top, 8)
                                 }
                                 if !detail.leaders.isEmpty {
-                                    GroupBox("Here to welcome you") { ForEach(detail.leaders, id: \.name) { leader in HStack { Image(systemName: "person.crop.circle.fill").foregroundStyle(theme.palette.brandAccent); Text(leader.name).font(.subheadline); Spacer(); Text(leader.groupRole.capitalized).font(.caption).foregroundStyle(.secondary) }.padding(.vertical, 8) } }
+                                    GroupPanelView("Here to welcome you") { ForEach(detail.leaders, id: \.name) { leader in HStack { Image(systemName: "person.crop.circle.fill").foregroundStyle(theme.palette.brandAccent); Text(leader.name).font(.subheadline); Spacer(); Text(leader.groupRole.capitalized).font(.caption).foregroundStyle(.secondary) }.padding(.vertical, 8) } }
                                 }
                                 if detail.capabilities.canEditDetails { Button("Edit group details") { editing = true }.buttonStyle(.bordered) }
                                 if detail.capabilities.canManageRequests { NavigationLink { GroupRequestsView(model: model, groupId: groupId) } label: { Label("Join requests (\(detail.pendingRequestCount))", systemImage: "person.badge.plus") }.buttonStyle(.bordered) }
@@ -67,6 +63,7 @@ struct GroupPage: View {
             else { ProgressView("Opening your group…") }
         }
         .background(theme.palette.background)
+            .foregroundStyle(theme.palette.contentPrimary)
         .navigationTitle(detail?.group.name ?? "Group").navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .topBarTrailing) { if detail?.group.membershipState == "member" { Button { preferences = true } label: { Image(systemName: "bell") }.accessibilityLabel("Group notifications") } } }
         .sheet(isPresented: $editing) { if let detail { GroupEditView(model: model, detail: detail) { Task { await load() } } } }
@@ -74,6 +71,9 @@ struct GroupPage: View {
         .task { await load() }
         .confirmationDialog("Leave this group?", isPresented: $confirmLeave, titleVisibility: .visible) { Button("Leave group", role: .destructive) { Task { if let group = detail?.group, await model.changeMembership(group) { dismiss() } } } } message: { Text("You will lose access to this group’s conversation. You can ask to join again later.") }
         .sheet(isPresented: $asking) { NavigationStack { Form { Section("Say hello (optional)") { TextField("What brings you to this group?", text: $joinMessage, axis: .vertical).lineLimit(3...5) }; GroupFeedback(model: model); Button("Send request") { Task { if let group = detail?.group, await model.changeMembership(group, message: joinMessage) { asking = false; await load() } } }.disabled(model.busy) }.navigationTitle("Ask to join").toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { asking = false } } } } }
+    }
+    private func groupSections(_ detail: GroupDetail) -> [String] {
+        ["Overview"] + (detail.group.chat != nil ? ["Chat"] : []) + ["Events"] + (detail.capabilities.canViewMembers ? ["Members"] : [])
     }
     @ViewBuilder private func membershipButton(_ group: GroupSummary) -> some View {
         switch group.joinAction {

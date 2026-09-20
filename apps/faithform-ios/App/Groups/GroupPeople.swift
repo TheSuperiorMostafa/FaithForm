@@ -12,6 +12,7 @@ struct GroupMembersView: View {
     @State private var search = ""
     var body: some View {
         List {
+            FaithFormSearchField(placeholder: "Find someone", text: $search, onSubmit: {}).listRowSeparator(.hidden)
             GroupFeedback(model: model)
             if !loaded { ProgressView("Finding familiar faces…") }
             ForEach(members.filter { search.isEmpty || $0.name.localizedCaseInsensitiveContains(search) }, id: \.membershipId) { member in
@@ -32,7 +33,7 @@ struct GroupMembersView: View {
             }
             if cursor != nil { Button("Load more members") { Task { await load(more: true) } } }
             if loaded && members.isEmpty { Text("No members to show yet.").foregroundStyle(.secondary) }
-        }.listStyle(.plain).searchable(text: $search, prompt: "Find someone")
+        }.listStyle(.plain).scrollContentBackground(.hidden)
         .task { await load() }.refreshable { await load() }
         .sheet(item: $selected) { member in if let userId = member.chatUserId, let cid = detail.group.chat?.cid { GroupSafetyView(model: model, cid: cid, userId: userId, name: member.name) } }
         .confirmationDialog("Remove this person?", isPresented: Binding(get: { confirming != nil }, set: { if !$0 { confirming = nil } }), titleVisibility: .visible) {
@@ -97,27 +98,71 @@ struct GroupPreferencesView: View {
     @State private var level = "all"
     @State private var blocked: [ChatBlockedPerson] = []
     @State private var loaded = false
+    @Environment(\.faithformTheme) private var theme
     var body: some View {
         NavigationStack {
-            Form {
-                if loaded {
-                    Section { Picker("Notify me about", selection: $level) {
-                        if groupId != nil { Text("Use church preference").tag("default") }
-                        Text("All messages").tag("all"); Text("Mentions only").tag("mentions"); Text("Nothing for now").tag(groupId == nil ? "off" : "muted")
-                    }.pickerStyle(.inline) } footer: { Text("Take part at your own pace. You can always read messages in the app.") }
-                    Button("Save preference") { Task { await save() } }.disabled(model.busy)
-                    if groupId == nil {
-                        Section("People you’ve blocked") {
-                            if blocked.isEmpty { Text("No blocked people").foregroundStyle(.secondary) }
-                            ForEach(blocked, id: \.chatUserId) { person in HStack { Text(person.name); Spacer(); Button("Unblock") { Task { await unblock(person) } }.disabled(model.busy) } }
-                        }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    VStack(alignment: .leading, spacing: 12) {
+                        Image(systemName: "bell.badge").font(.system(size: 26, weight: .medium))
+                            .foregroundStyle(theme.palette.brandAccent)
+                            .frame(width: 56, height: 56)
+                            .background(theme.palette.surfaceSunken, in: RoundedRectangle(cornerRadius: 18))
+                        Text("Stay close. On your terms.").font(theme.font(FaithFormTokens.Text.titleMedium))
+                        Text("Choose what reaches you. Every conversation will still be here when you’re ready.")
+                            .font(.subheadline).foregroundStyle(theme.palette.contentSecondary)
                     }
-                } else { ProgressView("Loading preferences…") }
-                GroupFeedback(model: model)
-            }.navigationTitle("Your notifications").toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }.task { await load() }
-        }
+                    if loaded {
+                        VStack(spacing: 10) {
+                            if groupId != nil { preference("default", title: "Use church preference", subtitle: "Follow your overall messaging setting.", symbol: "slider.horizontal.3") }
+                            preference("all", title: "All messages", subtitle: "Keep up with every conversation.", symbol: "bubble.left.and.bubble.right")
+                            preference("mentions", title: "Mentions only", subtitle: "Only when someone mentions you.", symbol: "at")
+                            preference(groupId == nil ? "off" : "muted", title: "Nothing for now", subtitle: "A little quiet. Catch up in the app.", symbol: "bell.slash")
+                        }
+                        Button { Task { await save() } } label: {
+                            HStack { if model.busy { ProgressView().tint(theme.palette.contentOnAccent) }; Text(model.busy ? "Saving…" : "Save preference").font(.headline) }
+                                .frame(maxWidth: .infinity, minHeight: 52)
+                                .foregroundStyle(theme.palette.contentOnAccent)
+                                .background(theme.palette.brandAccent, in: Capsule())
+                        }.buttonStyle(.plain).disabled(model.busy)
+                        if groupId == nil {
+                            VStack(alignment: .leading, spacing: 12) {
+                                Text("People you’ve blocked").font(.subheadline.weight(.semibold))
+                                if blocked.isEmpty { Text("No blocked people").font(.subheadline).foregroundStyle(theme.palette.contentSecondary) }
+                                ForEach(blocked, id: \.chatUserId) { person in
+                                    HStack { Text(person.name); Spacer(); Button("Unblock") { Task { await unblock(person) } }.disabled(model.busy) }
+                                }
+                            }.padding(18).frame(maxWidth: .infinity, alignment: .leading)
+                                .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 20))
+                        }
+                    } else if model.error == nil { ProgressView("Loading preferences…").frame(maxWidth: .infinity) }
+                    else { Button("Try again") { Task { await load() } } }
+                    GroupFeedback(model: model)
+                }.padding(24)
+            }.background(theme.palette.background)
+                .navigationTitle("Notifications").navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
+                .task { await load() }
+        }.tint(theme.palette.brandAccent).presentationDragIndicator(.visible).presentationCornerRadius(28)
+    }
+    private func preference(_ value: String, title: String, subtitle: String, symbol: String) -> some View {
+        Button { level = value } label: {
+            HStack(spacing: 14) {
+                Image(systemName: symbol).font(.title3).frame(width: 28).foregroundStyle(theme.palette.brandAccent)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(title).font(.subheadline.weight(.semibold)).foregroundStyle(theme.palette.contentPrimary)
+                    Text(subtitle).font(.caption).foregroundStyle(theme.palette.contentSecondary)
+                }.frame(maxWidth: .infinity, alignment: .leading)
+                Image(systemName: level == value ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(level == value ? theme.palette.brandAccent : theme.palette.contentSecondary)
+            }.padding(16).frame(minHeight: 76)
+                .background(level == value ? theme.palette.surfaceSunken : theme.palette.surface, in: RoundedRectangle(cornerRadius: 20))
+                .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(level == value ? theme.palette.brandAccent : theme.palette.border, lineWidth: theme.borderWidth))
+        }.buttonStyle(.plain).disabled(model.busy).accessibilityElement(children: .combine)
+            .accessibilityAddTraits(level == value ? .isSelected : [])
     }
     private func load() async {
+        model.error = nil
         do { let prefs = try await model.read("\(model.messagingPath)/preferences", as: MessagingPreferences.self); level = groupId.map { id in prefs.groups.first { $0.groupId == id }?.level ?? "default" } ?? prefs.level; blocked = try await model.read("\(model.messagingPath)/blocks", as: ChatBlockList.self).items; loaded = true }
         catch is CancellationError {} catch { model.error = GroupsModel.message(error) }
     }

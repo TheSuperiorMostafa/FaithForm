@@ -4,6 +4,13 @@ import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.text.style.TextOverflow
+import io.faithform.app.design.LocalFaithFormTheme
+import io.getstream.chat.android.compose.ui.theme.StreamColors
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -12,6 +19,7 @@ import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import io.faithform.app.ui.components.FaithFormSearchField
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -69,7 +77,17 @@ class GroupChatConnection {
 private data class SafetyTarget(val userId: String, val name: String, val messageId: String? = null)
 private class ChannelModels : ViewModelStoreOwner { override val viewModelStore = ViewModelStore() }
 
-@Composable fun GroupConversation(store: GroupsStore, connection: GroupChatConnection, cid: String, readOnly: Boolean = false, onBack: () -> Unit) {
+@Composable fun GroupConversation(store: GroupsStore, connection: GroupChatConnection, cid: String, readOnly: Boolean = false, showHeader: Boolean = true, onBack: () -> Unit) {
+    val theme = LocalFaithFormTheme.current
+    val baseColors = if (isSystemInDarkTheme()) StreamColors.defaultDarkColors() else StreamColors.defaultColors()
+    val chatColors = baseColors.copy(
+        textHighEmphasis = theme.palette.contentPrimary, textLowEmphasis = theme.palette.contentSecondary,
+        appBackground = theme.palette.background, barsBackground = theme.palette.background,
+        inputBackground = theme.palette.surfaceSunken, borders = theme.palette.border,
+        primaryAccent = theme.palette.brandAccent,
+        ownMessagesBackground = theme.palette.surfaceSunken, otherMessagesBackground = theme.palette.surface,
+        ownMessageText = theme.palette.contentPrimary, otherMessageText = theme.palette.contentPrimary,
+    )
     val context = LocalContext.current
     var ready by remember(cid) { mutableStateOf(false) }
     var failed by remember(cid) { mutableStateOf(false) }
@@ -90,8 +108,8 @@ private class ChannelModels : ViewModelStoreOwner { override val viewModelStore 
             }
         } }
         CompositionLocalProvider(LocalViewModelStoreOwner provides owner) {
-            ChatTheme(componentFactory = components) {
-                MessagesScreen(viewModelFactory = factory, onBackPressed = onBack,
+            ChatTheme(colors = chatColors, componentFactory = components) {
+                MessagesScreen(viewModelFactory = factory, showHeader = showHeader, onBackPressed = onBack,
                     onUserAvatarClick = { user -> if (user.id != connection.session?.chatUserId) safety = SafetyTarget(user.id, user.name.ifBlank { "this person" }) },
                     bottomBarContent = {
                         if (readOnly || connection.session?.suspended == true) Text("This conversation is read-only.", modifier = Modifier.fillMaxWidth().padding(16.dp), style = MaterialTheme.typography.bodySmall)
@@ -138,6 +156,7 @@ private class ChannelModels : ViewModelStoreOwner { override val viewModelStore 
 }
 
 @Composable fun GroupMessages(store: GroupsStore, connection: GroupChatConnection) {
+    val theme = LocalFaithFormTheme.current
     val context = LocalContext.current; val scope = rememberCoroutineScope()
     var channels by remember { mutableStateOf<List<Channel>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
@@ -156,10 +175,22 @@ private class ChannelModels : ViewModelStoreOwner { override val viewModelStore 
         } catch (e: CancellationException) { throw e } catch (e: Exception) { store.error = GroupsStore.message(e) } finally { loading = false }
     }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("Your conversations", style = MaterialTheme.typography.titleLarge); IconButton(onClick = { newConversation = true }) { Icon(Icons.Outlined.Edit, "New message") } }; Text("A little encouragement goes a long way.", style = MaterialTheme.typography.bodyMedium); GroupFeedback(store) }
+        item { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("Your conversations", style = MaterialTheme.typography.titleLarge); FilledIconButton(onClick = { newConversation = true }, modifier = Modifier.size(48.dp), colors = IconButtonDefaults.filledIconButtonColors(containerColor = theme.palette.brandAccent, contentColor = theme.palette.contentOnAccent)) { Icon(Icons.Outlined.Edit, "New message") } }; Text("A little encouragement goes a long way.", style = MaterialTheme.typography.bodyMedium); GroupFeedback(store) }
         if (loading) item { CircularProgressIndicator() }
         else if (channels.isEmpty()) item { GroupEmpty("Start a conversation", "Send a little encouragement to someone in your community.") }
-        items(channels, key = { it.cid }) { channel -> Surface(shape = MaterialTheme.shapes.large, tonalElevation = 1.dp, modifier = Modifier.fillMaxWidth().clickable { selected = channel }) { Column(Modifier.padding(18.dp)) { Text(channel.name.ifBlank { channel.members.filter { it.user.id != connection.session?.chatUserId }.joinToString { it.user.name }.ifBlank { "Conversation" } }, style = MaterialTheme.typography.titleMedium); Text(channel.messages.lastOrNull()?.text?.take(120) ?: "Say hello", maxLines = 2, style = MaterialTheme.typography.bodyMedium); if (channel.unreadCount ?: 0 > 0) Text("${channel.unreadCount} new", style = MaterialTheme.typography.labelMedium) } } }
+        items(channels, key = { it.cid }) { channel ->
+            val name = channel.name.ifBlank { channel.members.filter { it.user.id != connection.session?.chatUserId }.joinToString { it.user.name }.ifBlank { "Conversation" } }
+            Surface(color = theme.palette.surface, shape = RoundedCornerShape(20.dp), modifier = Modifier.fillMaxWidth().clickable { selected = channel }) {
+                Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Surface(shape = CircleShape, color = theme.palette.surfaceSunken) { Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { Text(name.take(1).uppercase(), style = MaterialTheme.typography.titleMedium, color = theme.palette.brandAccent) } }
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
+                        Text(channel.messages.lastOrNull()?.text?.take(120)?.ifBlank { "Attachment" } ?: "Say hello", maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, color = theme.palette.contentSecondary)
+                    }
+                    if ((channel.unreadCount ?: 0) > 0) Surface(shape = CircleShape, color = theme.palette.brandAccent) { Text("${channel.unreadCount}", color = theme.palette.contentOnAccent, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)) }
+                }
+            }
+        }
         item { TextButton(onClick = { refresh++ }) { Text("Refresh messages") } }
     }
 }
@@ -168,7 +199,7 @@ private class ChannelModels : ViewModelStoreOwner { override val viewModelStore 
     suspend fun load(more: Boolean = false) { try { val args = mutableMapOf("q" to query); if (more) cursor?.let { args["cursor"] = it }; val page = store.read<MessagingContactPage>("${store.messagingPath}/contacts", args); people = if (more) people + page.items else page.items; cursor = page.nextCursor } catch (e: CancellationException) { throw e } catch (e: Exception) { store.error = GroupsStore.message(e) } finally { loading = false } }
     LaunchedEffect(query) { delay(250); load() }
     GroupFormSheet("New message", onDismiss) {
-        OutlinedTextField(query, { query = it }, label = { Text("Find someone") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+        FaithFormSearchField(query, { query = it }, "Find someone", onSearch = {})
         GroupFeedback(store)
         if (loading) CircularProgressIndicator() else if (people.isEmpty()) GroupEmpty("No people found", "Your church’s messaging settings decide who you can contact. Try another name.")
         people.forEach { person -> TextButton(enabled = !store.busy, onClick = { scope.launch { store.action("") { val channel = store.send<DirectConversation>("${store.messagingPath}/direct", buildJsonObject { put("chatUserId", person.chatUserId) }); if (channel.state == "pending") error("Your conversation is being prepared. Please try again in a moment."); open(channel) } } }, modifier = Modifier.fillMaxWidth()) { Column(Modifier.fillMaxWidth()) { Text(person.name, style = MaterialTheme.typography.titleMedium); person.context?.let { Text(it, style = MaterialTheme.typography.bodySmall) } } } }

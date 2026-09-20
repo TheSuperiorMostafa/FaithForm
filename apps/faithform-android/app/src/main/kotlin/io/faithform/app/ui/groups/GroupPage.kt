@@ -8,6 +8,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import io.faithform.app.ui.components.FaithFormPillSwitcher
+import io.faithform.app.ui.components.FaithFormPillOption
+import io.faithform.app.ui.components.FaithFormSearchField
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,9 +57,9 @@ import kotlinx.serialization.json.*
         if (d == null) Column(modifier.padding(20.dp)) { GroupFeedback(store); if (store.error == null) CircularProgressIndicator() else Button(onClick = { reload++ }) { Text("Try again") } }
         else Column(modifier) {
             val tabs = listOfNotNull("Overview", if (d.group.chat != null) "Chat" else null, "Events", if (d.capabilities.canViewMembers) "Members" else null)
-            ScrollableTabRow(selectedTabIndex = tabs.indexOf(tab).coerceAtLeast(0), edgePadding = 16.dp, containerColor = theme.palette.background) { tabs.forEach { title -> Tab(selected = title == tab, onClick = { tab = title }, text = { Text(title) }) } }
+            FaithFormPillSwitcher(options = tabs.map { FaithFormPillOption(it, it) }, selected = tab, onSelect = { tab = it }, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp))
             when (tab) {
-                "Chat" -> d.group.chat?.let { GroupConversation(store, chat, it.cid, readOnly = it.state != "ready" || (it.postingPolicy == "leaders" && d.group.groupRole == "member"), onBack = { tab = "Overview" }) }
+                "Chat" -> d.group.chat?.let { GroupConversation(store, chat, it.cid, readOnly = it.state != "ready" || (it.postingPolicy == "leaders" && d.group.groupRole == "member"), showHeader = false, onBack = { tab = "Overview" }) }
                 "Events" -> GroupEvents(store, d)
                 "Members" -> GroupMembers(store, d)
                 else -> LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {
@@ -103,7 +106,7 @@ import kotlinx.serialization.json.*
     suspend fun load(more: Boolean = false) { try { val page = store.read<GroupMemberPage>("${store.path}/${detail.group.id}/members", if (more) mapOf("cursor" to (cursor ?: "")) else emptyMap()); members = if (more) members + page.items else page.items; cursor = page.nextCursor; loaded = true } catch (e: CancellationException) { throw e } catch (e: Exception) { store.error = GroupsStore.message(e); loaded = true } }
     LaunchedEffect(detail.group.id) { load() }
     LazyColumn(contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { OutlinedTextField(query, { query = it }, label = { Text("Find someone") }, modifier = Modifier.fillMaxWidth(), singleLine = true) }
+        item { FaithFormSearchField(query, { query = it }, "Find someone", onSearch = {}) }
         item { GroupFeedback(store) }
         if (!loaded) item { CircularProgressIndicator() }
         items(members.filter { query.isEmpty() || it.name.contains(query, ignoreCase = true) }, key = { it.membershipId }) { member ->

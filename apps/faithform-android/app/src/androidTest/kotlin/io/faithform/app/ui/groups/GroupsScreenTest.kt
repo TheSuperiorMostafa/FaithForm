@@ -18,10 +18,22 @@ class GroupsScreenTest {
     private val group = """{"id":"00000000-0000-4000-8000-000000000001","name":"The Table","summary":null,"coverImageUrl":null,"type":{"id":"life","name":"Life group","icon":"users"},"memberCount":14,"capacity":20,"enrollment":"open","visibility":"public","status":"active","scheduleText":"Tuesdays at 6:30 pm","meetingDays":[2],"campusName":null,"locationName":null,"nextEvent":null,"membershipState":"member","groupRole":"member","joinAction":"leave","chat":null,"isYouth":false,"version":1}"""
     private val api = ApiClient(ApiEnvironment("groups-test", "https://example.invalid"), 1, object : HttpTransport {
         override suspend fun perform(request: HttpRequest): HttpResponse {
-            val data = if (request.url.contains("/filters")) """{"types":[],"campuses":[],"days":[]}""" else if (request.url.contains("/discover")) """{"items":[],"nextCursor":null}""" else """{"items":[$group],"directMessagesEnabled":false,"messagingAvailable":false}"""
+            val data = if (request.url.contains("/preferences")) """{"level":"mentions","groups":[]}""" else if (request.url.contains("/blocks")) """{"items":[]}""" else if (request.url.contains("/filters")) """{"types":[],"campuses":[],"days":[]}""" else if (request.url.contains("/discover")) """{"items":[],"nextCursor":null}""" else """{"items":[$group],"directMessagesEnabled":false,"messagingAvailable":false}"""
             return HttpResponse(200, """{"ok":true,"data":$data,"meta":{"apiVersion":"2026-08-24","apiMajor":1,"requestId":"groups-test","minimumSupportedClientBuild":1}}""", emptyMap())
         }
     }, object : TokenProvider { override suspend fun validAccessToken() = "groups-test"; override suspend fun invalidate() {} })
+
+    @Test fun notificationChoicesAreSelectableAndSaveDismissesSheet() {
+        rule.setContent { FaithFormTheme { GroupsHost(api, "grace", "preferences-test") } }
+        rule.onNodeWithContentDescription("Messaging preferences").performClick()
+        rule.waitUntil(10000) { rule.onAllNodesWithText("Mentions only").fetchSemanticsNodes().isNotEmpty() }
+        rule.onNodeWithText("Mentions only").assertIsSelected()
+        rule.onNodeWithText("All messages").performClick().assertIsSelected()
+        val file = File(rule.activity.getExternalFilesDir(null), "notifications-android.png")
+        file.outputStream().use { androidx.test.platform.app.InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot().compress(android.graphics.Bitmap.CompressFormat.PNG, 100, it) }
+        rule.onNodeWithText("Save preference").performScrollTo().performClick()
+        rule.waitUntil(10000) { rule.onAllNodesWithText("Stay close. On your terms.").fetchSemanticsNodes().isEmpty() }
+    }
 
     @Test fun groupsShowMembershipAndDiscoveryEmptyState() {
         rule.setContent { FaithFormTheme { GroupsHost(api, "grace", "groups-test") } }
