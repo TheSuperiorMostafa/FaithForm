@@ -15,7 +15,7 @@ import {
   type ValidInvite,
 } from "@/lib/onboarding/validate-invite";
 import { requireOnboardingInvitee } from "@/lib/onboarding/require-invitee";
-import { validateImageBuffer } from "@/lib/security/validate-image";
+import { prepareChurchLogo } from "@/lib/branding/church-logo";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { dashboardEmailRedirect } from "@/lib/auth/auth-redirects";
@@ -174,15 +174,11 @@ export async function uploadChurchLogo(
     return { ok: false, error: "No file provided." };
   }
 
-  if (file.size > 2 * 1024 * 1024) {
-    return { ok: false, error: "Logo must be 2MB or smaller." };
+  const prepared = await prepareChurchLogo(file, formData.get("crop"));
+  if (!prepared.ok) {
+    return { ok: false, error: prepared.error };
   }
-
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const validated = await validateImageBuffer(buffer);
-  if (!validated) {
-    return { ok: false, error: "Logo must be a valid PNG or JPG image." };
-  }
+  const validated = prepared.image;
 
   const path = `${churchId}/logo.${validated.ext}`;
 
@@ -202,7 +198,9 @@ export async function uploadChurchLogo(
     .from("church-logos")
     .getPublicUrl(path);
 
-  const logoUrl = publicUrl.publicUrl;
+  // The path is reused on every upload, so the URL carries a version: without
+  // it a re-framed logo keeps showing the old crop from every browser cache.
+  const logoUrl = `${publicUrl.publicUrl}?v=${Date.now()}`;
   await admin
     .from("churches")
     .update({ logo_url: logoUrl })

@@ -11,9 +11,11 @@
  *   feature  .site-figure       the split-grid photo column
  *   portrait .site-staff-photo  staff card, near-square
  *   video    .site-sermon-stage featured sermon player
+ *   logo     the church avatar  square in the apps, the header and footer
+ *   cover    the church cover   16:9 in the apps, the site hero crops a band
  */
 
-export type ImageAspectKey = "banner" | "feature" | "portrait" | "video" | "free";
+export type ImageAspectKey = "banner" | "feature" | "portrait" | "video" | "logo" | "cover" | "free";
 
 export type ImageAspect = {
   key: ImageAspectKey;
@@ -57,11 +59,32 @@ export const IMAGE_ASPECTS: Record<ImageAspectKey, ImageAspect> = {
     output: { width: 1600, height: 900 },
     hint: "Standard widescreen, like a video thumbnail.",
   },
+  logo: {
+    key: "logo",
+    label: "Church logo",
+    // The apps draw the church logo as a square avatar and centre-crop
+    // anything else, so it is framed here the way groups frame their photo:
+    // once, by the church, and the same on every screen. The output matches
+    // saveBrandingImage's logo size, so every upload path stores one shape.
+    ratio: 1,
+    output: { width: 1024, height: 1024 },
+    hint: "A square, 1:1 — the shape the apps show.",
+  },
+  cover: {
+    key: "cover",
+    label: "Church cover",
+    // One cover feeds the apps' church page and the website hero. The apps
+    // show it 16:9, which is also what saveBrandingImage stores, so every
+    // upload frames it at that shape; the site's hero strip shows the middle
+    // band of it. Framing it as a banner instead left the apps upscaling a
+    // sliver to fill their frame.
+    ratio: 16 / 9,
+    output: { width: 1600, height: 900 },
+    hint: "Widescreen, 16:9 — the shape the apps show. Your website shows the middle band.",
+  },
   free: {
     key: "free",
     label: "Any shape",
-    // Logos render with object-fit: contain and must never be cropped — a
-    // trimmed wordmark is worse than a letterboxed one.
     ratio: null,
     output: null,
     hint: "Kept as-is, never cropped.",

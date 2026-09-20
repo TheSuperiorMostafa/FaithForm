@@ -2,13 +2,16 @@
 
 import { useRef, useState, useTransition } from "react";
 import { Palette } from "lucide-react";
+import type { Area } from "react-easy-crop";
 import {
   updateGivingBranding,
   uploadGivingLogo,
 } from "@/app/dashboard/settings/giving-actions";
+import { ImageCropper } from "@/components/website-admin/image-cropper";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { downscaleForUpload, UPLOAD_BUDGET_BYTES } from "@/lib/sites/downscale-image";
 import { cn } from "@/lib/utils";
 
 type GivingBrandingSettingsProps = {
@@ -30,17 +33,40 @@ export function GivingBrandingSettings({
   const [preview, setPreview] = useState<string | null>(logoUrl);
   const [primary, setPrimary] = useState(primaryColor ?? "#002D5F");
   const [accent, setAccent] = useState(accentColor ?? "#C5A059");
+  const [cropping, setCropping] = useState<File | null>(null);
+  // Shrinking a phone photo takes a beat before the cropper can open.
+  const [preparing, setPreparing] = useState(false);
 
-  const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  /**
+   * The logo is framed in the same square cropper the group photo uses. The
+   * shrink comes first because the cropper reports source-image pixels, which
+   * must describe the file that is actually uploaded.
+   */
+  const handleLogoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    // Cleared so choosing the same file again still opens the cropper.
+    e.target.value = "";
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = () => setPreview(reader.result as string);
-    reader.readAsDataURL(file);
+    setMessage(null);
+    setPreparing(true);
+    let ready: File;
+    try {
+      ready = await downscaleForUpload(file);
+    } finally {
+      setPreparing(false);
+    }
+    if (ready.size > UPLOAD_BUDGET_BYTES) {
+      setMessage("That photo is too large to upload. Save it as a JPG and try again.");
+      return;
+    }
+    setCropping(ready);
+  };
 
+  const uploadLogo = (file: File, crop: Area) => {
     const formData = new FormData();
     formData.set("logo", file);
+    formData.set("crop", JSON.stringify(crop));
     startTransition(async () => {
       setMessage(null);
       const result = await uploadGivingLogo(formData);
@@ -108,7 +134,7 @@ export function GivingBrandingSettings({
             <img
               src={preview}
               alt="Church logo preview"
-              className="h-14 w-auto max-w-[160px] rounded-md border border-border object-contain"
+              className="size-14 rounded-md border border-border object-cover"
             />
           ) : (
             <div className="flex h-14 w-28 items-center justify-center rounded-md border border-dashed border-border text-xs text-muted-foreground">
@@ -119,7 +145,7 @@ export function GivingBrandingSettings({
             <input
               ref={fileRef}
               type="file"
-              accept="image/png,image/jpeg"
+              accept="image/png,image/jpeg,image/webp"
               className="hidden"
               onChange={handleLogoChange}
             />
@@ -127,12 +153,12 @@ export function GivingBrandingSettings({
               type="button"
               variant="outline"
               size="sm"
-              disabled={pending}
+              disabled={pending || preparing}
               onClick={() => fileRef.current?.click()}
             >
-              {preview ? "Replace logo" : "Upload logo"}
+              {preparing ? "Preparing…" : preview ? "Replace logo" : "Upload logo"}
             </Button>
-            <p className="mt-1 text-xs text-muted-foreground">PNG or JPG, max 2MB</p>
+            <p className="mt-1 text-xs text-muted-foreground">A square, 1:1 — the shape the apps show</p>
           </div>
         </div>
       </div>
@@ -210,6 +236,19 @@ export function GivingBrandingSettings({
           Reset to defaults
         </Button>
       </div>
+
+      {cropping && (
+        <ImageCropper
+          file={cropping}
+          aspectKey="logo"
+          onCancel={() => setCropping(null)}
+          onConfirm={(crop) => {
+            const file = cropping;
+            setCropping(null);
+            uploadLogo(file, crop);
+          }}
+        />
+      )}
     </div>
   );
 }

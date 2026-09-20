@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { requireChurchAuth } from "@/lib/auth/church";
-import { validateImageBuffer } from "@/lib/security/validate-image";
+import { prepareChurchLogo } from "@/lib/branding/church-logo";
 import { normalizeHexColor } from "@/lib/giving/branding";
 import { extractLogoTheme } from "@/lib/branding/church-theme";
 import { ensureDefaultFunds } from "@/lib/giving/funds";
@@ -225,11 +225,9 @@ export async function uploadGivingLogo(
 
   const file = formData.get("logo") as File | null;
   if (!file || file.size === 0) return { error: "No file provided." };
-  if (file.size > 2 * 1024 * 1024) return { error: "Logo must be 2MB or smaller." };
-
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const validated = await validateImageBuffer(buffer);
-  if (!validated) return { error: "Logo must be a valid PNG or JPG image." };
+  const prepared = await prepareChurchLogo(file, formData.get("crop"));
+  if (!prepared.ok) return { error: prepared.error };
+  const validated = prepared.image;
 
   const path = `${auth.churchId}/logo.${validated.ext}`;
 
@@ -241,7 +239,8 @@ export async function uploadGivingLogo(
   if (uploadError) return { error: uploadError.message };
 
   const { data: publicUrl } = admin.storage.from("church-logos").getPublicUrl(path);
-  const logoUrl = publicUrl.publicUrl;
+  // Same path on every upload: version the URL so a re-framed logo shows.
+  const logoUrl = `${publicUrl.publicUrl}?v=${Date.now()}`;
 
   const { error } = await admin
     .from("churches")

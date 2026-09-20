@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, useTransition } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import type { Area } from "react-easy-crop";
 import {
   completeOnboarding,
   createOnboardingAccount,
@@ -179,9 +180,10 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
     });
   }
 
-  async function handleLogoUpload(file: File) {
+  async function handleLogoUpload(file: File, crop: Area) {
     const formData = new FormData();
     formData.set("logo", file);
+    formData.set("crop", JSON.stringify(crop));
     const result = await uploadChurchLogo(
       props.churchId,
       props.token,

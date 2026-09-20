@@ -2,11 +2,14 @@
 
 import { useRef, useState } from "react";
 import { Upload } from "lucide-react";
+import type { Area } from "react-easy-crop";
 import type { ProfileData } from "@/components/onboarding/OnboardingWizard";
+import { ImageCropper } from "@/components/website-admin/image-cropper";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { downscaleForUpload, UPLOAD_BUDGET_BYTES } from "@/lib/sites/downscale-image";
 import { cn } from "@/lib/utils";
 
 const US_STATES = [
@@ -28,7 +31,7 @@ type StepProfileProps = {
   onChange: (profile: ProfileData) => void;
   error: string | null;
   pending: boolean;
-  onUpload: (file: File) => Promise<string | null>;
+  onUpload: (file: File, crop: Area) => Promise<string | null>;
   onNext: () => void;
   onSkip: () => void;
 };
@@ -43,12 +46,40 @@ export function StepProfile({
   onSkip,
 }: StepProfileProps) {
   const [uploading, setUploading] = useState(false);
+  const [preparing, setPreparing] = useState(false);
+  const [cropping, setCropping] = useState<File | null>(null);
+  const [pickError, setPickError] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(profile.logoUrl || null);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  /**
+   * The logo is framed in the same square cropper the group photo uses. The
+   * shrink comes first because the cropper reports source-image pixels, which
+   * must describe the file that is actually uploaded.
+   */
   async function handleFile(file: File) {
+    setPickError(null);
+    if (!file.type.startsWith("image/")) {
+      setPickError("That file isn't an image.");
+      return;
+    }
+    setPreparing(true);
+    let ready: File;
+    try {
+      ready = await downscaleForUpload(file);
+    } finally {
+      setPreparing(false);
+    }
+    if (ready.size > UPLOAD_BUDGET_BYTES) {
+      setPickError("That photo is too large to upload. Save it as a JPG and try again.");
+      return;
+    }
+    setCropping(ready);
+  }
+
+  async function upload(file: File, crop: Area) {
     setUploading(true);
-    const url = await onUpload(file);
+    const url = await onUpload(file, crop);
     setUploading(false);
     if (url) {
       setPreview(url);
@@ -170,26 +201,50 @@ export function StepProfile({
             <img
               src={preview}
               alt="Logo preview"
-              className="mb-2 max-h-24 max-w-full rounded-lg object-contain"
+              className="mb-2 size-24 rounded-lg object-cover"
             />
           ) : (
             <Upload className="mb-2 size-8 text-muted-foreground" strokeWidth={1.5} />
           )}
           <p className="text-sm text-muted-foreground">
-            {uploading ? "Uploading…" : "Drag & drop or click to upload (PNG/JPG, max 2MB)"}
+            {uploading
+              ? "Uploading…"
+              : preparing
+                ? "Preparing photo…"
+                : "Drag & drop or click to upload — you'll frame it as a square"}
           </p>
           <input
             ref={fileRef}
             type="file"
-            accept="image/png,image/jpeg,image/jpg"
+            accept="image/png,image/jpeg,image/jpg,image/webp"
             className="hidden"
             onChange={(e) => {
               const file = e.target.files?.[0];
+              // Cleared so choosing the same file again still opens the cropper.
+              e.target.value = "";
               if (file) void handleFile(file);
             }}
           />
         </div>
+        {pickError && (
+          <p className="text-sm text-destructive" role="alert">
+            {pickError}
+          </p>
+        )}
       </div>
+
+      {cropping && (
+        <ImageCropper
+          file={cropping}
+          aspectKey="logo"
+          onCancel={() => setCropping(null)}
+          onConfirm={(crop) => {
+            const file = cropping;
+            setCropping(null);
+            void upload(file, crop);
+          }}
+        />
+      )}
 
       {error && (
         <p className="text-sm text-destructive" role="alert">
@@ -206,7 +261,7 @@ export function StepProfile({
         >
           Skip for now
         </button>
-        <Button type="button" onClick={onNext} disabled={pending || uploading} className="w-full sm:w-auto">
+        <Button type="button" onClick={onNext} disabled={pending || uploading || preparing} className="w-full sm:w-auto">
           {pending ? "Saving…" : "Continue →"}
         </Button>
       </div>

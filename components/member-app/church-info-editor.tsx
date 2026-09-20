@@ -197,7 +197,7 @@ export function ChurchInfoEditor({
             label="Cover photo"
             value={form.coverImageUrl}
             onChange={(url) => set("coverImageUrl", url)}
-            aspect="video"
+            aspect="cover"
             previewClassName="max-w-md"
             help="A wide photo of your building, your people, or worship. It fills the top of your page."
             disabled={disabled}
@@ -208,7 +208,7 @@ export function ChurchInfoEditor({
               label="Logo"
               value={form.logoUrl}
               onChange={(url) => set("logoUrl", url)}
-              help="Square works best."
+              aspect="logo"
               disabled={disabled}
               uploadAction={uploadChurchAppImage}
             />

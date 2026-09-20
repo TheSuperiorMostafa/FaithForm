@@ -132,18 +132,20 @@ export function DetailsForm({
           </Field>
           <ImageUploadField
             label="Logo"
-            help="Shown in the header and footer. A square image works best."
-            // Never cropped: the site renders logos with object-fit: contain,
-            // and trimming a wordmark is worse than letterboxing it.
-            aspect="free"
+            help="Shown in the header and footer, and as your church's picture in the app."
+            // One logo feeds the site and the apps, and the apps show it
+            // square, so it is framed here rather than centre-cropped there.
+            aspect="logo"
             value={form.logoUrl}
             disabled={!canEdit}
             onChange={(url) => set("logoUrl", url)}
           />
           <ImageUploadField
             label="Cover photo"
-            help="The banner across the very top of your page. The photo beside your welcome text is set separately, in Pages → About."
-            aspect="banner"
+            help="Across the top of your page, and at the top of your church's page in the app. The photo beside your welcome text is set separately, in Pages → About."
+            // Shared with the apps, so it is framed at their shape rather than
+            // as the hero strip — the same cover crop on every surface.
+            aspect="cover"
             value={form.coverImageUrl}
             disabled={!canEdit}
             onChange={(url) => set("coverImageUrl", url)}
