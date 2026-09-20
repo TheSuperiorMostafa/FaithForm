@@ -156,6 +156,56 @@ export async function listAppConnections(
   return connections;
 }
 
+/**
+ * The photo to show for each of this church's people, by person.
+ *
+ * `visitor_accounts.avatar_url` is the source of truth for a person's photo
+ * (docs/faithform/PROFILE_PHOTOS.md), so someone who set one in the app is
+ * shown with it wherever staff see them, and People's own `photo_url` is the
+ * fallback. Read with the service role and scoped to the church the caller was
+ * already authorized for, as every staff read is: row security keeps an
+ * account's own row to itself, so a link alone cannot reach the photo.
+ */
+export async function listAppPhotos(
+  admin: SupabaseClient,
+  churchId: string,
+): Promise<Map<string, string>> {
+  const photos = new Map<string, string>();
+  const { data, error } = await admin
+    .from("visitor_people_links")
+    .select("member_id, account_id")
+    .eq("church_id", churchId)
+    .eq("is_active", true)
+    .limit(5000);
+  if (error) {
+    console.error("listAppPhotos:", error.message);
+    return photos;
+  }
+  const links = (data ?? []) as { member_id: string; account_id: string }[];
+  if (links.length === 0) return photos;
+
+  const { data: accounts, error: accountsError } = await admin
+    .from("visitor_accounts")
+    .select("id, avatar_url")
+    .in("id", [...new Set(links.map((link) => link.account_id))]);
+  if (accountsError) {
+    console.error("listAppPhotos:", accountsError.message);
+    return photos;
+  }
+  // Only an ordinary public rendition is ever rendered as someone's face.
+  const avatars = new Map(
+    ((accounts ?? []) as { id: string; avatar_url: string | null }[])
+      .filter((account): account is { id: string; avatar_url: string } =>
+        Boolean(account.avatar_url && /^https:\/\//.test(account.avatar_url)))
+      .map((account) => [account.id, account.avatar_url]),
+  );
+  for (const link of links) {
+    const avatar = avatars.get(link.account_id);
+    if (avatar) photos.set(link.member_id, avatar);
+  }
+  return photos;
+}
+
 export type AppMemberNotInPeople = {
   accountId: string;
   displayName: string | null;

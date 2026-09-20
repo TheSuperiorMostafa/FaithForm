@@ -15,6 +15,7 @@ import {
 import { attendanceSectionTabs } from "@/lib/attendance/section-tabs";
 import { filterNavByFeatures, isNavItemActive, navItems } from "@/components/dashboard/nav-items";
 import { getAttendanceTrend } from "@/lib/queries/dashboard";
+import { listAppPhotos } from "@/lib/faithform/app-people";
 import { getMembersForChurch } from "@/lib/queries/members";
 import {
   escapeLikePattern,
@@ -275,6 +276,50 @@ test("People shows who is on the app only where the church offers the app", () =
   assert.match(page, /showAppStatus\s*\?\s*listAppConnections\(supabase, auth\.churchId\)/);
   assert.match(page, /<PeopleClaimsPanel/);
   assert.match(page, /<AppMembersNotInPeoplePanel/);
+  // A photo is the person's own, not a fact about the church's app plan, so
+  // it is loaded whatever that flag says.
+  assert.match(page, /listAppPhotos\(createAdminClient\(\), auth\.churchId\)/);
+  assert.doesNotMatch(page, /showAppStatus\s*\?\s*listAppPhotos/);
+});
+
+test("People shows the photo someone set in the app, and initials without one", async () => {
+  const tables: Record<string, unknown[]> = {
+    visitor_people_links: [
+      { member_id: "ann", account_id: "acc-ann" },
+      { member_id: "ben", account_id: "acc-ben" },
+      { member_id: "cal", account_id: "acc-cal" },
+      { member_id: "dee", account_id: "acc-dee" },
+    ],
+    visitor_accounts: [
+      { id: "acc-ann", avatar_url: "https://cdn.example/ann.jpg" },
+      // Nobody has to have one.
+      { id: "acc-ben", avatar_url: null },
+      // Nothing but an ordinary public image is rendered as a face.
+      { id: "acc-cal", avatar_url: "javascript:alert(1)" },
+      { id: "acc-dee", avatar_url: "http://cdn.example/dee.jpg" },
+    ],
+  };
+  const admin = {
+    from: (table: string) => {
+      const query = {
+        select: () => query,
+        eq: () => query,
+        in: () => query,
+        limit: () => query,
+        then: (resolve: (value: unknown) => void) =>
+          resolve({ data: tables[table] ?? [], error: null }),
+      };
+      return query;
+    },
+  } as unknown as SupabaseClient;
+
+  const photos = await listAppPhotos(admin, "c");
+  assert.deepEqual(Object.fromEntries(photos), { ann: "https://cdn.example/ann.jpg" });
+
+  // The list renders that photo and falls back to initials without one.
+  const manager = read("components/people/people-manager.tsx");
+  assert.match(manager, /<ProfileAvatar\s+url=\{appPhotos\[member\.id\] \?\? member\.photo_url\}/);
+  assert.match(manager, /initials=\{getInitials\(member\.first_name, member\.last_name\)\}/);
 });
 
 

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, Search, Smartphone } from "lucide-react";
 
+import { ProfileAvatar } from "@/components/dashboard/profile-avatar";
 import { MemberFormPanel } from "@/components/people/member-form-panel";
 import { Button } from "@/components/ui/button";
 import type { ChurchMember } from "@/lib/queries/members";
@@ -19,6 +20,8 @@ type PeopleManagerProps = {
   showAppStatus?: boolean;
   /** People connected to an app account, by member id. */
   appConnections?: Record<string, { linkedAt: string }>;
+  /** The photo someone set in the app, by member id. Initials without one. */
+  appPhotos?: Record<string, string>;
 };
 
 type FilterOption = "all" | "on-app" | "missing-phone" | "inactive";
@@ -33,6 +36,7 @@ export function PeopleManager({
   isAdmin,
   showAppStatus = false,
   appConnections = {},
+  appPhotos = {},
 }: PeopleManagerProps) {
   const [members, setMembers] = useState(initialMembers);
   // The panels above the list change People too — confirming someone from the
@@ -344,10 +348,13 @@ export function PeopleManager({
                   )}
                 >
                   <div
-                    className="flex size-11 shrink-0 items-center justify-center rounded-full bg-accent/15 text-base font-bold text-accent"
+                    className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-accent/15 text-base font-bold text-accent"
                     aria-hidden
                   >
-                    {getInitials(member.first_name, member.last_name)}
+                    <ProfileAvatar
+                      url={appPhotos[member.id] ?? member.photo_url}
+                      initials={getInitials(member.first_name, member.last_name)}
+                    />
                   </div>
 
                   <div className="min-w-0 flex-1">
