@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Check, Copy, Link2, Plus, Search, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { StaffMemberRow, StaffRequestRow, listStaffBans, listStaffInvitations } from "@/lib/groups/staff/people";
@@ -23,9 +23,70 @@ export function Members({ groupId, members, archived, bans }: { groupId: string;
   </>;
 }
 function AddPeople({ groupId, close }: { groupId: string; close: () => void }) {
-  const [results, setResults] = useState<{ memberId: string; name: string; hasApp: boolean }[] | null>(null); const [selected, setSelected] = useState<string[]>([]); const [role, setRole] = useState<GroupRole>("member");
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<{ memberId: string; name: string; hasApp: boolean }[] | null>(null);
+  const [selected, setSelected] = useState<string[]>([]);
+  const [role, setRole] = useState<GroupRole>("member");
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const searchVersion = useRef(0);
   const { pending, error, run } = useGroupAction();
-  return <div className="space-y-5"><form className="flex items-end gap-2" onSubmit={e => { e.preventDefault(); const q = String(new FormData(e.currentTarget).get("query") ?? ""); run(() => actions.findPeople(groupId, q), undefined, setResults); }}><div className="flex-1"><Field label="Search your people"><input name="query" autoFocus required placeholder="First or last name" /></Field></div><Button type="submit" disabled={pending}>Search</Button></form>{results && (results.length ? <div className="max-h-64 overflow-y-auto">{results.map(p => <label key={p.memberId} className="g-row cursor-pointer"><span className="flex items-center gap-3"><Avatar name={p.name} /><span><strong className="g-row-title">{p.name}</strong><span className="block text-xs text-muted-foreground">{p.hasApp ? "Has the FaithForm app" : "Invite them to download the app"}</span></span></span><input type="checkbox" checked={selected.includes(p.memberId)} onChange={e => setSelected(s => e.target.checked ? [...s, p.memberId] : s.filter(id => id !== p.memberId))} /></label>)}</div> : <p className="text-sm text-muted-foreground">No matching people outside this group. Try another name.</p>)}<Field label="Add as"><select value={role} onChange={e => setRole(e.target.value as GroupRole)}><option value="member">Member</option><option value="leader">Leader</option><option value="manager">Manager</option></select></Field>{error && <Notice>{error}</Notice>}<Button disabled={pending || selected.length === 0} onClick={() => run(() => actions.addMembers(groupId, selected, role), "People added", close)}><Plus className="size-4" />Add {selected.length || ""} {selected.length === 1 ? "person" : "people"}</Button></div>;
+
+  useEffect(() => {
+    const version = ++searchVersion.current;
+    let active = true;
+    const needle = query.trim();
+    setResults(null);
+    setSearchError(null);
+    setSearching(!!needle);
+    if (!needle) return;
+
+    const timer = setTimeout(async () => {
+      try {
+        const result = await actions.findPeople(groupId, needle);
+        if (!active || version !== searchVersion.current) return;
+        if (result.ok) setResults(result.data);
+        else setSearchError(result.error);
+      } catch {
+        if (active && version === searchVersion.current) {
+          setSearchError("We couldn’t search your people. Try changing the name to search again.");
+        }
+      } finally {
+        if (active && version === searchVersion.current) setSearching(false);
+      }
+    }, 250);
+    return () => { active = false; clearTimeout(timer); };
+  }, [groupId, query]);
+
+  return <div className="space-y-5">
+    <Field label="Search your people" hint="Results appear as you type.">
+      <input
+        name="query"
+        type="search"
+        autoFocus
+        autoComplete="off"
+        maxLength={80}
+        placeholder="First or last name"
+        value={query}
+        onChange={e => {
+          // Invalidate in-flight results immediately, before the next effect runs.
+          searchVersion.current += 1;
+          setQuery(e.target.value);
+          setResults(null);
+          setSearchError(null);
+          setSearching(!!e.target.value.trim());
+        }}
+      />
+    </Field>
+    <div role="status" className="text-sm text-muted-foreground">
+      {searching ? "Searching…" : !query.trim() ? "Start typing a name to find people." : results ? results.length ? `${results.length} ${results.length === 1 ? "person found" : "people found"}.` : "No matching people outside this group. Try another name." : null}
+    </div>
+    {!!results?.length && <div className="max-h-64 overflow-y-auto">{results.map(p => <label key={p.memberId} className="g-row cursor-pointer"><span className="flex items-center gap-3"><Avatar name={p.name} /><span><strong className="g-row-title">{p.name}</strong><span className="block text-xs text-muted-foreground">{p.hasApp ? "Has the FaithForm app" : "Invite them to download the app"}</span></span></span><input type="checkbox" checked={selected.includes(p.memberId)} onChange={e => setSelected(s => e.target.checked ? [...s, p.memberId] : s.filter(id => id !== p.memberId))} /></label>)}</div>}
+    {searchError && <Notice>{searchError}</Notice>}
+    <Field label="Add as"><select value={role} onChange={e => setRole(e.target.value as GroupRole)}><option value="member">Member</option><option value="leader">Leader</option><option value="manager">Manager</option></select></Field>
+    {error && <Notice>{error}</Notice>}
+    <Button disabled={pending || selected.length === 0} onClick={() => run(() => actions.addMembers(groupId, selected, role), "People added", close)}><Plus className="size-4" />Add {selected.length || ""} {selected.length === 1 ? "person" : "people"}</Button>
+  </div>;
 }
 export function Invitations({ groupId, invitations, archived }: { groupId: string; invitations: Awaited<ReturnType<typeof listStaffInvitations>>; archived: boolean }) {
   const { pending, error, run } = useGroupAction(); const [url, setUrl] = useState<string | null>(null); const [copied, setCopied] = useState(false);
