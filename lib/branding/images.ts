@@ -35,7 +35,13 @@ export async function saveBrandingImage(admin: SupabaseClient, target: BrandingT
     if (!normalized) throw new MobileError("invalid_request", "Choose a readable JPG, PNG or WebP image.");
     path = `${prefix}${target.kind}-${randomUUID()}.${normalized.ext}`;
     const result = await storage.upload(path, normalized.buffer, { contentType: normalized.contentType, cacheControl: "31536000", upsert: false });
-    if (result.error) throw new MobileError("unavailable", "Your image could not be uploaded. Try again.");
+    // The bucket name and the storage error are ours, not the caller's: a
+    // missing bucket and a transient outage read identically to a device, so
+    // the cause has to reach the logs or the next report is undiagnosable.
+    if (result.error) {
+      console.error(`[branding] ${BUCKET} upload failed: ${result.error.message}`);
+      throw new MobileError("unavailable", "Your image could not be uploaded. Try again.");
+    }
     url = storage.getPublicUrl(path).data.publicUrl;
   }
   const column = target.kind === "logo" ? "logo_url" : "cover_image_url";
@@ -49,6 +55,11 @@ export async function saveBrandingImage(admin: SupabaseClient, target: BrandingT
   if (result.error || !result.data) {
     // A transport error can be ambiguous: only clean up after a confirmed loser.
     if (!result.error && path) await storage.remove([path]);
+    // Distinguishes a genuine driver error from a lost compare-and-swap, which
+    // otherwise produce the same 503 with nothing to tell them apart.
+    console.error(
+      `[branding] ${target.kind} row update failed: ${result.error?.message ?? "compare-and-swap lost"}`,
+    );
     throw new MobileError("unavailable", "The image could not be saved. Refresh and try again.");
   }
   const publicPrefix = storage.getPublicUrl(prefix).data.publicUrl;
