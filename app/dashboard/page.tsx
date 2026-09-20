@@ -1,3 +1,4 @@
+import { LiveAttendanceRefresh } from "@/components/attendance/live-attendance-refresh";
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 
@@ -62,6 +63,7 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
+      <LiveAttendanceRefresh />
       <Suspense fallback={<HeroSkeleton />}>
         <HeroHoursSaved churchId={churchId} range={range} />
       </Suspense>

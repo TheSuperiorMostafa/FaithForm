@@ -378,6 +378,52 @@ struct CoreLocationAdapterTests {
     // Callbacks
     // -----------------------------------------------------------------------
 
+    @Test("a completed request's timeout cannot cancel a later location request")
+    func oldTimeoutCannotCancelNewFix() async {
+        let fake = FakeCoreLocation()
+        fake.set(status: .authorizedAlways)
+        fake.fix = CLLocation(
+            coordinate: CLLocationCoordinate2D(latitude: 38.2527, longitude: -85.7585),
+            altitude: 0, horizontalAccuracy: 10, verticalAccuracy: 10, timestamp: Date()
+        )
+        let adapter = await make(fake)
+        #expect(await adapter.requestOneShotLocation(timeout: 0.1) != nil)
+        let nextFix = fake.fix!
+        fake.fix = nil
+        let request = Task { await adapter.requestOneShotLocation(timeout: 2) }
+        try? await Task.sleep(for: .milliseconds(200))
+        fake.delegate?.locationManager?(CLLocationManager(), didUpdateLocations: [nextFix])
+        #expect(await request.value != nil)
+    }
+
+    @Test("opening inside a campus triggers arrival even without an OS boundary callback")
+    func alreadyInsideFallback() async {
+        let fake = FakeCoreLocation()
+        fake.set(status: .authorizedAlways)
+        fake.fix = CLLocation(
+            coordinate: CLLocationCoordinate2D(latitude: 38.2527, longitude: -85.7585),
+            altitude: 0, horizontalAccuracy: 10, verticalAccuracy: 10, timestamp: Date()
+        )
+        let adapter = await make(fake)
+        await adapter.startMonitoring(MonitoredRegion(
+            identifier: "faithform.campus.inside", latitude: 38.2527, longitude: -85.7585, radiusMeters: 50
+        ))
+        let events = StateEvents()
+        await adapter.setRegionHandler { identifier, transition in
+            await events.append(identifier, transition)
+        }
+        await adapter.requestStateForMonitoredRegions()
+        #expect(await events.inside == ["faithform.campus.inside"])
+        #expect(fake.calls.contains("requestState:faithform.campus.inside"))
+    }
+
+    private actor StateEvents {
+        var inside: [String] = []
+        func append(_ identifier: String, _ transition: RegionTransition) {
+            if transition == .inside { inside.append(identifier) }
+        }
+    }
+
     @Test("a fix is translated into a sample with nothing extra carried over")
     func fixTranslation() async {
         let fake = FakeCoreLocation()

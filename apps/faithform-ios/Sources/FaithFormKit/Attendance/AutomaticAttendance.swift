@@ -279,6 +279,8 @@ public actor AutomaticAttendanceCoordinator {
         self.now = now
     }
 
+    private var activityChurch: String?
+    public func currentActivityChurch() -> String? { activityChurch }
     public func currentPhase() -> EvidencePhase { phase }
     public func currentSettings() -> AutomaticAttendanceSettings { settings }
 
@@ -292,6 +294,8 @@ public actor AutomaticAttendanceCoordinator {
             // A different identity has different occurrences. Never carry the
             // suppression list or the refusal counters across one.
             settledOccurrences = []
+            activityChurch = nil
+            phase = .idle
             policies = [:]
             exitEpochs = [:]
             lastEntryAt = [:]
@@ -412,6 +416,7 @@ public actor AutomaticAttendanceCoordinator {
             return phase
         }
 
+        activityChurch = church
         if let refusal = outcome.churchRefusals[church] ?? outcome.refusal {
             if refusal != Self.unavailableRefusal {
                 return await fail(Self.refusal(forReconcile: refusal), church: church)
@@ -638,7 +643,12 @@ public actor AutomaticAttendanceCoordinator {
             _ = await resumePending()
             return
         }
-        if let last = lastEntryAt[regionId], now().timeIntervalSince(last) < stateEntryInterval {
+        let retryInterval: TimeInterval
+        switch phase {
+        case .refused, .retrying, .holding: retryInterval = 30
+        default: retryInterval = stateEntryInterval
+        }
+        if let last = lastEntryAt[regionId], now().timeIntervalSince(last) < retryInterval {
             return
         }
         _ = await handleRegionEntered(regionId: regionId)
@@ -672,6 +682,7 @@ public actor AutomaticAttendanceCoordinator {
             guard let scoped = scopedPartition(slug),
                   let attempt = await store.current(partition: scoped, now: now())
             else { continue }
+            activityChurch = slug
             phase = await resume(attempt, accountId: accountId, partition: scoped)
         }
         return phase
@@ -777,8 +788,11 @@ public actor AutomaticAttendanceCoordinator {
             await store.update(attempt, partition: scoped)
         }
 
-        // **Nothing sleeps here.** The OS delivers the question at the instant;
-        // the app itself holds no timer and no background assertion.
+        // A zero-dwell policy means count on arrival. Finish during this OS
+        // execution opportunity; a stationary phone may never get another one.
+        if attempt.maySubmitArrival(now: now()), let accountId {
+            return await submitArrival(attempt, accountId: accountId, partition: scoped)
+        }
         await schedulePromptIfAhead(attempt)
         phase = .awaitingDwell(occurrenceId: attempt.occurrenceId, since: attempt.openedAt)
         return phase

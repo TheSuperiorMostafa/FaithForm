@@ -86,17 +86,23 @@ public struct AutomaticAttendanceSnapshot: Equatable, Sendable {
     public let isSignedIn: Bool
     public let outcome: ReconcileOutcome
     public let pending: [PendingArrival]
+    public let activity: EvidencePhase
+    public let activityChurchSlug: String?
 
     public init(
         settings: AutomaticAttendanceSettings,
         isSignedIn: Bool,
         outcome: ReconcileOutcome,
-        pending: [PendingArrival]
+        pending: [PendingArrival],
+        activity: EvidencePhase = .idle,
+        activityChurchSlug: String? = nil
     ) {
         self.settings = settings
         self.isSignedIn = isSignedIn
         self.outcome = outcome
         self.pending = pending
+        self.activity = activity
+        self.activityChurchSlug = activityChurchSlug
     }
 }
 
@@ -148,6 +154,7 @@ public actor AutomaticAttendanceService {
     private var settings = AutomaticAttendanceSettings()
     private var started = false
     private var prepared = false
+    private var foregroundTicks = 0
     private var onChange: (@Sendable () async -> Void)?
 
     public init(
@@ -276,16 +283,39 @@ public actor AutomaticAttendanceService {
                 trigger = .accountChanged
             }
             await coordinator.reconcile(trigger: trigger)
+            await coordinator.determineRegionStates()
+            await coordinator.resumePending()
         }
         await changed()
     }
 
     /// The app came to the foreground.
     public func foreground() async {
+        foregroundTicks = 0
         guard settings.enabled, account != nil else { return }
         await coordinator.reconcile(trigger: .foreground)
         await coordinator.determineRegionStates()
         await coordinator.resumePending()
+        await changed()
+    }
+
+    /// Work due while any app screen is visible, including Home. The caller
+    /// owns cancellation when the scene backgrounds; this is not a background timer.
+    public func foregroundTick() async {
+        guard settings.enabled, account != nil else { return }
+        await coordinator.resumePending()
+        foregroundTicks += 1
+        if foregroundTicks >= 6 {
+            foregroundTicks = 0
+            switch await coordinator.currentPhase() {
+            case .idle, .refused, .retrying, .holding:
+                // Recover even when the first network/GPS failure happened
+                // before there was an attempt to persist and resume.
+                await coordinator.reconcile(trigger: .windowBoundary)
+                await coordinator.determineRegionStates()
+            default: break
+            }
+        }
         await changed()
     }
 
@@ -446,7 +476,9 @@ public actor AutomaticAttendanceService {
             settings: settings,
             isSignedIn: account != nil,
             outcome: await coordinator.lastReconcileOutcome(),
-            pending: settings.enabled ? await coordinator.pendingArrivals() : []
+            pending: settings.enabled ? await coordinator.pendingArrivals() : [],
+            activity: await coordinator.currentPhase(),
+            activityChurchSlug: await coordinator.currentActivityChurch()
         )
     }
 

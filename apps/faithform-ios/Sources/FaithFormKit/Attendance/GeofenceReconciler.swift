@@ -27,7 +27,7 @@ public protocol RegionMonitoring: Actor {
     /// This is how someone who turns the feature on while already sitting in
     /// church is noticed: iOS does not deliver an entry for a region the device
     /// was inside when monitoring began.
-    func requestStateForMonitoredRegions()
+    func requestStateForMonitoredRegions() async
 }
 
 /// Why a reconciliation ran. Recorded for the readiness screen and for tests;

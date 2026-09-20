@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import {
   History,
@@ -150,7 +150,7 @@ export function ServiceOccurrencesBoard({
   const [search, setSearch] = useState("");
   // Read once per render of the list; the badge is a hint, and the server
   // decides whether check-in is really open.
-  const [now] = useState(() => Date.now());
+  const [now, setNow] = useState(() => Date.now());
 
   /**
    * Batch keys, held per submission intent rather than per click.
@@ -173,6 +173,35 @@ export function ServiceOccurrencesBoard({
       setRoster(await getOccurrenceRoster(occurrenceId));
     });
   };
+
+  useEffect(() => {
+    let cancelled = false;
+    let loading = false;
+    const refresh = async () => {
+      if (document.visibilityState !== "visible" || pending || loading || !navigator.onLine) return;
+      setNow(Date.now());
+      if (!selected) return;
+      loading = true;
+      try {
+        const entries = await getOccurrenceRoster(selected.id);
+        if (!cancelled) setRoster(entries);
+      } catch {
+        // Keep the last successful roster during a connection interruption.
+      } finally {
+        loading = false;
+      }
+    };
+    const timer = window.setInterval(() => void refresh(), 15_000);
+    const visible = () => void refresh();
+    document.addEventListener("visibilitychange", visible);
+    window.addEventListener("online", visible);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", visible);
+      window.removeEventListener("online", visible);
+    };
+  }, [selected, pending]);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -332,7 +361,7 @@ export function ServiceOccurrencesBoard({
           </h1>
           <p className="text-sm text-muted-foreground">
             Every event that counts attendance, including Sunday services.
-            Pick one to see who came and how they checked in.
+            Pick one to see who came and how they checked in. Updates every 15 seconds while this page is open.
           </p>
         </div>
         <Button variant="outline" onClick={refreshHorizon} disabled={pending}>

@@ -1042,19 +1042,42 @@ struct ArrivalTests {
         #expect(await submitter.sent.count == 1)
     }
 
-    @Test("automatic: a church with no dwell still waits the device's minimum")
-    func automaticFloor() async {
-        #expect(ArrivalPolicy.automaticDwell(minDwellSeconds: 0) == ArrivalPolicy.minimumAutomaticDwell)
-        #expect(ArrivalPolicy.automaticDwell(minDwellSeconds: -5) == ArrivalPolicy.minimumAutomaticDwell)
+    @Test("automatic: zero dwell counts during the arrival callback, without another wake")
+    func automaticOnArrival() async {
+        #expect(ArrivalPolicy.automaticDwell(minDwellSeconds: 0) == 0)
+        #expect(ArrivalPolicy.automaticDwell(minDwellSeconds: -5) == 0)
         #expect(ArrivalPolicy.automaticDwell(minDwellSeconds: 300) == 300)
-
+        let submitter = ScriptedSubmitter()
+        await submitter.set(answers: [.success(counted)])
         let stack = AttendanceStack.make(
-            states: ["grace": .available(churchConfiguration("grace", requiresConfirmation: false, minDwellSeconds: 0))]
+            states: ["grace": .available(churchConfiguration("grace", requiresConfirmation: false, minDwellSeconds: 0))],
+            submitter: submitter
         )
         await stack.switchedOn()
-        _ = await stack.coordinator.handleRegionEntered(regionId: campus)
-        _ = await stack.coordinator.resumePending()
-        #expect(await stack.submitter.sent.isEmpty)
+        await stack.service.handleRegion(identifier: campus, transition: .inside)
+        #expect(await stack.submitter.sent.count == 1)
+        #expect(await stack.notifier.checkedIn == ["grace"])
+        #expect(await stack.store.count() == 0)
+        await stack.service.handleRegion(identifier: campus, transition: .entered)
+        #expect(await stack.submitter.sent.count == 1)
+    }
+
+    @Test("automatic: a pending dwell finishes while Home stays visible")
+    func foregroundTickFinishesDwell() async {
+        let submitter = ScriptedSubmitter()
+        await submitter.set(answers: [.success(counted)])
+        let stack = AttendanceStack.make(
+            states: ["grace": .available(churchConfiguration("grace", requiresConfirmation: false))],
+            submitter: submitter
+        )
+        await stack.switchedOn()
+        await stack.service.handleRegion(identifier: campus, transition: .inside)
+        await stack.service.foregroundTick()
+        #expect(await submitter.sent.isEmpty)
+        stack.clock.advance(by: 121)
+        await stack.service.foregroundTick()
+        #expect(await submitter.sent.count == 1)
+        #expect(await stack.notifier.checkedIn == ["grace"])
     }
 
     @Test("an exit after a relaunch still abandons the stored arrival")
@@ -1345,6 +1368,19 @@ struct ArrivalTests {
         _ = await stack.coordinator.handleRegionEntered(regionId: campus)
         await stack.coordinator.handleRegionState(regionId: campus, inside: false)
         #expect(await stack.store.count() == 0, "outside did not abandon")
+    }
+
+    @Test("an arrival with no open service can retry without waiting ten minutes")
+    func closedWindowCanRecover() async {
+        let submitter = ScriptedSubmitter()
+        await submitter.set(occurrenceId: nil)
+        let stack = AttendanceStack.make(submitter: submitter)
+        await stack.switchedOn()
+        await stack.service.handleRegion(identifier: campus, transition: .inside)
+        let before = await submitter.occurrenceReads
+        stack.clock.advance(by: 31)
+        await stack.service.handleRegion(identifier: campus, transition: .inside)
+        #expect(await submitter.occurrenceReads > before)
     }
 
     @Test("the campus entered is named when asking which service is open")
