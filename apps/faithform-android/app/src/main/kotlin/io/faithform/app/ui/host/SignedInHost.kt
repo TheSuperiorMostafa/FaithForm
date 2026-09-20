@@ -2,11 +2,7 @@ package io.faithform.app.ui.host
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
-import androidx.compose.material3.IconButton
 import androidx.compose.material.icons.outlined.Groups
-import androidx.compose.material.icons.outlined.ArrowBack
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.unit.dp
 import io.faithform.app.ui.groups.GroupsHost
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
@@ -165,141 +161,142 @@ fun SignedInHost(
                 .consumeWindowInsets(inner)
                 .imePadding(),
         ) {
-            if (HostTab.GROUPS in tabs && !hideChrome) Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (current == HostTab.ACCOUNT) IconButton(onClick = { viewModel.selectTab(HostTab.HOME) }) { Icon(Icons.Outlined.ArrowBack, "Back to home") }
-                Text("Your community", style = MaterialTheme.typography.labelMedium, color = theme.palette.contentSecondary, modifier = Modifier.weight(1f))
-                IconButton(onClick = { viewModel.selectTab(HostTab.ACCOUNT) }) { Icon(Icons.Outlined.AccountCircle, "Your account") }
-            }
             if (isStale && !hideChrome) StaleBanner(stringResource(R.string.offline_cached))
 
-            tabStates.SaveableStateProvider(current.name) {
-                when (current) {
-                    HostTab.HOME -> HomeTab(
-                        appViewModel = viewModel,
-                        container = container,
-                        locationProvider = locationProvider,
-                        church = church,
-                        partition = partition,
-                    )
-
-                    HostTab.GROUPS -> if (church != null && partition != null) GroupsHost(container.apiClient, church.churchSlug, partition.toString())
-                    HostTab.CHECK_IN -> {
-                        var showAutomaticCheckIn by rememberSaveable(selectedSlug) {
-                            mutableStateOf(false)
-                        }
-                        val showsAutomatic = church?.automaticCheckInEnabled ?: true
-                        val showsCode = church?.codeCheckInEnabled ?: true
-                        if (showAutomaticCheckIn && showsAutomatic) {
-                            TabScreen(
-                                title = stringResource(R.string.auto_attendance_title),
-                                onBack = { showAutomaticCheckIn = false },
-                            ) { _ ->
-                                AutomaticAttendanceIntroScreen(
-                                    onContinue = { showAutomaticCheckIn = false },
-                                    onNotNow = { showAutomaticCheckIn = false },
-                                )
-                            }
-                        } else {
-                            TabScreen(
-                                title = stringResource(
-                                    if (showsCode) R.string.checkin_scan_title
-                                    else R.string.auto_attendance_title,
-                                ),
-                            ) { content ->
-                                CheckInTab(
-                                    api = container.apiClient,
-                                    cameraPermission = cameraPermission,
-                                    showsCodeCheckIn = showsCode,
-                                    automaticCheckInContent = if (showsAutomatic) {
-                                        { automaticModifier ->
-                                            AutomaticCheckInEntry(
-                                                enabled = container.automaticAttendance?.settings?.enabled == true,
-                                                onOpen = { showAutomaticCheckIn = true },
-                                                modifier = automaticModifier,
-                                            )
-                                        }
-                                    } else null,
-                                    modifier = content,
-                                )
-                            }
-                        }
-                    }
-
-                    HostTab.WATCH -> if (church != null && partition != null) {
-                        WatchTab(
+            // Keep the active tab within the shell’s available content area.
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                tabStates.SaveableStateProvider(current.name) {
+                    when (current) {
+                        HostTab.HOME -> HomeTab(
                             appViewModel = viewModel,
                             container = container,
-                            bootstrap = bootstrap,
-                            churchSlug = church.churchSlug,
-                            partition = partition,
+                            locationProvider = locationProvider,
                             church = church,
-                            onFullScreenChanged = { recordingFullScreen = it },
-                        )
-                    }
-
-                    HostTab.GIVE -> if (church != null && partition != null) {
-                        GiveTab(
-                            client = container.givingClient,
-                            sheet = RelayedPaymentSheet(container.paymentSheets),
-                            pendingDonations = container.pendingDonations,
-                            churchSlug = church.churchSlug,
                             partition = partition,
+                            onOpenAccount = if (HostTab.GROUPS in tabs) {
+                                { viewModel.selectTab(HostTab.ACCOUNT) }
+                            } else null,
                         )
-                    }
 
-                    HostTab.ACCOUNT -> {
-                        var showAutoCheckIn by rememberSaveable { mutableStateOf(false) }
-                        var showChurchAppearance by rememberSaveable { mutableStateOf(false) }
-                        val showsAuto =
-                            "attendance" in bootstrap.enabledCapabilities &&
-                                selectedSlug != null &&
-                                (church?.automaticCheckInEnabled ?: true)
-                        if (showChurchAppearance && church?.canManageBranding == true) {
-                            TabScreen(
-                                title = stringResource(R.string.church_appearance_title),
-                                onBack = { showChurchAppearance = false },
-                            ) { content ->
-                                ChurchAppearanceScreen(
-                                    church = church,
-                                    modifier = content,
-                                    onSave = { primary, accent, done ->
-                                        viewModel.updateChurchTheme(
-                                            church.churchSlug,
-                                            primary,
-                                            accent,
-                                        ) { ok ->
-                                            done(ok)
-                                            if (ok) showChurchAppearance = false
-                                        }
-                                    },
-                                )
+                        HostTab.GROUPS -> if (church != null && partition != null) GroupsHost(container.apiClient, church.churchSlug, partition.toString())
+                        HostTab.CHECK_IN -> {
+                            var showAutomaticCheckIn by rememberSaveable(selectedSlug) {
+                                mutableStateOf(false)
                             }
-                        } else if (showAutoCheckIn && showsAuto) {
-                            TabScreen(
-                                title = stringResource(R.string.auto_attendance_title),
-                                onBack = { showAutoCheckIn = false },
-                            ) { _ ->
-                                AutomaticAttendanceIntroScreen(
-                                    onContinue = { showAutoCheckIn = false },
-                                    onNotNow = { showAutoCheckIn = false },
-                                )
+                            val showsAutomatic = church?.automaticCheckInEnabled ?: true
+                            val showsCode = church?.codeCheckInEnabled ?: true
+                            if (showAutomaticCheckIn && showsAutomatic) {
+                                TabScreen(
+                                    title = stringResource(R.string.auto_attendance_title),
+                                    onBack = { showAutomaticCheckIn = false },
+                                ) { _ ->
+                                    AutomaticAttendanceIntroScreen(
+                                        onContinue = { showAutomaticCheckIn = false },
+                                        onNotNow = { showAutomaticCheckIn = false },
+                                    )
+                                }
+                            } else {
+                                TabScreen(
+                                    title = stringResource(
+                                        if (showsCode) R.string.checkin_scan_title
+                                        else R.string.auto_attendance_title,
+                                    ),
+                                ) { content ->
+                                    CheckInTab(
+                                        api = container.apiClient,
+                                        cameraPermission = cameraPermission,
+                                        showsCodeCheckIn = showsCode,
+                                        automaticCheckInContent = if (showsAutomatic) {
+                                            { automaticModifier ->
+                                                AutomaticCheckInEntry(
+                                                    enabled = container.automaticAttendance?.settings?.enabled == true,
+                                                    onOpen = { showAutomaticCheckIn = true },
+                                                    modifier = automaticModifier,
+                                                )
+                                            }
+                                        } else null,
+                                        modifier = content,
+                                    )
+                                }
                             }
-                        } else {
-                            TabScreen(title = stringResource(R.string.tab_account)) { content ->
-                                AccountTab(
-                                    bootstrap = bootstrap,
-                                    onSignOut = viewModel::signOut,
-                                    onDeleteAccount = viewModel::beginDeletion,
-                                    modifier = content,
-                                    showsAutomaticCheckIn = showsAuto,
-                                    automaticCheckInEnabled = container.automaticAttendance?.settings?.enabled == true,
-                                    onOpenAutomaticCheckIn = { showAutoCheckIn = true },
-                                    onOpenChurchAppearance = if (church?.canManageBranding == true) {
-                                        { showChurchAppearance = true }
-                                    } else null,
-                                    onUpdateDisplayName = viewModel::updateDisplayName,
-                                    onUpdateProfilePhoto = viewModel::updateProfilePhoto,
-                                )
+                        }
+
+                        HostTab.WATCH -> if (church != null && partition != null) {
+                            WatchTab(
+                                appViewModel = viewModel,
+                                container = container,
+                                bootstrap = bootstrap,
+                                churchSlug = church.churchSlug,
+                                partition = partition,
+                                church = church,
+                                onFullScreenChanged = { recordingFullScreen = it },
+                            )
+                        }
+
+                        HostTab.GIVE -> if (church != null && partition != null) {
+                            GiveTab(
+                                client = container.givingClient,
+                                sheet = RelayedPaymentSheet(container.paymentSheets),
+                                pendingDonations = container.pendingDonations,
+                                churchSlug = church.churchSlug,
+                                partition = partition,
+                            )
+                        }
+
+                        HostTab.ACCOUNT -> {
+                            var showAutoCheckIn by rememberSaveable { mutableStateOf(false) }
+                            var showChurchAppearance by rememberSaveable { mutableStateOf(false) }
+                            val showsAuto =
+                                "attendance" in bootstrap.enabledCapabilities &&
+                                    selectedSlug != null &&
+                                    (church?.automaticCheckInEnabled ?: true)
+                            if (showChurchAppearance && church?.canManageBranding == true) {
+                                TabScreen(
+                                    title = stringResource(R.string.church_appearance_title),
+                                    onBack = { showChurchAppearance = false },
+                                ) { content ->
+                                    ChurchAppearanceScreen(
+                                        church = church,
+                                        modifier = content,
+                                        onSave = { primary, accent, done ->
+                                            viewModel.updateChurchTheme(
+                                                church.churchSlug,
+                                                primary,
+                                                accent,
+                                            ) { ok ->
+                                                done(ok)
+                                                if (ok) showChurchAppearance = false
+                                            }
+                                        },
+                                    )
+                                }
+                            } else if (showAutoCheckIn && showsAuto) {
+                                TabScreen(
+                                    title = stringResource(R.string.auto_attendance_title),
+                                    onBack = { showAutoCheckIn = false },
+                                ) { _ ->
+                                    AutomaticAttendanceIntroScreen(
+                                        onContinue = { showAutoCheckIn = false },
+                                        onNotNow = { showAutoCheckIn = false },
+                                    )
+                                }
+                            } else {
+                                TabScreen(title = stringResource(R.string.tab_account)) { content ->
+                                    AccountTab(
+                                        bootstrap = bootstrap,
+                                        onSignOut = viewModel::signOut,
+                                        onDeleteAccount = viewModel::beginDeletion,
+                                        modifier = content,
+                                        showsAutomaticCheckIn = showsAuto,
+                                        automaticCheckInEnabled = container.automaticAttendance?.settings?.enabled == true,
+                                        onOpenAutomaticCheckIn = { showAutoCheckIn = true },
+                                        onOpenChurchAppearance = if (church?.canManageBranding == true) {
+                                            { showChurchAppearance = true }
+                                        } else null,
+                                        onUpdateDisplayName = viewModel::updateDisplayName,
+                                        onUpdateProfilePhoto = viewModel::updateProfilePhoto,
+                                    )
+                                }
                             }
                         }
                     }

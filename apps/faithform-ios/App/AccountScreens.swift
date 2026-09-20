@@ -15,16 +15,13 @@ struct AccountTabView: View {
         NavigationStack {
             VStack(spacing: 0) {
                 if isStale { OfflineBanner(message: L.offlineCached) }
-                ScrollView {
-                    AccountView(
-                        dependencies: dependencies,
-                        root: root,
-                        displayName: bootstrap.profile.displayName,
-                        avatarUrl: bootstrap.profile.avatarUrl,
-                        showsAutomaticCheckIn: !AppDependencies.attendanceChurches(in: bootstrap).isEmpty
-                    )
-                    .padding(FaithFormTokens.Spacing.lg)
-                }
+                AccountView(
+                    dependencies: dependencies,
+                    root: root,
+                    displayName: bootstrap.profile.displayName,
+                    avatarUrl: bootstrap.profile.avatarUrl,
+                    showsAutomaticCheckIn: !AppDependencies.attendanceChurches(in: bootstrap).isEmpty
+                )
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(theme.palette.background)
@@ -120,6 +117,11 @@ private struct AutomaticCheckInRow: View {
 /// Who is signed in, and every way to leave: sign out, delete the account, and
 /// the documents that say what happens to their information.
 ///
+/// Laid out as the rest of the app now is: a hero washed in the person's own
+/// photo, then panels. It owns its scroll view and its background so the wash
+/// can run edge to edge and up under the title bar — a caller that wrapped it
+/// in its own `ScrollView` would cut the header into a card.
+///
 /// Used by the Account tab and by the first-run flow, so a person with no
 /// church yet has exactly the same controls as one with five.
 struct AccountView: View {
@@ -133,172 +135,381 @@ struct AccountView: View {
     var showsAutomaticCheckIn = false
 
     @AppStorage("faithform.appearance") private var appearance = "system"
-    @State private var draftName = ""
-    @State private var savingName = false
-    @State private var nameSaveFailed = false
+    @State private var editingName = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.xl) {
-            identityHeader
-            ProfilePhotoControl(root: root, hasPhoto: avatarUrl != nil)
+        ScrollView {
+            VStack(spacing: 22) {
+                ProfileHeroView(
+                    root: root,
+                    displayName: displayName,
+                    avatarUrl: avatarUrl,
+                    subtitle: root.selectedChurch?.churchName ?? "FaithForm account"
+                )
 
-            if displayName == nil {
-                nameEditor
-            }
-
-            VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.sm) {
-                Text(L.preferencesSection)
-                    .font(theme.font(FaithFormTokens.Text.label))
-                    .foregroundStyle(theme.mutedContent)
-
-                VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.xs) {
-                    Text("Display")
-                        .font(theme.font(FaithFormTokens.Text.body))
-                        .foregroundStyle(theme.palette.contentPrimary)
-                    Picker("Appearance", selection: $appearance) {
-                        Text("System").tag("system")
-                        Text("Light").tag("light")
-                        Text("Dark").tag("dark")
-                    }
-                    .pickerStyle(.segmented)
+                VStack(spacing: 22) {
+                    detailsPanel
+                    preferencesPanel
+                    if root.selectedChurch?.canManageBranding == true { churchToolsPanel }
+                    legalPanel
+                    exitActions
                 }
-                .padding(.vertical, FaithFormTokens.Spacing.xs)
-
-                if showsAutomaticCheckIn {
-                    AutomaticCheckInRow(model: dependencies.attendanceModel)
-                }
+                .padding(.horizontal, 20)
             }
-
-            if root.selectedChurch?.canManageBranding == true {
-                VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.sm) {
-                    Text(L.churchToolsSection)
-                        .font(theme.font(FaithFormTokens.Text.label))
-                        .foregroundStyle(theme.mutedContent)
-                    NavigationLink(value: AccountRoute.churchAppearance) {
-                        HStack(spacing: FaithFormTokens.Spacing.md) {
-                            Image(systemName: "paintpalette")
-                                .foregroundStyle(theme.palette.brandPrimary)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(L.churchAppearanceTitle)
-                                    .foregroundStyle(theme.palette.contentPrimary)
-                                Text(L.churchAppearanceRowBody)
-                                    .font(theme.font(FaithFormTokens.Text.caption))
-                                    .foregroundStyle(theme.palette.contentSecondary)
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .foregroundStyle(theme.palette.contentSecondary)
-                        }
-                        .frame(minHeight: FaithFormTokens.TouchTarget.recommended)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-
-            VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.sm) {
-                Text(L.legalSection)
-                    .font(theme.font(FaithFormTokens.Text.label))
-                    .foregroundStyle(theme.mutedContent)
-                LegalLinksView()
-            }
-
-            VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.md) {
-                Button(L.signOut) { Task { await root.signOut() } }
-                    .buttonStyle(FaithFormButtonStyle(kind: .secondary, theme: theme))
-                AccountDeletionControl(root: root)
-            }
+            .padding(.bottom, 36)
+            .frame(maxWidth: FaithFormTokens.Layout.contentMaxWidth)
+            .frame(maxWidth: .infinity)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .onAppear {
-            if draftName.isEmpty { draftName = displayName ?? "" }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        // The wash is the person's own photo, blurred past recognition, so the
+        // header reads as one surface from the status bar down.
+        .background(alignment: .top) {
+            ProfileAvatarWash(url: avatarUrl)
+                .frame(height: 360)
+                .ignoresSafeArea(edges: .top)
+        }
+        .background(theme.palette.background.ignoresSafeArea())
+        .sheet(isPresented: $editingName) {
+            NameEditorSheet(root: root, current: displayName ?? "")
         }
     }
 
-    private var identityHeader: some View {
-        HStack(spacing: FaithFormTokens.Spacing.base) {
-            accountAvatar
-            VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.xs) {
+    // MARK: Panels
+
+    private var detailsPanel: some View {
+        GroupPanelView("Your details") {
+            Button { editingName = true } label: {
+                HStack(spacing: FaithFormTokens.Spacing.md) {
+                    Image(systemName: "person.text.rectangle")
+                        .font(.system(size: FaithFormTokens.IconSize.sizeMedium))
+                        .foregroundStyle(theme.palette.brandAccent)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Display name")
+                            .font(theme.font(FaithFormTokens.Text.caption))
+                            .foregroundStyle(theme.palette.contentSecondary)
+                        Text(displayName ?? "Add your name")
+                            .font(theme.font(FaithFormTokens.Text.body))
+                            .foregroundStyle(
+                                displayName == nil ? theme.palette.contentSecondary : theme.palette.contentPrimary
+                            )
+                    }
+                    Spacer(minLength: FaithFormTokens.Spacing.md)
+                    Text(displayName == nil ? "Add" : "Edit")
+                        .font(theme.font(FaithFormTokens.Text.label))
+                        .foregroundStyle(theme.palette.brandAccent)
+                }
+                .frame(minHeight: FaithFormTokens.TouchTarget.recommended)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(GroupPressStyle())
+            .accessibilityLabel("Display name, \(displayName ?? "not set")")
+            .accessibilityHint("Opens an editor for the name other people see")
+        }
+    }
+
+    private var preferencesPanel: some View {
+        GroupPanelView(L.preferencesSection) {
+            VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.sm) {
+                Text("Appearance")
+                    .font(theme.font(FaithFormTokens.Text.bodySmall))
+                    .foregroundStyle(theme.palette.contentSecondary)
+                Picker("Appearance", selection: $appearance) {
+                    Text("System").tag("system")
+                    Text("Light").tag("light")
+                    Text("Dark").tag("dark")
+                }
+                .pickerStyle(.segmented)
+            }
+
+            if showsAutomaticCheckIn {
+                Divider().overlay(theme.palette.divider)
+                AutomaticCheckInRow(model: dependencies.attendanceModel)
+            }
+        }
+    }
+
+    private var churchToolsPanel: some View {
+        GroupPanelView(L.churchToolsSection) {
+            NavigationLink(value: AccountRoute.churchAppearance) {
+                HStack(spacing: FaithFormTokens.Spacing.md) {
+                    Image(systemName: "paintpalette")
+                        .font(.system(size: FaithFormTokens.IconSize.sizeMedium))
+                        .foregroundStyle(theme.palette.brandAccent)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(L.churchAppearanceTitle)
+                            .font(theme.font(FaithFormTokens.Text.body))
+                            .foregroundStyle(theme.palette.contentPrimary)
+                        Text(L.churchAppearanceRowBody)
+                            .font(theme.font(FaithFormTokens.Text.caption))
+                            .foregroundStyle(theme.palette.contentSecondary)
+                    }
+                    Spacer(minLength: FaithFormTokens.Spacing.md)
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(theme.palette.contentSecondary)
+                        .accessibilityHidden(true)
+                }
+                .frame(minHeight: FaithFormTokens.TouchTarget.recommended)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(GroupPressStyle())
+        }
+    }
+
+    private var legalPanel: some View {
+        GroupPanelView(L.legalSection) { LegalLinksView() }
+    }
+
+    private var exitActions: some View {
+        VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.md) {
+            Button(L.signOut) { Task { await root.signOut() } }
+                .buttonStyle(FaithFormButtonStyle(kind: .secondary, theme: theme))
+            AccountDeletionControl(root: root)
+        }
+    }
+}
+
+/// The header: the photo, the name, and the one tap that changes either.
+///
+/// The avatar *is* the control. A row of "Change photo / Remove" buttons under
+/// a picture is the shape of a settings form; tapping the picture is the shape
+/// of every app people already use, and it leaves the header to be a header.
+private struct ProfileHeroView: View {
+    @Environment(\.faithformTheme) private var theme
+    let root: RootModel
+    let displayName: String?
+    let avatarUrl: String?
+    let subtitle: String
+
+    @State private var draft: PhotoDraft?
+    @State private var picking = false
+    @State private var loading = false
+    @State private var removing = false
+    @State private var failed = false
+    @State private var confirmRemoval = false
+
+    private var hasPhoto: Bool { avatarUrl != nil }
+    private var busy: Bool { loading || removing }
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Menu {
+                Button {
+                    picking = true
+                } label: {
+                    Label(hasPhoto ? "Choose a new photo" : "Choose a photo", systemImage: "photo.on.rectangle")
+                }
+                if hasPhoto {
+                    Button(role: .destructive) { confirmRemoval = true } label: {
+                        Label("Remove photo", systemImage: "trash")
+                    }
+                }
+            } label: {
+                avatar
+            }
+            .disabled(busy)
+            .accessibilityLabel(hasPhoto ? "Profile photo" : "Add a profile photo")
+            .accessibilityHint("Opens choices for changing your photo")
+
+            VStack(spacing: 6) {
                 Text(displayName ?? L.yourAccount)
                     .font(theme.font(FaithFormTokens.Text.displayMedium))
                     .foregroundStyle(theme.palette.contentPrimary)
-                if dependencies.allowsDebugControls {
-                    Text(dependencies.environment.key)
-                        .font(theme.font(FaithFormTokens.Text.caption))
-                        .foregroundStyle(theme.palette.contentSecondary)
-                }
+                    .multilineTextAlignment(.center)
+                Text(subtitle)
+                    .font(theme.font(FaithFormTokens.Text.bodySmall))
+                    .foregroundStyle(theme.palette.contentSecondary)
+            }
+            .accessibilityElement(children: .combine)
+
+            if busy {
+                Text(removing ? "Removing photo…" : "Opening photo…")
+                    .font(theme.font(FaithFormTokens.Text.caption))
+                    .foregroundStyle(theme.palette.contentSecondary)
+                    .accessibilityAddTraits(.updatesFrequently)
+            }
+            if failed {
+                Text("Your photo was not changed. Please try again.")
+                    .font(theme.font(FaithFormTokens.Text.caption))
+                    .foregroundStyle(theme.palette.destructive)
+                    .accessibilityAddTraits(.updatesFrequently)
             }
         }
-        .accessibilityElement(children: .combine)
-    }
-
-    private var nameEditor: some View {
-        VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.sm) {
-            Text(L.accountAddNameHint)
-                .font(theme.font(FaithFormTokens.Text.bodySmall))
-                .foregroundStyle(theme.palette.contentSecondary)
-            AuthField(label: L.authNameLabel, text: $draftName, content: .name)
-            if nameSaveFailed {
-                AuthErrorText(message: L.errorTitle)
-            }
-            Button {
+        .padding(.top, 12)
+        .padding(.bottom, 4)
+        .padding(.horizontal, 20)
+        .frame(maxWidth: .infinity)
+        .modifier(ProfilePhotoPicker(draft: $draft, failed: $failed, loading: $loading, isPresented: $picking))
+        .confirmationDialog("Remove profile photo?", isPresented: $confirmRemoval, titleVisibility: .visible) {
+            Button("Remove photo", role: .destructive) {
                 Task {
-                    savingName = true
-                    nameSaveFailed = false
-                    let ok = await root.updateDisplayName(draftName)
-                    savingName = false
-                    if !ok { nameSaveFailed = true }
+                    removing = true
+                    failed = !(await root.updateProfilePhoto(nil))
+                    removing = false
                 }
-            } label: {
-                FaithFormWorkingLabel(L.accountSaveName, working: savingName)
             }
-            .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
-            .disabled(savingName || draftName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+        .fullScreenCover(item: $draft) { draft in
+            ProfilePhotoCropper(image: draft.image, save: { data in await root.updateProfilePhoto(data) })
         }
     }
 
-    private var accountAvatar: some View {
-        let size = FaithFormTokens.TouchTarget.recommended + FaithFormTokens.Spacing.base
-        return Group {
-            if let avatarUrl, let url = URL(string: avatarUrl) {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case let .success(image):
-                        image.resizable().scaledToFill()
-                    default:
-                        initialsAvatar
-                    }
-                }
+    private var avatar: some View {
+        ZStack(alignment: .bottomTrailing) {
+            ProfileAvatarView(url: avatarUrl, name: displayName, size: 112)
+            // The badge says the picture is a button without needing a caption.
+            ZStack {
+                Circle().fill(theme.palette.brandAccent)
+                Image(systemName: hasPhoto ? "pencil" : "plus")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(theme.palette.brandPrimary)
+            }
+            .frame(width: 34, height: 34)
+            .overlay(Circle().strokeBorder(theme.palette.background, lineWidth: 3))
+            .offset(x: 2, y: 2)
+        }
+        .opacity(busy ? 0.5 : 1)
+        .overlay {
+            if busy { ProgressView().tint(theme.palette.brandAccent) }
+        }
+    }
+}
+
+/// The person's photo, or their initials on the brand wash. Circular
+/// everywhere — a face is not a logo, and the square treatment the Groups
+/// screens use for church and group artwork would crop it like one.
+struct ProfileAvatarView: View {
+    @Environment(\.faithformTheme) private var theme
+    let url: String?
+    let name: String?
+    var size: CGFloat = 112
+
+    var body: some View {
+        ZStack {
+            LinearGradient(
+                colors: [theme.palette.brandAccent.opacity(0.34), theme.palette.brandAccentSoft.opacity(0.18)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            if let name, !name.isEmpty {
+                Text(profileInitials(from: name))
+                    .font(.system(size: size * 0.34, weight: .semibold, design: .rounded))
+                    .foregroundStyle(theme.palette.contentPrimary.opacity(0.78))
+                    .minimumScaleFactor(0.6)
             } else {
-                initialsAvatar
+                Image(systemName: "person.fill")
+                    .font(.system(size: size * 0.36))
+                    .foregroundStyle(theme.palette.contentPrimary.opacity(0.55))
+            }
+            if let url, let imageURL = URL(string: url) {
+                AsyncImage(
+                    url: imageURL,
+                    transaction: Transaction(animation: theme.animation(FaithFormTokens.Motion.standard))
+                ) { phase in
+                    if let image = phase.image { image.resizable().scaledToFill().transition(.opacity) }
+                }
             }
         }
         .frame(width: size, height: size)
         .clipShape(Circle())
-        .overlay(Circle().strokeBorder(theme.palette.border, lineWidth: 1))
+        .overlay(Circle().strokeBorder(theme.palette.border, lineWidth: theme.borderWidth))
+        .shadow(color: .black.opacity(theme.usesDecorativeShadow ? 0.18 : 0), radius: 18, y: 8)
         .accessibilityHidden(true)
     }
+}
 
-    private var initialsAvatar: some View {
+/// The same photo, blurred far past recognition, so the header carries the
+/// person's own colour without stretching a face into a banner.
+private struct ProfileAvatarWash: View {
+    @Environment(\.faithformTheme) private var theme
+    let url: String?
+
+    var body: some View {
         ZStack {
-            theme.palette.surfaceSunken
-            if let displayName, !displayName.isEmpty {
-                Text(initials(from: displayName))
-                    .font(theme.font(FaithFormTokens.Text.titleMedium))
-                    .foregroundStyle(theme.palette.brandPrimary)
+            theme.palette.background
+            if let url, let imageURL = URL(string: url) {
+                AsyncImage(url: imageURL) { image in
+                    image.resizable().scaledToFill().blur(radius: 52, opaque: false).opacity(0.34)
+                } placeholder: { Color.clear }
             } else {
-                Image(systemName: "person.fill")
-                    .font(.system(size: FaithFormTokens.IconSize.sizeLarge))
-                    .foregroundStyle(theme.palette.brandPrimary)
+                LinearGradient(
+                    colors: [theme.palette.brandAccent.opacity(0.18), theme.palette.background],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
             }
+            LinearGradient(
+                colors: [theme.palette.background.opacity(0.1), theme.palette.background],
+                startPoint: .top,
+                endPoint: .bottom
+            )
         }
+        .clipped()
+        .accessibilityHidden(true)
     }
+}
 
-    private func initials(from name: String) -> String {
-        let parts = name.split(separator: " ").prefix(2)
-        let letters = parts.compactMap { $0.first.map(String.init) }
-        return letters.isEmpty ? String(name.prefix(1)).uppercased() : letters.joined().uppercased()
+/// Changing the name other people see.
+///
+/// A sheet rather than a field wired into the page, because the name is now
+/// editable whenever — the old screen only offered it while it was still
+/// blank, which left no way to fix a typo short of deleting the account.
+private struct NameEditorSheet: View {
+    @Environment(\.faithformTheme) private var theme
+    @Environment(\.dismiss) private var dismiss
+    let root: RootModel
+    let current: String
+
+    @State private var draft = ""
+    @State private var saving = false
+    @State private var failed = false
+
+    private var trimmed: String { draft.trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
+                Text(L.accountAddNameHint)
+                    .font(theme.font(FaithFormTokens.Text.bodySmall))
+                    .foregroundStyle(theme.palette.contentSecondary)
+                AuthField(label: L.authNameLabel, text: $draft, content: .name)
+                if failed { AuthErrorText(message: L.errorTitle) }
+                Spacer(minLength: 0)
+            }
+            .padding(FaithFormTokens.Spacing.lg)
+            .background(theme.palette.background)
+            .navigationTitle("Your name")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(L.cancel) { dismiss() }.disabled(saving)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(L.accountSaveName) {
+                        Task {
+                            saving = true
+                            failed = false
+                            let ok = await root.updateDisplayName(draft)
+                            saving = false
+                            if ok { dismiss() } else { failed = true }
+                        }
+                    }
+                    .disabled(saving || trimmed.isEmpty || trimmed == current)
+                }
+            }
+            .onAppear { if draft.isEmpty { draft = current } }
+            .interactiveDismissDisabled(saving)
+        }
+        .presentationDetents([.medium])
     }
+}
+
+func profileInitials(from name: String) -> String {
+    let parts = name.split(whereSeparator: { $0 == " " || $0 == "-" }).prefix(2)
+    let letters = parts.compactMap { $0.first.map(String.init) }
+    return letters.isEmpty ? String(name.prefix(1)).uppercased() : letters.joined().uppercased()
 }
 
 private struct ChurchAppearancePreset: Identifiable {

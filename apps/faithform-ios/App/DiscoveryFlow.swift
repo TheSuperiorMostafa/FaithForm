@@ -247,15 +247,12 @@ struct OnboardingFlowView: View {
                 case let .church(slug):
                     ChurchProfileHostView(slug: slug, dependencies: dependencies, root: root)
                 case .account:
-                    ScrollView {
-                        AccountView(
-                            dependencies: dependencies,
-                            root: root,
-                            displayName: root.state.bootstrap?.profile.displayName
-                        )
-                        .padding(FaithFormTokens.Spacing.lg)
-                    }
-                    .background(theme.palette.background)
+                    AccountView(
+                        dependencies: dependencies,
+                        root: root,
+                        displayName: root.state.bootstrap?.profile.displayName,
+                        avatarUrl: root.state.bootstrap?.profile.avatarUrl
+                    )
                     .navigationTitle(L.account)
                 }
             }
@@ -303,7 +300,7 @@ struct ChurchImagesEditor: View {
                     BrandingPhotoControl(title: "church logo", aspect: 1, hasPhoto: logo != nil) { await save($0, kind: "logo") }
                 }
                 Section("Church cover") {
-                    GroupCoverView(url: cover, name: "Church").frame(height: 160).clipped()
+                    BrandingCoverPreview(url: cover).frame(height: 160)
                     BrandingPhotoControl(title: "church cover", aspect: 16 / 9, hasPhoto: cover != nil) { await save($0, kind: "cover") }
                 }
                 if let message { Text(message).foregroundStyle(.secondary) }

@@ -3,6 +3,7 @@ package io.faithform.app.ui.groups
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import io.faithform.app.contract.*
@@ -17,7 +18,10 @@ import kotlinx.serialization.json.*
     LaunchedEffect(token, retry) { try { store.error = null; preview = store.send("api/mobile/v1/group-invitations/preview", buildJsonObject { put("token", token) }) } catch (e: CancellationException) { throw e } catch (e: Exception) { store.error = GroupsStore.message(e) } }
     GroupFormSheet("You’re invited", onDismiss) {
         preview?.let { invitation ->
-            GroupCover(invitation.coverImageUrl, Modifier.height(190.dp))
+            Box(Modifier.fillMaxWidth().height(190.dp), contentAlignment = Alignment.Center) {
+                GroupAvatarBackdrop(invitation.coverImageUrl, Modifier.matchParentSize())
+                GroupAvatar(invitation.coverImageUrl, invitation.groupName, 104.dp)
+            }
             Text(if (accepted) "Welcome to the group." else "There’s a place for you.", style = MaterialTheme.typography.headlineLarge)
             Text(invitation.groupName, style = MaterialTheme.typography.titleLarge)
             Text("You’re invited to join ${invitation.churchName}’s group. You’ll need to belong to this church in the app before joining.")

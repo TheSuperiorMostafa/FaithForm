@@ -11,7 +11,7 @@ import { getChurchMessagingSettings } from "@/lib/messaging/settings";
 import { GroupsNav } from "@/components/groups/shared";
 import { GroupList } from "@/components/groups/group-list";
 import { GroupDetailShell, GroupOverview, GroupLifecycle } from "@/components/groups/group-detail";
-import { CoverEditor, GroupForm } from "@/components/groups/group-form";
+import { GroupForm, GroupPhotoEditor } from "@/components/groups/group-form";
 import { Invitations, Members, Requests } from "@/components/groups/people";
 import { Gatherings, Schedules } from "@/components/groups/gatherings";
 import { GroupChat, Messages } from "@/components/groups/chat";
@@ -60,7 +60,7 @@ export default async function GroupsPage({ params }: { params: Promise<{ path?: 
     else if (tab === "gatherings") {
       const [upcoming, past] = await Promise.all([events.listStaffGatherings(ctx, section, "upcoming"), events.listStaffGatherings(ctx, section, "past")]);
       panel = <><Gatherings detail={detail} upcoming={upcoming} past={past} timezone={ctx.church.timezone} />{detail.group.status === "active" && <div className="mt-6"><Schedules detail={detail} timezone={ctx.church.timezone} /></div>}</>;
-    } else if (tab === "settings") panel = <div className="space-y-6">{detail.group.status === "active" && <><div className="g-panel"><GroupForm detail={detail} types={types} campuses={campuses} /></div><CoverEditor detail={detail} /></>}<GroupLifecycle detail={detail} /></div>;
+    } else if (tab === "settings") panel = <div className="space-y-6">{detail.group.status === "active" && <><GroupPhotoEditor detail={detail} /><div className="g-panel"><GroupForm detail={detail} types={types} campuses={campuses} /></div></>}<GroupLifecycle detail={detail} /></div>;
     else notFound();
     content = <GroupDetailShell detail={detail} tab={tab} types={types} campuses={campuses}>{panel}</GroupDetailShell>;
   } else notFound();

@@ -6,7 +6,7 @@ import FaithFormKit
 ///
 /// ## One church, and where it is changed
 ///
-/// An account has exactly one church. The top-right "Church info" button opens
+/// An account has exactly one church. Tapping its name and logo in the header opens
 /// that church's page (`ChurchProfileView` in its current-church mode), which
 /// is also where it is changed or removed. Changing it walks the same
 /// find-a-church search as first run; adding a church there replaces this one
@@ -36,6 +36,7 @@ struct HomeTabView: View {
     let root: RootModel
     let isStale: Bool
     let discovery: DiscoveryModel
+    var onOpenAccount: (() -> Void)? = nil
 
     @State private var path: [Route] = []
     @State private var section: HomeSection = .feed
@@ -45,6 +46,7 @@ struct HomeTabView: View {
     var body: some View {
         NavigationStack(path: $path) {
             VStack(spacing: 0) {
+                homeHeader
                 if isStale { OfflineBanner(message: L.offlineCached) }
                 content
             }
@@ -53,55 +55,68 @@ struct HomeTabView: View {
             .environment(\.announcementTransitionNamespace, announcementTransition)
             .navigationTitle(root.selectedChurch?.churchName ?? L.homeTitle)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .principal) {
-                    HStack(spacing: FaithFormTokens.Spacing.sm) {
-                        if let church = root.selectedChurch {
-                            ChurchAvatar(logoUrl: church.logoUrl, name: church.churchName, size: 28)
-                            Text(church.churchName)
-                                .font(theme.font(FaithFormTokens.Text.titleMedium))
-                                .foregroundStyle(theme.palette.contentPrimary)
-                                .lineLimit(1)
-                        } else {
-                            Text(L.homeTitle)
-                                .font(theme.font(FaithFormTokens.Text.titleMedium))
-                                .foregroundStyle(theme.palette.contentPrimary)
-                        }
-                    }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    if let church = root.selectedChurch {
-                        Button { path.append(.churchInfo(church.churchSlug)) } label: {
-                            Label(L.churchInfo, systemImage: "info.circle")
-                        }
-                        .accessibilityLabel(L.churchInfo)
-                    }
-                }
-            }
+            .toolbar(.hidden, for: .navigationBar)
             .navigationDestination(for: Route.self) { route in
-                switch route {
-                case let .churchInfo(slug):
-                    ChurchProfileHostView(
-                        slug: slug,
-                        dependencies: dependencies,
-                        root: root,
-                        onChurchChanged: { path.removeAll() },
-                        onChangeChurch: changeChurch
-                    )
-                case .search:
-                    DiscoverySearchView(
-                        dependencies: dependencies,
-                        root: root,
-                        discovery: discovery,
-                        // A new church replaces this one; Home shows it at once.
-                        onChurchChanged: { path.removeAll() }
-                    )
-                case let .announcement(item):
-                    AnnouncementDetailView(item: item)
-                        .modifier(AnnouncementZoomDestination(id: item.id, namespace: announcementTransition))
+                Group {
+                    switch route {
+                    case let .churchInfo(slug):
+                        ChurchProfileHostView(
+                            slug: slug,
+                            dependencies: dependencies,
+                            root: root,
+                            onChurchChanged: { path.removeAll() },
+                            onChangeChurch: changeChurch
+                        )
+                    case .search:
+                        DiscoverySearchView(
+                            dependencies: dependencies,
+                            root: root,
+                            discovery: discovery,
+                            // A new church replaces this one; Home shows it at once.
+                            onChurchChanged: { path.removeAll() }
+                        )
+                    case let .announcement(item):
+                        AnnouncementDetailView(item: item)
+                            .modifier(AnnouncementZoomDestination(id: item.id, namespace: announcementTransition))
+                    }
                 }
+                .toolbar(.visible, for: .navigationBar)
+            }
+
+        }
+    }
+
+    private var homeHeader: some View {
+        HStack(spacing: FaithFormTokens.Spacing.sm) {
+            if let church = root.selectedChurch {
+                Button { path.append(.churchInfo(church.churchSlug)) } label: {
+                    HStack(spacing: FaithFormTokens.Spacing.sm) {
+                        ChurchAvatar(logoUrl: church.logoUrl, name: church.churchName, size: 28)
+                        Text(church.churchName)
+                            .lineLimit(1)
+                    }
+                    .frame(minHeight: FaithFormTokens.TouchTarget.minimum)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("\(church.churchName), \(L.churchInfo)"))
+            } else {
+                Text(L.homeTitle)
+            }
+            Spacer(minLength: 0)
+            if let onOpenAccount {
+                Button(action: onOpenAccount) {
+                    Image(systemName: "person.crop.circle")
+                        .font(.title3)
+                        .frame(width: 44, height: 44)
+                }
+                .accessibilityLabel("Account and settings")
             }
         }
+        .font(theme.font(FaithFormTokens.Text.titleMedium))
+        .foregroundStyle(theme.palette.contentPrimary)
+        .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     /// "Change church" on the church info page opens search. Offered only when
@@ -131,6 +146,7 @@ struct HomeTabView: View {
                     ],
                     accessibilityLabel: L.homeTitle
                 )
+                .fixedSize(horizontal: false, vertical: true)
                 .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
                 .padding(.vertical, FaithFormTokens.Spacing.sm)
 

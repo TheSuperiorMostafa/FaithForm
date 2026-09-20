@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 
 import { previewGroupInvitation } from "@/lib/groups/membership";
+import { groupInitials } from "@/lib/groups/types";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -31,12 +32,27 @@ export default async function GroupInvitationPage({ params }: { params: Promise<
       <div className="w-full max-w-md overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
         {preview ? (
           <>
-            {preview.coverImageUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element -- a public bucket URL; no optimizer round trip for a one-off page
-              <img src={preview.coverImageUrl} alt="" className="aspect-video w-full object-cover" />
-            ) : (
-              <div aria-hidden className="aspect-video w-full bg-muted" />
-            )}
+            {/*
+              A group photo is square — the same 1:1 logo the iPhone and
+              Android apps show. Filling a 16:9 banner with it sliced the top
+              and bottom off the logo, so the photo keeps its shape and the
+              band behind it is the same photo blurred past recognition,
+              exactly as the invitation screen in the apps does it.
+            */}
+            <div className="relative flex h-48 items-center justify-center overflow-hidden bg-gradient-to-br from-accent/15 to-card">
+              {preview.coverImageUrl && (
+                // eslint-disable-next-line @next/next/no-img-element -- a public bucket URL; no optimizer round trip for a one-off page
+                <img src={preview.coverImageUrl} alt="" aria-hidden className="absolute inset-0 size-full scale-125 object-cover opacity-50 blur-2xl" />
+              )}
+              <span className="relative flex size-28 items-center justify-center overflow-hidden rounded-[34px] border border-border bg-gradient-to-br from-accent/30 to-primary/10 shadow-lg">
+                {preview.coverImageUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- same public bucket URL
+                  <img src={preview.coverImageUrl} alt="" className="size-full object-cover" />
+                ) : (
+                  <span aria-hidden className="text-3xl font-semibold text-foreground/70">{groupInitials(preview.groupName)}</span>
+                )}
+              </span>
+            </div>
             <div className="space-y-5 p-6">
               <div className="space-y-1.5">
                 <p className="text-sm font-medium text-muted-foreground">{preview.churchName} invited you to join</p>

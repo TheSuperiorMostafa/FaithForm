@@ -60,6 +60,7 @@ struct GroupMembersView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(theme.palette.background.ignoresSafeArea())
         .foregroundStyle(theme.palette.contentPrimary)
+        .navigationTitle("Members").navigationBarTitleDisplayMode(.inline)
         .task { await load() }.refreshable { await load() }
         .sheet(item: $selected) { member in if let userId = member.chatUserId, let cid = detail.group.chat?.cid { GroupSafetyView(model: model, cid: cid, userId: userId, name: member.name) } }
         .confirmationDialog("Remove this person?", isPresented: Binding(get: { confirming != nil }, set: { if !$0 { confirming = nil } }), titleVisibility: .visible) {

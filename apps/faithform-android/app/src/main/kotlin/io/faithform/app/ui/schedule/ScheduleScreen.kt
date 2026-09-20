@@ -125,7 +125,7 @@ fun HomeHostScreen(
         PullToRefreshBox(
             isRefreshing = isRefreshing,
             onRefresh = onRefresh,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.weight(1f).fillMaxWidth(),
         ) {
             when (section) {
                 HomeSection.FEED -> HomeFeedScreen(

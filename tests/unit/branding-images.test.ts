@@ -29,12 +29,13 @@ test("branding contract rejects tenant overrides, omitted content and malformed 
   assert.throws(() => decodeBrandingPhoto("not base64!"));
   assert.throws(() => parseImageCrop('{"x":-1,"y":0,"width":100,"height":100}'));
 });
-test("group crop produces a metadata-free 16:9 image and scopes the database write", async () => {
+test("group crop produces a metadata-free square logo and scopes the database write", async () => {
   const fake = store();
   const source = await sharp({ create: { width: 800, height: 800, channels: 3, background: "red" } }).withMetadata().png().toBuffer();
-  await saveBrandingImage(fake.admin, target, source, { x: 0, y: 0, width: 800, height: 450 });
+  await saveBrandingImage(fake.admin, target, source, { x: 0, y: 0, width: 800, height: 800 });
   const metadata = await sharp(fake.uploads[0].bytes).metadata();
-  assert.equal(metadata.width, 1600); assert.equal(metadata.height, 900); assert.equal(metadata.exif, undefined);
+  // A group photo is a logo: the apps show it square, so it is stored square.
+  assert.equal(metadata.width, 1024); assert.equal(metadata.height, 1024); assert.equal(metadata.exif, undefined);
   assert.ok(fake.predicates.some(p => p[0] === "church_id" && p[1] === "church"));
   assert.ok(fake.predicates.some(p => p[0] === "cover_image_url" && p[1] === null));
   assert.match(fake.uploads[0].path, /^church\/groups\/group\/cover-/);

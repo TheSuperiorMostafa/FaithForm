@@ -58,10 +58,10 @@ struct GroupsTabView: View {
                                 if section == "My groups" { Button("Discover groups") { section = "Discover" }.buttonStyle(.borderedProminent).frame(maxWidth: .infinity) }
                             } else {
                                 ForEach(displayed, id: \.id) { group in
-                                    NavigationLink(value: group.id) {
+                                    NavigationLink(value: GroupRoute.opening(group)) {
                                         if section == "My groups" { GroupConversationRow(group: group) }
                                         else { GroupCard(group: group) }
-                                    }.buttonStyle(.plain)
+                                    }.buttonStyle(GroupPressStyle())
                                 }
                                 if section == "Discover", model.nextCursor != nil {
                                     Button("Show more groups") { Task { await model.discover(query: query, type: category, more: true) } }.frame(maxWidth: .infinity).disabled(model.loading)
@@ -75,7 +75,9 @@ struct GroupsTabView: View {
             .foregroundStyle(theme.palette.contentPrimary)
             .navigationTitle("Groups")
             .toolbar(.hidden, for: .navigationBar)
-            .navigationDestination(for: String.self) { id in GroupPage(model: model, groupId: id, initialGroup: (model.home?.items ?? []).first { $0.id == id } ?? model.discovered.first { $0.id == id }).toolbar(.visible, for: .navigationBar) }
+            .navigationDestination(for: GroupRoute.self) { route in
+                groupDestination(route, model: model).toolbar(.visible, for: .navigationBar)
+            }
             .sheet(isPresented: $preferences) { GroupPreferencesView(model: model) }
             .task { await model.load() }
             .task(id: model.home?.messagingAvailable) {
@@ -96,40 +98,54 @@ struct GroupsTabView: View {
     private func groupFilter(_ title: String, id: String) -> some View { Button(title) { category = id }.font(.caption.weight(.semibold)).padding(.horizontal, 14).frame(minHeight: 44).background(category == id ? theme.palette.brandAccent : theme.palette.surfaceSunken, in: Capsule()).foregroundStyle(category == id ? theme.palette.contentOnAccent : theme.palette.contentSecondary).accessibilityAddTraits(category == id ? .isSelected : []) }
 }
 
+/// Discovery cards lead with the group's square photo rather than a cropped
+/// banner, so the logo arrives at the shape it was uploaded in.
 struct GroupCard: View {
     let group: GroupSummary
     @Environment(\.faithformTheme) private var theme
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            GroupCoverView(url: group.coverImageUrl, name: group.name).frame(height: 144).clipped()
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Text(group.type?.name ?? "Community").font(.caption2.weight(.semibold)).foregroundStyle(theme.palette.contentSecondary)
-                    Spacer()
-                    if group.membershipState == "requested" { GroupBadge(text: "Request sent") }
-                    else if group.status == "archived" { GroupBadge(text: "Archived") }
-                    else if group.membershipState == "member" { GroupBadge(text: "Your group") }
-                    else if group.isYouth { GroupBadge(text: "Youth group") }
-                    else if group.enrollment == "open" { GroupBadge(text: "Open to join") }
-                }
-                Text(group.name).font(.title3.weight(.semibold))
-                Label("\(group.memberCount) members", systemImage: "person.2").font(.caption).foregroundStyle(theme.palette.contentSecondary)
-                if let schedule = group.scheduleText { Label(schedule, systemImage: "calendar").font(.caption).foregroundStyle(theme.palette.contentSecondary) }
-                if let event = group.nextEvent { Divider(); Label("Next: \(groupDate(event.startsAt))", systemImage: "arrow.up.right").font(.caption.weight(.medium)) }
-            }.padding(18)
-        }.background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 22)).clipShape(RoundedRectangle(cornerRadius: 22)).overlay(RoundedRectangle(cornerRadius: 22).stroke(theme.palette.divider.opacity(0.65), lineWidth: 1))
-        .accessibilityElement(children: .combine)
+    private var badge: String? {
+        if group.membershipState == "requested" { return "Request sent" }
+        if group.status == "archived" { return "Archived" }
+        if group.membershipState == "member" { return "Your group" }
+        if group.isYouth { return "Youth group" }
+        if group.enrollment == "open" { return "Open to join" }
+        return nil
     }
-}
-struct GroupCoverView: View {
-    let url: String?; let name: String
-    @Environment(\.faithformTheme) private var theme
     var body: some View {
-        ZStack {
-            LinearGradient(colors: [theme.palette.brandAccent.opacity(0.2), theme.palette.brandAccent.opacity(0.08)], startPoint: .topLeading, endPoint: .bottomTrailing)
-            Image(systemName: "person.3.sequence").font(.system(size: 42, weight: .ultraLight)).foregroundStyle(theme.palette.contentSecondary.opacity(0.65))
-            if let url, let imageURL = URL(string: url) { AsyncImage(url: imageURL) { image in image.resizable().scaledToFill() } placeholder: { Color.clear } }
-        }.accessibilityHidden(true)
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top, spacing: 14) {
+                GroupAvatarView(url: group.coverImageUrl, name: group.name, size: 64)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(group.type?.name ?? "Community")
+                        .font(.caption2.weight(.semibold)).tracking(0.6).textCase(.uppercase)
+                        .foregroundStyle(theme.palette.brandAccent)
+                    Text(group.name).font(.title3.weight(.semibold)).lineLimit(2)
+                    Text("\(group.memberCount) members")
+                        .font(.caption).foregroundStyle(theme.palette.contentSecondary)
+                }.frame(maxWidth: .infinity, alignment: .leading)
+                if let badge { GroupBadge(text: badge) }
+            }
+            if let summary = group.summary, !summary.isEmpty {
+                Text(summary).font(.subheadline).foregroundStyle(theme.palette.contentSecondary)
+                    .lineLimit(2).lineSpacing(3)
+            }
+            if group.scheduleText != nil || group.locationName != nil || group.nextEvent != nil {
+                Rectangle().fill(theme.palette.divider).frame(height: 1)
+                VStack(alignment: .leading, spacing: 8) {
+                    if let schedule = group.scheduleText { Label(schedule, systemImage: "calendar") }
+                    if let place = group.locationName { Label(place, systemImage: "mappin.and.ellipse") }
+                    if let event = group.nextEvent { Label("Next: \(groupDate(event.startsAt))", systemImage: "sparkles") }
+                }
+                .font(.caption.weight(.medium))
+                .foregroundStyle(theme.palette.contentSecondary)
+            }
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(theme.palette.border, lineWidth: theme.borderWidth))
+        .shadow(color: theme.usesDecorativeShadow ? theme.palette.brandPrimary.opacity(0.06) : .clear, radius: 10, y: 4)
+        .accessibilityElement(children: .combine)
     }
 }
 struct GroupBadge: View {
@@ -170,28 +186,34 @@ struct GroupPanelView<Content: View>: View {
 }
 
 
-/// Compact rows put every joined group's conversation within a single tap.
+/// One tap from the list to the conversation, with the group's own square
+/// photo so a row is recognisable before its name is read.
 struct GroupConversationRow: View {
     let group: GroupSummary
     @Environment(\.faithformTheme) private var theme
+    private var subtitle: String {
+        var parts = ["\(group.memberCount) members"]
+        if let schedule = group.scheduleText { parts.append(schedule) }
+        else if group.chat != nil { parts.append("Tap to chat") }
+        return parts.joined(separator: " · ")
+    }
     var body: some View {
         HStack(spacing: 14) {
-            GroupCoverView(url: group.coverImageUrl, name: group.name)
-                .frame(width: 56, height: 56)
-                .clipShape(RoundedRectangle(cornerRadius: 18))
-            VStack(alignment: .leading, spacing: 6) {
-                Text(group.name).font(.headline).foregroundStyle(theme.palette.contentPrimary)
-                Text(group.chat == nil ? "\(group.memberCount) members" : "Open conversation · \(group.memberCount) members")
-                    .font(.subheadline).foregroundStyle(theme.palette.contentSecondary)
-                    .lineLimit(2)
+            GroupAvatarView(url: group.coverImageUrl, name: group.name, size: 60)
+            VStack(alignment: .leading, spacing: 5) {
+                Text(group.name).font(.headline).foregroundStyle(theme.palette.contentPrimary).lineLimit(1)
+                Text(subtitle)
+                    .font(.subheadline).foregroundStyle(theme.palette.contentSecondary).lineLimit(2)
             }
             Spacer(minLength: 0)
-            Image(systemName: "chevron.right").font(.caption.weight(.semibold))
-                .foregroundStyle(theme.palette.contentSecondary)
+            Image(systemName: group.chat == nil ? "chevron.right" : "bubble.left.and.bubble.right.fill")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(group.chat == nil ? theme.palette.contentSecondary : theme.palette.brandAccent)
         }
-        .padding(16)
+        .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 22))
+        .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(theme.palette.border, lineWidth: theme.borderWidth))
         .accessibilityElement(children: .combine)
     }
 }

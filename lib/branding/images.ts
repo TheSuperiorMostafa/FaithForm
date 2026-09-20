@@ -27,7 +27,11 @@ export async function saveBrandingImage(admin: SupabaseClient, target: BrandingT
   let url: string | null = null;
   if (bytes) {
     if (!bytes.length || bytes.length > 12 * 1024 * 1024) throw new MobileError("payload_too_large", "Choose an image under 12 MB.");
-    const normalized = await normalizeSiteImage(bytes, { crop, output: target.kind === "logo" ? { width: 512, height: 512 } : { width: 1600, height: 900 } });
+    // A group's photo is its logo, not a banner: the apps show it square in
+    // lists, headers and the conversation title, so it is stored square. Only
+    // the church cover is genuinely wide.
+    const output = target.kind === "logo" || target.groupId ? { width: 1024, height: 1024 } : { width: 1600, height: 900 };
+    const normalized = await normalizeSiteImage(bytes, { crop, output });
     if (!normalized) throw new MobileError("invalid_request", "Choose a readable JPG, PNG or WebP image.");
     path = `${prefix}${target.kind}-${randomUUID()}.${normalized.ext}`;
     const result = await storage.upload(path, normalized.buffer, { contentType: normalized.contentType, cacheControl: "31536000", upsert: false });

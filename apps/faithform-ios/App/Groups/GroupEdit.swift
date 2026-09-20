@@ -30,8 +30,12 @@ struct GroupEditView: View {
     var body: some View {
         NavigationStack { Form {
             Section("Group photo") {
-                GroupCoverView(url: photoURL, name: name).frame(height: 160).clipped()
-                BrandingPhotoControl(title: "group photo", aspect: 16 / 9, hasPhoto: photoURL != nil) { data in
+                HStack(spacing: 16) {
+                    GroupAvatarView(url: photoURL, name: name, size: 88)
+                    Text("Square photos look best — this is the logo people see in their groups list and at the top of the conversation.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }.padding(.vertical, 4)
+                BrandingPhotoControl(title: "group photo", aspect: 1, hasPhoto: photoURL != nil) { data in
                     await model.perform("Group photo saved.") {
                         let result = try await model.send("\(model.path)/\(detail.group.id)/photo", method: .put, body: BrandingPhotoBody(imageBase64: data?.base64EncodedString()), as: BrandingPhotoResult.self)
                         photoURL = result.url

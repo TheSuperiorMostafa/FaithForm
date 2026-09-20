@@ -252,15 +252,6 @@ struct RootView: View {
                     .tag(tab)
             }
         }
-        .safeAreaInset(edge: .top, spacing: 0) {
-            if available.contains(.groups) {
-                HStack {
-                    Text("Your community").font(.caption).foregroundStyle(theme.palette.contentSecondary)
-                    Spacer()
-                    Button { accountOpen = true } label: { Image(systemName: "person.crop.circle").font(.title3).frame(width: 44, height: 36) }.accessibilityLabel("Account and settings")
-                }.padding(.horizontal, 20).background(theme.palette.background)
-            }
-        }
         .sheet(isPresented: $accountOpen) {
             AccountTabView(dependencies: dependencies, root: model, bootstrap: bootstrap, isStale: isStale)
                 .presentationDragIndicator(.visible)
@@ -343,7 +334,9 @@ struct RootView: View {
                 dependencies: dependencies,
                 root: model,
                 isStale: isStale,
-                discovery: discovery
+                discovery: discovery,
+                onOpenAccount: model.availableTabs(bootstrap: bootstrap).contains(.groups)
+                    ? { accountOpen = true } : nil
             )
 
         case .groups, .checkIn, .watch, .give:

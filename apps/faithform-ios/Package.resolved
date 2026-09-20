@@ -1,6 +1,33 @@
 {
-  "originHash" : "43c197a7810ce00437675fd549e7b2b41633a9f145f28aa01e57c76c5b0f736b",
+  "originHash" : "a734ae9f8acfdc6da258703595262e3ec2723e3920bd6d76835ed91f6b206ea2",
   "pins" : [
+    {
+      "identity" : "stream-chat-swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/GetStream/stream-chat-swift.git",
+      "state" : {
+        "revision" : "e1ad1bf1f5d3bc28160a7796299f268df03e7dcf",
+        "version" : "5.11.0"
+      }
+    },
+    {
+      "identity" : "stream-chat-swiftui",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/GetStream/stream-chat-swiftui.git",
+      "state" : {
+        "revision" : "2c267cdc09bed8bf5931489040ae36664d6e6908",
+        "version" : "5.11.0"
+      }
+    },
+    {
+      "identity" : "stream-core-swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/GetStream/stream-core-swift.git",
+      "state" : {
+        "revision" : "fc4cc112690e1389e5ca3172bc3b55fea1dbc0da",
+        "version" : "0.10.1"
+      }
+    },
     {
       "identity" : "stripe-ios",
       "kind" : "remoteSourceControl",

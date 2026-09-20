@@ -48,6 +48,40 @@ Set these in **Vercel → Project → Settings → Environment Variables** (and 
 
 ---
 
+## Stripe giving notifications
+
+Successful payments reach the church's Giving dashboard through Stripe webhooks.
+Accepting a payment alone does not create a `giving_donations` record.
+
+1. Set `STRIPE_SECRET_KEY` and `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` from the same
+   Stripe platform account and mode (live for production).
+2. In that platform's live Stripe Workbench, create an event destination for
+   **Connected accounts**, using snapshot events, at
+   `https://faithform.io/api/webhooks/stripe`. With the webhook endpoint API, use
+   `connect: true`. FaithForm creates direct charges on each church's connected
+   account, so a destination for the platform's own payments will not receive them.
+3. Subscribe to the events handled by `lib/stripe/webhooks.ts`:
+   `account.updated`, `capability.updated`, `account.application.deauthorized`,
+   `payment_intent.succeeded`, `payment_intent.payment_failed`, `charge.refunded`,
+   `invoice.paid`, `invoice.payment_failed`, `customer.subscription.created`,
+   `customer.subscription.updated`, `customer.subscription.deleted`,
+   `charge.dispute.created`, `charge.dispute.closed`, and `payout.failed`.
+4. Save the destination's signing secret as the sensitive production variable
+   `STRIPE_WEBHOOK_SECRET`, or add it to the comma-separated
+   `STRIPE_WEBHOOK_SECRETS` when retaining an existing destination. Redeploy to
+   activate environment changes. Never commit signing secrets.
+5. Verify a successful event receives HTTP 200, its `stripe_webhook_events` row
+   is `processed`, and exactly one matching payment appears in `giving_donations`
+   for the expected church. Refresh Giving and compare the amount and fund.
+
+When switching Stripe platform accounts, recreate the connected-account event
+destination and replace its signing secret too. An old account's destination
+does not receive the new account's payments. For missed gifts, recover the
+original Stripe events through the existing idempotent webhook handler; do not
+create another charge or invent donation records from a browser success callback.
+
+Reference: [Stripe Connect webhooks](https://docs.stripe.com/connect/webhooks).
+
 ## Supabase Production Setup
 
 ### 1. Create a Supabase project

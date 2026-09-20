@@ -15,7 +15,12 @@ struct GroupInvitationView: View {
         NavigationStack {
             ScrollView { VStack(alignment: .leading, spacing: 24) {
                 if let preview {
-                    GroupCoverView(url: preview.coverImageUrl, name: preview.groupName).frame(height: 210).clipped().clipShape(RoundedRectangle(cornerRadius: 22))
+                    ZStack {
+                        GroupAvatarBackdrop(url: preview.coverImageUrl)
+                        GroupAvatarView(url: preview.coverImageUrl, name: preview.groupName, size: 112)
+                    }
+                    .frame(height: 200).frame(maxWidth: .infinity)
+                    .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                     Text(accepted ? "Welcome to the group." : "There’s a place for you.").font(.largeTitle.bold())
                     Text(preview.groupName).font(.title2.bold())
                     Text("You’re invited to join \(preview.churchName)’s group. You’ll need to belong to this church in the app before joining.").foregroundStyle(.secondary)

@@ -15,7 +15,11 @@ struct GroupEventsView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 20) {
-                GroupSectionHeading(eyebrow: "TIME TOGETHER", title: "Gatherings", subtitle: "Good company. Something to look forward to.")
+                // The title bar already says "Gatherings"; this is the line
+                // that says why you would come.
+                Text("Good company. Something to look forward to.")
+                    .font(.subheadline).foregroundStyle(theme.palette.contentSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 FaithFormPillSwitcher(selection: $when, options: [.init("upcoming", title: "Coming up"), .init("past", title: "Past")], accessibilityLabel: "Gatherings")
                 if detail.capabilities.canManageEvents && !detail.isArchived {
                     Button { adding = true } label: {
@@ -52,6 +56,7 @@ struct GroupEventsView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(theme.palette.background.ignoresSafeArea())
         .foregroundStyle(theme.palette.contentPrimary)
+        .navigationTitle("Gatherings").navigationBarTitleDisplayMode(.inline)
         .refreshable { await load() }
         .task(id: when) { loaded = false; await load() }
         .sheet(isPresented: $adding, onDismiss: { Task { await load() } }) { GroupEventForm(model: model, groupId: detail.group.id) }

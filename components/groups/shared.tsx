@@ -3,12 +3,13 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter } from "next/navigation";
-import { useId, useState, useTransition, type ReactNode } from "react";
+import { useId, useState, useTransition, type CSSProperties, type ReactNode } from "react";
 import { ArrowUpRight, CalendarDays, Check, ChevronRight, LayoutGrid, Loader2, MessageCircle, Search, Settings2, ShieldCheck, UsersRound, ChartNoAxesCombined, Inbox } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { StaffActionResult } from "@/lib/groups/staff/context";
+import { groupInitials } from "@/lib/groups/types";
 import { cn } from "@/lib/utils";
 
 export const base = "/dashboard/groups";
@@ -41,7 +42,17 @@ export function Modal({ title, description, open, onClose, children, wide = fals
 export function Empty({ title, description, children, icon = "groups" }: { title: string; description: string; children?: ReactNode; icon?: "groups" | "messages" | "events" | "safety" | "search" }) { const Icon = ({ groups: UsersRound, messages: MessageCircle, events: CalendarDays, safety: ShieldCheck, search: Search })[icon]; return <div className="g-empty"><div className="g-empty-icon"><Icon className="size-7" strokeWidth={1.5} /></div><h3>{title}</h3><p>{description}</p>{children}</div>; }
 export function Pill({ children, tone = "neutral" }: { children: ReactNode; tone?: "neutral" | "green" | "amber" }) { return <span className={cn("g-pill", `g-pill-${tone}`)}>{children}</span>; }
 export function Avatar({ name }: { name: string }) { return <span className="g-avatar" aria-hidden>{name.split(" ").slice(0, 2).map(p => p[0]).join("")}</span>; }
-export function GroupCover({ name, url, index = 0, large = false }: { name: string; url: string | null; index?: number; large?: boolean }) { return <div className={cn("g-cover", `g-cover-${index % 4}`, large && "g-cover-large")}>{url ? <Image src={url} alt="" fill unoptimized sizes="(max-width: 768px) 100vw, 33vw" /> : <><div className="g-cover-orbit" /><UsersRound size={large ? 60 : 38} strokeWidth={1.1} /><span className="g-cover-word">{name}</span></>}</div>; }
+/**
+ * The group photo is a square logo everywhere it appears — the same crop in a
+ * 40px inbox row as in a 128px header. It is what the phones store and show,
+ * so the dashboard shows it identically rather than letterboxing a square
+ * logo into a wide banner and leaving it stranded in empty space.
+ */
+export function GroupAvatar({ name, url, size = 56, className }: { name: string; url: string | null; size?: number; className?: string }) {
+  return <span className={cn("g-photo", className)} style={{ "--g-photo-size": `${size}px`, "--g-photo-radius": `${Math.round(size * 0.3)}px` } as CSSProperties}>{url ? <Image src={url} alt="" fill unoptimized sizes={`${size}px`} /> : <span className="g-photo-initials" aria-hidden>{groupInitials(name)}</span>}</span>;
+}
+/** The same square photo, blurred past recognition, so a header or card carries the group's own colour without ever cropping the logo. */
+export function GroupBackdrop({ url }: { url: string | null }) { return <span className="g-backdrop" aria-hidden>{url && <Image src={url} alt="" fill unoptimized sizes="640px" />}</span>; }
 export function PageHeading({ eyebrow = "LIFE TOGETHER", title, description, children }: { eyebrow?: string; title: string; description: string; children?: ReactNode }) { return <header className="g-heading"><div><p className="g-eyebrow">{eyebrow}</p><h1>{title}</h1><p className="g-description">{description}</p></div><div className="flex flex-wrap items-center gap-3">{children}</div></header>; }
 export function GroupsNav({ requests = 0, reports = 0 }: { requests?: number; reports?: number }) {
   const path = usePathname();

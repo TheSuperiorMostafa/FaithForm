@@ -12,10 +12,10 @@ struct GroupsScreensTests {
         func group(membership: String, chat: GroupChatInfo?) -> GroupSummary {
             GroupSummary(id: "table", name: "The Table", memberCount: 14, enrollment: "open", visibility: "discoverable", status: "active", meetingDays: [], membershipState: membership, joinAction: "join", chat: chat, isYouth: false, version: 1)
         }
-        #expect(GroupPage.initialSection(for: group(membership: "member", chat: chat)) == "Chat")
-        #expect(GroupPage.initialSection(for: group(membership: "member", chat: nil)) == "Overview")
-        #expect(GroupPage.initialSection(for: group(membership: "none", chat: chat)) == "Overview")
-        #expect(GroupPage.initialSection(for: group(membership: "requested", chat: nil)) == "Overview")
+        #expect(GroupRoute.opening(group(membership: "member", chat: chat)) == .chat(group(membership: "member", chat: chat)))
+        #expect(GroupRoute.opening(group(membership: "member", chat: nil)) == .info(groupId: "table", fromChat: false))
+        #expect(GroupRoute.opening(group(membership: "none", chat: chat)) == .info(groupId: "table", fromChat: false))
+        #expect(GroupRoute.opening(group(membership: "requested", chat: nil)) == .info(groupId: "table", fromChat: false))
     }
 
     @Test func openingJoinedChatDoesNotRequestOverview() async throws {
@@ -26,7 +26,7 @@ struct GroupsScreensTests {
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let window = UIWindow(windowScene: scene); window.frame = scene.screen.bounds
         window.rootViewController = UIHostingController(rootView: NavigationStack {
-            GroupPage(model: model, groupId: group.id, initialGroup: group)
+            GroupChatScreen(model: model, group: group)
         }.environmentObject(GroupChatSession()).faithformTheme())
         window.makeKeyAndVisible()
         defer { window.isHidden = true }
@@ -39,8 +39,18 @@ struct GroupsScreensTests {
     }
 
     @Test func eventsAndMembersUseThemedScreens() async throws {
-        let group = GroupSummary(id: "table", name: "The Table", memberCount: 14, enrollment: "open", visibility: "discoverable", status: "active", meetingDays: [], membershipState: "member", groupRole: "leader", joinAction: "leave", isYouth: false, version: 1)
-        let detail = GroupDetail(group: group, leaders: [], schedules: [], upcomingEvents: [], capabilities: .init(canViewMembers: true, canManageMembers: true, canManageRequests: true, canInvite: true, canManageRoles: true, canEditDetails: true, canManageEvents: true, canTakeAttendance: true, canModerateChat: true), pendingRequestCount: 0, isArchived: false)
+        let group = GroupSummary(id: "table", name: "The Table", type: .init(id: "life", name: "Life group", icon: "users"), memberCount: 14, enrollment: "open", visibility: "discoverable", status: "active", scheduleText: "Tuesdays at 6:30 pm", meetingDays: [2], membershipState: "member", groupRole: "leader", joinAction: "leave", chat: .init(cid: "ff_group:table", channelType: "ff_group", channelId: "table", state: "ready", postingPolicy: "everyone"), isYouth: false, version: 1)
+        let detail = GroupDetail(
+            group: group,
+            description: "A midweek table for anyone who would rather share a meal than sit in rows. Bring what you have; there is always enough.",
+            leaders: [.init(name: "Jordan Williams", groupRole: "leader"), .init(name: "Sarah Chen", groupRole: "manager")],
+            schedules: [.init(text: "Tuesdays at 6:30 pm", frequency: "weekly", dayOfWeek: 2, startTime: "18:30", durationMinutes: 90, timezone: "America/New_York")],
+            location: .init(name: "Community kitchen", address: "41 Bridge Street", membersOnly: false),
+            upcomingEvents: [.init(id: "dinner", groupId: "table", title: "Dinner around the table", startsAt: "2026-10-08T22:30:00Z", endsAt: "2026-10-09T00:00:00Z", timezone: "America/New_York", isCancelled: false, goingCount: 12)],
+            capabilities: .init(canViewMembers: true, canManageMembers: true, canManageRequests: true, canInvite: true, canManageRoles: true, canEditDetails: true, canManageEvents: true, canTakeAttendance: true, canModerateChat: true),
+            pendingRequestCount: 2,
+            isArchived: false
+        )
         let events = GroupEventPage(items: [
             .init(id: "dinner", groupId: group.id, title: "Dinner around the table", startsAt: "2026-10-08T22:30:00Z", endsAt: "2026-10-09T00:00:00Z", timezone: "America/New_York", locationName: "Community kitchen", isCancelled: false, rsvp: "going", goingCount: 12),
             .init(id: "walk", groupId: group.id, title: "Saturday morning walk", startsAt: "2026-10-10T13:00:00Z", endsAt: "2026-10-10T14:00:00Z", timezone: "America/New_York", locationName: "Waterfront Park", isCancelled: false, goingCount: 8)
@@ -54,8 +64,8 @@ struct GroupsScreensTests {
         let directory = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("group-redesign")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         for scheme in [ColorScheme.light, .dark] {
-            for section in ["Events", "Members"] {
-                let body = try section == "Events" ? JSONEncoder().encode(events) : JSONEncoder().encode(members)
+            for section in ["Info", "Events", "Members"] {
+                let body = try section == "Info" ? JSONEncoder().encode(detail) : section == "Events" ? JSONEncoder().encode(events) : JSONEncoder().encode(members)
                 let envelope = Data("{\"ok\":true,\"data\":\(String(decoding: body, as: UTF8.self)),\"meta\":{\"apiVersion\":\"2026-08-24\",\"apiMajor\":1,\"requestId\":\"design-test\",\"minimumSupportedClientBuild\":1}}".utf8)
                 let transport = StubTransport([.init(status: 200, body: envelope)])
                 let api = APIClient(configuration: .init(environment: APIEnvironment(key: "design-test", baseURL: URL(string: "https://example.invalid")!), clientBuild: 1), transport: transport, tokens: GroupTestTokens())
@@ -63,11 +73,11 @@ struct GroupsScreensTests {
                 let window = UIWindow(windowScene: scene); window.frame = scene.screen.bounds
                 window.overrideUserInterfaceStyle = scheme == .dark ? .dark : .light
                 window.rootViewController = UIHostingController(rootView: NavigationStack {
-                    VStack(spacing: 0) {
-                        FaithFormPillSwitcher(selection: .constant(section), options: ["Chat", "Overview", "Events", "Members"].map { .init($0, title: $0) }, accessibilityLabel: "Group section").padding(.horizontal, 20).padding(.vertical, 12)
-                        if section == "Events" { GroupEventsView(model: model, detail: detail) }
+                    Group {
+                        if section == "Info" { GroupInfoScreen(model: model, groupId: group.id) }
+                        else if section == "Events" { GroupEventsView(model: model, detail: detail) }
                         else { GroupMembersView(model: model, detail: detail) }
-                    }.navigationTitle(group.name).navigationBarTitleDisplayMode(.inline)
+                    }
                 }.faithformTheme().environment(\.colorScheme, scheme))
                 window.makeKeyAndVisible()
                 let deadline = ContinuousClock.now.advanced(by: .seconds(5))

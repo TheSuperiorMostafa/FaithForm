@@ -12,8 +12,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.Church
-import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
@@ -58,7 +58,7 @@ private enum class HomeRoute { FEED, CHURCH_INFO, FIND }
 
 /**
  * Home: what the account's church has published, newest and pinned first —
- * and, behind the "Church info" button in its bar, that church's page.
+ * and, behind the tappable church name and logo in its bar, that church's page.
  *
  * A person has exactly one church, so there is no church tab and no switcher.
  * The church's page, and finding a different church from it ("Change church"),
@@ -76,6 +76,7 @@ fun HomeTab(
     church: ChurchRelationship?,
     partition: CachePartition?,
     modifier: Modifier = Modifier,
+    onOpenAccount: (() -> Unit)? = null,
 ) {
     var route by rememberSaveable { mutableStateOf(HomeRoute.FEED) }
     // Back from the search returns to whichever page opened it.
@@ -126,6 +127,7 @@ fun HomeTab(
             church = church,
             partition = partition,
             onOpenChurchInfo = { route = HomeRoute.CHURCH_INFO },
+            onOpenAccount = onOpenAccount,
             modifier = modifier,
         )
     }
@@ -173,6 +175,7 @@ private fun HomeFeed(
     church: ChurchRelationship,
     partition: CachePartition,
     onOpenChurchInfo: () -> Unit,
+    onOpenAccount: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     val api = container.apiClient
@@ -236,9 +239,13 @@ private fun HomeFeed(
         logoUrl = church.logoUrl,
         showChurchAvatar = true,
         modifier = modifier,
+        onTitleClick = onOpenChurchInfo,
+        titleClickLabel = stringResource(R.string.church_info),
         actions = {
-            IconButton(onClick = onOpenChurchInfo) {
-                Icon(Icons.Outlined.Info, contentDescription = stringResource(R.string.church_info))
+            if (onOpenAccount != null) {
+                IconButton(onClick = onOpenAccount) {
+                    Icon(Icons.Outlined.AccountCircle, contentDescription = stringResource(R.string.tab_account))
+                }
             }
         },
     ) { content ->

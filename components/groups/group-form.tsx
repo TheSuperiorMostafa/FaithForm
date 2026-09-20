@@ -1,13 +1,14 @@
 "use client";
 import { ImageCropper } from "@/components/website-admin/image-cropper";
-import { downscaleForUpload } from "@/lib/sites/downscale-image";
+import { downscaleForUpload, UPLOAD_BUDGET_BYTES } from "@/lib/sites/downscale-image";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus } from "lucide-react";
+import { ImagePlus, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import type { StaffGroupDetail, StaffGroupType } from "@/lib/groups/staff/groups";
 import { saveGroup, uploadCover, removeCover } from "@/app/dashboard/groups/actions";
-import { base, Field, Modal, Notice, Submit, Toggle, useGroupAction } from "./shared";
+import { base, Field, GroupAvatar, Modal, Notice, Submit, Toggle, useGroupAction } from "./shared";
 
 type Props = { types: StaffGroupType[]; campuses: { id: string; name: string }[]; detail?: StaffGroupDetail };
 export function GroupFormButton(props: Props) {
@@ -32,25 +33,68 @@ export function GroupForm({ types, campuses, detail, close }: Props & { close?: 
     {error && <Notice>{error}</Notice>}<div className="g-form-actions">{close && <Button variant="ghost" onClick={close} disabled={pending}>Cancel</Button>}<Submit pending={pending}>{group ? "Save group" : "Create group"}</Submit></div>
   </form>;
 }
-export function CoverEditor({ detail }: { detail: StaffGroupDetail }) {
+/**
+ * A group's photo is a square logo, not a banner.
+ *
+ * The phones render it at 1:1 in every place a group appears — the list row,
+ * the conversation title, the group header — so the dashboard crops to the
+ * same square and previews it at those sizes. A church choosing the photo can
+ * see what the apps will show before it saves.
+ */
+export function GroupPhotoEditor({ detail }: { detail: StaffGroupDetail }) {
   const { pending, error, run } = useGroupAction();
   const [photo, setPhoto] = useState<File | null>(null);
   const [preparing, setPreparing] = useState(false);
   const [photoError, setPhotoError] = useState<string | null>(null);
-  return <section className="g-panel space-y-4"><h3>Group photo</h3><p className="g-row-sub">Choose your photo, then position it in the frame.</p>
-    <Field label="Choose a photo" hint="JPG, PNG or WebP, up to 12 MB."><input type="file" accept="image/jpeg,image/png,image/webp" disabled={pending || preparing} onChange={async e => {
-      const file = e.target.files?.[0]; e.target.value = ""; if (!file) return;
-      setPreparing(true); setPhotoError(null);
-      try { if (file.size > 12 * 1024 * 1024) throw new Error("Choose an image under 12 MB."); const prepared = await downscaleForUpload(file); if (prepared.size > 3_400_000) throw new Error("Too large"); setPhoto(prepared); }
-      catch { setPhotoError("This photo could not be prepared. Choose an image under 12 MB."); }
-      finally { setPreparing(false); }
-    }} /></Field>
+  const [dragging, setDragging] = useState(false);
+  const { name, cover_image_url: url, id } = detail.group;
+  const busy = pending || preparing;
+
+  // Shared by the file input and the drop target: a photo straight off a
+  // phone is far over the Server Action body limit, so it is shrunk here
+  // before the cropper ever sees it.
+  async function choose(file: File | null | undefined) {
+    if (!file) return;
+    setPreparing(true); setPhotoError(null);
+    try {
+      if (!/^image\/(jpeg|png|webp)$/.test(file.type)) throw new Error("unsupported");
+      if (file.size > 12 * 1024 * 1024) throw new Error("too large");
+      const prepared = await downscaleForUpload(file);
+      if (prepared.size > UPLOAD_BUDGET_BYTES) throw new Error("still too large");
+      setPhoto(prepared);
+    } catch { setPhotoError("That photo could not be prepared. Choose a JPG, PNG or WebP under 12 MB."); }
+    finally { setPreparing(false); }
+  }
+
+  return <section className="g-panel" id="photo">
+    <h3>Group photo</h3>
+    <p className="g-row-sub">One square photo, shown everywhere this group appears — here, in the iPhone app, and on Android. Position it once and every screen shows the same crop.</p>
+    <div className="g-photo-editor">
+      <GroupAvatar name={name} url={url} size={148} className="g-photo-hero" />
+      <div className="min-w-0 flex-1">
+        <label className={cn("g-dropzone", dragging && "is-dragging")}
+          onDragOver={e => { e.preventDefault(); if (!busy) setDragging(true); }}
+          onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false); }}
+          onDrop={e => { e.preventDefault(); setDragging(false); if (!busy) void choose(e.dataTransfer.files?.[0]); }}>
+          <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" disabled={busy} onChange={e => { const file = e.target.files?.[0]; e.target.value = ""; void choose(file); }} />
+          <span className="g-dropzone-icon"><ImagePlus className="size-5" strokeWidth={1.6} /></span>
+          <strong>{url ? "Drag a new photo here, or browse" : "Drag a photo here, or browse"}</strong>
+          <small>JPG, PNG or WebP, up to 12 MB. You will position it in a square frame next.</small>
+        </label>
+        <div className="g-photo-actions">
+          <p className="g-row-sub" role="status">{preparing ? "Preparing your photo…" : pending ? "Saving your photo…" : url ? "This photo is live on every device." : "No photo yet — members see your group’s initials."}</p>
+          {url && <Button variant="ghost" size="sm" disabled={busy} onClick={() => run(() => removeCover(id), "Photo removed")}><Trash2 className="size-4" />Remove</Button>}
+        </div>
+      </div>
+    </div>
+    <div className="g-photo-sizes">
+      <span>Where it appears</span>
+      {[["Groups list", 56], ["Conversations", 40], ["Chat title", 28]].map(([caption, size]) => <div key={caption}><GroupAvatar name={name} url={url} size={size as number} /><small>{caption}</small></div>)}
+    </div>
     {(error || photoError) && <Notice>{error || photoError}</Notice>}
-    {(pending || preparing) && <p role="status">{preparing ? "Preparing photo…" : "Saving photo…"}</p>}
-    {detail.group.cover_image_url && <Button variant="ghost" disabled={pending} onClick={() => run(() => removeCover(detail.group.id), "Photo removed")}>Remove photo</Button>}
-    {photo && <ImageCropper file={photo} shape={{ label: "Group photo", hint: "Wide cover", ratio: 16 / 9 }} onCancel={() => setPhoto(null)} onConfirm={crop => {
+    {photo && <ImageCropper file={photo} shape={{ label: "Group photo", hint: "A square, 1:1 — the shape the apps show.", ratio: 1 }} onCancel={() => setPhoto(null)} onConfirm={crop => {
       const data = new FormData(); data.set("cover", photo); data.set("crop", JSON.stringify(crop)); setPhoto(null);
-      run(() => uploadCover(detail.group.id, data), "Group photo updated");
+      run(() => uploadCover(id, data), "Group photo updated");
     }} />}
   </section>;
 }

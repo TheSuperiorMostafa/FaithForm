@@ -75,3 +75,13 @@ export type ScheduleInput = {
   startsOn: string;
   endsOn: string | null;
 };
+
+/**
+ * The two letters shown when a group has no photo — derived the same way on
+ * the dashboard, the iPhone app and Android, so a group without a logo still
+ * looks like itself on every screen.
+ */
+export function groupInitials(name: string): string {
+  const letters = name.split(/[\s-]+/).filter(Boolean).slice(0, 2).map(part => part[0]).join("");
+  return letters ? letters.toUpperCase() : "\u2022";
+}
