@@ -111,6 +111,7 @@ fun AccountTab(
     automaticCheckInEnabled: Boolean = false,
     onOpenAutomaticCheckIn: (() -> Unit)? = null,
     onOpenChurchAppearance: (() -> Unit)? = null,
+    onUpdateProfilePhoto: ((ByteArray?, (Boolean) -> Unit) -> Unit)? = null,
     onUpdateDisplayName: ((String, (Boolean) -> Unit) -> Unit)? = null,
 ) {
     val theme = LocalFaithFormTheme.current
@@ -189,6 +190,10 @@ fun AccountTab(
                     )
                 }
             }
+        }
+
+        if (onUpdateProfilePhoto != null) {
+            ProfilePhotoControl(bootstrap.profile.avatarUrl != null, onUpdateProfilePhoto)
         }
 
         if (displayName.isNullOrBlank() && onUpdateDisplayName != null) {

@@ -1,3 +1,4 @@
+import { ProfileAvatar } from "./profile-avatar";
 import Link from "next/link";
 import { LogOut, ShieldCheck } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
@@ -6,10 +7,11 @@ import { isBootstrapSuperAdminEmail } from "@/lib/auth/superadmin-emails";
 
 type TopbarProps = {
   churchName?: string | null;
+  avatarUrl?: string | null;
   userEmail?: string;
 };
 
-export function Topbar({ churchName, userEmail }: TopbarProps) {
+export function Topbar({ churchName, userEmail, avatarUrl }: TopbarProps) {
   const initials = userEmail
     ? userEmail.charAt(0).toUpperCase()
     : (churchName ?? "F").charAt(0).toUpperCase();
@@ -45,7 +47,7 @@ export function Topbar({ churchName, userEmail }: TopbarProps) {
           className="flex size-10 items-center justify-center rounded-full bg-accent text-sm font-bold text-accent-foreground shadow-sm"
           aria-hidden
         >
-          {initials}
+          <ProfileAvatar url={avatarUrl} initials={initials} />
         </div>
         <form action="/auth/signout" method="post">
           <Button

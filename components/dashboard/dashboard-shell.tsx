@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { BottomNav } from "@/components/dashboard/bottom-nav";
 import { DashboardUsageTracker } from "@/components/dashboard/usage-tracker";
 import { Sidebar } from "@/components/dashboard/sidebar";
@@ -29,11 +30,37 @@ export function DashboardShell({
   banner,
   children,
 }: DashboardShellProps) {
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    let inFlight = false;
+    const refresh = async () => {
+      if (document.visibilityState === "hidden" || inFlight) return;
+      inFlight = true;
+      try {
+        const response = await fetch("/api/dashboard/account/profile", { cache: "no-store", signal: controller.signal });
+        if (response.ok) setAvatarUrl((await response.json()).avatarUrl ?? null);
+        else if (response.status === 401) setAvatarUrl(null);
+      } catch { /* Keep the last photo during transient network failures. */ }
+      finally { inFlight = false; }
+    };
+    void refresh();
+    const interval = window.setInterval(() => void refresh(), 30_000);
+    window.addEventListener("focus", refresh);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      controller.abort();
+      window.clearInterval(interval);
+      window.removeEventListener("focus", refresh);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, []);
   return (
     <div className="h-dvh overflow-hidden bg-background">
       <DashboardUsageTracker />
       <VoiceAgentAutoSync />
       <Sidebar
+        avatarUrl={avatarUrl}
         userEmail={userEmail}
         churchName={churchName}
         role={role}
@@ -48,7 +75,7 @@ export function DashboardShell({
       */}
       <div className="flex h-dvh min-w-0 flex-col overflow-hidden md:ml-[72px]">
         {banner}
-        <Topbar userEmail={userEmail} churchName={churchName} />
+        <Topbar avatarUrl={avatarUrl} userEmail={userEmail} churchName={churchName} />
 
         <main className="flex-1 overflow-y-auto p-5 pb-24 md:p-8 md:pb-8">
           {children}

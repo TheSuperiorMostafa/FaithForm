@@ -129,6 +129,7 @@ Prompt 4 owns the boundary and identity/bootstrap only:
 | `/api/mobile/v1/account/bootstrap` | GET | private-revalidate, ETag |
 | `/api/mobile/v1/account/relationships` | GET | private-revalidate, ETag, cursor |
 | `/api/mobile/v1/account/profile` | PATCH | private-no-store |
+| `/api/mobile/v1/account/photo` | PUT | private-no-store |
 | `/api/mobile/v1/account/consent` | POST | private-no-store |
 | `/api/mobile/v1/account/selected-church` | PUT | private-no-store |
 | `/api/mobile/v1/account/sign-out` | POST | private-no-store |

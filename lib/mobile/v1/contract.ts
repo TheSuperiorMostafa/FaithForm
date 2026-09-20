@@ -240,6 +240,15 @@ export const updateProfileRequestSchema = z.object({
   communicationPrefs: z.record(z.string(), z.boolean()).optional(),
 }).meta({ id: "UpdateProfileRequest" });
 
+/** Explicit null removes the current photo; omission is invalid. */
+export const updateProfilePhotoRequestSchema = z.object({
+  jpegBase64: z.string().min(1).max(1_400_000).nullable(),
+}).strict().meta({ id: "UpdateProfilePhotoRequest" });
+
+export const profilePhotoResultSchema = z.object({
+  avatarUrl: url.nullable(),
+}).meta({ id: "ProfilePhotoResult" });
+
 export const selectChurchRequestSchema = z.object({
   churchSlug: churchSlug.nullable(),
 }).meta({ id: "SelectChurchRequest" });
@@ -1923,6 +1932,8 @@ export const CONTRACT_SCHEMAS = {
   SignOutResult: signOutResultSchema,
   Health: healthSchema,
   UpdateProfileRequest: updateProfileRequestSchema,
+  UpdateProfilePhotoRequest: updateProfilePhotoRequestSchema,
+  ProfilePhotoResult: profilePhotoResultSchema,
   SelectChurchRequest: selectChurchRequestSchema,
   ConsentRequest: consentRequestSchema,
   AccountActionRequest: accountActionRequestSchema,

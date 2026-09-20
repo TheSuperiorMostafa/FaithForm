@@ -140,6 +140,7 @@ struct AccountView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.xl) {
             identityHeader
+            ProfilePhotoControl(root: root, hasPhoto: avatarUrl != nil)
 
             if displayName == nil {
                 nameEditor

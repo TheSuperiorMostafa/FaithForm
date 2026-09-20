@@ -528,6 +528,32 @@ class AppViewModel(
         }
     }
 
+    fun updateProfilePhoto(jpeg: ByteArray?, onDone: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            @Serializable
+            data class PhotoReply(val avatarUrl: String? = null)
+            val ok = try {
+                api.send(
+                    path = "api/mobile/v1/account/photo",
+                    serializer = MobileSuccess.serializer(PhotoReply.serializer()),
+                    method = "PUT",
+                    body = json.encodeToString(
+                        kotlinx.serialization.json.JsonObject.serializer(),
+                        buildJsonObject {
+                            put("jpegBase64", jpeg?.let { android.util.Base64.encodeToString(it, android.util.Base64.NO_WRAP) })
+                        }
+                    )
+                )
+                true
+            } catch (error: Exception) {
+                if (error is kotlinx.coroutines.CancellationException) throw error
+                false
+            }
+            if (ok) loadNow(quiet = true)
+            onDone(ok)
+        }
+    }
+
     fun updateChurchTheme(
         churchSlug: String,
         primaryColor: String,

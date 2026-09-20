@@ -1449,6 +1449,49 @@
       },
       "additionalProperties": false
     },
+    "UpdateProfilePhotoRequest": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "jpegBase64": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1400000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "jpegBase64"
+      ],
+      "additionalProperties": false
+    },
+    "ProfilePhotoResult": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "avatarUrl": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 2048
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "avatarUrl"
+      ],
+      "additionalProperties": false
+    },
     "SelectChurchRequest": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "object",

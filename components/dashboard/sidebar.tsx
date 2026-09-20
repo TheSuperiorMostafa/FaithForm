@@ -1,5 +1,6 @@
 "use client";
 
+import { ProfileAvatar } from "./profile-avatar";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, type MouseEvent } from "react";
@@ -17,6 +18,7 @@ import {
 import { useSidebarHoverIntent } from "./use-sidebar-hover-intent";
 
 type SidebarProps = {
+  avatarUrl?: string | null;
   userEmail: string;
   churchName: string | null;
   role: string | null;
@@ -113,6 +115,7 @@ function isModifiedClick(event: MouseEvent<HTMLAnchorElement>) {
 }
 
 export function Sidebar({
+  avatarUrl,
   userEmail,
   churchName,
   role,
@@ -274,7 +277,7 @@ export function Sidebar({
               title={userEmail}
               aria-hidden
             >
-              {initial}
+              <ProfileAvatar url={avatarUrl} initials={initial} />
             </div>
           </div>
           <div

@@ -298,6 +298,7 @@ fun SignedInHost(
                                         { showChurchAppearance = true }
                                     } else null,
                                     onUpdateDisplayName = viewModel::updateDisplayName,
+                                    onUpdateProfilePhoto = viewModel::updateProfilePhoto,
                                 )
                             }
                         }

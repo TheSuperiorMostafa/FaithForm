@@ -1036,6 +1036,24 @@ data class UpdateProfileRequest(
  * which is what lets a released client keep working when the server adds one.
  */
 @Serializable
+data class UpdateProfilePhotoRequest(
+    val jpegBase64: String? = null
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class ProfilePhotoResult(
+    val avatarUrl: String? = null
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
 data class SelectChurchRequest(
     val churchSlug: String? = null
 )

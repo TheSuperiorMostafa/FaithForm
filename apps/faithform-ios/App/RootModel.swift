@@ -136,6 +136,27 @@ final class RootModel {
         }
     }
 
+    func updateProfilePhoto(_ jpeg: Data?) async -> Bool {
+        struct PhotoUpdate: Encodable, Sendable {
+            let jpegBase64: String?
+            enum CodingKeys: String, CodingKey { case jpegBase64 }
+            func encode(to encoder: Encoder) throws {
+                var values = encoder.container(keyedBy: CodingKeys.self)
+                if let jpegBase64 { try values.encode(jpegBase64, forKey: .jpegBase64) }
+                else { try values.encodeNil(forKey: .jpegBase64) }
+            }
+        }
+        struct PhotoReply: Decodable, Sendable { let avatarUrl: String? }
+        do {
+            _ = try await dependencies.api.send(
+                "api/mobile/v1/account/photo", method: .put,
+                body: PhotoUpdate(jpegBase64: jpeg?.base64EncodedString()), as: PhotoReply.self
+            )
+            await load(quiet: true)
+            return true
+        } catch { return false }
+    }
+
     /// Saves branding through the same server authority as the dashboard, then
     /// reloads bootstrap so the entire app adopts the new palette immediately.
     func updateChurchTheme(primaryColor: String?, accentColor: String?) async -> Bool {
