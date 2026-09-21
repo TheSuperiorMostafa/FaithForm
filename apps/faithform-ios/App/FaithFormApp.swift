@@ -15,42 +15,56 @@ struct FaithFormApp: App {
 
     @State private var launch: LaunchOutcome
 
-    @AppStorage("faithform.appearance") private var appearance = "system"
-
     init() {
         _launch = State(initialValue: LaunchOutcome.resolve())
     }
 
     var body: some Scene {
-        WindowGroup {
-            Group {
-                switch launch {
-                case let .ready(dependencies):
-                    RootView(dependencies: dependencies)
-                        .faithformTheme()
-                        // A `faithform://` link, handled the same whether it arrives
-                        // cold or into a running app. It is parsed and authorized
-                        // before anything moves — an unknown or unauthorized link
-                        // does nothing at all.
-                        .onOpenURL { url in
-                            NotificationCenter.default.post(
-                                name: .faithformDeepLink,
-                                object: nil,
-                                userInfo: ["url": url]
-                            )
-                        }
+        // SwiftUI may invoke this lazy factory on its async renderer. Construct
+        // the value on the main actor, then pass a nonisolated immutable factory;
+        // an actor-inheriting closure here traps during navigation animations.
+        WindowGroup(content: windowContentFactory(FaithFormWindowContent(launch: launch)))
+    }
+}
 
-                case let .unconfigured(reason):
-                    // **The fail-closed state.** A build with no origin does not
-                    // guess at one and does not fall back to production. It says so
-                    // — to a developer in the reason, and to a person in a sentence
-                    // that does not blame them.
-                    UnconfiguredView(reason: reason)
-                        .faithformTheme()
-                }
+nonisolated func windowContentFactory<Content: View & Sendable>(
+    _ content: Content
+) -> @Sendable () -> Content {
+    { content }
+}
+
+private struct FaithFormWindowContent: View {
+    let launch: LaunchOutcome
+    @AppStorage("faithform.appearance") private var appearance = "system"
+
+    var body: some View {
+        Group {
+            switch launch {
+            case let .ready(dependencies):
+                RootView(dependencies: dependencies)
+                    .faithformTheme()
+                    // A `faithform://` link, handled the same whether it arrives
+                    // cold or into a running app. It is parsed and authorized
+                    // before anything moves — an unknown or unauthorized link
+                    // does nothing at all.
+                    .onOpenURL { url in
+                        NotificationCenter.default.post(
+                            name: .faithformDeepLink,
+                            object: nil,
+                            userInfo: ["url": url]
+                        )
+                    }
+
+            case let .unconfigured(reason):
+                // **The fail-closed state.** A build with no origin does not
+                // guess at one and does not fall back to production. It says so
+                // — to a developer in the reason, and to a person in a sentence
+                // that does not blame them.
+                UnconfiguredView(reason: reason)
+                    .faithformTheme()
             }
-            .preferredColorScheme(appearance == "light" ? .light : appearance == "dark" ? .dark : nil)
         }
+        .preferredColorScheme(appearance == "light" ? .light : appearance == "dark" ? .dark : nil)
     }
 }
 
