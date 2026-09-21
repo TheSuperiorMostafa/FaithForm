@@ -29,11 +29,11 @@ export type RetellPhoneNumber = {
   inbound_agents?: Array<{ agent_id: string; weight: number }> | null;
 };
 
-type ListPhoneNumbersResponse =
-  | RetellPhoneNumber[]
-  | {
-      items?: RetellPhoneNumber[];
-    };
+type ListPhoneNumbersResponse = {
+  items?: RetellPhoneNumber[];
+  has_more?: boolean;
+  pagination_key?: string | null;
+};
 
 function formatDisplayNumber(phone: RetellPhoneNumber): string {
   return phone.phone_number_pretty?.trim() || phone.phone_number;
@@ -42,14 +42,25 @@ function formatDisplayNumber(phone: RetellPhoneNumber): string {
 async function listRetellPhoneNumbers(
   churchId?: string | null,
 ): Promise<RetellPhoneNumber[]> {
-  const response = await retellRequest<ListPhoneNumbersResponse>({
-    method: "GET",
-    path: "/v2/list-phone-numbers",
-    churchId,
-  });
+  const numbers: RetellPhoneNumber[] = [];
+  let paginationKey: string | undefined;
 
-  if (Array.isArray(response)) return response;
-  return response.items ?? [];
+  for (let page = 0; page < 20; page += 1) {
+    const query = new URLSearchParams({ limit: "1000" });
+    if (paginationKey) query.set("pagination_key", paginationKey);
+
+    const response = await retellRequest<ListPhoneNumbersResponse>({
+      method: "GET",
+      path: `/v2/list-phone-numbers?${query.toString()}`,
+      churchId,
+    });
+
+    numbers.push(...(response?.items ?? []));
+    if (!response?.has_more || !response.pagination_key) break;
+    paginationKey = response.pagination_key;
+  }
+
+  return numbers;
 }
 
 function findNumberForAgent(

@@ -149,7 +149,14 @@ export async function upsertPhoneCallFromRetell(
   return { churchId, created: !existing?.id };
 }
 
-type RetellListCallsResponse = Array<RetellCallPayload>;
+type RetellListCallsResponse = {
+  items?: RetellCallPayload[];
+  has_more?: boolean;
+  pagination_key?: string | null;
+};
+
+const RETELL_CALL_PAGE_LIMIT = 50;
+const RETELL_CALL_PAGE_CAP = 20;
 
 export async function importRetellCallsForChurch(
   churchId: string,
@@ -167,21 +174,40 @@ export async function importRetellCallsForChurch(
     throw new Error("No Retell agent linked yet. Save your voice assistant settings first.");
   }
 
-  const calls = await retellRequest<RetellListCallsResponse>({
-    method: "POST",
-    path: "/v2/list-calls",
-    body: {
-      filter_criteria: {
-        agent_id: [agentId],
+  const calls: RetellCallPayload[] = [];
+  let paginationKey: string | undefined;
+  let remaining = Math.max(0, limit);
+
+  for (
+    let page = 0;
+    page < RETELL_CALL_PAGE_CAP && remaining > 0;
+    page += 1
+  ) {
+    const pageLimit = Math.min(remaining, RETELL_CALL_PAGE_LIMIT);
+    const response = await retellRequest<RetellListCallsResponse>({
+      method: "POST",
+      path: "/v3/list-calls",
+      body: {
+        filter_criteria: {
+          agent: [{ agent_id: agentId }],
+        },
+        sort_order: "descending",
+        limit: pageLimit,
+        ...(paginationKey ? { pagination_key: paginationKey } : {}),
       },
-      sort_order: "descending",
-      limit,
-    },
-    // A linked church's agent may live in their own Retell account, so calls
-    // are listed with their key when one is saved, falling back to
-    // FaithForm's shared key.
-    churchId,
-  });
+      // A linked church's agent may live in their own Retell account, so calls
+      // are listed with their key when one is saved, falling back to
+      // FaithForm's shared key.
+      churchId,
+    });
+
+    const pageItems = Array.isArray(response?.items) ? response.items : [];
+    calls.push(...pageItems);
+    remaining -= pageItems.length;
+
+    if (!response?.has_more || !response.pagination_key) break;
+    paginationKey = response.pagination_key;
+  }
 
   let imported = 0;
   let skipped = 0;
