@@ -13,10 +13,19 @@ import FaithFormKit
 /// Set as `UNUserNotificationCenter`'s delegate while the app launches, because
 /// "Check in" runs without opening the app and may be what launched it.
 final class AttendanceNotificationResponder: NSObject, UNUserNotificationCenterDelegate, @unchecked Sendable {
-    private let service: AutomaticAttendanceService
+    private let handleAttendance: @Sendable (AttendanceNotificationAction) async -> Void
+    private let openURL: @MainActor @Sendable (URL) -> Void
 
-    init(service: AutomaticAttendanceService) {
-        self.service = service
+    convenience init(service: AutomaticAttendanceService) {
+        self.init(handleAttendance: { await service.handleNotification($0) }, openURL: Self.open)
+    }
+
+    init(
+        handleAttendance: @escaping @Sendable (AttendanceNotificationAction) async -> Void,
+        openURL: @escaping @MainActor @Sendable (URL) -> Void
+    ) {
+        self.handleAttendance = handleAttendance
+        self.openURL = openURL
     }
 
     /// The question and the answer are shown even while FaithForm is open —
@@ -36,40 +45,57 @@ final class AttendanceNotificationResponder: NSObject, UNUserNotificationCenterD
             : []
     }
 
-    /// Returns only once the work is done: the system keeps the app running
-    /// until then, which is the execution time a background "Check in" needs
-    /// for one fix and one request.
+    /// Use the completion-based API deliberately. The async-to-Objective-C
+    /// bridge can finish on a cooperative worker; UIKit's snapshot completion
+    /// then asserts because it must run on the main thread. Finish explicitly
+    /// on MainActor, after any background check-in work has completed.
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
-        didReceive response: UNNotificationResponse
-    ) async {
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping @Sendable () -> Void
+    ) {
         let content = response.notification.request.content
-        guard let action = AttendanceNotificationContent.action(
+        receive(
             actionIdentifier: response.actionIdentifier,
             categoryIdentifier: content.categoryIdentifier,
-            userInfo: content.userInfo
-        ) else {
-            // Not a check-in question, so it is a push carrying a deep link —
-            // and a link is all it carries. It goes through the same
-            // fail-closed router as a tapped `faithform://` URL, which decides
-            // whether this account may open it; the payload authorizes nothing.
-            // The URL is read here and only the URL crosses to the main actor:
-            // the payload itself is `[AnyHashable: Any]`, which is not Sendable.
-            if let url = Self.deepLink(in: content.userInfo) {
-                await Self.open(url)
+            userInfo: content.userInfo,
+            completionHandler: completionHandler
+        )
+    }
+
+    /// Decode framework objects before crossing actors. Only Sendable intents
+    /// and URLs enter the task, never UNNotificationResponse or its dictionary.
+    @discardableResult
+    func receive(
+        actionIdentifier: String,
+        categoryIdentifier: String,
+        userInfo: [AnyHashable: Any],
+        completionHandler: @escaping @Sendable () -> Void
+    ) -> Task<Void, Never> {
+        let action = AttendanceNotificationContent.action(
+            actionIdentifier: actionIdentifier,
+            categoryIdentifier: categoryIdentifier,
+            userInfo: userInfo
+        )
+        let url = actionIdentifier == UNNotificationDefaultActionIdentifier
+            ? Self.deepLink(in: userInfo) : nil
+
+        return Task {
+            if let action {
+                await handleAttendance(action)
+                switch action {
+                case let .checkIn(slug, opensApp) where opensApp:
+                    if let link = Self.checkInLink(churchSlug: slug) { await openURL(link) }
+                case let .open(slug):
+                    if let link = Self.checkInLink(churchSlug: slug) { await openURL(link) }
+                default: break
+                }
+            } else if let url {
+                await openURL(url)
             }
-            return
-        }
-
-        await service.handleNotification(action)
-
-        switch action {
-        case let .checkIn(slug, opensApp) where opensApp:
-            await Self.openCheckIn(churchSlug: slug)
-        case let .open(slug):
-            await Self.openCheckIn(churchSlug: slug)
-        default:
-            break
+            // Every path, including malformed and dismissed notifications,
+            // completes exactly once, on the executor UIKit requires.
+            await MainActor.run { completionHandler() }
         }
     }
 
@@ -96,10 +122,8 @@ final class AttendanceNotificationResponder: NSObject, UNUserNotificationCenterD
 
     /// The Check in tab for that church, through the same fail-closed router as
     /// every other link.
-    @MainActor
-    private static func openCheckIn(churchSlug: String) {
-        guard let url = URL(string: "faithform://church/\(churchSlug)/check-in") else { return }
-        NotificationCenter.default.post(name: .faithformDeepLink, object: nil, userInfo: ["url": url])
+    private static func checkInLink(churchSlug: String) -> URL? {
+        URL(string: "faithform://church/\(churchSlug)/check-in")
     }
 }
 
