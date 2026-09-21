@@ -29,8 +29,8 @@ settings:
     SWIFT_TREAT_WARNINGS_AS_ERRORS: YES
     GCC_TREAT_WARNINGS_AS_ERRORS: YES
     ENABLE_USER_SCRIPT_SANDBOXING: YES
-    # Automatic signing, with **no team in source** — Xcode fills that in from
-    # whoever opens it.
+    # Automatic signing. Development configurations choose their local team;
+    # Release.xcconfig pins the store app's team and bundle identifier.
     #
     # Signing is *not* disabled here. It used to be, so the CI build would work
     # on a machine with no Apple account, and the cost was that Xcode could not

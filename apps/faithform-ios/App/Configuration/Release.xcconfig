@@ -1,6 +1,12 @@
 #include "Base.xcconfig"
 
+// Store identity must win over the optional personal-development overrides
+// included by Base.xcconfig. It must match the App Store app and APNs topic.
+FAITHFORM_BUNDLE_ID = io.faithform.app
 FAITHFORM_BUNDLE_ID_SUFFIX =
+PRODUCT_BUNDLE_IDENTIFIER = $(FAITHFORM_BUNDLE_ID)
+DEVELOPMENT_TEAM = BPKHRJ24C7
+CURRENT_PROJECT_VERSION = 3
 FAITHFORM_ENVIRONMENT_KEY = production
 
 // Production. Written here rather than supplied at build time because an
