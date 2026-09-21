@@ -9,6 +9,10 @@ import FaithFormKit
 /// `RootView`, neither of which needs to know it is inside an app.
 @main
 struct FaithFormApp: App {
+    /// SwiftUI has no hook for the two APNs callbacks, so the app keeps a
+    /// delegate for exactly those. It composes nothing — see `PushNotifications`.
+    @UIApplicationDelegateAdaptor(PushApplicationDelegate.self) private var pushDelegate
+
     @State private var launch: LaunchOutcome
 
     @AppStorage("faithform.appearance") private var appearance = "system"

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -157,6 +158,33 @@ test("an unconfigured adapter skips rather than falling back to something weaker
   assert.equal(fcmResult.outcome, "skipped");
 
   process.env = original;
+});
+
+// ---------------------------------------------------------------------------
+// The APNs transport
+// ---------------------------------------------------------------------------
+
+test("APNs is sent over HTTP/2, because fetch cannot talk to it at all", () => {
+  // This was a silent total failure, and the worst kind: Apple serves HTTP/2
+  // only, Node's fetch is HTTP/1.1, and undici rejects Apple's reply with
+  // "Response does not match the HTTP/1.1 protocol". The send path classifies
+  // a thrown request as `transport`, which is *retryable* — so every iPhone
+  // notification failed, retried, and failed again, and the outbox recorded a
+  // network blip rather than a configuration that could never work.
+  const source = readFileSync("lib/faithform/push/adapters.ts", "utf8");
+  const apnsSection = source.slice(source.indexOf("class ApnsAdapter"));
+
+  assert.ok(
+    source.includes('import("node:http2")'),
+    "the APNs adapter no longer uses http2",
+  );
+  assert.ok(
+    !/\bfetch\(/.test(apnsSection.slice(0, apnsSection.indexOf("class FcmAdapter"))),
+    "the APNs adapter is sending with fetch again, which Apple will not answer",
+  );
+  // FCM is plain HTTPS and fetch is right for it — this is not a rule about
+  // the file, only about Apple.
+  assert.ok(source.includes("class FcmAdapter"));
 });
 
 // ---------------------------------------------------------------------------

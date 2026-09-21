@@ -38,6 +38,14 @@ struct AccountTabView: View {
                     )
                 case .churchAppearance:
                     ChurchAppearanceScreen(root: root)
+                case .notifications:
+                    NotificationSettingsScreen(
+                        push: dependencies.push,
+                        api: dependencies.api,
+                        churches: (root.state.bootstrap?.relationships ?? [])
+                            .filter { $0.canReadPublishedContent && $0.state != .blocked && $0.state != .left }
+                            .map { (slug: $0.churchSlug, name: $0.churchName) }
+                    )
                 }
             }
         }
@@ -47,6 +55,7 @@ struct AccountTabView: View {
 enum AccountRoute: Hashable {
     case automaticCheckIn
     case churchAppearance
+    case notifications
 }
 
 /// Automatic check-in, from Account: the whole journey on one pushed page.
@@ -221,6 +230,32 @@ struct AccountView: View {
                 }
                 .pickerStyle(.segmented)
             }
+
+            Divider().overlay(theme.palette.divider)
+            NavigationLink(value: AccountRoute.notifications) {
+                HStack(spacing: FaithFormTokens.Spacing.md) {
+                    Image(systemName: "bell")
+                        .font(.system(size: FaithFormTokens.IconSize.sizeMedium))
+                        .foregroundStyle(theme.palette.brandAccent)
+                        .accessibilityHidden(true)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Notifications")
+                            .font(theme.font(FaithFormTokens.Text.body))
+                            .foregroundStyle(theme.palette.contentPrimary)
+                        Text("Announcements, events and services going live")
+                            .font(theme.font(FaithFormTokens.Text.caption))
+                            .foregroundStyle(theme.palette.contentSecondary)
+                    }
+                    Spacer(minLength: FaithFormTokens.Spacing.md)
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(theme.palette.contentSecondary)
+                        .accessibilityHidden(true)
+                }
+                .frame(minHeight: FaithFormTokens.TouchTarget.recommended)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(GroupPressStyle())
 
             if showsAutomaticCheckIn {
                 Divider().overlay(theme.palette.divider)

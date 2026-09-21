@@ -137,6 +137,9 @@ struct GroupPreferencesView: View {
     @State private var level = "all"
     @State private var blocked: [ChatBlockedPerson] = []
     @State private var loaded = false
+    /// Assumed on until asked, so the note below never flashes for someone who
+    /// has already allowed them.
+    @State private var systemNotifications: NotificationAuthorization = .authorized
     @Environment(\.faithformTheme) private var theme
     var body: some View {
         NavigationStack {
@@ -150,6 +153,19 @@ struct GroupPreferencesView: View {
                         Text("Stay close. On your terms.").font(theme.font(FaithFormTokens.Text.titleMedium))
                         Text("Choose what reaches you. Every conversation will still be here when you’re ready.")
                             .font(.subheadline).foregroundStyle(theme.palette.contentSecondary)
+                        // Saving a choice that nothing can deliver is how a
+                        // setting comes to look broken. If this iPhone has not
+                        // allowed notifications, say so here — the choice is
+                        // still worth making, and it takes effect as soon as it
+                        // can be acted on.
+                        if systemNotifications == .notDetermined || systemNotifications == .denied {
+                            Text("Notifications are off for FaithForm on this iPhone. Turn them on in Account › Notifications, and what you choose here starts arriving.")
+                                .font(.caption)
+                                .foregroundStyle(theme.palette.contentSecondary)
+                                .padding(14)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .background(theme.palette.surfaceSunken, in: RoundedRectangle(cornerRadius: 16))
+                        }
                     }
                     if loaded {
                         VStack(spacing: 10) {
@@ -181,7 +197,10 @@ struct GroupPreferencesView: View {
             }.background(theme.palette.background)
                 .navigationTitle("Notifications").navigationBarTitleDisplayMode(.inline)
                 .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
-                .task { await load() }
+                .task {
+                    systemNotifications = await SystemNotificationAuthorizer().status()
+                    await load()
+                }
         }.tint(theme.palette.brandAccent).presentationDragIndicator(.visible).presentationCornerRadius(28)
     }
     private func preference(_ value: String, title: String, subtitle: String, symbol: String) -> some View {

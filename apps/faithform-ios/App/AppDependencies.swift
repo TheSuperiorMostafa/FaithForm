@@ -1,4 +1,5 @@
 import Foundation
+import UIKit
 import UserNotifications
 import FaithFormKit
 
@@ -54,6 +55,14 @@ final class AppDependencies {
     let attendanceModel: AutomaticAttendanceModel
     let attendanceNotificationResponder: AttendanceNotificationResponder
 
+    // MARK: Push
+
+    /// Permission, the APNs token, and this install's row on the server.
+    ///
+    /// Built at launch but silent until someone enables it: `refreshStatus()`
+    /// only reads, and the system prompt is reachable from one screen.
+    let push: PushLifecycleModel
+
     init(
         environment: APIEnvironment,
         clientBuild: Int,
@@ -99,6 +108,15 @@ final class AppDependencies {
         self.presentations = PresentationClient(api: api, cache: cache)
         self.giving = GivingClient(api: api, cache: cache)
         self.resumePositions = KeychainResumePositionStore(store: secureStore)
+        self.push = PushLifecycleModel(
+            api: api,
+            authorizer: SystemNotificationAuthorizer(),
+            installId: InstallIdentity.current(environmentKey: environment.key),
+            clientBuild: clientBuild,
+            appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
+            osVersion: UIDevice.current.systemVersion,
+            locale: Locale.current.identifier
+        )
 
         let location = CoreLocationAdapter()
         let configuration = APIGeofenceConfigurationSource(api: api)
@@ -140,6 +158,19 @@ final class AppDependencies {
         // the location delegate is: a tap on "Check in" can launch the app.
         self.attendanceNotificationResponder = AttendanceNotificationResponder(service: service)
         UNUserNotificationCenter.current().delegate = attendanceNotificationResponder
+
+        Task { [push] in
+            // Reads the permission state, and takes any token APNs issued
+            // during launch — for a phone that already enabled notifications,
+            // registration happens without anyone being asked anything.
+            await push.refreshStatus()
+            await PushApplicationDelegate.tokens.onTokenChanged { token in
+                await push.handleToken(token)
+            }
+            if NotificationPrompting.shouldRegisterForRemote(push.status) {
+                await SystemNotificationAuthorizer().registerForRemoteNotifications()
+            }
+        }
 
         Task {
             // Order matters. What this device last knew is read first, then the

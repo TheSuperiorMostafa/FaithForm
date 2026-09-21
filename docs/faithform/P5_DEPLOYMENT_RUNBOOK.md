@@ -124,10 +124,38 @@ Escaped-newline PEMs are normalised, so a key pasted from a secret store works
 whether or not its newlines survived.
 
 **Still required externally:** the Push Notifications capability on the App ID
-and a registered bundle identifier. The `aps-environment` entitlement is now
-declared in `Config/FaithForm.entitlements` (development in the dev xcconfig,
-production in the release one), but the App ID it attaches to does not exist yet
+and a registered bundle identifier. The `aps-environment` entitlement is
+declared in `apps/faithform-ios/App/Resources/FaithForm.entitlements`
+(`development`, which Xcode rewrites to `production` for a distribution build)
 — see `P4_EXTERNAL_SETUP_RUNBOOK.md`.
+
+**`APNS_HOST` is not optional in practice.** A device token is issued by one
+APNs environment and is unknown to the other: a development build's token works
+only against `https://api.sandbox.push.apple.com`, and a TestFlight or App Store
+build's only against `https://api.push.apple.com` (the default). Pointing at the
+wrong one answers `BadDeviceToken`, which the worker reads as a dead
+installation and **invalidates the row** — so a misconfigured host does not
+merely fail, it unregisters the phone.
+
+**Check it without a phone:**
+
+```
+node --env-file=.env.local scripts/verify-apns.mjs
+```
+
+It signs a provider token from the configured key and sends to a device token
+that cannot exist. `BadDeviceToken` back is a pass: Apple had to accept the
+key, the Team ID and the topic before it could judge the token. Anything else
+— `InvalidProviderToken`, `TopicDisallowed`, `MissingTopic` — names which half
+is wrong. Once an iPhone has registered, `--token <64 hex chars>` sends a real
+one, and `--production` switches hosts.
+
+**The transport is `node:http2`, and must stay that way.** APNs serves HTTP/2
+only; `fetch` is HTTP/1.1 and Apple's reply fails to parse, which the send path
+classified as a retryable transport error. Every iPhone notification failed
+that way, silently, and the outbox recorded a network blip rather than a
+configuration that could never work. `tests/unit/faithform-push.test.ts` pins
+it.
 
 ## 7. FCM
 

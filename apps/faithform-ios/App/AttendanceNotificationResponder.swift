@@ -25,7 +25,13 @@ final class AttendanceNotificationResponder: NSObject, UNUserNotificationCenterD
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
-        AttendanceNotificationContent.isAttendanceIdentifier(notification.request.identifier)
+        if AttendanceNotificationContent.isAttendanceIdentifier(notification.request.identifier) {
+            return [.banner, .list, .sound]
+        }
+        // A push from the server — an announcement, a service going live, a
+        // message. Shown while the app is open too: the person is looking at
+        // one church's feed, and this may be another church entirely.
+        return notification.request.content.userInfo["faithform"] != nil
             ? [.banner, .list, .sound]
             : []
     }
@@ -42,7 +48,18 @@ final class AttendanceNotificationResponder: NSObject, UNUserNotificationCenterD
             actionIdentifier: response.actionIdentifier,
             categoryIdentifier: content.categoryIdentifier,
             userInfo: content.userInfo
-        ) else { return }
+        ) else {
+            // Not a check-in question, so it is a push carrying a deep link —
+            // and a link is all it carries. It goes through the same
+            // fail-closed router as a tapped `faithform://` URL, which decides
+            // whether this account may open it; the payload authorizes nothing.
+            // The URL is read here and only the URL crosses to the main actor:
+            // the payload itself is `[AnyHashable: Any]`, which is not Sendable.
+            if let url = Self.deepLink(in: content.userInfo) {
+                await Self.open(url)
+            }
+            return
+        }
 
         await service.handleNotification(action)
 
@@ -54,6 +71,20 @@ final class AttendanceNotificationResponder: NSObject, UNUserNotificationCenterD
         default:
             break
         }
+    }
+
+    /// The `faithform://` link a push carried, if it carried one.
+    private static func deepLink(in userInfo: [AnyHashable: Any]) -> URL? {
+        guard
+            let payload = userInfo["faithform"] as? [String: Any],
+            let link = payload["deepLink"] as? String
+        else { return nil }
+        return URL(string: link)
+    }
+
+    @MainActor
+    private static func open(_ url: URL) {
+        NotificationCenter.default.post(name: .faithformDeepLink, object: nil, userInfo: ["url": url])
     }
 
     /// The Check in tab for that church, through the same fail-closed router as

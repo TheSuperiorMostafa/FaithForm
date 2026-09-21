@@ -30,6 +30,14 @@ yarn-error.log*
 .env.vercel*
 .env.production*
 
+# provider keys. An APNs .p8 is downloadable exactly once and is the whole
+# credential for sending to every iPhone; a Firebase service account is the
+# same for Android. Neither belongs in a repository, and a key that reaches
+# one has to be revoked rather than removed.
+*.p8
+service-account*.json
+google-services.json
+
 # vercel
 .vercel
 

@@ -171,6 +171,87 @@ function envValue(name: string): string | undefined {
   return value && value.length > 0 ? value : undefined;
 }
 
+// ---------------------------------------------------------------------------
+// APNs transport
+// ---------------------------------------------------------------------------
+//
+// **APNs speaks HTTP/2 and nothing else.** Node's `fetch` is HTTP/1.1 unless
+// its agent is built for h2, and Apple answers such a connection with a frame
+// undici rejects — "Response does not match the HTTP/1.1 protocol". That is a
+// thrown TypeError, which the send path classifies as `transport`, which is
+// *retryable*: every notification to every iPhone would fail, retry, and fail,
+// with nothing in the outbox to say why. So the session is built here, on
+// `node:http2`.
+//
+// One session per host, kept between sends: a batch of a hundred is a hundred
+// streams on one connection rather than a hundred TLS handshakes. A session
+// that errors or closes is dropped from the cache so the next send dials a new
+// one, and an idle one is closed rather than held open forever.
+
+const APNS_IDLE_MS = 60_000;
+const APNS_REQUEST_TIMEOUT_MS = 10_000;
+
+type ApnsResponse = { status: number; body: string };
+
+const apnsSessions = new Map<string, import("node:http2").ClientHttp2Session>();
+
+async function apnsSession(host: string) {
+  const existing = apnsSessions.get(host);
+  if (existing && !existing.closed && !existing.destroyed) return existing;
+
+  const http2 = await import("node:http2");
+  const session = http2.connect(host);
+  session.setTimeout(APNS_IDLE_MS, () => session.close());
+  const forget = () => {
+    if (apnsSessions.get(host) === session) apnsSessions.delete(host);
+  };
+  session.on("close", forget);
+  // Unhandled 'error' on a session is a process-level throw. It is also the
+  // normal way a dropped connection announces itself, so it is only ever a
+  // reason to dial again.
+  session.on("error", forget);
+  session.on("goaway", forget);
+  apnsSessions.set(host, session);
+  return session;
+}
+
+async function apnsRequest(input: {
+  host: string;
+  token: string;
+  headers: Record<string, string>;
+  body: string;
+}): Promise<ApnsResponse> {
+  const session = await apnsSession(input.host);
+  return await new Promise<ApnsResponse>((resolve, reject) => {
+    const stream = session.request({
+      ":method": "POST",
+      // The path carries the device token, which is why no error below is
+      // allowed to echo the request.
+      ":path": `/3/device/${input.token}`,
+      "content-type": "application/json",
+      ...input.headers,
+    });
+    stream.setTimeout(APNS_REQUEST_TIMEOUT_MS, () => stream.close());
+
+    let status = 0;
+    let body = "";
+    stream.on("response", (headers) => {
+      status = Number(headers[":status"] ?? 0);
+    });
+    stream.setEncoding("utf8");
+    stream.on("data", (chunk: string) => {
+      // A reason phrase is short; anything longer is not something to hold.
+      if (body.length < 2_048) body += chunk;
+    });
+    stream.on("end", () => {
+      if (status === 0) reject(new Error("apns_no_status"));
+      else resolve({ status, body });
+    });
+    stream.on("error", () => reject(new Error("apns_stream_error")));
+    stream.end(input.body);
+  });
+}
+
 export class ApnsAdapter implements PushAdapter {
   readonly provider = "apns" as const;
   private readonly tokens: ApnsTokenProvider;
@@ -200,23 +281,20 @@ export class ApnsAdapter implements PushAdapter {
 
     const host = envValue("APNS_HOST") ?? "https://api.push.apple.com";
     try {
-      const response = await fetch(`${host}/3/device/${token}`, {
-        method: "POST",
+      const response = await apnsRequest({
+        host,
+        token,
         headers: {
           "apns-topic": envValue("APNS_TOPIC")!,
           "apns-push-type": "alert",
           "apns-collapse-id": message.collapseKey.slice(0, 64),
           authorization: `bearer ${authorization.token}`,
-          "content-type": "application/json",
         },
         body: JSON.stringify(buildApnsPayload(message)),
       });
 
-      let reason: string | undefined;
-      if (!response.ok) {
-        const text = await response.text().catch(() => "");
-        reason = safeReason(text);
-      }
+      const reason =
+        response.status >= 200 && response.status < 300 ? undefined : safeReason(response.body);
 
       const result = classifyApnsResponse(response.status, reason);
       // A rejected credential means our signed token is wrong or stale; drop it

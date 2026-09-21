@@ -565,6 +565,11 @@ final class RootModel {
             as: SignOutReply.self
         )
 
+        // This install stops being addressable for the account signing out,
+        // before the session it needs to say so is gone. Best-effort: a failure
+        // leaves a row the server retires when its token is next rejected.
+        await dependencies.push.retire()
+
         // Automatic check-in stops before anything else: every region, any
         // unsent arrival, every pending notification and the stored choice. A
         // region left registered would wake the app for someone signed out.
