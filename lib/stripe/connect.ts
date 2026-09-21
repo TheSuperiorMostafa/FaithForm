@@ -132,7 +132,11 @@ export async function createLoginLink(stripeAccountId: string): Promise<string> 
  */
 function isAccountInaccessible(err: unknown): boolean {
   const e = err as { code?: string; type?: string } | null;
-  return e?.code === "account_invalid";
+  const status = (err as { statusCode?: number; status?: number } | null)?.statusCode
+    ?? (err as { status?: number } | null)?.status;
+  return e?.code === "account_invalid"
+    || e?.code === "permission_denied"
+    || status === 403;
 }
 
 /** Unlinks a connected account the current platform key can no longer reach. */
