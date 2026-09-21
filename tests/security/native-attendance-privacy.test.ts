@@ -357,7 +357,14 @@ test("the manifest declares the permissions this app needs and no more", () => {
   );
   const code = stripComments(manifest, "AndroidManifest.xml");
 
-  const declared = [...code.matchAll(/android:name="android\.permission\.([A-Z_]+)"/g)]
+  // A `tools:node="remove"` line is a revocation, not a declaration: naming
+  // the permission is the only way to keep a library's merged one out of the
+  // APK, so those lines are what make the list below true rather than what
+  // breaks it.
+  const declared = code
+    .split("\n")
+    .filter((line) => !line.includes('tools:node="remove"'))
+    .flatMap((line) => [...line.matchAll(/android:name="android\.permission\.([A-Z_]+)"/g)])
     .map((m) => m[1])
     .sort();
 
@@ -379,6 +386,9 @@ test("the manifest declares the permissions this app needs and no more", () => {
     // adapters can reach a permission request at all.
     "CAMERA",
     "INTERNET",
+    // Group messages: the chat SDK synchronises through WorkManager, which
+    // needs it. No wake-up of our own, and no background location with it.
+    "WAKE_LOCK",
   ]);
 });
 

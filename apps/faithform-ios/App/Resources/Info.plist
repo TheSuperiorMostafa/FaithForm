@@ -159,9 +159,20 @@
     <string>FaithForm reads the check-in code your church puts on the screen. It never takes or saves a photo.</string>
 
     <!--
+        Saving a photo from a group chat. StreamChat's image viewer hands the
+        image itself to the share sheet, whose "Save Image" writes to Photos —
+        and without this key that tap terminates the app. Add-only: nothing
+        reads the library (profile and chat photos come through PhotosPicker
+        and the file importer, which need no permission).
+    -->
+    <key>NSPhotoLibraryAddUsageDescription</key>
+    <string>FaithForm saves a photo from a group chat to your library when you choose Save Image.</string>
+
+    <!--
         Deliberately absent:
 
-          * NSPhotoLibraryUsageDescription — nothing reads or writes photos.
+          * NSPhotoLibraryUsageDescription — nothing reads the library; photos
+            are chosen through PhotosPicker, which needs no permission.
           * NSMicrophoneUsageDescription — nothing records audio.
           * NSContactsUsageDescription — nothing reads contacts.
           * NSUserTrackingUsageDescription — there is no tracking to ask about.

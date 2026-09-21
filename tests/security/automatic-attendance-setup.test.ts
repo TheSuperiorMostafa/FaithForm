@@ -284,9 +284,14 @@ test("the privacy policy describes automatic check-in as the code does it", () =
   }
 });
 
-test("the clarification did not move the privacy version, so nobody is asked to accept again", () => {
-  assert.equal(PRIVACY_VERSION, "2026-08-01");
+test("the check-in clarification is still recorded as one that moved nothing", () => {
+  // The clarification itself did not move the version. The version did later
+  // move, to 2026-09-20, for collection the August text did not disclose at
+  // all — the photos people upload and the messages Stream carries — which is
+  // a different thing and is documented separately on the page.
+  assert.equal(PRIVACY_VERSION, "2026-09-20");
   assert.match(privacy, /without\s+\* moving PRIVACY_VERSION/);
+  assert.match(privacy, /PRIVACY_VERSION did move to 2026-09-20/);
 });
 
 test("the account deletion page covers a pending automatic check-in", () => {

@@ -1,3 +1,4 @@
+import { sendSafetyReportNotification } from "@/lib/email/safety-report";
 import { VisitorError } from "@/lib/faithform/errors";
 import { resolveMemberContext } from "@/lib/groups/context";
 import { requireChannelAccess } from "@/lib/messaging/access";
@@ -101,6 +102,21 @@ export async function submitReport(
     await provider?.flagMessage(messageId, chatUserIdFor(userId), input.reason).catch(() => undefined);
   }
   console.info("[messaging] report received", JSON.stringify({ kind: row.report_type, reason: input.reason }));
+
+  // Rings FaithForm's own safety inbox as well as the church's queue: /terms
+  // commits us to acting on objectionable content within 24 hours, and a
+  // church's moderators cannot be relied on to be awake. Best effort, and
+  // deliberately free of names and message text — see the module.
+  if (!error) {
+    await sendSafetyReportNotification({
+      churchSlug,
+      reportType: row.report_type,
+      reason: input.reason,
+      hasAttachments: hasAttachments,
+      channelCid: channel.cid,
+      messageId,
+    }).catch(() => undefined);
+  }
   return { received: true };
 }
 

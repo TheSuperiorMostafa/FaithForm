@@ -87,6 +87,9 @@ export function LegalDocument({
           <Link href={LEGAL_PATHS.accountDeletion} className="hover:text-foreground">
             Delete your account
           </Link>
+          <Link href={LEGAL_PATHS.support} className="hover:text-foreground">
+            Support
+          </Link>
           <a href={`mailto:${SUPPORT_EMAIL}`} className="hover:text-foreground">
             Contact
           </a>

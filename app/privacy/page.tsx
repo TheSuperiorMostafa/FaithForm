@@ -45,6 +45,15 @@ import {
  * with the app closed, for check-in only), the same purpose and the same sharing the
  * 2026-08-01 text already disclosed. Moving the version would ask every person on
  * both apps to accept again for a clarification.
+ *
+ * PRIVACY_VERSION did move to 2026-09-20, for the store submission, and for the
+ * opposite reason: the photos people upload (profile, group, chat attachments) and
+ * the group messages Stream delivers and stores are collection the August text did
+ * not disclose at all. New collection is a new version, and every person is asked
+ * again. The sections to keep true to the code:
+ *   Photos are chosen by the person (PhotosPicker / .fileImporter), never read from
+ *     the library by the app: tests/security/checkin-privacy.test.ts
+ *   Messages, attachments, reports and blocks: lib/messaging/safety.ts, stream-provider.ts
  *   The scanner decodes on-device and uploads no image: AVFoundationScanner.swift, CameraXScanner.kt
  *   No card data reaches FaithForm: tests/security/giving-privacy.test.ts
  *   No analytics, advertising or tracking SDKs in either app: Package.swift, libs.versions.toml
@@ -180,10 +189,46 @@ export default function PrivacyPolicyPage() {
       <p>
         The apps use your camera only to read a check-in code your church shows
         on screen. The code is read on your device and only its contents are
-        sent to us. The apps never take, save, or upload a photo or video, and
-        they don&apos;t access your photo library. You can type the check-in
-        code instead of scanning it.
+        sent to us. The apps never take or save a photo with your camera, and
+        they never read your photo library on their own. You can type the
+        check-in code instead of scanning it.
       </p>
+
+      <h3>Photos you choose</h3>
+      <p>
+        You can upload a profile photo, and a group&apos;s leaders can upload a
+        photo for their group. If your church turns on group messages, you can
+        also attach photos, videos, and files to a message. In every case you
+        pick the file yourself, and only the file you pick is uploaded. Your
+        profile photo is shown to the churches you are connected with and to
+        people in groups you belong to.
+      </p>
+
+      <h3>Group messages</h3>
+      <ul>
+        <li>
+          Where a church turns them on, you can send messages in a group and
+          directly to other members of that church. We store the messages you
+          send, anything you attach to them, and who read them, so the
+          conversation is there when you come back to it.
+        </li>
+        <li>
+          Messages are delivered through <strong>Stream</strong>, a messaging
+          provider that stores them for us. Your name, profile photo, and
+          account identifier are shared with Stream so your messages can be
+          shown with your name on them.
+        </li>
+        <li>
+          If you report a message or a person, we keep your report, the reason
+          you chose, anything you wrote, and the message you reported, and we
+          make it available to that church&apos;s moderators and to us, so it
+          can be acted on. If you block someone, we keep a record of that too.
+        </li>
+        <li>
+          Your church can see the messages sent in its groups, and its
+          moderators can remove content and remove people from a group.
+        </li>
+      </ul>
 
       <h3>Attendance and check-in</h3>
       <p>
@@ -270,6 +315,7 @@ export default function PrivacyPolicyPage() {
         <li><strong>Supabase</strong> &mdash; database, sign-in, and file storage.</li>
         <li><strong>Vercel</strong> &mdash; hosting for our website and servers.</li>
         <li><strong>Stripe</strong> &mdash; payment processing for gifts. Stripe also uses payment information for its own purposes, such as preventing fraud, under the <a href="https://stripe.com/privacy" rel="noopener noreferrer">Stripe Privacy Policy</a>.</li>
+        <li><strong>Stream</strong> &mdash; delivery and storage of group and direct messages, where a church turns messaging on.</li>
         <li><strong>Resend</strong> &mdash; delivery of emails such as giving receipts.</li>
         <li><strong>Apple and Google</strong> &mdash; delivery of notifications to your device through Apple Push Notification service and Firebase Cloud Messaging, if you allow notifications.</li>
       </ul>

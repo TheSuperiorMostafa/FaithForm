@@ -225,6 +225,7 @@ public enum L {
     public static var accountDeletionHelp: String {
         t("account_deletion_help", "How account deletion works")
     }
+    public static var contactSupport: String { t("contact_support", "Contact support") }
     public static var signInTitle: String { t("sign_in_title", "Sign in to continue") }
     public static var signInBody: String {
         t("sign_in_body", "Your church's app — start with a link, or create an account.")

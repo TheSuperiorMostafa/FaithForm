@@ -24,8 +24,14 @@ import { rewriteChurchSite } from "../../lib/sites/tenant";
 
 const LEGAL_ROUTES = Object.values(LEGAL_PATHS);
 
-test("the three store-required pages are the legal routes", () => {
-  assert.deepEqual([...LEGAL_ROUTES].sort(), ["/account-deletion", "/privacy", "/terms"]);
+test("the store-required pages are the legal routes", () => {
+  // Four, since both stores also list a Support URL and App Review opens it.
+  assert.deepEqual([...LEGAL_ROUTES].sort(), [
+    "/account-deletion",
+    "/privacy",
+    "/support",
+    "/terms",
+  ]);
 });
 
 test("middleware treats every legal page as public", () => {
@@ -109,6 +115,19 @@ test("the pages ask nothing of a session, so nothing can redirect a visitor away
   }
 });
 
+test("the support page is reachable signed-out and names a way to reach a person", () => {
+  // Not a policy, so no version and no legal review — but a reviewer opens it
+  // from the listing, and guideline 1.2 wants the contact on it.
+  const file = "app/support/page.tsx";
+  assert.ok(existsSync(file), `${LEGAL_PATHS.support} has no page`);
+  const page = readFileSync(file, "utf8");
+  for (const signedIn of ["@/lib/supabase/server", "getUser", "getClaims", "redirect(", "requireSuperAdmin", "getChurchAuth"]) {
+    assert.ok(!page.includes(signedIn), `${file} uses ${signedIn}`);
+  }
+  assert.match(page, /export const metadata: Metadata = \{\s*title: "[^"]+ \| FaithForm"/);
+  assert.ok(page.includes("SUPPORT_EMAIL"), "the support page names no address");
+});
+
 // ---------------------------------------------------------------------------
 // One version, printed and required
 // ---------------------------------------------------------------------------
@@ -127,8 +146,8 @@ test("the apps require exactly the versions the pages print", () => {
 test("the current versions are the ones every accepted consent was recorded against", () => {
   // Moving either is a re-prompt for every person on both apps. That may be
   // exactly right, but it should never happen by accident in a refactor.
-  assert.equal(TERMS_VERSION, "2026-08-01");
-  assert.equal(PRIVACY_VERSION, "2026-08-01");
+  assert.equal(TERMS_VERSION, "2026-09-20");
+  assert.equal(PRIVACY_VERSION, "2026-09-20");
 });
 
 test("an effective date prints from the string, never through a time zone", () => {

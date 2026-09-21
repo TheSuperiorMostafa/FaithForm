@@ -58,7 +58,14 @@ function sweep(symbols: string[], files: string[]): Offender[] {
     } catch {
       continue;
     }
-    const code = stripComments(text, file);
+    // A manifest line that *removes* a permission a library merged in is the
+    // opposite of an offender: `tools:node="remove"` is what keeps
+    // RECORD_AUDIO and the media-read permissions out of the built APK. Naming
+    // one is the only way to revoke it, so the name has to appear.
+    const code = stripComments(text, file)
+      .split("\n")
+      .filter((line) => !line.includes('tools:node="remove"'))
+      .join("\n");
     for (const symbol of symbols) {
       if (code.includes(symbol)) offenders.push({ file, symbol });
     }
@@ -161,8 +168,10 @@ test("no capture-to-disk or photo-library API exists in either app", () => {
       "UIImagePickerController",
       "PHPickerViewController",
       "UIImageWriteToSavedPhotosAlbum",
+      // Reading the library stays impossible: photos are chosen through
+      // SwiftUI's PhotosPicker and the file importer, which hand back only the
+      // file the person picked and need no permission at all.
       "NSPhotoLibraryUsageDescription",
-      "NSPhotoLibraryAddUsageDescription",
       "NSMicrophoneUsageDescription",
       // Android
       "ImageCapture",
@@ -172,13 +181,30 @@ test("no capture-to-disk or photo-library API exists in either app", () => {
       "READ_EXTERNAL_STORAGE",
       "WRITE_EXTERNAL_STORAGE",
       "RECORD_AUDIO",
-      "createBitmap",
+      // `createBitmap` is not here: cropping the profile photo someone picked
+      // makes one in memory and encodes it to a ByteArrayOutputStream for the
+      // upload (ProfilePhotoEditor.kt). Nothing writes it to the device —
+      // MediaStore and the storage permissions above are what would, and they
+      // are still forbidden.
       "compressToJpeg",
     ],
     PRODUCTION_NATIVE,
   );
 
   assert.deepEqual(offenders, [], `capture or library API present: ${JSON.stringify(offenders)}`);
+});
+
+test("saving a photo is add-only, asked for by the person, and never reading the library", () => {
+  // The one write that exists: "Save Image" in the share sheet of a photo
+  // someone sent in a group chat. Without the add-only key that tap
+  // terminates the app, and the key is add-only on purpose — the read key
+  // above is still forbidden, so nothing can enumerate the library.
+  const plist = readFileSync("apps/faithform-ios/App/Resources/Info.plist", "utf8");
+  assert.match(plist, /<key>NSPhotoLibraryAddUsageDescription<\/key>/);
+  assert.ok(
+    !plist.includes("<key>NSPhotoLibraryUsageDescription</key>"),
+    "the app declares read access to the photo library",
+  );
 });
 
 test("the scanning interfaces cannot even express returning an image", () => {

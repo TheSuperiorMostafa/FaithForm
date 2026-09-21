@@ -145,6 +145,46 @@ export default function TermsOfServicePage() {
         <li>copy, scrape, or reverse engineer FaithForm, except where the law allows it despite this restriction.</li>
       </ul>
 
+      <h3>What you post, and what we don&apos;t allow</h3>
+      <p>
+        Where a church turns on groups and messages, you can post messages,
+        photos, videos, and files, and set a profile photo. What you post is
+        yours, and you are responsible for it. You keep your rights in it, and
+        you give FaithForm permission to store and show it to the people it was
+        meant for, so the feature can work.
+      </p>
+      <p>
+        <strong>
+          There is no tolerance for objectionable content or abusive behaviour.
+        </strong>{" "}
+        Don&apos;t post anything that is:
+      </p>
+      <ul>
+        <li>harassing, bullying, threatening, or intended to intimidate someone;</li>
+        <li>hateful towards a person or group, including on the basis of race, ethnicity, national origin, religion, disability, age, sex, gender identity, or sexual orientation;</li>
+        <li>sexually explicit, or sexual content involving a minor of any kind;</li>
+        <li>violent, gratuitously graphic, or encouraging self-harm, suicide, or an eating disorder;</li>
+        <li>unlawful, fraudulent, deceptive, or promoting illegal activity;</li>
+        <li>spam, a scam, or a solicitation unrelated to the church community you posted it in;</li>
+        <li>private information about someone else that you don&apos;t have permission to share;</li>
+        <li>someone else&apos;s work, when you don&apos;t have the right to post it.</li>
+      </ul>
+      <p>
+        Every message and every person in a conversation can be reported from
+        inside the app, and you can block someone so they can no longer message
+        you. Reports go to the moderators of the church the content is in, and
+        to us. We and the church review reports of objectionable content and act
+        on them &mdash; removing the content, and removing the person who posted
+        it &mdash; within 24 hours of the report. We may remove content, suspend
+        an account, or close it, and a church may remove content or remove
+        someone from its own community.
+      </p>
+      <p>
+        To report something, use the report option on the message or the person
+        in the app, or write to us at{" "}
+        <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>.
+      </p>
+
       <h2 id="feedback">8. Feedback</h2>
       <p>
         If you send us ideas or suggestions, we may use them to improve

@@ -80,8 +80,42 @@ struct SafetySelection: Identifiable { let id = UUID(); let cid: String; let use
     @Injected(\.chatClient) var chatClient
     var styles = RegularStyles()
     let readOnly: Bool
+    /// Chat user ids this person has blocked. See `GroupsModel.blockedChatUserIds`.
+    let blocked: Set<String>
     let report: (SafetySelection) -> Void
-    init(readOnly: Bool, report: @escaping (SafetySelection) -> Void) { self.readOnly = readOnly; self.report = report; styles.composerPlacement = .docked }
+    /// `blocked` has no default on purpose: every place that builds a factory
+    /// has to say what it knows, or a blocked person reappears in whichever
+    /// surface forgot — which is how the direct-message list used to preview
+    /// their last message while their messages were hidden in the group.
+    init(readOnly: Bool, blocked: Set<String>, report: @escaping (SafetySelection) -> Void) {
+        self.readOnly = readOnly; self.blocked = blocked; self.report = report; styles.composerPlacement = .docked
+    }
+    /// A blocked person's messages, hidden in place.
+    ///
+    /// The provider's block stops direct messages and nothing else, so this is
+    /// what makes blocking mean the same thing inside a group. Hidden rather
+    /// than removed: a gap where a message was is confusing, and the person who
+    /// blocked them can still tell a conversation happened.
+    @ViewBuilder func makeMessageItemView(options: MessageItemViewOptions) -> some View {
+        if !options.message.isSentByCurrentUser, blocked.contains(options.message.author.id) {
+            BlockedMessageRow()
+        } else {
+            MessageItemView(
+                factory: self,
+                channel: options.channel,
+                message: options.message,
+                width: options.width,
+                showsAllInfo: options.showsAllInfo,
+                shownAsPreview: options.shownAsPreview,
+                isInThread: options.isInThread,
+                isLast: options.isLast,
+                scrolledId: options.scrolledId,
+                quotedMessage: options.quotedMessage,
+                onLongPress: options.onLongPress,
+                viewModel: options.viewModel
+            )
+        }
+    }
     func makeMessageActionsView(options: MessageActionsViewOptions) -> some View {
         var actions = MessageAction.defaultActions(for: .init(message: options.message, channel: options.channel, onFinish: options.onFinish, onError: options.onError)).filter { ![MessageActionId.flag, MessageActionId.block, MessageActionId.unblock, MessageActionId.mute, MessageActionId.unmute].contains($0.id) }
         if !options.message.isSentByCurrentUser {
@@ -91,6 +125,40 @@ struct SafetySelection: Identifiable { let id = UUID(); let cid: String; let use
             }, confirmationPopup: nil, isDestructive: false))
         }
         return MessageActionsView(messageActions: actions)
+    }
+    /// "…is typing" names the person, so a blocked one is left out of it.
+    @ViewBuilder func makeInlineTypingIndicatorView(options: TypingIndicatorViewOptions) -> some View {
+        let typing = options.channel.currentlyTypingUsersFiltered(currentUserId: options.currentUserId)
+        if !typing.isEmpty, typing.allSatisfy({ blocked.contains($0.id) }) {
+            EmptyView()
+        } else {
+            TypingIndicatorView(
+                users: Array(typing),
+                typingText: options.channel.typingIndicatorString(currentUserId: options.currentUserId)
+            )
+        }
+    }
+    /// A quote carries the quoted person's words inside someone else's
+    /// message, which is the one way a blocked person's content still reaches
+    /// the screen once their own messages are hidden.
+    @ViewBuilder func makeQuotedMessageView(options: QuotedMessageViewOptions) -> some View {
+        if blocked.contains(options.quotedMessage.author.id) {
+            Text("Quoted message hidden because you blocked this person.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(options.padding ?? EdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8))
+        } else {
+            QuotedMessageView(
+                factory: self,
+                viewModel: QuotedMessageViewModel(
+                    message: options.quotedMessage,
+                    currentUser: chatClient.currentUserController().currentUser,
+                    outgoing: options.outgoing
+                ),
+                padding: options.padding
+            )
+        }
     }
     @ViewBuilder func makeMessageComposerViewType(options: MessageComposerViewTypeOptions) -> some View {
         if readOnly { Text("This conversation is read-only.").font(.footnote).foregroundStyle(.secondary).frame(maxWidth: .infinity).padding() }
@@ -119,6 +187,18 @@ struct SafetySelection: Identifiable { let id = UUID(); let cid: String; let use
     }
     func makeChannelListHeaderViewModifier(options: ChannelListHeaderViewModifierOptions) -> some ChannelListHeaderViewModifier { FaithFormChatListHeader(title: options.title) }
 }
+/// What stands in for a blocked person's message.
+struct BlockedMessageRow: View {
+    var body: some View {
+        Text("Message hidden because you blocked this person.")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .center)
+            .padding(.vertical, 6)
+            .padding(.horizontal, 16)
+    }
+}
+
 /// The conversation owns its chrome, including while reactions are presented.
 struct FaithFormConversationBars: ViewModifier {
     let shouldShowNavigation: Bool
@@ -150,7 +230,7 @@ struct GroupConversationView: View {
     var body: some View {
         Group {
             if let controller, session.client != nil {
-                ChatChannelView(viewFactory: FaithFormChatFactory(readOnly: readOnly || session.session?.suspended == true, report: { safety = $0 }), channelController: controller)
+                ChatChannelView(viewFactory: FaithFormChatFactory(readOnly: readOnly || session.session?.suspended == true, blocked: model.blockedChatUserIds, report: { safety = $0 }), channelController: controller)
             } else if failed { VStack { GroupEmpty(symbol: "bubble.left.and.bubble.right", title: "Let’s reconnect", message: "Messages are unavailable right now. Your group is still here."); Button("Try again") { retry += 1 } } }
             else { ConversationSkeleton() }
         }
@@ -162,6 +242,7 @@ struct GroupConversationView: View {
             do {
                 failed = false
                 try await session.connect(model, theme: theme)
+                await model.loadBlocked()
                 controller = try await session.channel(for: cid)
             }
             catch is CancellationError {} catch { failed = true }
@@ -192,7 +273,7 @@ struct GroupMessagesView: View {
                 Button { compose = true } label: { Image(systemName: "square.and.pencil").frame(width: 48, height: 48).foregroundStyle(theme.palette.contentOnAccent).background(theme.palette.brandAccent, in: Circle()) }.accessibilityLabel("New message")
             }.padding(.horizontal, 20).padding(.vertical, 12)
             if let list, session.client != nil {
-                ChatChannelListView(viewFactory: FaithFormChatFactory(readOnly: false, report: { _ in }), channelListController: list, title: "Messages", onItemTap: { channel in selected = DirectSelection(cid: channel.cid.rawValue, name: channel.name ?? "Conversation", readOnly: channel.isFrozen) }, embedInNavigationView: false)
+                ChatChannelListView(viewFactory: FaithFormChatFactory(readOnly: false, blocked: model.blockedChatUserIds, report: { _ in }), channelListController: list, title: "Messages", onItemTap: { channel in selected = DirectSelection(cid: channel.cid.rawValue, name: channel.name ?? "Conversation", readOnly: channel.isFrozen) }, embedInNavigationView: false)
             } else if failed { GroupEmpty(symbol: "bubble.left", title: "Messages are taking a moment", message: "Please check your connection and try again."); Button("Try again") { retry += 1 } }
             else { ConversationListSkeleton().padding(20).frame(maxHeight: .infinity, alignment: .top) }
         }

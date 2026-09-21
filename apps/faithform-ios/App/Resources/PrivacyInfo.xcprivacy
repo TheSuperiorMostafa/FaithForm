@@ -10,9 +10,12 @@
         file, and https://faithform.io/privacy must say the same as both. A
         change to what the app sends is a change to all three, in one go.
 
-        Third-party SDKs carry their own manifests (Stripe's ships inside its
-        package), and Xcode merges them into the privacy report at archive
-        time. This file describes FaithForm's own code only.
+        Third-party SDKs carry their own manifests (Stripe's and StreamChat's
+        ship inside their packages), and Xcode merges them into the privacy
+        report at archive time. This file describes FaithForm's own code only —
+        including what is collected through those SDKs on its behalf, such as
+        the messages and attachments Stream delivers, which Stream's own
+        manifest does not declare.
     -->
 
     <!--
@@ -159,18 +162,64 @@
                 <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
             </array>
         </dict>
+
+        <!--
+            Photos a person uploads: their profile photo, a group's cover
+            photo (leaders), and photos or videos attached in group chat.
+        -->
+        <dict>
+            <key>NSPrivacyCollectedDataType</key>
+            <string>NSPrivacyCollectedDataTypePhotosorVideos</string>
+            <key>NSPrivacyCollectedDataTypeLinked</key>
+            <true/>
+            <key>NSPrivacyCollectedDataTypeTracking</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypePurposes</key>
+            <array>
+                <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+            </array>
+        </dict>
+
+        <!--
+            Group and direct messages (delivered through Stream), files
+            attached to them, and the free-text details of an abuse report.
+        -->
+        <dict>
+            <key>NSPrivacyCollectedDataType</key>
+            <string>NSPrivacyCollectedDataTypeOtherUserContent</string>
+            <key>NSPrivacyCollectedDataTypeLinked</key>
+            <true/>
+            <key>NSPrivacyCollectedDataTypeTracking</key>
+            <false/>
+            <key>NSPrivacyCollectedDataTypePurposes</key>
+            <array>
+                <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
+            </array>
+        </dict>
     </array>
 
     <!--
-        Required-reason APIs: none in FaithForm's own code.
+        Required-reason APIs.
 
-        Checked, not assumed: the app and FaithFormKit use no UserDefaults
-        (credentials, resume positions and a pending gift all live in the
-        Keychain), no file timestamps, no disk-space queries, no system boot
-        time and no active keyboard list. The response cache is in memory.
-        An entry is added in the same change that first calls one of them.
+        UserDefaults, through @AppStorage, for two display preferences this
+        app reads back itself: the light/dark appearance and the presentation
+        text size. Nothing else is stored there — credentials, resume
+        positions and a pending gift all live in the Keychain.
+
+        Checked, not assumed: no file timestamps, no disk-space queries, no
+        system boot time and no active keyboard list. The response cache is in
+        memory. An entry is added in the same change that first calls one.
     -->
     <key>NSPrivacyAccessedAPITypes</key>
-    <array/>
+    <array>
+        <dict>
+            <key>NSPrivacyAccessedAPIType</key>
+            <string>NSPrivacyAccessedAPICategoryUserDefaults</string>
+            <key>NSPrivacyAccessedAPITypeReasons</key>
+            <array>
+                <string>CA92.1</string>
+            </array>
+        </dict>
+    </array>
 </dict>
 </plist>

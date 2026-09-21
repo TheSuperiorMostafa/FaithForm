@@ -23,6 +23,9 @@ public enum LegalLinks {
     /// Google Play requires this page; Apple requires the in-app action. The
     /// account screen offers both, so neither store's reviewer has to go looking.
     public static let accountDeletion = URL(string: "https://faithform.io/account-deletion")!
+    /// Guideline 1.2 asks for published contact information inside an app with
+    /// user-generated content; this is the address the Terms already name.
+    public static let support = URL(string: "mailto:support@faithform.io")!
 
     /// "By continuing, you agree to FaithForm's Terms of Service and Privacy
     /// Policy." — with both names as tappable links.

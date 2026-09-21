@@ -732,6 +732,7 @@ struct LegalLinksView: View {
             link(L.privacyPolicy, LegalLinks.privacyPolicy)
             link(L.termsOfService, LegalLinks.termsOfService)
             link(L.accountDeletionHelp, LegalLinks.accountDeletion)
+            link(L.contactSupport, LegalLinks.support)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }

@@ -339,11 +339,18 @@ struct AppBundleTests {
         // the app closes, so none is asked for. See Info.plist.
         #expect(info["NSLocationTemporaryUsageDescriptionDictionary"] == nil)
 
+        // Add-only, and only for "Save Image" on a photo someone sent in a
+        // group chat: the share sheet writes to Photos, and without this the
+        // app is terminated on that tap. Reading the library stays undeclared
+        // below — a picked photo comes through PhotosPicker, which needs no
+        // permission at all.
+        let photoAdd = info["NSPhotoLibraryAddUsageDescription"] as? String ?? ""
+        #expect(photoAdd.contains("group chat"))
+
         for absent in [
             // The pre-iOS 11 key. Nothing targets a system that reads it.
             "NSLocationAlwaysUsageDescription",
             "NSPhotoLibraryUsageDescription",
-            "NSPhotoLibraryAddUsageDescription",
             "NSMicrophoneUsageDescription",
             "NSContactsUsageDescription",
             "NSCalendarsUsageDescription",

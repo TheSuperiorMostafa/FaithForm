@@ -14,6 +14,15 @@ public final class GroupsModel {
     public private(set) var busy = false
     public var error: String?
     public var feedback: String?
+    /// The people this person has blocked, by chat user id.
+    ///
+    /// The provider's own block applies to direct messages only, so without
+    /// this a blocked person's messages still appear in every group both people
+    /// are in — and blocking someone who is abusive in a group is exactly what
+    /// App Store guideline 1.2 asks an app to offer. The conversation reads
+    /// this to hide those messages; the server list is what it is loaded from,
+    /// and it is refreshed whenever a block or unblock succeeds.
+    public private(set) var blockedChatUserIds: Set<String> = []
     private var searchGeneration = 0
 
     public init(api: APIClient, churchSlug: String) { self.api = api; self.churchSlug = churchSlug }
@@ -52,6 +61,17 @@ public final class GroupsModel {
         } catch is CancellationError {} catch { if generation == searchGeneration { self.error = Self.message(error) } }
         if generation == searchGeneration { loading = false }
     }
+    /// Replaces the blocked set from a list the server returned.
+    public func applyBlocked(_ list: ChatBlockList) {
+        blockedChatUserIds = Set(list.items.map(\.chatUserId))
+    }
+    /// Loads the blocked set, quietly: a conversation that cannot reach the
+    /// list should still open, and it shows every message when it does.
+    public func loadBlocked() async {
+        do { applyBlocked(try await read("\(messagingPath)/blocks", as: ChatBlockList.self)) }
+        catch is CancellationError {} catch {}
+    }
+
     @discardableResult public func perform(_ success: String, operation: () async throws -> Void) async -> Bool {
         guard !busy else { return false }; busy = true; error = nil; feedback = nil
         defer { busy = false }

@@ -38,9 +38,14 @@ struct GroupMembersView: View {
                                     Text(member.isYou ? "You · \(member.groupRole.capitalized)" : member.groupRole.capitalized)
                                         .font(.caption.weight(.medium)).foregroundStyle(theme.palette.contentSecondary)
                                 }.frame(maxWidth: .infinity, alignment: .leading)
-                                if !member.isYou && (member.chatUserId != nil || detail.capabilities.canManageMembers || detail.capabilities.canManageRoles) {
+                                // "Report or block" opens a sheet that needs
+                                // both the person's chat id and the group's
+                                // conversation; without the second it used to
+                                // open empty, so it is offered only when the
+                                // sheet can actually be built.
+                                if !member.isYou && ((member.chatUserId != nil && detail.group.chat != nil) || detail.capabilities.canManageMembers || detail.capabilities.canManageRoles) {
                                     Menu {
-                                        if member.chatUserId != nil { Button("Report or block", systemImage: "shield") { selected = member } }
+                                        if member.chatUserId != nil && detail.group.chat != nil { Button("Report or block", systemImage: "shield") { selected = member } }
                                         if detail.capabilities.canManageMembers { Button("Remove from group", role: .destructive) { confirming = member } }
                                         if detail.capabilities.canManageRoles {
                                             ForEach(["member", "leader", "manager"], id: \.self) { role in if role != member.groupRole { Button("Make \(role)") { Task { await changeRole(member, role: role) } } } }
@@ -197,7 +202,7 @@ struct GroupPreferencesView: View {
     }
     private func load() async {
         model.error = nil
-        do { let prefs = try await model.read("\(model.messagingPath)/preferences", as: MessagingPreferences.self); level = groupId.map { id in prefs.groups.first { $0.groupId == id }?.level ?? "default" } ?? prefs.level; blocked = try await model.read("\(model.messagingPath)/blocks", as: ChatBlockList.self).items; loaded = true }
+        do { let prefs = try await model.read("\(model.messagingPath)/preferences", as: MessagingPreferences.self); level = groupId.map { id in prefs.groups.first { $0.groupId == id }?.level ?? "default" } ?? prefs.level; let list = try await model.read("\(model.messagingPath)/blocks", as: ChatBlockList.self); blocked = list.items; model.applyBlocked(list); loaded = true }
         catch is CancellationError {} catch { model.error = GroupsModel.message(error) }
     }
     private func save() async {
@@ -207,7 +212,7 @@ struct GroupPreferencesView: View {
         }) { dismiss() }
     }
     private func unblock(_ person: ChatBlockedPerson) async {
-        await model.perform("Person unblocked.") { let response = try await model.api.send("\(model.messagingPath)/blocks", method: .delete, query: ["chatUserId": person.chatUserId], as: ChatBlockList.self); blocked = response.value?.items ?? blocked }
+        await model.perform("Person unblocked.") { let response = try await model.api.send("\(model.messagingPath)/blocks", method: .delete, query: ["chatUserId": person.chatUserId], as: ChatBlockList.self); if let list = response.value { blocked = list.items; model.applyBlocked(list) } }
     }
 }
 
@@ -221,16 +226,16 @@ struct GroupSafetyView: View {
     @State private var confirmBlock = false
     var body: some View {
         NavigationStack { Form {
-            Section { Text("Help keep this a welcoming space. Reports go privately to your church’s moderation team.").font(.subheadline).foregroundStyle(.secondary) }
+            Section { Text("Help keep this a welcoming space. Reports go privately to your church’s moderation team and to FaithForm, and objectionable content is acted on within 24 hours.").font(.subheadline).foregroundStyle(.secondary) }
             Section("Report \(name)") {
                 Picker("Reason", selection: $reason) { ForEach(["spam", "harassment", "hate", "sexual", "violence", "self_harm", "inappropriate", "other"], id: \.self) { Text($0.replacingOccurrences(of: "_", with: " ").capitalized).tag($0) } }
                 TextField("Anything else we should know?", text: $details, axis: .vertical).lineLimit(3...5)
                 Button("Send confidential report") { Task { await report() } }.disabled(model.busy)
             }
-            Section { Button("Block this person", role: .destructive) { confirmBlock = true }.disabled(model.busy) } footer: { Text("Neither of you will be able to message the other directly. You can unblock them in your messaging preferences.") }
+            Section { Button("Block this person", role: .destructive) { confirmBlock = true }.disabled(model.busy) } footer: { Text("Neither of you will be able to message the other directly, and their messages are hidden in the groups you share. You can unblock them in your messaging preferences.") }
             GroupFeedback(model: model)
         }.navigationTitle("Report or block").toolbar { ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } } }
-        .confirmationDialog("Block \(name)?", isPresented: $confirmBlock, titleVisibility: .visible) { Button("Block person", role: .destructive) { Task { if await model.perform("Person blocked.", operation: { let _: ChatBlockList = try await model.send("\(model.messagingPath)/blocks", body: ChatBlockRequest(chatUserId: userId), as: ChatBlockList.self) }) { dismiss() } } } }
+        .confirmationDialog("Block \(name)?", isPresented: $confirmBlock, titleVisibility: .visible) { Button("Block person", role: .destructive) { Task { if await model.perform("Person blocked.", operation: { let list: ChatBlockList = try await model.send("\(model.messagingPath)/blocks", body: ChatBlockRequest(chatUserId: userId), as: ChatBlockList.self); model.applyBlocked(list) }) { dismiss() } } } }
         }
     }
     private func report() async { if await model.perform("Thank you. Your report has been received.", operation: { let _: ChatReportResult = try await model.send("\(model.messagingPath)/reports", body: ChatReportRequest(cid: cid, messageId: messageId, reportedChatUserId: userId, reason: reason, details: String(details.prefix(1000))), as: ChatReportResult.self) }) { dismiss() } }

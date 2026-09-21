@@ -18,8 +18,13 @@
  * parsed as a `Date` anywhere: `new Date("2026-08-01")` is midnight UTC, which
  * prints as July 31 for anyone west of Greenwich.
  */
-export const TERMS_VERSION = "2026-08-01";
-export const PRIVACY_VERSION = "2026-08-01";
+// Moved from 2026-08-01 for the 1.0 store submission: the Terms gained a
+// section on what you post and a no-objectionable-content policy (App Store
+// guideline 1.2), and the Privacy Policy gained the photos people upload and
+// the group messages delivered through Stream. Both describe collection that
+// did not exist in August, so the date they were agreed to had to move.
+export const TERMS_VERSION = "2026-09-20";
+export const PRIVACY_VERSION = "2026-09-20";
 
 /** Where people write to us about their data or their account. */
 export const SUPPORT_EMAIL = "support@faithform.io";
@@ -29,6 +34,8 @@ export const LEGAL_PATHS = {
   privacy: "/privacy",
   terms: "/terms",
   accountDeletion: "/account-deletion",
+  /** The Support URL both app stores list. Public, like the rest of these. */
+  support: "/support",
 } as const;
 
 const MONTHS = [
