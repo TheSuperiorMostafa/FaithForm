@@ -10,6 +10,7 @@ import {
   verifyAppleCalendarReadable,
   type AppleCalendarChoice,
 } from "@/lib/integrations/apple-calendar";
+import { verifyICloudMailDrafts } from "@/lib/integrations/icloud-mail";
 import { CalendarFeedError } from "@/lib/integrations/apple-feed";
 import { CalDavAuthError, CalDavError } from "@/lib/integrations/caldav";
 import {
@@ -230,6 +231,61 @@ export async function connectAppleCalendarLinkAction(
     };
   }
 
+  revalidatePath("/dashboard/settings");
+  revalidatePath("/dashboard/announcements");
+  return { ok: true };
+}
+
+/** Enables iCloud Mail drafts using the same app-specific password as Calendar. */
+export async function configureICloudMailAction(
+  formData: FormData,
+): Promise<AppleSaveState> {
+  const gate = await requireAnnouncementsAdmin();
+  if (!gate.ok) return gate;
+  const { auth, supabase } = gate;
+  const enabled = formData.get("enabled") === "true";
+  const address = formData.get("mailAddress")?.toString().trim().toLowerCase() ?? "";
+  const existing = await getIntegration(auth.churchId, "apple", supabase);
+  const metadata = (existing?.metadata ?? {}) as AppleIntegrationMetadata;
+
+  if (!existing || metadata.mode === "public_link" || !existing.access_token?.trim()) {
+    return { ok: false, error: "Connect iCloud with an Apple ID before turning on Apple Mail drafts." };
+  }
+  if (!enabled) {
+    await saveIntegration({
+      churchId: auth.churchId,
+      provider: "apple",
+      accessToken: existing.access_token,
+      refreshToken: existing.refresh_token,
+      tokenExpiresAt: existing.token_expires_at ? new Date(existing.token_expires_at) : null,
+      metadata: { ...metadata, mail_enabled: false, mail_verified_at: undefined },
+      connectedBy: auth.userId,
+    }, supabase);
+    revalidatePath("/dashboard/settings");
+    return { ok: true };
+  }
+  if (!address) return { ok: false, error: "Enter the iCloud Mail address first." };
+
+  try {
+    await verifyICloudMailDrafts({ address, password: existing.access_token });
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Could not verify iCloud Mail." };
+  }
+
+  await saveIntegration({
+    churchId: auth.churchId,
+    provider: "apple",
+    accessToken: existing.access_token,
+    refreshToken: existing.refresh_token,
+    tokenExpiresAt: existing.token_expires_at ? new Date(existing.token_expires_at) : null,
+    metadata: {
+      ...metadata,
+      mail_address: address,
+      mail_enabled: true,
+      mail_verified_at: new Date().toISOString(),
+    },
+    connectedBy: auth.userId,
+  }, supabase);
   revalidatePath("/dashboard/settings");
   revalidatePath("/dashboard/announcements");
   return { ok: true };

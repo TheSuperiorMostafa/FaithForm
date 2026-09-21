@@ -1,4 +1,5 @@
 const SMS_MOBILE_API_URL = "https://api.smsmobileapi.com/sendsms/";
+const SMS_MOBILE_LIST_URL = "https://api.smsmobileapi.com/gateway/mobile/list/";
 
 type SmsMobileApiResponse = {
   result?: {
@@ -12,6 +13,21 @@ type SmsMobileApiResponse = {
 export type SmsMobileApiResult =
   | { ok: true; messageId: string | null }
   | { ok: false; error: string };
+
+export type SmsMobileDevice = {
+  sid: string;
+  label: string | null;
+  online: boolean | null;
+  raw: Record<string, unknown>;
+};
+
+type SmsMobileDeviceResponse = {
+  result?: {
+    error?: number | string;
+    mobiles?: Array<Record<string, unknown>>;
+    mobile?: Array<Record<string, unknown>>;
+  };
+};
 
 function parseApiError(result: SmsMobileApiResponse["result"]): string {
   const code = result?.error;
@@ -51,6 +67,7 @@ export async function sendSmsMobileApi(input: {
   apiKey: string;
   recipients: string;
   message: string;
+  deviceSid?: string | null;
 }): Promise<SmsMobileApiResult> {
   const apikey = input.apiKey.trim();
   if (!apikey) {
@@ -64,6 +81,7 @@ export async function sendSmsMobileApi(input: {
     sendsms: "1",
     sendwa: "0",
   });
+  if (input.deviceSid?.trim()) body.set("sIdentifiant", input.deviceSid.trim());
 
   let response: Response;
   try {
@@ -105,4 +123,57 @@ export async function sendSmsMobileApi(input: {
   }
 
   return { ok: true, messageId: result?.id ?? null };
+}
+
+/** Lists the phones connected to one SMSMobileAPI account. Server-side only. */
+export async function listSmsMobileDevices(
+  apiKey: string,
+): Promise<{ ok: true; devices: SmsMobileDevice[] } | { ok: false; error: string }> {
+  const key = apiKey.trim();
+  if (!key) return { ok: false, error: "SMS is not configured" };
+
+  const url = new URL(SMS_MOBILE_LIST_URL);
+  url.searchParams.set("apikey", key);
+  let response: Response;
+  try {
+    response = await fetch(url, { method: "GET" });
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Network error" };
+  }
+
+  let payload: SmsMobileDeviceResponse;
+  try {
+    payload = (await response.json()) as SmsMobileDeviceResponse;
+  } catch {
+    return { ok: false, error: "Invalid SMS gateway response" };
+  }
+
+  const result = payload.result;
+  const errorCode = String(result?.error ?? "0");
+  if (!response.ok || (errorCode !== "0" && errorCode !== "")) {
+    return { ok: false, error: parseApiError(result) };
+  }
+
+  const rows = result?.mobiles ?? result?.mobile ?? [];
+  return {
+    ok: true,
+    devices: rows
+      .map((row) => {
+        const sid = String(row.sIdentifiant ?? row.sIdentifiantPhone ?? row.sid ?? "").trim();
+        if (!sid) return null;
+        const onlineValue = row.online ?? row.connected ?? row.status;
+        return {
+          sid,
+          label: String(row.label ?? row.name ?? row.phone ?? "").trim() || null,
+          online:
+            typeof onlineValue === "boolean"
+              ? onlineValue
+              : onlineValue == null
+                ? null
+                : /online|connected|1|true/i.test(String(onlineValue)),
+          raw: row,
+        };
+      })
+      .filter((device): device is SmsMobileDevice => Boolean(device)),
+  };
 }

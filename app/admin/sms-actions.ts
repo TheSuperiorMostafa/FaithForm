@@ -3,8 +3,9 @@
 import { revalidatePath } from "next/cache";
 
 import { requireSuperAdmin } from "@/lib/auth/superadmin";
-import { removeChurchSmsSender, saveChurchSmsSender } from "@/lib/sms/church-sender";
+import { removeChurchSmsSender, saveChurchSmsSender, getChurchSmsSender } from "@/lib/sms/church-sender";
 import { toE164 } from "@/lib/sms/phone";
+import { listSmsMobileDevices } from "@/lib/sms/sms-mobile-api";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type ChurchSmsFormState = {
@@ -34,6 +35,7 @@ export async function saveChurchSms(
 
   const apiKey = formData.get("sms_api_key")?.toString().trim() || null;
   const rawNumber = formData.get("sms_from_number")?.toString().trim() ?? "";
+  const deviceSid = formData.get("sms_device_sid")?.toString().trim() || null;
   const fromNumber = rawNumber ? toE164(rawNumber) : null;
   if (rawNumber && !fromNumber) {
     return { ok: false, error: "Enter the phone's number like 123-456-7890." };
@@ -42,7 +44,7 @@ export async function saveChurchSms(
   try {
     await saveChurchSmsSender(
       churchId,
-      { apiKey, fromNumber, userId: user.id },
+      { apiKey, fromNumber, deviceSid, userId: user.id },
       createAdminClient(),
     );
   } catch (err) {
@@ -54,6 +56,19 @@ export async function saveChurchSms(
 
   revalidateChurch(churchId);
   return { ok: true, message: "Texting phone saved." };
+}
+
+export async function listChurchSmsDevices(formData: FormData) {
+  await requireSuperAdmin();
+  const churchId = formData.get("church_id")?.toString();
+  if (!churchId) return { ok: false as const, error: "Missing church." };
+  const sender = await getChurchSmsSender(churchId, createAdminClient());
+  const key = formData.get("sms_api_key")?.toString().trim() ||
+    (sender?.gateway === "smsmobileapi" ? sender.apiKey : null);
+  if (!key) return { ok: false as const, error: "Enter the SMSMobileAPI key first." };
+  const result = await listSmsMobileDevices(key);
+  if (!result.ok) return result;
+  return result;
 }
 
 export async function disconnectChurchSms(

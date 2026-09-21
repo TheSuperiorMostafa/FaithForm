@@ -181,6 +181,7 @@ test("a church with its own phone texts from it", async () => {
     gateway: "smsmobileapi",
     apiKey: "grace-key",
     fromNumber: "+15025550134",
+    deviceSid: null,
     source: "church",
   });
 });
@@ -194,6 +195,7 @@ test("the server-wide phone only ever texts for the church it belongs to", async
       assert.equal(owner?.gateway, "smsmobileapi");
       assert.equal(owner?.source, "server");
       assert.equal(owner?.fromNumber, "+15025559999");
+      assert.equal(owner?.deviceSid, null);
 
       // The bug: every other church used the same pastor's phone.
       assert.equal(await getChurchSmsSender("grace", client), null);

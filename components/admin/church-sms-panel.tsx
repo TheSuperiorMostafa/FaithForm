@@ -121,6 +121,20 @@ export function ChurchSmsPanel({
                 defaultValue={hasOwnPhone ? (status.fromNumber ?? "") : ""}
               />
             </div>
+            <div className="flex flex-col gap-2 sm:col-span-2">
+              <Label htmlFor="sms_device_sid">SMSMobileAPI device ID</Label>
+              <Input
+                id="sms_device_sid"
+                name="sms_device_sid"
+                autoComplete="off"
+                defaultValue={hasOwnPhone ? (status.deviceSid ?? "") : ""}
+                placeholder="Paste the phone ID from SMSMobileAPI"
+              />
+              <p className="text-xs text-muted-foreground">
+                This is the phone&apos;s <code>sIdentifiant</code>. Set a different
+                device ID for every church, even when they share one SMSMobileAPI account.
+              </p>
+            </div>
           </div>
           <div className="flex flex-wrap gap-2">
             <SaveButton connected={hasOwnPhone} />

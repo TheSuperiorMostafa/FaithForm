@@ -6,6 +6,7 @@ import { AlertTriangle, Apple, Check, ExternalLink, Info } from "lucide-react";
 import {
   connectAppleCalendarAction,
   connectAppleCalendarLinkAction,
+  configureICloudMailAction,
   listAppleCalendarsAction,
 } from "@/app/dashboard/settings/apple-calendar-actions";
 import type { AppleCalendarChoice } from "@/lib/integrations/apple-calendar";
@@ -24,6 +25,9 @@ export type AppleCalendarStatus = {
   readOnly: boolean;
   needsReconnect: boolean;
   reconnectReason: string | null;
+  mailAddress: string | null;
+  mailEnabled: boolean;
+  mailVerifiedAt: string | null;
 };
 
 /**
@@ -50,6 +54,8 @@ export function AppleCalendarConnect({
   const [advanced, setAdvanced] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [mailAddress, setMailAddress] = useState(status.mailAddress ?? "");
+  const [mailEnabled, setMailEnabled] = useState(status.mailEnabled);
 
   function close() {
     setOpen(false);
@@ -60,6 +66,22 @@ export function AppleCalendarConnect({
   function connected() {
     close();
     window.location.href = "/dashboard/settings?tab=integrations&apple_connected=1";
+  }
+
+  function configureMail(enabled: boolean) {
+    setError(null);
+    const formData = new FormData();
+    formData.set("enabled", String(enabled));
+    formData.set("mailAddress", mailAddress);
+    startTransition(async () => {
+      const result = await configureICloudMailAction(formData);
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      setMailEnabled(enabled);
+      setError(null);
+    });
   }
 
   const detail = !status.connected
@@ -169,6 +191,44 @@ export function AppleCalendarConnect({
               }}
             />
           )}
+        </div>
+      )}
+
+      {status.connected && !status.readOnly && (
+        <div className="flex flex-col gap-3 rounded-xl border border-border bg-background p-4">
+          <div>
+            <p className="text-sm font-semibold text-foreground">Apple Mail drafts</p>
+            <p className="text-sm text-muted-foreground">
+              Use the same app-specific password to create weekly announcement drafts in iCloud Mail.
+            </p>
+          </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+            <div className="flex flex-1 flex-col gap-2">
+              <Label htmlFor="icloud_mail_address">iCloud Mail address</Label>
+              <Input
+                id="icloud_mail_address"
+                type="email"
+                placeholder="yourchurch@icloud.com"
+                value={mailAddress}
+                onChange={(event) => setMailAddress(event.target.value)}
+                disabled={pending || mailEnabled}
+              />
+            </div>
+            <Button
+              type="button"
+              variant={mailEnabled ? "outline" : "default"}
+              onClick={() => configureMail(!mailEnabled)}
+              disabled={pending || (!mailEnabled && !mailAddress.trim())}
+            >
+              {pending ? "Checking…" : mailEnabled ? "Turn off drafts" : "Enable drafts"}
+            </Button>
+          </div>
+          {mailEnabled && (
+            <p className="text-xs text-green-700 dark:text-green-300">
+              Weekly announcements will be created as drafts in Apple Mail.
+            </p>
+          )}
+          {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
         </div>
       )}
     </div>

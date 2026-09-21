@@ -40,6 +40,7 @@ Set these in **Vercel → Project → Settings → Environment Variables** (and 
 | Variable | What it is |
 |----------|------------|
 | `SMS_MOBILE_API_KEY` | [SMSMobileAPI](https://smsmobileapi.com/doc/) key for attendance follow-up texts (sent from your connected phone) |
+| `SMS_MOBILE_API_DEVICE_SID` | Optional device ID (`sIdentifiant`) for the legacy server-wide SMSMobileAPI phone; church connections save their own device ID in the admin panel |
 | `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM_NUMBER` | Optional Twilio fallback if `SMS_MOBILE_API_KEY` is not set |
 | `RESEND_API_KEY` | Transactional email (onboarding invites) |
 | `INTERNAL_ALERT_EMAIL` | Planned for staff alerts |

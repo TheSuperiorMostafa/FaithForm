@@ -24,6 +24,7 @@ export type ChurchSmsSender =
       gateway: "smsmobileapi";
       apiKey: string;
       fromNumber: string | null;
+      deviceSid: string | null;
       source: "church" | "server";
     }
   | {
@@ -31,6 +32,7 @@ export type ChurchSmsSender =
       accountSid: string;
       authToken: string;
       fromNumber: string;
+      deviceSid: null;
       source: "server";
     };
 
@@ -38,6 +40,7 @@ export type ChurchSmsSender =
 export type ChurchSmsStatus = {
   connected: boolean;
   fromNumber: string | null;
+  deviceSid: string | null;
   /** "server" means the church is using the server-wide phone (SMS_ENV_CHURCH_ID). */
   source: "church" | "server" | null;
 };
@@ -51,6 +54,7 @@ function serverSender(): ChurchSmsSender | null {
       gateway: "smsmobileapi",
       apiKey,
       fromNumber: process.env.SMS_MOBILE_API_NUMBER?.trim() || null,
+      deviceSid: process.env.SMS_MOBILE_API_DEVICE_SID?.trim() || null,
       source: "server",
     };
   }
@@ -59,7 +63,7 @@ function serverSender(): ChurchSmsSender | null {
   const authToken = process.env.TWILIO_AUTH_TOKEN?.trim();
   const fromNumber = process.env.TWILIO_FROM_NUMBER?.trim();
   if (accountSid && authToken && fromNumber) {
-    return { gateway: "twilio", accountSid, authToken, fromNumber, source: "server" };
+    return { gateway: "twilio", accountSid, authToken, fromNumber, deviceSid: null, source: "server" };
   }
 
   return null;
@@ -73,7 +77,7 @@ function serverCredentialChurchId(): string | null {
 async function readChurchConnection(
   churchId: string,
   client: SupabaseClient,
-): Promise<{ apiKey: string; fromNumber: string | null } | null> {
+): Promise<{ apiKey: string; fromNumber: string | null; deviceSid: string | null } | null> {
   const { data, error } = await client
     .from("church_integrations")
     .select("access_token, metadata")
@@ -87,13 +91,18 @@ async function readChurchConnection(
   const apiKey = (data.access_token as string | null)?.trim();
   if (!apiKey) return null;
 
-  const metadata = (data.metadata ?? {}) as { from_number?: unknown };
+  const metadata = (data.metadata ?? {}) as { from_number?: unknown; device_sid?: unknown };
   const fromNumber =
     typeof metadata.from_number === "string" && metadata.from_number.trim()
       ? metadata.from_number.trim()
       : null;
 
-  return { apiKey, fromNumber };
+  const deviceSid =
+    typeof metadata.device_sid === "string" && metadata.device_sid.trim()
+      ? metadata.device_sid.trim()
+      : null;
+
+  return { apiKey, fromNumber, deviceSid };
 }
 
 /**
@@ -112,6 +121,7 @@ export async function getChurchSmsSender(
         gateway: "smsmobileapi",
         apiKey: own.apiKey,
         fromNumber: own.fromNumber,
+        deviceSid: own.deviceSid,
         source: "church",
       };
     }
@@ -126,8 +136,8 @@ export async function getChurchSmsStatus(
 ): Promise<ChurchSmsStatus> {
   const sender = await getChurchSmsSender(churchId, admin);
   return sender
-    ? { connected: true, fromNumber: sender.fromNumber, source: sender.source }
-    : { connected: false, fromNumber: null, source: null };
+    ? { connected: true, fromNumber: sender.fromNumber, deviceSid: sender.deviceSid, source: sender.source }
+    : { connected: false, fromNumber: null, deviceSid: null, source: null };
 }
 
 /**
@@ -136,11 +146,12 @@ export async function getChurchSmsStatus(
  */
 export async function saveChurchSmsSender(
   churchId: string,
-  input: { apiKey: string | null; fromNumber: string | null; userId: string | null },
+  input: { apiKey: string | null; fromNumber: string | null; deviceSid: string | null; userId: string | null },
   admin: SupabaseClient,
 ): Promise<void> {
   const existing = await readChurchConnection(churchId, admin);
   const apiKey = input.apiKey?.trim() || existing?.apiKey;
+  const deviceSid = input.deviceSid?.trim() || existing?.deviceSid || null;
   if (!apiKey) {
     throw new Error("Enter the SMSMobileAPI key from the app on the church's phone.");
   }
@@ -150,7 +161,11 @@ export async function saveChurchSmsSender(
       church_id: churchId,
       provider: SMS_PROVIDER,
       access_token: apiKey,
-      metadata: { gateway: "smsmobileapi", from_number: input.fromNumber },
+      metadata: {
+        gateway: "smsmobileapi",
+        from_number: input.fromNumber,
+        device_sid: deviceSid,
+      },
       connected_by: input.userId,
       updated_at: new Date().toISOString(),
     },

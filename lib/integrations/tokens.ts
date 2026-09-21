@@ -51,6 +51,9 @@ const EMPTY_STATUS = {
     readOnly: false,
     needsReconnect: false,
     reconnectReason: null as string | null,
+    mailAddress: null as string | null,
+    mailEnabled: false,
+    mailVerifiedAt: null as string | null,
   },
 };
 
@@ -142,6 +145,9 @@ function projectSafeMetadata(
       mode: metadata.mode,
       apple_id: metadata.apple_id,
       calendar_name: metadata.calendar_name,
+      mail_address: metadata.mail_address,
+      mail_enabled: metadata.mail_enabled,
+      mail_verified_at: metadata.mail_verified_at,
     };
   }
   return {};
@@ -218,6 +224,9 @@ export async function getIntegrationStatus(
         !apple?.connected && appleMeta.needs_reconnect
           ? "Reconnect required."
           : null,
+      mailAddress: appleMeta.mail_address ?? null,
+      mailEnabled: appleMeta.mail_enabled === true,
+      mailVerifiedAt: appleMeta.mail_verified_at ?? null,
     },
   };
 }

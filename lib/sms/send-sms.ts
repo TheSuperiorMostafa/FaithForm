@@ -63,6 +63,7 @@ export async function sendSms(
     apiKey: sender.apiKey,
     recipients: to,
     message,
+    deviceSid: sender.deviceSid,
   });
   return { ...result, from: sender.fromNumber };
 }
