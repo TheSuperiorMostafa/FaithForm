@@ -23,8 +23,8 @@ async function enqueue(
   admin: SupabaseClient,
   input: {
     churchId: string;
-    kind: "group_join_requested" | "group_request_approved" | "group_event_cancelled";
-    subjectType: "group_join_request" | "group_event";
+    kind: "group_join_requested" | "group_request_approved" | "group_event_cancelled" | "group_message";
+    subjectType: "group_join_request" | "group_event" | "group_message";
     subjectId: string;
     accountIds: string[];
     title: string;
