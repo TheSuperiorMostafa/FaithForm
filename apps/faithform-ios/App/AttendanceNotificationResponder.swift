@@ -31,7 +31,7 @@ final class AttendanceNotificationResponder: NSObject, UNUserNotificationCenterD
         // A push from the server — an announcement, a service going live, a
         // message. Shown while the app is open too: the person is looking at
         // one church's feed, and this may be another church entirely.
-        return notification.request.content.userInfo["faithform"] != nil
+        return notification.request.content.userInfo["faithform"] != nil || notification.request.content.userInfo["stream"] != nil
             ? [.banner, .list, .sound]
             : []
     }
@@ -75,6 +75,13 @@ final class AttendanceNotificationResponder: NSObject, UNUserNotificationCenterD
 
     /// The `faithform://` link a push carried, if it carried one.
     private static func deepLink(in userInfo: [AnyHashable: Any]) -> URL? {
+        if let chat = userInfo["stream"] as? [String: String], let cid = chat["cid"] {
+            var link = URLComponents()
+            link.scheme = "faithform"
+            link.host = "messages"
+            link.queryItems = [URLQueryItem(name: "cid", value: cid)]
+            return link.url
+        }
         guard
             let payload = userInfo["faithform"] as? [String: Any],
             let link = payload["deepLink"] as? String

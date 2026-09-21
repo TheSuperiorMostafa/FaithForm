@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { runMessagingSync } from "@/lib/messaging/sync/worker";
 import { compareSecret } from "@/lib/security/compare-secret";
+import { ensureChatPushConfigured } from "@/lib/messaging/push-configuration";
 
 /**
  * Drains the messaging outbox: every change FaithForm made that the chat
@@ -23,6 +24,8 @@ export async function GET(request: Request) {
 
   const totals = { configured: true, claimed: 0, done: 0, retried: 0, failed: 0, batches: 0 };
   const started = Date.now();
+  const applePushConfigured = await ensureChatPushConfigured().catch(() => false);
+  console.info("[messaging-push]", { applePushConfigured });
   // Several batches per invocation, inside a 45-second budget.
   while (Date.now() - started < 40_000 && totals.batches < 8) {
     const result = await runMessagingSync({ limit: 50, budgetMs: Math.max(5_000, 45_000 - (Date.now() - started)) });
@@ -37,7 +40,7 @@ export async function GET(request: Request) {
 
   // Counts only — never a person, a church, or a message.
   return NextResponse.json(
-    { ok: true, durationMs: Date.now() - started, ...totals },
+    { ok: true, durationMs: Date.now() - started, applePushConfigured, ...totals },
     { headers: { "Cache-Control": "no-store" } },
   );
 }

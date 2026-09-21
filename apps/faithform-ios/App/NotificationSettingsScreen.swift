@@ -35,7 +35,7 @@ struct NotificationSettingsScreen: View {
         .navigationTitle("Notifications")
         .navigationBarTitleDisplayMode(.inline)
         .task {
-            await push.refreshStatus()
+            await push.synchronize()
             let model = settings ?? NotificationSettingsModel(api: api)
             settings = model
             await model.load(churches: churches)
@@ -44,7 +44,7 @@ struct NotificationSettingsScreen: View {
         // that already knows, rather than to a stale "off".
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
-            Task { await push.refreshStatus() }
+            Task { await push.synchronize() }
         }
     }
 

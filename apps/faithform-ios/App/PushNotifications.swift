@@ -62,6 +62,18 @@ struct SystemNotificationAuthorizer: NotificationAuthorizing {
 actor DeviceTokenInbox: DeviceTokenObserving {
     private var pending: String?
     private var handler: (@Sendable (String) async -> Void)?
+    private var failureHandler: (@Sendable () async -> Void)?
+    private var failed = false
+
+    func onRegistrationFailed(_ handler: @escaping @Sendable () async -> Void) async {
+        failureHandler = handler
+        if failed { await handler() }
+    }
+
+    func registrationFailed() async {
+        failed = true
+        await failureHandler?()
+    }
 
     func onTokenChanged(_ handler: @escaping @Sendable (String) async -> Void) async {
         self.handler = handler
@@ -74,6 +86,7 @@ actor DeviceTokenInbox: DeviceTokenObserving {
     /// Called by the app delegate. Never logged: a device token is a
     /// credential for addressing this phone.
     func receive(_ token: String) async {
+        failed = false
         guard let handler else {
             pending = token
             return
@@ -89,6 +102,29 @@ final class PushApplicationDelegate: NSObject, UIApplicationDelegate {
     /// no policy and no account state — only the most recent token, until the
     /// graph is ready to take it.
     static let tokens = DeviceTokenInbox()
+
+    /// The provisioning profile, not the backend URL or build optimization,
+    /// determines which APNs environment issued this device's token. Store
+    /// builds have no embedded profile and use production APNs.
+    static var apnsEnvironment: String {
+        guard let url = Bundle.main.url(forResource: "embedded", withExtension: "mobileprovision"),
+              let data = try? Data(contentsOf: url),
+              let start = data.range(of: Data("<?xml".utf8)),
+              let end = data.range(of: Data("</plist>".utf8)),
+              let profile = try? PropertyListSerialization.propertyList(
+                from: data.subdata(in: start.lowerBound..<end.upperBound), options: [], format: nil
+              ) as? [String: Any],
+              let entitlements = profile["Entitlements"] as? [String: Any],
+              let environment = entitlements["aps-environment"] as? String
+        else {
+            #if targetEnvironment(simulator)
+            return "development"
+            #else
+            return "production"
+            #endif
+        }
+        return environment == "development" ? "development" : "production"
+    }
 
     func application(
         _ application: UIApplication,
@@ -106,5 +142,6 @@ final class PushApplicationDelegate: NSObject, UIApplicationDelegate {
         // is a note rather than anything a person is shown. The next launch
         // registers again.
         FaithFormLog(category: "push").event("apns_registration_failed")
+        Task { await Self.tokens.registrationFailed() }
     }
 }

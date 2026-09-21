@@ -115,7 +115,8 @@ final class AppDependencies {
             clientBuild: clientBuild,
             appVersion: Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
             osVersion: UIDevice.current.systemVersion,
-            locale: Locale.current.identifier
+            locale: Locale.current.identifier,
+            apnsEnvironment: PushApplicationDelegate.apnsEnvironment
         )
 
         let location = CoreLocationAdapter()
@@ -163,13 +164,11 @@ final class AppDependencies {
             // Reads the permission state, and takes any token APNs issued
             // during launch — for a phone that already enabled notifications,
             // registration happens without anyone being asked anything.
-            await push.refreshStatus()
             await PushApplicationDelegate.tokens.onTokenChanged { token in
                 await push.handleToken(token)
             }
-            if NotificationPrompting.shouldRegisterForRemote(push.status) {
-                await SystemNotificationAuthorizer().registerForRemoteNotifications()
-            }
+            await PushApplicationDelegate.tokens.onRegistrationFailed { await push.registrationFailed() }
+            await push.synchronize()
         }
 
         Task {

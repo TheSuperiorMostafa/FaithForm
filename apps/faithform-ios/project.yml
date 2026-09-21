@@ -78,17 +78,10 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         TARGETED_DEVICE_FAMILY: "1"
-      # Notifications are the one entitlement an implemented feature needs, and
-      # they are attached to Staging and Release **only**.
-      #
-      # A free personal Apple team cannot provision `aps-environment`. Requiring
-      # it in Debug would fail automatic signing in exactly the configuration
-      # somebody uses to run the app on their own phone — and the error names
-      # provisioning rather than the capability, so it reads as a broken project.
-      #
-      # Push is not testable on a personal team or a simulator anyway, so nothing
-      # is lost by scoping it. Associated domains are absent entirely — see
-      # P12_IOS_APP_TARGET_AND_SIGNING.md.
+      # Device Debug builds need APNs too. Without this entitlement iOS refuses
+      # registration even when the person has allowed notifications. A personal
+      # team without Push capability can explicitly clear CODE_SIGN_ENTITLEMENTS
+      # for a build that does not exercise remote notifications.
       #
       # **Which** entitlements file is a switch, not a constant. Apple Pay needs
       # `com.apple.developer.in-app-payments`, and a profile without that
@@ -97,6 +90,8 @@ targets:
       # Base.xcconfig, where the same switch decides whether the app is told a
       # merchant ID, so the two cannot disagree.
       configs:
+        Debug:
+          CODE_SIGN_ENTITLEMENTS: App/Resources/FaithForm.entitlements
         Staging:
           CODE_SIGN_ENTITLEMENTS: $(FAITHFORM_ENTITLEMENTS)
         Release:

@@ -34,7 +34,7 @@ export type PushMessage = {
 export interface PushAdapter {
   readonly provider: "apns" | "fcm";
   isConfigured(): boolean;
-  send(token: string, message: PushMessage): Promise<DeliveryResult>;
+  send(token: string, message: PushMessage, apnsEnvironment?: "development" | "production" | null): Promise<DeliveryResult>;
 }
 
 /**
@@ -191,6 +191,12 @@ function envValue(name: string): string | undefined {
 const APNS_IDLE_MS = 60_000;
 const APNS_REQUEST_TIMEOUT_MS = 10_000;
 
+export function apnsHost(environment?: "development" | "production" | null): string {
+  if (environment === "development") return "https://api.sandbox.push.apple.com";
+  if (environment === "production") return "https://api.push.apple.com";
+  return envValue("APNS_HOST") ?? "https://api.push.apple.com";
+}
+
 type ApnsResponse = { status: number; body: string };
 
 const apnsSessions = new Map<string, import("node:http2").ClientHttp2Session>();
@@ -264,7 +270,7 @@ export class ApnsAdapter implements PushAdapter {
     return readApnsConfig() !== null && Boolean(envValue("APNS_TOPIC"));
   }
 
-  async send(token: string, message: PushMessage): Promise<DeliveryResult> {
+  async send(token: string, message: PushMessage, environment?: "development" | "production" | null): Promise<DeliveryResult> {
     if (!this.isConfigured()) {
       // Fails closed. No fallback, no relaxed configuration.
       return { outcome: "skipped", errorCategory: "not_configured" };
@@ -279,7 +285,7 @@ export class ApnsAdapter implements PushAdapter {
       };
     }
 
-    const host = envValue("APNS_HOST") ?? "https://api.push.apple.com";
+    const host = apnsHost(environment);
     try {
       const response = await apnsRequest({
         host,

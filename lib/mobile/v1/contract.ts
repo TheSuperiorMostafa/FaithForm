@@ -502,6 +502,7 @@ export const registerDeviceRequestSchema = z
     platform: devicePlatformSchema,
     provider: z.enum(["apns", "fcm"]),
     providerToken: z.string().min(16).max(4096),
+    apnsEnvironment: z.enum(["development", "production"]).optional(),
     appVersion: z.string().max(40).optional(),
     clientBuild: z.number().int().optional(),
     osVersion: z.string().max(40).optional(),

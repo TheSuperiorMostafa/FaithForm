@@ -71,7 +71,11 @@ export type PushPreferenceInput = {
 
 export type DeviceProvider = "apn" | "firebase";
 
-export type ChatDevice = { token: string; provider: DeviceProvider };
+export type ChatDevice = {
+  token: string;
+  provider: DeviceProvider;
+  apnsEnvironment?: "development" | "production" | null;
+};
 
 export type ChatProviderErrorCategory =
   /** Retry later: timeouts, 5xx, rate limits. */

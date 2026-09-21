@@ -118,7 +118,6 @@ type OutboxJob = {
     | "stream_event"
     | "stream_recording"
     | "group_join_request"
-    | "group_message"
     | "group_event";
   kind?: string;
   subject_id: string;
@@ -135,6 +134,13 @@ type OutboxJob = {
   attempts: number;
 };
 
+type PushRecipient = {
+  installationId: string;
+  provider: "apns" | "fcm";
+  token: string;
+  apnsEnvironment: "development" | "production" | null;
+};
+
 /**
  * Resolves who should receive a job, at send time.
  *
@@ -146,7 +152,7 @@ type OutboxJob = {
 async function resolveRecipients(
   admin: SupabaseClient,
   job: OutboxJob,
-): Promise<{ installationId: string; provider: "apns" | "fcm"; token: string }[]> {
+): Promise<PushRecipient[]> {
   if (job.target_account_ids && job.target_account_ids.length > 0) {
     return resolveTargetedRecipients(admin, job, job.target_account_ids);
   }
@@ -184,7 +190,7 @@ async function resolveRecipients(
 
   const { data: installations } = await admin
     .from("visitor_device_installations")
-    .select("id, provider, provider_token")
+    .select("id, provider, provider_token, apns_environment")
     .in("account_id", eligible)
     .eq("is_enabled", true)
     .is("invalidated_at", null)
@@ -196,6 +202,7 @@ async function resolveRecipients(
       installationId: row.id as string,
       provider: row.provider as "apns" | "fcm",
       token: row.provider_token as string,
+      apnsEnvironment: row.apns_environment as PushRecipient["apnsEnvironment"],
     }));
 }
 
@@ -209,7 +216,7 @@ async function resolveTargetedRecipients(
   admin: SupabaseClient,
   job: OutboxJob,
   accountIds: string[],
-): Promise<{ installationId: string; provider: "apns" | "fcm"; token: string }[]> {
+): Promise<PushRecipient[]> {
   const [{ data: relationships }, { data: switchedOff }] = await Promise.all([
     admin
       .from("visitor_church_relationships")
@@ -233,7 +240,7 @@ async function resolveTargetedRecipients(
 
   const { data: installations } = await admin
     .from("visitor_device_installations")
-    .select("id, provider, provider_token")
+    .select("id, provider, provider_token, apns_environment")
     .in("account_id", eligible)
     .eq("is_enabled", true)
     .is("invalidated_at", null)
@@ -245,6 +252,7 @@ async function resolveTargetedRecipients(
       installationId: row.id as string,
       provider: row.provider as "apns" | "fcm",
       token: row.provider_token as string,
+      apnsEnvironment: row.apns_environment as PushRecipient["apnsEnvironment"],
     }));
 }
 
@@ -265,8 +273,6 @@ async function subjectIsStillCurrent(
     if (!data) return false;
     return job.kind === "group_request_approved" ? data.status === "approved" : data.status === "pending";
   }
-
-  if (job.subject_type === "group_message") return true;
 
   // "Thursday's gathering is cancelled" only while it still is.
   if (job.subject_type === "group_event") {
@@ -394,7 +400,7 @@ export async function runNotificationWorker(options?: {
 
     for (const recipient of recipients) {
       const adapter = adapters[recipient.provider];
-      const outcome: DeliveryResult = await adapter.send(recipient.token, message);
+      const outcome: DeliveryResult = await adapter.send(recipient.token, message, recipient.apnsEnvironment);
 
       await admin.from("notification_delivery_attempts").insert({
         outbox_id: raw.id,

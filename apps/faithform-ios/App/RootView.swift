@@ -175,6 +175,7 @@ struct RootView: View {
         // permission changed in Settings shows up on screen.
         .task(id: scenePhase) {
             guard scenePhase == .active else { return }
+            await dependencies.push.synchronize()
             await dependencies.attendance.foreground()
             await dependencies.attendanceModel.refresh()
             await dependencies.attendanceModel.refreshHistory()

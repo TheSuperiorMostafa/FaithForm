@@ -10,10 +10,19 @@ import {
   safeReason,
   safeErrorCode,
   ApnsAdapter,
+  apnsHost,
   FcmAdapter,
   FakePushAdapter,
 } from "@/lib/faithform/push/adapters";
 import { dedupeKeyFor } from "@/lib/faithform/push/outbox";
+import { apnProviderName } from "@/lib/messaging/push-configuration";
+
+test("Xcode and store tokens use their own APNs hosts and chat providers", () => {
+  assert.equal(apnsHost("development"), "https://api.sandbox.push.apple.com");
+  assert.equal(apnsHost("production"), "https://api.push.apple.com");
+  assert.equal(apnProviderName("faithform-apn", "development"), "faithform-apn-development");
+  assert.equal(apnProviderName("faithform-apn", "production"), "faithform-apn");
+});
 
 // ---------------------------------------------------------------------------
 // APNs classification

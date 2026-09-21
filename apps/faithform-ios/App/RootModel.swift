@@ -248,6 +248,7 @@ final class RootModel {
             state.apply(.ready(bootstrap, isStale: false))
             adoptSelection(bootstrap)
             syncAttendance(bootstrap)
+            await dependencies.push.synchronize()
         } catch let error as APIError {
             if error.isCancellation {
                 if !quiet, let previous { state.apply(.ready(previous, isStale: false)) }
@@ -462,6 +463,17 @@ final class RootModel {
     /// account has no relationship with all do **nothing at all** — no error
     /// screen, no partial navigation, no prompt.
     func open(_ url: URL) {
+        if url.scheme == "faithform", url.host == "messages",
+           let cid = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems?.first(where: { $0.name == "cid" })?.value {
+            Task {
+                guard let route = try? await dependencies.api.send(
+                    "api/mobile/v1/messaging/route", query: ["cid": cid], as: ChatRoute.self
+                ).value,
+                let link = URL(string: "faithform://church/\(route.churchSlug)/groups") else { return }
+                open(link)
+            }
+            return
+        }
         // The email-confirmation callback. Exchanged exactly once by
         // `AuthModel`; with a session already on the device it degrades to a
         // quiet refresh, so a replayed or duplicate link cannot corrupt state.

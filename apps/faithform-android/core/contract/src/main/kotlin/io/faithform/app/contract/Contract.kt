@@ -1350,6 +1350,7 @@ data class RegisterDeviceRequest(
     val platform: DevicePlatform,
     val provider: String,
     val providerToken: String,
+    val apnsEnvironment: String? = null,
     val appVersion: String? = null,
     val clientBuild: Int? = null,
     val osVersion: String? = null,

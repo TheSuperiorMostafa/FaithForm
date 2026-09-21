@@ -3100,6 +3100,13 @@
           "minLength": 16,
           "maxLength": 4096
         },
+        "apnsEnvironment": {
+          "type": "string",
+          "enum": [
+            "development",
+            "production"
+          ]
+        },
         "appVersion": {
           "type": "string",
           "maxLength": 40

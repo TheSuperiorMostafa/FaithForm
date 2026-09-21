@@ -3,6 +3,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { StreamChat } from "stream-chat";
 
 import { readMessagingConfig, type MessagingConfig } from "@/lib/messaging/config";
+import { apnProviderName, ensureChatPushConfigured } from "@/lib/messaging/push-configuration";
 import { SYSTEM_CHAT_USER_ID, cidOf, type ChannelType } from "@/lib/messaging/ids";
 import {
   ChatProviderError,
@@ -351,6 +352,7 @@ export class StreamChatProvider implements ChatProvider {
       return (response.devices ?? []).map((device) => ({
         token: device.id,
         provider: device.push_provider === "apn" ? "apn" : "firebase",
+        apnsEnvironment: device.push_provider_name?.endsWith("-development") ? "development" : "production",
       }));
     } catch (error) {
       if (error instanceof ChatProviderError && error.category === "not_found") return [];
@@ -360,8 +362,9 @@ export class StreamChatProvider implements ChatProvider {
 
   async addDevice(chatUserId: string, device: ChatDevice): Promise<void> {
     const config = readMessagingConfig();
+    if (device.provider === "apn") await ensureChatPushConfigured();
     const providerName =
-      device.provider === "apn" ? config?.apnProviderName : config?.firebaseProviderName;
+      device.provider === "apn" ? apnProviderName(config?.apnProviderName ?? "faithform-apn", device.apnsEnvironment) : config?.firebaseProviderName;
     await call(() => this.client.addDevice(device.token, device.provider, chatUserId, providerName));
   }
 

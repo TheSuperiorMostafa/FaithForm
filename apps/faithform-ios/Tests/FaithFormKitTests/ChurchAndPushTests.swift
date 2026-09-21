@@ -865,6 +865,36 @@ struct PushLifecycleTests {
         #expect(subject.lastRegisteredToken == "rotated-token")
     }
 
+    @Test("a token received before sign-in retries after sign-in without another prompt")
+    func retriesPendingRegistration() async {
+        let failure = Data("""
+        {"ok":false,"error":{"code":"unauthenticated","message":"Sign in to continue.","retryable":false},"meta":{"apiVersion":"2026-08-24","apiMajor":1,"requestId":"r","minimumSupportedClientBuild":1}}
+        """.utf8)
+        let reply = envelope("""
+        {"installId":"install-abcdefgh","platform":"ios","isEnabled":true,"lastSeenAt":"2026-08-24T10:00:00Z"}
+        """)
+        let authorizer = ScriptedAuthorizer(initial: .authorized)
+        let subject = model([.init(status: 401, body: failure), .init(status: 200, body: reply)], authorizer: authorizer)
+        await subject.handleToken("pending-device-token")
+        #expect(subject.lastRegisteredToken == nil)
+        await subject.synchronize()
+        #expect(subject.lastRegisteredToken == "pending-device-token")
+        #expect(subject.registrationError == nil)
+        #expect(await authorizer.requests() == 0)
+        #expect(await authorizer.registrations() == 1)
+    }
+
+    @Test("returning from Settings with permission registers without prompting")
+    func enabledInSettingsRegisters() async {
+        let authorizer = ScriptedAuthorizer(initial: .authorized)
+        await model([], authorizer: authorizer).synchronize()
+        #expect(await authorizer.registrations() == 1)
+        #expect(await authorizer.requests() == 0)
+        let denied = ScriptedAuthorizer(initial: .denied)
+        await model([], authorizer: denied).synchronize()
+        #expect(await denied.registrations() == 0)
+    }
+
     @Test("a failed registration never puts the token in the error")
     func failureRedacts() async {
         let failure = Data("""

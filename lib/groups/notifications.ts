@@ -23,8 +23,8 @@ async function enqueue(
   admin: SupabaseClient,
   input: {
     churchId: string;
-    kind: "group_join_requested" | "group_request_approved" | "group_event_cancelled" | "group_message";
-    subjectType: "group_join_request" | "group_event" | "group_message";
+    kind: "group_join_requested" | "group_request_approved" | "group_event_cancelled";
+    subjectType: "group_join_request" | "group_event";
     subjectId: string;
     accountIds: string[];
     title: string;
@@ -147,44 +147,5 @@ export async function notifyGatheringCancelled(
     deepLink: `faithform://church/${input.churchSlug}/groups/${input.groupId}/events/${input.eventId}`,
     collapseKey: `group-event-${input.eventId}`,
     dedupeKey: dedupe(`group_event_cancelled:${input.eventId}:v${input.eventVersion}`),
-  });
-}
-
-export async function notifyGroupMessage(
-  admin: SupabaseClient,
-  input: {
-    churchId: string;
-    churchSlug: string;
-    groupId: string;
-    groupName: string;
-    messageId: string;
-    senderAccountId: string | null;
-    senderName: string | null;
-    text: string | null;
-  },
-): Promise<void> {
-  const { data } = await admin
-    .from("group_memberships")
-    .select("account_id")
-    .eq("group_id", input.groupId)
-    .eq("status", "active")
-    .not("account_id", "is", null)
-    .limit(200);
-
-  const recipients = ((data ?? []) as { account_id: string }[])
-    .map((row) => row.account_id)
-    .filter((accountId) => accountId !== input.senderAccountId);
-
-  await enqueue(admin, {
-    churchId: input.churchId,
-    kind: "group_message",
-    subjectType: "group_message",
-    subjectId: input.messageId,
-    accountIds: recipients,
-    title: input.groupName,
-    body: `${firstName(input.senderName)}: ${(input.text ?? "New message").trim().slice(0, 160)}`,
-    deepLink: `faithform://church/${input.churchSlug}/groups/${input.groupId}`,
-    collapseKey: `group-messages-${input.groupId}`,
-    dedupeKey: dedupe(`group_message:${input.messageId}`),
   });
 }

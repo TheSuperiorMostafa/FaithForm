@@ -47,6 +47,7 @@ public struct DeviceRegistration: Codable, Sendable, Equatable {
     public let clientBuild: Int?
     public let osVersion: String?
     public let locale: String?
+    public let apnsEnvironment: String?
 
     public init(
         installId: String,
@@ -54,7 +55,8 @@ public struct DeviceRegistration: Codable, Sendable, Equatable {
         appVersion: String? = nil,
         clientBuild: Int? = nil,
         osVersion: String? = nil,
-        locale: String? = nil
+        locale: String? = nil,
+        apnsEnvironment: String? = nil
     ) {
         self.installId = installId
         self.platform = "ios"
@@ -64,6 +66,7 @@ public struct DeviceRegistration: Codable, Sendable, Equatable {
         self.clientBuild = clientBuild
         self.osVersion = osVersion
         self.locale = locale
+        self.apnsEnvironment = apnsEnvironment
     }
 }
 
@@ -120,6 +123,8 @@ public final class PushLifecycleModel {
     private let appVersion: String?
     private let osVersion: String?
     private let locale: String?
+    private let apnsEnvironment: String?
+    private var pendingToken: String?
 
     public init(
         api: APIClient,
@@ -128,7 +133,8 @@ public final class PushLifecycleModel {
         clientBuild: Int,
         appVersion: String? = nil,
         osVersion: String? = nil,
-        locale: String? = nil
+        locale: String? = nil,
+        apnsEnvironment: String? = nil
     ) {
         self.api = api
         self.authorizer = authorizer
@@ -137,11 +143,25 @@ public final class PushLifecycleModel {
         self.appVersion = appVersion
         self.osVersion = osVersion
         self.locale = locale
+        self.apnsEnvironment = apnsEnvironment
     }
 
     /// Reads the current state without prompting. Safe to call at launch.
     public func refreshStatus() async {
         status = await authorizer.status()
+    }
+
+    /// Retry after sign-in, a network failure, or permission enabled in Settings.
+    /// This never asks permission; only the explicit education action does.
+    public func synchronize() async {
+        await refreshStatus()
+        guard NotificationPrompting.shouldRegisterForRemote(status) else { return }
+        if let pendingToken { await handleToken(pendingToken) }
+        await authorizer.registerForRemoteNotifications()
+    }
+
+    public func registrationFailed() {
+        registrationError = "This iPhone could not connect to notifications. Reopen FaithForm to try again."
     }
 
     /// Shows the education screen. Does not prompt.
@@ -171,6 +191,7 @@ public final class PushLifecycleModel {
     /// Idempotent: the same token registering twice is a no-op, so a relaunch
     /// does not produce a redundant round trip.
     public func handleToken(_ token: String) async {
+        pendingToken = token
         guard token != lastRegisteredToken else { return }
 
         do {
@@ -183,7 +204,8 @@ public final class PushLifecycleModel {
                     appVersion: appVersion,
                     clientBuild: clientBuild,
                     osVersion: osVersion,
-                    locale: locale
+                    locale: locale,
+                    apnsEnvironment: apnsEnvironment
                 ),
                 as: DeviceInstallation.self
             )
@@ -194,7 +216,7 @@ public final class PushLifecycleModel {
             // this device, not about its credential.
             registrationError = error.displayMessage
         } catch {
-            registrationError = nil
+            registrationError = "This iPhone could not connect to notifications. Reopen FaithForm to try again."
         }
     }
 

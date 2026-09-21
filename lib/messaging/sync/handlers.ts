@@ -133,29 +133,33 @@ async function syncDevices(ctx: HandlerContext, job: SyncJob): Promise<HandlerRe
     .eq("user_id", userId)
     .maybeSingle();
 
-  let desired: { token: string; provider: "apn" | "firebase" }[] = [];
+  let desired: import("@/lib/messaging/provider").ChatDevice[] = [];
   if (account && account.status === "active") {
     const { data: installations } = await ctx.admin
       .from("visitor_device_installations")
-      .select("provider, provider_token")
+      .select("provider, provider_token, apns_environment")
       .eq("account_id", account.id as string)
       .eq("environment", currentPushEnvironment())
       .eq("is_enabled", true)
       .is("invalidated_at", null)
       .limit(25);
-    desired = ((installations ?? []) as { provider: string; provider_token: string }[])
+    desired = ((installations ?? []) as { provider: string; provider_token: string; apns_environment?: "development" | "production" | null }[])
       .filter((row) => row.provider_token && row.provider_token.length >= 16)
-      .map((row) => ({ token: row.provider_token, provider: row.provider === "apns" ? "apn" : "firebase" }));
+      .map((row) => ({ token: row.provider_token, provider: row.provider === "apns" ? "apn" : "firebase", apnsEnvironment: row.apns_environment }));
   }
 
   const actual = await ctx.provider.listDevices(chatUserId);
   const desiredTokens = new Set(desired.map((device) => device.token));
-  const actualTokens = new Set(actual.map((device) => device.token));
+  const actualByToken = new Map(actual.map((device) => [device.token, device]));
 
   let added = 0;
   let removed = 0;
   for (const device of desired) {
-    if (!actualTokens.has(device.token)) {
+    const previous = actualByToken.get(device.token);
+    const changedEnvironment = previous && device.provider === "apn" &&
+      (previous.apnsEnvironment ?? "production") !== (device.apnsEnvironment ?? "production");
+    if (changedEnvironment) await ctx.provider.removeDevice(chatUserId, device.token);
+    if (!previous || changedEnvironment) {
       await ctx.provider.addDevice(chatUserId, device);
       added += 1;
     }

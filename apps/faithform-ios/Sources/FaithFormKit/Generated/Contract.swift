@@ -2175,6 +2175,7 @@ public struct RegisterDeviceRequest: Codable, Hashable, Sendable {
     public let platform: DevicePlatform
     public let provider: String
     public let providerToken: String
+    public let apnsEnvironment: String?
     public let appVersion: String?
     public let clientBuild: Int?
     public let osVersion: String?
@@ -2185,6 +2186,7 @@ public struct RegisterDeviceRequest: Codable, Hashable, Sendable {
         platform: DevicePlatform,
         provider: String,
         providerToken: String,
+        apnsEnvironment: String? = nil,
         appVersion: String? = nil,
         clientBuild: Int? = nil,
         osVersion: String? = nil,
@@ -2194,6 +2196,7 @@ public struct RegisterDeviceRequest: Codable, Hashable, Sendable {
         self.platform = platform
         self.provider = provider
         self.providerToken = providerToken
+        self.apnsEnvironment = apnsEnvironment
         self.appVersion = appVersion
         self.clientBuild = clientBuild
         self.osVersion = osVersion
