@@ -7,6 +7,7 @@ import { DM_CHANNEL_TYPE, GROUP_CHANNEL_TYPE, SYSTEM_CHAT_USER_ID, isChatUserId 
 import type { ChatProvider } from "@/lib/messaging/provider";
 import { getChatProvider } from "@/lib/messaging/stream-provider";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { notifyGroupMessage } from "@/lib/groups/notifications";
 
 /**
  * Inbound provider events.
@@ -192,7 +193,28 @@ async function dispatch(admin: SupabaseClient, event: StreamEvent): Promise<stri
     if (channel.type !== GROUP_CHANNEL_TYPE) return "ignored";
     const createdAt = event.message?.created_at ?? event.created_at ?? new Date().toISOString();
     await admin.rpc("record_group_message_activity", { p_channel_id: channel.id, p_created_at: createdAt });
-    return "counted";
+    const context = await resolveChannel(admin, channel);
+    const senderChatId = event.message?.user?.id ?? event.user?.id;
+    const senderAccountId = await authUserFor(admin, senderChatId);
+    if (context?.groupId && event.message?.id && senderChatId !== SYSTEM_CHAT_USER_ID) {
+      const [{ data: group }, { data: church }] = await Promise.all([
+        admin.from("groups").select("name").eq("id", context.groupId).maybeSingle(),
+        admin.from("churches").select("slug").eq("id", context.churchId).maybeSingle(),
+      ]);
+      if (group?.name && church?.slug) {
+        await notifyGroupMessage(admin, {
+          churchId: context.churchId,
+          churchSlug: church.slug as string,
+          groupId: context.groupId,
+          groupName: group.name as string,
+          messageId: event.message.id,
+          senderAccountId,
+          senderName: event.message.user?.name ?? event.user?.name ?? null,
+          text: event.message.text ?? null,
+        });
+      }
+    }
+    return "counted_and_enqueued";
   }
 
   const context = await resolveChannel(admin, channel);

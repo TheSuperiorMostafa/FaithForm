@@ -118,6 +118,7 @@ type OutboxJob = {
     | "stream_event"
     | "stream_recording"
     | "group_join_request"
+    | "group_message"
     | "group_event";
   kind?: string;
   subject_id: string;
@@ -264,6 +265,8 @@ async function subjectIsStillCurrent(
     if (!data) return false;
     return job.kind === "group_request_approved" ? data.status === "approved" : data.status === "pending";
   }
+
+  if (job.subject_type === "group_message") return true;
 
   // "Thursday's gathering is cancelled" only while it still is.
   if (job.subject_type === "group_event") {
