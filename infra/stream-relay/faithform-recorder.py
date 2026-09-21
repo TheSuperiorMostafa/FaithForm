@@ -213,12 +213,21 @@ def process_take(take_dir, final=False):
                 if action == "done" or size:
                     committed.append({"kind": "init", "seq": 0, **({"bytes": size} if size else {})})
             elif kind == "frame":
+                handled = False
                 if action == "upload":
                     frame = make_frame(take_dir, by_seq.get(seq, {"seq": seq, "file": f"seg_{seq:06d}.m4s"}))
                     size = put(decision["uploadUrl"], frame, "image/jpeg") if frame else None
                     if size:
                         committed.append({"kind": "frame", "seq": seq, "bytes": size})
-                state["frames"][str(seq)] = "handled"
+                        handled = True
+                elif action in ("done", "skip"):
+                    handled = True
+                # Keep failed or deferred frames eligible for the next prepare
+                # pass. Marking them handled here permanently removed the only
+                # automatic thumbnail retry after a transient ffmpeg/storage
+                # failure.
+                if handled:
+                    state["frames"][str(seq)] = "handled"
         if committed:
             result = call("/api/stream/relay/recording/commit",
                           {"path": meta["path"], "takeId": meta["takeId"], "items": committed})
