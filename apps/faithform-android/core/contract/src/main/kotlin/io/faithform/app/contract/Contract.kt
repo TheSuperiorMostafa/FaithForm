@@ -512,6 +512,60 @@ enum class GiftType {
  * throwing, so a server that adds a case cannot break a released build.
  */
 @Serializable
+enum class GivingInterval {
+    @SerialName("week") WEEK,
+    @SerialName("month") MONTH,
+    @SerialName("year") YEAR,
+    UNKNOWN;
+
+    companion object {
+        fun fromWire(value: String?): GivingInterval =
+            entries.firstOrNull { it.wire == value } ?: UNKNOWN
+    }
+
+    val wire: String
+        get() = when (this) {
+            WEEK -> "week"
+            MONTH -> "month"
+            YEAR -> "year"
+            UNKNOWN -> "unknown"
+        }
+}
+
+/**
+ * Forward-compatible: an unrecognised value decodes to [UNKNOWN] rather than
+ * throwing, so a server that adds a case cannot break a released build.
+ */
+@Serializable
+enum class RecurringGiftStatus {
+    @SerialName("active") ACTIVE,
+    @SerialName("trialing") TRIALING,
+    @SerialName("past_due") PAST_DUE,
+    @SerialName("paused") PAUSED,
+    @SerialName("unpaid") UNPAID,
+    UNKNOWN;
+
+    companion object {
+        fun fromWire(value: String?): RecurringGiftStatus =
+            entries.firstOrNull { it.wire == value } ?: UNKNOWN
+    }
+
+    val wire: String
+        get() = when (this) {
+            ACTIVE -> "active"
+            TRIALING -> "trialing"
+            PAST_DUE -> "past_due"
+            PAUSED -> "paused"
+            UNPAID -> "unpaid"
+            UNKNOWN -> "unknown"
+        }
+}
+
+/**
+ * Forward-compatible: an unrecognised value decodes to [UNKNOWN] rather than
+ * throwing, so a server that adds a case cannot break a released build.
+ */
+@Serializable
 enum class GroupRole {
     @SerialName("member") MEMBER,
     @SerialName("leader") LEADER,
@@ -961,6 +1015,26 @@ data class AccountRequest(
     val status: AccountRequestStatus,
     val requestedAt: String,
     val completedAt: String? = null
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class PeopleClaimRequest(
+    val churchSlug: String
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class PeopleClaimResponse(
+    val status: String,
+    val source: String,
+    val isLinked: Boolean
 )
 
 /**
@@ -2005,6 +2079,70 @@ data class GivingReceipt(
     val churchName: String,
     val paidAt: String,
     val giftType: String
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class StartRecurringGiftRequest(
+    val churchSlug: String,
+    val fundId: String,
+    val amountCents: Int,
+    val interval: String,
+    val clientAttemptId: String
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class RecurringGiftSession(
+    val attemptId: String,
+    val clientSecret: String? = null,
+    val publishableKey: String,
+    val stripeAccountId: String,
+    val merchantName: String,
+    val amountCents: Int,
+    val currency: String,
+    val interval: String,
+    val fundTitle: String
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class RecurringGift(
+    val subscriptionId: String,
+    val fundTitle: String,
+    val amountCents: Int,
+    val currency: String,
+    val interval: String,
+    val status: String,
+    val startedAt: String
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class RecurringGiftList(
+    val items: List<RecurringGift>
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class RecurringGiftCancelResult(
+    val subscriptionId: String,
+    val stopped: Boolean
 )
 
 /**

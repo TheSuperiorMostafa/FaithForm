@@ -220,7 +220,7 @@ test("the link is stored like a key, never in the metadata browsers see", () => 
   // What the browser gets for iCloud: health flags, mode, Apple ID, name.
   assert.deepEqual(
     [...returned.matchAll(/^\s+(\.\.\.common|\w+):/gm)].map((m) => m[1]),
-    ["mode", "apple_id", "calendar_name"],
+    ["mode", "apple_id", "calendar_name", "mail_address", "mail_enabled", "mail_verified_at"],
   );
   assert.doesNotMatch(returned, /access_token|calendar_url|feed/i);
 });

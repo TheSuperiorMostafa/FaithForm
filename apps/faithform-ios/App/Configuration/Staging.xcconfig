@@ -19,6 +19,32 @@ FAITHFORM_ALLOW_DEBUG_CONTROLS = NO
 // Base.xcconfig.
 FAITHFORM_APPLE_PAY_MERCHANT_ID = merchant.io.faithform.app
 
-// Deliberately empty, like the origin above.
-FAITHFORM_SUPABASE_URL =
-FAITHFORM_SUPABASE_ANON_KEY =
+// Resolved from the developer's own gitignored names, exactly as Debug does.
+//
+// Still fail-closed: a machine without Local.xcconfig — and CI — resolves both
+// to empty, and the app renders its "not configured" state rather than guessing
+// a project. What this cannot do is silently pick a default.
+FAITHFORM_SUPABASE_URL = $(FAITHFORM_DEV_SUPABASE_URL)
+FAITHFORM_SUPABASE_ANON_KEY = $(FAITHFORM_DEV_SUPABASE_ANON_KEY)
+
+// ---------------------------------------------------------------------------
+// A developer's own backend, if they named one
+// ---------------------------------------------------------------------------
+//
+// Last, so a value in Local.xcconfig wins over the blanks above — the same
+// second pass Debug.xcconfig ends with, and for a sharper reason.
+//
+// Apple Pay exists only in Staging and Release: Debug signs with no
+// entitlements and blanks the merchant ID, deliberately. Without this include
+// there was therefore **no configuration that could both carry Apple Pay and
+// reach a backend**, and so no way to exercise in-app giving on a device at
+// all — the one feature the entitlement exists for.
+//
+// The fail-closed default is untouched. A machine with no Local.xcconfig, and
+// CI, still resolve these to empty and the app still refuses to start rather
+// than guessing an origin. What changes is only that a developer who has
+// written an origin into their own gitignored file gets the one they wrote.
+// That is not a staging build "silently" talking to production; it is a
+// developer's machine doing what that developer configured it to do, which is
+// exactly what Debug has always done.
+#include? "Local.xcconfig"

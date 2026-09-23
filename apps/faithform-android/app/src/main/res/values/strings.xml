@@ -251,6 +251,13 @@
     <string name="auto_attendance_your_church">your church</string>
     <string name="auto_attendance_pending_waiting_body">Stay a moment and FaithForm will ask you to confirm.</string>
     <string name="auto_attendance_pending_automatic_body">Stay a moment and FaithForm will check you in.</string>
+    <string name="auto_attendance_arrival_eyebrow">Automatic check-in</string>
+    <string name="auto_attendance_arrival_waiting_caption">Stay here — we\'ll ask you to confirm when the timer runs out.</string>
+    <string name="auto_attendance_arrival_automatic_caption">Stay here — you\'ll be checked in when the timer runs out.</string>
+    <string name="auto_attendance_arrival_ready_caption">Tap to be counted for today\'s service.</string>
+    <string name="auto_attendance_arrival_waiting_until">Check-in starts at %1$s. Stay nearby.</string>
+    <string name="auto_attendance_arrival_decline">I\'m not here</string>
+    <string name="auto_attendance_arrival_time_left">%1$s left</string>
     <string name="auto_attendance_next_service">Next service: %1$s</string>
     <string name="auto_attendance_service_open">Check-in is open for %1$s</string>
     <string name="auto_attendance_watching_churches">Watching for %1$s</string>
@@ -421,6 +428,33 @@
     <string name="giving_status_refunded">Refunded</string>
     <string name="giving_status_disputed">Under review</string>
     <string name="giving_recurring_elsewhere">Giving every week or month is set up on this church\'s giving page.</string>
+
+    <!-- Recurring giving (migration 0100). iOS starts these from the Give tab;
+         Android lists and stops them, and has no Apple Pay rule to satisfy. -->
+    <string name="giving_once_title">Give once</string>
+    <string name="giving_recurring_title">Give regularly</string>
+    <string name="giving_cadence_weekly">Every week</string>
+    <string name="giving_cadence_monthly">Every month</string>
+    <string name="giving_cadence_yearly">Every year</string>
+    <string name="giving_every_week_amount">%1$s every week</string>
+    <string name="giving_every_month_amount">%1$s every month</string>
+    <string name="giving_how_often">How often</string>
+    <string name="giving_start_recurring">Start giving</string>
+    <string name="giving_recurring_confirm_body">The first gift is today. You can stop it anytime from this screen.</string>
+    <string name="giving_recurring_started_title">Your gift is set up</string>
+    <string name="giving_recurring_started_body">We\'re confirming the first payment. Your gift will appear below once it clears.</string>
+    <string name="giving_your_recurring">Your regular giving</string>
+    <string name="giving_recurring_payment_problem">Payment didn\'t go through</string>
+    <string name="giving_recurring_paused">Paused</string>
+    <string name="giving_recurring_started_on">Started %1$s</string>
+    <string name="giving_stop_recurring">Stop this gift</string>
+    <string name="giving_stop_recurring_confirm">Stop giving %1$s?</string>
+    <string name="giving_stop_recurring_body">Nothing else will be charged. Gifts you have already made are unaffected.</string>
+    <string name="giving_stop_recurring_confirm_action">Stop giving</string>
+    <string name="giving_keep_giving">Keep giving</string>
+    <string name="giving_stop_failed">Couldn\'t stop that gift. Try again.</string>
+    <string name="giving_recurring_needs_email">Add an email to your account to give every week or month.</string>
+    <string name="giving_recurring_empty">You have no regular giving set up here yet.</string>
     <string name="giving_loading">Loading…</string>
     <!-- iPhone-only in practice: iOS sends a church without Apple Pay approval
          to its web giving page. Every church gives in the app on Android, so

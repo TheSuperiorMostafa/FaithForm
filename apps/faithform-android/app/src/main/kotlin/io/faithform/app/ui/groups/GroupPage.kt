@@ -47,6 +47,13 @@ import kotlinx.serialization.json.*
             catch (e: Exception) { store.error = GroupsStore.message(e) }
         }
     }
+    // A leave action can happen one level deeper in group info. The shared
+    // home list is refreshed, so pop this stale chat immediately when the
+    // membership disappears instead of leaving a live composer behind.
+    LaunchedEffect(store.home?.items, groupId) {
+        val current = store.home?.items?.firstOrNull { it.id == groupId }
+        if (store.home != null && current?.membershipState != "member") onBack()
+    }
     val group = cached ?: fetched
     if (preferences) GroupPreferences(store, groupId, onDismiss = { preferences = false })
     if (group == null) {

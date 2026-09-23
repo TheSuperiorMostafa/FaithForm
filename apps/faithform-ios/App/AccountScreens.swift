@@ -32,6 +32,7 @@ struct AccountTabView: View {
                 case .automaticCheckIn:
                     AutomaticCheckInScreen(
                         model: dependencies.attendanceModel,
+                        api: dependencies.api,
                         church: root.selectedChurch.map {
                             AttendanceChurch(slug: $0.churchSlug, name: $0.churchName)
                         }
@@ -68,6 +69,7 @@ struct AutomaticCheckInScreen: View {
     @Environment(\.openURL) private var openURL
     @Environment(\.dismiss) private var dismiss
     let model: AutomaticAttendanceModel
+    let api: APIClient
     let church: AttendanceChurch?
 
     var body: some View {
@@ -75,6 +77,15 @@ struct AutomaticCheckInScreen: View {
             model: model,
             onOpenSettings: {
                 if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
+            },
+            onRequestConfirmation: {
+                guard let slug = church?.slug else { return L.autoAttendanceOfflineBody }
+                do {
+                    let result = try await APIPeopleClaimRequester(api: api).requestConfirmation(churchSlug: slug)
+                    return result.isLinked ? L.autoAttendanceConfirmationAlreadyLinked : L.autoAttendanceConfirmationRequested
+                } catch {
+                    return L.autoAttendanceConfirmationFailed
+                }
             },
             onClose: { dismiss() }
         )
@@ -323,6 +334,7 @@ private struct ProfileHeroView: View {
     @State private var loading = false
     @State private var removing = false
     @State private var failed = false
+    @State private var failureMessage: String?
     @State private var confirmRemoval = false
 
     private var hasPhoto: Bool { avatarUrl != nil }
@@ -365,10 +377,11 @@ private struct ProfileHeroView: View {
                     .foregroundStyle(theme.palette.contentSecondary)
                     .accessibilityAddTraits(.updatesFrequently)
             }
-            if failed {
-                Text("Your photo was not changed. Please try again.")
+            if failed || failureMessage != nil {
+                Text(failureMessage ?? "Your photo was not changed. Please try again.")
                     .font(theme.font(FaithFormTokens.Text.caption))
                     .foregroundStyle(theme.palette.destructive)
+                    .multilineTextAlignment(.center)
                     .accessibilityAddTraits(.updatesFrequently)
             }
         }
@@ -381,7 +394,8 @@ private struct ProfileHeroView: View {
             Button("Remove photo", role: .destructive) {
                 Task {
                     removing = true
-                    failed = !(await root.updateProfilePhoto(nil))
+                    failed = false
+                    failureMessage = await root.updateProfilePhoto(nil)
                     removing = false
                 }
             }

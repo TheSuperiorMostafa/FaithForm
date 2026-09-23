@@ -103,9 +103,12 @@ import kotlinx.coroutines.delay
 /**
  * A 16:9 picture of the service — the frame FaithForm captured from the stream
  * when there is one, otherwise a quiet branded placeholder.
+ *
+ * [showsGlyph] is false where a play button or spinner is laid over the
+ * centre: the placeholder's own icon would show through behind it.
  */
 @Composable
-fun StreamThumbnail(url: String?, modifier: Modifier = Modifier) {
+fun StreamThumbnail(url: String?, modifier: Modifier = Modifier, showsGlyph: Boolean = true) {
     val palette = LocalFaithFormTheme.current.palette
     Box(
         modifier = modifier
@@ -126,12 +129,14 @@ fun StreamThumbnail(url: String?, modifier: Modifier = Modifier) {
                     ),
                 ),
         )
-        Icon(
-            Icons.Outlined.Movie,
-            contentDescription = null,
-            tint = Color.White.copy(alpha = 0.22f),
-            modifier = Modifier.size(44.dp),
-        )
+        if (showsGlyph) {
+            Icon(
+                Icons.Outlined.Movie,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.22f),
+                modifier = Modifier.size(44.dp),
+            )
+        }
         if (url != null) {
             AsyncImage(
                 model = url,
@@ -408,7 +413,7 @@ fun RecordingStage(
         VideoSurface(player = player, modifier = Modifier.fillMaxSize())
 
         if (showsPoster) {
-            StreamThumbnail(url = detail?.posterUrl, modifier = Modifier.fillMaxSize())
+            StreamThumbnail(url = detail?.posterUrl, modifier = Modifier.fillMaxSize(), showsGlyph = false)
             Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.18f)))
         }
 

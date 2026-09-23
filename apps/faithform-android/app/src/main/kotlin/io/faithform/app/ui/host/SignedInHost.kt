@@ -178,7 +178,7 @@ fun SignedInHost(
                             } else null,
                         )
 
-                        HostTab.GROUPS -> if (church != null && partition != null) GroupsHost(container.apiClient, church.churchSlug, partition.toString())
+                        HostTab.GROUPS -> if (church != null && partition != null) GroupsHost(container.apiClient, church.churchSlug, partition.toString(), church = church)
                         HostTab.CHECK_IN -> {
                             var showAutomaticCheckIn by rememberSaveable(selectedSlug) {
                                 mutableStateOf(false)

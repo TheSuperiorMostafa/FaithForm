@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import OnboardingLoading from "./loading";
 import { OnboardingWizard } from "@/components/onboarding/OnboardingWizard";
 import { OnboardingErrorCard } from "@/components/onboarding/onboarding-error-card";
 import {
@@ -52,7 +53,7 @@ export default async function OnboardingPage({ searchParams }: PageProps) {
       : integrationResult;
 
   return (
-    <Suspense fallback={<div className="text-muted-foreground">Loading…</div>}>
+    <Suspense fallback={<OnboardingLoading />}>
       <OnboardingWizard
         token={token}
         churchId={invite.churchId}

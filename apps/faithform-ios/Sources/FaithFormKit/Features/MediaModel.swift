@@ -275,6 +275,15 @@ public final class MediaDetailModel {
     }
 
     public func play(kind: MediaPlaybackKind) async {
+        // A second tap while the grant is still in flight would ask for a
+        // second capability and throw away the item the first one built.
+        if case .preparing = playback { return }
+        // Published *before* the grant, not after it. The grant is a network
+        // round trip; until it lands the stage would otherwise go on drawing
+        // the play button over the poster, and a button that does nothing for
+        // as long as the network takes is a button that looks broken.
+        // Android's model publishes `Preparing` at the same point.
+        playback = .preparing
         await coordinator.start(
             churchSlug: churchSlug,
             kind: kind,

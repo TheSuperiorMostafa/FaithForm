@@ -528,11 +528,20 @@ class AppViewModel(
         }
     }
 
-    fun updateProfilePhoto(jpeg: ByteArray?, onDone: (Boolean) -> Unit) {
+    /**
+     * Reports `null` when the photo saved, and otherwise the sentence to show.
+     *
+     * The server already says *why* it refused — the photo was too large, the
+     * account is not active, too many changes this hour, storage is down — and
+     * that sentence is worth far more to the person holding the phone than the
+     * single "could not save your photo" this used to collapse every one of
+     * them into.
+     */
+    fun updateProfilePhoto(jpeg: ByteArray?, onDone: (String?) -> Unit) {
         viewModelScope.launch {
             @Serializable
             data class PhotoReply(val avatarUrl: String? = null)
-            val ok = try {
+            val failure = try {
                 api.send(
                     path = "api/mobile/v1/account/photo",
                     serializer = MobileSuccess.serializer(PhotoReply.serializer()),
@@ -544,13 +553,15 @@ class AppViewModel(
                         }
                     )
                 )
-                true
+                null
+            } catch (error: ApiException) {
+                error.displayMessage
             } catch (error: Exception) {
                 if (error is kotlinx.coroutines.CancellationException) throw error
-                false
+                "Your photo was not changed. Please try again."
             }
-            if (ok) loadNow(quiet = true)
-            onDone(ok)
+            if (failure == null) loadNow(quiet = true)
+            onDone(failure)
         }
     }
 

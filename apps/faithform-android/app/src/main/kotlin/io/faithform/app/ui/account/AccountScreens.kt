@@ -5,7 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.widget.Toast
-import androidx.compose.foundation.BorderStroke
+import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -24,16 +25,31 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.Badge
+import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Photo
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
@@ -45,17 +61,26 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Color
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import io.faithform.app.ui.groups.GroupPanel
 import io.faithform.app.DeletionPhase
 import io.faithform.app.R
 import io.faithform.app.ui.components.FaithFormWorkingLabel
@@ -100,6 +125,10 @@ fun openWebLink(context: Context, url: String) {
 
 /**
  * The Account tab: who is signed in, preferences, policies, and the two ways to leave.
+ *
+ * Laid out as the rest of the app now is — a hero washed in the person's own
+ * photo, then panels — so Account stops being the one screen that still looks
+ * like a settings form.
  */
 @Composable
 fun AccountTab(
@@ -111,287 +140,507 @@ fun AccountTab(
     automaticCheckInEnabled: Boolean = false,
     onOpenAutomaticCheckIn: (() -> Unit)? = null,
     onOpenChurchAppearance: (() -> Unit)? = null,
-    onUpdateProfilePhoto: ((ByteArray?, (Boolean) -> Unit) -> Unit)? = null,
+    onUpdateProfilePhoto: ((ByteArray?, (String?) -> Unit) -> Unit)? = null,
     onUpdateDisplayName: ((String, (Boolean) -> Unit) -> Unit)? = null,
 ) {
     val theme = LocalFaithFormTheme.current
     val displayName = bootstrap.profile.displayName
-    val title = displayName ?: stringResource(R.string.your_account)
-    val avatarSize = FaithFormTokens.TouchTarget.recommended + FaithFormTokens.Spacing.base
-    var draftName by remember(displayName) { mutableStateOf(displayName.orEmpty()) }
-    var savingName by remember { mutableStateOf(false) }
-    var nameSaveFailed by remember { mutableStateOf(false) }
+    val avatarUrl = bootstrap.profile.avatarUrl
+    var editingName by remember { mutableStateOf(false) }
 
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .verticalScroll(rememberScrollState())
-            .padding(
-                horizontal = FaithFormTokens.Layout.screenPaddingHorizontal,
-                vertical = FaithFormTokens.Layout.screenPaddingVertical,
-            )
-            .widthIn(max = FaithFormTokens.Layout.contentMaxWidth),
-        verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.xl),
-    ) {
-        Row(
+    Box(modifier.fillMaxSize().background(theme.palette.background)) {
+        // The wash is the person's own photo, blurred past recognition, so the
+        // header reads as one surface from the status bar down.
+        ProfileAvatarWash(avatarUrl, Modifier.fillMaxWidth().height(340.dp).align(Alignment.TopCenter))
+
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .background(theme.palette.surface, RoundedCornerShape(FaithFormTokens.Radius.lg))
-                .border(theme.borderWidth, theme.palette.border, RoundedCornerShape(FaithFormTokens.Radius.lg))
-                .padding(FaithFormTokens.Spacing.base),
-            horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.base),
-            verticalAlignment = Alignment.CenterVertically,
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(bottom = FaithFormTokens.Spacing.xxl),
+            verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.lg),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Box(
-                modifier = Modifier
-                    .size(avatarSize)
-                    .clip(CircleShape)
-                    .background(theme.palette.surfaceSunken)
-                    .border(theme.borderWidth, theme.palette.border, CircleShape),
-                contentAlignment = Alignment.Center,
-            ) {
-                val avatarUrl = bootstrap.profile.avatarUrl
-                if (!avatarUrl.isNullOrBlank()) {
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(avatarUrl)
-                            .crossfade(true)
-                            .build(),
-                        contentDescription = null,
-                        contentScale = ContentScale.Crop,
-                        modifier = Modifier.fillMaxSize(),
-                    )
-                } else if (!displayName.isNullOrBlank()) {
-                    Text(
-                        accountInitials(displayName),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = theme.palette.brandPrimary,
-                    )
-                } else {
-                    Icon(
-                        Icons.Outlined.Person,
-                        contentDescription = null,
-                        tint = theme.palette.brandPrimary,
-                        modifier = Modifier.size(FaithFormTokens.IconSize.sizeLarge),
-                    )
-                }
-            }
-            Column(verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.xs)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.displayMedium,
-                    color = theme.palette.contentPrimary,
-                )
-                if (bootstrap.profile.status == AccountStatus.DELETION_REQUESTED) {
-                    Text(
-                        stringResource(R.string.delete_account_requested_title),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = theme.palette.destructive,
-                    )
-                }
-            }
-        }
-
-        if (onUpdateProfilePhoto != null) {
-            ProfilePhotoControl(bootstrap.profile.avatarUrl != null, onUpdateProfilePhoto)
-        }
-
-        if (displayName.isNullOrBlank() && onUpdateDisplayName != null) {
-            val shape = RoundedCornerShape(FaithFormTokens.Radius.control)
-            Column(verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm)) {
-                Text(
-                    stringResource(R.string.account_add_name_hint),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = theme.palette.contentSecondary,
-                )
-                Column(verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.xs)) {
-                    Text(
-                        stringResource(R.string.auth_name_label),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = theme.mutedContent,
-                    )
-                    TextField(
-                        value = draftName,
-                        onValueChange = {
-                            draftName = it
-                            nameSaveFailed = false
-                        },
-                        singleLine = true,
-                        shape = shape,
-                        colors = TextFieldDefaults.colors(
-                            focusedContainerColor = theme.palette.surface,
-                            unfocusedContainerColor = theme.palette.surface,
-                            disabledContainerColor = theme.palette.surface,
-                            focusedIndicatorColor = theme.palette.brandAccent,
-                            unfocusedIndicatorColor = theme.palette.border,
-                            cursorColor = theme.palette.brandPrimary,
-                        ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .heightIn(min = FaithFormTokens.TouchTarget.recommended)
-                            .border(theme.borderWidth, theme.palette.border, shape),
-                    )
-                }
-                if (nameSaveFailed) {
-                    Text(
-                        stringResource(R.string.error_title),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = theme.palette.destructive,
-                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-                    )
-                }
-                Button(
-                    onClick = {
-                        savingName = true
-                        nameSaveFailed = false
-                        onUpdateDisplayName(draftName) { ok ->
-                            savingName = false
-                            if (!ok) nameSaveFailed = true
-                        }
-                    },
-                    enabled = !savingName && draftName.trim().isNotEmpty(),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = theme.palette.brandAccent,
-                        contentColor = theme.palette.contentOnAccent,
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = FaithFormTokens.TouchTarget.recommended),
-                ) {
-                    FaithFormWorkingLabel(
-                        text = stringResource(R.string.account_save_name),
-                        working = savingName,
-                    )
-                }
-            }
-        }
-
-        val context = LocalContext.current
-        val prefs = remember { context.getSharedPreferences("faithform_prefs", Context.MODE_PRIVATE) }
-        var currentAppearance by remember { mutableStateOf(prefs.getString("appearance", "system") ?: "system") }
-
-        Column(verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm)) {
-            Text(
-                stringResource(R.string.preferences_section),
-                style = MaterialTheme.typography.labelLarge,
-                color = theme.mutedContent,
+            ProfileHero(
+                displayName = displayName,
+                avatarUrl = avatarUrl,
+                subtitle = bootstrap.relationships.firstOrNull {
+                    it.churchSlug == bootstrap.profile.selectedChurchSlug
+                }?.churchName ?: stringResource(R.string.your_account),
+                deletionRequested = bootstrap.profile.status == AccountStatus.DELETION_REQUESTED,
+                onUpdateProfilePhoto = onUpdateProfilePhoto,
             )
+
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(theme.palette.surface, RoundedCornerShape(FaithFormTokens.Radius.lg))
-                    .border(theme.borderWidth, theme.palette.border, RoundedCornerShape(FaithFormTokens.Radius.lg))
-                    .padding(FaithFormTokens.Spacing.base),
-                verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm),
+                    .widthIn(max = FaithFormTokens.Layout.contentMaxWidth)
+                    .padding(horizontal = FaithFormTokens.Layout.screenPaddingHorizontal),
+                verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.lg),
             ) {
-                Text(
-                    text = "Display",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = theme.palette.contentPrimary,
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm),
-                ) {
-                    listOf("system" to "System", "light" to "Light", "dark" to "Dark").forEach { (key, label) ->
-                        val selected = currentAppearance == key
-                        OutlinedButton(
-                            onClick = {
-                                currentAppearance = key
-                                prefs.edit().putString("appearance", key).apply()
-                            },
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                containerColor = if (selected) theme.palette.brandAccent else Color.Transparent,
-                                contentColor = if (selected) theme.palette.contentOnAccent else theme.palette.contentPrimary,
-                            ),
-                            border = BorderStroke(
-                                theme.borderWidth,
-                                if (selected) theme.palette.brandAccent else theme.palette.border,
-                            ),
-                        ) {
-                            Text(label, maxLines = 1)
-                        }
-                    }
-                }
-            }
-
-            if (showsAutomaticCheckIn && onOpenAutomaticCheckIn != null) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(theme.palette.surface, RoundedCornerShape(FaithFormTokens.Radius.lg))
-                        .border(theme.borderWidth, theme.palette.border, RoundedCornerShape(FaithFormTokens.Radius.lg))
-                        .clickable(onClick = onOpenAutomaticCheckIn)
-                        .padding(FaithFormTokens.Spacing.base)
-                        .heightIn(min = FaithFormTokens.TouchTarget.recommended),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.md),
-                ) {
-                    Icon(
-                        Icons.Outlined.LocationOn,
-                        contentDescription = null,
-                        tint = theme.palette.brandPrimary,
-                    )
-                    Text(
-                        stringResource(R.string.auto_attendance_title),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = theme.palette.contentPrimary,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Text(
-                        stringResource(
-                            if (automaticCheckInEnabled) R.string.auto_attendance_on
-                            else R.string.auto_attendance_off,
-                        ),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = theme.palette.contentSecondary,
-                    )
-                }
-            }
-        }
-
-        if (onOpenChurchAppearance != null) {
-            Column(verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm)) {
-                Text(
-                    stringResource(R.string.church_tools_section),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = theme.mutedContent,
-                )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(theme.palette.surface, RoundedCornerShape(FaithFormTokens.Radius.lg))
-                        .border(theme.borderWidth, theme.palette.border, RoundedCornerShape(FaithFormTokens.Radius.lg))
-                        .clickable(onClick = onOpenChurchAppearance)
-                        .padding(FaithFormTokens.Spacing.base)
-                        .heightIn(min = FaithFormTokens.TouchTarget.recommended),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.md),
-                ) {
-                    Icon(Icons.Outlined.Palette, contentDescription = null, tint = theme.palette.brandPrimary)
-                    Column(Modifier.weight(1f)) {
-                        Text(stringResource(R.string.church_appearance_title), color = theme.palette.contentPrimary)
-                        Text(
-                            stringResource(R.string.church_appearance_row_body),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = theme.palette.contentSecondary,
+                if (onUpdateDisplayName != null) {
+                    GroupPanel("Your details") {
+                        AccountRow(
+                            icon = Icons.Outlined.Badge,
+                            title = stringResource(R.string.auth_name_label),
+                            subtitle = displayName ?: stringResource(R.string.account_add_name_hint),
+                            trailing = if (displayName == null) "Add" else "Edit",
+                            onClick = { editingName = true },
                         )
                     }
                 }
+
+                GroupPanel(stringResource(R.string.preferences_section)) {
+                    AppearanceChooser()
+                    if (showsAutomaticCheckIn && onOpenAutomaticCheckIn != null) {
+                        HorizontalDivider(color = theme.palette.divider)
+                        AccountRow(
+                            icon = Icons.Outlined.LocationOn,
+                            title = stringResource(R.string.auto_attendance_title),
+                            subtitle = null,
+                            trailing = stringResource(
+                                if (automaticCheckInEnabled) R.string.auto_attendance_on
+                                else R.string.auto_attendance_off,
+                            ),
+                            onClick = onOpenAutomaticCheckIn,
+                        )
+                    }
+                }
+
+                if (onOpenChurchAppearance != null) {
+                    GroupPanel(stringResource(R.string.church_tools_section)) {
+                        AccountRow(
+                            icon = Icons.Outlined.Palette,
+                            title = stringResource(R.string.church_appearance_title),
+                            subtitle = stringResource(R.string.church_appearance_row_body),
+                            trailing = null,
+                            onClick = onOpenChurchAppearance,
+                        )
+                    }
+                }
+
+                GroupPanel(stringResource(R.string.legal_section)) { LegalLinksSection() }
+
+                AccountExitActions(onSignOut = onSignOut, onDeleteAccount = onDeleteAccount)
+            }
+        }
+    }
+
+    if (editingName && onUpdateDisplayName != null) {
+        NameEditorSheet(
+            current = displayName.orEmpty(),
+            onDismiss = { editingName = false },
+            onSave = onUpdateDisplayName,
+        )
+    }
+}
+
+/**
+ * The header: the photo, the name, and the one tap that changes either.
+ *
+ * The avatar *is* the control. A row of "Change photo / Remove" buttons under a
+ * picture is the shape of a settings form; tapping the picture is the shape of
+ * every app people already use, and it leaves the header to be a header.
+ */
+@Composable
+private fun ProfileHero(
+    displayName: String?,
+    avatarUrl: String?,
+    subtitle: String,
+    deletionRequested: Boolean,
+    onUpdateProfilePhoto: ((ByteArray?, (String?) -> Unit) -> Unit)?,
+) {
+    val theme = LocalFaithFormTheme.current
+    var menuOpen by remember { mutableStateOf(false) }
+    var confirmRemoval by remember { mutableStateOf(false) }
+    var removing by remember { mutableStateOf(false) }
+    var removeFailure by remember { mutableStateOf<String?>(null) }
+    val hasPhoto = !avatarUrl.isNullOrBlank()
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = FaithFormTokens.Spacing.base, bottom = FaithFormTokens.Spacing.xs)
+            .padding(horizontal = FaithFormTokens.Layout.screenPaddingHorizontal),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.md),
+    ) {
+        if (onUpdateProfilePhoto == null) {
+            ProfileAvatar(avatarUrl, displayName, 112.dp)
+        } else {
+            ProfilePhotoPicker(onUpdateProfilePhoto) { openPicker, pickerBusy, pickerFailed ->
+                val busy = pickerBusy || removing
+                Box {
+                    Box(
+                        modifier = Modifier
+                            .clip(CircleShape)
+                            .clickable(enabled = !busy) { menuOpen = true }
+                            .semantics {
+                                contentDescription =
+                                    if (hasPhoto) "Profile photo. Opens choices for changing it."
+                                    else "Add a profile photo."
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        ProfileAvatar(avatarUrl, displayName, 112.dp, dimmed = busy)
+                        // The badge says the picture is a button without a caption.
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .size(34.dp)
+                                .border(3.dp, theme.palette.background, CircleShape)
+                                .padding(3.dp)
+                                .background(theme.palette.brandAccent, CircleShape),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                if (hasPhoto) Icons.Outlined.Edit else Icons.Outlined.Add,
+                                contentDescription = null,
+                                tint = theme.palette.brandPrimary,
+                                modifier = Modifier.size(FaithFormTokens.IconSize.sizeSmall),
+                            )
+                        }
+                        if (busy) CircularProgressIndicator(color = theme.palette.brandAccent)
+                    }
+
+                    DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                        DropdownMenuItem(
+                            text = { Text(if (hasPhoto) "Choose a new photo" else "Choose a photo") },
+                            leadingIcon = { Icon(Icons.Outlined.Photo, contentDescription = null) },
+                            onClick = { menuOpen = false; removeFailure = null; openPicker() },
+                        )
+                        if (hasPhoto) {
+                            DropdownMenuItem(
+                                text = { Text("Remove photo", color = theme.palette.destructive) },
+                                leadingIcon = {
+                                    Icon(Icons.Outlined.Delete, contentDescription = null, tint = theme.palette.destructive)
+                                },
+                                onClick = { menuOpen = false; confirmRemoval = true },
+                            )
+                        }
+                    }
+                }
+
+                val problem = removeFailure
+                    ?: if (pickerFailed) stringResource(R.string.error_title) else null
+                if (problem != null) {
+                    Text(
+                        problem,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = theme.palette.destructive,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                    )
+                }
+
+                if (confirmRemoval) {
+                    AlertDialog(
+                        onDismissRequest = { confirmRemoval = false },
+                        title = { Text("Remove profile photo?") },
+                        confirmButton = {
+                            TextButton(onClick = {
+                                confirmRemoval = false
+                                removing = true
+                                removeFailure = null
+                                onUpdateProfilePhoto(null) { reason ->
+                                    removing = false
+                                    removeFailure = reason
+                                }
+                            }) { Text("Remove photo") }
+                        },
+                        dismissButton = {
+                            TextButton(onClick = { confirmRemoval = false }) {
+                                Text(stringResource(android.R.string.cancel))
+                            }
+                        },
+                    )
+                }
             }
         }
 
-        Column(verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm)) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.xs),
+        ) {
             Text(
-                stringResource(R.string.legal_section),
-                style = MaterialTheme.typography.labelLarge,
-                color = theme.mutedContent,
+                text = displayName ?: stringResource(R.string.your_account),
+                style = MaterialTheme.typography.displayMedium,
+                color = theme.palette.contentPrimary,
+                textAlign = TextAlign.Center,
             )
-            LegalLinksSection()
+            Text(
+                text = subtitle,
+                style = MaterialTheme.typography.bodyMedium,
+                color = theme.palette.contentSecondary,
+                textAlign = TextAlign.Center,
+            )
+            if (deletionRequested) {
+                Text(
+                    stringResource(R.string.delete_account_requested_title),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = theme.palette.destructive,
+                )
+            }
         }
+    }
+}
 
-        AccountExitActions(onSignOut = onSignOut, onDeleteAccount = onDeleteAccount)
+/**
+ * The person's photo, or their initials on the brand wash. Circular everywhere —
+ * a face is not a logo, and the square treatment the Groups screens use for
+ * church and group artwork would crop it like one.
+ */
+@Composable
+fun ProfileAvatar(url: String?, name: String?, size: Dp = 112.dp, dimmed: Boolean = false) {
+    val theme = LocalFaithFormTheme.current
+    Box(
+        modifier = Modifier
+            .size(size)
+            .clip(CircleShape)
+            .alpha(if (dimmed) 0.5f else 1f)
+            .background(
+                Brush.linearGradient(
+                    listOf(
+                        theme.palette.brandAccent.copy(alpha = 0.34f),
+                        theme.palette.brandAccentSoft.copy(alpha = 0.18f),
+                    ),
+                ),
+            )
+            .border(theme.borderWidth, theme.palette.border, CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (!name.isNullOrBlank()) {
+            Text(
+                accountInitials(name),
+                style = if (size >= 72.dp) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = theme.palette.contentPrimary.copy(alpha = 0.78f),
+            )
+        } else {
+            Icon(
+                Icons.Outlined.Person,
+                contentDescription = null,
+                tint = theme.palette.contentPrimary.copy(alpha = 0.55f),
+                modifier = Modifier.size(size * 0.36f),
+            )
+        }
+        if (!url.isNullOrBlank()) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalContext.current).data(url).crossfade(true).build(),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
+    }
+}
+
+/**
+ * The same photo, blurred far past recognition, so the header carries the
+ * person's own colour without stretching a face into a banner. Blur needs API
+ * 31, so older devices get the brand wash instead of an unblurred photo.
+ */
+@Composable
+private fun ProfileAvatarWash(url: String?, modifier: Modifier = Modifier) {
+    val theme = LocalFaithFormTheme.current
+    Box(modifier.background(theme.palette.background)) {
+        if (!url.isNullOrBlank() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            AsyncImage(
+                model = url,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.matchParentSize().blur(52.dp).alpha(0.34f),
+            )
+        } else {
+            Box(
+                Modifier.matchParentSize().background(
+                    Brush.verticalGradient(
+                        listOf(theme.palette.brandAccent.copy(alpha = 0.18f), theme.palette.background),
+                    ),
+                ),
+            )
+        }
+        Box(
+            Modifier.matchParentSize().background(
+                Brush.verticalGradient(
+                    listOf(theme.palette.background.copy(alpha = 0.1f), theme.palette.background),
+                ),
+            ),
+        )
+    }
+}
+
+/** One row inside a panel: icon, what it is, and where it goes. */
+@Composable
+private fun AccountRow(
+    icon: ImageVector,
+    title: String,
+    subtitle: String?,
+    trailing: String?,
+    onClick: () -> Unit,
+) {
+    val theme = LocalFaithFormTheme.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(FaithFormTokens.Radius.md))
+            .clickable(onClick = onClick)
+            .heightIn(min = FaithFormTokens.TouchTarget.recommended),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.md),
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = theme.palette.brandAccent,
+            modifier = Modifier.size(FaithFormTokens.IconSize.sizeMedium),
+        )
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge, color = theme.palette.contentPrimary)
+            if (subtitle != null) {
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = theme.palette.contentSecondary,
+                )
+            }
+        }
+        if (trailing != null) {
+            Text(trailing, style = MaterialTheme.typography.labelLarge, color = theme.palette.brandAccent)
+        }
+        Icon(
+            Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+            contentDescription = null,
+            tint = theme.palette.contentSecondary,
+            modifier = Modifier.size(FaithFormTokens.IconSize.sizeMedium),
+        )
+    }
+}
+
+/** System, Light or Dark — a segmented row, not three stacked buttons. */
+@Composable
+private fun AppearanceChooser() {
+    val theme = LocalFaithFormTheme.current
+    val context = LocalContext.current
+    val prefs = remember { context.getSharedPreferences("faithform_prefs", Context.MODE_PRIVATE) }
+    var current by remember { mutableStateOf(prefs.getString("appearance", "system") ?: "system") }
+
+    Column(verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm)) {
+        Text(
+            "Appearance",
+            style = MaterialTheme.typography.bodyMedium,
+            color = theme.palette.contentSecondary,
+        )
+        SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth()) {
+            val options = listOf("system" to "System", "light" to "Light", "dark" to "Dark")
+            options.forEachIndexed { index, (key, label) ->
+                SegmentedButton(
+                    selected = current == key,
+                    onClick = {
+                        current = key
+                        prefs.edit().putString("appearance", key).apply()
+                    },
+                    shape = SegmentedButtonDefaults.itemShape(index, options.size),
+                    colors = SegmentedButtonDefaults.colors(
+                        activeContainerColor = theme.palette.brandAccent,
+                        activeContentColor = theme.palette.contentOnAccent,
+                        inactiveContainerColor = Color.Transparent,
+                        inactiveContentColor = theme.palette.contentPrimary,
+                        activeBorderColor = theme.palette.brandAccent,
+                        inactiveBorderColor = theme.palette.border,
+                    ),
+                ) { Text(label, maxLines = 1) }
+            }
+        }
+    }
+}
+
+/**
+ * Changing the name other people see.
+ *
+ * A sheet rather than a field wired into the page, because the name is now
+ * editable whenever — the old screen only offered it while it was still blank,
+ * which left no way to fix a typo short of deleting the account.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun NameEditorSheet(
+    current: String,
+    onDismiss: () -> Unit,
+    onSave: (String, (Boolean) -> Unit) -> Unit,
+) {
+    val theme = LocalFaithFormTheme.current
+    var draft by remember { mutableStateOf(current) }
+    var saving by remember { mutableStateOf(false) }
+    var failed by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(FaithFormTokens.Radius.control)
+    val trimmed = draft.trim()
+
+    ModalBottomSheet(onDismissRequest = { if (!saving) onDismiss() }, containerColor = theme.palette.background) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = FaithFormTokens.Layout.screenPaddingHorizontal)
+                .padding(bottom = FaithFormTokens.Spacing.xl),
+            verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.base),
+        ) {
+            Text(
+                "Your name",
+                style = MaterialTheme.typography.titleLarge,
+                color = theme.palette.contentPrimary,
+            )
+            Text(
+                stringResource(R.string.account_add_name_hint),
+                style = MaterialTheme.typography.bodyMedium,
+                color = theme.palette.contentSecondary,
+            )
+            TextField(
+                value = draft,
+                onValueChange = { draft = it; failed = false },
+                singleLine = true,
+                shape = shape,
+                label = { Text(stringResource(R.string.auth_name_label)) },
+                colors = TextFieldDefaults.colors(
+                    focusedContainerColor = theme.palette.surface,
+                    unfocusedContainerColor = theme.palette.surface,
+                    disabledContainerColor = theme.palette.surface,
+                    focusedIndicatorColor = theme.palette.brandAccent,
+                    unfocusedIndicatorColor = theme.palette.border,
+                    cursorColor = theme.palette.brandPrimary,
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = FaithFormTokens.TouchTarget.recommended),
+            )
+            if (failed) {
+                Text(
+                    stringResource(R.string.error_title),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = theme.palette.destructive,
+                    modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+                )
+            }
+            Button(
+                onClick = {
+                    saving = true
+                    failed = false
+                    onSave(trimmed) { ok ->
+                        saving = false
+                        if (ok) onDismiss() else failed = true
+                    }
+                },
+                enabled = !saving && trimmed.isNotEmpty() && trimmed != current,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = theme.palette.brandAccent,
+                    contentColor = theme.palette.contentOnAccent,
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = FaithFormTokens.TouchTarget.recommended),
+            ) {
+                FaithFormWorkingLabel(text = stringResource(R.string.account_save_name), working = saving)
+            }
+        }
     }
 }
 

@@ -25,7 +25,6 @@ struct HomeTabView: View {
     enum Route: Hashable {
         /// The church info page for one church — from the toolbar, the
         /// account's own church.
-        case churchInfo(String)
         /// Search and nearby, then a church's page.
         case search
         case announcement(FeedItem)
@@ -39,6 +38,7 @@ struct HomeTabView: View {
     var onOpenAccount: (() -> Void)? = nil
 
     @State private var path: [Route] = []
+    @State private var presentedChurchSlug: String?
     @State private var section: HomeSection = .feed
     /// Shared by the cards and the detail, so a tapped card zooms into it.
     @Namespace private var announcementTransition
@@ -59,21 +59,17 @@ struct HomeTabView: View {
             .navigationDestination(for: Route.self) { route in
                 Group {
                     switch route {
-                    case let .churchInfo(slug):
-                        ChurchProfileHostView(
-                            slug: slug,
-                            dependencies: dependencies,
-                            root: root,
-                            onChurchChanged: { path.removeAll() },
-                            onChangeChurch: changeChurch
-                        )
                     case .search:
                         DiscoverySearchView(
                             dependencies: dependencies,
                             root: root,
                             discovery: discovery,
                             // A new church replaces this one; Home shows it at once.
-                            onChurchChanged: { path.removeAll() }
+                            onChurchChanged: {
+                                withAnimation(theme.animation(FaithFormTokens.Motion.standard)) {
+                                    path.removeAll()
+                                }
+                            }
                         )
                     case let .announcement(item):
                         AnnouncementDetailView(item: item)
@@ -82,6 +78,24 @@ struct HomeTabView: View {
                 }
                 .toolbar(.visible, for: .navigationBar)
             }
+            .sheet(isPresented: Binding(
+                get: { presentedChurchSlug != nil },
+                set: { if !$0 { presentedChurchSlug = nil } }
+            )) {
+                if let slug = presentedChurchSlug {
+                    NavigationStack {
+                        ChurchProfileHostView(
+                            slug: slug,
+                            dependencies: dependencies,
+                            root: root,
+                            onChurchChanged: { presentedChurchSlug = nil },
+                            onChangeChurch: changeChurch
+                        )
+                        .toolbar(.hidden, for: .navigationBar)
+                    }
+                    .presentationDragIndicator(.visible)
+                }
+            }
 
         }
     }
@@ -89,7 +103,7 @@ struct HomeTabView: View {
     private var homeHeader: some View {
         HStack(spacing: FaithFormTokens.Spacing.sm) {
             if let church = root.selectedChurch {
-                Button { path.append(.churchInfo(church.churchSlug)) } label: {
+                Button { presentedChurchSlug = church.churchSlug } label: {
                     HStack(spacing: FaithFormTokens.Spacing.sm) {
                         ChurchAvatar(logoUrl: church.logoUrl, name: church.churchName, size: 28)
                         Text(church.churchName)
@@ -119,6 +133,19 @@ struct HomeTabView: View {
         .fixedSize(horizontal: false, vertical: true)
     }
 
+    private var attendance: AutomaticAttendanceModel { dependencies.attendanceModel }
+
+    /// The arrival waiting at this church, if automatic check-in is on and the
+    /// church offers it. Another church's arrival belongs on that church's Home.
+    private func arrival(for slug: String) -> PendingArrival? {
+        guard root.selectedChurch?.automaticCheckInEnabled ?? true,
+              attendance.isEnabled,
+              let pending = attendance.pending,
+              pending.churchSlug == slug
+        else { return nil }
+        return pending
+    }
+
     /// "Change church" on the church info page opens search. Offered only when
     /// discovery is, like every other door in the app: a switched-off
     /// capability is not a button that fails.
@@ -131,6 +158,24 @@ struct HomeTabView: View {
     private var content: some View {
         if let church = root.selectedChurch, let features = root.features {
             VStack(spacing: 0) {
+                if let pending = arrival(for: church.churchSlug) {
+                    // Someone standing in the building shouldn't have to find
+                    // the Check in tab to be counted — the question comes to
+                    // the screen they are already on.
+                    AttendanceArrivalCard(
+                        pending: pending,
+                        churchName: church.churchName,
+                        logoUrl: church.logoUrl,
+                        now: attendance.status.now,
+                        isWorking: attendance.isWorking,
+                        onConfirm: { Task { await attendance.confirmCheckIn() } },
+                        onDecline: { Task { await attendance.declineArrival() } }
+                    )
+                    .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
+                    .padding(.top, FaithFormTokens.Spacing.sm)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
+
                 if let live = features.media.phase.live, live.state == "live" {
                     // Straight into the picture, full screen and playing.
                     LiveNowHero(live: live) { root.watchLive(live) }
@@ -174,6 +219,12 @@ struct HomeTabView: View {
                     )
                 }
             }
+            .animation(theme.animation(FaithFormTokens.Motion.slow), value: attendance.pending?.occurrenceId)
+            // An arrival on screen counts itself down and turns into "Check in"
+            // the moment it is due, rather than waiting for the notification.
+            .task(id: attendance.pending?.promptAt) {
+                await attendance.holdOpenWhilePending()
+            }
             // A service usually starts with the app already open on Home.
             .refreshesLiveStatus(features.media)
             // Keyed by the container, so a church switch starts this church's
@@ -194,9 +245,41 @@ struct HomeTabView: View {
         } else {
             ScrollView {
                 VStack(spacing: FaithFormTokens.Spacing.lg) {
-                    EmptyStateView(title: L.noChurchTitle, explanation: L.noChurchBody, symbol: "building.2")
-                    Button(L.findAChurch) { path.append(.search) }
-                    .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
+                    FaithFormCard {
+                        VStack(spacing: 16) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                    .fill(theme.palette.brandAccent.opacity(0.12))
+                                    .frame(width: 64, height: 64)
+                                Image(systemName: "building.2.fill")
+                                    .font(.system(size: 28, weight: .medium))
+                                    .foregroundStyle(theme.palette.brandAccent)
+                            }
+                            .accessibilityHidden(true)
+
+                            VStack(spacing: 6) {
+                                Text(L.noChurchTitle)
+                                    .font(.system(size: 20, weight: .semibold, design: .rounded))
+                                    .foregroundStyle(theme.palette.contentPrimary)
+                                    .multilineTextAlignment(.center)
+                                Text(L.noChurchBody)
+                                    .font(.subheadline)
+                                    .foregroundStyle(theme.palette.contentSecondary)
+                                    .multilineTextAlignment(.center)
+                                    .lineSpacing(3)
+                            }
+
+                            Button {
+                                path.append(.search)
+                            } label: {
+                                Label(L.findAChurch, systemImage: "magnifyingglass")
+                            }
+                            .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
+                            .padding(.top, 4)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 20)
+                    }
                 }
                 .padding(FaithFormTokens.Spacing.lg)
             }

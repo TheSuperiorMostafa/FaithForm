@@ -14,7 +14,7 @@ import SwiftUI
 ///
 /// Never rounds and never abbreviates. `$1.2K` on a receipt is not a number a
 /// person can check against their bank.
-func formatGivingAmount(cents: Int, currency: String) -> String {
+public func formatGivingAmount(cents: Int, currency: String) -> String {
     let formatter = NumberFormatter()
     formatter.numberStyle = .currency
     formatter.currencyCode = currency.uppercased()
@@ -53,7 +53,6 @@ public struct GivingHomeView: View {
         switch phase {
         case .idle, .loading:
             GivingHomeSkeleton()
-                .padding(FaithFormTokens.Spacing.xl)
 
         case .blocked:
             // The same answer a blocked visitor gets everywhere. Nothing about
@@ -515,7 +514,6 @@ public struct GivingHistoryView: View {
     public var body: some View {
         if isLoading && items.isEmpty {
             GivingHistorySkeleton()
-                .padding(FaithFormTokens.Spacing.xl)
         } else if items.isEmpty {
             EmptyStateView(title: L.givingHistoryTitle, explanation: L.givingHistoryEmpty, symbol: "heart")
         } else {

@@ -136,7 +136,14 @@ final class RootModel {
         }
     }
 
-    func updateProfilePhoto(_ jpeg: Data?) async -> Bool {
+    /// `nil` means the photo saved. Anything else is the sentence to show.
+    ///
+    /// The server already says *why* it refused — the photo was too large, the
+    /// account is not active, too many changes this hour, storage is down — and
+    /// that sentence is worth far more to the person holding the phone than the
+    /// single "could not save your photo" this used to collapse every one of
+    /// them into.
+    func updateProfilePhoto(_ jpeg: Data?) async -> String? {
         struct PhotoUpdate: Encodable, Sendable {
             let jpegBase64: String?
             enum CodingKeys: String, CodingKey { case jpegBase64 }
@@ -153,8 +160,12 @@ final class RootModel {
                 body: PhotoUpdate(jpegBase64: jpeg?.base64EncodedString()), as: PhotoReply.self
             )
             await load(quiet: true)
-            return true
-        } catch { return false }
+            return nil
+        } catch let error as APIError {
+            return error.displayMessage
+        } catch {
+            return "Your photo was not changed. Please try again."
+        }
     }
 
     /// Saves branding through the same server authority as the dashboard, then

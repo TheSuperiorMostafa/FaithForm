@@ -722,3 +722,81 @@ struct CapabilityHandlingTests {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// The play button
+// ---------------------------------------------------------------------------
+
+private actor MediaTestTokens: TokenProviding {
+    func validAccessToken() async throws -> String { "test-token" }
+    func invalidate() async {}
+}
+
+@MainActor
+private func makeDetail(granter: FakeGranter, player: FakePlayer) -> MediaDetailModel {
+    MediaDetailModel(
+        client: MediaClient(
+            api: APIClient(
+                configuration: .init(
+                    environment: APIEnvironment(
+                        key: "test",
+                        baseURL: URL(string: "https://example.invalid")!
+                    ),
+                    clientBuild: 1
+                ),
+                transport: StubTransport([]),
+                tokens: MediaTestTokens()
+            ),
+            cache: PartitionedCache()
+        ),
+        coordinator: MediaPlaybackCoordinator(
+            granter: granter,
+            player: player,
+            resumeStore: FakeResumeStore(),
+            now: { fixedNow }
+        ),
+        churchSlug: "grace",
+        mediaId: "r1",
+        partition: partitionA
+    )
+}
+
+@Suite("Play button feedback")
+@MainActor
+struct PlayButtonTests {
+
+    // The grant is a network round trip. Reading the session's state back only
+    // after it returns left `playback` on `.idle` for its whole duration, and
+    // the stage draws the play button over the poster for `.idle` — so the
+    // button sat there doing nothing until the network answered.
+    @Test("the stage leaves .idle the moment play is pressed", .timeLimit(.minutes(1)))
+    func preparingIsPublishedBeforeTheGrant() async {
+        let granter = FakeGranter()
+        let detail = makeDetail(granter: granter, player: FakePlayer())
+        await granter.openGate()
+
+        let playing = Task { await detail.play(kind: .recording) }
+        await granter.waitUntilCalls(1)
+
+        #expect(detail.playback == .preparing, "the play button gives no feedback while the grant is in flight")
+
+        await granter.releaseGate()
+        await playing.value
+    }
+
+    @Test("a second press while the grant is in flight asks for one capability", .timeLimit(.minutes(1)))
+    func repeatedPressesAreOneSession() async {
+        let granter = FakeGranter()
+        let detail = makeDetail(granter: granter, player: FakePlayer())
+        await granter.openGate()
+
+        let first = Task { await detail.play(kind: .recording) }
+        await granter.waitUntilCalls(1)
+        await detail.play(kind: .recording)
+
+        await granter.releaseGate()
+        await first.value
+
+        #expect(await granter.calls.count == 1)
+    }
+}

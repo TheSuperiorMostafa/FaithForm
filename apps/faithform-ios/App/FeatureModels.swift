@@ -120,6 +120,10 @@ final class ChurchFeatures {
         client: dependencies.giving,
         sheet: StripePaymentSheetAdapter(presenter: { TopViewController.resolve() }),
         store: SecurePendingDonationStore(store: dependencies.secureStore, partition: partition),
+        recurringStore: SecurePendingRecurringStore(
+            store: dependencies.secureStore,
+            partition: partition
+        ),
         churchSlug: churchSlug,
         partition: partition,
         applePayMerchantID: dependencies.applePayMerchantID,

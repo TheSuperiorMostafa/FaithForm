@@ -1,18 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    The FaithForm mark: the navy F with the gold fold, traced from the iOS app
-    icon (apps/faithform-ios/App/Resources/Assets.xcassets/AppIcon.appiconset/
-    AppIcon.png) rather than redrawn by eye.
+    The FaithForm mark: the white F with the gold fold, tracing the brand mark
+    for the adaptive launcher icon.
 
     The viewport is the source artwork's own 1024-pixel square, so every
     coordinate below is a pixel position in that PNG, and the 108dp adaptive
     layer maps it 1:1. At that scale the mark sits inside the 66dp safe zone
     with room to spare (its farthest corner is 31dp from centre), so no launcher
-    mask - circle, squircle or teardrop - clips it. The traced shapes overlap
-    the original's navy and gold pixels at about 95% intersection-over-union;
-    the difference is the source's anti-aliasing and JPEG-style noise.
+    mask - circle, squircle or teardrop - clips it.
 
-    Colours are sampled from the artwork: navy #082641, and the fold's gradient
+    Colours: white #FFFFFF on brand navy #002D5F ground, and the fold's gradient
     from #EEC683 at its top edge to #B88A46 at its point.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
@@ -23,7 +20,7 @@
     android:viewportHeight="1024">
 
     <path
-        android:fillColor="#FF082641"
+        android:fillColor="#FFFFFFFF"
         android:pathData="M409,277 L688,277 L688,373 L465,373 L418,420 L418,440 L595,440 L498,537 L418,537 L418,702 L321,702 L321,365 Z" />
 
     <path android:pathData="M465,373 L688,373 L688,431 L421,698 L418,698 L418,537 L498,537 L595,440 L418,440 L418,420 Z">

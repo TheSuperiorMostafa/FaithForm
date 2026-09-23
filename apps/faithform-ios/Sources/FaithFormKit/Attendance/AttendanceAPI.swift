@@ -266,6 +266,29 @@ public actor APIAttendanceConsent: AutomaticAttendanceModel.ConsentWriting {
     }
 }
 
+/// Opens the existing People confirmation queue for the church.
+public actor APIPeopleClaimRequester {
+    private let api: APIClient
+
+    public init(api: APIClient) {
+        self.api = api
+    }
+
+    public func requestConfirmation(churchSlug: String) async throws -> PeopleClaimResponse {
+        let response = try await api.send(
+            "api/mobile/v1/account/people-claim",
+            method: .post,
+            body: PeopleClaimRequest(churchSlug: churchSlug),
+            idempotencyKey: UUID().uuidString,
+            as: PeopleClaimResponse.self
+        )
+        guard let result = response.value else {
+            throw APIError(code: .unavailable, message: L.autoAttendanceOfflineBody, retryable: true)
+        }
+        return result
+    }
+}
+
 // MARK: - History
 
 /// The person's own attendance at one church.

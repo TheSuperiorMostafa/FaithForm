@@ -2,7 +2,9 @@ import SwiftUI
 import FaithFormKit
 
 struct GroupsTabView: View {
+    var root: RootModel? = nil
     @Bindable var model: GroupsModel
+    var isStale: Bool = false
     @StateObject private var chat = GroupChatSession()
     @Environment(\.faithformTheme) private var theme
     @State private var section = "My groups"
@@ -14,15 +16,10 @@ struct GroupsTabView: View {
     var body: some View {
         NavigationStack {
             VStack(spacing: 0) {
-                HStack {
-                    Text("Groups").font(theme.font(FaithFormTokens.Text.titleMedium))
-                    Spacer()
-                    Button { preferences = true } label: {
-                        Image(systemName: "bell").font(.title3).frame(width: 44, height: 44)
-                    }.accessibilityLabel("Messaging preferences")
-                }.foregroundStyle(theme.palette.contentPrimary).padding(.horizontal, 20)
+                if isStale { OfflineBanner(message: L.offlineCached) }
                 FaithFormPillSwitcher(selection: $section, options: sections.map { .init($0, title: $0) }, accessibilityLabel: "Groups section")
-                    .padding(.horizontal, 20).padding(.top, 8).padding(.bottom, 14)
+                    .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
+                    .padding(.vertical, FaithFormTokens.Spacing.sm)
                 if section == "Messages" {
                     GroupMessagesView(model: model)
                 } else {
@@ -51,11 +48,29 @@ struct GroupsTabView: View {
                             }
                             GroupFeedback(model: model)
                             if model.loading {
-                                if section == "My groups" { ConversationListSkeleton() } else { GroupListSkeleton() }
+                                if section == "My groups" { MyGroupListSkeleton() } else { GroupListSkeleton() }
                             }
                             else if displayed.isEmpty {
-                                GroupEmpty(symbol: "person.3", title: section == "My groups" ? "Your next connection starts here" : "No groups found", message: section == "My groups" ? "Explore groups and find a place that feels like you." : "Try a different name or category.")
-                                if section == "My groups" { Button("Discover groups") { section = "Discover" }.buttonStyle(.borderedProminent).frame(maxWidth: .infinity) }
+                                FaithFormCard {
+                                    VStack(spacing: 16) {
+                                        GroupEmpty(
+                                            symbol: section == "My groups" ? "person.3" : "magnifyingglass",
+                                            title: section == "My groups" ? "Your next connection starts here" : "No groups found",
+                                            message: section == "My groups" ? "Explore groups and find a place that feels like you." : "Try a different name or category."
+                                        )
+                                        if section == "My groups" {
+                                            Button {
+                                                section = "Discover"
+                                            } label: {
+                                                Label("Discover groups", systemImage: "sparkles")
+                                            }
+                                            .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
+                                            .padding(.horizontal, 4)
+                                            .padding(.bottom, 6)
+                                        }
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                }
                             } else {
                                 ForEach(displayed, id: \.id) { group in
                                     NavigationLink(value: GroupRoute.opening(group)) {
@@ -71,12 +86,37 @@ struct GroupsTabView: View {
                     }.refreshable { await refresh() }
                 }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(theme.palette.background)
             .foregroundStyle(theme.palette.contentPrimary)
             .navigationTitle("Groups")
-            .toolbar(.hidden, for: .navigationBar)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .principal) {
+                    HStack(spacing: FaithFormTokens.Spacing.sm) {
+                        if let church = root?.selectedChurch {
+                            ChurchAvatar(logoUrl: church.logoUrl, name: church.churchName, size: 28)
+                            Text(church.churchName)
+                                .font(theme.font(FaithFormTokens.Text.titleMedium))
+                                .foregroundStyle(theme.palette.contentPrimary)
+                                .lineLimit(1)
+                        } else {
+                            Text("Groups")
+                                .font(theme.font(FaithFormTokens.Text.titleMedium))
+                                .foregroundStyle(theme.palette.contentPrimary)
+                        }
+                    }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { preferences = true } label: {
+                        Image(systemName: "bell")
+                    }
+                    .foregroundStyle(theme.palette.contentPrimary)
+                    .accessibilityLabel("Messaging preferences")
+                }
+            }
             .navigationDestination(for: GroupRoute.self) { route in
-                groupDestination(route, model: model).toolbar(.visible, for: .navigationBar)
+                groupDestination(route, model: model)
             }
             .sheet(isPresented: $preferences) { GroupPreferencesView(model: model) }
             .task { await model.load() }
@@ -154,14 +194,61 @@ struct GroupBadge: View {
     var body: some View { Text(text).font(.caption2.weight(.semibold)).foregroundStyle(theme.palette.contentSecondary).padding(.horizontal, 10).padding(.vertical, 6).background(theme.palette.surfaceSunken, in: Capsule()) }
 }
 struct GroupEmpty: View {
-    let symbol: String; let title: String; let message: String
-    var body: some View { VStack(spacing: 14) { Image(systemName: symbol).font(.system(size: 34, weight: .light)).foregroundStyle(.secondary).padding(18).background(.quaternary, in: RoundedRectangle(cornerRadius: 22)); Text(title).font(.title3.weight(.semibold)); Text(message).font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center) }.frame(maxWidth: .infinity).padding(.vertical, 35).padding(.horizontal, 12) }
+    let symbol: String
+    let title: String
+    let message: String
+    @Environment(\.faithformTheme) private var theme
+
+    var body: some View {
+        VStack(spacing: 14) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(theme.palette.brandAccent.opacity(0.12))
+                    .frame(width: 64, height: 64)
+                Image(systemName: symbol)
+                    .font(.system(size: 28, weight: .medium))
+                    .foregroundStyle(theme.palette.brandAccent)
+            }
+            .accessibilityHidden(true)
+
+            VStack(spacing: 6) {
+                Text(title)
+                    .font(.system(size: 19, weight: .semibold, design: .rounded))
+                    .foregroundStyle(theme.palette.contentPrimary)
+                    .multilineTextAlignment(.center)
+                Text(message)
+                    .font(.subheadline)
+                    .foregroundStyle(theme.palette.contentSecondary)
+                    .multilineTextAlignment(.center)
+                    .lineSpacing(3)
+            }
+            .padding(.horizontal, 12)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 24)
+        .accessibilityElement(children: .combine)
+    }
 }
 struct GroupFeedback: View {
     @Bindable var model: GroupsModel
+    @Environment(\.faithformTheme) private var theme
     var body: some View {
         if let error = model.error { Label(error, systemImage: "exclamationmark.circle").font(.subheadline).foregroundStyle(.orange).padding(14).frame(maxWidth: .infinity, alignment: .leading).background(.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 12)).accessibilityAddTraits(.updatesFrequently) }
-        else if let feedback = model.feedback { Label(feedback, systemImage: "checkmark.circle").font(.subheadline).foregroundStyle(.green).padding(12).accessibilityAddTraits(.updatesFrequently) }
+        else if let feedback = model.feedback {
+            Label(feedback, systemImage: "bell.badge.fill")
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(theme.palette.contentPrimary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 11)
+                .background(theme.palette.surfaceSunken, in: Capsule())
+                .overlay(Capsule().strokeBorder(theme.palette.border, lineWidth: theme.borderWidth))
+                .accessibilityAddTraits(.updatesFrequently)
+                .task(id: feedback) {
+                    try? await Task.sleep(for: .seconds(3))
+                    guard !Task.isCancelled else { return }
+                    model.feedback = nil
+                }
+        }
     }
 }
 func groupDate(_ raw: String) -> String {
@@ -236,12 +323,16 @@ struct GroupSectionHeading: View {
 struct GroupRetryCard: View {
     let message: String
     let retry: () -> Void
+    @Environment(\.faithformTheme) private var theme
     var body: some View {
         FaithFormCard {
             VStack(spacing: 16) {
                 GroupEmpty(symbol: "wifi.exclamationmark", title: "Let’s try that again", message: message)
-                Button("Try again", action: retry).buttonStyle(.borderedProminent)
-            }.frame(maxWidth: .infinity).padding(.bottom, 12)
+                Button("Try again", action: retry)
+                    .buttonStyle(FaithFormButtonStyle(kind: .secondary, theme: theme))
+                    .padding(.horizontal, 4)
+                    .padding(.bottom, 6)
+            }.frame(maxWidth: .infinity)
         }
     }
 }

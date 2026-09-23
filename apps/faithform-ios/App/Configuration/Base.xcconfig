@@ -14,17 +14,17 @@
 //     DEVELOPMENT_TEAM = ABCDE12345
 //     FAITHFORM_BUNDLE_ID = com.yourname.faithform
 //
-// Included first so everything below can be overridden by it.
-#include? "Local.xcconfig"
-
 // The App ID registered with Apple, and the same applicationId the Android app
 // ships under. Debug and Staging append a suffix so all three install side by
 // side on one phone.
 //
 // Someone building on their own Apple team cannot sign `io.faithform.app`; they
 // set FAITHFORM_BUNDLE_ID in Local.xcconfig to something they own.
-FAITHFORM_BUNDLE_ID = $(FAITHFORM_BUNDLE_ID:default=io.faithform.app)
+FAITHFORM_BUNDLE_ID = io.faithform.app
 PRODUCT_BUNDLE_IDENTIFIER = $(FAITHFORM_BUNDLE_ID)$(FAITHFORM_BUNDLE_ID_SUFFIX)
+
+// Included so developer overrides in Local.xcconfig win over the defaults above.
+#include? "Local.xcconfig"
 
 PRODUCT_NAME = FaithForm
 // The store launch. The build number goes up with every upload to App Store

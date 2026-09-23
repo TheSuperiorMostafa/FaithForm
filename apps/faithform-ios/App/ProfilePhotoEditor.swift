@@ -91,7 +91,8 @@ struct ProfileCrop: Equatable {
         return copy
     }
 
-    /// Where `0` is fully zoomed out and `1` fully in — what the slider rides on.
+    /// Where `0` is fully zoomed out and `1` fully in. Used by the double tap
+    /// and by the accessibility zoom action.
     var zoomFraction: CGFloat {
         get {
             let span = maximumScale - minimumScale
@@ -99,6 +100,40 @@ struct ProfileCrop: Equatable {
             return min(max((scale - minimumScale) / span, 0), 1)
         }
         set { scale = minimumScale + (maximumScale - minimumScale) * min(max(newValue, 0), 1) }
+    }
+
+    /// Soft limits, for the length of a gesture only.
+    ///
+    /// The photo may be dragged past its edge and pinched below the floor, but
+    /// each further point of travel moves it less than the last, so it feels
+    /// tethered rather than stuck — the same rubber band `UIScrollView` uses.
+    /// `clamped()` is what pulls it home when the fingers lift.
+    func rubberBanded() -> ProfileCrop {
+        var copy = self
+        copy.scale = Self.band(scale, lower: minimumScale, upper: maximumScale)
+        let limit = copy.panLimit
+        copy.offset = CGSize(
+            width: Self.band(offset.width, limit: limit.width, give: max(40, maskSize.width * 0.3)),
+            height: Self.band(offset.height, limit: limit.height, give: max(40, maskSize.height * 0.3))
+        )
+        return copy
+    }
+
+    /// Asymptotic give: travel past `limit` approaches `limit + give` but never
+    /// reaches it, so there is always resistance and never a hard wall.
+    private static func band(_ value: CGFloat, limit: CGFloat, give: CGFloat) -> CGFloat {
+        let overshoot = abs(value) - limit
+        guard overshoot > 0, give > 0 else { return value }
+        let damped = (1 - 1 / (overshoot / give + 1)) * give
+        return (value < 0 ? -1 : 1) * (limit + damped)
+    }
+
+    /// The same curve for zoom, which is bounded on both sides rather than
+    /// around zero.
+    private static func band(_ value: CGFloat, lower: CGFloat, upper: CGFloat) -> CGFloat {
+        if value < lower { return lower - band(lower - value, limit: 0, give: lower * 0.35) }
+        if value > upper { return upper + band(value - upper, limit: 0, give: upper * 0.25) }
+        return value
     }
 
     /// The region of the *original* photo the mask is showing, in its own pixels.
@@ -139,10 +174,20 @@ private func outputSize(for aspect: CGFloat) -> CGSize {
 ///
 /// Not main-actor bound: the cropper runs it on a background task so a large
 /// photo does not freeze the Save button while it encodes.
-func renderProfilePhoto(_ image: UIImage, crop: ProfileCrop, aspect: CGFloat = 1) -> Data? {
+///
+/// `maxBytes` is honoured by stepping the quality down rather than by refusing
+/// the photo. A 1280-wide cover at quality 0.9 can land over the server's
+/// budget, and the old code answered that by silently reporting a save failure
+/// on a crop that was perfectly fine.
+func renderProfilePhoto(
+    _ image: UIImage,
+    crop: ProfileCrop,
+    aspect: CGFloat = 1,
+    maxBytes: Int = 1_000_000
+) -> Data? {
     guard let source = image.upOriented?.cgImage else { return nil }
     let sourceSize = CGSize(width: source.width, height: source.height)
-    let rect = crop.cropRect(in: sourceSize)
+    let rect = crop.clamped().cropRect(in: sourceSize)
     guard rect.width >= 1, rect.height >= 1, let cut = source.cropping(to: rect) else { return nil }
 
     let output = outputSize(for: aspect)
@@ -155,7 +200,13 @@ func renderProfilePhoto(_ image: UIImage, crop: ProfileCrop, aspect: CGFloat = 1
         context.fill(CGRect(origin: .zero, size: output))
         UIImage(cgImage: cut).draw(in: CGRect(origin: .zero, size: output))
     }
-    return rendered.jpegData(compressionQuality: 0.9)
+
+    var data: Data?
+    for quality in [0.9, 0.8, 0.7, 0.6, 0.45] as [CGFloat] {
+        data = rendered.jpegData(compressionQuality: quality)
+        if let data, data.count <= maxBytes { return data }
+    }
+    return data
 }
 
 extension UIImage {
@@ -240,18 +291,22 @@ struct ProfilePhotoCropper: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     @State var image: UIImage
-    let save: (Data) async -> Bool
+    /// `nil` means it saved. Anything else is the sentence to show, which is
+    /// the server's own — "Please try again later", "Choose a smaller photo" —
+    /// rather than one generic line that hides which of those happened.
+    let save: (Data) async -> String?
     var aspect: CGFloat = 1
     var circular = true
     var title = "Your photo"
     var footnote = "Visible to people you meet in FaithForm."
+    var maxBytes = 1_000_000
 
     @State private var crop = ProfileCrop()
     @State private var container: CGSize = .zero
     @State private var gestureStart: ProfileCrop?
     @State private var interacting = false
     @State private var working = false
-    @State private var failed = false
+    @State private var failure: String?
 
     /// Room for the floating bars, so the mask is never under one of them.
     private var maskInset: CGFloat { 34 }
@@ -344,42 +399,16 @@ struct ProfilePhotoCropper: View {
 
     private var bottomBar: some View {
         VStack(spacing: 18) {
-            if failed {
-                Label("Couldn’t save that photo. Your crop is still here — try again.", systemImage: "exclamationmark.circle")
+            if let failure {
+                Label(failure, systemImage: "exclamationmark.circle")
                     .font(.footnote)
                     .foregroundStyle(.white)
+                    .multilineTextAlignment(.leading)
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)
-                    .background(.red.opacity(0.85), in: Capsule())
+                    .background(.red.opacity(0.85), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     .accessibilityAddTraits(.updatesFrequently)
             }
-
-            HStack(spacing: 14) {
-                Image(systemName: "photo")
-                    .font(.footnote)
-                    .foregroundStyle(.white.opacity(0.6))
-                    .accessibilityHidden(true)
-                Slider(
-                    value: Binding(
-                        get: { crop.zoomFraction },
-                        set: { value in
-                            var next = crop
-                            next.zoomFraction = value
-                            crop = next.clamped()
-                        }
-                    ),
-                    in: 0...1
-                ) { Text("Zoom") }
-                .tint(theme.palette.brandAccent)
-                .accessibilityValue("\(Int(crop.zoomFraction * 100)) percent")
-                Image(systemName: "photo.fill")
-                    .font(.headline)
-                    .foregroundStyle(.white.opacity(0.6))
-                    .accessibilityHidden(true)
-            }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 10)
-            .background(.ultraThinMaterial, in: Capsule())
 
             HStack(spacing: 12) {
                 Button("Reset") { reset() }
@@ -431,7 +460,9 @@ struct ProfilePhotoCropper: View {
                     width: start.offset.width + value.translation.width,
                     height: start.offset.height + value.translation.height
                 )
-                crop = next.clamped()
+                // Soft while a finger is down: past the edge the photo keeps
+                // following, just less and less.
+                crop = next.rubberBanded()
             }
             .onEnded { _ in endGesture() }
     }
@@ -445,18 +476,26 @@ struct ProfilePhotoCropper: View {
                 next.scale = start.scale * value.magnification
                 // Pan rides the zoom, so the point under the fingers stays put
                 // instead of sliding towards the centre as the photo grows.
-                let ratio = next.clamped().scale / start.scale
+                let ratio = next.rubberBanded().scale / start.scale
                 next.offset = CGSize(width: start.offset.width * ratio, height: start.offset.height * ratio)
-                crop = next.clamped()
+                crop = next.rubberBanded()
             }
             .onEnded { _ in endGesture() }
     }
 
+    /// The fingers lift and the photo springs home. A spring rather than an
+    /// ease, because the overshoot on the way back is the half of the rubber
+    /// band that makes it read as elastic rather than as a snap.
     private func endGesture() {
         gestureStart = nil
-        withAnimation(theme.animation(FaithFormTokens.Motion.fast)) {
+        let settled = crop.clamped()
+        withAnimation(
+            reduceMotion
+                ? theme.animation(FaithFormTokens.Motion.fast)
+                : .spring(response: 0.34, dampingFraction: 0.72)
+        ) {
             interacting = false
-            crop = crop.clamped()
+            crop = settled
         }
     }
 
@@ -522,22 +561,24 @@ struct ProfilePhotoCropper: View {
     }
 
     private func commit() {
-        let snapshot = crop
+        let snapshot = crop.clamped()
         let source = image
         let ratio = aspect
+        let budget = maxBytes
         Task {
             working = true
-            failed = false
+            failure = nil
             let data = await Task.detached(priority: .userInitiated) {
-                renderProfilePhoto(source, crop: snapshot, aspect: ratio)
+                renderProfilePhoto(source, crop: snapshot, aspect: ratio, maxBytes: budget)
             }.value
-            if let data, await save(data) {
+            guard let data else {
                 working = false
-                dismiss()
-            } else {
-                working = false
-                failed = true
+                failure = "That photo could not be prepared. Try another one."
+                return
             }
+            let reason = await save(data)
+            working = false
+            if reason == nil { dismiss() } else { failure = reason }
         }
     }
 }
@@ -679,11 +720,7 @@ struct BrandingPhotoControl: View {
         .fullScreenCover(item: $draft) { draft in
             ProfilePhotoCropper(
                 image: draft.image,
-                save: { data in
-                    // A banner at 1280 wide still has to fit the upload budget.
-                    guard data.count <= 1_000_000 else { return false }
-                    return await save(data)
-                },
+                save: { data in await save(data) ? nil : "The photo was not changed. Please try again." },
                 aspect: aspect,
                 circular: false,
                 title: title.capitalizedFirst,

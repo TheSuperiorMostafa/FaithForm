@@ -183,6 +183,19 @@ export const accountRequestSchema = z.object({
   completedAt: instant.nullable(),
 }).meta({ id: "AccountRequest" });
 
+/** A member asking staff to match their app account to People. */
+export const peopleClaimRequestSchema = z
+  .object({ churchSlug })
+  .meta({ id: "PeopleClaimRequest" });
+
+export const peopleClaimResponseSchema = z
+  .object({
+    status: z.enum(["pending", "approved", "rejected", "withdrawn", "disputed"]),
+    source: z.enum(["self_request", "invitation", "join"]),
+    isLinked: z.boolean(),
+  })
+  .meta({ id: "PeopleClaimResponse" });
+
 /**
  * Everything the app needs on launch, in one round trip.
  *
@@ -1278,10 +1291,18 @@ export const givingHomeSchema = z
     churchName: z.string().max(200).nullable(),
     funds: z.array(givingFundSchema),
     /**
-     * Whether this church runs recurring gifts at all.
+     * Whether a recurring gift can be started here, now.
      *
-     * FaithForm gives one-time. This exists so the app can say where recurring
-     * lives rather than pretending it does not exist.
+     * True when the church is accepting and has at least one published fund —
+     * the same conditions a one-time gift needs, because a subscription is
+     * built from the same fund and charged to the same connected account. It is
+     * reported rather than inferred so a later reason to withhold recurring (a
+     * church that opts out, a region that cannot support it) has somewhere to
+     * live that does not require a client change.
+     *
+     * Before migration 0100 this meant "the church has ever run a recurring
+     * gift", and the app used it to point at a web page. It is a capability
+     * now, and the app acts on it.
      */
     recurringAvailable: z.boolean(),
     givingVersion: z.number().int(),
@@ -1393,6 +1414,129 @@ export const givingReceiptSchema = z
     giftType: z.enum(["one_time", "recurring"]),
   })
   .meta({ id: "GivingReceipt" });
+
+// ---------------------------------------------------------------------------
+// Recurring giving (migration 0100)
+// ---------------------------------------------------------------------------
+
+/**
+ * How often a recurring gift is charged.
+ *
+ * The three cadences `giving_subscriptions.interval` already allows, so a phone
+ * can never start one the church's dashboard cannot render. The app offers
+ * weekly and monthly; `year` exists because the column does and because a gift
+ * started on the web can be annual and must still be listable.
+ */
+export const givingIntervalSchema = z.enum(["week", "month", "year"]);
+
+/**
+ * The state of a recurring gift, as the **webhook** last recorded it.
+ *
+ * A narrowing of Stripe's own subscription statuses onto the ones a giver can
+ * act on. `canceled` never reaches a phone — the projection omits it, because a
+ * stopped gift charges nothing and offers nothing to do.
+ */
+export const recurringGiftStatusSchema = z.enum([
+  "active",
+  "trialing",
+  "past_due",
+  "paused",
+  "unpaid",
+]);
+
+/**
+ * What a client sends to start, or resume starting, a recurring gift.
+ *
+ * The same four facts a one-time gift sends, plus a cadence. No billing anchor:
+ * the day a recurring gift renews is the day it started, which Stripe derives
+ * itself and handles correctly at month ends. A client that could choose an
+ * anchor could also choose the 31st.
+ */
+export const startRecurringGiftRequestSchema = z
+  .object({
+    churchSlug: z.string().min(1).max(120),
+    fundId: z.string().max(64),
+    amountCents: z.number().int(),
+    interval: givingIntervalSchema,
+    /**
+     * The client's id for this logical attempt.
+     *
+     * Its job is to **repeat**, and it matters more here than for a one-time
+     * gift: a duplicated payment charges twice once, a duplicated subscription
+     * charges twice every month until somebody notices.
+     */
+    clientAttemptId: z.string().min(8).max(64),
+  })
+  .meta({ id: "StartRecurringGiftRequest" });
+
+/**
+ * Everything a native payment sheet needs to confirm a recurring gift's **first**
+ * payment, and nothing else.
+ *
+ * The client secret belongs to the first invoice. Confirming it both pays that
+ * invoice and saves the method for every renewal, which is why the flow is one
+ * sheet rather than a sheet plus a separate card-saving step.
+ */
+export const recurringGiftSessionSchema = z
+  .object({
+    attemptId: z.string().max(64),
+    /**
+     * Null when there is nothing left to confirm — a resumed attempt whose
+     * first invoice is already paid. Nullable rather than empty-string,
+     * because "no secret" and "a secret that is the empty string" are
+     * different mistakes and only one of them should be representable.
+     */
+    clientSecret: z.string().max(512).nullable(),
+    publishableKey: z.string().max(255),
+    stripeAccountId: z.string().max(64),
+    merchantName: z.string().max(200),
+    amountCents: z.number().int(),
+    currency: z.string().max(8),
+    interval: givingIntervalSchema,
+    fundTitle: z.string().max(120),
+  })
+  .meta({ id: "RecurringGiftSession" });
+
+/**
+ * One of a person's own recurring gifts.
+ *
+ * Carries no Stripe customer id, no subscription id from the provider, no donor
+ * email and no card detail. `subscriptionId` is FaithForm's own row id — the
+ * only handle a phone ever holds, and the only one the cancel route accepts.
+ */
+export const recurringGiftSchema = z
+  .object({
+    subscriptionId: z.string().max(64),
+    fundTitle: z.string().max(120),
+    amountCents: z.number().int(),
+    currency: z.string().max(8),
+    interval: givingIntervalSchema,
+    status: recurringGiftStatusSchema,
+    startedAt: z.string().max(40),
+  })
+  .meta({ id: "RecurringGift" });
+
+export const recurringGiftListSchema = z
+  .object({
+    items: z.array(recurringGiftSchema),
+  })
+  .meta({ id: "RecurringGiftList" });
+
+/**
+ * What a cancel returns: the gift, in the state the cancel left it.
+ *
+ * `stopped` is this server's own word, not Stripe's. It is true once the
+ * provider has accepted the cancellation, which is the moment the person can be
+ * told the gift will not charge again — the webhook's own `canceled` event
+ * follows and updates the row, but nobody should have to wait for it to be told
+ * what they just did worked.
+ */
+export const recurringGiftCancelResultSchema = z
+  .object({
+    subscriptionId: z.string().max(64),
+    stopped: z.boolean(),
+  })
+  .meta({ id: "RecurringGiftCancelResult" });
 
 // ---------------------------------------------------------------------------
 // Prompt 14 — groups and messaging
@@ -1936,6 +2080,8 @@ export const CONTRACT_SCHEMAS = {
   UpdateChurchThemeRequest: updateChurchThemeRequestSchema,
   ChurchRelationship: churchRelationshipSchema,
   AccountRequest: accountRequestSchema,
+  PeopleClaimRequest: peopleClaimRequestSchema,
+  PeopleClaimResponse: peopleClaimResponseSchema,
   Bootstrap: bootstrapSchema,
   RelationshipPage: relationshipPageSchema,
   SelectedChurch: selectedChurchSchema,
@@ -2012,6 +2158,11 @@ export const CONTRACT_SCHEMAS = {
   DonationStatusResult: donationStatusResultSchema,
   GivingHistoryPage: givingHistoryPageSchema,
   GivingReceipt: givingReceiptSchema,
+  StartRecurringGiftRequest: startRecurringGiftRequestSchema,
+  RecurringGiftSession: recurringGiftSessionSchema,
+  RecurringGift: recurringGiftSchema,
+  RecurringGiftList: recurringGiftListSchema,
+  RecurringGiftCancelResult: recurringGiftCancelResultSchema,
   GroupTypeSummary: groupTypeSummarySchema,
   GroupLeader: groupLeaderSchema,
   GroupEventSummary: groupEventSummarySchema,
@@ -2096,6 +2247,8 @@ export const CONTRACT_ENUMS = {
     "failed", "cancelled", "refunded", "disputed",
   ],
   GiftType: ["one_time", "recurring"],
+  GivingInterval: ["week", "month", "year"],
+  RecurringGiftStatus: ["active", "trialing", "past_due", "paused", "unpaid"],
   GroupRole: ["member", "leader", "manager"],
   GroupMembershipState: ["member", "requested", "invited", "not_member", "banned"],
   GroupJoinAction: [

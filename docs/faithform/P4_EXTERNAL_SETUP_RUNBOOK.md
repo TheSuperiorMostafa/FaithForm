@@ -55,9 +55,9 @@ Until then the `associated-domains` entitlement and the `autoVerify` filter are
 
 | Item | Required |
 |---|---|
-| Redirect URLs | `faithform://auth/callback` added to the Supabase Auth allow-list, per environment |
+| Redirect URLs | `{origin}/auth/callback` **and** `{origin}/app/auth/callback` added to the Supabase Auth allow-list, per environment. Not the `faithform://` scheme: a browser will not follow a `302` into a custom scheme, so the apps register the https hand-off page instead — see [P13 §2](P13_AUTH_REDIRECT_ARCHITECTURE.md) |
 | Publishable key per environment | Supplied to the app as build configuration — **never the service-role key** |
-| Email template | Magic-link template pointing at the app scheme |
+| Email template | `{{ .ConfirmationURL }}`, so the `redirect_to` the app supplied is honoured |
 
 ## 5. API origins
 

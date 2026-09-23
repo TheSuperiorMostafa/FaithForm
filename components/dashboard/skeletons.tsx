@@ -42,3 +42,42 @@ export function ChartSkeleton() {
     </Card>
   );
 }
+
+export function QuickActionsSkeleton() {
+  return (
+    <section className="flex flex-col gap-3">
+      <div className="border-l-4 border-accent pl-3">
+        <Skeleton className="h-8 w-48" />
+      </div>
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Card key={i} className="flex items-center gap-4 p-5">
+            <Skeleton className="size-11 shrink-0 rounded-xl" />
+            <div className="space-y-1.5 flex-1">
+              <Skeleton className="h-4 w-28" />
+              <Skeleton className="h-3 w-20" />
+            </div>
+          </Card>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+export function DashboardPageSkeleton() {
+  return (
+    <div
+      className="mx-auto flex w-full max-w-5xl flex-col gap-5"
+      role="status"
+      aria-busy="true"
+      aria-label="Loading dashboard"
+    >
+      <HeroSkeleton />
+      <StatRowSkeleton />
+      <QuickActionsSkeleton />
+      <ChartSkeleton />
+      <span className="sr-only">Loading dashboard…</span>
+    </div>
+  );
+}
+

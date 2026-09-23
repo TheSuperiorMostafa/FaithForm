@@ -16,6 +16,7 @@ import io.faithform.app.AppViewModel
 import io.faithform.app.LaunchPhase
 import io.faithform.app.session.AppContainer
 import io.faithform.app.storage.CachePartition
+import kotlinx.coroutines.delay
 
 /**
  * The Church info page for [slug], wired to the account.
@@ -77,9 +78,12 @@ fun ChurchInfoHost(
             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
             finishing = true
             when (event) {
-                ChurchProfileEvent.Added -> appViewModel.reloadQuietly(preferring = slug) {
-                    finishing = false
-                    added?.invoke()
+                ChurchProfileEvent.Added -> {
+                    delay(600)
+                    appViewModel.reloadQuietly(preferring = slug) {
+                        finishing = false
+                        added?.invoke()
+                    }
                 }
                 ChurchProfileEvent.Removed -> appViewModel.reloadQuietly {
                     finishing = false

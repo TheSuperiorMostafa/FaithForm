@@ -186,6 +186,7 @@ public struct AutomaticAttendanceStatus: Equatable, Sendable {
     public var lastCheckIn: AutomaticAttendanceModel.RecentCheckIn?
     public var pending: PendingArrival?
     public var activityMessage: String?
+    public var confirmationMessage: String?
     public var isWorking: Bool
     public var now: Date
 
@@ -202,6 +203,7 @@ public struct AutomaticAttendanceStatus: Equatable, Sendable {
         lastCheckIn: AutomaticAttendanceModel.RecentCheckIn? = nil,
         pending: PendingArrival? = nil,
         activityMessage: String? = nil,
+        confirmationMessage: String? = nil,
         isWorking: Bool = false,
         now: Date = Date()
     ) {
@@ -217,6 +219,7 @@ public struct AutomaticAttendanceStatus: Equatable, Sendable {
         self.lastCheckIn = lastCheckIn
         self.pending = pending
         self.activityMessage = activityMessage
+        self.confirmationMessage = confirmationMessage
         self.isWorking = isWorking
         self.now = now
     }
@@ -241,7 +244,10 @@ extension AutomaticAttendanceModel {
             pending: pending,
             activityMessage: activityMessage,
             isWorking: isWorking,
-            now: Date()
+            // Reading `tick` is what re-draws a countdown each second; the
+            // later of it and the real clock is shown, so a screen with no
+            // ticker running still draws the right time.
+            now: max(tick, Date())
         )
     }
 }
@@ -261,6 +267,8 @@ public struct AutomaticAttendanceStatusView: View {
     private let onSetUp: @MainActor () -> Void
     private let onResumeSetup: @MainActor () -> Void
     private let onConfirm: @MainActor () -> Void
+    private let onRequestConfirmation: (@MainActor () async -> Void)?
+    private let onDecline: @MainActor () -> Void
     private let onDisable: @MainActor () -> Void
     private let onOpenSettings: @MainActor () -> Void
 
@@ -269,6 +277,8 @@ public struct AutomaticAttendanceStatusView: View {
         onSetUp: @escaping @MainActor () -> Void,
         onResumeSetup: @escaping @MainActor () -> Void,
         onConfirm: @escaping @MainActor () -> Void,
+        onRequestConfirmation: (@MainActor () async -> Void)? = nil,
+        onDecline: @escaping @MainActor () -> Void = {},
         onDisable: @escaping @MainActor () -> Void,
         onOpenSettings: @escaping @MainActor () -> Void
     ) {
@@ -276,6 +286,8 @@ public struct AutomaticAttendanceStatusView: View {
         self.onSetUp = onSetUp
         self.onResumeSetup = onResumeSetup
         self.onConfirm = onConfirm
+        self.onRequestConfirmation = onRequestConfirmation
+        self.onDecline = onDecline
         self.onDisable = onDisable
         self.onOpenSettings = onOpenSettings
     }
@@ -291,12 +303,22 @@ public struct AutomaticAttendanceStatusView: View {
                         .accessibilityAddTraits(.updatesFrequently)
                 }
             }
+            if let message = status.confirmationMessage {
+                FaithFormCard {
+                    Text(message)
+                        .font(theme.font(FaithFormTokens.Text.body))
+                        .foregroundStyle(theme.palette.contentSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
             if let pending = status.pending, status.isEnabled {
-                PendingArrivalCard(
+                AttendanceArrivalCard(
                     pending: pending,
+                    churchName: status.churchName,
                     now: status.now,
                     isWorking: status.isWorking,
-                    onConfirm: onConfirm
+                    onConfirm: onConfirm,
+                    onDecline: onDecline
                 )
             }
             if status.notificationsOff, status.isEnabled {
@@ -425,7 +447,11 @@ public struct AutomaticAttendanceStatusView: View {
                     .accessibilityLabel(L.autoAttendanceSaving)
 
             case .blocked(let blocker):
-                if blocker.isRecoverableInSettings {
+                if blocker == .noPeopleLink, let onRequestConfirmation {
+                    Button(L.autoAttendanceRequestConfirmation) { Task { await onRequestConfirmation() } }
+                        .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
+                        .disabled(status.isWorking)
+                } else if blocker.isRecoverableInSettings {
                     Button(L.autoAttendanceOpenSettings, action: onOpenSettings)
                         .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
                 } else if blocker.isRecoverableInSetup {
@@ -570,48 +596,6 @@ private struct DetailRow: View {
     }
 }
 
-/// An arrival waiting on a verdict.
-///
-/// Says what happens next and offers "Check in" only when the church asks and
-/// the moment has come — never an encouraging state that reads as done.
-private struct PendingArrivalCard: View {
-    @Environment(\.faithformTheme) private var theme
-    let pending: PendingArrival
-    let now: Date
-    let isWorking: Bool
-    let onConfirm: @MainActor () -> Void
-
-    var body: some View {
-        FaithFormCard {
-            VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.md) {
-                Text(AttendanceNotificationContent.arrivalTitle(churchName: pending.churchName ?? ""))
-                    .font(theme.font(FaithFormTokens.Text.titleMedium))
-                    .foregroundStyle(theme.palette.contentPrimary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                if pending.canConfirm(now: now) {
-                    Button(action: onConfirm) {
-                        FaithFormWorkingLabel(L.autoAttendancePromptActionCheckIn, working: isWorking)
-                    }
-                    .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
-                    .disabled(isWorking)
-                } else {
-                    Text(
-                        pending.isQueued
-                            ? L.autoAttendanceOfflineBody
-                            : pending.needsPersonConfirmation
-                                ? L.autoAttendancePendingWaitingBody
-                                : L.autoAttendancePendingAutomaticBody
-                    )
-                    .font(theme.font(FaithFormTokens.Text.bodySmall))
-                    .foregroundStyle(theme.palette.contentSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-        }
-    }
-}
-
 /// The most recent server verdict.
 ///
 /// Shown only when the server actually returned one. `already_counted` reads as
@@ -648,15 +632,19 @@ public struct AutomaticAttendanceFlowView: View {
     @Environment(\.faithformTheme) private var theme
     private let model: AutomaticAttendanceModel
     private let onOpenSettings: @MainActor () -> Void
+    private let onRequestConfirmation: (@MainActor () async -> String?)?
     private let onClose: @MainActor () -> Void
+    @State private var confirmationMessage: String?
 
     public init(
         model: AutomaticAttendanceModel,
         onOpenSettings: @escaping @MainActor () -> Void,
+        onRequestConfirmation: (@MainActor () async -> String?)? = nil,
         onClose: @escaping @MainActor () -> Void
     ) {
         self.model = model
         self.onOpenSettings = onOpenSettings
+        self.onRequestConfirmation = onRequestConfirmation
         self.onClose = onClose
     }
 
@@ -666,7 +654,7 @@ public struct AutomaticAttendanceFlowView: View {
             .background(theme.palette.background)
             .task(id: model.pending?.promptAt) {
                 // An open screen is execution time of its own.
-                await model.holdOpenUntilDue()
+                await model.holdOpenWhilePending()
             }
     }
 
@@ -736,10 +724,13 @@ public struct AutomaticAttendanceFlowView: View {
         case .notStarted, .ready, .blocked:
             ScrollView {
                 AutomaticAttendanceStatusView(
-                    status: model.status,
+                    status: statusWithConfirmationMessage,
                     onSetUp: { model.begin() },
                     onResumeSetup: { Task { await model.resumeSetup() } },
                     onConfirm: { Task { await model.confirmCheckIn() } },
+                    onRequestConfirmation: onRequestConfirmation.map { request in
+                        { Task { confirmationMessage = await request() } }
+                    },
                     onDisable: { Task { await model.disable() } },
                     onOpenSettings: onOpenSettings
                 )
@@ -747,5 +738,11 @@ public struct AutomaticAttendanceFlowView: View {
                 .padding(.vertical, FaithFormTokens.Spacing.xl)
             }
         }
+    }
+
+    private var statusWithConfirmationMessage: AutomaticAttendanceStatus {
+        var status = model.status
+        status.confirmationMessage = confirmationMessage
+        return status
     }
 }

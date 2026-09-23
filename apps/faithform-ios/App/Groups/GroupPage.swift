@@ -10,6 +10,7 @@ struct GroupChatScreen: View {
     @Bindable var model: GroupsModel
     let group: GroupSummary
     @Environment(\.faithformTheme) private var theme
+    @Environment(\.dismiss) private var dismiss
     @State private var preferences = false
 
     private var readOnly: Bool {
@@ -53,6 +54,15 @@ struct GroupChatScreen: View {
             }
         }
         .sheet(isPresented: $preferences) { GroupPreferencesView(model: model, groupId: group.id) }
+        // Leaving from group info refreshes the shared model while this screen
+        // is still in the navigation stack. Remove the stale conversation as
+        // soon as membership disappears so its composer cannot remain usable.
+        .onChange(of: model.home?.items) { _, groups in
+            guard let current = groups?.first(where: { $0.id == group.id }), current.membershipState == "member" else {
+                dismiss()
+                return
+            }
+        }
     }
 }
 
@@ -75,6 +85,8 @@ struct GroupInfoScreen: View {
     @State private var invite: String?
     @State private var preferences = false
     @State private var editing = false
+    @State private var joinedRecently = false
+    @State private var leaving = false
 
     var body: some View {
         Group {
@@ -121,6 +133,30 @@ struct GroupInfoScreen: View {
         .toolbarBackground(.hidden, for: .navigationBar)
         .navigationTitle(detail?.group.name ?? "Group")
         .navigationBarTitleDisplayMode(.inline)
+        .overlay(alignment: .bottom) {
+            if joinedRecently, let detail {
+                VStack(spacing: 12) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "checkmark.circle.fill").font(.title2).foregroundStyle(theme.palette.brandAccent)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("You’re in").font(.headline)
+                            Text("Welcome to \(detail.group.name)").font(.subheadline).foregroundStyle(theme.palette.contentSecondary)
+                        }
+                        Spacer()
+                    }
+                    NavigationLink(value: GroupRoute.chat(detail.group)) {
+                        Text("Go to chat").font(.headline).frame(maxWidth: .infinity, minHeight: 48)
+                            .foregroundStyle(theme.palette.contentOnAccent).background(theme.palette.brandAccent, in: Capsule())
+                    }.simultaneousGesture(TapGesture().onEnded { joinedRecently = false })
+                    Button("Stay here") { joinedRecently = false }
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(theme.palette.contentSecondary)
+                }
+                .padding(18).background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(.white.opacity(0.16)))
+                .padding(.horizontal, 16).padding(.bottom, 12)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 if detail?.group.membershipState == "member" {
@@ -132,9 +168,18 @@ struct GroupInfoScreen: View {
         .sheet(isPresented: $editing) { if let detail { GroupEditView(model: model, detail: detail) { Task { await load() } } } }
         .sheet(isPresented: $preferences) { GroupPreferencesView(model: model, groupId: groupId) }
         .task { if detail == nil { await load() } }
-        .confirmationDialog("Leave this group?", isPresented: $confirmLeave, titleVisibility: .visible) {
-            Button("Leave group", role: .destructive) { Task { if let group = detail?.group, await model.changeMembership(group) { dismiss() } } }
-        } message: { Text("You will lose access to this group's conversation. You can ask to join again later.") }
+        .alert("Leave this group?", isPresented: $confirmLeave) {
+            Button("Leave group", role: .destructive) {
+                leaving = true
+                Task {
+                    if let group = detail?.group, await model.changeMembership(group) { dismiss() }
+                    else { leaving = false }
+                }
+            }
+            Button("Keep group", role: .cancel) { }
+        } message: {
+            Text("You’ll lose access to this group’s conversation, but you can ask to join again later.")
+        }
         .sheet(isPresented: $asking) {
             NavigationStack {
                 Form {
@@ -259,7 +304,16 @@ struct GroupInfoScreen: View {
     @ViewBuilder private func membershipButton(_ group: GroupSummary) -> some View {
         switch group.joinAction {
         case "join":
-            Button { Task { _ = await model.changeMembership(group); await load() } } label: { primaryLabel("Join this group") }
+            Button {
+                Task {
+                    let success = await model.changeMembership(group)
+                    if success {
+                        await load()
+                        model.feedback = nil
+                        withAnimation(.spring(response: 0.45, dampingFraction: 0.82)) { joinedRecently = true }
+                    }
+                }
+            } label: { primaryLabel(model.busy ? "Joining…" : "Join this group") }
                 .buttonStyle(GroupPressStyle()).disabled(model.busy)
         case "request":
             Button { asking = true } label: { primaryLabel("Ask to join") }.buttonStyle(GroupPressStyle())
@@ -269,8 +323,12 @@ struct GroupInfoScreen: View {
                 Button("Cancel request") { Task { _ = await model.changeMembership(group); await load() } }.disabled(model.busy)
             }.frame(maxWidth: .infinity)
         case "leave":
-            Button("Leave group", role: .destructive) { confirmLeave = true }
-                .font(.subheadline).frame(maxWidth: .infinity, minHeight: FaithFormTokens.TouchTarget.minimum).padding(.top, 6)
+            Button { confirmLeave = true } label: {
+                GroupActionRow(symbol: "rectangle.portrait.and.arrow.right", title: leaving ? "Leaving…" : "Leave group", isDestructive: true)
+            }
+            .buttonStyle(GroupPressStyle())
+            .disabled(leaving || model.busy)
+            .padding(.top, 6)
         default:
             Text(group.joinAction == "full" ? "This group is currently full." : group.joinAction == "invitation_required" ? "Ask a leader for an invitation to join." : "This group isn't accepting members right now.")
                 .font(.subheadline).foregroundStyle(theme.palette.contentSecondary).frame(maxWidth: .infinity, alignment: .center)
@@ -282,6 +340,46 @@ struct GroupInfoScreen: View {
             .frame(maxWidth: .infinity, minHeight: 52)
             .foregroundStyle(theme.palette.contentOnAccent)
             .background(theme.palette.brandAccent, in: Capsule())
+    }
+
+    private var leaveSheet: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            HStack(spacing: 12) {
+                Image(systemName: "rectangle.portrait.and.arrow.right")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(theme.palette.destructive)
+                    .frame(width: 46, height: 46)
+                    .background(theme.palette.destructive.opacity(0.10), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Leave this group?").font(.title3.weight(.semibold))
+                    Text("You can ask to join again later.").font(.subheadline).foregroundStyle(theme.palette.contentSecondary)
+                }
+            }
+            Text("You’ll lose access to this group’s conversation.")
+                .font(.subheadline).foregroundStyle(theme.palette.contentSecondary)
+            HStack(spacing: 10) {
+                Button("Keep group") { confirmLeave = false }
+                    .font(.headline).frame(maxWidth: .infinity, minHeight: 50)
+                    .background(theme.palette.surfaceSunken, in: Capsule())
+                Button(leaving ? "Leaving…" : "Leave group", role: .destructive) {
+                    leaving = true
+                    Task {
+                        if let group = detail?.group, await model.changeMembership(group) {
+                            confirmLeave = false
+                            DispatchQueue.main.async { dismiss() }
+                        }
+                        else { leaving = false }
+                    }
+                }
+                .font(.headline).frame(maxWidth: .infinity, minHeight: 50)
+                .background(theme.palette.destructive.opacity(0.12), in: Capsule())
+                .disabled(leaving || model.busy)
+            }
+        }
+        .padding(22)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .foregroundStyle(theme.palette.contentPrimary)
+        .background(theme.palette.background)
     }
 
     // MARK: - Content

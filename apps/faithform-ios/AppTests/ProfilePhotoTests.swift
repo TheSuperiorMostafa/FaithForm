@@ -41,18 +41,60 @@ struct ProfilePhotoTests {
 
     @Test("Zooming out pulls an extreme pan back inside the photo")
     func zoomingOutRecoversThePan() {
+        // Floor 0.5x, so the ceiling is 3x and a request for 4x lands there:
+        // 400 * 3 = 1200 wide against a 200 mask leaves 500 of slack.
         var crop = ProfileCrop(
             imageSize: CGSize(width: 400, height: 400),
             maskSize: CGSize(width: 200, height: 200),
             scale: 4,
-            offset: CGSize(width: 700, height: 700)
+            offset: CGSize(width: 900, height: 900)
         ).clamped()
-        #expect(crop.offset.width == 700)
+        #expect(crop.scale == 3)
+        #expect(crop.offset.width == 500)
 
         crop.scale = 1
         crop = crop.clamped()
         #expect(crop.offset.width == 100)
         #expect(crop.offset.height == 100)
+    }
+
+    @Test("The rubber band gives past the edge but never runs free")
+    func rubberBandResists() {
+        let base = ProfileCrop(
+            imageSize: CGSize(width: 400, height: 200),
+            maskSize: CGSize(width: 200, height: 200),
+            scale: 1,
+            offset: CGSize(width: 300, height: 0)
+        )
+        let banded = base.rubberBanded()
+        // Past the 100pt limit it keeps moving, but nowhere near the 300 asked
+        // for, and always further out than the hard clamp would allow.
+        #expect(banded.offset.width > 100)
+        #expect(banded.offset.width < 200)
+
+        // Twice as far past the edge does not move it twice as far.
+        var harder = base
+        harder.offset = CGSize(width: 600, height: 0)
+        let bandedHarder = harder.rubberBanded()
+        #expect(bandedHarder.offset.width > banded.offset.width)
+        #expect(bandedHarder.offset.width - 100 < (banded.offset.width - 100) * 2)
+
+        // And letting go puts it back exactly on the edge.
+        #expect(banded.clamped().offset.width == 100)
+    }
+
+    @Test("A pinch below the floor gives, and springs back to it")
+    func rubberBandResistsUnderZoom() {
+        let base = ProfileCrop(
+            imageSize: CGSize(width: 400, height: 400),
+            maskSize: CGSize(width: 200, height: 200),
+            scale: 0.2,
+            offset: .zero
+        )
+        let banded = base.rubberBanded()
+        #expect(banded.scale < base.minimumScale)
+        #expect(banded.scale > base.minimumScale * 0.6)
+        #expect(banded.clamped().scale == base.minimumScale)
     }
 
     // MARK: Rendering

@@ -1914,4 +1914,36 @@ struct ArrivalPolicyTests {
         let automatic = PendingArrival(churchSlug: "g", churchName: nil, occurrenceId: "o", mode: .automatic, promptAt: journeyStart, needsPersonConfirmation: false, isQueued: false)
         #expect(!automatic.canConfirm(now: journeyStart))
     }
+
+    @Test("a waiting arrival counts down from when it began, never below zero")
+    func countdown() {
+        let began = journeyStart
+        let pending = PendingArrival(churchSlug: "g", churchName: nil, occurrenceId: "o", mode: .confirmation, promptAt: began.addingTimeInterval(120), startedAt: began, needsPersonConfirmation: true, isQueued: false)
+        #expect(pending.secondsRemaining(now: began) == 120)
+        #expect(pending.secondsRemaining(now: began.addingTimeInterval(30)) == 90)
+        #expect(pending.secondsRemaining(now: began.addingTimeInterval(500)) == 0)
+        #expect(pending.progress(now: began) == 0)
+        #expect(pending.progress(now: began.addingTimeInterval(60)) == 0.5)
+        #expect(pending.progress(now: began.addingTimeInterval(500)) == 1)
+    }
+
+    @Test("an arrival long before check-in opens shows a time, not a ticking ring")
+    func tickingHorizon() {
+        let soon = PendingArrival(churchSlug: "g", churchName: nil, occurrenceId: "o", mode: .confirmation, promptAt: journeyStart.addingTimeInterval(120), startedAt: journeyStart, needsPersonConfirmation: true, isQueued: false)
+        #expect(soon.isTicking(now: journeyStart))
+        let early = PendingArrival(churchSlug: "g", churchName: nil, occurrenceId: "o", mode: .confirmation, promptAt: journeyStart.addingTimeInterval(45 * 60), startedAt: journeyStart, needsPersonConfirmation: true, isQueued: false)
+        #expect(!early.isTicking(now: journeyStart))
+        #expect(early.isTicking(now: journeyStart.addingTimeInterval(36 * 60)))
+        let queued = PendingArrival(churchSlug: "g", churchName: nil, occurrenceId: "o", mode: .confirmation, promptAt: journeyStart.addingTimeInterval(60), startedAt: journeyStart, needsPersonConfirmation: true, isQueued: true)
+        #expect(queued.secondsRemaining(now: journeyStart) == nil)
+        #expect(!queued.isTicking(now: journeyStart))
+    }
+
+    @Test("the countdown reads as a clock and rounds up so it never shows 0:00 early")
+    func countdownClock() {
+        #expect(CountdownRing.clock(120) == "2:00")
+        #expect(CountdownRing.clock(107) == "1:47")
+        #expect(CountdownRing.clock(0.2) == "0:01")
+        #expect(CountdownRing.clock(0) == "0:00")
+    }
 }

@@ -118,6 +118,45 @@ struct AttendanceScreenshotTests {
         )
     }
 
+    @Test("the arrival card on Home: counting down, waiting for check-in, ready", .enabled(if: enabled))
+    func arrivalCard() async throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        func arrival(startedAgo: TimeInterval, promptIn: TimeInterval, mode: ArrivalMode = .confirmation) -> PendingArrival {
+            PendingArrival(
+                churchSlug: "grace", churchName: "Grace Community", occurrenceId: "o",
+                mode: mode, promptAt: now.addingTimeInterval(promptIn),
+                startedAt: now.addingTimeInterval(-startedAgo),
+                needsPersonConfirmation: mode == .confirmation, isQueued: false
+            )
+        }
+        let states: [(String, PendingArrival)] = [
+            ("11-home-arrival-counting", arrival(startedAgo: 13, promptIn: 107)),
+            ("12-home-arrival-early", arrival(startedAgo: 60, promptIn: 40 * 60)),
+            ("13-home-arrival-ready", arrival(startedAgo: 125, promptIn: -5)),
+            ("14-home-arrival-automatic", arrival(startedAgo: 80, promptIn: 40, mode: .automatic)),
+        ]
+        for (name, pending) in states {
+            try await render(
+                name,
+                ScrollView {
+                    VStack(spacing: FaithFormTokens.Spacing.md) {
+                        AttendanceArrivalCard(
+                            pending: pending, churchName: "Grace Community", now: now,
+                            isWorking: false, onConfirm: {}, onDecline: {}
+                        )
+                        // Where the feed begins, for scale.
+                        RoundedRectangle(cornerRadius: FaithFormTokens.Radius.xl)
+                            .fill(Color.gray.opacity(0.12))
+                            .frame(height: 220)
+                    }
+                    .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
+                    .padding(.top, FaithFormTokens.Spacing.xxl)
+                }
+                .background(FaithFormTokens.light.background)
+            )
+        }
+    }
+
     @Test("typing an unused character: the field shows what the model kept, and says why", .enabled(if: enabled))
     func typedCodeField() async throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)

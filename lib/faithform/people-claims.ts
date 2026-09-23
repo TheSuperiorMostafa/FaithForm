@@ -102,6 +102,14 @@ export async function requestPeopleClaim(
   const churchId = await resolveChurchIdBySlug(admin, parsed.data.churchSlug);
   await assertNotBlocked(admin, account.id, churchId);
 
+  // The member app only needs to send the church. Use the account's current
+  // display name as the staff-facing hint so the request is useful even when
+  // it is opened from the automatic check-in blocker.
+  const accountName = (account.displayName ?? "").trim();
+  const nameParts = accountName ? accountName.split(/\s+/) : [];
+  const claimedFirstName = parsed.data.firstName ?? nameParts[0] ?? undefined;
+  const claimedLastName = parsed.data.lastName ?? (nameParts.length > 1 ? nameParts.slice(1).join(" ") : undefined);
+
   const { data: existingLink } = await admin
     .from("visitor_people_links")
     .select("id")
@@ -128,8 +136,8 @@ export async function requestPeopleClaim(
     await admin
       .from("visitor_people_claims")
       .update({
-        claimed_first_name: parsed.data.firstName ?? null,
-        claimed_last_name: parsed.data.lastName ?? null,
+        claimed_first_name: claimedFirstName ?? null,
+        claimed_last_name: claimedLastName ?? null,
         normalized_email: normalizeEmail(parsed.data.email),
         normalized_phone: normalizePhone(parsed.data.phone),
         updated_at: new Date().toISOString(),
@@ -152,8 +160,8 @@ export async function requestPeopleClaim(
       church_id: churchId,
       status: "pending",
       source: "self_request",
-      claimed_first_name: parsed.data.firstName ?? null,
-      claimed_last_name: parsed.data.lastName ?? null,
+      claimed_first_name: claimedFirstName ?? null,
+      claimed_last_name: claimedLastName ?? null,
       normalized_email: normalizeEmail(parsed.data.email),
       normalized_phone: normalizePhone(parsed.data.phone),
     })

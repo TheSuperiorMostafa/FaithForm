@@ -17,7 +17,7 @@ reach, and until they do, the flow will not work no matter what the code says.
 |---|---|---|
 | Who | Church staff | Visitors / congregation |
 | Auth entry | `/login`, `/setup`, `/onboarding` | In-app sign-up and sign-in |
-| Post-auth destination | `{site origin}/auth/callback` | `faithform://auth/callback` |
+| Post-auth destination | `{site origin}/auth/callback` | `{site origin}/app/auth/callback` → `faithform://auth/callback` |
 | Flow | Supabase SSR cookie session | PKCE, code exchanged in-app |
 | After success | Dashboard shell (staff role required) | Visitor bootstrap → discovery or home |
 
@@ -68,9 +68,19 @@ FaithForm app: create account
 Supabase sends the confirmation email
   ▼
 Person taps the link → Supabase verifies the address
-  │  302 → faithform://auth/callback?code=…
+  │  302 → {site origin}/app/auth/callback?code=…
   ▼
-OS opens the app directly (custom scheme — no browser page as a final stop)
+The hand-off page (app/app/auth/callback) — https, so the browser follows it
+  │  ── reads the location's query *and fragment*: a code arrives in one, a
+  │     provider failure in the other, and a fragment never reaches a server
+  │  ── navigates to faithform://auth/callback?code=…  — a navigation the page
+  │     initiates, which browsers allow, unlike a 302 into a custom scheme
+  │  ── never exchanges the code: the verifier is in the phone's keychain, so
+  │     this page is a courier and nothing else
+  │  ── after 2s, shows "Your email is confirmed" and a manual Open button,
+  │     because no browser reports whether the app came to the front
+  ▼
+OS opens the app
   ▼
 AuthCallbackLink.parse(url)  ── strict: exact scheme, host, path; code matched
   │                             against ^[A-Za-z0-9._~-]{8,512}$
@@ -92,7 +102,34 @@ Has church → visitor home
 ```
 
 **Staff dashboard routes are never entered.** The mobile app has no concept of
-them; it only ever calls `/api/mobile/v1/*`.
+them; it only ever calls `/api/mobile/v1/*`. `/app/auth/callback` is a public,
+unindexed, no-referrer page that renders one card and calls nothing.
+
+### Why the confirmation redirect is an https page
+
+It was `faithform://auth/callback` directly, on the assumption in the old
+diagram: "OS opens the app directly — no browser page as a final stop."
+
+That is not how it behaved. A custom scheme cannot be the **final stop of a
+redirect chain**. Supabase's verify endpoint confirms the address and *then*
+answers `302 Location: faithform://…`, and a browser asked to follow a redirect
+into a non-http scheme generally refuses; the in-app browsers inside mail
+clients always do. So the last thing every new member saw after confirming was
+a connection error — for an account that had been confirmed a moment earlier,
+which is why signing in by hand then worked perfectly and why the bug read as
+cosmetic. It was not: it was on the first screen of every signup.
+
+An https page can receive that redirect. From there the hand-off to the scheme
+is a navigation the *page* performs, which browsers do allow, and when nothing
+happens there is somewhere to say so in words instead of a browser error.
+
+The page holds no authority. The code it carries is worthless without the PKCE
+verifier, which never leaves the phone's keychain — so a code passing through
+this page is worthless to the server, to a proxy, and to anyone reading the
+URL. Nothing about the destination is taken from the arriving link: the deep
+link is rebuilt from a code matched against the contract's alphabet, or from
+the two machine-readable error names, and nothing else survives the crossing —
+not the provider's wording, not an address in it, not an extra parameter.
 
 ### Dashboard auth (unchanged, now explicit)
 
@@ -178,16 +215,19 @@ and why the mobile app must never rely on it.
 
 | Environment | Rows to add |
 |---|---|
-| Development | `http://localhost:3000/auth/callback`<br>`faithform://auth/callback` |
-| Staging | `{staging origin}/auth/callback`<br>`faithform://auth/callback` |
-| Production | `https://faithform.io/auth/callback`<br>`faithform://auth/callback` |
+| Development | `http://localhost:3000/auth/callback`<br>`http://localhost:3000/app/auth/callback` |
+| Staging | `{staging origin}/auth/callback`<br>`{staging origin}/app/auth/callback` |
+| Production | `https://faithform.io/auth/callback`<br>`https://faithform.io/app/auth/callback` |
 
-> `faithform://auth/callback` is the same string in every environment — there is
-> one custom scheme. Environments stay separated at the identity provider: each
-> talks to its own Supabase project, the PKCE verifier is stored per
-> environment key, and a code minted by one project cannot be spent against
-> another. **If this row is missing, Supabase silently falls back to the Site
-> URL and the original bug returns.**
+> **If a row is missing, Supabase silently falls back to the Site URL and the
+> original bug returns.**
+>
+> `faithform://auth/callback` is no longer a row, and adding it back would do
+> nothing: nothing registers it as a `redirect_to` any more. The apps register
+> `{origin}/app/auth/callback` instead, for the reason in §2. Environments stay
+> separated at the identity provider: each talks to its own Supabase project,
+> the PKCE verifier is stored per environment key, and a code minted by one
+> project cannot be spent against another.
 
 ### 4.2 Supabase → Authentication → Email Templates
 

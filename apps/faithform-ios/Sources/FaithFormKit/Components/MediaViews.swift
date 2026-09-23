@@ -60,7 +60,7 @@ public struct LiveNowHero: View {
 
     private var card: some View {
         VStack(alignment: .leading, spacing: 0) {
-            StreamThumbnail(url: live.posterUrl)
+            StreamThumbnail(url: live.posterUrl, showsGlyph: action == nil)
                 .overlay {
                     LinearGradient(
                         colors: [.black.opacity(0.0), .black.opacity(0.35)],
@@ -204,6 +204,13 @@ public struct MediaArchiveList: View {
                     }
 
                 case let .loaded(live, items, isStale):
+                    // A recently ended service can be exposed in both places:
+                    // the replay hero and the archive endpoint. The hero is
+                    // the primary entry point for that recording, so don't
+                    // render the same media item a second time below it.
+                    let archiveItems = items.filter { item in
+                        item.mediaId != live?.replayMediaId
+                    }
                     if isStale {
                         OfflineBanner(message: L.offlineCached)
                     }
@@ -216,7 +223,7 @@ public struct MediaArchiveList: View {
                     }
 
                     let searching = !model.searchTerm.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    if live == nil && items.isEmpty && !searching {
+                    if live == nil && archiveItems.isEmpty && !searching {
                         EmptyStateView(
                             title: L.mediaServicesEmptyTitle,
                             explanation: L.mediaServicesEmptyBody,
@@ -233,20 +240,20 @@ public struct MediaArchiveList: View {
                             onSubmit: { Task { await model.search(model.searchTerm) } }
                         )
 
-                        if items.isEmpty {
+                        if archiveItems.isEmpty {
                             EmptyStateView(
                                 title: searching ? L.mediaArchiveEmptySearch : L.mediaArchiveEmpty,
                                 explanation: searching ? "" : L.mediaArchiveEmptyBody,
                                 symbol: searching ? "magnifyingglass" : "film"
                             )
                         } else {
-                            ForEach(items, id: \.mediaId) { item in
+                            ForEach(archiveItems, id: \.mediaId) { item in
                                 Button { onOpen(item) } label: {
                                     ArchiveCard(item: item)
                                 }
                                 .buttonStyle(PressScaleStyle())
                                 .onAppear {
-                                    if item.mediaId == items.last?.mediaId {
+                                    if item.mediaId == archiveItems.last?.mediaId {
                                         Task { await model.loadMore() }
                                     }
                                 }
@@ -704,7 +711,7 @@ public struct LivePlayerView: View {
                 .accessibilityHidden(true)
 
             if model.phase == .connecting && live.posterUrl != nil {
-                StreamThumbnail(url: live.posterUrl)
+                StreamThumbnail(url: live.posterUrl, showsGlyph: false)
                     .overlay(Color.black.opacity(0.35))
             }
 

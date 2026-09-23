@@ -105,11 +105,15 @@ class AppContainer(
                 // Password-reset emails land on this build's own web origin,
                 // so a staging build cannot mail someone a production link.
                 resetRedirectOrigin = apiOrigin,
-                // Confirmation emails return to this app's own callback — the
-                // contract constant, never a value a request or link supplied.
-                // Without it the identity provider falls back to its Site URL,
-                // which is the church dashboard, not this app.
-                signUpRedirect = AuthCallbackLink.CANONICAL
+                // Confirmation emails return to this build's own web origin,
+                // which hands off to `faithform://auth/callback` from a page
+                // rather than from a redirect — a browser will not follow a
+                // `302` into a custom scheme, and every confirmation ended on
+                // a connection error while this was the scheme itself. Derived
+                // from configuration, never from a request or a link; without
+                // it the provider falls back to its Site URL, which is the
+                // church dashboard, not this app.
+                signUpRedirect = AuthCallbackLink.confirmRedirect(apiOrigin)
             ),
             transport,
             verifierStore = verifierStore

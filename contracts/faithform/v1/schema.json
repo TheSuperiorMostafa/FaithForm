@@ -816,6 +816,54 @@
       ],
       "additionalProperties": false
     },
+    "PeopleClaimRequest": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "churchSlug": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        }
+      },
+      "required": [
+        "churchSlug"
+      ],
+      "additionalProperties": false
+    },
+    "PeopleClaimResponse": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "pending",
+            "approved",
+            "rejected",
+            "withdrawn",
+            "disputed"
+          ]
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "self_request",
+            "invitation",
+            "join"
+          ]
+        },
+        "isLinked": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "status",
+        "source",
+        "isLinked"
+      ],
+      "additionalProperties": false
+    },
     "Bootstrap": {
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "type": "object",
@@ -6984,6 +7032,258 @@
         "churchName",
         "paidAt",
         "giftType"
+      ],
+      "additionalProperties": false
+    },
+    "StartRecurringGiftRequest": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "churchSlug": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "fundId": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "amountCents": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "interval": {
+          "type": "string",
+          "enum": [
+            "week",
+            "month",
+            "year"
+          ]
+        },
+        "clientAttemptId": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 64
+        }
+      },
+      "required": [
+        "churchSlug",
+        "fundId",
+        "amountCents",
+        "interval",
+        "clientAttemptId"
+      ],
+      "additionalProperties": false
+    },
+    "RecurringGiftSession": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "attemptId": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "clientSecret": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 512
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "publishableKey": {
+          "type": "string",
+          "maxLength": 255
+        },
+        "stripeAccountId": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "merchantName": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "amountCents": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "currency": {
+          "type": "string",
+          "maxLength": 8
+        },
+        "interval": {
+          "type": "string",
+          "enum": [
+            "week",
+            "month",
+            "year"
+          ]
+        },
+        "fundTitle": {
+          "type": "string",
+          "maxLength": 120
+        }
+      },
+      "required": [
+        "attemptId",
+        "clientSecret",
+        "publishableKey",
+        "stripeAccountId",
+        "merchantName",
+        "amountCents",
+        "currency",
+        "interval",
+        "fundTitle"
+      ],
+      "additionalProperties": false
+    },
+    "RecurringGift": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "subscriptionId": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "fundTitle": {
+          "type": "string",
+          "maxLength": 120
+        },
+        "amountCents": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "currency": {
+          "type": "string",
+          "maxLength": 8
+        },
+        "interval": {
+          "type": "string",
+          "enum": [
+            "week",
+            "month",
+            "year"
+          ]
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "trialing",
+            "past_due",
+            "paused",
+            "unpaid"
+          ]
+        },
+        "startedAt": {
+          "type": "string",
+          "maxLength": 40
+        }
+      },
+      "required": [
+        "subscriptionId",
+        "fundTitle",
+        "amountCents",
+        "currency",
+        "interval",
+        "status",
+        "startedAt"
+      ],
+      "additionalProperties": false
+    },
+    "RecurringGiftList": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/RecurringGift"
+          }
+        }
+      },
+      "required": [
+        "items"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "RecurringGift": {
+          "type": "object",
+          "properties": {
+            "subscriptionId": {
+              "type": "string",
+              "maxLength": 64
+            },
+            "fundTitle": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "amountCents": {
+              "type": "integer",
+              "minimum": -9007199254740991,
+              "maximum": 9007199254740991
+            },
+            "currency": {
+              "type": "string",
+              "maxLength": 8
+            },
+            "interval": {
+              "type": "string",
+              "enum": [
+                "week",
+                "month",
+                "year"
+              ]
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "active",
+                "trialing",
+                "past_due",
+                "paused",
+                "unpaid"
+              ]
+            },
+            "startedAt": {
+              "type": "string",
+              "maxLength": 40
+            }
+          },
+          "required": [
+            "subscriptionId",
+            "fundTitle",
+            "amountCents",
+            "currency",
+            "interval",
+            "status",
+            "startedAt"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "RecurringGiftCancelResult": {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "type": "object",
+      "properties": {
+        "subscriptionId": {
+          "type": "string",
+          "maxLength": 64
+        },
+        "stopped": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "subscriptionId",
+        "stopped"
       ],
       "additionalProperties": false
     },

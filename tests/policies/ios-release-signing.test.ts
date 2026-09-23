@@ -24,6 +24,12 @@ test("the release keeps production services and disables debug controls", () => 
   assert.match(release, /^FAITHFORM_ALLOW_DEBUG_CONTROLS = NO$/m);
 });
 
+test("the replacement for rejected build 3 has a newer release build number", () => {
+  const build = release.match(/^CURRENT_PROJECT_VERSION = (\d+)$/m);
+  assert.ok(build);
+  assert.ok(Number(build[1]) > 3);
+});
+
 test("the App Store export uses the same team without uploading automatically", () => {
   const options = readFileSync("apps/faithform-ios/ExportOptions-AppStore.plist", "utf8");
   assert.match(options, /<key>method<\/key>\s*<string>app-store-connect<\/string>/);

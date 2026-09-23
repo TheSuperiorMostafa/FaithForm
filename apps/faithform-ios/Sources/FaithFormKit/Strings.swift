@@ -406,6 +406,18 @@ public enum L {
     public static var autoAttendanceNoLinkBody: String {
         t("auto_attendance_no_link_body", "Once someone at your church confirms your details, you can turn on automatic check-in.")
     }
+    public static var autoAttendanceRequestConfirmation: String {
+        t("auto_attendance_request_confirmation", "Ask my church to confirm me")
+    }
+    public static var autoAttendanceConfirmationRequested: String {
+        t("auto_attendance_confirmation_requested", "Request sent. Someone at your church can now confirm you from People.")
+    }
+    public static var autoAttendanceConfirmationAlreadyLinked: String {
+        t("auto_attendance_confirmation_already_linked", "Your church has already confirmed you. Try automatic check-in again.")
+    }
+    public static var autoAttendanceConfirmationFailed: String {
+        t("auto_attendance_confirmation_failed", "We couldn't send that request. Check your connection and try again.")
+    }
     public static var autoAttendanceChurchDisabledTitle: String {
         t("auto_attendance_church_disabled_title", "Your church has not set this up")
     }
@@ -497,6 +509,27 @@ public enum L {
     }
     public static var autoAttendancePendingAutomaticBody: String {
         t("auto_attendance_pending_automatic_body", "Stay a moment and FaithForm will check you in.")
+    }
+    public static var autoAttendanceArrivalEyebrow: String {
+        t("auto_attendance_arrival_eyebrow", "Automatic check-in")
+    }
+    public static var autoAttendanceArrivalWaitingCaption: String {
+        t("auto_attendance_arrival_waiting_caption", "Stay here — we'll ask you to confirm when the timer runs out.")
+    }
+    public static var autoAttendanceArrivalAutomaticCaption: String {
+        t("auto_attendance_arrival_automatic_caption", "Stay here — you'll be checked in when the timer runs out.")
+    }
+    public static var autoAttendanceArrivalReadyCaption: String {
+        t("auto_attendance_arrival_ready_caption", "Tap to be counted for today's service.")
+    }
+    public static var autoAttendanceArrivalWaitingUntil: String {
+        t("auto_attendance_arrival_waiting_until", "Check-in starts at %@. Stay nearby.")
+    }
+    public static var autoAttendanceArrivalDecline: String {
+        t("auto_attendance_arrival_decline", "I'm not here")
+    }
+    public static var autoAttendanceArrivalTimeLeft: String {
+        t("auto_attendance_arrival_time_left", "%@ left")
     }
     public static var autoAttendanceNextService: String {
         t("auto_attendance_next_service", "Next service: %@")
@@ -994,6 +1027,85 @@ public enum L {
     }
     public static var givingRecurringElsewhere: String {
         t("giving_recurring_elsewhere", "Giving every week or month is set up on this church's giving page.")
+    }
+
+    // MARK: - Recurring giving (migration 0100)
+
+    public static var givingOnceTitle: String {
+        t("giving_once_title", "Give once")
+    }
+    public static var givingRecurringTitle: String {
+        t("giving_recurring_title", "Give regularly")
+    }
+    public static var givingCadenceWeekly: String {
+        t("giving_cadence_weekly", "Every week")
+    }
+    public static var givingCadenceMonthly: String {
+        t("giving_cadence_monthly", "Every month")
+    }
+    public static var givingCadenceYearly: String {
+        t("giving_cadence_yearly", "Every year")
+    }
+    /// "%@" is the formatted amount: "$25 every week".
+    public static func givingEveryWeekAmount(_ amount: String) -> String {
+        String(format: t("giving_every_week_amount", "%@ every week"), amount)
+    }
+    /// "%@" is the formatted amount: "$25 every month".
+    public static func givingEveryMonthAmount(_ amount: String) -> String {
+        String(format: t("giving_every_month_amount", "%@ every month"), amount)
+    }
+    public static var givingHowOften: String {
+        t("giving_how_often", "How often")
+    }
+    public static var givingStartRecurring: String {
+        t("giving_start_recurring", "Start giving")
+    }
+    public static var givingRecurringConfirmBody: String {
+        t("giving_recurring_confirm_body", "The first gift is today. You can stop it anytime from this screen.")
+    }
+    public static var givingRecurringStartedTitle: String {
+        t("giving_recurring_started_title", "Your gift is set up")
+    }
+    public static var givingRecurringStartedBody: String {
+        t("giving_recurring_started_body", "We're confirming the first payment. Your gift will appear below once it clears.")
+    }
+    public static var givingYourRecurring: String {
+        t("giving_your_recurring", "Your regular giving")
+    }
+    public static var givingRecurringPaymentProblem: String {
+        t("giving_recurring_payment_problem", "Payment didn't go through")
+    }
+    public static var givingRecurringPaused: String {
+        t("giving_recurring_paused", "Paused")
+    }
+    /// "%@" is when it started, as a date: "Started 3 March 2026".
+    public static func givingRecurringStartedOn(_ date: String) -> String {
+        String(format: t("giving_recurring_started_on", "Started %@"), date)
+    }
+    public static var givingStopRecurring: String {
+        t("giving_stop_recurring", "Stop this gift")
+    }
+    /// "%@" is the gift, phrased at its cadence: "Stop giving $25 every month?"
+    public static func givingStopRecurringConfirm(_ gift: String) -> String {
+        String(format: t("giving_stop_recurring_confirm", "Stop giving %@?"), gift)
+    }
+    public static var givingStopRecurringBody: String {
+        t("giving_stop_recurring_body", "Nothing else will be charged. Gifts you have already made are unaffected.")
+    }
+    public static var givingStopRecurringConfirmAction: String {
+        t("giving_stop_recurring_confirm_action", "Stop giving")
+    }
+    public static var givingKeepGiving: String {
+        t("giving_keep_giving", "Keep giving")
+    }
+    public static var givingStopFailed: String {
+        t("giving_stop_failed", "Couldn't stop that gift. Try again.")
+    }
+    public static var givingRecurringNeedsEmail: String {
+        t("giving_recurring_needs_email", "Add an email to your account to give every week or month.")
+    }
+    public static var givingRecurringEmpty: String {
+        t("giving_recurring_empty", "You have no regular giving set up here yet.")
     }
     public static var givingLoading: String {
         t("giving_loading", "Loading…")

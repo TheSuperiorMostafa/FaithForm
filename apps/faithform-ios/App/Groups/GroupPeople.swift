@@ -228,7 +228,12 @@ struct GroupPreferencesView: View {
         if await model.perform("Preference saved.", operation: {
             if let groupId { let _: GroupAck = try await model.send("\(model.path)/\(groupId)/notifications", method: .put, body: SetGroupNotificationRequest(level: level), as: GroupAck.self) }
             else { let _: MessagingPreferences = try await model.send("\(model.messagingPath)/preferences", method: .put, body: SetMessagingLevelRequest(level: level), as: MessagingPreferences.self) }
-        }) { dismiss() }
+        }) {
+            // The sheet closing is the confirmation. Do not leak a green
+            // “Preference saved” banner into the screen underneath.
+            model.feedback = nil
+            dismiss()
+        }
     }
     private func unblock(_ person: ChatBlockedPerson) async {
         await model.perform("Person unblocked.") { let response = try await model.api.send("\(model.messagingPath)/blocks", method: .delete, query: ["chatUserId": person.chatUserId], as: ChatBlockList.self); if let list = response.value { blocked = list.items; model.applyBlocked(list) } }

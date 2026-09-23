@@ -17,12 +17,23 @@ import FaithFormKit
 ///
 /// An amount field, a payment sheet, or a view of a web page inside the app. It
 /// shows what the church gives to, read-only, and one button that leaves.
+///
+/// It *does* list the person's existing recurring gifts, with a way to stop
+/// them, because none of those three things is one of these. Stopping a gift
+/// moves no money and asks for none; it is account management, and a monthly
+/// charge somebody can see nowhere and stop nowhere is the outcome this feature
+/// most has to avoid.
 struct GiveTabView: View {
     enum Route: Hashable {
         case amount
         case confirm
         case outcome
         case history
+        /// The recurring counterparts. Separate cases rather than a flag on the
+        /// existing ones, so a half-finished one-time gift and a half-finished
+        /// recurring one can never be shown the same screen.
+        case recurringConfirm
+        case recurringOutcome
     }
 
     @Environment(\.faithformTheme) private var theme
@@ -31,6 +42,9 @@ struct GiveTabView: View {
     let isStale: Bool
 
     @State private var path: [Route] = []
+    @State private var mode: GivingModeSelector.Mode = .once
+    /// The gift a person has asked to stop, held only while the alert is up.
+    @State private var stopping: RecurringGift?
 
     var body: some View {
         let model = features.giving
@@ -75,6 +89,32 @@ struct GiveTabView: View {
         // again. Kept apart from `load` because it can poll for a minute or
         // two, and the fund list should not wait on it.
         .task(id: features.key) { await model.resumeInterruptedDonation() }
+        // What a person already gives, loaded alongside the funds rather than
+        // after them: the list is on the same screen, and a section that
+        // appears a second late reads as one that failed.
+        .task(id: features.key) {
+            await model.resumeInterruptedRecurring()
+            await model.loadRecurring()
+        }
+        // Asked once, in words, before anything stops. Not a swipe, not an
+        // overflow menu — and the confirming button is the plain one, because
+        // stopping a gift destroys nothing.
+        .alert(
+            stopping.map { L.givingStopRecurringConfirm(giftPhrase($0)) } ?? "",
+            isPresented: Binding(
+                get: { stopping != nil },
+                set: { if !$0 { stopping = nil } }
+            ),
+            presenting: stopping
+        ) { gift in
+            Button(L.givingStopRecurringConfirmAction) {
+                stopping = nil
+                Task { await model.stopRecurring(subscriptionID: gift.subscriptionId) }
+            }
+            Button(L.givingKeepGiving, role: .cancel) { stopping = nil }
+        } message: { _ in
+            Text(L.givingStopRecurringBody)
+        }
         .onChange(of: model.donation) { _, phase in
             // A resumed gift has something to say; show it wherever the person
             // is, unless they are already looking at it.
@@ -91,19 +131,60 @@ struct GiveTabView: View {
         if let home = model.listPhase.home {
             switch features.givingRoute(for: home) {
             case .inApp:
-                GivingHomeView(
-                    phase: model.listPhase,
-                    selectedFund: model.selectedFund,
-                    onSelect: { fund in
-                        if model.selectedFund?.fundId != fund.fundId { model.amountText = "" }
-                        model.selectedFund = fund
-                        path.append(.amount)
-                    },
-                    onRetry: { Task { await model.load() } },
-                    onHistory: { path.append(.history) }
-                )
+                VStack(alignment: .leading, spacing: FaithFormTokens.Layout.sectionGap) {
+                    // Only offered when the server says this church can take
+                    // one. A selector with a segment that cannot work is worse
+                    // than no selector.
+                    if home.recurringAvailable {
+                        GivingModeSelector(mode: $mode)
+                    }
+
+                    GivingHomeView(
+                        phase: model.listPhase,
+                        selectedFund: model.selectedFund,
+                        onSelect: { fund in
+                            if model.selectedFund?.fundId != fund.fundId { model.amountText = "" }
+                            model.selectedFund = fund
+                            path.append(.amount)
+                        },
+                        onRetry: { Task { await model.load() } },
+                        onHistory: { path.append(.history) }
+                    )
+
+                    // Listed whatever the selector says. What somebody already
+                    // gives is not a mode they have to switch into to see — and
+                    // a recurring charge that is only visible behind a toggle is
+                    // a recurring charge somebody will miss.
+                    RecurringGiftsSection(
+                        gifts: model.recurringGifts,
+                        isLoading: model.recurringLoading,
+                        stoppingID: model.stoppingID,
+                        stopFailed: model.stopFailed,
+                        onStop: { stopping = $0 }
+                    )
+                }
             case let .web(url):
-                WebGivingView(home: home, url: url)
+                VStack(alignment: .leading, spacing: FaithFormTokens.Layout.sectionGap) {
+                    WebGivingView(home: home, url: url)
+
+                    // Shown here too, and the distinction is the whole reason
+                    // it is allowed to be: **stopping a gift is not giving
+                    // one.** No amount, no payment sheet, no money moving — so
+                    // nothing here is the in-app donation guideline 3.2.1(vi)
+                    // reserves for approved nonprofits.
+                    //
+                    // Leaving it out would mean a person who set up a monthly
+                    // gift on this church's own page could see it nowhere and
+                    // stop it nowhere, which is the failure this whole feature
+                    // exists to avoid.
+                    RecurringGiftsSection(
+                        gifts: model.recurringGifts,
+                        isLoading: model.recurringLoading,
+                        stoppingID: model.stoppingID,
+                        stopFailed: model.stopFailed,
+                        onStop: { stopping = $0 }
+                    )
+                }
             case .unavailable:
                 if home.availability == "available" {
                     // Accepting, yet neither door is open: no approval and no
@@ -148,12 +229,19 @@ struct GiveTabView: View {
         case .amount:
             if let fund = model.selectedFund {
                 ScrollView {
-                    GivingAmountView(
-                        fund: fund,
-                        amountText: Bindable(model).amountText,
-                        result: model.amountResult,
-                        onContinue: { path.append(.confirm) }
-                    )
+                    VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
+                        if mode == .recurring {
+                            GivingCadencePicker(cadence: Bindable(model).cadence)
+                        }
+                        GivingAmountView(
+                            fund: fund,
+                            amountText: Bindable(model).amountText,
+                            result: model.amountResult,
+                            onContinue: {
+                                path.append(mode == .recurring ? .recurringConfirm : .confirm)
+                            }
+                        )
+                    }
                     .padding(FaithFormTokens.Layout.screenPaddingHorizontal)
                 }
                 .background(theme.palette.background)
@@ -213,6 +301,54 @@ struct GiveTabView: View {
             )
             .navigationBarTitleDisplayMode(.inline)
 
+        case .recurringConfirm:
+            if let fund = model.selectedFund, case let .valid(cents) = model.amountResult {
+                ScrollView {
+                    GivingRecurringConfirmView(
+                        churchName: model.listPhase.home?.churchName ?? "",
+                        fundTitle: fund.title,
+                        amountCents: cents,
+                        currency: fund.currency,
+                        cadence: model.cadence,
+                        onStart: {
+                            path.append(.recurringOutcome)
+                            Task { await model.startRecurring() }
+                        }
+                    )
+                    .padding(FaithFormTokens.Layout.screenPaddingHorizontal)
+                }
+                .background(theme.palette.background)
+                .navigationBarTitleDisplayMode(.inline)
+            }
+
+        case .recurringOutcome:
+            ScrollView {
+                GivingRecurringOutcomeView(
+                    phase: model.recurring,
+                    onDone: {
+                        if case .started = model.recurring {
+                            // A finished set-up starts the next one from the
+                            // top, with nothing of this one left in the field.
+                            model.amountText = ""
+                            mode = .once
+                            path.removeAll()
+                        } else if path.count > 1 {
+                            // Declined, cancelled or unreachable: back to the
+                            // confirmation, where trying again is one tap.
+                            path.removeLast()
+                        } else {
+                            path.removeAll()
+                        }
+                    }
+                )
+                .padding(FaithFormTokens.Layout.screenPaddingHorizontal)
+            }
+            .background(theme.palette.background)
+            // No way back while the subscription is being created. Leaving
+            // would not stop it, only the person's view of it.
+            .navigationBarBackButtonHidden(Self.isRecurringInFlight(model.recurring))
+            .navigationBarTitleDisplayMode(.inline)
+
         case .history:
             ScrollView {
                 GivingHistoryView(items: model.history, isLoading: model.historyLoading)
@@ -225,9 +361,33 @@ struct GiveTabView: View {
         }
     }
 
+    /// How the alert names the gift: the same words its row shows.
+    ///
+    /// A confirmation that said "stop this gift?" would be asking somebody to
+    /// match it against a card the alert is covering.
+    private func giftPhrase(_ gift: RecurringGift) -> String {
+        let amount = formatGivingAmount(cents: gift.amountCents, currency: gift.currency)
+        switch GivingInterval(rawValue: gift.interval) {
+        case .week: return L.givingEveryWeekAmount(amount)
+        case .month: return L.givingEveryMonthAmount(amount)
+        default: return "\(amount) · \(recurringIntervalTitle(gift.interval))"
+        }
+    }
+
     nonisolated static func isInFlight(_ phase: DonationPhase) -> Bool {
         switch phase {
         case .preparing, .presenting, .awaitingConfirmation: return true
+        default: return false
+        }
+    }
+
+    /// Whether a recurring gift is mid-creation.
+    ///
+    /// `started` is **not** in flight: the subscription exists by then and the
+    /// screen has a button of its own, so the person must be able to leave.
+    nonisolated static func isRecurringInFlight(_ phase: RecurringPhase) -> Bool {
+        switch phase {
+        case .preparing, .presenting: return true
         default: return false
         }
     }

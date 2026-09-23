@@ -154,6 +154,9 @@ public final class AutomaticAttendanceModel {
     /// An arrival still waiting on a verdict — the selected church's first.
     public private(set) var pending: PendingArrival?
     public private(set) var activityMessage: String?
+    /// The clock a waiting arrival is drawn against. Advanced once a second
+    /// by `holdOpenWhilePending()` so a countdown on screen actually moves.
+    public private(set) var tick: Date = Date()
 
     public struct RecentCheckIn: Equatable, Sendable {
         public let occurrenceLabel: String
@@ -224,6 +227,7 @@ public final class AutomaticAttendanceModel {
         }
 
         let previousPending = pending
+        tick = now()
         let snapshot = await service.snapshot()
         isEnabled = snapshot.settings.enabled
         monitoredRegionCount = snapshot.settings.enabled ? snapshot.outcome.monitoring : 0
@@ -453,20 +457,40 @@ public final class AutomaticAttendanceModel {
         if phase.isSuccess { await refreshHistory() }
     }
 
-    /// While this screen is open and an arrival becomes due within a few
-    /// minutes, wait for it here: an app on screen has execution time of its
-    /// own, and spending it saves the person a second tap.
+    /// "I'm not here": closes the arrival without counting anything.
+    public func declineArrival() async {
+        guard let pending else { return }
+        isWorking = true
+        defer { isWorking = false }
+        await service.declineArrival(churchSlug: pending.churchSlug)
+        await refresh()
+    }
+
+    /// Keeps a waiting arrival moving while a screen showing it is open.
+    ///
+    /// Ticks once a second so the countdown is live, and resumes the attempt
+    /// the moment it comes due — then the "Check in" button is simply there,
+    /// or an automatic arrival is simply counted.
+    ///
+    /// There is no cap on how far ahead the moment may be. The old one — five
+    /// minutes — left an early arrival reading "Stay a moment" with nothing
+    /// scheduled to change it, and the only thing that ever did was the
+    /// notification, long after the person had stopped looking.
     ///
     /// Cancelled with the view that runs it. Never used for a closed app.
-    public func holdOpenUntilDue(maximumWait: TimeInterval = 5 * 60) async {
-        guard let pending, let promptAt = pending.promptAt else { return }
-        let wait = promptAt.timeIntervalSince(now())
-        guard wait > 0, wait <= maximumWait else { return }
-        try? await Task.sleep(nanoseconds: UInt64((wait + 1) * 1_000_000_000))
-        guard !Task.isCancelled else { return }
-        let phase = await service.resume()
-        await refresh()
-        if phase.isSuccess { await refreshHistory() }
+    public func holdOpenWhilePending() async {
+        while !Task.isCancelled {
+            // Nothing scheduled — a queued submission — has nothing to count down.
+            guard let promptAt = pending?.promptAt else { return }
+            tick = now()
+            if tick >= promptAt {
+                let phase = await service.resume()
+                await refresh()
+                if phase.isSuccess { await refreshHistory() }
+                return
+            }
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+        }
     }
 
     // MARK: - Steps

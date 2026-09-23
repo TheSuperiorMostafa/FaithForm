@@ -9,6 +9,15 @@
     "codePattern": "^[A-Za-z0-9._~-]{8,512}$",
     "$comment": "One custom scheme for every build, by construction: iOS and Android both register `faithform` and neither declares Universal/App Links (a deliberate decision recorded in Info.plist and AndroidManifest.xml). Environment separation happens at the identity provider, not in the URL: each environment talks to its own Supabase project, the PKCE verifier is stored per environment, and a code minted by one project is meaningless to another."
   },
+  "confirmHandoff": {
+    "path": "/app/auth/callback",
+    "environments": {
+      "development": "http://localhost:3000/app/auth/callback",
+      "production": "https://faithform.io/app/auth/callback"
+    },
+    "$comment": "The https page a confirmation email returns to, and the reason the apps no longer register the custom scheme itself as `redirect_to`. A custom scheme cannot be the final stop of a redirect chain: Supabase's verify endpoint confirms the address and then 302s to `redirect_to`, and browsers — the in-app browsers inside mail clients above all — refuse to follow a 302 into a non-http scheme. The address was already confirmed by then, so the person saw a connection error for an account that had in fact been created, and signing in worked. This page ends that: it receives the 302, hands the code on to `faithform.canonical` from a page it controls, and when the app does not open says so in words. It never exchanges the code — the PKCE verifier is in the phone's keychain — so it is a courier and nothing else. Staging's row is `{staging origin}/app/auth/callback`, uninvented here for the same reason the dashboard's is.",
+    "$staging": "{staging origin}/app/auth/callback"
+  },
   "dashboard": {
     "callbackPath": "/auth/callback",
     "environments": {
@@ -79,6 +88,60 @@
         "url": "faithform://auth/callback?code=9c1e02f3%204d69%20whitespace",
         "reason": "invalid",
         "why": "off-alphabet codes are refused before any network call"
+      }
+    ],
+    "handoff": [
+      {
+        "search": "?code=9c1e02f3-4d69-4b8c-a44f-3a9bb75d0a01",
+        "hash": "",
+        "deepLink": "faithform://auth/callback?code=9c1e02f3-4d69-4b8c-a44f-3a9bb75d0a01",
+        "why": "the ordinary success: the code travels on untouched"
+      },
+      {
+        "search": "?code=Zm9vYmFyLWJhemJhcg&type=signup",
+        "hash": "",
+        "deepLink": "faithform://auth/callback?code=Zm9vYmFyLWJhemJhcg",
+        "why": "only the code is carried; parameters the provider appended are dropped rather than relayed"
+      },
+      {
+        "search": "",
+        "hash": "#error=access_denied&error_code=otp_expired&error_description=Email+link+is+invalid+or+has+expired",
+        "deepLink": "faithform://auth/callback#error=access_denied&error_code=otp_expired",
+        "why": "a failure reaches the app as a failure, so it shows the expired-link screen; the provider's wording is not relayed"
+      },
+      {
+        "search": "?error=server_error&error_description=Unable+to+process+request",
+        "hash": "",
+        "deepLink": "faithform://auth/callback#error=server_error",
+        "why": "a failure reported in the query is normalised into the fragment, which is where both parsers look first"
+      },
+      {
+        "search": "?error=access_denied&error_code=%2E%2E%2Fevil",
+        "hash": "",
+        "deepLink": "faithform://auth/callback#error=access_denied",
+        "why": "an error code outside our own alphabet is dropped, not forwarded: nothing shapes the deep link but values this file names"
+      }
+    ],
+    "handoffRefused": [
+      {
+        "search": "?code=short",
+        "hash": "",
+        "why": "a code outside the contract bounds is never forwarded; the page explains instead"
+      },
+      {
+        "search": "?code=9c1e02f3%204d69%20whitespace",
+        "hash": "",
+        "why": "off-alphabet codes are never forwarded"
+      },
+      {
+        "search": "",
+        "hash": "",
+        "why": "nothing to carry at all: the page says the address is confirmed and points at sign-in"
+      },
+      {
+        "search": "?next=%2Fdashboard",
+        "hash": "",
+        "why": "a parameter that is neither a code nor an error carries no state to the app, and a destination is never taken from a link"
       }
     ],
     "rejected": [

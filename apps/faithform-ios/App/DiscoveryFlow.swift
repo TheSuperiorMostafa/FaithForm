@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import FaithFormKit
 
 /// The shared find-a-church journey: search (or nearby) → the church's page →
@@ -53,19 +54,26 @@ struct DiscoverySearchView: View {
             )
             .presentationDetents([.medium])
         }
-        .navigationDestination(item: $opened) { church in
-            ChurchProfileHostView(
-                slug: church.slug,
-                dependencies: dependencies,
-                root: root,
-                onChurchChanged: {
-                    opened = nil
-                    onChurchChanged()
-                },
-                // Someone who opened their own church from search is already
-                // choosing: "Change church" takes them back to the results.
-                onChangeChurch: { opened = nil }
-            )
+        .sheet(isPresented: Binding(
+            get: { opened != nil },
+            set: { if !$0 { opened = nil } }
+        )) {
+            if let church = opened {
+                NavigationStack {
+                    ChurchProfileHostView(
+                        slug: church.slug,
+                        dependencies: dependencies,
+                        root: root,
+                        onChurchChanged: {
+                            opened = nil
+                            onChurchChanged()
+                        },
+                        onChangeChurch: { opened = nil }
+                    )
+                    .toolbar(.hidden, for: .navigationBar)
+                }
+                .presentationDragIndicator(.visible)
+            }
         }
     }
 
@@ -177,8 +185,28 @@ struct ChurchProfileHostView: View {
     }
 
     private func churchChanged() async {
-        await root.load(quiet: true)
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder),
+            to: nil,
+            from: nil,
+            for: nil
+        )
         onChurchChanged()
+        // Close the profile sheet before the account transition starts. This
+        // prevents the empty-state/onboarding flow from being presented while
+        // the old church profile is still unwinding its navigation state.
+        await root.load(quiet: true)
+        // The discovery field can restore first-responder status as its sheet
+        // disappears. Clear it once more after the transition has completed.
+        Task { @MainActor in
+            await Task.yield()
+            UIApplication.shared.sendAction(
+                #selector(UIResponder.resignFirstResponder),
+                to: nil,
+                from: nil,
+                for: nil
+            )
+        }
     }
 }
 

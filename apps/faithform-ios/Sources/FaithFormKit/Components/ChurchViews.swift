@@ -62,6 +62,7 @@ public struct ChurchProfileView: View {
     /// disabled until it has moved on.
     @State private var finishing = false
     @State private var churchesAdded = 0
+    @State private var joinedCelebration: ChurchProfile? = nil
 
     /// - Parameters:
     ///   - hasOtherChurch: the account's church exists and is a different one.
@@ -126,14 +127,35 @@ public struct ChurchProfileView: View {
                 }
             }
         }
+        .overlay {
+            if finishing && joinedCelebration == nil {
+                ZStack {
+                    Color.black.opacity(0.34).ignoresSafeArea()
+                    VStack(spacing: FaithFormTokens.Spacing.md) {
+                        ProgressView()
+                            .controlSize(.large)
+                            .tint(theme.palette.brandAccent)
+                        Text("Adding your church…")
+                            .font(theme.font(FaithFormTokens.Text.titleMedium))
+                            .foregroundStyle(.white)
+                    }
+                    .padding(.horizontal, 28)
+                    .padding(.vertical, 24)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                    .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(.white.opacity(0.18)))
+                }
+                .transition(.opacity)
+                .zIndex(99)
+            } else if let profile = joinedCelebration {
+                ChurchJoinedCelebrationOverlay(profile: profile)
+                    .transition(.opacity.combined(with: .scale(scale: 0.94)))
+                    .zIndex(100)
+            }
+        }
         .background(theme.palette.background)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
-        // Clear over the cover, the usual bar once the cover has scrolled away.
         .toolbarBackground(showsBarBackground ? .visible : .hidden, for: .navigationBar)
-        // Light status bar and title over the dark top of the cover, and the
-        // page's own again once the bar is back. Named explicitly: nil does
-        // not hand the status bar back.
         .toolbarColorScheme(isOverCover ? .dark : colorScheme, for: .navigationBar)
         #endif
     }
@@ -162,7 +184,7 @@ public struct ChurchProfileView: View {
                 .frame(maxWidth: FaithFormTokens.Layout.contentMaxWidth)
                 .frame(maxWidth: .infinity)
         }
-        .refreshable { await model.refresh(slug: slug) }
+        .ignoresSafeArea(edges: .top)
     }
 
     // MARK: - Loaded
@@ -185,8 +207,6 @@ public struct ChurchProfileView: View {
                 sections(profile, action: action, quickActions: quickActions)
             }
         }
-        .ignoresSafeArea(edges: .top)
-        .refreshable { await model.refresh(slug: slug) }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if action == .add || action == .replace || action == .invitationRequired {
                 actionBar(action)
@@ -195,7 +215,6 @@ public struct ChurchProfileView: View {
         .navigationTitle(profile.name)
         .toolbar {
             ToolbarItem(placement: .principal) {
-                // The name fades in once the hero that carried it has gone.
                 Text(profile.name)
                     .font(theme.font(FaithFormTokens.Text.titleMedium))
                     .foregroundStyle(theme.palette.contentPrimary)
@@ -463,9 +482,26 @@ public struct ChurchProfileView: View {
     }
 
     private func add() async {
-        guard await model.add(slug: slug) else { return }
         finishing = true
+        guard await model.add(slug: slug) else {
+            finishing = false
+            return
+        }
         churchesAdded += 1
+
+        #if os(iOS)
+        let feedback = UINotificationFeedbackGenerator()
+        feedback.prepare()
+        feedback.notificationOccurred(.success)
+        #endif
+
+        if case let .loaded(profile) = model.phase {
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
+                joinedCelebration = profile
+            }
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
+        }
+
         await onChurchAdded()
         finishing = false
     }
@@ -1175,5 +1211,87 @@ private extension View {
     /// Fades and lifts a section in on first appearance, one after another.
     func reveal(_ index: Int, _ revealed: Bool) -> some View {
         modifier(Reveal(index: index, revealed: revealed))
+    }
+}
+
+// MARK: - Joined celebration
+
+public struct ChurchJoinedCelebrationOverlay: View {
+    let profile: ChurchProfile
+    @Environment(\.faithformTheme) private var theme
+    @State private var appeared = false
+
+    public init(profile: ChurchProfile) {
+        self.profile = profile
+    }
+
+    public var body: some View {
+        ZStack {
+            theme.palette.background.opacity(0.88)
+                .background(.ultraThinMaterial)
+                .ignoresSafeArea()
+
+            VStack(spacing: FaithFormTokens.Spacing.lg) {
+                ZStack {
+                    Circle()
+                        .fill(theme.palette.brandAccent.opacity(0.12))
+                        .frame(width: 124, height: 124)
+                        .scaleEffect(appeared ? 1.08 : 0.8)
+
+                    ChurchAvatar(
+                        logoUrl: profile.logoUrl,
+                        name: profile.name,
+                        size: 88,
+                        style: .ringed(ring: 3.5)
+                    )
+                    .scaleEffect(appeared ? 1.0 : 0.72)
+
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 30, weight: .bold))
+                        .foregroundStyle(theme.palette.brandAccent)
+                        .background(Circle().fill(theme.palette.background).padding(2))
+                        .offset(x: 34, y: 34)
+                        .scaleEffect(appeared ? 1.0 : 0.2)
+                        .opacity(appeared ? 1.0 : 0)
+                }
+
+                VStack(spacing: FaithFormTokens.Spacing.xs) {
+                    Text("WELCOME TO")
+                        .font(.system(size: 12, weight: .bold))
+                        .tracking(2.5)
+                        .foregroundStyle(theme.palette.brandAccent)
+
+                    Text(profile.name)
+                        .font(.system(size: 28, weight: .bold, design: .rounded))
+                        .foregroundStyle(theme.palette.contentPrimary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
+
+                    Text("Your church home is ready.")
+                        .font(.subheadline)
+                        .foregroundStyle(theme.palette.contentSecondary)
+                }
+                .opacity(appeared ? 1.0 : 0)
+                .offset(y: appeared ? 0 : 10)
+
+                HStack(spacing: FaithFormTokens.Spacing.sm) {
+                    ProgressView()
+                        .tint(theme.palette.brandAccent)
+                    Text("Opening home…")
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(theme.palette.contentSecondary)
+                }
+                .padding(.top, FaithFormTokens.Spacing.xs)
+                .opacity(appeared ? 1.0 : 0)
+            }
+            .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
+        }
+        .onAppear {
+            withAnimation(.spring(response: 0.5, dampingFraction: 0.76)) {
+                appeared = true
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Welcome to \(profile.name). Your church home is ready.")
     }
 }

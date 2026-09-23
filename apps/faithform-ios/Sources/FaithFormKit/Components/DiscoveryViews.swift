@@ -19,36 +19,109 @@ public struct WelcomeView: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
-            Spacer(minLength: FaithFormTokens.Spacing.xxl)
+        ScrollView {
+            VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.xl) {
+                // Header Lockup
+                VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.md) {
+                    HStack(spacing: FaithFormTokens.Spacing.sm) {
+                        FaithFormMark()
+                            .frame(height: 32)
+                        Text(L.appName)
+                            .font(theme.font(FaithFormTokens.Text.titleMedium))
+                            .fontWeight(.bold)
+                            .foregroundStyle(theme.palette.contentPrimary)
+                    }
 
-            VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.md) {
-                Text(L.welcomeTitle)
-                    .font(theme.font(FaithFormTokens.Text.displayLarge))
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("WELCOME HOME")
+                            .font(.caption2.weight(.bold))
+                            .tracking(2.5)
+                            .foregroundStyle(theme.palette.brandAccent)
+                        Text("Find your church community.")
+                            .font(.system(size: 28, weight: .bold, design: .rounded))
+                            .foregroundStyle(theme.palette.contentPrimary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    Text("Connect with your congregation, follow announcements, join groups, and worship together wherever you are.")
+                        .font(theme.font(FaithFormTokens.Text.body))
+                        .foregroundStyle(theme.palette.contentSecondary)
+                        .lineSpacing(3)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                // Feature Highlights Card
+                FaithFormCard {
+                    VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.base) {
+                        welcomeFeatureRow(
+                            symbol: "building.2.fill",
+                            title: "Your Church Home",
+                            detail: "Access weekly sermons, live broadcasts, and church-wide announcements."
+                        )
+                        Rectangle()
+                            .fill(theme.palette.divider)
+                            .frame(height: theme.borderWidth)
+                        welcomeFeatureRow(
+                            symbol: "person.3.fill",
+                            title: "Community & Groups",
+                            detail: "Build real relationships in small groups and direct messaging."
+                        )
+                        Rectangle()
+                            .fill(theme.palette.divider)
+                            .frame(height: theme.borderWidth)
+                        welcomeFeatureRow(
+                            symbol: "heart.fill",
+                            title: "Check-In & Giving",
+                            detail: "Touchless Sunday morning check-in and simple, secure generosity."
+                        )
+                    }
+                }
+
+                // Actions
+                VStack(spacing: FaithFormTokens.Spacing.md) {
+                    Button(action: onFindChurch) {
+                        Label(L.findAChurch, systemImage: "magnifyingglass")
+                    }
+                    .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
+
+                    Button(action: onHaveInvitation) {
+                        Label(L.haveInvitation, systemImage: "envelope.open")
+                    }
+                    .buttonStyle(FaithFormButtonStyle(kind: .secondary, theme: theme))
+                }
+            }
+            .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
+            .padding(.top, FaithFormTokens.Spacing.lg)
+            .padding(.bottom, FaithFormTokens.Spacing.xxl)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(theme.palette.background)
+    }
+
+    private func welcomeFeatureRow(symbol: String, title: String, detail: String) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(theme.palette.brandAccent.opacity(0.12))
+                    .frame(width: 44, height: 44)
+                Image(systemName: symbol)
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(theme.palette.brandAccent)
+            }
+            .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(theme.font(FaithFormTokens.Text.titleMedium))
                     .foregroundStyle(theme.palette.contentPrimary)
-                Text(L.welcomeBody)
-                    .font(theme.font(FaithFormTokens.Text.body))
+                Text(detail)
+                    .font(theme.font(FaithFormTokens.Text.bodySmall))
                     .foregroundStyle(theme.palette.contentSecondary)
+                    .lineSpacing(2)
                     .fixedSize(horizontal: false, vertical: true)
             }
-
-            Spacer()
-
-            VStack(spacing: FaithFormTokens.Spacing.md) {
-                Button(action: onHaveInvitation) {
-                    Label(L.haveInvitation, systemImage: "envelope.open")
-                }
-                    .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
-                Button(action: onFindChurch) {
-                    Label(L.findAChurch, systemImage: "magnifyingglass")
-                }
-                    .buttonStyle(FaithFormButtonStyle(kind: .secondary, theme: theme))
-            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
-        .padding(.bottom, FaithFormTokens.Spacing.xl)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
-        .background(theme.palette.background)
     }
 }
 
@@ -155,6 +228,7 @@ extension String {
 public struct DiscoveryView: View {
     @Environment(\.faithformTheme) private var theme
     @Bindable private var model: DiscoveryModel
+    @FocusState private var searchFocused: Bool
     private let onOpenChurch: @MainActor (String) -> Void
     /// The host decides what "near me" does next — usually showing the
     /// education screen before any OS prompt. Without a host handler the tap
@@ -172,30 +246,25 @@ public struct DiscoveryView: View {
     }
 
     public var body: some View {
-        VStack(spacing: FaithFormTokens.Spacing.base) {
+        VStack(spacing: FaithFormTokens.Spacing.md) {
             searchBar
-
-            Button(L.churchesNearMe) {
-                if let onNearby {
-                    onNearby()
-                } else {
-                    Task { await model.beginNearbyFlow() }
-                }
-            }
-            .buttonStyle(FaithFormButtonStyle(kind: .secondary, theme: theme))
 
             content
         }
         .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
         .background(theme.palette.background)
-        .navigationTitle(L.searchResultsTitle)
+        .navigationTitle(model.query.isEmpty ? L.findAChurch : L.searchResultsTitle)
+        .onAppear { searchFocused = false }
+        .onDisappear { searchFocused = false }
     }
 
     private var searchBar: some View {
         HStack(spacing: FaithFormTokens.Spacing.sm) {
             Image(systemName: "magnifyingglass")
-                .foregroundStyle(theme.mutedContent)
+                .font(.system(size: 17, weight: .medium))
+                .foregroundStyle(theme.palette.brandAccent)
             TextField(L.searchPlaceholder, text: $model.query)
+                .focused($searchFocused)
                 .font(theme.font(FaithFormTokens.Text.body))
                 .submitLabel(.search)
                 .onChange(of: model.query) { _, _ in
@@ -203,17 +272,109 @@ public struct DiscoveryView: View {
                 }
                 .onSubmit { Task { await model.search() } }
                 .accessibilityLabel(Text(L.searchPlaceholder))
+            if !model.query.isEmpty {
+                Button {
+                    model.query = ""
+                    model.queryDidChange()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 16))
+                        .foregroundStyle(theme.palette.contentSecondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Clear search")
+            }
         }
         .padding(.horizontal, FaithFormTokens.Spacing.base)
-        .frame(minHeight: FaithFormTokens.TouchTarget.minimum)
-        .background(Capsule().fill(theme.palette.surfaceSunken))
+        .frame(minHeight: FaithFormTokens.TouchTarget.recommended)
+        .background(
+            RoundedRectangle(cornerRadius: FaithFormTokens.Radius.control, style: .continuous)
+                .fill(theme.palette.surfaceSunken)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: FaithFormTokens.Radius.control, style: .continuous)
+                .strokeBorder(theme.palette.border, lineWidth: theme.borderWidth)
+        )
     }
 
     @ViewBuilder
     private var content: some View {
         switch model.phase {
         case .idle:
-            EmptyStateView(title: L.searchResultsTitle, explanation: L.searchPlaceholder, symbol: "magnifyingglass")
+            ScrollView {
+                VStack(spacing: FaithFormTokens.Spacing.lg) {
+                    // Nearby Churches Card
+                    Button {
+                        if let onNearby { onNearby() } else { Task { await model.beginNearbyFlow() } }
+                    } label: {
+                        HStack(spacing: 16) {
+                            ZStack {
+                                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                    .fill(theme.palette.brandAccent.opacity(0.14))
+                                    .frame(width: 52, height: 52)
+                                Image(systemName: "location.fill")
+                                    .font(.system(size: 22, weight: .semibold))
+                                    .foregroundStyle(theme.palette.brandAccent)
+                            }
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(L.churchesNearMe)
+                                    .font(theme.font(FaithFormTokens.Text.titleMedium))
+                                    .foregroundStyle(theme.palette.contentPrimary)
+                                Text("Discover congregations active near you")
+                                    .font(theme.font(FaithFormTokens.Text.bodySmall))
+                                    .foregroundStyle(theme.palette.contentSecondary)
+                            }
+                            Spacer(minLength: 0)
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(theme.palette.contentSecondary)
+                        }
+                        .padding(16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                                .strokeBorder(theme.palette.border, lineWidth: theme.borderWidth)
+                        )
+                        .shadow(color: theme.usesDecorativeShadow ? theme.palette.brandPrimary.opacity(0.04) : .clear, radius: 10, y: 3)
+                    }
+                    .buttonStyle(PressScaleStyle())
+
+                    // Search Tips Card
+                    FaithFormCard {
+                        VStack(alignment: .leading, spacing: 14) {
+                            Text("HOW TO FIND YOUR CHURCH")
+                                .font(.caption2.weight(.bold))
+                                .tracking(2)
+                                .foregroundStyle(theme.palette.brandAccent)
+
+                            discoveryTipRow(
+                                symbol: "building.columns.fill",
+                                title: "Search by Congregation Name",
+                                detail: "Type your church, parish, or ministry name (e.g. \"Grace Chapel\")."
+                            )
+                            Rectangle()
+                                .fill(theme.palette.divider)
+                                .frame(height: theme.borderWidth)
+                            discoveryTipRow(
+                                symbol: "mappin.and.ellipse",
+                                title: "Search by Location",
+                                detail: "Enter your city, neighborhood, or postal code to browse local churches."
+                            )
+                            Rectangle()
+                                .fill(theme.palette.divider)
+                                .frame(height: theme.borderWidth)
+                            discoveryTipRow(
+                                symbol: "link",
+                                title: "Have an Invitation Link?",
+                                detail: "Tap your church's email or SMS invitation link to join automatically."
+                            )
+                        }
+                    }
+                }
+                .padding(.top, FaithFormTokens.Spacing.xs)
+                .padding(.bottom, FaithFormTokens.Spacing.xl)
+            }
         case .searching:
             DiscoveryResultsSkeleton()
         case let .results(churches, _):
@@ -226,12 +387,72 @@ public struct DiscoveryView: View {
                 .padding(.vertical, FaithFormTokens.Spacing.sm)
             }
         case .empty:
-            EmptyStateView(title: L.noResultsTitle, explanation: L.noResultsBody, symbol: "magnifyingglass")
+            FaithFormCard {
+                VStack(spacing: 16) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .fill(theme.palette.brandAccent.opacity(0.12))
+                            .frame(width: 64, height: 64)
+                        Image(systemName: "magnifyingglass")
+                            .font(.system(size: 28, weight: .medium))
+                            .foregroundStyle(theme.palette.brandAccent)
+                    }
+                    VStack(spacing: 6) {
+                        Text(L.noResultsTitle)
+                            .font(.system(size: 19, weight: .semibold, design: .rounded))
+                            .foregroundStyle(theme.palette.contentPrimary)
+                            .multilineTextAlignment(.center)
+                        Text(L.noResultsBody)
+                            .font(.subheadline)
+                            .foregroundStyle(theme.palette.contentSecondary)
+                            .multilineTextAlignment(.center)
+                            .lineSpacing(3)
+                    }
+                    if let onNearby {
+                        Button {
+                            onNearby()
+                        } label: {
+                            Label(L.churchesNearMe, systemImage: "location.fill")
+                        }
+                        .buttonStyle(FaithFormButtonStyle(kind: .secondary, theme: theme))
+                        .padding(.top, 4)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 20)
+            }
+            .padding(.top, FaithFormTokens.Spacing.base)
         case .offline:
             EmptyStateView(title: L.offlineTitle, explanation: L.offlineBody, symbol: "wifi.slash")
         case let .failed(message):
             EmptyStateView(title: L.errorTitle, explanation: message, symbol: "exclamationmark.triangle")
         }
         Spacer(minLength: 0)
+    }
+
+    private func discoveryTipRow(symbol: String, title: String, detail: String) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(theme.palette.brandAccent.opacity(0.12))
+                    .frame(width: 38, height: 38)
+                Image(systemName: symbol)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(theme.palette.brandAccent)
+            }
+            .accessibilityHidden(true)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(theme.font(FaithFormTokens.Text.titleMedium))
+                    .foregroundStyle(theme.palette.contentPrimary)
+                Text(detail)
+                    .font(theme.font(FaithFormTokens.Text.bodySmall))
+                    .foregroundStyle(theme.palette.contentSecondary)
+                    .lineSpacing(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 }

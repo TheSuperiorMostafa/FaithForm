@@ -27,6 +27,32 @@ object AuthCallbackLink {
      */
     const val CANONICAL = "faithform://auth/callback"
 
+    /**
+     * The https page the confirmation email returns to, relative to a web
+     * origin. See `confirmHandoff` in the contract.
+     */
+    const val CONFIRM_HANDOFF_PATH = "/app/auth/callback"
+
+    /**
+     * What this app registers with the identity provider as the confirmation
+     * redirect — an https page on this build's own origin, **not** the custom
+     * scheme above.
+     *
+     * The scheme was the redirect once, on the assumption that the OS would
+     * open the app with no browser page as a final stop. It does not: the
+     * provider confirms the address and then answers `302 Location:
+     * faithform://…`, and a browser asked to follow a redirect into a non-http
+     * scheme refuses — the in-app browsers inside mail clients always do.
+     * Every new member saw a connection error for an account that had just
+     * been confirmed. The https page receives that redirect and performs the
+     * hand-off itself, which browsers do allow.
+     *
+     * Per environment, from build configuration, exactly like the reset
+     * origin: a staging build cannot mail someone a production link.
+     */
+    fun confirmRedirect(origin: String): String =
+        origin.trimEnd('/') + CONFIRM_HANDOFF_PATH
+
     /** Bounds from the contract: what a provider-minted code may look like.
      * Anything outside is refused before any network call. */
     private val codePattern = Regex("^[A-Za-z0-9._~-]{8,512}$")

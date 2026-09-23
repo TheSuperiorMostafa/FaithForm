@@ -250,7 +250,7 @@ fun LiveNowHero(
             },
     ) {
         Box {
-            StreamThumbnail(url = live.posterUrl)
+            StreamThumbnail(url = live.posterUrl, showsGlyph = onClick == null)
             Box(
                 Modifier
                     .matchParentSize()

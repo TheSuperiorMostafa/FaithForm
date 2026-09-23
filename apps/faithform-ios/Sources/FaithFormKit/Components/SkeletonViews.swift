@@ -126,9 +126,10 @@ struct SkeletonSearchField: View {
 struct SkeletonAvatar: View {
     @Environment(\.faithformTheme) private var theme
     var size: CGFloat = FaithFormTokens.TouchTarget.recommended
+    var cornerRadius: CGFloat? = nil
 
     var body: some View {
-        RoundedRectangle(cornerRadius: FaithFormTokens.Radius.md, style: .continuous)
+        RoundedRectangle(cornerRadius: cornerRadius ?? FaithFormTokens.Radius.md, style: .continuous)
             .fill(theme.palette.skeletonBase)
             .frame(width: size, height: size)
     }
@@ -236,18 +237,13 @@ struct GivingFundCardSkeleton: View {
 struct GivingHistoryRowSkeleton: View {
     var body: some View {
         FaithFormCard {
-            HStack(alignment: .top) {
+            HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.xs) {
                     SkeletonBone(height: FaithFormTokens.Text.titleMedium.size, widthFraction: 0.4)
                     SkeletonBone(height: FaithFormTokens.Text.bodySmall.size, widthFraction: 0.55)
-                    SkeletonBone(height: FaithFormTokens.Text.caption.size, widthFraction: 0.32)
                 }
-                Spacer(minLength: 0)
-                SkeletonBone(
-                    height: 22,
-                    widthFraction: 0.18,
-                    cornerRadius: FaithFormTokens.Radius.pill
-                )
+                Spacer(minLength: FaithFormTokens.Spacing.md)
+                SkeletonBone(height: FaithFormTokens.Text.caption.size, widthFraction: 0.22)
             }
         }
     }
@@ -472,7 +468,6 @@ struct GivingHomeSkeleton: View {
             ForEach(0..<3, id: \.self) { _ in GivingFundCardSkeleton() }
             SkeletonBone(
                 height: FaithFormTokens.TouchTarget.recommended,
-                widthFraction: 0.4,
                 cornerRadius: FaithFormTokens.Radius.control
             )
         }
@@ -484,7 +479,7 @@ struct GivingHomeSkeleton: View {
 struct GivingHistorySkeleton: View {
     var body: some View {
         VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.md) {
-            SkeletonBone(height: FaithFormTokens.Text.caption.size, widthFraction: 0.55)
+            SkeletonBone(height: FaithFormTokens.Text.caption.size, widthFraction: 0.72)
             ForEach(0..<4, id: \.self) { _ in GivingHistoryRowSkeleton() }
         }
         .skeletonShimmer()
@@ -593,33 +588,60 @@ public struct SlideSkeleton: View {
     }
 }
 
-/// Mirrors the group section picker, cover, and overview details.
+/// Mirrors the group square logo, header, action tiles, and details panel.
 public struct GroupDetailSkeleton: View {
+    @Environment(\.faithformTheme) private var theme
     public init() {}
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 22) {
-            HStack(spacing: 8) {
+        VStack(spacing: 22) {
+            VStack(spacing: 16) {
+                SkeletonAvatar(size: 108, cornerRadius: 32)
+                VStack(spacing: 8) {
+                    SkeletonBone(height: 30, widthFraction: 0.65, alignment: .center)
+                    SkeletonBone(height: 16, widthFraction: 0.85, alignment: .center)
+                    HStack(spacing: 8) {
+                        SkeletonBone(height: 28, cornerRadius: FaithFormTokens.Radius.pill)
+                            .frame(width: 100)
+                        SkeletonBone(height: 28, cornerRadius: FaithFormTokens.Radius.pill)
+                            .frame(width: 90)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.top, 8)
+            .padding(.bottom, 12)
+
+            HStack(spacing: 12) {
                 ForEach(0..<3, id: \.self) { _ in
-                    SkeletonBone(height: 40, cornerRadius: FaithFormTokens.Radius.pill)
+                    SkeletonBone(height: 104, cornerRadius: 20)
                 }
             }
-            SkeletonBone(height: 190, cornerRadius: 22)
-            SkeletonBone(height: 24, widthFraction: 0.3)
-            SkeletonBone(height: 34, widthFraction: 0.75)
-            SkeletonBone(height: 16, widthFraction: 0.35)
-            VStack(spacing: 8) {
-                SkeletonBone(height: 16)
-                SkeletonBone(height: 16, widthFraction: 0.92)
-                SkeletonBone(height: 16, widthFraction: 0.64)
-            }
-            FaithFormCard {
-                VStack(alignment: .leading, spacing: 16) {
-                    SkeletonBone(height: 20, widthFraction: 0.45)
-                    SkeletonBone(height: 16, widthFraction: 0.8)
-                    SkeletonBone(height: 16, widthFraction: 0.6)
+
+            VStack(alignment: .leading, spacing: 14) {
+                SkeletonBone(height: 20, widthFraction: 0.4)
+                VStack(spacing: 8) {
+                    SkeletonBone(height: 14)
+                    SkeletonBone(height: 14, widthFraction: 0.92)
+                    SkeletonBone(height: 14, widthFraction: 0.64)
                 }
             }
+            .padding(20)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(theme.palette.border, lineWidth: theme.borderWidth))
+
+            VStack(alignment: .leading, spacing: 14) {
+                SkeletonBone(height: 20, widthFraction: 0.35)
+                VStack(spacing: 10) {
+                    SkeletonBone(height: 14, widthFraction: 0.7)
+                    SkeletonBone(height: 14, widthFraction: 0.5)
+                }
+            }
+            .padding(20)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(theme.palette.border, lineWidth: theme.borderWidth))
         }
         .skeletonShimmer()
         .accessibilityElement(children: .ignore)
@@ -687,6 +709,7 @@ public struct ConversationListSkeleton: View {
 }
 
 
+/// Mirrors the group cards in the discover list.
 public struct GroupListSkeleton: View {
     @Environment(\.faithformTheme) private var theme
     public init() {}
@@ -694,18 +717,29 @@ public struct GroupListSkeleton: View {
     public var body: some View {
         VStack(spacing: 18) {
             ForEach(0..<3, id: \.self) { _ in
-                VStack(spacing: 0) {
-                    SkeletonBone(height: 144, cornerRadius: 0)
-                    VStack(alignment: .leading, spacing: 12) {
-                        SkeletonBone(height: 14, widthFraction: 0.3)
-                        SkeletonBone(height: 22, widthFraction: 0.7)
-                        SkeletonBone(height: 14, widthFraction: 0.4)
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack(alignment: .top, spacing: 14) {
+                        SkeletonAvatar(size: 64, cornerRadius: 19)
+                        VStack(alignment: .leading, spacing: 6) {
+                            SkeletonBone(height: 11, widthFraction: 0.28)
+                            SkeletonBone(height: 20, widthFraction: 0.65)
+                            SkeletonBone(height: 12, widthFraction: 0.35)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    VStack(alignment: .leading, spacing: 6) {
+                        SkeletonBone(height: 14, widthFraction: 0.92)
                         SkeletonBone(height: 14, widthFraction: 0.6)
                     }
-                    .padding(18)
+                    Rectangle()
+                        .fill(theme.palette.divider)
+                        .frame(height: 1)
+                    SkeletonBone(height: 14, widthFraction: 0.45)
                 }
-                .background(theme.palette.surface)
-                .clipShape(RoundedRectangle(cornerRadius: 22))
+                .padding(18)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).strokeBorder(theme.palette.border, lineWidth: theme.borderWidth))
             }
         }
         .skeletonShimmer()
@@ -713,6 +747,36 @@ public struct GroupListSkeleton: View {
         .accessibilityLabel("Loading your groups")
     }
 }
+
+/// Mirrors the joined group conversation rows in "My groups".
+public struct MyGroupListSkeleton: View {
+    @Environment(\.faithformTheme) private var theme
+    public init() {}
+
+    public var body: some View {
+        VStack(spacing: 18) {
+            ForEach(0..<4, id: \.self) { _ in
+                HStack(spacing: 14) {
+                    SkeletonAvatar(size: 60, cornerRadius: 18)
+                    VStack(alignment: .leading, spacing: 6) {
+                        SkeletonBone(height: 18, widthFraction: 0.55)
+                        SkeletonBone(height: 14, widthFraction: 0.75)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(theme.palette.surface, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(theme.palette.border, lineWidth: theme.borderWidth))
+            }
+        }
+        .skeletonShimmer()
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Loading your groups")
+    }
+}
+
+public typealias GroupConversationListSkeleton = MyGroupListSkeleton
 
 public struct GroupPeopleSkeleton: View {
     public init() {}

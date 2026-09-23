@@ -341,17 +341,21 @@ struct AppBundleTests {
 
         // Add-only, and only for "Save Image" on a photo someone sent in a
         // group chat: the share sheet writes to Photos, and without this the
-        // app is terminated on that tap. Reading the library stays undeclared
-        // below — a picked photo comes through PhotosPicker, which needs no
-        // permission at all.
+        // app is terminated on that tap. The linked chat SDK also requires
+        // read-library and microphone strings for App Store validation, even
+        // though our system pickers and disabled voice composer don't prompt.
         let photoAdd = info["NSPhotoLibraryAddUsageDescription"] as? String ?? ""
         #expect(photoAdd.contains("group chat"))
+        let photoRead = info["NSPhotoLibraryUsageDescription"] as? String ?? ""
+        #expect(photoRead.contains("share in chat"))
+        #expect(photoRead.contains("profile"))
+        let microphone = info["NSMicrophoneUsageDescription"] as? String ?? ""
+        #expect(microphone.contains("only when you choose"))
+        #expect(microphone.contains("voice message"))
 
         for absent in [
             // The pre-iOS 11 key. Nothing targets a system that reads it.
             "NSLocationAlwaysUsageDescription",
-            "NSPhotoLibraryUsageDescription",
-            "NSMicrophoneUsageDescription",
             "NSContactsUsageDescription",
             "NSCalendarsUsageDescription",
             "NSUserTrackingUsageDescription",
@@ -453,6 +457,44 @@ struct AppBundleTests {
         // this identifier would be rejected, which is the intended outcome.
         let identifier = Bundle.main.bundleIdentifier ?? ""
         #expect(identifier.hasPrefix("io.faithform."))
+    }
+
+    @Test("landscape is declared, so full-screen video can enter it")
+    func orientationsDeclared() {
+        // Declaring them is only half of it: the app delegate answers
+        // `.portrait` unless full-screen video has opened the gate. But an
+        // orientation missing from the bundle cannot be entered whatever the
+        // delegate says, so removing either of these silently leaves a playing
+        // service upright.
+        let orientations = info["UISupportedInterfaceOrientations"] as? [String] ?? []
+        #expect(orientations.contains("UIInterfaceOrientationPortrait"))
+        #expect(orientations.contains("UIInterfaceOrientationLandscapeLeft"))
+        #expect(orientations.contains("UIInterfaceOrientationLandscapeRight"))
+        // Upside down is not wanted anywhere, and a phone that flips to it
+        // while someone reads is the reason.
+        #expect(!orientations.contains("UIInterfaceOrientationPortraitUpsideDown"))
+    }
+
+    @Test("the app is portrait until full-screen video asks otherwise")
+    @MainActor
+    func orientationGate() {
+        let delegate = PushApplicationDelegate()
+
+        ScreenOrientation.enterPortrait()
+        #expect(ScreenOrientation.allowsLandscape == false)
+        #expect(delegate.application(.shared, supportedInterfaceOrientationsFor: nil) == .portrait)
+
+        ScreenOrientation.enterLandscape()
+        #expect(ScreenOrientation.allowsLandscape)
+        #expect(
+            delegate.application(.shared, supportedInterfaceOrientationsFor: nil)
+                == [.portrait, .landscapeLeft, .landscapeRight]
+        )
+
+        // Leaving the player puts it back, so the rest of the app cannot be
+        // rotated by a screen that has already gone.
+        ScreenOrientation.enterPortrait()
+        #expect(delegate.application(.shared, supportedInterfaceOrientationsFor: nil) == .portrait)
     }
 
     @Test("nothing secret is in the bundle")

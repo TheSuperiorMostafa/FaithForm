@@ -1,0 +1,9 @@
+# Cursor Rules for FaithForm
+
+## Mandatory Requirement: Pixel-Accurate Skeleton Loading
+
+When designing or redesigning ANY page or subpage in FaithForm:
+1. Always create a matching, pixel-accurate `loading.tsx` file (or `<Suspense fallback={<...Skeleton />}>`).
+2. The skeleton must mirror the exact layout geometry: same `max-w-*` container, same grid layout (`grid-cols-*`), same card padding, rounded borders, and headers to eliminate Cumulative Layout Shift (CLS).
+3. Use `@/components/ui/skeleton` with the shared shimmer animation. Never leave unstyled empty space or jarring layout jumps.
+4. Ensure accessibility: include `role="status"`, `aria-busy="true"`, `aria-label="Loading [Section]"`, and `<span className="sr-only">Loading…</span>`.

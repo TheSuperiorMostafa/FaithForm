@@ -165,28 +165,17 @@ struct ChurchCover: View {
         }
     }
 
-    /// Dark at the bottom so white type over any photograph stays readable,
-    /// and a lighter band at the top for the status bar and back button.
+    /// Dark at the bottom so white type over any photograph stays readable.
     private var scrims: some View {
-        ZStack {
-            LinearGradient(
-                stops: [
-                    .init(color: .black.opacity(0), location: 0.3),
-                    .init(color: .black.opacity(0.38), location: 0.62),
-                    .init(color: .black.opacity(0.78), location: 1),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            LinearGradient(
-                stops: [
-                    .init(color: .black.opacity(0.42), location: 0),
-                    .init(color: .black.opacity(0), location: 0.32),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        }
+        LinearGradient(
+            stops: [
+                .init(color: .black.opacity(0), location: 0.3),
+                .init(color: .black.opacity(0.38), location: 0.62),
+                .init(color: .black.opacity(0.78), location: 1),
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
         .allowsHitTesting(false)
     }
 }

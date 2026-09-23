@@ -36,12 +36,14 @@ import {
 const CURRENCY = "usd";
 
 /** Bounds on a bound: a fund cannot open the door wider than the platform. */
-const ABSOLUTE_MIN_CENTS = 100;
-const ABSOLUTE_MAX_CENTS = 2_000_000;
+export const ABSOLUTE_MIN_CENTS = 100;
+export const ABSOLUTE_MAX_CENTS = 2_000_000;
 
-function client(supabase?: SupabaseClient) {
+export function givingClient(supabase?: SupabaseClient) {
   return supabase ?? createAdminClient();
 }
+
+const client = givingClient;
 
 // ---------------------------------------------------------------------------
 // Church readiness
@@ -67,7 +69,7 @@ export type GivingChurch = {
   applePayDonationsApproved: boolean;
 };
 
-async function resolveGivingChurch(
+export async function resolveGivingChurch(
   slug: string,
   supabase?: SupabaseClient,
 ): Promise<{ ok: true; church: GivingChurch } | { ok: false; availability: GivingAvailability }> {
@@ -142,11 +144,13 @@ export type GivingHomeDto = {
   churchName: string | null;
   funds: GivingFundDto[];
   /**
-   * Whether this church runs recurring gifts at all.
+   * Whether a recurring gift can be started here, now.
    *
-   * Reported so the app can be truthful about what exists rather than silent.
-   * FaithForm gives one-time; recurring lives in the church's existing donor
-   * portal, and saying so is better than pretending it does not exist.
+   * True when the church is accepting and has published at least one fund — a
+   * subscription is built from the same fund and charged to the same connected
+   * account, so it needs nothing a one-time gift does not. Reported rather than
+   * inferred by the client so a later reason to withhold recurring has
+   * somewhere to live that does not require an app release.
    */
   recurringAvailable: boolean;
   givingVersion: number;
@@ -204,19 +208,15 @@ export async function getGivingHome(input: {
     publicationVersion: Number(row.publication_version ?? 1),
   }));
 
-  // Whether the church has ever run a recurring gift. A fact about the church's
-  // own rows, not a claim about what FaithForm can do with it.
-  const { count } = await db
-    .from("giving_subscriptions")
-    .select("id", { count: "exact", head: true })
-    .eq("church_id", resolved.church.churchId)
-    .in("status", ["active", "trialing", "past_due"]);
-
   return {
     availability: "available",
     churchName: resolved.church.name,
     funds,
-    recurringAvailable: (count ?? 0) > 0,
+    // The church is accepting and something is published to give to, which is
+    // every condition a subscription needs. Deliberately not "has ever run a
+    // recurring gift", which is what this meant before migration 0100: that
+    // made the first recurring giver at every church impossible.
+    recurringAvailable: funds.length > 0,
     // A single validator over every published fund: any edit to any of them
     // moves it, and a phone's cached giving screen revalidates.
     givingVersion: funds.reduce((total, fund) => total + fund.publicationVersion, funds.length),
@@ -446,7 +446,7 @@ export async function startDonation(
   };
 }
 
-async function readFundTitle(
+export async function readFundTitle(
   churchId: string,
   fundId: string,
   db: SupabaseClient,

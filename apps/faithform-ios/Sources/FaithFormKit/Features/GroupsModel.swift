@@ -75,12 +75,14 @@ public final class GroupsModel {
     @discardableResult public func perform(_ success: String, operation: () async throws -> Void) async -> Bool {
         guard !busy else { return false }; busy = true; error = nil; feedback = nil
         defer { busy = false }
-        do { try await operation(); feedback = success; return true }
+        do { try await operation(); feedback = success.isEmpty ? nil : success; return true }
         catch is CancellationError { return false }
         catch { self.error = Self.message(error); return false }
     }
     public func changeMembership(_ group: GroupSummary, message: String = "") async -> Bool {
-        await perform(group.joinAction == "leave" ? "You left the group." : group.joinAction == "cancel_request" ? "Request cancelled." : group.joinAction == "request" ? "Your request has been sent." : "Welcome to the group!") {
+        // Joining has its own “You’re in” card. Leaving uses the shared,
+        // lightweight notification acknowledgment shown after the route closes.
+        await perform(group.joinAction == "leave" ? "You left the group." : "") {
             let leaving = ["leave", "cancel_request"].contains(group.joinAction)
             let result = try await self.send("\(self.path)/\(group.id)/\(leaving ? "leave" : "join")", body: JoinGroupRequest(message: message), as: GroupJoinResult.self)
             let allowed = ["joined", "already_member", "requested", "already_requested", "left", "request_cancelled", "not_member"]

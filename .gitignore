@@ -75,3 +75,9 @@ apps/faithform-ios/build/
 
 # Supabase CLI scratch state
 supabase/.temp/
+
+# Local build and tool analysis outputs
+/.build/
+/graphify-out/
+/output/
+

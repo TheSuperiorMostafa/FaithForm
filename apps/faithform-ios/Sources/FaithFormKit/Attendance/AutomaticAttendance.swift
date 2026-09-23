@@ -124,6 +124,10 @@ public struct PendingArrival: Equatable, Sendable {
     public let mode: ArrivalMode
     /// When the person will be — or was — asked.
     public let promptAt: Date?
+    /// When the wait began, so a screen can show how much of it is left
+    /// against how long it was. Without it a countdown has a number but no
+    /// proportion, and "2:00" tells nobody whether that is nearly done.
+    public let startedAt: Date
     public let needsPersonConfirmation: Bool
     /// A submission is waiting for the network.
     public let isQueued: Bool
@@ -134,6 +138,7 @@ public struct PendingArrival: Equatable, Sendable {
         occurrenceId: String,
         mode: ArrivalMode,
         promptAt: Date?,
+        startedAt: Date = Date(),
         needsPersonConfirmation: Bool,
         isQueued: Bool
     ) {
@@ -142,6 +147,7 @@ public struct PendingArrival: Equatable, Sendable {
         self.occurrenceId = occurrenceId
         self.mode = mode
         self.promptAt = promptAt
+        self.startedAt = startedAt
         self.needsPersonConfirmation = needsPersonConfirmation
         self.isQueued = isQueued
     }
@@ -151,6 +157,39 @@ public struct PendingArrival: Equatable, Sendable {
         guard needsPersonConfirmation, !isQueued else { return false }
         guard let promptAt else { return false }
         return now >= promptAt
+    }
+
+    /// Seconds left before anything happens, or nil when nothing is scheduled.
+    ///
+    /// Never negative: a moment that has passed is zero, which is what a
+    /// countdown should read while the app catches up with it.
+    public func secondsRemaining(now: Date) -> TimeInterval? {
+        guard let promptAt, !isQueued else { return nil }
+        return max(0, promptAt.timeIntervalSince(now))
+    }
+
+    /// How far through the wait the person is, 0…1.
+    ///
+    /// Measured from when the wait began rather than from the church's dwell
+    /// setting, so an arrival held for a window that had not opened yet fills
+    /// the same ring as an ordinary dwell instead of overflowing it.
+    public func progress(now: Date) -> Double {
+        guard let promptAt else { return 0 }
+        let total = promptAt.timeIntervalSince(startedAt)
+        guard total > 0 else { return 1 }
+        return min(1, max(0, now.timeIntervalSince(startedAt) / total))
+    }
+
+    /// Whether the wait is short enough to watch tick down.
+    ///
+    /// Past this a ring counting out three quarters of an hour is theatre —
+    /// an arrival before check-in opened is better answered with the clock
+    /// time it opens at.
+    public static let tickingHorizon: TimeInterval = 10 * 60
+
+    public func isTicking(now: Date) -> Bool {
+        guard let remaining = secondsRemaining(now: now) else { return false }
+        return remaining <= Self.tickingHorizon
     }
 }
 
@@ -713,6 +752,7 @@ public actor AutomaticAttendanceCoordinator {
                     occurrenceId: attempt.occurrenceId,
                     mode: attempt.mode ?? .confirmation,
                     promptAt: attempt.promptAt,
+                    startedAt: attempt.openedAt,
                     needsPersonConfirmation: attempt.needsPersonConfirmation,
                     isQueued: attempt.queued != nil
                 )

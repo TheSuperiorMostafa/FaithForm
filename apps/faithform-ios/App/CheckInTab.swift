@@ -23,6 +23,7 @@ struct CheckInTabView: View {
     @Environment(\.faithformTheme) private var theme
     @Environment(\.openURL) private var openURL
     let root: RootModel
+    let dependencies: AppDependencies
     let features: ChurchFeatures
     let attendance: AutomaticAttendanceModel
     let isStale: Bool
@@ -69,6 +70,7 @@ struct CheckInTabView: View {
                 AutomaticAttendanceFlowView(
                     model: attendance,
                     onOpenSettings: openSettings,
+                    onRequestConfirmation: { await requestPeopleConfirmation() },
                     onClose: { settingUp = false }
                 )
                 .faithformTheme(root.selectedChurch?.appTheme)
@@ -92,8 +94,20 @@ struct CheckInTabView: View {
             // is open, rather than waiting for a notification.
             .task(id: attendance.pending?.promptAt) {
                 guard showsAutomaticCheckIn else { return }
-                await attendance.holdOpenUntilDue()
+                await attendance.holdOpenWhilePending()
             }
+        }
+    }
+
+    private func requestPeopleConfirmation() async -> String? {
+        guard let slug = root.selectedChurch?.churchSlug else { return L.autoAttendanceOfflineBody }
+        do {
+            let result = try await APIPeopleClaimRequester(api: dependencies.api).requestConfirmation(churchSlug: slug)
+            return result.isLinked ? L.autoAttendanceConfirmationAlreadyLinked : L.autoAttendanceConfirmationRequested
+        } catch let error as APIError {
+            return error.displayMessage.isEmpty ? L.autoAttendanceConfirmationFailed : error.displayMessage
+        } catch {
+            return L.autoAttendanceConfirmationFailed
         }
     }
 
@@ -226,6 +240,7 @@ struct AutomaticCheckInSection: View {
                 onSetUp: onSetUp,
                 onResumeSetup: onResumeSetup,
                 onConfirm: { Task { await model.confirmCheckIn() } },
+                onDecline: { Task { await model.declineArrival() } },
                 onDisable: { Task { await model.disable() } },
                 onOpenSettings: onOpenSettings
             )

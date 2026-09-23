@@ -766,6 +766,88 @@ public enum GiftType: RawRepresentable, Codable, Hashable, Sendable {
 /// Forward-compatible: an unrecognised value decodes to `.unknown`
 /// rather than failing, so a server that adds a case cannot break a
 /// released build.
+public enum GivingInterval: RawRepresentable, Codable, Hashable, Sendable {
+    case week
+    case month
+    case year
+    case unknown(String)
+
+    public init(rawValue: String) {
+        switch rawValue {
+        case "week": self = .week
+        case "month": self = .month
+        case "year": self = .year
+        default: self = .unknown(rawValue)
+        }
+    }
+
+    public var rawValue: String {
+        switch self {
+        case .week: return "week"
+        case .month: return "month"
+        case .year: return "year"
+        case let .unknown(value): return value
+        }
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        self.init(rawValue: try container.decode(String.self))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+}
+
+/// Forward-compatible: an unrecognised value decodes to `.unknown`
+/// rather than failing, so a server that adds a case cannot break a
+/// released build.
+public enum RecurringGiftStatus: RawRepresentable, Codable, Hashable, Sendable {
+    case active
+    case trialing
+    case pastDue
+    case paused
+    case unpaid
+    case unknown(String)
+
+    public init(rawValue: String) {
+        switch rawValue {
+        case "active": self = .active
+        case "trialing": self = .trialing
+        case "past_due": self = .pastDue
+        case "paused": self = .paused
+        case "unpaid": self = .unpaid
+        default: self = .unknown(rawValue)
+        }
+    }
+
+    public var rawValue: String {
+        switch self {
+        case .active: return "active"
+        case .trialing: return "trialing"
+        case .pastDue: return "past_due"
+        case .paused: return "paused"
+        case .unpaid: return "unpaid"
+        case let .unknown(value): return value
+        }
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        self.init(rawValue: try container.decode(String.self))
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+}
+
+/// Forward-compatible: an unrecognised value decodes to `.unknown`
+/// rather than failing, so a server that adds a case cannot break a
+/// released build.
 public enum GroupRole: RawRepresentable, Codable, Hashable, Sendable {
     case member
     case leader
@@ -1499,6 +1581,36 @@ public struct AccountRequest: Codable, Hashable, Sendable {
         self.status = status
         self.requestedAt = requestedAt
         self.completedAt = completedAt
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct PeopleClaimRequest: Codable, Hashable, Sendable {
+    public let churchSlug: String
+
+    public init(
+        churchSlug: String
+    ) {
+        self.churchSlug = churchSlug
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct PeopleClaimResponse: Codable, Hashable, Sendable {
+    public let status: String
+    public let source: String
+    public let isLinked: Bool
+
+    public init(
+        status: String,
+        source: String,
+        isLinked: Bool
+    ) {
+        self.status = status
+        self.source = source
+        self.isLinked = isLinked
     }
 }
 
@@ -3491,6 +3603,123 @@ public struct GivingReceipt: Codable, Hashable, Sendable {
         self.churchName = churchName
         self.paidAt = paidAt
         self.giftType = giftType
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct StartRecurringGiftRequest: Codable, Hashable, Sendable {
+    public let churchSlug: String
+    public let fundId: String
+    public let amountCents: Int
+    public let interval: String
+    public let clientAttemptId: String
+
+    public init(
+        churchSlug: String,
+        fundId: String,
+        amountCents: Int,
+        interval: String,
+        clientAttemptId: String
+    ) {
+        self.churchSlug = churchSlug
+        self.fundId = fundId
+        self.amountCents = amountCents
+        self.interval = interval
+        self.clientAttemptId = clientAttemptId
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct RecurringGiftSession: Codable, Hashable, Sendable {
+    public let attemptId: String
+    public let clientSecret: String?
+    public let publishableKey: String
+    public let stripeAccountId: String
+    public let merchantName: String
+    public let amountCents: Int
+    public let currency: String
+    public let interval: String
+    public let fundTitle: String
+
+    public init(
+        attemptId: String,
+        clientSecret: String? = nil,
+        publishableKey: String,
+        stripeAccountId: String,
+        merchantName: String,
+        amountCents: Int,
+        currency: String,
+        interval: String,
+        fundTitle: String
+    ) {
+        self.attemptId = attemptId
+        self.clientSecret = clientSecret
+        self.publishableKey = publishableKey
+        self.stripeAccountId = stripeAccountId
+        self.merchantName = merchantName
+        self.amountCents = amountCents
+        self.currency = currency
+        self.interval = interval
+        self.fundTitle = fundTitle
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct RecurringGift: Codable, Hashable, Sendable {
+    public let subscriptionId: String
+    public let fundTitle: String
+    public let amountCents: Int
+    public let currency: String
+    public let interval: String
+    public let status: String
+    public let startedAt: String
+
+    public init(
+        subscriptionId: String,
+        fundTitle: String,
+        amountCents: Int,
+        currency: String,
+        interval: String,
+        status: String,
+        startedAt: String
+    ) {
+        self.subscriptionId = subscriptionId
+        self.fundTitle = fundTitle
+        self.amountCents = amountCents
+        self.currency = currency
+        self.interval = interval
+        self.status = status
+        self.startedAt = startedAt
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct RecurringGiftList: Codable, Hashable, Sendable {
+    public let items: [RecurringGift]
+
+    public init(
+        items: [RecurringGift]
+    ) {
+        self.items = items
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct RecurringGiftCancelResult: Codable, Hashable, Sendable {
+    public let subscriptionId: String
+    public let stopped: Bool
+
+    public init(
+        subscriptionId: String,
+        stopped: Bool
+    ) {
+        self.subscriptionId = subscriptionId
+        self.stopped = stopped
     }
 }
 

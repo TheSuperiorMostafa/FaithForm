@@ -138,8 +138,16 @@ struct RootView: View {
                         // No church yet: the welcome flow stands in front of the
                         // tabs until a relationship exists, and not a launch longer.
                         OnboardingFlowView(dependencies: dependencies, root: model)
+                            .transition(.asymmetric(
+                                insertion: .opacity,
+                                removal: .opacity.combined(with: .scale(scale: 1.04))
+                            ))
                     } else {
                         tabs(bootstrap: bootstrap, isStale: isStale)
+                            .transition(.asymmetric(
+                                insertion: .opacity.combined(with: .scale(scale: 0.96)),
+                                removal: .opacity
+                            ))
                     }
                 }
                 .opacity(shellRevealed ? 1 : 0)
@@ -159,6 +167,7 @@ struct RootView: View {
         }
         .animation(theme.animation(FaithFormTokens.Motion.standard), value: showsLaunchLockup)
         .animation(theme.animation(FaithFormTokens.Motion.standard), value: shellRevealed)
+        .animation(theme.animation(FaithFormTokens.Motion.slow), value: model.needsOnboarding)
         .sheet(isPresented: Binding(get: { model.state.bootstrap != nil && model.groupInvitationToken != nil }, set: { if !$0 { model.groupInvitationToken = nil } })) {
             if let token = model.groupInvitationToken { GroupInvitationView(api: dependencies.api, token: token) { slug in
                 model.groupInvitationToken = nil
@@ -370,10 +379,11 @@ struct RootView: View {
     private func churchScreen(for tab: RootTab, features: ChurchFeatures, isStale: Bool) -> some View {
         switch tab {
         case .groups:
-            GroupsTabView(model: features.groups)
+            GroupsTabView(root: model, model: features.groups, isStale: isStale)
         case .checkIn:
             CheckInTabView(
                 root: model,
+                dependencies: dependencies,
                 features: features,
                 attendance: dependencies.attendanceModel,
                 isStale: isStale

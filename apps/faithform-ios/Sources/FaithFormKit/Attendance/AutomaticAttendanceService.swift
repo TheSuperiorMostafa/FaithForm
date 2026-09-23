@@ -460,6 +460,13 @@ public actor AutomaticAttendanceService {
         return phase
     }
 
+    /// The person said they are not there. Closes the arrival and cancels its
+    /// scheduled question, so nothing buzzes about a place they have left.
+    public func declineArrival(churchSlug: String) async {
+        await coordinator.declineArrival(churchSlug: churchSlug)
+        await changed()
+    }
+
     /// Any opportunity the app itself has, such as the screen staying open
     /// until a confirmation is due.
     @discardableResult

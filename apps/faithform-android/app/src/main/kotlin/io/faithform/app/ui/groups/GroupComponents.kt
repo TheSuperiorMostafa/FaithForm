@@ -38,10 +38,23 @@ import java.time.format.DateTimeFormatter
     }
 }
 @Composable fun GroupEmpty(title: String, message: String, icon: ImageVector = Icons.Outlined.Groups) {
-    Column(Modifier.fillMaxWidth().padding(vertical = 36.dp, horizontal = 16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Surface(shape = RoundedCornerShape(22.dp), color = MaterialTheme.colorScheme.surfaceContainer) { Icon(icon, contentDescription = null, modifier = Modifier.padding(20.dp).size(32.dp)) }
-        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-        Text(message, style = MaterialTheme.typography.bodyMedium, color = LocalFaithFormTheme.current.palette.contentSecondary, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+    val theme = LocalFaithFormTheme.current
+    Column(Modifier.fillMaxWidth().padding(vertical = 24.dp, horizontal = 16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier
+                .size(64.dp)
+                .background(theme.palette.brandAccent.copy(alpha = 0.14f), RoundedCornerShape(20.dp))
+        ) {
+            Icon(icon, contentDescription = null, tint = theme.palette.brandAccent, modifier = Modifier.size(28.dp))
+        }
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = theme.palette.contentPrimary, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+            Text(message, style = MaterialTheme.typography.bodyMedium, color = theme.palette.contentSecondary, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        }
     }
 }
 /**

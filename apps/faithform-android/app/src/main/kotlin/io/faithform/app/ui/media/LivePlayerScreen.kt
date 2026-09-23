@@ -160,7 +160,7 @@ fun LivePlayerScreen(
         ) {
             VideoSurface(player = player, modifier = Modifier.fillMaxSize())
             if (phase == LivePlayerModel.Phase.CONNECTING) {
-                StreamThumbnail(url = card.posterUrl, modifier = Modifier.fillMaxSize())
+                StreamThumbnail(url = card.posterUrl, modifier = Modifier.fillMaxSize(), showsGlyph = false)
                 Box(Modifier.matchParentSize().background(Color.Black.copy(alpha = 0.35f)))
             }
             LiveStatus(

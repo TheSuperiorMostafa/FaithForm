@@ -292,13 +292,8 @@ fun GivingHistoryRowSkeleton(modifier: Modifier = Modifier) {
             ) {
                 SkeletonBone(height = 17.dp, widthFraction = 0.4f)
                 SkeletonBone(height = 15.dp, widthFraction = 0.55f)
-                SkeletonBone(height = 12.dp, widthFraction = 0.32f)
             }
-            SkeletonBone(
-                height = 22.dp,
-                widthFraction = 0.18f,
-                cornerRadius = FaithFormTokens.Radius.pill,
-            )
+            SkeletonBone(height = 12.dp, widthFraction = 0.22f)
         }
     }
 }
@@ -498,7 +493,6 @@ fun GivingHomeSkeleton(modifier: Modifier = Modifier) {
         repeat(3) { GivingFundCardSkeleton() }
         SkeletonBone(
             height = FaithFormTokens.TouchTarget.recommended,
-            widthFraction = 0.4f,
             cornerRadius = FaithFormTokens.Radius.control,
         )
     }
@@ -513,7 +507,7 @@ fun GivingHistorySkeleton(modifier: Modifier = Modifier) {
             .skeletonShimmer(),
         verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.md),
     ) {
-        SkeletonBone(height = 12.dp, widthFraction = 0.55f)
+        SkeletonBone(height = 12.dp, widthFraction = 0.72f)
         repeat(4) { GivingHistoryRowSkeleton() }
     }
 }

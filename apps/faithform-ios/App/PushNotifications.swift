@@ -95,9 +95,22 @@ actor DeviceTokenInbox: DeviceTokenObserving {
     }
 }
 
-/// The application delegate, for the two APNs callbacks that exist nowhere in
-/// SwiftUI. It does nothing else — launch composition stays in `AppDependencies`.
+/// The application delegate: the two APNs callbacks that exist nowhere in
+/// SwiftUI, and the one question SwiftUI cannot answer either — which way up
+/// the app may be. Launch composition stays in `AppDependencies`.
 final class PushApplicationDelegate: NSObject, UIApplicationDelegate {
+    /// Portrait, except while a service is playing full screen.
+    ///
+    /// Info.plist lists the landscape orientations because an orientation not
+    /// declared there can never be entered; this is what keeps them to the one
+    /// place they are wanted. See `ScreenOrientation`.
+    func application(
+        _ application: UIApplication,
+        supportedInterfaceOrientationsFor window: UIWindow?
+    ) -> UIInterfaceOrientationMask {
+        ScreenOrientation.allowsLandscape ? [.portrait, .landscapeLeft, .landscapeRight] : .portrait
+    }
+
     /// Shared because UIKit owns the delegate's construction. The inbox holds
     /// no policy and no account state — only the most recent token, until the
     /// graph is ready to take it.

@@ -4,8 +4,9 @@ function Skeleton({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="skeleton"
+      aria-hidden="true"
       className={cn(
-        "relative overflow-hidden rounded-md bg-muted before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_1.6s_infinite] before:bg-gradient-to-r before:from-transparent before:via-white/45 before:to-transparent dark:before:via-white/10",
+        "relative overflow-hidden rounded-md bg-muted before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_1.6s_infinite] motion-reduce:before:animate-none before:bg-gradient-to-r before:from-transparent before:via-white/45 before:to-transparent dark:before:via-white/10",
         className,
       )}
       {...props}

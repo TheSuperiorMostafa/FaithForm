@@ -1,12 +1,14 @@
 package io.faithform.app.ui.groups
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.RoundedCornerShape
+import io.faithform.app.design.FaithFormTokens
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.*
@@ -21,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import io.faithform.app.contract.ChurchRelationship
 import io.faithform.app.contract.GroupSummary
 import io.faithform.app.design.LocalFaithFormTheme
 import io.faithform.app.network.ApiClient
@@ -28,7 +31,7 @@ import io.faithform.app.ui.host.TabScreen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-@Composable fun GroupsHost(api: ApiClient, churchSlug: String, partitionKey: String) {
+@Composable fun GroupsHost(api: ApiClient, churchSlug: String, partitionKey: String, church: ChurchRelationship? = null) {
     val store = remember(partitionKey) { GroupsStore(api, churchSlug) }
     val chat = remember(partitionKey) { GroupChatConnection() }
     val scope = rememberCoroutineScope()
@@ -58,7 +61,13 @@ import kotlinx.coroutines.launch
     }
     LaunchedEffect(section, query, category) { if (section == "Discover") { delay(250); store.discover(query, category) } }
     LaunchedEffect(store.home?.directMessagesEnabled) { if (store.home?.directMessagesEnabled != true && section == "Messages") section = "My groups" }
-    TabScreen(title = "Groups", actions = { IconButton(onClick = { preferences = true }) { Icon(Icons.Outlined.NotificationsNone, "Messaging preferences") } }) { modifier ->
+    val groupsTitle = church?.churchName ?: "Groups"
+    TabScreen(
+        title = groupsTitle,
+        logoUrl = church?.logoUrl,
+        showChurchAvatar = church != null,
+        actions = { IconButton(onClick = { preferences = true }) { Icon(Icons.Outlined.NotificationsNone, "Messaging preferences") } },
+    ) { modifier ->
         Column(modifier) {
             val sections = if (store.home?.directMessagesEnabled == true) listOf("My groups", "Discover", "Messages") else listOf("My groups", "Discover")
             FaithFormPillSwitcher(options = sections.map { FaithFormPillOption(it, it) }, selected = section, onSelect = { section = it }, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp))
@@ -79,7 +88,42 @@ import kotlinx.coroutines.launch
                 if (store.loading) item { Row(Modifier.fillMaxWidth().padding(32.dp), horizontalArrangement = Arrangement.Center) { CircularProgressIndicator() } }
                 else {
                     val groups = if (section == "Discover") store.discovered else store.home?.items.orEmpty()
-                    if (groups.isEmpty()) item { GroupEmpty(if (section == "My groups") "Your next connection starts here" else "No groups found", if (section == "My groups") "Explore groups and find a place that feels like you." else "Try another name or category."); if (section == "My groups") Button(onClick = { section = "Discover" }, modifier = Modifier.fillMaxWidth()) { Text("Discover groups") } }
+                    if (groups.isEmpty()) item {
+                        Surface(
+                            color = theme.palette.surface,
+                            shape = RoundedCornerShape(24.dp),
+                            border = BorderStroke(theme.borderWidth, theme.palette.border),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                GroupEmpty(
+                                    title = if (section == "My groups") "Your next connection starts here" else "No groups found",
+                                    message = if (section == "My groups") "Explore groups and find a place that feels like you." else "Try another name or category.",
+                                    icon = if (section == "My groups") Icons.Outlined.Groups else Icons.Outlined.Search
+                                )
+                                if (section == "My groups") {
+                                    Button(
+                                        onClick = { section = "Discover" },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .heightIn(min = FaithFormTokens.TouchTarget.recommended),
+                                        shape = RoundedCornerShape(FaithFormTokens.Radius.control),
+                                        colors = ButtonDefaults.buttonColors(
+                                            containerColor = theme.palette.brandAccent,
+                                            contentColor = theme.palette.contentOnAccent
+                                        )
+                                    ) {
+                                        Icon(Icons.Outlined.Search, contentDescription = null, modifier = Modifier.size(20.dp))
+                                        Spacer(Modifier.width(FaithFormTokens.Spacing.sm))
+                                        Text("Discover groups", style = MaterialTheme.typography.titleMedium)
+                                    }
+                                }
+                            }
+                        }
+                    }
                     items(groups, key = { it.id }) { group ->
                         if (section == "My groups") GroupConversationRow(group) { popping = false; stack.add(GroupRoute.opening(group)) }
                         else GroupCard(group) { popping = false; stack.add(GroupRoute.opening(group)) }

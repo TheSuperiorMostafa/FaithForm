@@ -125,13 +125,14 @@ test("Android binds the video surface to the player it actually has", () => {
   const adapter = read(`${ANDROID}/media/Media3PlayerAdapter.kt`);
   const screen = read(`${ANDROID}/ui/media/LivePlayerScreen.kt`);
   const watch = read(`${ANDROID}/ui/media/WatchHost.kt`);
+  const stage = read(`${ANDROID}/ui/media/MediaStage.kt`);
 
   // The player is created by the first Play, after the view exists; a view
   // bound once to a plain property stays bound to null.
   assert.match(adapter, /val videoPlayerState: StateFlow<Player\?>/);
+  assert.match(stage, /update = \{ view -> view\.player = player \}/);
   for (const source of [screen, watch]) {
     assert.match(source, /videoPlayerState\.collectAsStateWithLifecycle\(\)/);
-    assert.match(source, /update = \{ view -> view\.player = player \}/);
     assert.doesNotMatch(source, /view\.player = adapter\.videoPlayer/);
   }
   // Falling behind the live window rejoins the edge instead of failing.

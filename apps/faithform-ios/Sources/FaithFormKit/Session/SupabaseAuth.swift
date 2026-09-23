@@ -23,8 +23,9 @@ public struct SupabaseAuthConfiguration: Sendable {
     /// the product's own reset screen. Optional: without it the reset email
     /// falls back to the identity provider's configured site URL.
     public let resetRedirectOrigin: URL?
-    /// Where the confirmation email returns to: this app's own callback,
-    /// `AuthCallbackLink.canonical`, allow-listed in the identity provider.
+    /// Where the confirmation email returns to: this build's own
+    /// `AuthCallbackLink.confirmRedirect(origin:)` page, allow-listed in the
+    /// identity provider, which hands the code on to the app.
     ///
     /// Without it the provider falls back to its Site URL — the church
     /// dashboard — which is precisely the misroute this field exists to end.

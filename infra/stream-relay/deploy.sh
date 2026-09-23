@@ -58,8 +58,10 @@ fi
 
 if [[ $INSTALL_RECORDER_CRON -eq 1 ]]; then
   # Resumes any recording whose uploader died (reboot, crash, app outage).
+  # The user copy start-mediamtx.sh loads: /etc/faithform-stream-relay.env is
+  # root-only, and this cron runs as the relay user.
   echo "→ installing the recorder sweep (every minute)"
-  ssh "$RELAY_HOST" '(crontab -l 2>/dev/null | grep -v faithform-recorder.py; echo "* * * * * set -a; . /etc/faithform-stream-relay.env; set +a; python3 \$HOME/scripts/faithform-recorder.py sweep >> \$HOME/mediamtx/logs/recorder.log 2>&1") | crontab -'
+  ssh "$RELAY_HOST" '(crontab -l 2>/dev/null | grep -v faithform-recorder.py; echo "* * * * * set -a; . \$HOME/faithform-stream-relay.env; set +a; python3 \$HOME/scripts/faithform-recorder.py sweep >> \$HOME/mediamtx/logs/recorder.log 2>&1") | crontab -'
 fi
 
 if [[ $BOOTSTRAP -eq 1 ]]; then

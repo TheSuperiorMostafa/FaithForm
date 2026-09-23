@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { isBootstrapSuperAdminEmail } from "@/lib/auth/superadmin-emails";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { stopAllRecurringGiftsForAccount } from "@/lib/giving/v1/giving-recurring-service";
 
 /**
  * Carries out the account deletions people ask for in the app.
@@ -33,6 +34,16 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * personal data left behind after we told someone it was gone.
  * `tests/policies/account-deletion-migration.test.ts` pins the classification
  * so that a future table has to choose a side.
+ *
+ * ## The one thing a foreign key cannot do
+ *
+ * Cancel a Stripe subscription. A recurring gift lives on the church's
+ * connected account, and deleting the rows that point at it would leave a card
+ * being charged every month with no account left to see it from. So
+ * `stopRecurringGifts` runs first, before the donor links that find those gifts
+ * are revoked, and before the Auth delete. It is the only part of this file
+ * that names a specific kind of data, and it is here because the alternative is
+ * charging people after they leave.
  *
  * ## Why a church staff member keeps their sign-in
  *
@@ -351,6 +362,32 @@ export async function inspectSignInIdentity(
  * the same cascade that removes the link; the member it names is the
  * church's own record.
  */
+/**
+ * Stops the account's recurring gifts, and never lets that stop the deletion.
+ *
+ * Failures are counted and logged rather than thrown: /account-deletion
+ * promises the account goes within 30 days, and Apple's guideline 5.1.1(v)
+ * requires it. A provider outage is a thing to see in a log, not a reason to
+ * keep somebody's account alive.
+ */
+async function stopRecurringGifts(
+  admin: SupabaseClient,
+  accountId: string,
+): Promise<void> {
+  try {
+    const result = await stopAllRecurringGiftsForAccount({ accountId, supabase: admin });
+    if (result.failed > 0) {
+      // No account id and no church: the request id is what ties a report to
+      // this run, exactly as everywhere else in this file.
+      console.error(
+        `[account-deletion] ${result.failed} recurring gift(s) could not be stopped`,
+      );
+    }
+  } catch {
+    console.error("[account-deletion] recurring gifts could not be read");
+  }
+}
+
 async function recordLinkRevocations(
   admin: SupabaseClient,
   accountId: string,
@@ -518,6 +555,13 @@ export async function processDeletionRequest(
   await recordOutcome(admin, request.id, outcome);
 
   await closeExportRequests(admin, accountId);
+  // **Before** the links are revoked, because the links are how a gift is
+  // found — and before the Auth delete, because afterwards there is no account
+  // to resolve. No foreign key can cancel a Stripe subscription, so without
+  // this a deleted account keeps being charged every month with no way left to
+  // see it. Best effort: a church whose Stripe account is unreachable must not
+  // stop the deletion we promised would happen.
+  await stopRecurringGifts(admin, accountId);
   await recordLinkRevocations(admin, accountId);
 
   if (identity.hasStaffAccess || !identity.exists) {

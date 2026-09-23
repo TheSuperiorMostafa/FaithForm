@@ -25,8 +25,9 @@ import UIKit
 ///
 /// No `PaymentSheet.FlowController` with a saved-card screen, no
 /// `CustomerSheet`, no `STPPaymentMethodCardParams`, and no bank-account UI.
-/// FaithForm gives once; it does not manage instruments. Recurring giving lives
-/// in the church's existing donor portal.
+/// FaithForm does not manage instruments: a recurring gift saves its method on
+/// the *subscription*, server-side, and the only thing a person can do to a
+/// saved method from the app is stop the gift that uses it.
 ///
 /// ## What is not verified here
 ///
@@ -85,7 +86,16 @@ public actor StripePaymentSheetAdapter: PaymentSheetFacade {
                     // accepts it.
                     configuration.applePay = .init(
                         merchantId: merchantID,
-                        merchantCountryCode: "US"
+                        merchantCountryCode: "US",
+                        // **"Donate with Apple Pay", not "Buy with Apple Pay".**
+                        // Apple's own guidance for nonprofit fundraising asks
+                        // for the donate button, and the default here is
+                        // `.plain`. It is also simply true: nobody is buying
+                        // anything, and a button that says so is the one a
+                        // person should be asked to press. The same button for
+                        // a recurring gift: `.support` and `.contribute` read
+                        // as patronage, and this is a donation either way.
+                        buttonType: .donate
                     )
                 }
 

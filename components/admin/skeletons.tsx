@@ -47,15 +47,96 @@ export function AdminChartSkeleton() {
   );
 }
 
+export function AdminOverviewSkeleton() {
+  return (
+    <div
+      className="mx-auto flex w-full max-w-6xl flex-col gap-5"
+      role="status"
+      aria-busy="true"
+      aria-label="Loading platform overview"
+    >
+      <div className="space-y-1">
+        <Skeleton className="h-8 w-56" />
+        <Skeleton className="h-4 w-96 max-w-full" />
+      </div>
+
+      {/* 5 Stats Cards */}
+      <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-5">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <Card key={i} className="p-5">
+            <Skeleton className="mb-4 size-10 rounded-xl" />
+            <Skeleton className="mb-2 h-4 w-28" />
+            <Skeleton className="h-9 w-20" />
+            <Skeleton className="mt-3 h-3 w-36" />
+          </Card>
+        ))}
+      </div>
+
+      {/* Platform Giving Card */}
+      <Card className="p-6 space-y-4">
+        <Skeleton className="h-6 w-40" />
+        <div className="space-y-1">
+          <Skeleton className="h-8 w-32" />
+          <Skeleton className="h-4 w-60" />
+        </div>
+        <div className="grid gap-3 sm:grid-cols-5 pt-2">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="space-y-1">
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="h-5 w-12" />
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* 2-Column Grid */}
+      <div className="grid gap-5 xl:grid-cols-2">
+        <Card className="p-6 space-y-4">
+          <Skeleton className="h-5 w-36" />
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-20" />
+              <Skeleton className="h-3 w-full rounded-full" />
+            </div>
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="h-3 w-full rounded-full" />
+            </div>
+          </div>
+        </Card>
+        <Card className="p-6 space-y-4">
+          <Skeleton className="h-5 w-44" />
+          <div className="space-y-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="flex items-center justify-between">
+                <Skeleton className="h-4 w-36" />
+                <Skeleton className="h-4 w-20" />
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+      <span className="sr-only">Loading platform overview…</span>
+    </div>
+  );
+}
+
 export function AdminPageSkeleton() {
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+    <div
+      className="mx-auto flex w-full max-w-6xl flex-col gap-6"
+      role="status"
+      aria-busy="true"
+      aria-label="Loading admin"
+    >
       <div>
         <Skeleton className="h-8 w-56" />
         <Skeleton className="mt-2 h-4 w-80" />
       </div>
       <AdminStatGridSkeleton />
       <AdminTableSkeleton />
+      <span className="sr-only">Loading admin…</span>
     </div>
   );
 }
+

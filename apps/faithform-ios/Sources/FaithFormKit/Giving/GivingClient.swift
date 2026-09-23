@@ -10,8 +10,10 @@ import Foundation
 ///
 /// **Nothing else is.** A donation session carries a client secret, a status is
 /// the one thing where a stale answer is actively harmful, and a person's giving
-/// history is not something to leave sitting in a cache on a shared device. All
-/// three routes say `no-store`, and this client does not second-guess them.
+/// history — and their recurring gifts, and whether one of them is really
+/// stopped — is not something to leave sitting in a cache on a shared device.
+/// Every one of those routes says `no-store`, and this client does not
+/// second-guess them.
 public actor GivingClient {
     private let api: APIClient
     private let cache: PartitionedCache
@@ -110,6 +112,61 @@ public actor GivingClient {
         let response = try await api.send(
             "api/mobile/v1/giving/\(churchSlug)/receipt/\(attemptID)",
             as: GivingReceipt.self
+        )
+        return try require(response.value)
+    }
+
+    // MARK: - Recurring
+
+    /// Starts, or resumes starting, one recurring gift.
+    ///
+    /// The attempt id is the client's, is persisted before this is called, and
+    /// is re-sent unchanged after any interruption — which is what makes the
+    /// server return the subscription it already created rather than a second
+    /// one that would charge every month alongside the first.
+    public func startRecurringGift(_ attempt: RecurringAttempt) async throws -> RecurringGiftSession {
+        let response = try await api.send(
+            "api/mobile/v1/giving/recurring",
+            method: .post,
+            body: StartRecurringGiftRequest(
+                churchSlug: attempt.churchSlug,
+                fundId: attempt.fundID,
+                amountCents: attempt.amountCents,
+                interval: attempt.cadence.wireValue,
+                clientAttemptId: attempt.clientAttemptID
+            ),
+            as: RecurringGiftSession.self
+        )
+        return try require(response.value)
+    }
+
+    /// This account's own recurring gifts at this church. Never cached.
+    ///
+    /// Not cached for the reason history is not: what somebody gives, and how
+    /// often, is not a thing to leave sitting on a shared device. It is also
+    /// the screen where a person checks whether the gift they just stopped is
+    /// really stopped, and a cached answer there would be a lie.
+    public func recurringGifts(churchSlug: String) async throws -> RecurringGiftList {
+        let response = try await api.send(
+            "api/mobile/v1/giving/\(churchSlug)/recurring",
+            as: RecurringGiftList.self
+        )
+        return try require(response.value)
+    }
+
+    /// Stops one recurring gift.
+    ///
+    /// Carries FaithForm's own row id — the only handle this app ever holds.
+    /// The server resolves it for the calling account alone; a gift belonging
+    /// to somebody else reads as not found.
+    public func stopRecurringGift(
+        churchSlug: String,
+        subscriptionID: String
+    ) async throws -> RecurringGiftCancelResult {
+        let response = try await api.send(
+            "api/mobile/v1/giving/\(churchSlug)/recurring/\(subscriptionID)/cancel",
+            method: .post,
+            as: RecurringGiftCancelResult.self
         )
         return try require(response.value)
     }

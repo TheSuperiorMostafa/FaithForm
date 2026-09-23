@@ -24,7 +24,13 @@ private final class MemoryFlowStore: AuthFlowStateStoring, @unchecked Sendable {
     }
 }
 
-private func pkceConfig(redirect: String? = AuthCallbackLink.canonical) -> SupabaseAuthConfiguration {
+/// A web origin standing in for a real environment's, so the tests exercise the
+/// https hand-off the apps actually register rather than the custom scheme,
+/// which a browser will not follow a redirect into.
+private let handoffOrigin = URL(string: "https://app.example")!
+private let handoffRedirect = "https://app.example/app/auth/callback"
+
+private func pkceConfig(redirect: String? = handoffRedirect) -> SupabaseAuthConfiguration {
     SupabaseAuthConfiguration(
         url: URL(string: "https://identity.example")!,
         anonKey: "anon-key",
@@ -77,6 +83,42 @@ struct AuthCallbackContractTests {
         #expect(AuthCallbackLink.host == contract.faithform["host"] as? String)
         #expect(AuthCallbackLink.path == contract.faithform["path"] as? String)
         #expect(AuthCallbackLink.canonical == contract.faithform["canonical"] as? String)
+    }
+
+    @Test("the confirmation redirect is the contract's https page, per environment")
+    func confirmRedirectMatchesContract() throws {
+        let contract = try CallbackContract()
+        let handoff = try #require(contract.json["confirmHandoff"] as? [String: Any])
+        #expect(AuthCallbackLink.confirmHandoffPath == handoff["path"] as? String)
+
+        let environments = try #require(handoff["environments"] as? [String: String])
+        for (name, expected) in environments {
+            let origin = try #require(URL(string: String(expected.dropLast(
+                AuthCallbackLink.confirmHandoffPath.count
+            ))))
+            // `Comment` is expressible by a string *literal*; a value needs the
+            // initializer, or this does not compile.
+            #expect(
+                AuthCallbackLink.confirmRedirect(origin: origin)?.absoluteString == expected,
+                Comment(rawValue: name)
+            )
+        }
+    }
+
+    @Test("the confirmation redirect is never the custom scheme")
+    func confirmRedirectIsNeverTheScheme() throws {
+        // The regression this page exists for: a `302` into `faithform://`
+        // is what browsers refused, leaving a confirmed account looking broken.
+        let redirect = try #require(
+            AuthCallbackLink.confirmRedirect(origin: handoffOrigin)
+        )
+        #expect(redirect.scheme == "https")
+        #expect(redirect.absoluteString == handoffRedirect)
+        // A trailing slash on the configured origin must not double up.
+        #expect(
+            AuthCallbackLink.confirmRedirect(origin: URL(string: "https://app.example/")!)?
+                .absoluteString == handoffRedirect
+        )
     }
 
     @Test("every accepted vector yields exactly its code")
@@ -156,7 +198,11 @@ struct SupabaseAuthConfirmationTests {
         let request = await transport.received.first
         let url = request?.url?.absoluteString ?? ""
         #expect(url.contains("auth/v1/signup"))
-        #expect(url.contains("redirect_to=faithform%3A%2F%2Fauth%2Fcallback"))
+        // Compared decoded: the exact percent-encoding is the client's business,
+        // the destination is the contract's.
+        let sent = URLComponents(string: url)?.queryItems?
+            .first { $0.name == "redirect_to" }?.value
+        #expect(sent == handoffRedirect)
 
         let body = bodyJSON(of: request)
         let verifier = try #require(store.loadVerifier())

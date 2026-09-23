@@ -41,6 +41,30 @@ class AuthCallbackLinkTest {
     }
 
     @Test
+    fun `the confirmation redirect is the contract's https page, per environment`() {
+        val handoff = contract["confirmHandoff"]!!.jsonObject
+        val path = handoff["path"]!!.jsonPrimitive.content
+        assertEquals(path, AuthCallbackLink.CONFIRM_HANDOFF_PATH)
+
+        for ((name, element) in handoff["environments"]!!.jsonObject) {
+            val expected = element.jsonPrimitive.content
+            val origin = expected.removeSuffix(path)
+            assertEquals(name, expected, AuthCallbackLink.confirmRedirect(origin))
+            // A trailing slash on the configured origin must not double up.
+            assertEquals(name, expected, AuthCallbackLink.confirmRedirect("$origin/"))
+        }
+    }
+
+    @Test
+    fun `the confirmation redirect is never the custom scheme`() {
+        // The regression the https page exists for: a `302` into `faithform://`
+        // is what browsers refused, leaving a confirmed account looking broken.
+        val redirect = AuthCallbackLink.confirmRedirect("https://app.example")
+        assertTrue(redirect, redirect.startsWith("https://"))
+        assertTrue(redirect, !redirect.contains(AuthCallbackLink.SCHEME + "://"))
+    }
+
+    @Test
     fun `every accepted vector yields exactly its code`() {
         for (vector in vectors("accepted")) {
             val url = vector["url"]!!.jsonPrimitive.content

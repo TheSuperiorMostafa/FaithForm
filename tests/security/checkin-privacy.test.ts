@@ -168,11 +168,11 @@ test("no capture-to-disk or photo-library API exists in either app", () => {
       "UIImagePickerController",
       "PHPickerViewController",
       "UIImageWriteToSavedPhotosAlbum",
-      // Reading the library stays impossible: photos are chosen through
-      // SwiftUI's PhotosPicker and the file importer, which hand back only the
-      // file the person picked and need no permission at all.
-      "NSPhotoLibraryUsageDescription",
-      "NSMicrophoneUsageDescription",
+      // Purpose strings for APIs linked by the chat SDK are required by App
+      // Store validation. Keep banning actual capture/permission calls here;
+      // declaring their purpose does not grant access or enable recording.
+      "AVAudioRecorder",
+      "requestRecordPermission",
       // Android
       "ImageCapture",
       "VideoCapture",
@@ -194,17 +194,18 @@ test("no capture-to-disk or photo-library API exists in either app", () => {
   assert.deepEqual(offenders, [], `capture or library API present: ${JSON.stringify(offenders)}`);
 });
 
-test("saving a photo is add-only, asked for by the person, and never reading the library", () => {
+test("chat SDK privacy descriptions ship without enabling voice recording or library enumeration", () => {
   // The one write that exists: "Save Image" in the share sheet of a photo
   // someone sent in a group chat. Without the add-only key that tap
-  // terminates the app, and the key is add-only on purpose — the read key
-  // above is still forbidden, so nothing can enumerate the library.
+  // terminates the app. Apple also requires descriptions for photo-read and
+  // microphone APIs linked by StreamChat, even with voice recording disabled.
   const plist = readFileSync("apps/faithform-ios/App/Resources/Info.plist", "utf8");
   assert.match(plist, /<key>NSPhotoLibraryAddUsageDescription<\/key>/);
-  assert.ok(
-    !plist.includes("<key>NSPhotoLibraryUsageDescription</key>"),
-    "the app declares read access to the photo library",
-  );
+  assert.match(plist, /<key>NSPhotoLibraryUsageDescription<\/key>\s*<string>[^<]*share in chat[^<]*profile[^<]*<\/string>/);
+  assert.match(plist, /<key>NSMicrophoneUsageDescription<\/key>\s*<string>[^<]*only when you choose[^<]*voice message[^<]*<\/string>/);
+  const chat = readFileSync("apps/faithform-ios/App/Groups/GroupChat.swift", "utf8");
+  assert.match(chat, /isVoiceRecordingEnabled: false/);
+  assert.match(chat, /\.fileImporter\(/);
 });
 
 test("the scanning interfaces cannot even express returning an image", () => {

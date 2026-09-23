@@ -41,16 +41,34 @@ public final class GivingModel {
     public private(set) var history: [DonationStatusResult] = []
     public private(set) var historyLoading = false
 
+    /// Starting a recurring gift: its own phase, deliberately separate from
+    /// `donation`. One screen can be waiting on a one-time gift's webhook while
+    /// a person starts a recurring one, and a single phase would make the
+    /// second overwrite the first's outcome.
+    public private(set) var recurring: RecurringPhase = .idle
+    public private(set) var recurringGifts: [RecurringGift] = []
+    public private(set) var recurringLoading = false
+    /// Set when stopping a gift failed. Cleared by the next attempt, so a stale
+    /// message cannot outlive the row it was about.
+    public private(set) var stopFailed = false
+    /// The gift currently being stopped, so its row alone shows progress.
+    public private(set) var stoppingID: String?
+
     /// True once polling has given up. The gift is still going through; the app
     /// simply stops asking and says so.
     public private(set) var pollingExhausted = false
 
     public var selectedFund: GivingFund?
     public var amountText: String = ""
+    /// Which cadence the amount screen is offering. Monthly by default because
+    /// that is what most regular giving is, and a default nobody changes should
+    /// be the common case rather than the first alphabetically.
+    public var cadence: RecurringCadence = .month
 
     private let client: GivingClient
     private let sheet: any PaymentSheetFacade
     private let store: PendingDonationStore
+    private let recurringStore: PendingRecurringStore
     private let churchSlug: String
     private let partition: CachePartition
     private let applePayMerchantID: String?
@@ -64,6 +82,7 @@ public final class GivingModel {
         client: GivingClient,
         sheet: any PaymentSheetFacade,
         store: PendingDonationStore,
+        recurringStore: PendingRecurringStore,
         churchSlug: String,
         partition: CachePartition,
         applePayMerchantID: String? = nil,
@@ -73,6 +92,7 @@ public final class GivingModel {
         self.client = client
         self.sheet = sheet
         self.store = store
+        self.recurringStore = recurringStore
         self.churchSlug = churchSlug
         self.partition = partition
         self.applePayMerchantID = applePayMerchantID
@@ -295,6 +315,150 @@ public final class GivingModel {
         pollingExhausted = true
     }
 
+    // MARK: - Recurring giving
+
+    /// Starts a recurring gift, presents the sheet, and stops claiming things.
+    ///
+    /// The shape is `give()`'s, with one difference at the end: there is no
+    /// poll. A one-time gift has a single outcome worth waiting for, so the app
+    /// waits. A subscription's outcome is "it renews next month", which no
+    /// amount of waiting on this screen establishes — so the sheet closing
+    /// moves to `.started`, the list reloads, and the webhook's answer shows up
+    /// there as a status rather than as a spinner nobody can outlast.
+    public func startRecurring() async {
+        guard let fund = selectedFund, case let .valid(cents) = amountResult else { return }
+
+        recurring = .preparing
+
+        let attempt = RecurringAttempt(
+            clientAttemptID: RecurringAttempt.newAttemptID(),
+            churchSlug: churchSlug,
+            fundID: fund.fundId,
+            amountCents: cents,
+            cadence: cadence
+        )
+        await recurringStore.save(attempt)
+
+        let session: RecurringGiftSession
+        do {
+            session = try await client.startRecurringGift(attempt)
+        } catch let error as APIError {
+            await recurringStore.clear()
+            recurring = .failed(recurringFailure(for: error), attempt)
+            return
+        } catch {
+            await recurringStore.clear()
+            recurring = .failed(.network, attempt)
+            return
+        }
+
+        // A resumed attempt whose first invoice is already paid comes back with
+        // no secret. There is nothing to confirm and nothing to present: the
+        // gift is running, and saying so beats opening an empty sheet.
+        guard let clientSecret = session.clientSecret, !clientSecret.isEmpty else {
+            await recurringStore.clear()
+            recurring = .started(attempt)
+            await loadRecurring()
+            return
+        }
+
+        recurring = .presenting(attempt)
+
+        let allowApplePay = applePayAvailable(
+            serverAllows: listPhase.home?.applePayApproved == true,
+            deviceCanMakePayments: deviceCanUseApplePay(),
+            merchantID: applePayMerchantID
+        )
+
+        let outcome = await sheet.present(
+            PaymentSheetRequest(
+                clientSecret: clientSecret,
+                publishableKey: session.publishableKey,
+                stripeAccountID: session.stripeAccountId,
+                merchantName: session.merchantName,
+                allowApplePay: allowApplePay,
+                appleMerchantID: applePayMerchantID
+            )
+        )
+
+        recurring = advanceRecurringAfterSheet(outcome, attempt: attempt)
+        await recurringStore.clear()
+
+        if case .completed = outcome {
+            // The subscription exists either way; the list is where its real
+            // state appears once the webhook has spoken.
+            await loadRecurring()
+        }
+    }
+
+    /// Picks up a recurring gift that was interrupted.
+    ///
+    /// A phone killed with the sheet open left a subscription whose first
+    /// invoice may or may not be paid. Re-sending the same attempt id asks the
+    /// server what became of it — and never creates a second one.
+    public func resumeInterruptedRecurring() async {
+        guard let pending = await recurringStore.load() else { return }
+        guard pending.churchSlug == churchSlug else { return }
+        await recurringStore.clear()
+        await loadRecurring()
+    }
+
+    public func loadRecurring() async {
+        recurringLoading = true
+        defer { recurringLoading = false }
+        do {
+            recurringGifts = try await client.recurringGifts(churchSlug: churchSlug).items
+        } catch {
+            if error.isCancellation { return }
+            // An empty list rather than a stale one: a gift shown after it was
+            // stopped is worse than a list that says nothing.
+            recurringGifts = []
+        }
+    }
+
+    /// Stops one recurring gift, and only reports it stopped when the server did.
+    public func stopRecurring(subscriptionID: String) async {
+        stopFailed = false
+        stoppingID = subscriptionID
+        defer { stoppingID = nil }
+
+        do {
+            let result = try await client.stopRecurringGift(
+                churchSlug: churchSlug,
+                subscriptionID: subscriptionID
+            )
+            guard result.stopped else {
+                stopFailed = true
+                return
+            }
+        } catch {
+            if error.isCancellation { return }
+            stopFailed = true
+            return
+        }
+
+        // Re-read rather than removing the row locally. The webhook writes the
+        // cancellation, and the list is what it writes to; dropping the row
+        // here would show "stopped" for a gift the server had not yet stopped.
+        await loadRecurring()
+    }
+
+    private func recurringFailure(for error: APIError) -> RecurringFailure {
+        switch error.code {
+        case .notFound: return .notAllowed
+        case .conflict:
+            // The server says `conflict` both for a church that is not
+            // accepting and for an account with no email. They read very
+            // differently to a person, and only the message tells them apart.
+            return error.message.localizedCaseInsensitiveContains("email")
+                ? .noEmail
+                : .churchNotAccepting
+        case .invalidRequest: return .notAllowed
+        case .unavailable, .internalError: return .network
+        default: return .unavailable
+        }
+    }
+
     // MARK: - History
 
     public func loadHistory() async {
@@ -319,7 +483,69 @@ public final class GivingModel {
         listPhase = .idle
         selectedFund = nil
         amountText = ""
+        cadence = .month
+        recurring = .idle
+        recurringGifts = []
+        stopFailed = false
+        stoppingID = nil
         await store.clear()
+        await recurringStore.clear()
+    }
+}
+
+/// Where a pending **recurring** attempt lives between an interruption and a
+/// resume.
+///
+/// Separate from ``PendingDonationStore`` rather than generic over both,
+/// because the two must never share a slot: a phone killed during a one-time
+/// gift and then again during a recurring one has two things to resume, and a
+/// single entry would lose one of them — the one that is still charging.
+public protocol PendingRecurringStore: Sendable {
+    func save(_ attempt: RecurringAttempt) async
+    func load() async -> RecurringAttempt?
+    func clear() async
+}
+
+/// The pending recurring attempt, in the Keychain.
+///
+/// Same reasoning as ``SecurePendingDonationStore``: not because the attempt is
+/// a secret — it holds a fund, an amount and a cadence — but because the
+/// Keychain is where this app keeps what must survive a kill **and** disappear
+/// on sign-out. A pending gift left in `UserDefaults` would be resumed for
+/// whoever signs in next, and this one would set up a monthly charge for them.
+public struct SecurePendingRecurringStore: PendingRecurringStore {
+    private let store: SecureStoring
+    private let key: String
+
+    public init(store: SecureStoring, partition: CachePartition) {
+        self.store = store
+        // A different prefix from the one-time store's, so the two can never
+        // collide. The authorization version is left out for the same reason it
+        // is there: a version bump mid-payment must not orphan the one record
+        // that lets the app ask what became of the gift.
+        self.key = [
+            "giving.pending.recurring",
+            partition.environment,
+            partition.accountId ?? "anonymous",
+            partition.churchSlug ?? "-",
+        ].joined(separator: "|")
+    }
+
+    public func save(_ attempt: RecurringAttempt) async {
+        guard let data = try? JSONEncoder.faithform.encode(attempt) else { return }
+        try? store.write(data, for: key)
+    }
+
+    public func load() async -> RecurringAttempt? {
+        guard
+            let data = try? store.read(key),
+            let attempt = try? JSONDecoder.faithform.decode(RecurringAttempt.self, from: data)
+        else { return nil }
+        return attempt
+    }
+
+    public func clear() async {
+        try? store.delete(key)
     }
 }
 

@@ -15,9 +15,13 @@ import SwiftUI
 public struct StreamThumbnail: View {
     @Environment(\.faithformTheme) private var theme
     private let url: String?
+    private let showsGlyph: Bool
 
-    public init(url: String?) {
+    /// `showsGlyph: false` where a play button or spinner is laid over the
+    /// centre: the placeholder's own icon would show through behind it.
+    public init(url: String?, showsGlyph: Bool = true) {
         self.url = url
+        self.showsGlyph = showsGlyph
     }
 
     public var body: some View {
@@ -54,9 +58,11 @@ public struct StreamThumbnail: View {
                 startRadius: 0,
                 endRadius: 260
             )
-            Image(systemName: "play.rectangle.fill")
-                .font(.system(size: 40, weight: .regular))
-                .foregroundStyle(.white.opacity(0.22))
+            if showsGlyph {
+                Image(systemName: "play.rectangle.fill")
+                    .font(.system(size: 40, weight: .regular))
+                    .foregroundStyle(.white.opacity(0.22))
+            }
         }
     }
 }
@@ -152,10 +158,37 @@ import UIKit
 /// Rotates the app for full-screen video, whatever the phone's rotation lock
 /// says — which is what every video app does, and what "Full screen" means to
 /// someone holding a phone upright.
+///
+/// ## The app is portrait, and this is the exception
+///
+/// Every screen but a playing service is portrait: a feed, a check-in code and
+/// a giving form have nothing to do sideways, and an app that tips over while
+/// someone reads it in bed is worse for having tried. Landscape exists for one
+/// reason — a service filling the screen — so it is granted for exactly as
+/// long as that lasts.
+///
+/// `allowsLandscape` is what the app delegate answers
+/// `supportedInterfaceOrientationsFor` with. Info.plist has to *declare* the
+/// landscape orientations for them to be possible at all; the delegate is what
+/// narrows them to this one case, and a build with the delegate missing would
+/// silently rotate everywhere.
 @MainActor
 public enum ScreenOrientation {
-    public static func enterLandscape() { request(.landscapeRight) }
-    public static func enterPortrait() { request(.portrait) }
+    /// True only while full-screen video is on screen.
+    public private(set) static var allowsLandscape = false
+
+    public static func enterLandscape() {
+        // Opened *before* the request: iOS asks the delegate what is supported
+        // as part of honouring it, and a gate still shut at that moment
+        // refuses the rotation that was just asked for.
+        allowsLandscape = true
+        request(.landscapeRight)
+    }
+
+    public static func enterPortrait() {
+        allowsLandscape = false
+        request(.portrait)
+    }
 
     private static func request(_ mask: UIInterfaceOrientationMask) {
         guard let scene = UIApplication.shared.connectedScenes
@@ -259,7 +292,7 @@ public struct RecordingStage: View {
                 .accessibilityHidden(true)
 
             if showsPoster {
-                StreamThumbnail(url: posterUrl)
+                StreamThumbnail(url: posterUrl, showsGlyph: false)
                     .overlay(Color.black.opacity(0.18))
                     .transition(.opacity)
             }

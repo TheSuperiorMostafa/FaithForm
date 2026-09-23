@@ -36,7 +36,14 @@ private class MemoryVerifierStore(var verifier: String? = null) : CodeVerifierSt
     override fun clear() { verifier = null }
 }
 
-private fun pkceConfig(redirect: String? = "faithform://auth/callback") = SupabaseAuthConfig(
+/**
+ * A web origin standing in for a real environment's, so the tests exercise the
+ * https hand-off the app actually registers rather than the custom scheme,
+ * which a browser will not follow a redirect into.
+ */
+private const val HANDOFF_REDIRECT = "https://app.example/app/auth/callback"
+
+private fun pkceConfig(redirect: String? = HANDOFF_REDIRECT) = SupabaseAuthConfig(
     url = "https://identity.example",
     anonKey = "anon-key",
     signUpRedirect = redirect
@@ -79,7 +86,7 @@ class SupabaseAuthConfirmationTest {
 
         val request = transport.received.single()
         assertTrue(request.url.contains("auth/v1/signup"))
-        assertTrue(request.url.contains("redirect_to=faithform%3A%2F%2Fauth%2Fcallback"))
+        assertTrue(request.url.contains("redirect_to=https%3A%2F%2Fapp.example%2Fapp%2Fauth%2Fcallback"))
 
         val verifier = store.verifier
         assertNotNull(verifier)

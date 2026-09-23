@@ -32,6 +32,16 @@ export const ACCOUNT_OWNED: readonly Reference[] = [
   { table: "attendance_qr_scan_redemptions", column: "account_id", action: "cascade" },
   { table: "giving_donor_links", column: "account_id", action: "cascade" },
   { table: "giving_donation_attempts", column: "account_id", action: "cascade" },
+  // A recurring attempt (0100) is a log of what a person asked to start, and it
+  // carries no money: the gift itself lives on `giving_subscriptions`, which is
+  // the church's financial record and is not touched by a deletion. So the
+  // attempt goes with the account, exactly as the one-time attempt above does.
+  //
+  // Deleting an account does **not** stop a recurring gift — no foreign key can
+  // cancel a Stripe subscription. `lib/faithform/account-deletion.ts` is where
+  // that has to happen, and until it does the church's donor portal is the way
+  // out, as it already is for every gift started on the web.
+  { table: "giving_recurring_attempts", column: "account_id", action: "cascade" },
   // Groups (0091/0092). A membership or ban anchored to a People record is the
   // church's and survives: a before-delete trigger on visitor_accounts nulls
   // the account on those rows first, so the cascade below only removes what
