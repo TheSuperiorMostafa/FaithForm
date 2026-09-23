@@ -115,6 +115,114 @@
   padding-bottom: 116px;
 }
 
+[data-theme="light"] .site-surface-canvas,
+[data-theme="light"] .site-surface-surface {
+  background: var(--site-canvas);
+}
+
+[data-theme="light"] .site-surface-canvas-alt {
+  background: var(--site-canvas-alt);
+}
+
+[data-theme="light"] .site-head {
+  margin-bottom: 52px;
+}
+
+[data-theme="light"] .site-display-lg,
+[data-theme="light"] .site-display-md {
+  font-weight: 500;
+  line-height: 1.12;
+}
+
+[data-theme="light"] .site-display-lg {
+  font-size: clamp(32px, 4.5vw, 48px);
+}
+
+[data-theme="light"] .site-display-md {
+  font-size: clamp(28px, 4vw, 42px);
+}
+
+[data-theme="light"] .site-grid {
+  gap: 20px;
+}
+
+[data-theme="light"] .site-card {
+  background: var(--site-surface);
+  border-radius: 14px;
+  padding: 26px 22px;
+}
+
+[data-theme="light"] .site-card-lg {
+  padding: 32px 24px;
+}
+
+[data-theme="light"] .site-card-title,
+[data-theme="light"] .site-staff-name,
+[data-theme="light"] .site-sermon-title {
+  font-weight: 600;
+}
+
+[data-theme="light"] .site-badge {
+  width: 30px;
+  height: 2px;
+  border-radius: 0;
+  background: var(--site-accent);
+  color: transparent;
+  font-size: 0;
+}
+
+[data-theme="light"] .site-staff-card {
+  border-radius: 14px;
+  background: var(--site-surface);
+  box-shadow: 0 14px 34px rgba(6, 44, 64, 0.08);
+}
+
+[data-theme="light"] .site-panel {
+  border-radius: var(--site-radius-panel);
+  background: var(--site-surface);
+}
+
+[data-theme="light"] .site-panel-ink,
+[data-theme="light"] .site-surface-ink,
+[data-theme="light"] .site-surface-ink-strong {
+  background: var(--site-ink);
+}
+
+[data-theme="light"] .site-sermon-list,
+[data-theme="light"] .site-sermon-stage,
+[data-theme="light"] .site-map-card {
+  border-radius: 18px;
+}
+
+[data-theme="light"] .site-sermon-list {
+  background: var(--site-surface);
+  border: 1px solid var(--site-card-border);
+}
+
+[data-theme="light"] .site-sermon-row {
+  padding: 18px 20px;
+}
+
+[data-theme="light"] .site-form,
+[data-theme="light"] .site-fact {
+  border-color: var(--site-line, rgba(6, 44, 64, 0.1));
+}
+
+[data-theme="light"] .site-input,
+[data-theme="light"] .site-textarea {
+  border-radius: 10px;
+  background: var(--site-surface);
+}
+
+[data-theme="light"] .site-map-card {
+  background: var(--site-surface);
+  box-shadow: 0 16px 40px -18px rgba(6, 44, 64, 0.35);
+}
+
+[data-theme="light"] .site-footer-title {
+  font-weight: 600;
+}
+
 [data-theme="light"] .site-card,
 [data-theme="light"] .site-staff-card,
 [data-theme="light"] .site-panel {

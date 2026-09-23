@@ -152,6 +152,118 @@
   padding-bottom: 104px;
 }
 
+[data-theme="wood"] .site-surface-canvas,
+[data-theme="wood"] .site-surface-surface {
+  background: var(--site-canvas);
+}
+
+[data-theme="wood"] .site-surface-canvas-alt {
+  background: var(--site-canvas-alt);
+}
+
+[data-theme="wood"] .site-head {
+  margin-bottom: 44px;
+}
+
+[data-theme="wood"] .site-head-center {
+  max-width: 600px;
+}
+
+[data-theme="wood"] .site-display-lg,
+[data-theme="wood"] .site-display-md {
+  line-height: 1.2;
+  letter-spacing: 0.03em;
+}
+
+[data-theme="wood"] .site-display-lg {
+  font-size: clamp(26px, 3.4vw, 34px);
+}
+
+[data-theme="wood"] .site-display-md {
+  font-size: clamp(22px, 2.8vw, 28px);
+}
+
+[data-theme="wood"] .site-grid {
+  gap: 24px;
+}
+
+[data-theme="wood"] .site-card,
+[data-theme="wood"] .site-staff-card,
+[data-theme="wood"] .site-panel,
+[data-theme="wood"] .site-sermon-list,
+[data-theme="wood"] .site-map-card {
+  border-radius: 0;
+}
+
+[data-theme="wood"] .site-card,
+[data-theme="wood"] .site-staff-card {
+  background: var(--site-canvas);
+}
+
+[data-theme="wood"] .site-card-lg {
+  padding: 32px;
+}
+
+[data-theme="wood"] .site-card-title,
+[data-theme="wood"] .site-sermon-title {
+  font-family: var(--site-font-accent);
+  font-size: 20px;
+  text-transform: none;
+}
+
+[data-theme="wood"] .site-badge {
+  width: 30px;
+  height: 2px;
+  border-radius: 0;
+  background: var(--site-accent);
+  color: transparent;
+  font-size: 0;
+}
+
+[data-theme="wood"] .site-staff-card {
+  box-shadow: none;
+}
+
+[data-theme="wood"] .site-staff-photo,
+[data-theme="wood"] .site-figure,
+[data-theme="wood"] .site-sermon-stage {
+  border-radius: 0;
+}
+
+[data-theme="wood"] .site-panel {
+  background: var(--site-canvas);
+  box-shadow: none;
+}
+
+[data-theme="wood"] .site-panel-ink {
+  background: var(--site-ink);
+}
+
+[data-theme="wood"] .site-sermon-list {
+  background: transparent;
+  border-color: var(--site-card-border);
+}
+
+[data-theme="wood"] .site-sermon-row {
+  padding: 22px 0;
+  border-radius: 0;
+}
+
+[data-theme="wood"] .site-input,
+[data-theme="wood"] .site-textarea {
+  border-radius: 0;
+  background: var(--site-canvas);
+}
+
+[data-theme="wood"] .site-map-card {
+  background: var(--site-canvas);
+  box-shadow: none;
+}
+
+[data-theme="wood"] .site-footer-title {
+  letter-spacing: 0.16em;
+}
+
 [data-theme="wood"] .site-btn {
   min-height: 50px;
   box-shadow: 4px 4px 0 color-mix(in srgb, var(--site-ink) 28%, transparent);
