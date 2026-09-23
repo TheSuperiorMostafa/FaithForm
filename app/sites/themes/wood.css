@@ -43,8 +43,8 @@
 }
 
 [data-theme="wood"] .site-hero-body {
-  padding-top: 112px;
-  padding-bottom: 76px;
+  padding-top: 104px;
+  padding-bottom: 0;
 }
 
 [data-theme="wood"] .site-hero-media {
@@ -70,6 +70,22 @@
   text-shadow: 0 10px 40px rgba(0, 0, 0, 0.65);
 }
 
+[data-theme="wood"] .site-hero-foot {
+  justify-content: center;
+  align-items: center;
+  margin-top: 30px;
+}
+
+[data-theme="wood"] .site-hero-foot .site-lede {
+  text-align: center;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+[data-theme="wood"] .site-hero-actions {
+  justify-content: center;
+}
+
 [data-theme="wood"] .site-display-lg,
 [data-theme="wood"] .site-display-md,
 [data-theme="wood"] .site-card-title,
@@ -92,6 +108,7 @@
 [data-theme="wood"] .site-btn {
   letter-spacing: 0.14em;
   text-transform: uppercase;
+  box-shadow: none;
 }
 
 [data-theme="wood"] .site-card,
@@ -113,6 +130,23 @@
   padding-bottom: 30px;
 }
 
+[data-theme="wood"] .site-strip {
+  margin-top: 26px;
+  background: linear-gradient(176deg, rgba(12, 7, 3, 0.82), rgba(12, 7, 3, 0.94));
+  border-top-color: color-mix(in srgb, var(--site-accent) 32%, transparent);
+  color: #f8ecd2;
+}
+
+[data-theme="wood"] .site-strip-label,
+[data-theme="wood"] .site-strip-value,
+[data-theme="wood"] .site-strip-lines {
+  color: rgba(248, 236, 210, 0.82);
+}
+
+[data-theme="wood"] .site-strip-label {
+  color: var(--site-accent);
+}
+
 [data-theme="wood"] .site-section {
   padding-top: 104px;
   padding-bottom: 104px;
@@ -124,8 +158,11 @@
 }
 
 [data-theme="wood"] .site-btn:hover {
-  transform: translate(2px, 2px);
-  box-shadow: 2px 2px 0 color-mix(in srgb, var(--site-ink) 28%, transparent);
+  transform: none;
+}
+
+[data-theme="wood"] .site-hero .site-btn-solid {
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.45);
 }
 
 [data-theme="wood"] .site-surface-ink,

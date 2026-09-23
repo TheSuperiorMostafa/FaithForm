@@ -8,9 +8,9 @@ export const woodTheme: SiteThemeDefinition = {
   key: "wood",
   name: "Wood",
   description:
-    "Warm and traditional. Dark walnut, parchment and aged gold with stately Cinzel headings and softly rounded architectural details.",
+    "Warm and traditional. Walnut, parchment and aged gold with stately Cinzel headings, Spectral accents, and squared architectural details.",
   tokens: {
-    "--site-ink": "#2B1A0C",
+    "--site-ink": "#2E2018",
     "--site-ink-strong": "#170D06",
     "--site-ink-soft": "#4A362A",
     "--site-accent": "#C8961E",
