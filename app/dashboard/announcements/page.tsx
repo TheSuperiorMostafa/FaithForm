@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { listEmailQueue } from "@/lib/announcements/email-queue";
+import { getWeeklyEmailAvailability } from "@/lib/announcements/email-delivery";
 import {
   buildWeeklyAnnouncementQueue,
   QUEUE_HORIZON_DAYS,
@@ -57,6 +58,7 @@ export default async function AnnouncementsPage() {
   const integrationStatus = await getIntegrationStatus(churchId, supabase);
   const googleConnected = integrationStatus.google.connected;
   const appleConnected = integrationStatus.apple.connected;
+  const weeklyEmail = await getWeeklyEmailAvailability(churchId, supabase);
   const calendarConnected = googleConnected || appleConnected;
   // A calendar connected through a public iCloud link can be read, not
   // written, so it cannot take a new event.
@@ -109,6 +111,8 @@ export default async function AnnouncementsPage() {
           connected={connected}
           calendarConnected={calendarConnected}
           googleConnected={googleConnected}
+          emailAvailable={weeklyEmail.available}
+          emailChannel={weeklyEmail.channel}
           facebookConnected={facebookConnected}
           isAdmin={auth.isAdmin}
           publishedPromise={publishedPromise}
@@ -128,6 +132,7 @@ export default async function AnnouncementsPage() {
           calendarConnected={calendarConnected}
           canCreateEvents={canCreateEvents}
           googleConnected={googleConnected}
+          emailAvailable={weeklyEmail.available}
           facebookConnected={facebookConnected}
           isAdmin={auth.isAdmin}
           publishedPromise={publishedPromise}
@@ -154,6 +159,8 @@ async function WeeklyQueueSection({
   connected,
   calendarConnected,
   googleConnected,
+  emailAvailable,
+  emailChannel,
   facebookConnected,
   isAdmin,
   publishedPromise,
@@ -167,6 +174,8 @@ async function WeeklyQueueSection({
   connected: ConnectedCalendars;
   calendarConnected: boolean;
   googleConnected: boolean;
+  emailAvailable: boolean;
+  emailChannel: "gmail" | "icloud" | null;
   facebookConnected: boolean;
   isAdmin: boolean;
   publishedPromise: PublishedPromise;
@@ -220,6 +229,8 @@ async function WeeklyQueueSection({
         published={published}
         calendarConnected={calendarConnected}
         googleConnected={googleConnected}
+        emailAvailable={emailAvailable}
+        emailChannel={emailChannel}
         facebookConnected={facebookConnected}
         weekLabel={week.weekLabel}
         weeklyDraftCreated={
@@ -241,6 +252,7 @@ async function CalendarSection({
   calendarConnected,
   canCreateEvents,
   googleConnected,
+  emailAvailable,
   facebookConnected,
   isAdmin,
   publishedPromise,
@@ -255,6 +267,7 @@ async function CalendarSection({
   calendarConnected: boolean;
   canCreateEvents: boolean;
   googleConnected: boolean;
+  emailAvailable: boolean;
   facebookConnected: boolean;
   isAdmin: boolean;
   publishedPromise: PublishedPromise;
@@ -319,6 +332,7 @@ async function CalendarSection({
         calendarConnected={calendarConnected}
         canCreateEvents={canCreateEvents}
         googleConnected={googleConnected}
+        emailAvailable={emailAvailable}
         facebookConnected={facebookConnected}
       />
     </>

@@ -28,6 +28,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import type { WeeklyQueueItem } from "@/lib/announcements/weekly-email";
+import type { WeeklyEmailChannel } from "@/lib/announcements/email-delivery";
 import {
   formatDateTimeRange,
   type AnnouncementRow,
@@ -42,6 +43,9 @@ type WeeklyAnnouncementQueueProps = {
   calendarConnected: boolean;
   /** Google specifically: the weekly draft is a Gmail draft. */
   googleConnected: boolean;
+  /** Whether a weekly draft can be created through Google or iCloud Mail. */
+  emailAvailable: boolean;
+  emailChannel: WeeklyEmailChannel | null;
   facebookConnected: boolean;
   weekLabel: string;
   weeklyDraftCreated: boolean;
@@ -54,6 +58,8 @@ export function WeeklyAnnouncementQueue({
   published,
   calendarConnected,
   googleConnected,
+  emailAvailable,
+  emailChannel,
   facebookConnected,
   weekLabel,
   weeklyDraftCreated,
@@ -199,7 +205,7 @@ export function WeeklyAnnouncementQueue({
                 <Button
                   type="button"
                   variant="outline"
-                  disabled={pending}
+                  disabled={pending || !emailAvailable}
                   onClick={() => handleCreateDraft(false)}
                 >
                   <Mail className="mr-2 size-4" strokeWidth={1.75} />
@@ -217,12 +223,18 @@ export function WeeklyAnnouncementQueue({
                   </Button>
                 )}
                 <a
-                  href="https://mail.google.com/mail/u/0/#drafts"
+                  href={
+                    emailChannel === "icloud"
+                      ? "https://www.icloud.com/mail/"
+                      : "https://mail.google.com/mail/u/0/#drafts"
+                  }
                   target="_blank"
                   rel="noopener noreferrer"
                 >
                   <Button type="button" variant="ghost" size="sm">
-                    Open email drafts
+                    {emailChannel === "icloud"
+                      ? "Open iCloud Mail"
+                      : "Open email drafts"}
                   </Button>
                 </a>
               </div>

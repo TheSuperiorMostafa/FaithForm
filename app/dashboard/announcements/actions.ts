@@ -14,7 +14,10 @@ import {
   removeFromEmailQueue,
 } from "@/lib/announcements/email-queue";
 import { facebookPostUrl } from "@/lib/announcements/published-channels";
-import { createWeeklyAnnouncementGmailDraft } from "@/lib/announcements/weekly-email";
+import {
+  createWeeklyAnnouncementGmailDraft,
+} from "@/lib/announcements/weekly-email";
+import { resolveWeeklyEmailChannel } from "@/lib/announcements/email-delivery";
 import { getChurchAuth } from "@/lib/auth/church";
 import { featureActionError } from "@/lib/features/guard";
 import {
@@ -563,13 +566,12 @@ export async function publishAnnouncement(
     }
   }
 
-  const googleConnected = await hasIntegration(
+  const weeklyEmailChannel = await resolveWeeklyEmailChannel(
     ctx.churchId,
-    "google",
     ctx.supabase,
   );
-  if (payload.pushToTeam && !googleConnected) {
-    errors.push("Google is not connected — weekly email not queued.");
+  if (payload.pushToTeam && !weeklyEmailChannel) {
+    errors.push("Google or Apple email is not connected — weekly email not queued.");
   }
 
   if (facebookPostId || errors.length > 0) {
@@ -618,7 +620,7 @@ export async function publishAnnouncement(
     announcementId: announcementId!,
     facebookUrl,
     facebookScheduledAt,
-    queuedForWeeklyEmail: payload.pushToTeam && googleConnected,
+    queuedForWeeklyEmail: payload.pushToTeam && Boolean(weeklyEmailChannel),
     errors,
   };
 }
@@ -1001,12 +1003,15 @@ export async function publishToMoreChannels(
   let queuedForWeeklyEmail = false;
 
   if (addTeam) {
-    const googleConnected = await hasIntegration(ctx.churchId, "google", ctx.supabase);
-    if (googleConnected) {
+    const weeklyEmailChannel = await resolveWeeklyEmailChannel(
+      ctx.churchId,
+      ctx.supabase,
+    );
+    if (weeklyEmailChannel) {
       changes.push_to_team = true;
       queuedForWeeklyEmail = true;
     } else {
-      errors.push("Google is not connected — weekly email not queued.");
+      errors.push("Google or Apple email is not connected — weekly email not queued.");
     }
   }
 
