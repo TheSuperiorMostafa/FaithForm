@@ -9,13 +9,16 @@
 
 [data-theme="light"] {
   max-width: none;
+  background: var(--site-canvas);
 }
 
 [data-theme="light"] .site-nav {
-  background: color-mix(in srgb, var(--site-ink-strong) 86%, transparent);
+  position: absolute;
+  inset: 0 0 auto;
+  background: linear-gradient(180deg, rgba(4, 32, 47, 0.72), transparent);
   border-bottom-color: rgba(255, 255, 255, 0.16);
   color: #fff;
-  backdrop-filter: blur(16px);
+  backdrop-filter: blur(8px);
 }
 
 [data-theme="light"] .site-nav-inner,
@@ -29,12 +32,36 @@
 }
 
 [data-theme="light"] .site-hero {
-  min-height: min(760px, 82vh);
+  min-height: min(760px, 84vh);
+  position: relative;
+  isolation: isolate;
   display: grid;
   align-items: end;
   background:
-    linear-gradient(90deg, rgba(4, 32, 47, 0.9), rgba(4, 32, 47, 0.38) 62%, rgba(4, 32, 47, 0.62)),
+    linear-gradient(90deg, rgba(4, 32, 47, 0.88), rgba(4, 32, 47, 0.28) 68%, rgba(4, 32, 47, 0.58)),
     var(--site-ink);
+}
+
+[data-theme="light"] .site-hero-body {
+  position: relative;
+  z-index: 1;
+  padding-top: 150px;
+  padding-bottom: 92px;
+}
+
+[data-theme="light"] .site-hero-media {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  height: 100%;
+  margin: 0;
+}
+
+[data-theme="light"] .site-hero-media::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(4, 32, 47, 0.78), rgba(4, 32, 47, 0.2) 70%, rgba(4, 32, 47, 0.5));
 }
 
 [data-theme="light"] .site-display {
@@ -77,6 +104,25 @@
   color: var(--site-ink);
   box-shadow: 0 24px 70px rgba(6, 44, 64, 0.14);
   backdrop-filter: blur(18px);
+}
+
+[data-theme="light"] .site-section {
+  padding-top: 116px;
+  padding-bottom: 116px;
+}
+
+[data-theme="light"] .site-card,
+[data-theme="light"] .site-staff-card,
+[data-theme="light"] .site-panel {
+  border-color: rgba(6, 44, 64, 0.1);
+}
+
+[data-theme="light"] .site-card {
+  padding: 32px 30px;
+}
+
+[data-theme="light"] .site-btn-solid {
+  box-shadow: 0 12px 24px rgba(6, 44, 64, 0.16);
 }
 
 [data-theme="light"] .site-strip-label {

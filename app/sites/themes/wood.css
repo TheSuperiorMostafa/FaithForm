@@ -9,6 +9,7 @@
 
 [data-theme="wood"] {
   background:
+    repeating-linear-gradient(0deg, rgba(93, 55, 20, 0.025) 0 1px, transparent 1px 7px),
     radial-gradient(circle at 50% 0, rgba(200, 150, 30, 0.1), transparent 38%),
     var(--site-canvas);
 }
@@ -41,6 +42,17 @@
     linear-gradient(176deg, #7a5028 0%, #54341a 34%, #331e0e 66%, #170d06 100%);
 }
 
+[data-theme="wood"] .site-hero-body {
+  padding-top: 112px;
+  padding-bottom: 76px;
+}
+
+[data-theme="wood"] .site-hero-media {
+  height: 0;
+  margin: 0;
+  overflow: hidden;
+}
+
 [data-theme="wood"] .site-hero::before {
   content: "";
   position: absolute;
@@ -56,6 +68,14 @@
   letter-spacing: 0.02em;
   line-height: 1.12;
   text-shadow: 0 10px 40px rgba(0, 0, 0, 0.65);
+}
+
+[data-theme="wood"] .site-display-lg,
+[data-theme="wood"] .site-display-md,
+[data-theme="wood"] .site-card-title,
+[data-theme="wood"] .site-staff-name,
+[data-theme="wood"] .site-sermon-title {
+  text-transform: uppercase;
 }
 
 [data-theme="wood"] .site-display,
@@ -82,6 +102,30 @@
 
 [data-theme="wood"] .site-card {
   border-top: 3px solid var(--site-accent);
+  border-left: 0;
+  border-right: 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--site-ink) 16%, transparent);
+  background: color-mix(in srgb, var(--site-surface) 86%, var(--site-canvas-alt));
+}
+
+[data-theme="wood"] .site-strip-cell {
+  padding-top: 30px;
+  padding-bottom: 30px;
+}
+
+[data-theme="wood"] .site-section {
+  padding-top: 104px;
+  padding-bottom: 104px;
+}
+
+[data-theme="wood"] .site-btn {
+  min-height: 50px;
+  box-shadow: 4px 4px 0 color-mix(in srgb, var(--site-ink) 28%, transparent);
+}
+
+[data-theme="wood"] .site-btn:hover {
+  transform: translate(2px, 2px);
+  box-shadow: 2px 2px 0 color-mix(in srgb, var(--site-ink) 28%, transparent);
 }
 
 [data-theme="wood"] .site-surface-ink,
