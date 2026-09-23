@@ -481,3 +481,39 @@ export async function provisionYouTubeLiveForChurch(
     watchUrl: `https://www.youtube.com/watch?v=${broadcastId}`,
   };
 }
+
+/** Updates the current broadcast's title while preserving its other metadata. */
+export async function updateYouTubeLiveTitle(
+  churchId: string,
+  title: string,
+  supabase?: SupabaseClient,
+): Promise<{ ok: boolean; status?: string; error?: string }> {
+  try {
+    const integration = await getIntegration(churchId, "youtube", supabase);
+    const broadcastId = (integration?.metadata as YouTubeIntegrationMetadata | null)
+      ?.live_broadcast_id;
+    if (!integration || !broadcastId) return { ok: true, status: "no_broadcast" };
+
+    const { client } = await getYouTubeAuthClient(churchId, supabase);
+    const youtube = google.youtube({ version: "v3", auth: client });
+    const { data } = await youtube.liveBroadcasts.list({
+      part: ["snippet"],
+      id: [broadcastId],
+    });
+    const existing = data.items?.[0];
+    if (!existing?.id || !existing.snippet) {
+      return { ok: false, error: "YouTube broadcast was not found." };
+    }
+
+    await youtube.liveBroadcasts.update({
+      part: ["snippet"],
+      requestBody: {
+        id: existing.id,
+        snippet: { ...existing.snippet, title: title.slice(0, 100) },
+      },
+    });
+    return { ok: true, status: "updated" };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "YouTube update failed." };
+  }
+}

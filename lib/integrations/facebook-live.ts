@@ -76,6 +76,7 @@ export async function provisionFacebookLiveForChurch(
   churchId: string,
   userId: string | null,
   supabase?: SupabaseClient,
+  options?: { title?: string },
 ) {
   const integration = await getIntegration(churchId, "facebook", supabase);
   if (!integration) {
@@ -95,7 +96,7 @@ export async function provisionFacebookLiveForChurch(
   const { rtmpUrl, liveVideoId } = await provisionFacebookLiveRtmpUrl(
     pageId,
     pageToken,
-    `${pageName} — FaithForm`,
+    options?.title?.trim() || `${pageName} — FaithForm`,
   );
 
   await saveIntegration(
@@ -123,6 +124,39 @@ export async function provisionFacebookLiveForChurch(
     userId,
     supabase,
   );
+}
+
+/** Updates the current Page live video's title without touching its stream. */
+export async function updateFacebookLiveTitle(
+  churchId: string,
+  title: string,
+  supabase?: SupabaseClient,
+): Promise<{ ok: boolean; status?: string; error?: string }> {
+  try {
+    const integration = await getIntegration(churchId, "facebook", supabase);
+    const liveVideoId = (integration?.metadata as FacebookIntegrationMetadata | null)
+      ?.live_video_id;
+    if (!integration || !liveVideoId) return { ok: true, status: "no_live_video" };
+
+    const { token } = await getFacebookPageAccessToken(churchId, supabase);
+    const res = await fetch(`${GRAPH}/${liveVideoId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        title: title.slice(0, 255),
+        access_token: token,
+      }),
+    });
+    if (!res.ok) {
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: { message?: string };
+      };
+      return { ok: false, error: data.error?.message ?? `HTTP ${res.status}` };
+    }
+    return { ok: true, status: "updated" };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Facebook update failed." };
+  }
 }
 
 /**

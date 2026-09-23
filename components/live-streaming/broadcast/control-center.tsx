@@ -18,6 +18,7 @@ import {
 import {
   endLiveBroadcastAction,
   goLiveBroadcast,
+  renameLiveService,
 } from "@/app/dashboard/live-streaming/actions";
 import { LivePreview } from "@/components/live-streaming/broadcast/live-preview";
 import { PostLivePanel } from "@/components/live-streaming/broadcast/post-live-panel";
@@ -154,6 +155,17 @@ export function BroadcastControlCenter({
       await refresh();
     });
 
+  const renameLive = (nextTitle: string) =>
+    startTransition(async () => {
+      const result = await renameLiveService(nextTitle);
+      if (!result.ok) {
+        toast.error(result.error ?? "Could not rename the broadcast.");
+        return;
+      }
+      toast.success(result.message ?? "Broadcast title updated.");
+      await refresh();
+    });
+
   const announcement = useMemo(() => {
     switch (phase) {
       case "live":
@@ -182,6 +194,7 @@ export function BroadcastControlCenter({
             isAdmin={isAdmin}
             pending={pending}
             onEnd={() => setConfirmEnd(true)}
+            onRename={renameLive}
           />
         ) : phase === "waiting_for_video" ? (
           <WaitingView
@@ -190,6 +203,7 @@ export function BroadcastControlCenter({
             isAdmin={isAdmin}
             pending={pending}
             onCancel={() => setConfirmEnd(true)}
+            onRename={renameLive}
           />
         ) : phase === "post_live" && overview.recording ? (
           <div className="flex flex-col gap-6">
@@ -476,13 +490,18 @@ function WaitingView({
   isAdmin,
   pending,
   onCancel,
+  onRename,
 }: {
   overview: BroadcastOverview;
   studioStream: MediaStream | null;
   isAdmin: boolean;
   pending: boolean;
   onCancel: () => void;
+  onRename: (title: string) => void;
 }) {
+  const [title, setTitle] = useState(overview.session?.title ?? "Live Service");
+  const [editing, setEditing] = useState(false);
+  useEffect(() => setTitle(overview.session?.title ?? "Live Service"), [overview.session?.title]);
   return (
     <div className="grid gap-8 lg:grid-cols-[1.35fr_1fr]">
       <div className="flex flex-col gap-4">
@@ -491,9 +510,7 @@ function WaitingView({
             <Loader2 className="size-4 motion-safe:animate-spin" aria-hidden />
             Waiting for your video
           </p>
-          <h2 className="font-heading text-3xl font-bold leading-tight">
-            {overview.session?.title ?? "Live Service"}
-          </h2>
+          <EditableLiveTitle title={title} setTitle={setTitle} editing={editing} setEditing={setEditing} onSave={() => { onRename(title); setEditing(false); }} disabled={pending} />
         </div>
         <LivePreview
           active={false}
@@ -540,6 +557,7 @@ function LiveView({
   isAdmin,
   pending,
   onEnd,
+  onRename,
 }: {
   overview: BroadcastOverview;
   status: ControlCenterStatus;
@@ -547,12 +565,16 @@ function LiveView({
   isAdmin: boolean;
   pending: boolean;
   onEnd: () => void;
+  onRename: (title: string) => void;
 }) {
   const elapsed = useElapsed(overview.session?.liveSince ?? overview.session?.startedAt ?? null);
   const [healthOpen, setHealthOpen] = useState(false);
   const [linksOpen, setLinksOpen] = useState(false);
   const indicator = overview.recordingIndicator;
   const lostVideo = !overview.video.arriving;
+  const [title, setTitle] = useState(overview.session?.title ?? "Live Service");
+  const [editing, setEditing] = useState(false);
+  useEffect(() => setTitle(overview.session?.title ?? "Live Service"), [overview.session?.title]);
 
   return (
     <div className="grid gap-8 lg:grid-cols-[1.35fr_1fr]">
@@ -569,7 +591,7 @@ function LiveView({
             {formatClock(elapsed)}
           </span>
         </div>
-        <h2 className="font-heading text-2xl font-bold leading-tight">{overview.session?.title ?? "Live Service"}</h2>
+        <EditableLiveTitle title={title} setTitle={setTitle} editing={editing} setEditing={setEditing} onSave={() => { onRename(title); setEditing(false); }} disabled={pending} />
         <LivePreview active studioStream={studioStream} placeholder="Connecting to your live picture…" />
       </div>
 
@@ -608,6 +630,40 @@ function LiveView({
         </div>
       </div>
     </div>
+  );
+}
+
+function EditableLiveTitle({
+  title,
+  setTitle,
+  editing,
+  setEditing,
+  onSave,
+  disabled,
+}: {
+  title: string;
+  setTitle: (value: string) => void;
+  editing: boolean;
+  setEditing: (value: boolean) => void;
+  onSave: () => void;
+  disabled: boolean;
+}) {
+  if (!editing) {
+    return (
+      <div className="flex flex-wrap items-center gap-3">
+        <h2 className="font-heading text-2xl font-bold leading-tight">{title}</h2>
+        <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(true)} disabled={disabled}>
+          Rename
+        </Button>
+      </div>
+    );
+  }
+  return (
+    <form className="flex flex-wrap items-center gap-2" onSubmit={(event) => { event.preventDefault(); onSave(); }}>
+      <Input value={title} onChange={(event) => setTitle(event.target.value)} maxLength={100} autoFocus aria-label="Broadcast title" />
+      <Button type="submit" size="sm" disabled={disabled || !title.trim()}>Save</Button>
+      <Button type="button" variant="ghost" size="sm" onClick={() => setEditing(false)} disabled={disabled}>Cancel</Button>
+    </form>
   );
 }
 

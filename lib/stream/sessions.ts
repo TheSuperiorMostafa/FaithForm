@@ -144,6 +144,7 @@ export async function createStreamSession(
 export async function updateStreamSession(
   sessionId: string,
   patch: Partial<{
+    title: string | null;
     status: StreamSessionStatus;
     destinationsSnapshot: Array<{ name: string; url: string }>;
     errorMessage: string | null;
@@ -155,6 +156,7 @@ export async function updateStreamSession(
 ): Promise<StreamSession> {
   const client = getClient(supabase);
   const updates: Record<string, unknown> = {};
+  if (patch.title !== undefined) updates.title = patch.title?.trim() || null;
   if (patch.status !== undefined) updates.status = patch.status;
   if (patch.destinationsSnapshot !== undefined) {
     updates.destinations_snapshot = patch.destinationsSnapshot;

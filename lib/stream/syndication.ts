@@ -1,11 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { provisionFacebookLiveForChurch } from "@/lib/integrations/facebook-live";
+import { updateFacebookLiveTitle } from "@/lib/integrations/facebook-live";
 import { getIntegration, saveIntegration } from "@/lib/integrations/tokens";
 import type { YouTubeIntegrationMetadata } from "@/lib/integrations/types";
 import {
   getYouTubeAuthClient,
   provisionYouTubeLiveForChurch,
+  updateYouTubeLiveTitle,
 } from "@/lib/integrations/youtube-live";
 import { google } from "googleapis";
 import type { StreamEvent } from "@/lib/stream/events";
@@ -21,6 +23,11 @@ export type SyndicationPlatform = "youtube" | "facebook";
 
 export type ProvisionResult = {
   destinations: Array<{ name: string; url: string }>;
+  errors: Partial<Record<SyndicationPlatform, string>>;
+};
+
+export type RenameResult = {
+  updated: SyndicationPlatform[];
   errors: Partial<Record<SyndicationPlatform, string>>;
 };
 
@@ -66,7 +73,9 @@ export async function provisionDestinationsForEvent(
 
   if (event.syndicateFacebook) {
     try {
-      await provisionFacebookLiveForChurch(event.churchId, userId, client);
+      await provisionFacebookLiveForChurch(event.churchId, userId, client, {
+        title: event.title,
+      });
       const stream = await getIntegration(event.churchId, "stream", client);
       const facebookUrl = (stream?.metadata as { facebook_url?: string })
         ?.facebook_url;
@@ -81,6 +90,38 @@ export async function provisionDestinationsForEvent(
   }
 
   return { destinations, errors };
+}
+
+/** Renames already-provisioned platform broadcasts independently. */
+export async function renameLiveDestinations(
+  churchId: string,
+  title: string,
+  platforms: { youtube: boolean; facebook: boolean },
+  supabase?: SupabaseClient,
+): Promise<RenameResult> {
+  const client = supabase ?? createAdminClient();
+  const updated: SyndicationPlatform[] = [];
+  const errors: Partial<Record<SyndicationPlatform, string>> = {};
+
+  const work: Array<Promise<void>> = [];
+  if (platforms.youtube) {
+    work.push(
+      updateYouTubeLiveTitle(churchId, title, client).then((result) => {
+        if (result.ok && result.status !== "no_broadcast") updated.push("youtube");
+        else if (!result.ok) errors.youtube = result.error ?? "YouTube title update failed.";
+      }),
+    );
+  }
+  if (platforms.facebook) {
+    work.push(
+      updateFacebookLiveTitle(churchId, title, client).then((result) => {
+        if (result.ok && result.status !== "no_live_video") updated.push("facebook");
+        else if (!result.ok) errors.facebook = result.error ?? "Facebook title update failed.";
+      }),
+    );
+  }
+  await Promise.all(work);
+  return { updated, errors };
 }
 
 /**

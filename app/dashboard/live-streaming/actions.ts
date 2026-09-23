@@ -14,7 +14,11 @@ import {
 import {
   cancelStreamEvent,
   createStreamEvent,
+  getStreamEvent,
+  updateStreamEvent,
 } from "@/lib/stream/events";
+import { getActiveStreamSession, updateStreamSession } from "@/lib/stream/sessions";
+import { renameLiveDestinations } from "@/lib/stream/syndication";
 import { assertRateLimit } from "@/lib/security/rate-limit";
 import {
   buildStaticStreamName,
@@ -292,6 +296,44 @@ export async function endLiveBroadcastAction(): Promise<StreamRelayActionState> 
       error:
         error instanceof Error ? error.message : "Could not end broadcast.",
     };
+  }
+}
+
+export async function renameLiveService(
+  title: string,
+): Promise<StreamRelayActionState> {
+  const gate = await requireStreamAccess();
+  if (!gate.ok) return { ok: false, error: gate.error };
+  const auth = gate.auth;
+  if (!auth.isAdmin) return { ok: false, error: "Only church admins can rename broadcasts." };
+
+  const nextTitle = title.trim();
+  if (!nextTitle) return { ok: false, error: "Give the broadcast a title first." };
+  if (nextTitle.length > 100) return { ok: false, error: "Keep the broadcast title to 100 characters or fewer." };
+
+  try {
+    const session = await getActiveStreamSession(auth.churchId);
+    if (!session?.streamEventId) return { ok: false, error: "There is no active broadcast to rename." };
+    const event = await getStreamEvent(session.streamEventId);
+    if (!event || event.churchId !== auth.churchId) return { ok: false, error: "The active service could not be found." };
+
+    await updateStreamEvent(event.id, auth.churchId, { title: nextTitle });
+    await updateStreamSession(session.id, { title: nextTitle });
+
+    const external = await renameLiveDestinations(auth.churchId, nextTitle, {
+      youtube: event.syndicateYoutube,
+      facebook: event.syndicateFacebook,
+    });
+    revalidateLiveStreaming();
+    const failed = Object.entries(external.errors).map(([platform, error]) => `${platform}: ${error}`);
+    return {
+      ok: true,
+      message: failed.length
+        ? `Title updated in FaithForm. ${failed.join(" ")}`
+        : "Broadcast title updated everywhere.",
+    };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Could not rename the broadcast." };
   }
 }
 
