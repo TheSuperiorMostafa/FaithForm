@@ -5,8 +5,11 @@ import { MonthCalendar } from "@/components/announcements/month-calendar";
 import { PublishedAnnouncementsList } from "@/components/announcements/published-announcements-list";
 import { WeeklyAnnouncementQueue } from "@/components/announcements/weekly-announcement-queue";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import {
+  CalendarSectionSkeleton,
+  PublishedSectionSkeleton,
+  WeeklyQueueSectionSkeleton,
+} from "@/components/announcements/announcements-skeleton";
 import { listEmailQueue } from "@/lib/announcements/email-queue";
 import { getWeeklyEmailAvailability } from "@/lib/announcements/email-delivery";
 import {
@@ -102,7 +105,7 @@ export default async function AnnouncementsPage() {
         </div>
       </div>
 
-      <Suspense fallback={<AnnouncementSectionSkeleton rows={3} />}>
+      <Suspense fallback={<WeeklyQueueSectionSkeleton />}>
         <WeeklyQueueSection
           churchId={churchId}
           now={now}
@@ -121,7 +124,7 @@ export default async function AnnouncementsPage() {
         />
       </Suspense>
 
-      <Suspense fallback={<AnnouncementSectionSkeleton rows={5} tall />}>
+      <Suspense fallback={<CalendarSectionSkeleton />}>
         <CalendarSection
           churchId={churchId}
           year={year}
@@ -140,7 +143,7 @@ export default async function AnnouncementsPage() {
         />
       </Suspense>
 
-      <Suspense fallback={<AnnouncementSectionSkeleton rows={2} />}>
+      <Suspense fallback={<PublishedSectionSkeleton />}>
         <PublishedSection publishedPromise={publishedPromise} />
       </Suspense>
     </div>
@@ -355,22 +358,4 @@ function CalendarError({ message }: { message: string }) {
   );
 }
 
-function AnnouncementSectionSkeleton({
-  rows,
-  tall = false,
-}: {
-  rows: number;
-  tall?: boolean;
-}) {
-  return (
-    <Card className="space-y-4 p-5" role="status" aria-label="Loading section">
-      <Skeleton className="h-6 w-48" />
-      {Array.from({ length: rows }).map((_, index) => (
-        <Skeleton
-          key={index}
-          className={tall ? "h-20 w-full" : "h-14 w-full"}
-        />
-      ))}
-    </Card>
-  );
-}
+
