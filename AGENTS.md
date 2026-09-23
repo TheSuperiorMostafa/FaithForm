@@ -40,3 +40,13 @@ Whenever designing a new page, building a new sub-route, or redesigning an exist
    - Next.js App Router automatically renders `loading.tsx` inside the nearest parent `layout.tsx`.
    - When creating a folder under `app/dashboard/...` or `app/admin/...`, create `loading.tsx` alongside `page.tsx` if the page fetches data asynchronously.
    - If a page has multiple independent async sections, wrap them in `<Suspense fallback={<SectionSkeleton />}>` with modular section skeletons.
+
+5. **Static-First Principle (Text That Doesn't Change Loads Normally)**
+   - Text and UI chrome that do NOT change must load normally as real text without skeleton shimmer:
+     - Page titles (`<h1>`), subtitles, and breadcrumb labels.
+     - Static action buttons (e.g. "Email template", "Today", navigation links).
+     - Section titles, accordion labels, table column headers, and calendar weekday names (e.g. "Weekly email draft", "Submitted", "Sun", "Mon").
+     - Static notices and instructions.
+   - Skeletons must ONLY mask dynamic, asynchronous data (metrics, user names, event chips, counts, table rows, card contents).
+   - This ensures immediate user orientation, eliminates artificial cognitive delay, and provides instant perceived performance.
+

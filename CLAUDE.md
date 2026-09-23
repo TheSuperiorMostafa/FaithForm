@@ -9,3 +9,4 @@
 - Use `@/components/ui/skeleton` primitives (`Skeleton`, `SkeletonContainer`, `SkeletonText`).
 - Always wrap loading states in `<SkeletonContainer label="...">` to enforce the 180ms anti-flicker delay (suppressing flashing on sub-150ms cached loads) and provide accessible `role="status"`, `aria-busy="true"`, and screen-reader announcements.
 - Use `<SkeletonText lines={n} />` for paragraph placeholders with organic varying line widths and font leading parity.
+- Static-First Principle (Text That Doesn't Change Loads Normally): Static text and UI chrome (page titles, descriptions, action buttons, section labels, table/calendar headers) must load as real text without skeleton shimmer. Skeletons should only mask dynamic, data-dependent values.
