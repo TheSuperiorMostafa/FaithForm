@@ -1,5 +1,5 @@
 import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
 
 export function AdminStatGridSkeleton() {
   return (
@@ -49,11 +49,9 @@ export function AdminChartSkeleton() {
 
 export function AdminOverviewSkeleton() {
   return (
-    <div
+    <SkeletonContainer
       className="mx-auto flex w-full max-w-6xl flex-col gap-5"
-      role="status"
-      aria-busy="true"
-      aria-label="Loading platform overview"
+      label="platform overview"
     >
       <div className="space-y-1">
         <Skeleton className="h-8 w-56" />
@@ -116,18 +114,15 @@ export function AdminOverviewSkeleton() {
           </div>
         </Card>
       </div>
-      <span className="sr-only">Loading platform overview…</span>
-    </div>
+    </SkeletonContainer>
   );
 }
 
 export function AdminPageSkeleton() {
   return (
-    <div
+    <SkeletonContainer
       className="mx-auto flex w-full max-w-6xl flex-col gap-6"
-      role="status"
-      aria-busy="true"
-      aria-label="Loading admin"
+      label="admin"
     >
       <div>
         <Skeleton className="h-8 w-56" />
@@ -135,8 +130,7 @@ export function AdminPageSkeleton() {
       </div>
       <AdminStatGridSkeleton />
       <AdminTableSkeleton />
-      <span className="sr-only">Loading admin…</span>
-    </div>
+    </SkeletonContainer>
   );
 }
 

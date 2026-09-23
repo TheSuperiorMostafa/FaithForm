@@ -1,13 +1,11 @@
 import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
 
 export default function AttendanceDateLoading() {
   return (
-    <div
+    <SkeletonContainer
       className="flex w-full flex-col gap-6"
-      role="status"
-      aria-busy="true"
-      aria-label="Loading service record"
+      label="service record"
     >
       <div className="flex items-center gap-2">
         <Skeleton className="h-4 w-28" />
@@ -49,7 +47,6 @@ export default function AttendanceDateLoading() {
           </div>
         ))}
       </Card>
-      <span className="sr-only">Loading service record…</span>
-    </div>
+    </SkeletonContainer>
   );
 }

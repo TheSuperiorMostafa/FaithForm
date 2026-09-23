@@ -1,13 +1,11 @@
 import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
 
 export default function SettingsLoading() {
   return (
-    <div
+    <SkeletonContainer
       className="mx-auto flex w-full max-w-6xl flex-col gap-5"
-      role="status"
-      aria-busy="true"
-      aria-label="Loading settings"
+      label="settings"
     >
       <div>
         <div className="border-l-4 border-accent pl-3">
@@ -59,7 +57,6 @@ export default function SettingsLoading() {
           </div>
         </div>
       </Card>
-      <span className="sr-only">Loading settings…</span>
-    </div>
+    </SkeletonContainer>
   );
 }

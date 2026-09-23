@@ -1,4 +1,4 @@
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
 import { Card } from "@/components/ui/card";
 
 export function HeroSkeleton() {
@@ -66,18 +66,15 @@ export function QuickActionsSkeleton() {
 
 export function DashboardPageSkeleton() {
   return (
-    <div
+    <SkeletonContainer
       className="mx-auto flex w-full max-w-5xl flex-col gap-5"
-      role="status"
-      aria-busy="true"
-      aria-label="Loading dashboard"
+      label="dashboard"
     >
       <HeroSkeleton />
       <StatRowSkeleton />
       <QuickActionsSkeleton />
       <ChartSkeleton />
-      <span className="sr-only">Loading dashboard…</span>
-    </div>
+    </SkeletonContainer>
   );
 }
 

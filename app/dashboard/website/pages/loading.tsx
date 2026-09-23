@@ -1,13 +1,11 @@
 import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
 
 export default function WebsitePagesLoading() {
   return (
-    <div
+    <SkeletonContainer
       className="grid gap-6 md:grid-cols-[300px_1fr]"
-      role="status"
-      aria-busy="true"
-      aria-label="Loading page sections"
+      label="page sections"
     >
       {/* Sections list column */}
       <div className="flex flex-col gap-3">
@@ -49,7 +47,6 @@ export default function WebsitePagesLoading() {
           </div>
         </div>
       </Card>
-      <span className="sr-only">Loading page sections…</span>
-    </div>
+    </SkeletonContainer>
   );
 }

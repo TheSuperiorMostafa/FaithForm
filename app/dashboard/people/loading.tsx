@@ -1,13 +1,11 @@
 import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
 
 export default function PeopleLoading() {
   return (
-    <div
+    <SkeletonContainer
       className="flex w-full flex-col gap-5"
-      role="status"
-      aria-busy="true"
-      aria-label="Loading people directory"
+      label="people directory"
     >
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <Skeleton className="h-5 w-80 max-w-full" />
@@ -44,7 +42,6 @@ export default function PeopleLoading() {
           </Card>
         ))}
       </div>
-      <span className="sr-only">Loading people directory…</span>
-    </div>
+    </SkeletonContainer>
   );
 }

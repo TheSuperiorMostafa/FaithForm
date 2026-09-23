@@ -1,13 +1,11 @@
 import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
 
 export default function VoiceAssistantLoading() {
   return (
-    <div
+    <SkeletonContainer
       className="flex flex-col gap-6 pb-28"
-      role="status"
-      aria-busy="true"
-      aria-label="Loading voice assistant"
+      label="voice assistant"
     >
       {/* Page Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -96,7 +94,6 @@ export default function VoiceAssistantLoading() {
           </Card>
         </aside>
       </div>
-      <span className="sr-only">Loading voice assistant…</span>
-    </div>
+    </SkeletonContainer>
   );
 }

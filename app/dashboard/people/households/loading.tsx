@@ -1,13 +1,11 @@
 import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
 
 export default function HouseholdsLoading() {
   return (
-    <div
+    <SkeletonContainer
       className="flex flex-col gap-4"
-      role="status"
-      aria-busy="true"
-      aria-label="Loading households"
+      label="households"
     >
       <div className="flex flex-wrap items-end gap-3">
         <div className="min-w-[16rem] flex-1 space-y-2">
@@ -32,7 +30,6 @@ export default function HouseholdsLoading() {
           </Card>
         ))}
       </div>
-      <span className="sr-only">Loading households…</span>
-    </div>
+    </SkeletonContainer>
   );
 }

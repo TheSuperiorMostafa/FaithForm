@@ -1,13 +1,11 @@
 import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
 
 export default function LiveStreamingLoading() {
   return (
-    <div
+    <SkeletonContainer
       className="flex flex-col gap-6"
-      role="status"
-      aria-busy="true"
-      aria-label="Loading live stream"
+      label="live stream"
     >
       {/* Broadcast Control Center Skeleton */}
       <Card className="p-6 space-y-6">
@@ -52,7 +50,6 @@ export default function LiveStreamingLoading() {
           ))}
         </div>
       </Card>
-      <span className="sr-only">Loading live stream…</span>
-    </div>
+    </SkeletonContainer>
   );
 }

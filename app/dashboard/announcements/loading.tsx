@@ -1,13 +1,11 @@
 import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
 
 export default function AnnouncementsLoading() {
   return (
-    <div
+    <SkeletonContainer
       className="mx-auto flex w-full max-w-5xl flex-col gap-6"
-      role="status"
-      aria-busy="true"
-      aria-label="Loading announcements"
+      label="announcements"
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
@@ -59,7 +57,6 @@ export default function AnnouncementsLoading() {
           ))}
         </div>
       </Card>
-      <span className="sr-only">Loading announcements…</span>
-    </div>
+    </SkeletonContainer>
   );
 }

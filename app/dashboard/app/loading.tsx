@@ -1,13 +1,11 @@
 import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
 
 export default function MemberAppLoading() {
   return (
-    <div
+    <SkeletonContainer
       className="mx-auto flex w-full max-w-7xl flex-col gap-8"
-      role="status"
-      aria-busy="true"
-      aria-label="Loading member app settings"
+      label="member app settings"
     >
       <div>
         <div className="border-l-4 border-accent pl-3">
@@ -81,7 +79,6 @@ export default function MemberAppLoading() {
           </Card>
         </div>
       </section>
-      <span className="sr-only">Loading member app settings…</span>
-    </div>
+    </SkeletonContainer>
   );
 }

@@ -1,13 +1,11 @@
 import { AdminTableSkeleton } from "@/components/admin/skeletons";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
 
 export default function AdminDomainsLoading() {
   return (
-    <div
+    <SkeletonContainer
       className="mx-auto flex w-full max-w-6xl flex-col gap-6"
-      role="status"
-      aria-busy="true"
-      aria-label="Loading domain requests"
+      label="domain requests"
     >
       <div className="space-y-1">
         <Skeleton className="h-8 w-44" />
@@ -21,7 +19,6 @@ export default function AdminDomainsLoading() {
       </div>
 
       <AdminTableSkeleton rows={8} />
-      <span className="sr-only">Loading domain requests…</span>
-    </div>
+    </SkeletonContainer>
   );
 }

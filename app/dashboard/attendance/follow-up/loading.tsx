@@ -1,13 +1,11 @@
 import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
 
 export default function AttendanceFollowUpLoading() {
   return (
-    <div
+    <SkeletonContainer
       className="flex w-full flex-col gap-5"
-      role="status"
-      aria-busy="true"
-      aria-label="Loading attendance follow-up"
+      label="attendance follow-up"
     >
       <header className="flex flex-col gap-2">
         <div className="border-l-4 border-accent pl-3">
@@ -41,7 +39,6 @@ export default function AttendanceFollowUpLoading() {
           </Card>
         ))}
       </div>
-      <span className="sr-only">Loading attendance follow-up…</span>
-    </div>
+    </SkeletonContainer>
   );
 }

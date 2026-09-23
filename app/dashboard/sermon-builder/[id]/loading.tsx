@@ -1,13 +1,11 @@
 import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
 
 export default function SermonDetailLoading() {
   return (
-    <div
+    <SkeletonContainer
       className="mx-auto flex w-full max-w-5xl flex-col gap-6"
-      role="status"
-      aria-busy="true"
-      aria-label="Loading sermon"
+      label="sermon"
     >
       <Skeleton className="h-4 w-36" />
 
@@ -41,7 +39,6 @@ export default function SermonDetailLoading() {
           </Card>
         ))}
       </div>
-      <span className="sr-only">Loading sermon…</span>
-    </div>
+    </SkeletonContainer>
   );
 }

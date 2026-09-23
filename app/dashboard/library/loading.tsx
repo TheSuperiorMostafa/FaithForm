@@ -1,13 +1,11 @@
 import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
 
 export default function LibraryLoading() {
   return (
-    <div
+    <SkeletonContainer
       className="mx-auto flex w-full max-w-5xl flex-col gap-8"
-      role="status"
-      aria-busy="true"
-      aria-label="Loading library"
+      label="library"
     >
       <header>
         <div className="border-l-4 border-accent pl-3">
@@ -69,7 +67,6 @@ export default function LibraryLoading() {
           ))}
         </div>
       </section>
-      <span className="sr-only">Loading library…</span>
-    </div>
+    </SkeletonContainer>
   );
 }

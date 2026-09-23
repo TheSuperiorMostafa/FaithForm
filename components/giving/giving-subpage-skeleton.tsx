@@ -1,5 +1,5 @@
 import { Card, CardHeader } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
 
 type GivingSubpageSkeletonProps = {
   titleWidth?: string;
@@ -17,11 +17,9 @@ export function GivingSubpageSkeleton({
   label,
 }: GivingSubpageSkeletonProps) {
   return (
-    <div
+    <SkeletonContainer
       className="mx-auto flex w-full max-w-5xl flex-col gap-6"
-      role="status"
-      aria-busy="true"
-      aria-label={`Loading ${label}`}
+      label={label}
     >
       <Skeleton className="h-4 w-28" />
       <div className="space-y-1">
@@ -52,7 +50,6 @@ export function GivingSubpageSkeleton({
           ))}
         </div>
       </Card>
-      <span className="sr-only">Loading {label}…</span>
-    </div>
+    </SkeletonContainer>
   );
 }

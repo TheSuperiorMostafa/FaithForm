@@ -1,13 +1,11 @@
 import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
 
 export default function WebsiteDetailsLoading() {
   return (
-    <div
+    <SkeletonContainer
       className="flex flex-col gap-6"
-      role="status"
-      aria-busy="true"
-      aria-label="Loading website details"
+      label="website details"
     >
       <div className="space-y-1">
         <Skeleton className="h-6 w-36" />
@@ -49,7 +47,6 @@ export default function WebsiteDetailsLoading() {
           </div>
         </div>
       </Card>
-      <span className="sr-only">Loading website details…</span>
-    </div>
+    </SkeletonContainer>
   );
 }

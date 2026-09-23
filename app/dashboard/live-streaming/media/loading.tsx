@@ -1,13 +1,11 @@
 import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
 
 export default function MediaLoading() {
   return (
-    <div
+    <SkeletonContainer
       className="flex flex-col gap-6"
-      role="status"
-      aria-busy="true"
-      aria-label="Loading media library"
+      label="media library"
     >
       <div className="space-y-1">
         <Skeleton className="h-6 w-28" />
@@ -35,7 +33,6 @@ export default function MediaLoading() {
           </div>
         ))}
       </div>
-      <span className="sr-only">Loading media library…</span>
-    </div>
+    </SkeletonContainer>
   );
 }

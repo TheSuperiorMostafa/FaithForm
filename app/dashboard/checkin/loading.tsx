@@ -1,13 +1,11 @@
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
 
 export default function CheckinTodayLoading() {
   return (
-    <div
+    <SkeletonContainer
       className="flex flex-col gap-6"
-      role="status"
-      aria-busy="true"
-      aria-label="Loading check-in roster"
+      label="check-in roster"
     >
       {/* Check someone in form card */}
       <Card>
@@ -49,7 +47,6 @@ export default function CheckinTodayLoading() {
           </Card>
         ))}
       </div>
-      <span className="sr-only">Loading check-in roster…</span>
-    </div>
+    </SkeletonContainer>
   );
 }

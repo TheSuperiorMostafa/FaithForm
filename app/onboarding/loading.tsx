@@ -1,13 +1,11 @@
 import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton, SkeletonContainer, SkeletonText } from "@/components/ui/skeleton";
 
 export default function OnboardingLoading() {
   return (
-    <div
+    <SkeletonContainer
       className="mx-auto flex min-h-[80vh] w-full max-w-xl flex-col items-center justify-center p-4"
-      role="status"
-      aria-busy="true"
-      aria-label="Loading onboarding"
+      label="onboarding"
     >
       <Card className="w-full p-8 shadow-card dark:shadow-none space-y-6">
         <div className="flex items-center justify-between">
@@ -23,8 +21,7 @@ export default function OnboardingLoading() {
 
         <div className="space-y-4 pt-4">
           <Skeleton className="h-8 w-3/4" />
-          <Skeleton className="h-4 w-full" />
-          <Skeleton className="h-4 w-5/6" />
+          <SkeletonText lines={2} lastLineWidth="w-5/6" size="base" />
         </div>
 
         <div className="space-y-3 pt-4">
@@ -37,7 +34,6 @@ export default function OnboardingLoading() {
           <Skeleton className="h-10 w-28 rounded-lg" />
         </div>
       </Card>
-      <span className="sr-only">Loading onboarding…</span>
-    </div>
+    </SkeletonContainer>
   );
 }

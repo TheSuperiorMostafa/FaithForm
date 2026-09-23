@@ -1,13 +1,11 @@
 import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
 
 export default function CheckinSetupLoading() {
   return (
-    <div
+    <SkeletonContainer
       className="flex w-full flex-col gap-6"
-      role="status"
-      aria-busy="true"
-      aria-label="Loading automatic attendance setup"
+      label="automatic attendance setup"
     >
       <header className="flex flex-col gap-2">
         <div className="border-l-4 border-accent pl-3">
@@ -45,7 +43,6 @@ export default function CheckinSetupLoading() {
           </Card>
         ))}
       </div>
-      <span className="sr-only">Loading automatic attendance setup…</span>
-    </div>
+    </SkeletonContainer>
   );
 }

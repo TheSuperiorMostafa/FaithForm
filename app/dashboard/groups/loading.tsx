@@ -1,13 +1,11 @@
 import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
 
 export default function LoadingGroups() {
   return (
-    <div
+    <SkeletonContainer
       className="space-y-6 p-6"
-      role="status"
-      aria-busy="true"
-      aria-label="Loading groups"
+      label="groups"
     >
       <div className="flex items-center justify-between">
         <Skeleton className="h-10 w-52 rounded-xl" />
@@ -41,7 +39,6 @@ export default function LoadingGroups() {
           </Card>
         ))}
       </div>
-      <span className="sr-only">Loading groups…</span>
-    </div>
+    </SkeletonContainer>
   );
 }

@@ -1,13 +1,11 @@
 import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
 
 export default function ServicesLoading() {
   return (
-    <div
+    <SkeletonContainer
       className="flex w-full flex-col gap-5"
-      role="status"
-      aria-busy="true"
-      aria-label="Loading events and services"
+      label="events and services"
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="space-y-1.5">
@@ -54,7 +52,6 @@ export default function ServicesLoading() {
           ))}
         </div>
       </div>
-      <span className="sr-only">Loading events and services…</span>
-    </div>
+    </SkeletonContainer>
   );
 }

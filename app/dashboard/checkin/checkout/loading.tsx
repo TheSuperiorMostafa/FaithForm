@@ -1,13 +1,11 @@
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
 
 export default function CheckoutLoading() {
   return (
-    <div
+    <SkeletonContainer
       className="flex flex-col gap-6"
-      role="status"
-      aria-busy="true"
-      aria-label="Loading checkout console"
+      label="checkout console"
     >
       <div className="grid gap-6 md:grid-cols-2">
         <Card className="p-5 space-y-4">
@@ -37,7 +35,6 @@ export default function CheckoutLoading() {
       <div className="flex justify-center pt-2">
         <Skeleton className="h-4 w-48" />
       </div>
-      <span className="sr-only">Loading checkout console…</span>
-    </div>
+    </SkeletonContainer>
   );
 }

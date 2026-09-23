@@ -1,13 +1,11 @@
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
 
 export default function SupportLoading() {
   return (
-    <div
+    <SkeletonContainer
       className="mx-auto flex w-full max-w-lg flex-col gap-6"
-      role="status"
-      aria-busy="true"
-      aria-label="Loading support"
+      label="support"
     >
       <div>
         <div className="border-l-4 border-accent pl-3">
@@ -55,7 +53,6 @@ export default function SupportLoading() {
           ))}
         </CardContent>
       </Card>
-      <span className="sr-only">Loading support…</span>
-    </div>
+    </SkeletonContainer>
   );
 }

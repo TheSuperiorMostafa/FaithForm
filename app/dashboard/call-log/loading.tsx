@@ -1,13 +1,11 @@
 import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
 
 export default function CallLogLoading() {
   return (
-    <div
+    <SkeletonContainer
       className="flex flex-col gap-6"
-      role="status"
-      aria-busy="true"
-      aria-label="Loading call log"
+      label="call log"
     >
       <header className="space-y-1">
         <Skeleton className="h-8 w-36" />
@@ -48,7 +46,6 @@ export default function CallLogLoading() {
         <Skeleton className="h-5 w-44" />
         <Skeleton className="h-4 w-full max-w-2xl" />
       </Card>
-      <span className="sr-only">Loading call log…</span>
-    </div>
+    </SkeletonContainer>
   );
 }

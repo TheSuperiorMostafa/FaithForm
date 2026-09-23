@@ -1,13 +1,11 @@
 import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
 
 export default function CheckinLocationsLoading() {
   return (
-    <div
+    <SkeletonContainer
       className="flex flex-col gap-6"
-      role="status"
-      aria-busy="true"
-      aria-label="Loading rooms"
+      label="rooms"
     >
       <div className="flex items-center justify-between">
         <Skeleton className="h-5 w-48" />
@@ -31,7 +29,6 @@ export default function CheckinLocationsLoading() {
           </Card>
         ))}
       </div>
-      <span className="sr-only">Loading rooms…</span>
-    </div>
+    </SkeletonContainer>
   );
 }

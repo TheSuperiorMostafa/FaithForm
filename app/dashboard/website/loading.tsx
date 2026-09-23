@@ -1,13 +1,11 @@
 import { Card, CardContent } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton, SkeletonContainer, SkeletonText } from "@/components/ui/skeleton";
 
 export default function WebsiteOverviewLoading() {
   return (
-    <div
+    <SkeletonContainer
       className="flex flex-col gap-6"
-      role="status"
-      aria-busy="true"
-      aria-label="Loading website overview"
+      label="website overview"
     >
       {/* Publish Card */}
       <Card className="p-5">
@@ -50,8 +48,7 @@ export default function WebsiteOverviewLoading() {
         <CardContent className="flex h-96 items-center justify-center p-6">
           <div className="space-y-4 text-center max-w-sm w-full">
             <Skeleton className="h-6 w-3/4 mx-auto" />
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-2/3 mx-auto" />
+            <SkeletonText lines={2} lastLineWidth="w-2/3 mx-auto" size="base" />
           </div>
         </CardContent>
       </Card>
@@ -62,7 +59,6 @@ export default function WebsiteOverviewLoading() {
         <Skeleton className="h-4 w-80 max-w-full" />
         <Skeleton className="h-10 w-full rounded-md" />
       </Card>
-      <span className="sr-only">Loading website overview…</span>
-    </div>
+    </SkeletonContainer>
   );
 }

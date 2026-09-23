@@ -69,6 +69,15 @@ const config: Config = {
         card: "0 2px 12px rgba(0,45,95,0.07)",
         "card-hover": "0 10px 30px rgba(0,45,95,0.12)",
       },
+      keyframes: {
+        "skeleton-fade-in": {
+          "0%": { opacity: "0" },
+          "100%": { opacity: "1" },
+        },
+      },
+      animation: {
+        "skeleton-fade": "skeleton-fade-in 200ms ease-out 180ms both",
+      },
     },
   },
   plugins: [tailwindAnimate],

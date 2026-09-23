@@ -1,13 +1,11 @@
 import { Card } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
 
 export default function StreamSetupLoading() {
   return (
-    <div
+    <SkeletonContainer
       className="grid gap-6 lg:grid-cols-2"
-      role="status"
-      aria-busy="true"
-      aria-label="Loading stream setup"
+      label="stream setup"
     >
       <div className="flex flex-col gap-6">
         {Array.from({ length: 3 }).map((_, i) => (
@@ -33,7 +31,6 @@ export default function StreamSetupLoading() {
           </Card>
         ))}
       </div>
-      <span className="sr-only">Loading stream setup…</span>
-    </div>
+    </SkeletonContainer>
   );
 }

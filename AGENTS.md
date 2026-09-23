@@ -16,22 +16,24 @@ Whenever designing a new page, building a new sub-route, or redesigning an exist
      - Same header structure (title size, subtitle line, action buttons).
    - When real data loads, no UI elements should jump, stretch, or reflow.
 
-2. **Visual Polish & Styling Standards**
-   - Always use the shared `@/components/ui/skeleton` component.
+2. **Visual Polish & Anti-Flicker Standards**
+   - Always use the shared `@/components/ui/skeleton` primitives (`Skeleton`, `SkeletonContainer`, `SkeletonText`).
    - Skeletons use `bg-muted` with the fluid shimmer highlight gradient (`before:animate-[shimmer_1.6s_infinite]`).
    - Match brand accents where appropriate (e.g., `border-t-[3px] border-t-accent` on stat cards, `border-l-4 border-accent` on section headers).
    - Never use raw jarring CSS animations like unstyled `animate-pulse` or plain grey boxes without shimmer.
+   - **Anti-Flicker Threshold (150ms-200ms Grace Period)**: Skeletons must never flash prematurely on instantaneous (<150ms) or cached navigations. Always wrap loading states in `<SkeletonContainer label="...">` (or `.skeleton-fade-in`), which enforces an 180ms delay followed by a smooth 200ms dissolve fade-in (`animation: skeleton-fade-in 200ms ease-out 180ms both`).
+   - **Typography-Aware Staggered Line Rhythm (`SkeletonText`)**: Avoid rigid uniform rectangular blocks for paragraphs. Use `<SkeletonText lines={n} />` which generates natural varying line lengths (e.g. 100%, 92%, 65%) and exact line-height spacing (`leading-5`, `leading-6`).
 
 3. **Accessibility (a11y) Requirements**
-   - The root wrapper of every loading state must include:
+   - The root wrapper of every loading state must use `<SkeletonContainer label="[Page Name]">`:
      ```tsx
-     <div role="status" aria-busy="true" aria-label="Loading [Page/Section Name]" className="...">
+     <SkeletonContainer className="..." label="[Page/Section Name]">
        ...
-       <span className="sr-only">Loading [Page/Section Name]…</span>
-     </div>
+     </SkeletonContainer>
      ```
+     This automatically provides `role="status"`, `aria-busy="true"`, accessible aria-label, the anti-flicker delay, and `<span className="sr-only">Loading [Page Name]…</span>`.
    - Individual decorative skeleton elements should have `aria-hidden="true"`.
-   - Shimmer animations must support `motion-reduce:before:animate-none` for users who have requested reduced motion in their OS.
+   - Shimmer animations and fade-ins must support `motion-reduce:animate-none` and `motion-reduce:before:animate-none` for users who have requested reduced motion in their OS.
 
 4. **Hierarchical Next.js Route Loading**
    - Next.js App Router automatically renders `loading.tsx` inside the nearest parent `layout.tsx`.

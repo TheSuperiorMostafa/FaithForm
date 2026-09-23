@@ -1,13 +1,11 @@
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Skeleton, SkeletonContainer, SkeletonText } from "@/components/ui/skeleton";
 
 export default function GivingLoading() {
   return (
-    <div
+    <SkeletonContainer
       className="mx-auto flex w-full max-w-5xl flex-col gap-6"
-      role="status"
-      aria-busy="true"
-      aria-label="Loading giving"
+      label="giving"
     >
       <header className="flex flex-col gap-2">
         <div className="border-l-4 border-accent pl-3">
@@ -41,11 +39,7 @@ export default function GivingLoading() {
         {Array.from({ length: 2 }).map((_, i) => (
           <Card key={i} className="p-5 space-y-4">
             <Skeleton className="h-5 w-44" />
-            <div className="space-y-3">
-              <Skeleton className="h-4 w-full" />
-              <Skeleton className="h-4 w-5/6" />
-              <Skeleton className="h-4 w-4/6" />
-            </div>
+            <SkeletonText lines={3} lastLineWidth="w-4/6" size="base" />
           </Card>
         ))}
       </div>
@@ -85,7 +79,6 @@ export default function GivingLoading() {
           ))}
         </div>
       </Card>
-      <span className="sr-only">Loading giving…</span>
-    </div>
+    </SkeletonContainer>
   );
 }
