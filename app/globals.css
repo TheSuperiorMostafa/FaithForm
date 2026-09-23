@@ -68,10 +68,24 @@
    */
   html {
     color-scheme: light;
+    scrollbar-gutter: stable;
   }
 
   html.dark {
     color-scheme: dark;
+  }
+
+  main {
+    scrollbar-gutter: stable;
+  }
+
+  @supports not (scrollbar-gutter: stable) {
+    html {
+      overflow-y: scroll;
+    }
+    main {
+      overflow-y: scroll;
+    }
   }
 
   /*

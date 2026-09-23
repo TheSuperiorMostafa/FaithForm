@@ -37,6 +37,7 @@ function SkeletonContainer({
       aria-busy="true"
       aria-label={`Loading ${label}`}
       className={cn(
+        "w-full",
         delay && "animate-skeleton-fade motion-reduce:animate-none",
         className,
       )}

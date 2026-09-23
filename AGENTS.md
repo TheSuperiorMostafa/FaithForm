@@ -14,6 +14,7 @@ Whenever designing a new page, building a new sub-route, or redesigning an exist
      - Same grid columns and breakpoints (`sm:grid-cols-2`, `md:grid-cols-3`, `xl:grid-cols-5`, etc.).
      - Same card padding (`p-4`, `p-5`, `p-6`), rounded corners (`rounded-xl`, `rounded-2xl`, etc.), and borders (`border-border`).
      - Same header structure (title size, subtitle line, action buttons).
+   - **Scrollbar Gutter Stability**: All scrollable main containers (`html`, dashboard `<main>`, admin `<main>`) must enforce `scrollbar-gutter: stable` (with `@supports not (scrollbar-gutter: stable) { overflow-y: scroll; }`). Skeletons are often shorter than the viewport while populated pages exceed it; reserving the gutter prevents a 15px horizontal layout shift / glitch when real data loads.
    - When real data loads, no UI elements should jump, stretch, or reflow.
 
 2. **Visual Polish & Anti-Flicker Standards**

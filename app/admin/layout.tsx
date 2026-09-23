@@ -18,7 +18,7 @@ export default async function AdminLayout({
       <AdminSidebar userEmail={email} />
       <div className="flex h-dvh min-w-0 flex-1 flex-col overflow-hidden">
         <AdminMobileNav userEmail={email} />
-        <main className="flex-1 overflow-y-auto p-5 pb-24 md:p-8 md:pb-8">
+        <main className="flex-1 overflow-y-auto [scrollbar-gutter:stable] p-5 pb-24 md:p-8 md:pb-8">
           {children}
         </main>
       </div>
