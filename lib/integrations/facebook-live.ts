@@ -42,10 +42,14 @@ export async function provisionFacebookLiveRtmpUrl(
   pageAccessToken: string,
   title: string,
 ): Promise<{ rtmpUrl: string; liveVideoId: string }> {
+  const displayTitle = title.trim().slice(0, 255) || "FaithForm Live";
   const body = new URLSearchParams({
     status: "LIVE_NOW",
-    title: title.slice(0, 255) || "FaithForm Live",
-    description: "Live stream via FaithForm",
+    // Facebook's feed displays the live video's description as the post text.
+    // Keep it aligned with the title so the public post never falls back to a
+    // generic "Live stream via FaithForm" label.
+    title: displayTitle,
+    description: displayTitle,
     access_token: pageAccessToken,
   });
 
@@ -139,11 +143,13 @@ export async function updateFacebookLiveTitle(
     if (!integration || !liveVideoId) return { ok: true, status: "no_live_video" };
 
     const { token } = await getFacebookPageAccessToken(churchId, supabase);
+    const displayTitle = title.trim().slice(0, 255) || "FaithForm Live";
     const res = await fetch(`${GRAPH}/${liveVideoId}`, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
-        title: title.slice(0, 255),
+        title: displayTitle,
+        description: displayTitle,
         access_token: token,
       }),
     });
