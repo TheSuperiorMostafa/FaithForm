@@ -80,8 +80,7 @@ test("closes more slowly than it opens", () => {
 
 test("the sidebar expands from hover intent, not a toggle button", () => {
   assert.match(sidebar, /useSidebarHoverIntent\(\)/);
-  // Hover intent drives the tablet rail; when pinned open it is not wired.
-  assert.match(sidebar, /\.\.\.\(pinned \? \{\} : hoverIntent\.handlers\)/);
+  assert.match(sidebar, /\{\.\.\.hoverIntent\.handlers\}/);
   assert.doesNotMatch(sidebar, /Expand sidebar|Collapse sidebar/);
   assert.doesNotMatch(sidebar, /Chevron(Left|Right)/);
   assert.doesNotMatch(sidebar, /onCollapsedChange/);
@@ -113,23 +112,12 @@ test("the collapsed-state cookie is gone from both ends", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Large screens: always open, always labelled
+// Collapsed at every width
 // ---------------------------------------------------------------------------
 
-test("on large screens the sidebar is pinned open and reserves its width", () => {
-  const pinned = resolveSidebarLayout({ ...IDLE, pinned: true });
-  assert.deepEqual(pinned, {
-    expanded: true,
-    panelWidth: SIDEBAR_WIDTH_EXPANDED,
-    layoutWidth: SIDEBAR_WIDTH_EXPANDED,
-    overlaying: false,
-  });
-  // CSS decides the pinned state so the first paint is already right.
-  assert.match(sidebar, /lg:w-64/);
-  assert.match(shell, new RegExp(`lg:ml-\\[${SIDEBAR_WIDTH_EXPANDED}px\\]`));
-});
-
-test("labels are never hidden on large screens", () => {
-  assert.match(sidebar, /lg:max-w-full lg:opacity-100/);
+test("the sidebar collapses to the rail at every screen size", () => {
+  assert.doesNotMatch(sidebar, /pinned|lg:w-64|lg:max-w-full/);
+  assert.doesNotMatch(shell, /lg:ml-/);
+  // Sign out is still labelled when the panel is open.
   assert.match(sidebar, /Sign out/);
 });

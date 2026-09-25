@@ -80,12 +80,12 @@ export function DashboardShell({
       />
 
       {/*
-        On tablets, always the rail's 72px, never the expanded width: the
-        sidebar draws over this column when it opens rather than pushing it.
-        On large screens the sidebar is pinned open and this reserves its full
-        256px. See lib/dashboard/sidebar-layout.ts.
+        Always the rail's 72px, never the expanded width: the sidebar draws over
+        this column when it opens rather than pushing it. See
+        lib/dashboard/sidebar-layout.ts — a dashboard of tables and charts must
+        not reflow because a pointer crossed the nav.
       */}
-      <div className="flex h-dvh min-w-0 flex-col overflow-hidden md:ml-[72px] lg:ml-[256px]">
+      <div className="flex h-dvh min-w-0 flex-col overflow-hidden md:ml-[72px]">
         {banner}
         <Topbar avatarUrl={avatarUrl} userEmail={userEmail} churchName={churchName} />
 

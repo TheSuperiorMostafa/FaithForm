@@ -39,7 +39,7 @@ This standard is checked on every dashboard PR. Each rule has a **test** a revie
 - Users never need to remember IDs, codes, hex colours, slugs, coordinates, or "where the other setting was".
 - Show recent and likely choices. Pickers for people are **searchable** and show selected people as visible chips.
 - Information the user already gave is reused, never asked again (WCAG 3.3.7 Redundant Entry). **Church info is entered once** and used by the app, website, giving statements and attendance.
-- The sidebar always shows **text labels**. It is never an icon-only rail that needs hovering.
+- The sidebar is a rail that opens on hover, keyboard focus or tap, showing full **text labels** (owner decision: it auto-collapses so pages keep their width). Icons must be recognizable, rows are grouped, and every row has an accessible name when collapsed.
 
 ## 4. Plain language
 

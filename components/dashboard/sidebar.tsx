@@ -17,7 +17,6 @@ import {
   isNavItemActive,
   type NavItem,
 } from "./nav-items";
-import { SIDEBAR_PINNED_QUERY, useMediaQuery } from "./use-media-query";
 import { useSidebarHoverIntent } from "./use-sidebar-hover-intent";
 
 type SidebarProps = {
@@ -34,16 +33,10 @@ export function roleLabel(role: string | null): string {
   return "Team member";
 }
 
-/*
- * Collapsed styling only applies below `lg`. At ≥1024px the sidebar is always
- * open (see lib/dashboard/sidebar-layout.ts), and CSS — not JS — decides that,
- * so the first paint is already correct and nothing jumps on hydration.
- */
+/* Labels fold away with the rail and come back when it opens. */
 const labelVisibility = (collapsed: boolean) =>
-  collapsed
-    ? "max-w-0 opacity-0 overflow-hidden lg:max-w-full lg:opacity-100 lg:overflow-visible"
-    : "max-w-full opacity-100";
-const blockVisibility = (collapsed: boolean) => (collapsed ? "hidden lg:block" : "block");
+  collapsed ? "max-w-0 opacity-0 overflow-hidden" : "max-w-full opacity-100";
+const blockVisibility = (collapsed: boolean) => (collapsed ? "hidden" : "block");
 
 function SidebarLink({
   item,
@@ -134,14 +127,12 @@ export function Sidebar({
 }: SidebarProps) {
   const pathname = usePathname();
   const [pendingHref, setPendingHref] = useState<string | null>(null);
-  const pinned = useMediaQuery(SIDEBAR_PINNED_QUERY);
 
   const hoverIntent = useSidebarHoverIntent();
   const { expanded, panelWidth, overlaying } = resolveSidebarLayout({
     hovering: hoverIntent.hovering,
     keyboardFocusWithin: hoverIntent.keyboardFocusWithin,
     touchOpen: hoverIntent.touchOpen,
-    pinned,
   });
   const collapsed = !expanded;
   const closeSidebar = hoverIntent.close;
@@ -187,12 +178,12 @@ export function Sidebar({
   return (
     <aside
       ref={hoverIntent.sidebarRef}
-      {...(pinned ? {} : hoverIntent.handlers)}
+      {...hoverIntent.handlers}
       aria-label="Main"
       data-collapsed={collapsed}
       style={{ "--sidebar-panel": `${panelWidth}px` } as React.CSSProperties}
       className={cn(
-        "fixed inset-y-0 left-0 z-30 hidden w-[var(--sidebar-panel)] flex-col overflow-x-hidden overflow-y-hidden border-r border-sidebar bg-sidebar text-sidebar md:flex lg:w-64",
+        "fixed inset-y-0 left-0 z-30 hidden w-[var(--sidebar-panel)] flex-col overflow-x-hidden overflow-y-hidden border-r border-sidebar bg-sidebar text-sidebar md:flex",
         overlaying && "shadow-2xl",
         "transition-[width] duration-200 ease-out motion-reduce:transition-none",
       )}
@@ -222,20 +213,19 @@ export function Sidebar({
       {/* Nav items */}
       <nav
         aria-label="Sections"
-        className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain p-3"
+        className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain p-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         <div className="space-y-1">{home.map(link)}</div>
         {groups.map(({ group, items }) => (
           <div key={group} className="mt-3">
-            <p
-              className={cn(
-                "mb-1 h-6 overflow-hidden whitespace-nowrap px-3 text-xs font-bold uppercase tracking-[0.14em] text-white/55",
-                "transition-[opacity,max-width] duration-200 ease-out motion-reduce:transition-none",
-                labelVisibility(collapsed),
-              )}
-            >
-              {NAV_GROUP_LABELS[group]}
-            </p>
+            {collapsed ? (
+              // On the rail a heading has no room to read; a thin rule keeps the groups apart.
+              <div aria-hidden className="mx-3 mb-2 h-px bg-white/15" />
+            ) : (
+              <p className="mb-1 h-6 overflow-hidden whitespace-nowrap px-3 text-xs font-bold uppercase tracking-[0.14em] text-white/55">
+                {NAV_GROUP_LABELS[group]}
+              </p>
+            )}
             <div className="space-y-1">{items.map(link)}</div>
           </div>
         ))}
@@ -244,7 +234,7 @@ export function Sidebar({
       {/* Help, Settings, account */}
       <div className="shrink-0 space-y-2 overflow-x-hidden border-t border-sidebar p-3">
         {/* Side by side when labelled, so the whole menu fits a laptop screen. */}
-        <div className={cn("grid gap-1", collapsed ? "grid-cols-1 lg:grid-cols-2" : "grid-cols-2")}>
+        <div className={cn("grid gap-1", collapsed ? "grid-cols-1" : "grid-cols-2")}>
           {footerUtilityNavItems.map(link)}
         </div>
 
@@ -269,7 +259,7 @@ export function Sidebar({
           <form
             action="/auth/signout"
             method="post"
-            className={cn("shrink-0", collapsed && "hidden lg:block")}
+            className={cn("shrink-0", collapsed && "hidden")}
           >
             <button
               type="submit"

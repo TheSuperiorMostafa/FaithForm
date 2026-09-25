@@ -1,6 +1,17 @@
 import type { Config } from "tailwindcss";
 import tailwindAnimate from "tailwindcss-animate";
 
+/**
+ * Theme colours are CSS variables (so dark mode can swap them), and Tailwind
+ * cannot add opacity to a bare `var(--x)`: classes like `bg-accent/10` or
+ * `bg-primary/[0.07]` were silently never generated. Mixing with transparent
+ * through Tailwind's `<alpha-value>` placeholder gives them real colours; a
+ * class without a modifier mixes at 100%, which is the variable itself.
+ */
+function token(variable: string): string {
+  return `color-mix(in srgb, var(${variable}) calc(<alpha-value> * 100%), transparent)`;
+}
+
 const config: Config = {
   darkMode: ["class"],
   content: [
@@ -15,44 +26,44 @@ const config: Config = {
         heading: ["var(--font-heading)", "var(--font-sans)", "system-ui", "sans-serif"],
       },
       colors: {
-        border: "var(--border)",
-        input: "var(--input)",
-        ring: "var(--ring)",
-        background: "var(--background)",
-        foreground: "var(--foreground)",
+        border: token("--border"),
+        input: token("--input"),
+        ring: token("--ring"),
+        background: token("--background"),
+        foreground: token("--foreground"),
         primary: {
-          DEFAULT: "var(--primary)",
-          foreground: "var(--primary-foreground)",
+          DEFAULT: token("--primary"),
+          foreground: token("--primary-foreground"),
         },
         secondary: {
-          DEFAULT: "var(--secondary)",
-          foreground: "var(--secondary-foreground)",
+          DEFAULT: token("--secondary"),
+          foreground: token("--secondary-foreground"),
         },
         destructive: {
-          DEFAULT: "var(--destructive)",
-          foreground: "var(--destructive-foreground)",
+          DEFAULT: token("--destructive"),
+          foreground: token("--destructive-foreground"),
         },
         muted: {
-          DEFAULT: "var(--muted)",
-          foreground: "var(--muted-foreground)",
+          DEFAULT: token("--muted"),
+          foreground: token("--muted-foreground"),
         },
         accent: {
-          DEFAULT: "var(--accent)",
-          foreground: "var(--accent-foreground)",
+          DEFAULT: token("--accent"),
+          foreground: token("--accent-foreground"),
         },
         popover: {
-          DEFAULT: "var(--popover)",
-          foreground: "var(--popover-foreground)",
+          DEFAULT: token("--popover"),
+          foreground: token("--popover-foreground"),
         },
         card: {
-          DEFAULT: "var(--card)",
-          foreground: "var(--card-foreground)",
+          DEFAULT: token("--card"),
+          foreground: token("--card-foreground"),
         },
         sidebar: {
-          DEFAULT: "var(--sidebar-background)",
-          foreground: "var(--sidebar-foreground)",
-          accent: "var(--sidebar-accent)",
-          border: "var(--sidebar-border)",
+          DEFAULT: token("--sidebar-background"),
+          foreground: token("--sidebar-foreground"),
+          accent: token("--sidebar-accent"),
+          border: token("--sidebar-border"),
         },
         brand: {
           navy: "#002D5F",

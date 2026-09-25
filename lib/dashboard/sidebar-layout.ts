@@ -1,18 +1,15 @@
 /**
  * Geometry and timing for the dashboard sidebar.
  *
- * On tablet widths the sidebar reserves a fixed 72px rail and never reserves
- * more than that. When it expands it draws wider than the space it occupies,
- * so it floats above the page instead of shoving it sideways — passing a
- * pointer over a rail should open a menu, not reflow a dashboard full of
- * tables and charts for a gesture the user may not even have meant.
+ * The sidebar reserves a fixed 72px rail and never reserves more than that.
+ * When it expands it draws wider than the space it occupies, so it floats above
+ * the page instead of shoving it sideways — passing a pointer over a rail
+ * should open a menu, not reflow a dashboard full of tables and charts for a
+ * gesture the user may not even have meant.
  *
- * On large screens (≥1024px) the sidebar is simply open, labels always
- * visible: an older pastor should never have to discover that hovering a
- * column of icons reveals their names. It reserves its full width there, so
- * nothing floats over the page and nothing moves. The hover-to-open rail is
- * kept only for tablet widths, where a permanent 256px column would crowd
- * the page.
+ * That is also why there is no pin or toggle: pinning is the one thing that
+ * would move the content, and the point of this sidebar is that the content
+ * never moves.
  *
  * These widths are mirrored by one Tailwind class in dashboard-shell.tsx
  * (`md:ml-[72px]`), because a media query cannot come from an inline style.
@@ -54,11 +51,6 @@ export type SidebarInput = {
    * wide enough to render the sidebar at all.
    */
   touchOpen: boolean;
-  /**
-   * The viewport is wide enough to keep the sidebar open all the time
-   * (≥1024px). Labels always show and the full width is reserved.
-   */
-  pinned?: boolean;
 };
 
 export type SidebarLayout = {
@@ -76,15 +68,6 @@ export function resolveSidebarLayout(input: SidebarInput): SidebarLayout {
   // Focus counts as much as hover. A sidebar that only opens for a pointer is
   // one a keyboard user tabs through blind — a column of unlabelled icons with
   // no way to widen it.
-  if (input.pinned) {
-    return {
-      expanded: true,
-      panelWidth: SIDEBAR_WIDTH_EXPANDED,
-      layoutWidth: SIDEBAR_WIDTH_EXPANDED,
-      overlaying: false,
-    };
-  }
-
   const expanded = input.hovering || input.keyboardFocusWithin || input.touchOpen;
 
   return {
