@@ -24,6 +24,10 @@ export type ActionResult =
   | { ok: true }
   | { ok: false; error: string };
 
+export type CreateAccountResult =
+  | { ok: true; needsEmailConfirmation: boolean }
+  | { ok: false; error: string };
+
 export type ResendInviteResult =
   | { ok: true; email: string }
   | { ok: false; error: string };
@@ -53,7 +57,7 @@ export async function createOnboardingAccount(
     email: string;
     password: string;
   },
-): Promise<ActionResult> {
+): Promise<CreateAccountResult> {
   const inviteResult = await fetchInviteByToken(token);
   if (!inviteResult.ok) {
     return { ok: false, error: inviteResult.message };
@@ -68,14 +72,13 @@ export async function createOnboardingAccount(
   }
 
   const supabase = createClient();
-  // `next` is a **path**, not an absolute URL: the callback runs it through
-  // `safeRedirectPath`, which refuses anything absolute. Passing a full URL
-  // here silently degraded to `/dashboard` and stranded the invitee mid-flow.
+  // The confirmation link must resume after account creation. `next` is a
+  // relative path because the callback validates it with `safeRedirectPath`.
   const emailRedirectTo = dashboardEmailRedirect(
-    `/onboarding?token=${encodeURIComponent(token)}&step=2`,
+    `/onboarding?token=${encodeURIComponent(token)}&step=3`,
   );
 
-  const { error: signUpError } = await supabase.auth.signUp({
+  const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
     email: data.email,
     password: data.password,
     options: {
@@ -104,12 +107,12 @@ export async function createOnboardingAccount(
             "An account with this email already exists. Sign in with your existing password or use Forgot Password.",
         };
       }
-      return { ok: true };
+      return { ok: true, needsEmailConfirmation: false };
     }
     return { ok: false, error: signUpError.message };
   }
 
-  return { ok: true };
+  return { ok: true, needsEmailConfirmation: !signUpData.session };
 }
 
 export async function updateChurchProfile(

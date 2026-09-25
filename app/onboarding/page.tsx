@@ -6,6 +6,7 @@ import {
   getOnboardingIntegrationStatus,
   validateInviteToken,
 } from "@/app/onboarding/actions";
+import { createClient } from "@/lib/supabase/server";
 
 type PageProps = {
   searchParams: Promise<{ token?: string; step?: string }>;
@@ -39,6 +40,15 @@ export default async function OnboardingPage({ searchParams }: PageProps) {
   }
 
   const { invite } = result;
+  // Older confirmation emails point to step 2. A confirmed invitee already
+  // has an account, so take them to the next step instead of asking again.
+  if (initialStep === 2) {
+    const { data: { user } } = await createClient().auth.getUser();
+    if (user?.email?.toLowerCase() === invite.email.toLowerCase()) {
+      const { redirect } = await import("next/navigation");
+      redirect(`/onboarding?token=${encodeURIComponent(token)}&step=3`);
+    }
+  }
   const integrationResult = await getOnboardingIntegrationStatus(
     invite.churchId,
     token,
