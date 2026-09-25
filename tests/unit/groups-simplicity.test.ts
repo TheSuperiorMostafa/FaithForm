@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
@@ -22,7 +22,12 @@ import { REPORT_REASONS } from "@/lib/messaging/safety";
 
 const read = (path: string) => readFileSync(path, "utf8");
 const componentFiles = readdirSync("components/groups").filter((f) => f.endsWith(".tsx")).map((f) => `components/groups/${f}`);
-const allGroupsUi = [...componentFiles, "app/dashboard/groups/[[...path]]/page.tsx", "app/dashboard/groups/loading.tsx"];
+const walkTsx = (dir: string): string[] =>
+  readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+    entry.isDirectory() ? walkTsx(`${dir}/${entry.name}`) : entry.name.endsWith(".tsx") ? [`${dir}/${entry.name}`] : [],
+  );
+const routeFiles = walkTsx("app/dashboard/groups");
+const allGroupsUi = [...componentFiles, ...routeFiles];
 
 // ---------------------------------------------------------------------------
 // Plain words
@@ -161,9 +166,10 @@ test("the Groups nav shows three everyday links, a labelled More row, and real c
   assert.match(shared, /"All groups"[\s\S]*"Messages"[\s\S]*"Join requests"/);
   assert.match(shared, /More:/);
   assert.match(shared, /"Reports"[\s\S]*"Safety"[\s\S]*"Group settings"/);
-  const page = read("app/dashboard/groups/[[...path]]/page.tsx");
-  assert.match(page, /groupsNavCounts\(ctx\)/);
-  assert.match(page, /<GroupsNav requests=\{counts\.requests\} reports=\{counts\.reports\} \/>/);
+  const layout = read("app/dashboard/groups/(sections)/layout.tsx");
+  assert.match(layout, /groupsNavCounts\(ctx\)/);
+  const chrome = read("components/groups/sections-chrome.tsx");
+  assert.match(chrome, /<GroupsNav requests=\{counts\.requests\} reports=\{counts\.reports\} \/>/);
   const detail = read("components/groups/group-detail.tsx");
   assert.match(detail, /"Members"[\s\S]*"Chat"[\s\S]*"Meetings"[\s\S]*"About"/);
 });
@@ -220,4 +226,21 @@ test("loading mirrors the pages: real titles, SkeletonContainer, no page max-wid
   assert.match(skeleton, /<GroupsNav \/>/);
   assert.match(skeleton, /className="flex w-full flex-col gap-8"/);
   for (const file of [...allGroupsUi, "components/groups/skeletons.tsx"]) assert.doesNotMatch(read(file), /mx-auto max-w-/, file);
+});
+
+test("switching Groups tabs keeps the header and links on screen", () => {
+  // The header and links live in layouts, so moving between All groups,
+  // Messages and Join requests (or a group's tabs) only reloads the content.
+  assert.equal(existsSync("app/dashboard/groups/[[...path]]"), false);
+  const sections = read("app/dashboard/groups/(sections)/layout.tsx");
+  assert.match(sections, /<GroupsSectionChrome/);
+  for (const route of ["", "/messages", "/requests", "/insights", "/moderation", "/settings"]) {
+    const loading = read(`app/dashboard/groups/(sections)${route}/loading.tsx`);
+    assert.match(loading, /GroupsSectionBodySkeleton/, route || "list");
+  }
+  assert.match(read("app/dashboard/groups/[id]/layout.tsx"), /<GroupDetailShell detail=\{detail\}>/);
+  assert.match(read("app/dashboard/groups/[id]/[tab]/loading.tsx"), /GroupPanelSkeleton/);
+  const skeleton = read("components/groups/skeletons.tsx");
+  const body = skeleton.slice(skeleton.indexOf("export function GroupsSectionBodySkeleton"), skeleton.indexOf("function SectionBody"));
+  assert.doesNotMatch(body, /PageHeader|GroupsNav/, "the content skeleton must not redraw the header");
 });

@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 import { CalendarDays, History, Inbox, Info, MapPin, MessageCircle, Pencil, Settings2, ShieldCheck, UsersRound, type LucideIcon } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
@@ -37,8 +37,12 @@ export function GroupTabs({ groupId, groupName, tab, requests = 0 }: { groupId: 
  * One group: a calm header with the group's one main action (Message group),
  * four everyday tabs, and a labelled "More" row for requests and settings.
  */
-export function GroupDetailShell({ detail, tab, children }: { detail: StaffGroupDetail; tab: string; children: ReactNode }) {
+export function GroupDetailShell({ detail, tab: tabProp, children }: { detail: StaffGroupDetail; tab?: string; children: ReactNode }) {
   const g = detail.group;
+  // In the group's layout the shell stays mounted across tabs, so it reads the
+  // current tab from the address rather than from the page.
+  const pathname = usePathname() ?? "";
+  const tab = tabProp ?? (pathname.split("/")[4] || "members");
   const archived = g.status !== "active";
   const href = (slug: string) => `${base}/${g.id}/${slug}`;
 

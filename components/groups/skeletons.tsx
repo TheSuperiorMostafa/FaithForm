@@ -7,21 +7,22 @@ import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
 import { BackLink, base, GroupsNav } from "./shared";
 import { GroupTabs } from "./group-detail";
 import { GROUPS_SECTIONS, type GroupsSection } from "./sections";
+import { groupsSectionFromPath } from "./sections-chrome";
 
 /**
- * Loading states for every Groups route. The catch-all route has one
- * loading.tsx, so this reads the path and draws the matching layout: same
- * roots, header, links, grids and paddings as the real page. Titles, tab
+ * Loading states for Groups. `GroupsSkeleton` is the whole page (entering
+ * Groups, before its header and links exist). Inside Groups the header and
+ * links live in layouts and stay put, so switching tabs only shows
+ * `GroupsSectionBodySkeleton` or `GroupPanelSkeleton` under them. Titles, tab
  * labels and buttons are real text; only data shimmers.
  */
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-const SECTION_BY_PATH: Record<string, GroupsSection> = { "": "list", messages: "messages", requests: "requests", insights: "insights", moderation: "moderation", settings: "settings" };
 
 export function GroupsSkeleton() {
   const path = usePathname() ?? base;
   const [first = "", second] = path.replace(/^\/dashboard\/groups\/?/, "").split("/");
   if (UUID.test(first)) return <GroupDetailSkeleton groupId={first} tab={second || "members"} />;
-  return <SectionSkeleton section={SECTION_BY_PATH[first] ?? "list"} />;
+  return <SectionSkeleton section={groupsSectionFromPath(path)} />;
 }
 
 function StaticButton({ children, variant = "default" }: { children: React.ReactNode; variant?: "default" | "outline" }) {
@@ -40,6 +41,23 @@ function SectionSkeleton({ section }: { section: GroupsSection }) {
   return <SkeletonContainer label={copy.title.toLowerCase()} className="flex w-full flex-col gap-8">
     <PageHeader title={copy.title} description={copy.description} action={section === "list" ? <StaticButton><Plus className="size-5" aria-hidden />Create group</StaticButton> : undefined} />
     <GroupsNav />
+    <SectionBody section={section} />
+  </SkeletonContainer>;
+}
+
+/**
+ * Just the content under a top-level page's header and links: those stay on
+ * screen in the layout while a section loads, so only this part shimmers.
+ */
+export function GroupsSectionBodySkeleton() {
+  const section = groupsSectionFromPath(usePathname() ?? base);
+  return <SkeletonContainer label={GROUPS_SECTIONS[section].title.toLowerCase()} className="flex w-full flex-col gap-8">
+    <SectionBody section={section} />
+  </SkeletonContainer>;
+}
+
+function SectionBody({ section }: { section: GroupsSection }) {
+  return <>
     {section === "list" && <ListBody />}
     {section === "messages" && <div className="g-inbox">
       <aside className="g-inbox-list"><label className="g-search w-full max-w-none"><Search aria-hidden /><input type="search" disabled placeholder="Find a group" aria-hidden tabIndex={-1} /></label><ul className="mt-3 space-y-1">{Array.from({ length: 6 }).map((_, i) => <li key={i} className="g-inbox-row"><Skeleton className="size-11 rounded-[13px]" /><span className="flex-1 space-y-2"><Skeleton className="h-5 w-36" /><Skeleton className="h-4 w-24" /></span></li>)}</ul></aside>
@@ -55,7 +73,7 @@ function SectionSkeleton({ section }: { section: GroupsSection }) {
       <div className="space-y-6"><section className="g-panel space-y-4"><h2>Messages in the app</h2><p className="g-row-sub">These apply to every group. A group can be stricter in its own settings.</p>{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</section><section className="g-panel space-y-4"><h2>Kinds of groups</h2>{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}</section></div>
       <aside className="space-y-6"><section className="g-panel space-y-3"><Skeleton className="h-28 w-full" /></section><section className="g-panel space-y-3"><h2>Is chat up to date?</h2><Skeleton className="h-5 w-full" /></section></aside>
     </div>}
-  </SkeletonContainer>;
+  </>;
 }
 
 function ListBody() {
@@ -81,6 +99,18 @@ function GroupDetailSkeleton({ groupId, tab }: { groupId: string; tab: string })
       <div className="g-group-actions"><div className="flex flex-wrap gap-3"><StaticButton variant="outline"><Pencil className="size-5" aria-hidden />Edit group</StaticButton><StaticButton><MessageCircle className="size-5" aria-hidden />Message group</StaticButton></div><p className="text-sm text-muted-foreground">Members on the app will see your message.</p></div>
     </header>
     <GroupTabs groupId={groupId} groupName="Group" tab={tab} />
+    <GroupPanel tab={tab} />
+  </SkeletonContainer>;
+}
+
+/** Just one group's tab content: the header and tabs stay in the group's layout. */
+export function GroupPanelSkeleton() {
+  const tab = (usePathname() ?? "").split("/")[4] || "members";
+  return <SkeletonContainer label="group" className="flex w-full flex-col"><GroupPanel tab={tab} /></SkeletonContainer>;
+}
+
+function GroupPanel({ tab }: { tab: string }) {
+  return (
     <div>
       {tab === "members" && <div className="space-y-6">
         <div className="g-toolbar"><label className="g-search"><Search aria-hidden /><input type="search" disabled placeholder="Find someone in this group" aria-hidden tabIndex={-1} /></label><StaticButton><UserPlus className="size-5" aria-hidden />Add people</StaticButton></div>
@@ -93,5 +123,5 @@ function GroupDetailSkeleton({ groupId, tab }: { groupId: string; tab: string })
       {tab === "requests" && <Rows count={2} />}
       {tab === "settings" && <div className="flex flex-col gap-8"><section className="g-panel space-y-4"><h2>Group photo</h2><Skeleton className="h-40 w-full" /></section><section className="g-panel space-y-5"><h2>The basics</h2>{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-12 w-full rounded-xl" />)}</section></div>}
     </div>
-  </SkeletonContainer>;
+  );
 }
