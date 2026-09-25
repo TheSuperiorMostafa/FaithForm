@@ -1,6 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { useId, useState, useTransition } from "react";
+import { Pencil, Plus, Star, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+
 import {
   createGivingFund,
   deleteGivingFund,
@@ -8,105 +12,123 @@ import {
   updateGivingFund,
 } from "@/app/dashboard/settings/giving-actions";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { confirmAction } from "@/components/ui/confirm-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { cn } from "@/lib/utils";
+import { StatusBadge } from "@/components/ui/status-badge";
 import type { GivingFundRow } from "@/types/giving";
 
-export function FundsSettings({
-  funds,
-  className,
-}: {
-  funds: GivingFundRow[];
-  className?: string;
-}) {
+/**
+ * The funds donors choose between on the giving page: add, rename, pick the
+ * main one, remove. Removing asks first; past gifts to a removed fund stay in
+ * the records.
+ */
+export function FundsSettings({ funds }: { funds: GivingFundRow[] }) {
+  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [newName, setNewName] = useState("");
-  const [message, setMessage] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState<GivingFundRow | null>(null);
+  const newId = useId();
+  const active = funds.filter((f) => f.isActive);
 
-  const addFund = () => {
-    if (!newName.trim()) return;
+  const run = (work: () => Promise<{ error?: string }>, success: string) => {
     startTransition(async () => {
-      const result = await createGivingFund(newName.trim());
-      setMessage(result.error ?? "Fund added.");
-      if (!result.error) setNewName("");
+      try {
+        const result = await work();
+        if (result.error) {
+          toast.error(result.error);
+          return;
+        }
+        toast.success(success);
+        router.refresh();
+      } catch {
+        toast.error("That didn't save. Please try again.");
+      }
     });
   };
 
+  const addFund = () => {
+    const name = newName.trim();
+    if (!name) return;
+    startTransition(async () => {
+      try {
+        const result = await createGivingFund(name);
+        if (result.error) {
+          toast.error(result.error);
+          return;
+        }
+        toast.success(`${name} added. Donors can choose it on your giving page now.`);
+        setNewName("");
+        router.refresh();
+      } catch {
+        toast.error("We couldn't add that fund. Please try again.");
+      }
+    });
+  };
+
+  const remove = async (fund: GivingFundRow) => {
+    const ok = await confirmAction({
+      title: `Remove ${fund.name}?`,
+      description:
+        "Donors won't be able to choose it on your giving page or in the app any more. Gifts already given to it stay in your records.",
+      confirmLabel: "Remove fund",
+      destructive: true,
+    });
+    if (!ok) return;
+    run(() => deleteGivingFund(fund.id), `${fund.name} removed from your giving page.`);
+  };
+
   return (
-    <div className={cn("space-y-4 border-t pt-4", className)}>
-      <div>
-        <h4 className="text-sm font-medium">Giving funds</h4>
-        <p className="text-xs text-muted-foreground">
-          Donors choose a fund on your giving page. At least one fund must remain active.
+    <Card className="flex flex-col gap-6 p-6">
+      <div className="space-y-1.5">
+        <h2 className="font-heading text-xl font-bold text-foreground">Funds</h2>
+        <p className="text-[15px] leading-relaxed text-muted-foreground">
+          Donors choose a fund on your giving page. Your main fund is chosen for them unless they
+          pick another.
         </p>
       </div>
 
-      {message && (
-        <p className="text-sm text-muted-foreground" role="status">
-          {message}
-        </p>
-      )}
-
-      <ul className="space-y-2">
-        {funds.map((f) => (
-          <li
-            key={f.id}
-            className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-sm"
-          >
-            <span>
-              {f.name}
-              {f.isDefault && (
-                <span className="ml-2 text-xs text-muted-foreground">(default)</span>
-              )}
-              {!f.isActive && (
-                <span className="ml-2 text-xs text-destructive">(inactive)</span>
-              )}
-            </span>
-            <div className="flex gap-1">
-              {!f.isDefault && f.isActive && (
+      <ul className="flex flex-col divide-y divide-border rounded-2xl border border-border">
+        {active.map((fund) => (
+          <li key={fund.id} className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center">
+            <div className="flex min-w-0 flex-1 items-center gap-3">
+              <span className="truncate text-base font-semibold text-foreground">{fund.name}</span>
+              {fund.isDefault && <StatusBadge tone="done">Main fund</StatusBadge>}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button variant="outline" disabled={pending} onClick={() => setRenaming(fund)}>
+                <Pencil aria-hidden />
+                Rename
+              </Button>
+              {!fund.isDefault && (
                 <Button
-                  type="button"
                   variant="ghost"
-                  size="sm"
                   disabled={pending}
                   onClick={() =>
-                    startTransition(async () => {
-                      await setDefaultFund(f.id);
-                    })
+                    run(() => setDefaultFund(fund.id), `${fund.name} is now your main fund.`)
                   }
                 >
-                  Set default
+                  <Star aria-hidden />
+                  Make main fund
                 </Button>
               )}
-              {f.isActive && (
+              {!fund.isDefault && active.length > 1 && (
                 <Button
-                  type="button"
                   variant="ghost"
-                  size="sm"
                   disabled={pending}
-                  onClick={() =>
-                    startTransition(async () => {
-                      const name = window.prompt("Fund name", f.name);
-                      if (name) await updateGivingFund(f.id, { name });
-                    })
-                  }
+                  className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={() => void remove(fund)}
                 >
-                  Rename
-                </Button>
-              )}
-              {f.isActive && funds.filter((x) => x.isActive).length > 1 && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  disabled={pending}
-                  onClick={() =>
-                    startTransition(async () => {
-                      await deleteGivingFund(f.id);
-                    })
-                  }
-                >
+                  <Trash2 aria-hidden />
                   Remove
                 </Button>
               )}
@@ -115,25 +137,116 @@ export function FundsSettings({
         ))}
       </ul>
 
-      <div className="flex gap-2">
-        <div className="flex-1 space-y-1">
-          <Label htmlFor="new-fund">New fund</Label>
+      <div className="flex max-w-xl flex-col gap-2">
+        <Label htmlFor={newId}>Add a fund</Label>
+        <div className="flex flex-col gap-3 sm:flex-row">
           <Input
-            id="new-fund"
+            id={newId}
             value={newName}
+            maxLength={80}
+            placeholder="Youth ministry"
             onChange={(e) => setNewName(e.target.value)}
-            placeholder="Youth Ministry"
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                addFund();
+              }
+            }}
           />
+          <Button type="button" disabled={pending || !newName.trim()} onClick={addFund}>
+            <Plus aria-hidden />
+            Add fund
+          </Button>
         </div>
-        <Button
-          type="button"
-          className="mt-6"
-          disabled={pending}
-          onClick={addFund}
-        >
-          Add fund
-        </Button>
       </div>
-    </div>
+
+      {renaming && (
+        <RenameFundDialog
+          fund={renaming}
+          onClose={() => setRenaming(null)}
+          onSaved={() => {
+            setRenaming(null);
+            router.refresh();
+          }}
+        />
+      )}
+    </Card>
+  );
+}
+
+function RenameFundDialog({
+  fund,
+  onClose,
+  onSaved,
+}: {
+  fund: GivingFundRow;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [name, setName] = useState(fund.name);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const id = useId();
+
+  const save = (event: React.FormEvent) => {
+    event.preventDefault();
+    const trimmed = name.trim();
+    if (!trimmed || trimmed === fund.name) {
+      onClose();
+      return;
+    }
+    setError(null);
+    startTransition(async () => {
+      try {
+        const result = await updateGivingFund(fund.id, { name: trimmed });
+        if (result.error) {
+          setError(result.error);
+          return;
+        }
+        toast.success(`${fund.name} is now called ${trimmed}.`);
+        onSaved();
+      } catch {
+        setError("We couldn't rename this fund. Please try again.");
+      }
+    });
+  };
+
+  return (
+    <Dialog open onOpenChange={(open) => (open ? null : onClose())}>
+      <DialogContent aria-labelledby={`${id}-title`} onRequestClose={() => !pending}>
+        <form onSubmit={save}>
+          <DialogHeader>
+            <DialogTitle id={`${id}-title`}>Rename {fund.name}</DialogTitle>
+            <DialogDescription className="text-[15px]">
+              The new name shows on your giving page, in the app and on statements.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 px-6 py-5">
+            <Label htmlFor={id}>Fund name</Label>
+            <Input
+              id={id}
+              value={name}
+              maxLength={80}
+              autoFocus
+              aria-invalid={error ? true : undefined}
+              onChange={(e) => setName(e.target.value)}
+            />
+            {error && (
+              <p role="alert" className="text-[15px] font-medium text-destructive">
+                {error}
+              </p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" disabled={pending} onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={pending || !name.trim()}>
+              Save name
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

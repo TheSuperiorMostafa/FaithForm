@@ -55,9 +55,16 @@ async function requireSetupViewer(): Promise<SetupContext> {
 async function requireSetupAdmin(): Promise<SetupContext> {
   const context = await requireSetupViewer();
   if (!context.isAdmin) {
-    throw new VisitorError("forbidden", "Only a church admin can change Automatic Attendance.");
+    throw new VisitorError("forbidden", "Only a church admin can change attendance setup.");
   }
   return context;
+}
+
+/** Domain errors carry a sentence already; anything else is a bug, said plainly. */
+function plainSetupResult<T>(error: unknown, fallback: string): VisitorResult<T> {
+  if (error instanceof VisitorError) return toVisitorResult<T>(error);
+  console.error("[attendance/setup]", error);
+  return fail("unavailable", fallback);
 }
 
 function revalidateSetup() {
@@ -133,7 +140,7 @@ export async function getCheckinSetup(): Promise<VisitorResult<CheckinSetupView>
       },
     };
   } catch (error) {
-    return toVisitorResult(error);
+    return plainSetupResult(error, "We couldn't load your attendance setup. Try again.");
   }
 }
 
@@ -150,7 +157,7 @@ export async function saveCheckinPolicy(
     revalidateSetup();
     return { ok: true, data: saved };
   } catch (error) {
-    return toVisitorResult(error);
+    return plainSetupResult(error, "We couldn't save that change. Nothing was changed. Try again.");
   }
 }
 
@@ -169,7 +176,7 @@ export async function saveCampusLocation(input: {
     revalidateSetup();
     return { ok: true, data: saved };
   } catch (error) {
-    return toVisitorResult(error);
+    return plainSetupResult(error, "We couldn't save the location. Try again.");
   }
 }
 
@@ -211,7 +218,7 @@ export async function addMainCampus(): Promise<VisitorResult<{ campusId: string 
     revalidateSetup();
     return { ok: true, data: { campusId: campus.id } };
   } catch (error) {
-    return toVisitorResult(error);
+    return plainSetupResult(error, "We couldn't add your building. Try again.");
   }
 }
 
@@ -241,7 +248,7 @@ export async function findAddress(query: string): Promise<VisitorResult<GeocodeM
     }
     return { ok: true, data: matches };
   } catch (error) {
-    return toVisitorResult(error);
+    return plainSetupResult(error, "We couldn't look up that address. Try again, or click the map.");
   }
 }
 
@@ -254,6 +261,6 @@ export async function saveServiceTimes(
     revalidateSetup();
     return { ok: true, data: saved };
   } catch (error) {
-    return toVisitorResult(error);
+    return plainSetupResult(error, "We couldn't save your service times. Nothing was changed. Try again.");
   }
 }

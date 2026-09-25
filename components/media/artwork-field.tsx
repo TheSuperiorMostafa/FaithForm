@@ -10,6 +10,7 @@ import {
   type ArtworkTarget,
 } from "@/app/dashboard/live-streaming/media/actions";
 import { Button } from "@/components/ui/button";
+import { confirmAction } from "@/components/ui/confirm-dialog";
 import { ImageCropper } from "@/components/website-admin/image-cropper";
 import { ARTWORK_SPECS, type ArtworkCrop } from "@/lib/media/artwork";
 import { downscaleForUpload, UPLOAD_BUDGET_BYTES } from "@/lib/sites/downscale-image";
@@ -99,7 +100,19 @@ export function ArtworkField({
     setCropping(ready);
   }
 
-  function clear() {
+  async function clear() {
+    // No undo is possible here (the old image can't be re-attached without
+    // uploading it again), so removing asks first.
+    const ok = await confirmAction({
+      title: inherited ? "Go back to the series image?" : `Remove this ${spec.label.toLowerCase()} image?`,
+      description: inherited
+        ? "This message stops using its own image and shows the series artwork instead."
+        : "It disappears from the app and your website. You can add another image any time.",
+      confirmLabel: inherited ? "Use series image" : "Remove image",
+      cancelLabel: "Keep it",
+      destructive: true,
+    });
+    if (!ok) return;
     setError(null);
     startTransition(async () => {
       const result = await clearMediaArtwork({ target, crop });
@@ -116,7 +129,7 @@ export function ArtworkField({
       <div className="flex items-baseline justify-between gap-2">
         <p className="text-sm font-semibold">{spec.label}</p>
         {isInherited ? (
-          <span className="text-xs text-muted-foreground">From series</span>
+          <span className="text-sm text-muted-foreground">From series</span>
         ) : null}
       </div>
 
@@ -132,25 +145,24 @@ export function ArtworkField({
             )}
             style={{ aspectRatio: String(spec.ratio) }}
           />
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-2">
             <Button
               type="button"
               variant="outline"
-              size="sm"
               disabled={disabled || busy}
               onClick={() => inputRef.current?.click()}
             >
-              {isInherited ? "Override" : "Replace"}
+              {isInherited ? "Use its own image" : "Replace image"}
             </Button>
             {value ? (
               <Button
                 type="button"
                 variant="ghost"
-                size="sm"
                 disabled={disabled || busy}
-                onClick={clear}
+                onClick={() => void clear()}
+                className="gap-2"
               >
-                <Trash2 className="mr-1 size-3.5" />
+                <Trash2 className="size-4" aria-hidden />
                 {inherited ? "Use series" : "Remove"}
               </Button>
             ) : null}
@@ -169,13 +181,13 @@ export function ArtworkField({
           ) : (
             <ImageUp className="size-5 text-muted-foreground" aria-hidden />
           )}
-          <span className="text-xs font-medium text-accent">
+          <span className="text-sm font-medium text-primary dark:text-accent">
             {busy ? (preparing ? "Preparing…" : "Uploading…") : "Add artwork"}
           </span>
         </button>
       )}
 
-      <p className="text-xs leading-snug text-muted-foreground">{spec.hint}</p>
+      <p className="text-sm leading-snug text-muted-foreground">{spec.hint}</p>
 
       <input
         ref={inputRef}
@@ -204,7 +216,7 @@ export function ArtworkField({
         />
       ) : null}
 
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      {error ? <p className="text-sm text-destructive" role="alert">{error}</p> : null}
     </div>
   );
 }

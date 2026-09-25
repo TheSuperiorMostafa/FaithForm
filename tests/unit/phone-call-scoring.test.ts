@@ -560,7 +560,7 @@ test("the CSV marks urgent calls and drops the reply columns", () => {
   assert.match(csvExport, /score\.urgent \? "Yes" : ""/);
 });
 
-test("the notify_pastor flag is still saved, only no longer shown", () => {
+test("the notify_pastor flag is still saved (it now feeds \"Needs a call back\", never a reply badge)", () => {
   assert.match(scorer, /notify_pastor: z\.boolean\(\)/);
   assert.match(scorer, /notify_pastor: breakdown\.notify_pastor/);
   assert.match(scorer, /urgency: breakdown\.urgency/);

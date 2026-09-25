@@ -96,10 +96,11 @@ export function StepProfile({
     <div className="space-y-5">
       <div>
         <h2 className="font-heading text-2xl font-semibold text-foreground">
-          Tell Us About Your Church
+          Tell us about your church
         </h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          This helps personalize your experience.
+        <p className="mt-1 text-base text-muted-foreground">
+          Only the name is needed now. Everything else can wait, and you can
+          change it any time in Settings → Church info.
         </p>
       </div>
 
@@ -115,7 +116,7 @@ export function StepProfile({
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="address">Street address</Label>
+        <Label htmlFor="address">Street address (optional)</Label>
         <Input
           id="address"
           value={profile.address}
@@ -191,8 +192,17 @@ export function StepProfile({
           onDragOver={(e) => e.preventDefault()}
           onDrop={onDrop}
           onClick={() => fileRef.current?.click()}
+          role="button"
+          tabIndex={0}
+          aria-label="Choose a logo picture"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              fileRef.current?.click();
+            }
+          }}
           className={cn(
-            "flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-border",
+            "flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
             "bg-muted/30 px-4 py-8 transition-colors hover:border-accent/50 hover:bg-accent/5",
           )}
         >
@@ -206,12 +216,12 @@ export function StepProfile({
           ) : (
             <Upload className="mb-2 size-8 text-muted-foreground" strokeWidth={1.5} />
           )}
-          <p className="text-sm text-muted-foreground">
+          <p className="text-base text-muted-foreground">
             {uploading
               ? "Uploading…"
               : preparing
                 ? "Preparing photo…"
-                : "Drag & drop or click to upload — you'll frame it as a square"}
+                : "Choose a picture, or drag one here. You'll frame it as a square."}
           </p>
           <input
             ref={fileRef}
@@ -247,22 +257,23 @@ export function StepProfile({
       )}
 
       {error && (
-        <p className="text-sm text-destructive" role="alert">
+        <p className="text-base text-destructive" role="alert">
           {error}
         </p>
       )}
 
-      <div className="flex flex-col items-end gap-2">
-        <button
-          type="button"
-          onClick={onSkip}
-          disabled={pending}
-          className="text-sm text-muted-foreground hover:text-foreground"
-        >
+      <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+        <Button type="button" variant="ghost" onClick={onSkip} disabled={pending}>
           Skip for now
-        </button>
-        <Button type="button" onClick={onNext} disabled={pending || uploading || preparing} className="w-full sm:w-auto">
-          {pending ? "Saving…" : "Continue →"}
+        </Button>
+        <Button
+          type="button"
+          size="lg"
+          onClick={onNext}
+          disabled={pending || uploading || preparing}
+          className="h-12 w-full sm:w-auto"
+        >
+          {pending ? "Saving…" : "Save and continue"}
         </Button>
       </div>
     </div>

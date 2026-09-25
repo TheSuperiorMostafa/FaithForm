@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { parseStatementYear } from "@/lib/giving/statement-year";
 import JSZip from "jszip";
 import { logAdminAction } from "@/lib/activity/admin-log";
 import {
@@ -28,8 +29,8 @@ export async function POST(request: Request) {
   if (denied) return denied;
 
   const { searchParams } = new URL(request.url);
-  const year =
-    Number.parseInt(searchParams.get("year") ?? String(new Date().getFullYear()), 10);
+  // Defaults to last year until April, when year-end statements go out.
+  const year = parseStatementYear(searchParams.get("year"));
 
   const admin = createAdminClient();
   const { data: church } = await admin
@@ -40,7 +41,7 @@ export async function POST(request: Request) {
 
   if (!church?.ein) {
     return NextResponse.json(
-      { error: "Add your church EIN in Settings before generating statements." },
+      { error: "Add your church's tax ID (EIN) before making statements." },
       { status: 400 },
     );
   }

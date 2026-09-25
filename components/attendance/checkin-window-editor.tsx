@@ -21,6 +21,7 @@ import {
   withCurrentChoice,
 } from "@/lib/attendance/v2/setup-view";
 import { Segmented } from "@/components/attendance/setup-step";
+import { AdvancedSection } from "@/components/ui/advanced-section";
 import { Button } from "@/components/ui/button";
 
 type WindowDraft = {
@@ -55,8 +56,14 @@ export function CheckinWindowEditor({
   sample,
   isAdmin,
   onSaved,
+  showPhoneOptions = true,
 }: {
   policy: AttendanceSetupPolicy;
+  /**
+   * How a phone's arrival is counted only matters with phone check-in on.
+   * Hidden otherwise; the saved values are kept as they are.
+   */
+  showPhoneOptions?: boolean;
   /** A service to show the window against — the church's first, when it has one. */
   sample: { label: string; startTime: string; endTime: string | null } | null;
   isAdmin: boolean;
@@ -93,7 +100,9 @@ export function CheckinWindowEditor({
         toast.error(result.message);
         return;
       }
-      toast.success("Saved for services whose check-in has not opened yet.");
+      toast.success(
+        `Check-in now opens ${draft.opensBefore === 0 ? "at the start" : `${minutesPhrase(draft.opensBefore)} before`} and closes ${draft.closesAfter === 0 ? "at the end" : `${minutesPhrase(draft.closesAfter)} after`}, from the next service.`,
+      );
       onSaved();
     });
   };
@@ -120,7 +129,7 @@ export function CheckinWindowEditor({
   return (
     <div className="flex flex-col gap-6">
       <figure className="flex flex-col gap-3 rounded-xl border border-border bg-background p-4">
-        <figcaption className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <figcaption className="text-sm font-semibold text-muted-foreground">
           {sample ? `Every week for ${service.label}` : "For example, a 10 AM service"}
         </figcaption>
         <div
@@ -132,22 +141,22 @@ export function CheckinWindowEditor({
           <span style={{ flexGrow: Math.max(duration, 1) }} className="bg-primary" />
           <span style={{ flexGrow: draft.closesAfter }} className="bg-brand-gold/45" />
         </div>
-        <div className="grid grid-cols-3 gap-2 text-xs">
+        <div className="grid grid-cols-3 gap-2 text-sm">
           <span className="flex flex-col">
             <span className="text-muted-foreground">Check-in opens</span>
-            <span className="text-sm font-semibold tabular-nums text-foreground">
+            <span className="text-base font-semibold tabular-nums text-foreground">
               {formatClock(hours.opens)}
             </span>
           </span>
           <span className="flex flex-col items-center text-center">
             <span className="text-muted-foreground">Service</span>
-            <span className="text-sm font-semibold tabular-nums text-foreground">
+            <span className="text-base font-semibold tabular-nums text-foreground">
               {formatClock(hours.starts)} – {formatClock(hours.ends)}
             </span>
           </span>
           <span className="flex flex-col items-end text-right">
             <span className="text-muted-foreground">Check-in closes</span>
-            <span className="text-sm font-semibold tabular-nums text-foreground">
+            <span className="text-base font-semibold tabular-nums text-foreground">
               {formatClock(hours.closes)}
             </span>
           </span>
@@ -156,7 +165,7 @@ export function CheckinWindowEditor({
 
       <fieldset disabled={!isAdmin || pending} className="flex flex-col gap-5">
         <div className="flex flex-col gap-2">
-          <span className="text-sm font-semibold text-foreground">Check-in opens before the service</span>
+          <span className="text-[15px] font-semibold text-foreground">Check-in opens before the service</span>
           <Segmented
             label="Check-in opens before the service"
             options={opensOptions}
@@ -167,7 +176,7 @@ export function CheckinWindowEditor({
         </div>
 
         <div className="flex flex-col gap-2">
-          <span className="text-sm font-semibold text-foreground">Check-in closes after the service</span>
+          <span className="text-[15px] font-semibold text-foreground">Check-in closes after the service</span>
           <Segmented
             label="Check-in closes after the service"
             options={closesOptions}
@@ -176,54 +185,58 @@ export function CheckinWindowEditor({
             disabled={!isAdmin || pending}
           />
           {draft.opensBefore + draft.closesAfter === 0 ? (
-            <p className="text-xs text-amber-700 dark:text-amber-300">
+            <p className="text-sm text-amber-700 dark:text-amber-300">
               Check-in has to be open for some time around the service.
             </p>
           ) : null}
         </div>
 
-        <div className="flex flex-col gap-2">
-          <span className="text-sm font-semibold text-foreground">
-            How arrivals are counted
-          </span>
-          <Segmented
-            label="Arrival confirmation"
-            options={arrivalOptions}
-            value={draft.dwellSeconds}
-            onChange={(dwellSeconds) => setDraft({ ...draft, dwellSeconds })}
-            disabled={!isAdmin || pending}
-          />
-          <p className="text-xs text-muted-foreground">
-            {draft.dwellSeconds === 0
-              ? "Right away counts an opted-in person after their phone verifies they are inside the area during check-in. No confirmation tap is needed. This can include people dropping someone off."
-              : "After this wait, the phone asks the person to confirm they are attending. Attendance is counted only after they tap Check in. Choose Right away for fully automatic check-in."}
-          </p>
-        </div>
-
-        <details className="rounded-lg border border-border px-3 py-2">
-          <summary className="cursor-pointer select-none text-xs font-semibold text-muted-foreground">
-            Advanced: location accuracy
-          </summary>
-          <div className="mt-3 flex flex-col gap-2 pb-1">
+        {showPhoneOptions ? (
+          <div className="flex flex-col gap-2">
+            <span className="text-[15px] font-semibold text-foreground">
+              When a phone arrives, count them
+            </span>
             <Segmented
-              label="Location accuracy needed"
-              options={ACCURACY_CHOICES.map((choice) => ({
-                value: choice.meters as number,
-                label: choice.label,
-              }))}
-              value={nearestChoice(
-                ACCURACY_CHOICES.map((choice) => choice.meters),
-                draft.accuracy,
-              )}
-              onChange={(accuracy) => setDraft({ ...draft, accuracy })}
+              label="When a phone arrives, count them"
+              options={arrivalOptions}
+              value={draft.dwellSeconds}
+              onChange={(dwellSeconds) => setDraft({ ...draft, dwellSeconds })}
               disabled={!isAdmin || pending}
             />
-            <p className="text-xs text-muted-foreground">
-              A phone indoors is often less precise. A reading less precise than
-              this isn&apos;t used. Standard suits almost every church.
+            <p className="text-sm text-muted-foreground">
+              {draft.dwellSeconds === 0
+                ? "Right away counts someone as soon as their phone shows they're at church during check-in, with no tap needed. This can include someone dropping another person off."
+                : "After this wait, their phone asks them to confirm they're attending, and they're counted when they tap Check in."}
             </p>
           </div>
-        </details>
+        ) : null}
+
+        {showPhoneOptions ? (
+          <AdvancedSection
+            title="How exact a phone's location must be"
+            description="Standard suits almost every church."
+          >
+            <div className="flex flex-col gap-2">
+              <Segmented
+                label="How exact a phone's location must be"
+                options={ACCURACY_CHOICES.map((choice) => ({
+                  value: choice.meters as number,
+                  label: choice.label,
+                }))}
+                value={nearestChoice(
+                  ACCURACY_CHOICES.map((choice) => choice.meters),
+                  draft.accuracy,
+                )}
+                onChange={(accuracy) => setDraft({ ...draft, accuracy })}
+                disabled={!isAdmin || pending}
+              />
+              <p className="text-sm text-muted-foreground">
+                A phone indoors is often less exact. A reading less exact than
+                this isn&apos;t used.
+              </p>
+            </div>
+          </AdvancedSection>
+        ) : null}
       </fieldset>
 
       {isAdmin ? (

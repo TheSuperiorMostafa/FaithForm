@@ -8,6 +8,11 @@ import {
   type ThemeBackgroundImage,
 } from "@/lib/sermon-builder/pptx-media";
 import { getThemeAsync } from "@/lib/queries/slide-themes";
+import {
+  pickBodyFontSize,
+  pickSubtitleFontSize,
+  TITLE_FONT_PT,
+} from "@/lib/sermon-builder/slide-text-size";
 
 const SLIDE_W = 13.33;
 const SLIDE_H = 7.5;
@@ -23,22 +28,7 @@ function verseChunkToText(verses: RenderedVerse[]): string {
     .join(" ");
 }
 
-function countWords(text: string): number {
-  return text.split(/\s+/).filter(Boolean).length;
-}
-
-/** Calibrated for 12.33" × 5.7" body box; prefers larger text, then shrink-to-fit. */
-export function pickBodyFontSize(text: string): number {
-  const words = countWords(text);
-  if (words <= 8) return 92;
-  if (words <= 16) return 74;
-  if (words <= 28) return 60;
-  if (words <= 45) return 50;
-  if (words <= 65) return 42;
-  if (words <= 90) return 36;
-  if (words <= 120) return 30;
-  return 26;
-}
+export { pickBodyFontSize };
 
 function applySlideBackground(
   slide: { background: PptxGenJS.BackgroundProps },
@@ -108,7 +98,7 @@ export async function renderSimplePptx(input: SimplePptxInput): Promise<Buffer> 
     y: 2.2,
     w: BODY_W,
     h: 1.8,
-    fontSize: 44,
+    fontSize: TITLE_FONT_PT,
     bold: true,
     color: theme.text,
     fontFace: theme.fontHead,
@@ -121,7 +111,7 @@ export async function renderSimplePptx(input: SimplePptxInput): Promise<Buffer> 
     y: 4.2,
     w: BODY_W,
     h: 0.6,
-    fontSize: refsSummary.length > 60 ? 16 : 22,
+    fontSize: pickSubtitleFontSize(refsSummary),
     color: theme.accent,
     fontFace: theme.fontHead,
     align: "center",

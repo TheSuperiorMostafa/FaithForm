@@ -1,12 +1,5 @@
-import { GivingSubpageSkeleton } from "@/components/giving/giving-subpage-skeleton";
+import { DepositsSkeleton } from "@/components/giving/skeletons";
 
-export default function PayoutsLoading() {
-  return (
-    <GivingSubpageSkeleton
-      label="payouts"
-      titleWidth="w-32"
-      descriptionWidth="w-72"
-      columns={4}
-    />
-  );
+export default function DepositsLoading() {
+  return <DepositsSkeleton />;
 }

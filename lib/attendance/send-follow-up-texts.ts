@@ -1,6 +1,7 @@
 import { getFollowUpMessageTemplates } from "@/lib/queries/follow-up-settings";
 import { getChurchSmsSender } from "@/lib/sms/church-sender";
 import { pickFollowUpMessage } from "@/lib/sms/follow-up-messages";
+import { personalizeFollowUpMessage } from "@/lib/attendance/follow-up-message";
 import { sendSms } from "@/lib/sms/send-sms";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -28,6 +29,16 @@ export type FollowUpSendSummary = {
   skipped: number;
   /** True when the church has no texting phone of its own, so nothing was sent. */
   notConnected: boolean;
+};
+
+export type FollowUpSendOptions = {
+  /**
+   * One message for this send, written by the pastor on the Follow-up page,
+   * with `[Name]` where each first name goes. Already validated by the caller
+   * (`validateFollowUpOverride`). Without it, each person gets the church's
+   * saved message for how many Sundays they've missed.
+   */
+  messageTemplate?: string;
 };
 
 export const TEXTING_NOT_CONNECTED =
@@ -91,6 +102,7 @@ export async function sendAttendanceFollowUpTexts(
   churchId: string,
   members: FollowUpMember[],
   sender: FollowUpSender,
+  options: FollowUpSendOptions = {},
 ): Promise<FollowUpSendSummary> {
   const summary: FollowUpSendSummary = {
     sent: 0,
@@ -156,11 +168,9 @@ export async function sendAttendanceFollowUpTexts(
       continue;
     }
 
-    const message = pickFollowUpMessage(
-      member.firstName,
-      member.consecutiveAbsent,
-      templates,
-    );
+    const message = options.messageTemplate
+      ? personalizeFollowUpMessage(options.messageTemplate, member.firstName)
+      : pickFollowUpMessage(member.firstName, member.consecutiveAbsent, templates);
     const result = await sendSms(smsSender, member.phone, message);
 
     if (result.ok) {

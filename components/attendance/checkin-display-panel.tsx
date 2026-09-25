@@ -16,6 +16,8 @@ import {
   type KioskSummary,
 } from "@/app/dashboard/attendance/services/actions";
 import { Button } from "@/components/ui/button";
+import { confirmAction } from "@/components/ui/confirm-dialog";
+import { StatusBadge } from "@/components/ui/status-badge";
 
 /**
  * Where a pastor starts the check-in display and the welcome desk.
@@ -72,10 +74,9 @@ export function CheckinDisplayPanel({
 
   if (state && !state.signingConfigured) {
     return (
-      <div className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
-        Check-in codes aren&rsquo;t set up on this FaithForm installation yet.
-        Ask whoever runs it to finish the check-in setup &mdash; the steps are in
-        the deployment runbook.
+      <div className="rounded-xl border border-dashed border-border p-4 text-[15px] text-muted-foreground">
+        Check-in codes aren&rsquo;t available yet. Contact FaithForm support to
+        turn them on for your church.
       </div>
     );
   }
@@ -83,19 +84,15 @@ export function CheckinDisplayPanel({
   const running = Boolean(state?.sessionId);
 
   return (
-    <div className="flex flex-col gap-4 rounded-lg border border-border p-4">
+    <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-medium text-foreground">Check-in display</span>
-        {running ? (
-          <span className="rounded bg-accent/15 px-1.5 py-0.5 text-[11px] font-semibold text-accent">
-            Running
-          </span>
-        ) : null}
+        <span className="text-base font-semibold text-foreground">Check-in screen</span>
+        {running ? <StatusBadge tone="live">On</StatusBadge> : null}
 
         {running ? (
           <>
             <Button
-              size="sm"
+              
               variant="outline"
               disabled={pending}
               onClick={() =>
@@ -113,7 +110,7 @@ export function CheckinDisplayPanel({
               Show another code
             </Button>
             <Button
-              size="sm"
+              
               variant="outline"
               disabled={pending}
               onClick={() =>
@@ -121,18 +118,18 @@ export function CheckinDisplayPanel({
                   const result = await stopCheckinDisplay({ sessionId: state!.sessionId! });
                   if (result.ok) {
                     setPairing(null);
-                    toast.success("Check-in display stopped. Nobody already counted was affected.");
+                    toast.success("Check-in screen turned off. Nobody already counted was affected.");
                     refresh();
                   } else toast.error(result.message);
                 })
               }
             >
-              Stop display
+              Turn off the screen
             </Button>
           </>
         ) : (
           <Button
-            size="sm"
+            
             disabled={pending}
             onClick={() =>
               startTransition(async () => {
@@ -147,18 +144,18 @@ export function CheckinDisplayPanel({
               })
             }
           >
-            Start check-in display
+            Show a check-in code on a screen
           </Button>
         )}
       </div>
 
       {state && !state.qrEnabled ? (
-        <p className="rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+        <p className="rounded-xl border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
           Scanning a code is turned off for this service, so phones will be told
           this kind of check-in isn&rsquo;t on. Turn on &ldquo;Scan a code&rdquo;
           in{" "}
           <Link href="/dashboard/attendance/setup" className="font-semibold underline">
-            Automatic Attendance
+            Setup
           </Link>
           . It applies to services whose check-in hasn&rsquo;t opened yet.
         </p>
@@ -169,25 +166,24 @@ export function CheckinDisplayPanel({
           code={pairing.code}
           expiresAt={pairing.expiresAt}
           path="/checkin/display"
-          instruction="Open this address on the projector and type the code."
+          instruction="On the computer connected to the screen, open this address and type the code."
           onDone={() => setPairing(null)}
         />
       ) : null}
 
       {running ? (
-        <p className="text-xs text-muted-foreground">
-          The code on screen changes every {state?.rotationSeconds ?? 30} seconds.
-          Rotation makes a shared screenshot go stale quickly — it does not prove
-          anyone was in the room.
+        <p className="text-sm text-muted-foreground">
+          The code on screen changes every {state?.rotationSeconds ?? 30} seconds,
+          so a photo of it stops working quickly.
         </p>
       ) : null}
 
       {isAdmin ? (
-        <div className="flex flex-col gap-3 border-t border-border pt-3">
+        <div className="flex flex-col gap-3 border-t border-border pt-4">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-sm font-medium text-foreground">Welcome desk</span>
+            <span className="text-base font-semibold text-foreground">Welcome desk</span>
             <Button
-              size="sm"
+              
               variant="outline"
               disabled={pending}
               onClick={() =>
@@ -205,11 +201,11 @@ export function CheckinDisplayPanel({
           </div>
 
           {state && !state.kioskEnabled ? (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Check-in stations are turned off for this service. Turn on
               &ldquo;Welcome desk kiosk&rdquo; in{" "}
               <Link href="/dashboard/attendance/setup" className="font-semibold text-accent hover:underline">
-                Automatic Attendance
+                Setup
               </Link>{" "}
               before setting one up.
             </p>
@@ -225,40 +221,47 @@ export function CheckinDisplayPanel({
           ) : null}
 
           {kiosks.length > 0 ? (
-            <ul className="flex flex-col divide-y divide-border text-sm">
+            <ul className="flex flex-col divide-y divide-border text-[15px]">
               {kiosks.map((kiosk) => (
                 <li key={kiosk.id} className="flex items-center justify-between gap-2 py-2">
                   <span className="flex flex-col">
                     <span className="text-foreground">{kiosk.label}</span>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-sm text-muted-foreground">
                       {kiosk.status === "pending" ? "Waiting to be set up" : "Connected"}
                     </span>
                   </span>
                   <Button
-                    size="sm"
+                    
                     variant="outline"
                     disabled={pending}
-                    onClick={() =>
+                    onClick={async () => {
+                      const ok = await confirmAction({
+                        title: `Turn off ${kiosk.label}?`,
+                        description:
+                          "That tablet stops checking anyone in right away. To use it again, set up a new station and type the new code on it.",
+                        confirmLabel: "Turn off station",
+                        destructive: true,
+                      });
+                      if (!ok) return;
                       startTransition(async () => {
                         const result = await endKiosk({ kioskSessionId: kiosk.id });
                         if (result.ok) {
-                          toast.success("That station can no longer check anyone in.");
+                          toast.success(`${kiosk.label} is turned off. It can no longer check anyone in.`);
                           refresh();
                         } else toast.error(result.message);
-                      })
-                    }
+                      });
+                    }}
                   >
-                    Revoke
+                    Turn off
                   </Button>
                 </li>
               ))}
             </ul>
           ) : null}
 
-          <p className="text-xs text-muted-foreground">
-            A station can search this church&rsquo;s People and check them into
-            this service. It cannot export People, change attendance, see another
-            service, or reach the dashboard, and it locks itself when left idle.
+          <p className="text-sm text-muted-foreground">
+            A station can find people and check them in to this service only. It
+            can&rsquo;t see anything else, and it locks itself when left alone.
           </p>
         </div>
       ) : null}
@@ -288,18 +291,18 @@ function PairingCallout({
   onDone: () => void;
 }) {
   return (
-    <div className="flex flex-col gap-2 rounded-lg border border-accent/40 bg-accent/5 p-4">
-      <p className="text-sm text-foreground">{instruction}</p>
-      <p className="font-mono text-sm text-muted-foreground">{path}</p>
+    <div className="flex flex-col gap-2 rounded-xl border border-accent/40 bg-accent/5 p-4">
+      <p className="text-[15px] text-foreground">{instruction}</p>
+      <p className="font-mono text-[15px] text-muted-foreground">{path}</p>
       <p className="font-mono text-3xl font-bold tracking-[0.25em] text-foreground">
         {code}
       </p>
-      <p className="text-xs text-muted-foreground">
-        Single use, and it stops working in a few minutes
+      <p className="text-sm text-muted-foreground">
+        It works once and stops working in a few minutes
         {expiresAt ? "" : ""}. Don&rsquo;t leave it on screen.
       </p>
       <div>
-        <Button size="sm" variant="outline" onClick={onDone}>
+        <Button variant="outline" onClick={onDone}>
           Done
         </Button>
       </div>

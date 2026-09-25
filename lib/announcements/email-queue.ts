@@ -1,3 +1,4 @@
+import { toUserError } from "@/lib/errors/user-error";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -73,13 +74,17 @@ export async function addToEmailQueue(
 
   if (error) {
     if (isMissingQueueTable(error.message)) {
+      console.error("[email-queue] queue table missing — run `pnpm db:email-queue`.");
       return {
         ok: false,
         error:
-          "The announcement email queue isn't set up yet. Run `pnpm db:email-queue`.",
+          "The weekly email isn't available for your church yet. Nothing was lost. Contact FaithForm support.",
       };
     }
-    return { ok: false, error: error.message };
+    return {
+      ok: false,
+      error: toUserError(error, "We couldn't add this to the weekly email"),
+    };
   }
 
   return { ok: true };
@@ -97,7 +102,10 @@ export async function removeFromEmailQueue(
     .eq("google_event_id", input.googleEventId);
 
   if (error && !isMissingQueueTable(error.message)) {
-    return { ok: false, error: error.message };
+    return {
+      ok: false,
+      error: toUserError(error, "We couldn't take this out of the weekly email"),
+    };
   }
 
   return { ok: true };

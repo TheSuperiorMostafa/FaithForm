@@ -33,12 +33,12 @@ const METHODS: readonly PresenceMethod[] = [
 
 /** How staff are told someone was recorded — in words, never by colour alone. */
 export const PRESENCE_METHOD_LABELS: Record<PresenceMethod, string> = {
-  weekly: "Weekly sheet",
-  automatic: "Checked in automatically",
-  scanned: "Scanned the code",
-  kiosk: "Kiosk",
-  marked: "Marked on Services",
-  room: "Room check-in",
+  weekly: "Marked on the Sunday count",
+  automatic: "Checked in on their phone",
+  scanned: "Scanned the code on screen",
+  kiosk: "Checked in at the kiosk",
+  marked: "Marked by staff",
+  room: "Checked in to a kids room",
 };
 
 export type DayPresence = {

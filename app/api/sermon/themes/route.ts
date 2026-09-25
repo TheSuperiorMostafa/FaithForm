@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { listSlideThemesForChurch } from "@/lib/queries/slide-themes";
 import { getCurrentChurchId } from "@/lib/auth/current-church";
 import { createClient } from "@/lib/supabase/server";
+import { sermonRouteError } from "@/lib/sermon-builder/route-error";
 
 export const runtime = "nodejs";
 // Church uploads are part of the response, so this can't be cached globally.
@@ -19,7 +20,6 @@ export async function GET() {
 
     return NextResponse.json({ themes });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Could not load themes";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return sermonRouteError(e, "We couldn't load the slide themes.");
   }
 }

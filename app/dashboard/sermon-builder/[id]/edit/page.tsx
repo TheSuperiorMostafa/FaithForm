@@ -1,8 +1,9 @@
-import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { SermonBackLink } from "@/components/sermon-builder/sermon-back-link";
 import { SimpleSermonBuilder } from "@/components/sermon-builder/simple-sermon-builder";
 import { getCuratedTranslations, getDefaultTranslationId } from "@/lib/bible/translations";
+import { PageHeader } from "@/components/ui/page-header";
+import { EDIT_SERMON_TITLE } from "@/lib/sermon-builder/page-copy";
 import { parseScriptureRef } from "@/lib/sermon-builder/parse-ref";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentChurchId } from "@/lib/auth/current-church";
@@ -50,17 +51,9 @@ export default async function EditSimpleSermonPage({
     .filter((p): p is NonNullable<typeof p> => p !== null);
 
   return (
-    <div className="flex flex-col gap-4">
-      <Link
-        href={`/dashboard/sermon-builder/${sermon.id}`}
-        className="inline-flex w-fit items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="size-4" />
-        Back to slide deck
-      </Link>
-      <h1 className="border-l-4 border-accent pl-3 font-heading text-[26px] font-bold">
-        Edit slide deck
-      </h1>
+    <div className="flex w-full flex-col gap-8">
+      <SermonBackLink href={`/dashboard/sermon-builder/${sermon.id}`} label="Back to the sermon" />
+      <PageHeader title={EDIT_SERMON_TITLE} description={sermon.title} />
       <SimpleSermonBuilder
         translationOptions={translationOptions}
         defaultTranslation={defaultTranslation}
@@ -70,6 +63,7 @@ export default async function EditSimpleSermonPage({
           translation: sermon.translation ?? defaultTranslation,
           themeId: sermon.theme_id ?? "midnight",
           sermonDate: sermon.sermon_date,
+          updatedAt: sermon.updated_at,
           passages,
         }}
       />

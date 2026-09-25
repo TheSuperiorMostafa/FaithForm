@@ -459,6 +459,24 @@ export function isPublishedAnywhere(row: RecordingRowState): boolean {
   return app || web;
 }
 
+/**
+ * Where a published recording can be watched, in the words a church uses.
+ * "Published" on its own was ambiguous: a recording on the website only is
+ * not in the app, and a pastor assumes "published" means the app.
+ */
+export function publishedWhereLabel(where: { app: boolean; website: boolean }): string {
+  if (where.app && where.website) return "In the app and on the website";
+  if (where.app) return "Published in the app";
+  return "On the website only";
+}
+
+/**
+ * The one mapping from a recording row to what a church is told. Labels come
+ * from the canonical recording vocabulary (docs/ux audit §8.4): Live ·
+ * Processing · Ready to publish · Published (saying where) · Not published ·
+ * Problem. Tone, filters and next actions are derived from `phase` in
+ * `lib/stream/recording-status.ts`, never from the label.
+ */
 export function recordingPhase(row: RecordingRowState): RecordingPhaseView {
   if (row.deletedAt || row.status === "deleted") {
     return { phase: "deleted", label: "Deleted", detail: null };
@@ -473,14 +491,14 @@ export function recordingPhase(row: RecordingRowState): RecordingPhaseView {
   if (row.status === "processing") {
     return {
       phase: "preparing",
-      label: "Preparing recording",
-      detail: "FaithForm is preparing this recording. You can leave this page.",
+      label: "Processing",
+      detail: "Your recording is being prepared. We'll show it here when it's ready to publish.",
     };
   }
   if (row.status === "failed") {
     return {
       phase: "needs_attention",
-      label: "Needs attention",
+      label: "Problem",
       detail: failureExplanation(row.failureReason),
     };
   }
@@ -489,24 +507,27 @@ export function recordingPhase(row: RecordingRowState): RecordingPhaseView {
     if (!row.renditionVerifiedAt || TRANSIENT_REASONS.has(row.renditionReason ?? "")) {
       return {
         phase: "preparing",
-        label: "Preparing recording",
+        label: "Processing",
         detail: "FaithForm is checking this recording. This usually takes a minute.",
       };
     }
     return {
       phase: "needs_attention",
-      label: "Needs attention",
+      label: "Problem",
       detail: playabilityExplanation(row.renditionReason),
     };
   }
   if (isPublishedAnywhere(row)) {
-    return { phase: "published", label: "Published", detail: null };
+    const app =
+      row.mobileVisibility !== "none" && Boolean(row.mobilePublishedAt) && !row.mobileUnpublishedAt;
+    const website = Boolean(row.webPublishedAt) && !row.webUnpublishedAt;
+    return { phase: "published", label: publishedWhereLabel({ app, website }), detail: null };
   }
   if (row.mobileUnpublishedAt || row.webUnpublishedAt) {
     return {
       phase: "unpublished",
       label: "Not published",
-      detail: "Removed from the app and website. The recording is still saved.",
+      detail: "Taken out of the app and website. The recording is still saved.",
     };
   }
   return { phase: "ready_to_publish", label: "Ready to publish", detail: null };
@@ -533,7 +554,7 @@ export function playabilityExplanation(reason: string | null): string {
     case "video_profile_unsupported":
     case "audio_profile_unsupported":
     case "audio_format_unsupported":
-      return "Your streaming software is sending video in a format some phones can't play. Set it to H.264 video in Stream setup, and future services will record correctly.";
+      return "Your streaming software is sending video in a format some phones can't play. In its settings, choose H.264 video (Setup, then Advanced, lists the recommended settings), and future services will record correctly.";
     case "segments_missing":
     case "file_missing":
       return "Parts of this recording didn't finish saving.";

@@ -3,14 +3,13 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import { Download, RefreshCw, Sparkles } from "lucide-react";
+import { RefreshCw, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import {
   importVoiceAssistantCalls,
   rescoreLegacyPhoneCalls,
 } from "@/app/dashboard/voice-assistant/actions";
-import { Button, buttonVariants } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   ClassificationBadge,
@@ -34,6 +33,12 @@ type RecentCallsBlockProps = {
   isAdmin: boolean;
   hasAgent: boolean;
 };
+
+/**
+ * FaithForm staff only: the assistant's scores, re-scoring and importing.
+ * The Phone Calls page renders it inside "Assistant quality (for FaithForm
+ * staff)" for platform admins; churches see `CallsList` instead.
+ */
 
 /**
  * A guard on the re-score loop, not a quota: at five calls a round this is
@@ -121,10 +126,10 @@ export function RecentCallsBlock({
     <Card>
       <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
         <div>
-          <CardTitle>Call log</CardTitle>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Calls are saved here automatically. A call from someone in crisis is
-            marked Urgent.
+          <CardTitle>Scored calls</CardTitle>
+          <p className="mt-1 text-sm text-muted-foreground">
+            How the assistant handled each call, by the scoring rubric. The
+            church sees summaries and who needs a call back, never these scores.
           </p>
         </div>
         {isAdmin && (
@@ -161,15 +166,6 @@ export function RecentCallsBlock({
                 />
                 Sync from Retell
               </Button>
-            )}
-            {calls.length > 0 && (
-              <a
-                href="/api/dashboard/voice-assistant/calls/export"
-                className={cn(buttonVariants({ variant: "outline", size: "sm" }))}
-              >
-                <Download className="mr-1.5 size-3.5" aria-hidden />
-                Export CSV
-              </a>
             )}
           </div>
         )}

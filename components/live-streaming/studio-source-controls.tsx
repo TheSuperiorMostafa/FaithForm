@@ -87,7 +87,7 @@ export function StudioSourceControls({
       ) : (
         <>
           <div className="space-y-2">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            <p className="text-sm font-semibold text-muted-foreground">
               Source
             </p>
             <div
@@ -122,7 +122,7 @@ export function StudioSourceControls({
 
           {layout === "screenWithCamera" ? (
             <div className="space-y-2">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              <p className="text-sm font-semibold text-muted-foreground">
                 Camera position
               </p>
               <div
@@ -154,7 +154,7 @@ export function StudioSourceControls({
 
           <div className="flex flex-wrap items-center gap-4">
             <div className="flex min-w-[140px] flex-1 items-center gap-2">
-              <span className="text-xs text-muted-foreground">Mic</span>
+              <span className="text-sm text-muted-foreground">Mic</span>
               <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
                 <div
                   className="h-full rounded-full bg-emerald-500 transition-[width] duration-75"
@@ -177,7 +177,7 @@ export function StudioSourceControls({
       )}
 
       {!hasLogo && isLive ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           Add a church logo in Settings for a branded watermark on your stream.
         </p>
       ) : null}

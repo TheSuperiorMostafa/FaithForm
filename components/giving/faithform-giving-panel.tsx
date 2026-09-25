@@ -8,7 +8,6 @@ import {
   saveFundPublication,
 } from "@/app/dashboard/giving/faithform-actions";
 import type { PublishableFund, StripeReadiness } from "@/lib/giving/v1/publication";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -25,12 +24,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { ErrorState } from "@/components/ui/error-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { Textarea } from "@/components/ui/textarea";
 
 /**
- * Publishing a giving fund to the FaithForm apps.
+ * Publishing a giving fund to the FaithForm app.
  *
  * ## What this screen is, and is not
  *
@@ -46,9 +48,9 @@ import { Textarea } from "@/components/ui/textarea";
  */
 
 const VISIBILITY_LABELS = {
-  none: "Not in FaithForm",
+  none: "Not in the app",
   public: "Everyone",
-  followers: "People who added this church, and members",
+  followers: "People who follow your church, and members",
   members: "Members only",
 } as const;
 
@@ -73,16 +75,16 @@ function parseAmountToCents(value: string): number | null {
 /** What a church is missing, in the order it has to fix it. */
 function readinessMessage(readiness: StripeReadiness): string | null {
   if (!readiness.connected) {
-    return "This church hasn't connected a Stripe account yet. Until it does, funds can't be published to the app.";
+    return "Your church hasn't connected its bank yet. Until it does, funds can't be shown in the app.";
   }
   if (!readiness.detailsSubmitted) {
-    return "Stripe setup isn't finished. Complete it before publishing a fund to the app.";
+    return "Your bank connection isn't finished. Finish it before showing a fund in the app.";
   }
   if (!readiness.chargesEnabled) {
-    return "Stripe hasn't enabled payments for this church yet. Funds can't be published until it does.";
+    return "Your bank details are still being checked. Funds can be shown in the app once that's done.";
   }
   if (!readiness.givingFeatureEnabled) {
-    return "Giving is switched off for this church, so nothing is shown in the app.";
+    return "Giving is switched off for your church, so nothing is shown in the app.";
   }
   return null;
 }
@@ -91,15 +93,23 @@ export function FaithFormGivingPanel({ isAdmin }: { isAdmin: boolean }) {
   const [readiness, setReadiness] = useState<StripeReadiness | null>(null);
   const [funds, setFunds] = useState<PublishableFund[]>([]);
   const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
   const [editing, setEditing] = useState<PublishableFund | null>(null);
   const [pending, startTransition] = useTransition();
 
   const refresh = useCallback(async () => {
     setLoading(true);
-    const state = await loadFaithFormGiving();
-    setReadiness(state?.readiness ?? null);
-    setFunds(state?.funds ?? []);
-    setLoading(false);
+    setFailed(false);
+    try {
+      const state = await loadFaithFormGiving();
+      setReadiness(state?.readiness ?? null);
+      setFunds(state?.funds ?? []);
+      setFailed(state === null);
+    } catch {
+      setFailed(true);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -111,10 +121,9 @@ export function FaithFormGivingPanel({ isAdmin }: { isAdmin: boolean }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Giving in the app</CardTitle>
-        <CardDescription>
-          Choose which funds people can give to in FaithForm. Payouts, refunds and
-          reporting stay in the rest of this dashboard.
+        <CardTitle className="text-xl font-bold">Giving in the FaithForm app</CardTitle>
+        <CardDescription className="text-[15px]">
+          Choose which funds people can give to in the FaithForm app, and who sees them.
         </CardDescription>
       </CardHeader>
 
@@ -124,60 +133,72 @@ export function FaithFormGivingPanel({ isAdmin }: { isAdmin: boolean }) {
           A church looking at a row of disabled buttons deserves to know why
           before it starts pressing them.
         */}
-        {readiness ? (
+        {readiness && !readiness.canAcceptPayments ? (
           <div
-            className={`rounded-md border p-3 text-sm ${
-              readiness.canAcceptPayments
-                ? "border-emerald-200 bg-emerald-50 text-emerald-900"
-                : "border-amber-200 bg-amber-50 text-amber-900"
-            }`}
-            role={readiness.canAcceptPayments ? undefined : "alert"}
+            className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-[15px] text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100"
+            role="alert"
           >
-            <p className="font-medium">
-              {readiness.canAcceptPayments
-                ? "This church can accept gifts in the app."
-                : "This church can't accept gifts in the app yet."}
-            </p>
+            <p className="font-semibold">Your church can&apos;t receive gifts in the app yet.</p>
             {warning ? <p className="mt-1">{warning}</p> : null}
           </div>
         ) : null}
 
         {loading ? (
-          <p className="text-sm text-muted-foreground">Loading funds…</p>
+          <SkeletonContainer label="funds in the app" className="space-y-0">
+            <ul className="divide-y divide-border rounded-2xl border border-border">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <li key={i} className="flex flex-wrap items-center justify-between gap-3 p-4">
+                  <div className="space-y-2">
+                    <Skeleton className="h-5 w-40" />
+                    <Skeleton className="h-4 w-56" />
+                  </div>
+                  <Skeleton className="h-11 w-24 rounded-[10px]" />
+                </li>
+              ))}
+            </ul>
+          </SkeletonContainer>
+        ) : failed ? (
+          <ErrorState
+            compact
+            title="Your app funds didn't load"
+            description="Nothing was changed. Try again in a moment."
+            onRetry={() => void refresh()}
+          />
         ) : funds.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No funds yet. Create one in giving settings, then publish it here.
+          <p className="text-[15px] text-muted-foreground">
+            No funds yet. Add one under Funds above, then choose here whether it shows in the app.
           </p>
         ) : (
-          <ul className="divide-y rounded-md border">
+          <ul className="divide-y divide-border rounded-2xl border border-border">
             {funds.map((fund) => (
               <li
                 key={fund.fundId}
-                className="flex flex-wrap items-center justify-between gap-3 p-3"
+                className="flex flex-wrap items-center justify-between gap-3 p-4"
               >
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium">{fund.previewTitle}</span>
-                    <Badge variant={fund.visibility === "none" ? "outline" : "default"}>
-                      {VISIBILITY_LABELS[fund.visibility as Visibility]}
-                    </Badge>
-                    {fund.isActive ? null : <Badge variant="outline">Inactive</Badge>}
+                    <span className="text-base font-semibold">{fund.previewTitle}</span>
+                    <StatusBadge tone={fund.visibility === "none" ? "neutral" : "done"}>
+                      {fund.visibility === "none"
+                        ? VISIBILITY_LABELS.none
+                        : `In the app: ${VISIBILITY_LABELS[fund.visibility as Visibility]}`}
+                    </StatusBadge>
+                    {fund.isActive ? null : <StatusBadge tone="neutral">Removed</StatusBadge>}
                   </div>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {formatCents(fund.minAmountCents)} – {formatCents(fund.maxAmountCents)}
+                  <p className="mt-1 text-[15px] text-muted-foreground">
+                    {formatCents(fund.minAmountCents)} to {formatCents(fund.maxAmountCents)}
                     {fund.suggestedAmounts.length > 0
-                      ? ` · suggests ${fund.suggestedAmounts.map(formatCents).join(", ")}`
+                      ? ` · buttons for ${fund.suggestedAmounts.map(formatCents).join(", ")}`
                       : ""}
                   </p>
                 </div>
 
                 <Button
                   variant="outline"
-                  size="sm"
                   disabled={!isAdmin || (!fund.canPublish && fund.visibility === "none")}
                   onClick={() => setEditing(fund)}
                 >
-                  {fund.visibility === "none" ? "Publish" : "Edit"}
+                  {fund.visibility === "none" ? "Show in app" : "Change"}
                 </Button>
               </li>
             ))}
@@ -192,18 +213,23 @@ export function FaithFormGivingPanel({ isAdmin }: { isAdmin: boolean }) {
           onClose={() => setEditing(null)}
           onSave={(input) => {
             startTransition(async () => {
-              const result = await saveFundPublication({ fundId: editing.fundId, ...input });
-              if (!result.ok) {
-                toast.error(result.error ?? "Could not save that.");
-                return;
+              try {
+                const result = await saveFundPublication({ fundId: editing.fundId, ...input });
+                if (!result.ok) {
+                  toast.error(result.error ?? "We couldn't save that. Please try again.");
+                  return;
+                }
+                const title = input.title ?? editing.name;
+                toast.success(
+                  input.visibility === "none"
+                    ? `${title} is no longer in the app.`
+                    : `${title} is in the app for ${VISIBILITY_LABELS[input.visibility].toLowerCase()}.`,
+                );
+                setEditing(null);
+                await refresh();
+              } catch {
+                toast.error("We couldn't save that. Please try again.");
               }
-              toast.success(
-                input.visibility === "none"
-                  ? "Removed from the app."
-                  : "Saved. It's in the app now.",
-              );
-              setEditing(null);
-              await refresh();
             });
           }}
         />
@@ -253,17 +279,17 @@ function FundDialog({
     <Dialog open onOpenChange={(open) => (open ? null : onClose())}>
       <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>{fund.name} in FaithForm</DialogTitle>
-          <DialogDescription>
-            What people see when they open giving in the app.
+          <DialogTitle>{fund.name} in the app</DialogTitle>
+          <DialogDescription className="text-[15px]">
+            What people see when they open giving in the FaithForm app.
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-5 px-6 py-5">
           <fieldset className="space-y-2">
-            <legend className="text-sm font-medium">Who can see it</legend>
+            <legend className="text-[15px] font-semibold">Who can see it</legend>
             {(Object.keys(VISIBILITY_LABELS) as Visibility[]).map((value) => (
-              <label key={value} className="flex items-center gap-2 text-sm">
+              <label key={value} className="flex min-h-11 items-center gap-3 text-[15px]">
                 <input
                   type="radio"
                   name="visibility"
@@ -277,7 +303,7 @@ function FundDialog({
           </fieldset>
 
           <div className="space-y-1">
-            <Label htmlFor="fund-title">Title</Label>
+            <Label htmlFor="fund-title">Name in the app</Label>
             <Input
               id="fund-title"
               value={title}
@@ -300,7 +326,7 @@ function FundDialog({
 
           <div className="flex flex-wrap gap-3">
             <div className="space-y-1">
-              <Label htmlFor="fund-min">Minimum</Label>
+              <Label htmlFor="fund-min">Smallest gift ($)</Label>
               <Input
                 id="fund-min"
                 inputMode="decimal"
@@ -309,7 +335,7 @@ function FundDialog({
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="fund-max">Maximum</Label>
+              <Label htmlFor="fund-max">Largest gift ($)</Label>
               <Input
                 id="fund-max"
                 inputMode="decimal"
@@ -320,15 +346,15 @@ function FundDialog({
           </div>
 
           <div className="space-y-1">
-            <Label htmlFor="fund-suggested">Suggested amounts</Label>
+            <Label htmlFor="fund-suggested">Amount buttons ($)</Label>
             <Input
               id="fund-suggested"
               value={suggested}
               placeholder="25, 50, 100"
               onChange={(event) => setSuggested(event.target.value)}
             />
-            <p className="text-xs text-muted-foreground">
-              Shown as buttons. Anyone can still type their own amount.
+            <p className="text-sm text-muted-foreground">
+              Separate amounts with commas. Anyone can still type their own amount.
             </p>
           </div>
 
@@ -338,7 +364,7 @@ function FundDialog({
             because there is no such number to show.
           */}
           <div className="rounded-lg border bg-muted/40 p-4">
-            <p className="text-xs uppercase tracking-wide text-muted-foreground">
+            <p className="text-sm font-semibold text-muted-foreground">
               What people will see
             </p>
             <p className="mt-2 font-medium">{previewTitle}</p>
@@ -360,19 +386,19 @@ function FundDialog({
               )}
             </div>
             {amountsValid ? (
-              <p className="mt-2 text-xs text-muted-foreground">
-                {formatCents(min)} minimum · {formatCents(max)} maximum
+              <p className="mt-2 text-sm text-muted-foreground">
+                {formatCents(min)} smallest · {formatCents(max)} largest
               </p>
             ) : (
-              <p className="mt-2 text-xs text-destructive" role="alert">
-                Check the minimum and maximum.
+              <p className="mt-2 text-sm text-destructive" role="alert">
+                Check the smallest and largest gift. The largest must be more than the smallest.
               </p>
             )}
           </div>
         </div>
 
         <DialogFooter>
-          <Button variant="ghost" onClick={onClose} disabled={pending}>
+          <Button variant="outline" onClick={onClose} disabled={pending}>
             Cancel
           </Button>
           <Button
@@ -388,7 +414,11 @@ function FundDialog({
               })
             }
           >
-            Save
+            {visibility !== "none"
+              ? "Save and show in app"
+              : fund.visibility === "none"
+                ? "Save"
+                : "Take out of the app"}
           </Button>
         </DialogFooter>
       </DialogContent>

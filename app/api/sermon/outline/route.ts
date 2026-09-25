@@ -13,6 +13,7 @@ import {
 } from "@/lib/queries/sermons";
 import { createClient } from "@/lib/supabase/server";
 import { featureAccessDenied } from "@/lib/features/guard";
+import { SERMON_NOT_FOUND_MESSAGE, sermonRouteError } from "@/lib/sermon-builder/route-error";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -55,7 +56,7 @@ export async function POST(request: Request) {
 
     if (!trimmedTopic && cleanedRefs.length === 0) {
       return NextResponse.json(
-        { error: "Provide a topic or at least one scripture reference." },
+        { error: "Add a topic or at least one Bible passage first." },
         { status: 400 },
       );
     }
@@ -80,7 +81,7 @@ export async function POST(request: Request) {
       const supabase = createClient();
       const existing = await verifySermonAccess(supabase, sermonId, auth.churchId);
       if (!existing) {
-        return NextResponse.json({ error: "Sermon not found" }, { status: 404 });
+        return NextResponse.json({ error: SERMON_NOT_FOUND_MESSAGE }, { status: 404 });
       }
       sermon = await updateSermon(sermonId, {
         topic: ctx.topic,
@@ -96,7 +97,7 @@ export async function POST(request: Request) {
       if (series_id) {
         const series = await verifySeriesAccess(createClient(), series_id, auth.churchId);
         if (!series) {
-          return NextResponse.json({ error: "Series not found" }, { status: 404 });
+          return NextResponse.json({ error: "We couldn't find that series. It may have been deleted." }, { status: 404 });
         }
       }
       sermon = await createSermon({
@@ -158,9 +159,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ sermon, outline: object, modelUsed });
   } catch (e) {
-    console.error("[sermon/outline] failed", e);
-    const message = e instanceof Error ? e.message : "Outline generation failed";
-    const status = message === "Unauthorized" ? 401 : 500;
+    const response = sermonRouteError(e, "We couldn't make the lesson.");
+    const status = response.status;
+    const { error: message } = (await response.json()) as { error: string };
     const body: { error: string; detail?: string } = { error: message };
     if (process.env.NODE_ENV !== "production" && e instanceof Error && e.stack) {
       body.detail = e.stack.split("\n").slice(0, 4).join("\n");

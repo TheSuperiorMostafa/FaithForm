@@ -21,14 +21,16 @@ export function ScriptureBlock({ passage }: { passage: string }) {
 
     fetch(`/api/scripture/${encodeURIComponent(passage.trim())}`)
       .then(async (res) => {
-        if (!res.ok) throw new Error("Could not load passage");
+        if (!res.ok) throw new Error("passage lookup failed");
         return res.json() as Promise<PassageData>;
       })
       .then((res) => {
         if (!cancelled) setData(res);
       })
-      .catch((e) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : "Error");
+      .catch(() => {
+        if (!cancelled) {
+          setError(`We couldn't look up ${passage.trim()}. Check the reference and try again.`);
+        }
       });
 
     return () => {
@@ -44,11 +46,11 @@ export function ScriptureBlock({ passage }: { passage: string }) {
 
   return (
     <div className="space-y-1">
-      <blockquote className="rounded-lg border border-border bg-muted/40 p-3 text-sm leading-relaxed whitespace-pre-wrap">
+      <blockquote className="rounded-lg border border-border bg-muted/40 p-3 text-[15px] leading-relaxed whitespace-pre-wrap">
         {data.text}
       </blockquote>
       {data.translation && (
-        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           {data.translation}
         </p>
       )}

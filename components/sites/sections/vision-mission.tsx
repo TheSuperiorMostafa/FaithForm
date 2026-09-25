@@ -31,7 +31,7 @@ export const visionMissionSection = defineSection<VisionMissionContent>({
   type: "vision_mission",
   label: "Vision & mission",
   fields: [
-    { key: "eyebrow", label: "Eyebrow", type: "text" },
+    { key: "eyebrow", label: "Small heading above", type: "text" },
     { key: "headline", label: "Headline", type: "headline" },
     {
       key: "cards",
@@ -39,7 +39,7 @@ export const visionMissionSection = defineSection<VisionMissionContent>({
       type: "list",
       addLabel: "Add card",
       titleKey: "title",
-      help: "Left empty, these pull your vision and mission statements from Church Profile.",
+      help: "Left empty, these show the vision and mission from Website → Look & details.",
       itemFields: [
         { key: "badge", label: "Badge letter", type: "text" },
         { key: "title", label: "Title", type: "text" },

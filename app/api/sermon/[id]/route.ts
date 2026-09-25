@@ -8,6 +8,7 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import { featureAccessDenied } from "@/lib/features/guard";
 import { parseSermonEditorPatch } from "@/lib/sermon-builder/sermon-patch";
+import { SERMON_NOT_FOUND_MESSAGE, sermonRouteError } from "@/lib/sermon-builder/route-error";
 
 export async function PATCH(
   request: Request,
@@ -21,7 +22,7 @@ export async function PATCH(
     const supabase = createClient();
     const sermon = await verifySermonAccess(supabase, id, auth.churchId);
     if (!sermon) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+      return NextResponse.json({ error: SERMON_NOT_FOUND_MESSAGE }, { status: 404 });
     }
 
     const body = await request.json().catch(() => null);
@@ -32,9 +33,7 @@ export async function PATCH(
     const updated = await updateSermon(id, parsed.patch);
     return NextResponse.json({ sermon: updated });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Update failed";
-    const status = message === "Unauthorized" ? 401 : 500;
-    return NextResponse.json({ error: message }, { status });
+    return sermonRouteError(e, "We couldn't save your change to this sermon.");
   }
 }
 
@@ -50,12 +49,12 @@ export async function DELETE(
     const supabase = createClient();
     const sermon = await verifySermonAccess(supabase, id, auth.churchId);
     if (!sermon) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+      return NextResponse.json({ error: SERMON_NOT_FOUND_MESSAGE }, { status: 404 });
     }
 
     if (sermon.status !== "draft") {
       return NextResponse.json(
-        { error: "Only draft sermons can be deleted" },
+        { error: "Only draft sermons can be deleted here. Open the sermon to delete it." },
         { status: 400 },
       );
     }
@@ -63,8 +62,6 @@ export async function DELETE(
     await deleteSermon(id);
     return NextResponse.json({ success: true });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Delete failed";
-    const status = message === "Unauthorized" ? 401 : 500;
-    return NextResponse.json({ error: message }, { status });
+    return sermonRouteError(e, "We couldn't delete this sermon.");
   }
 }

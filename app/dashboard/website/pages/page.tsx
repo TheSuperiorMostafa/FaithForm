@@ -11,7 +11,19 @@ import { resolvePage } from "@/lib/sites/resolve";
 
 export const dynamic = "force-dynamic";
 
-export default async function WebsitePagesPage() {
+/**
+ * Website → Pages. `?edit=banner` opens the banner section's editor straight
+ * away (the Overview's "Change banner photo" button); `?edit=<section id>`
+ * opens any other.
+ */
+export default async function WebsitePagesPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const params = await searchParams;
+  const edit = Array.isArray(params.edit) ? params.edit[0] : params.edit;
+
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");
 
@@ -55,16 +67,35 @@ export default async function WebsitePagesPage() {
           isVisible: row.isVisible,
           hasOverride: overriddenIds.has(row.id),
           content,
-          // No descriptor means the section is agency-managed (custom blocks).
+          // No descriptor means FaithForm manages the section (text blocks).
           fields: master.fields ?? null,
         },
       ];
     });
 
+  // Every section a menu link or button can jump to, named the way the
+  // church sees it ("Banner: Welcome home") rather than as "#hero".
+  const linkTargets = resolved.sections.flatMap((section) => {
+    const row = site.sections.find((s) => s.id === section.ctx.id);
+    const master = row ? SECTION_REGISTRY[row.type] : undefined;
+    if (!row || !master || row.type === "site_nav") return [];
+    const title = sections.find((s) => s.id === row.id)?.label ?? master.label ?? row.type;
+    const hidden = row.isVisible ? "" : " (hidden)";
+    return [{ value: `#${section.ctx.anchor}`, label: `${title}${hidden}` }];
+  });
+
+  const openId =
+    edit === "banner"
+      ? (sections.find((s) => s.type === "hero")?.id ?? null)
+      : (sections.find((s) => s.id === edit)?.id ?? null);
+
   return (
     <PagesWorkspace
       sections={sections}
       canEdit={auth.isAdmin}
+      isLive={site.page.status === "published"}
+      initialOpenId={openId}
+      linkTargets={linkTargets}
       previewUrl={`${getCanonicalSiteUrl()}/sites/${site.slug}?preview=1`}
     />
   );

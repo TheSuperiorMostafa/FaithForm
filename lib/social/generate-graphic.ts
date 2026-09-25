@@ -236,7 +236,7 @@ export async function generateSocialGraphic(
     ...stored,
     usedAiImage: false,
     warning:
-      "AI flyer generation is unavailable — used a cinematic photo. Set GEMINI_API_KEY to enable full flyers.",
+      "We used a photo instead of a designed picture this time. You can make a new picture or upload your own.",
   };
 }
 

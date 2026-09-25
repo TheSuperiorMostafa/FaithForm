@@ -19,6 +19,12 @@ import { prepareChurchLogo } from "@/lib/branding/church-logo";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { dashboardEmailRedirect } from "@/lib/auth/auth-redirects";
+import { toUserError } from "@/lib/errors/user-error";
+import {
+  ALREADY_REGISTERED_MESSAGE,
+  isAlreadyRegistered,
+  signUpErrorMessage,
+} from "@/app/login/auth-messages";
 
 export type ActionResult =
   | { ok: true }
@@ -91,25 +97,18 @@ export async function createOnboardingAccount(
   });
 
   if (signUpError) {
-    const alreadyRegistered =
-      signUpError.message.toLowerCase().includes("already") ||
-      signUpError.message.toLowerCase().includes("registered");
-
-    if (alreadyRegistered) {
+    if (isAlreadyRegistered(signUpError)) {
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: data.email,
         password: data.password,
       });
       if (signInError) {
-        return {
-          ok: false,
-          error:
-            "An account with this email already exists. Sign in with your existing password or use Forgot Password.",
-        };
+        return { ok: false, error: ALREADY_REGISTERED_MESSAGE };
       }
       return { ok: true, needsEmailConfirmation: false };
     }
-    return { ok: false, error: signUpError.message };
+    console.error("[onboarding] sign-up refused:", signUpError.message);
+    return { ok: false, error: signUpErrorMessage(signUpError, 8) };
   }
 
   return { ok: true, needsEmailConfirmation: !signUpData.session };
@@ -135,6 +134,10 @@ export async function updateChurchProfile(
     return { ok: false, error: auth.error };
   }
 
+  if (!data.name.trim()) {
+    return { ok: false, error: "Please enter your church's name." };
+  }
+
   const admin = createAdminClient();
   const update: Record<string, string | null> = {
     name: data.name.trim(),
@@ -156,7 +159,7 @@ export async function updateChurchProfile(
     .eq("id", churchId);
 
   if (error) {
-    return { ok: false, error: error.message };
+    return { ok: false, error: toUserError(error, "We couldn't save your church's details.") };
   }
 
   return { ok: true };
@@ -194,7 +197,7 @@ export async function uploadChurchLogo(
     });
 
   if (uploadError) {
-    return { ok: false, error: uploadError.message };
+    return { ok: false, error: toUserError(uploadError, "We couldn't upload your logo.") };
   }
 
   const { data: publicUrl } = admin.storage
@@ -289,7 +292,7 @@ export async function completeOnboarding(token: string): Promise<ActionResult> {
   );
 
   if (linkError) {
-    return { ok: false, error: linkError.message };
+    return { ok: false, error: toUserError(linkError, "We couldn't finish setting up your account.") };
   }
 
   return { ok: true };

@@ -1,118 +1,76 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { deleteSermonAction } from "@/app/dashboard/sermon-builder/actions";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { confirmAction } from "@/components/ui/confirm-dialog";
 
-type DeleteDraftButtonProps = {
+type DeleteSermonButtonProps = {
   sermonId: string;
   sermonTitle: string;
   redirectTo?: string;
-  variant?: "icon" | "outline";
+  /** It was in the app once: say so in the confirmation. */
+  wasPublished?: boolean;
   className?: string;
 };
 
-export function DeleteDraftButton({
+/**
+ * Deletes a sermon for good, after a confirmation that names it. The server
+ * decides who may (see `deleteSermonAction`); a refusal is shown as a toast.
+ */
+export function DeleteSermonButton({
   sermonId,
   sermonTitle,
   redirectTo,
-  variant = "icon",
+  wasPublished = false,
   className,
-}: DeleteDraftButtonProps) {
+}: DeleteSermonButtonProps) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
-  function handleDelete() {
-    setError(null);
+  async function handleDelete() {
+    const ok = await confirmAction({
+      title: `Delete "${sermonTitle}"?`,
+      description: wasPublished
+        ? "The sermon, its slides, its lesson and every earlier version shared in the app are deleted for good. This can't be undone."
+        : "The sermon, its slides and its lesson are deleted for good. This can't be undone.",
+      confirmLabel: "Delete sermon",
+      destructive: true,
+    });
+    if (!ok) return;
+
     startTransition(async () => {
       const result = await deleteSermonAction(sermonId);
       if (result.error) {
-        setError(result.error);
+        toast.error(result.error);
         return;
       }
-      setOpen(false);
-      if (redirectTo) {
-        router.push(redirectTo);
-      } else {
-        router.refresh();
-      }
+      toast.success(`"${sermonTitle}" deleted.`);
+      if (redirectTo) router.push(redirectTo);
+      else router.refresh();
     });
   }
 
   return (
-    <>
-      <Button
-        type="button"
-        variant={variant === "icon" ? "ghost" : "outline"}
-        size={variant === "icon" ? "icon" : "sm"}
-        className={
-          variant === "icon"
-            ? `size-8 shrink-0 text-muted-foreground hover:text-destructive ${className ?? ""}`
-            : className
-        }
-        aria-label="Delete draft"
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          setOpen(true);
-        }}
-      >
-        <Trash2 className="size-4" />
-        {variant === "outline" && "Delete draft"}
-      </Button>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent showClose={!isPending}>
-          <DialogHeader>
-            <DialogTitle>Delete draft?</DialogTitle>
-            <DialogDescription>
-              &ldquo;{sermonTitle}&rdquo; will be permanently removed. This cannot
-              be undone.
-            </DialogDescription>
-          </DialogHeader>
-          {error && (
-            <p className="px-6 text-sm text-destructive" role="alert">
-              {error}
-            </p>
-          )}
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              disabled={isPending}
-              onClick={() => setOpen(false)}
-            >
-              Cancel
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              disabled={isPending}
-              onClick={handleDelete}
-            >
-              {isPending ? (
-                <>
-                  <Loader2 className="size-4 animate-spin" />
-                  Deleting…
-                </>
-              ) : (
-                "Delete"
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
+    <Button
+      type="button"
+      variant="ghost"
+      className={className}
+      disabled={isPending}
+      onClick={handleDelete}
+    >
+      {isPending ? (
+        <Loader2 aria-hidden className="size-5 animate-spin motion-reduce:animate-none" />
+      ) : (
+        <Trash2 aria-hidden className="size-5" />
+      )}
+      Delete sermon
+    </Button>
   );
 }
+
+/** Older name, kept for any import that still uses it. */
+export const DeleteDraftButton = DeleteSermonButton;

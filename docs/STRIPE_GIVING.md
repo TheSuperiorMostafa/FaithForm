@@ -89,7 +89,7 @@ Apply migration `0025_giving_receipt_email.sql` alongside `0016` if you use rece
 
 - `/dashboard/giving/gifts` — search, filter, pagination, CSV export, refunds
 - `/dashboard/giving/donors` — YTD totals per donor
-- Settings → Giving tab — fund CRUD, EIN, statement address
+- Giving → Giving settings (`/dashboard/giving/settings`) — funds, tax ID (EIN), statement address, giving page web address. First-time setup (Stripe onboarding) is the guided flow on the Giving page itself.
 - QR code on giving home
 
 ## Local development
@@ -109,7 +109,7 @@ Use the CLI `whsec_...` value as `STRIPE_WEBHOOK_SECRET`.
 ## Sandbox → live cutover
 
 1. Complete Connect platform settings in Stripe Dashboard (test mode).
-2. Onboard a test Standard connected account from **Dashboard → Settings → Giving tab**.
+2. Onboard a test Standard connected account from **Dashboard → Giving** (the "Start accepting gifts" setup).
 3. Send a test gift on `/give/[slug]` (or your full `NEXT_PUBLIC_SITE_URL/give/[slug]`).
 4. Confirm `giving_donations` rows and dashboard totals.
 5. Switch to **live** API keys in production env.

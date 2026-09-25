@@ -47,11 +47,11 @@ export const eventsListSection = defineSection<EventsListContent>({
   type: "events_list",
   label: "Events",
   fields: [
-    { key: "eyebrow", label: "Eyebrow", type: "text" },
+    { key: "eyebrow", label: "Small heading above", type: "text" },
     { key: "headline", label: "Headline", type: "headline" },
     {
       key: "emptyMessage",
-      label: "Message when nothing is scheduled",
+      label: "Text shown when nothing is scheduled",
       type: "text",
     },
     {

@@ -15,7 +15,7 @@ export const sermonFeedSection = defineSection<SermonFeedContent>({
   // The messages themselves are managed in Website → Sermons rather than here,
   // so this only exposes the framing copy around the feed.
   fields: [
-    { key: "eyebrow", label: "Eyebrow", type: "text" },
+    { key: "eyebrow", label: "Small heading above", type: "text" },
     { key: "headline", label: "Headline", type: "headline" },
     {
       key: "link",
@@ -28,7 +28,7 @@ export const sermonFeedSection = defineSection<SermonFeedContent>({
     },
     {
       key: "emptyMessage",
-      label: "Message when there are no sermons",
+      label: "Text shown when there are no sermons",
       type: "text",
     },
   ],

@@ -55,7 +55,7 @@ function mapLocation(row: Record<string, unknown>): ChurchLocation {
 
 export async function listLocations(
   churchId: string,
-  options: { includeInactive?: boolean } = {},
+  options: { includeInactive?: boolean; strict?: boolean } = {},
   supabase?: SupabaseClient,
 ): Promise<ChurchLocation[]> {
   const client = supabase ?? db();
@@ -71,7 +71,12 @@ export async function listLocations(
   if (!options.includeInactive) query = query.eq("is_active", true);
 
   const { data, error } = await query;
-  if (error) console.error("[checkin] rooms read failed:", error.message);
+  if (error) {
+    console.error("[checkin] rooms read failed:", error.message);
+    // A page that would otherwise say "No rooms yet" asks for the failure,
+    // so its error boundary can say so instead.
+    if (options.strict) throw new Error("rooms read failed");
+  }
   return (data ?? []).map((row) => mapLocation(row as Record<string, unknown>));
 }
 
@@ -404,7 +409,7 @@ export async function findHouseholdsByPersonName(
 // every check-in looked like it had not happened.
 const SESSION_SELECT = `
   id, member_id, household_id, location_id, status, local_service_date,
-  pre_checked_in_at, checked_in_at, checked_out_at,
+  pre_checked_in_at, checked_in_at, checked_in_by, checked_out_at,
   checkin_method, checkout_method, checkout_override_reason,
   members!member_id(id, first_name, last_name, medical_notes),
   church_locations(id, name),
@@ -444,6 +449,7 @@ function mapSession(row: SessionJoin): CheckinSessionRow | null {
     localServiceDate: row.local_service_date as string,
     preCheckedInAt: (row.pre_checked_in_at as string | null) ?? null,
     checkedInAt: (row.checked_in_at as string | null) ?? null,
+    checkedInBy: (row.checked_in_by as string | null) ?? null,
     checkedOutAt: (row.checked_out_at as string | null) ?? null,
     checkinMethod: (row.checkin_method as CheckinSessionRow["checkinMethod"]) ?? null,
     checkoutMethod:
@@ -457,7 +463,7 @@ function mapSession(row: SessionJoin): CheckinSessionRow | null {
 export async function getRoster(
   churchId: string,
   localServiceDate: string,
-  options: { locationId?: string; includeClosed?: boolean } = {},
+  options: { locationId?: string; includeClosed?: boolean; strict?: boolean } = {},
   supabase?: SupabaseClient,
 ): Promise<CheckinSessionRow[]> {
   const client = supabase ?? db();
@@ -476,7 +482,10 @@ export async function getRoster(
   const { data, error } = await query.order("checked_in_at", {
     ascending: true,
   });
-  if (error) console.error("[checkin] roster read failed:", error.message);
+  if (error) {
+    console.error("[checkin] roster read failed:", error.message);
+    if (options.strict) throw new Error("roster read failed");
+  }
 
   const rows = ((data ?? []) as unknown as SessionJoin[])
     .map(mapSession)
@@ -522,12 +531,14 @@ type ChildMembershipJoin = {
         last_name: string;
         is_active: boolean | null;
         default_location_id: string | null;
+        medical_notes?: string | null;
       }
     | {
         first_name: string;
         last_name: string;
         is_active: boolean | null;
         default_location_id: string | null;
+        medical_notes?: string | null;
       }[]
     | null;
 };
@@ -545,18 +556,20 @@ type ChildMembershipJoin = {
 export async function listCheckinChildren(
   churchId: string,
   supabase?: SupabaseClient,
+  options: { strict?: boolean } = {},
 ): Promise<CheckinChild[]> {
   const client = supabase ?? db();
   const { data, error } = await client
     .from("household_members")
     .select(
-      "member_id, household_id, relationship, households(name), members(first_name, last_name, is_active, default_location_id)",
+      "member_id, household_id, relationship, households(name), members(first_name, last_name, is_active, default_location_id, medical_notes)",
     )
     .eq("church_id", churchId)
     .in("relationship", ["dependent", "guardian"]);
 
   if (error) {
     console.error("[checkin] children read failed:", error.message);
+    if (options.strict) throw new Error("children read failed");
     return [];
   }
 
@@ -573,6 +586,7 @@ export async function listCheckinChildren(
       lastName: member.last_name,
       isActive: member.is_active !== false,
       defaultLocationId: member.default_location_id ?? null,
+      medicalNotes: member.medical_notes ?? null,
     });
   }
 
@@ -634,7 +648,7 @@ export async function getHouseholdOpenSessions(
  */
 export async function getLocationStats(
   churchId: string,
-  options: { weeks?: number; endWeekStart: string },
+  options: { weeks?: number; endWeekStart: string; strict?: boolean },
   supabase?: SupabaseClient,
 ): Promise<{ weeks: string[]; rows: LocationHeadcount[] }> {
   const client = supabase ?? db();
@@ -650,7 +664,10 @@ export async function getLocationStats(
       .gte("local_service_date", earliest),
     listDependentMemberIds(churchId, client),
   ]);
-  if (error) console.error("[checkin] stats read failed:", error.message);
+  if (error) {
+    console.error("[checkin] stats read failed:", error.message);
+    if (options.strict) throw new Error("stats read failed");
+  }
 
   const byLocation = new Map<string, LocationHeadcount>();
 

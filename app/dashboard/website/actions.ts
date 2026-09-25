@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
 import { requireChurchAuth } from "@/lib/auth/church";
+import { toUserError } from "@/lib/errors/user-error";
 import { featureActionError } from "@/lib/features/guard";
 import {
   getChurchProfile,
@@ -73,9 +74,9 @@ async function guardAdmin(): Promise<Guard> {
 function refresh() {
   revalidatePath("/dashboard/website");
   revalidatePath("/dashboard/website/pages");
-  revalidatePath("/dashboard/website/design");
+  revalidatePath("/dashboard/website/details");
   revalidatePath("/dashboard/website/sermons");
-  revalidatePath("/dashboard/website/messages");
+  revalidatePath("/dashboard/website/inbox");
 }
 
 /** Confirms a row belongs to this church before it is written to. */
@@ -140,7 +141,7 @@ export async function createWebsite(
   if (!profile) return fail("Your church profile could not be loaded.");
 
   if (!profile.name?.trim()) {
-    return fail("Add your church name in Church Profile before building a site.");
+    return fail("Add your church name in Settings → Church info before building a site.");
   }
 
   const draft = await generateSite(auth.churchId, profile);
@@ -168,8 +169,7 @@ export async function createWebsite(
     .maybeSingle();
 
   if (pageError || !page) {
-    console.error("[website] page insert failed:", pageError?.message);
-    return fail("Your website could not be created. Please try again.");
+    return fail(toUserError(pageError, "We couldn't create your website."));
   }
 
   const { error: sectionsError } = await supabase.from("site_sections").insert(
@@ -187,8 +187,7 @@ export async function createWebsite(
     // Leaving a page with no sections behind would render an empty site and
     // block a retry on the "already built" check above.
     await supabase.from("site_pages").delete().eq("id", page.id as string);
-    console.error("[website] section insert failed:", sectionsError.message);
-    return fail("Your website could not be created. Please try again.");
+    return fail(toUserError(sectionsError, "We couldn't create your website."));
   }
 
   refresh();
@@ -229,7 +228,7 @@ async function sectionBaseline(
   }
 
   if (row.type === "custom_embed") {
-    return fail("Custom blocks are managed by FaithForm. Contact support to change one.");
+    return fail("FaithForm looks after this text block for you. Contact support if you'd like it changed.");
   }
 
   const master = SECTION_REGISTRY[row.type as string];
@@ -306,8 +305,7 @@ export async function saveSectionContent(
     });
 
     if (error) {
-      console.error("[website] override insert failed:", error.message);
-      return fail("That change could not be saved.");
+      return fail(toUserError(error, "That change could not be saved."));
     }
   }
 
@@ -371,7 +369,7 @@ export async function setSectionVisible(
     .update({ is_visible: visible })
     .eq("id", sectionId);
 
-  if (error) return fail("That change could not be saved.");
+  if (error) return fail(toUserError(error, "That change could not be saved."));
 
   refresh();
   return ok;
@@ -409,7 +407,7 @@ export async function reorderSections(
       .update({ sort_order: index * 10 })
       .eq("id", sectionIds[index]);
 
-    if (error) return fail("The new order could not be saved.");
+    if (error) return fail(toUserError(error, "The new order could not be saved."));
   }
 
   refresh();
@@ -459,8 +457,7 @@ export async function saveDesign(
   );
 
   if (error) {
-    console.error("[website] design save failed:", error.message);
-    return fail("Those design settings could not be saved.");
+    return fail(toUserError(error, "Those design settings could not be saved."));
   }
 
   refresh();
@@ -489,7 +486,16 @@ export async function setPublished(published: boolean): Promise<ActionResult> {
     { onConflict: "church_id" },
   );
 
-  if (pageError || settingsError) return fail("That change could not be saved.");
+  if (pageError || settingsError) {
+    return fail(
+      toUserError(
+        pageError ?? settingsError,
+        published
+          ? "We couldn't put your website online."
+          : "We couldn't take your website offline.",
+      ),
+    );
+  }
 
   refresh();
   return ok;
@@ -541,13 +547,13 @@ export async function saveMedia(
 
   if (v.id) {
     if (!(await ownsRow("site_media", v.id, auth.churchId))) {
-      return fail("That message does not belong to your church.");
+      return fail("That sermon does not belong to your church.");
     }
     const { error } = await supabase.from("site_media").update(row).eq("id", v.id);
-    if (error) return fail("That message could not be saved.");
+    if (error) return fail(toUserError(error, "That sermon could not be saved."));
   } else {
     const { error } = await supabase.from("site_media").insert(row);
-    if (error) return fail("That message could not be saved.");
+    if (error) return fail(toUserError(error, "That sermon could not be saved."));
   }
 
   refresh();
@@ -559,11 +565,11 @@ export async function deleteMedia(id: string): Promise<ActionResult> {
   if (!auth.ok) return fail(auth.error);
 
   if (!(await ownsRow("site_media", id, auth.churchId))) {
-    return fail("That message does not belong to your church.");
+    return fail("That sermon does not belong to your church.");
   }
 
   const { error } = await createAdminClient().from("site_media").delete().eq("id", id);
-  if (error) return fail("That message could not be removed.");
+  if (error) return fail(toUserError(error, "That sermon could not be deleted."));
 
   refresh();
   return ok;
@@ -647,8 +653,7 @@ export async function uploadSiteImage(formData: FormData): Promise<UploadResult>
     });
 
   if (error) {
-    console.error("[website] image upload failed:", error.message);
-    return { ok: false, error: "That image could not be uploaded. Please try again." };
+    return { ok: false, error: toUserError(error, "That image could not be uploaded.") };
   }
 
   const { data } = admin.storage.from("church-covers").getPublicUrl(path);
@@ -805,8 +810,7 @@ export async function saveSiteDetails(
       admin,
     );
   } catch (error) {
-    console.error("[website] details save failed:", error);
-    return fail("Those details could not be saved.");
+    return fail(toUserError(error, "Those details could not be saved."));
   }
 
   // Service times drive attendance too: a moved or deleted service must
@@ -839,7 +843,7 @@ export async function saveSiteDetails(
 }
 
 // ---------------------------------------------------------------------------
-// MESSAGES
+// INBOX (contact-form messages)
 // ---------------------------------------------------------------------------
 
 /** Any member who can see the section may triage the inbox, not just admins. */
@@ -859,9 +863,10 @@ export async function setSubmissionStatus(
     .update({ status })
     .eq("id", id);
 
-  if (error) return fail("That message could not be updated.");
+  if (error) return fail(toUserError(error, "That message could not be updated."));
 
-  revalidatePath("/dashboard/website/messages");
+  revalidatePath("/dashboard/website/inbox");
+  revalidatePath("/dashboard/website");
   return ok;
 }
 

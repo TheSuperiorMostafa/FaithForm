@@ -178,3 +178,84 @@ export function formatCallScore(view: CallScoreView): string {
   if (view.value == null) return "";
   return `${view.value} / ${view.outOf}`;
 }
+
+// ---------------------------------------------------------------------------
+// Who needs a call back
+// ---------------------------------------------------------------------------
+
+/** The church's own words for where a call stands (audit §8.4: Call). */
+export type CallFollowUpTone = "attention" | "done" | "neutral";
+
+export type CallFollowUp = {
+  /** A real caller the rubric said a person at the church should ring back. */
+  needsCallBack: boolean;
+  /** Needs a call back, and the caller sounded like they were in crisis. */
+  urgent: boolean;
+  /** Someone at the church marked it handled. */
+  handled: boolean;
+  label: string;
+  tone: CallFollowUpTone;
+};
+
+const QUIET_LABELS: Record<CallClassification, string> = {
+  spam: "Spam",
+  no_engagement: "No one spoke",
+  vendor: "Sales call",
+  real: "Answered",
+};
+
+/**
+ * Whether a person at the church should ring this caller back, from what the
+ * scorer already saved: the kind of call, whether a human needs to know
+ * (`notify_pastor`) and how urgent it is. Spam, silent lines and sales calls
+ * never count, even when they sounded urgent. A call someone has marked
+ * handled drops out of the list.
+ */
+export function describeCallFollowUp(
+  call: Pick<
+    PhoneCallRow,
+    "call_classification" | "notify_pastor" | "urgency" | "score_breakdown"
+  >,
+  handledAt: string | null = null,
+): CallFollowUp {
+  const breakdown = call.score_breakdown ?? null;
+  const classification =
+    call.call_classification ??
+    (breakdown?.call_type as CallClassification | undefined) ??
+    null;
+  const flagged =
+    call.notify_pastor ?? (breakdown?.notify_pastor as boolean | undefined) ?? false;
+  const urgency =
+    call.urgency ?? (breakdown?.urgency as CallUrgency | undefined) ?? null;
+
+  const isPerson = classification === "real" || classification === null;
+  const wanted = isPerson && flagged === true;
+  const handled = Boolean(handledAt);
+  const needsCallBack = wanted && !handled;
+  const urgent = needsCallBack && urgency === "high";
+
+  if (handled) return { needsCallBack, urgent, handled, label: "Handled", tone: "done" };
+  if (urgent) {
+    return { needsCallBack, urgent, handled, label: "Urgent: call back", tone: "attention" };
+  }
+  if (needsCallBack) {
+    return { needsCallBack, urgent, handled, label: "Needs a call back", tone: "attention" };
+  }
+  return {
+    needsCallBack,
+    urgent,
+    handled,
+    label: classification ? QUIET_LABELS[classification] : "Not sorted yet",
+    tone: classification === "real" ? "done" : "neutral",
+  };
+}
+
+/** Urgent calls first, then the newest. Does not change the input. */
+export function sortCallsForFollowUp<T extends { urgent: boolean; calledAt: string }>(
+  calls: readonly T[],
+): T[] {
+  return [...calls].sort((a, b) => {
+    if (a.urgent !== b.urgent) return a.urgent ? -1 : 1;
+    return new Date(b.calledAt).getTime() - new Date(a.calledAt).getTime();
+  });
+}

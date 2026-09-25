@@ -5,15 +5,36 @@ import { useTheme, type ThemeMode } from "@/components/theme-provider";
 import { cn } from "@/lib/utils";
 
 type ThemeToggleProps = {
-  variant?: "segmented" | "compact";
+  /**
+   * "cards" is the big, labelled choice used in Settings; "segmented" and
+   * "compact" are for tight spaces (admin sidebar, sign-in screen).
+   */
+  variant?: "cards" | "segmented" | "compact";
   className?: string;
 };
 
-const options: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
-  { value: "light", label: "Light", icon: Sun },
-  { value: "dark", label: "Dark", icon: Moon },
-  { value: "system", label: "System", icon: Monitor },
+const options: {
+  value: ThemeMode;
+  label: string;
+  /** For the narrow segmented control. */
+  shortLabel: string;
+  hint: string;
+  icon: typeof Sun;
+}[] = [
+  { value: "light", label: "Light", shortLabel: "Light", hint: "Dark text on a light page.", icon: Sun },
+  { value: "dark", label: "Dark", shortLabel: "Dark", hint: "Light text on a dark page.", icon: Moon },
+  {
+    value: "system",
+    label: "Match my computer",
+    shortLabel: "Auto",
+    hint: "Follows your computer or phone's own setting.",
+    icon: Monitor,
+  },
 ];
+
+function labelFor(mode: ThemeMode): string {
+  return options.find((option) => option.value === mode)?.label ?? "Light";
+}
 
 export function ThemeToggle({
   variant = "segmented",
@@ -35,10 +56,44 @@ export function ThemeToggle({
           "flex size-10 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
           className,
         )}
-        aria-label={`Theme: ${mode}. Click to switch.`}
+        aria-label={`Colours: ${labelFor(mode)}. Click to switch.`}
       >
         <Icon className="size-4" />
       </button>
+    );
+  }
+
+  if (variant === "cards") {
+    return (
+      <div
+        role="radiogroup"
+        aria-label="Colours"
+        className={cn("grid gap-3 sm:grid-cols-3", className)}
+      >
+        {options.map(({ value, label, hint, icon: Icon }) => {
+          const active = mode === value;
+          return (
+            <button
+              key={value}
+              type="button"
+              role="radio"
+              aria-checked={active}
+              onClick={() => setMode(value)}
+              className={cn(
+                "flex min-h-[104px] flex-col items-start gap-2 rounded-2xl border-2 p-4 text-left transition-colors motion-reduce:transition-none",
+                "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                active
+                  ? "border-accent bg-accent/10"
+                  : "border-border bg-background hover:border-accent/50 hover:bg-accent/5",
+              )}
+            >
+              <Icon className="size-6 text-primary dark:text-accent" strokeWidth={1.75} aria-hidden />
+              <span className="text-base font-semibold text-foreground">{label}</span>
+              <span className="text-sm text-muted-foreground">{hint}</span>
+            </button>
+          );
+        })}
+      </div>
     );
   }
 
@@ -51,7 +106,7 @@ export function ThemeToggle({
       role="group"
       aria-label="Theme"
     >
-      {options.map(({ value, label, icon: Icon }) => (
+      {options.map(({ value, label, shortLabel, icon: Icon }) => (
         <button
           key={value}
           type="button"
@@ -66,7 +121,7 @@ export function ThemeToggle({
           aria-label={label}
         >
           <Icon className="size-3.5" />
-          <span className="hidden sm:inline">{label}</span>
+          <span className="hidden sm:inline">{shortLabel}</span>
         </button>
       ))}
     </div>

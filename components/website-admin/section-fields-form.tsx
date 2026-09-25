@@ -1,8 +1,16 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 
+import {
+  highlightWords,
+  joinHeadline,
+  splitHeadline,
+  type HeadlineParts,
+} from "@/components/website-admin/headline-text";
 import { ImageUploadField } from "@/components/website-admin/image-upload-field";
+import { AdvancedSection } from "@/components/ui/advanced-section";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,6 +30,9 @@ import { cn } from "@/lib/utils";
 
 type Value = unknown;
 type Bag = Record<string, unknown>;
+
+/** A section on this page that a link or button can jump to. */
+export type LinkTarget = { value: string; label: string };
 
 function get(bag: Bag, key: string): Value {
   return bag?.[key];
@@ -75,7 +86,7 @@ function FieldShell({
       {/* Below the control, so a field with help still lines up with one
        * without it when they share a row. */}
       {children}
-      {help ? <p className="text-xs text-muted-foreground">{help}</p> : null}
+      {help ? <p className="text-sm text-muted-foreground">{help}</p> : null}
     </div>
   );
 }
@@ -86,12 +97,15 @@ export function SectionFieldsForm({
   onChange,
   idPrefix = "f",
   depth = 0,
+  linkTargets = [],
 }: {
   fields: SectionField[];
   value: Bag;
   onChange: (next: Bag) => void;
   idPrefix?: string;
   depth?: number;
+  /** Sections a link can jump to; turns "Link" fields into a picker. */
+  linkTargets?: LinkTarget[];
 }) {
   const set = (key: string, next: Value) => onChange({ ...value, [key]: next });
 
@@ -102,8 +116,33 @@ export function SectionFieldsForm({
         const current = get(value, field.key);
 
         switch (field.type) {
-          case "text":
           case "url":
+            // Links that can point at a section of this page get a picker of
+            // sections; typing an address stays available under "More options".
+            if (field.key === "href" && linkTargets.length > 0) {
+              return (
+                <LinkField
+                  key={id}
+                  id={id}
+                  label={field.label}
+                  help={field.help}
+                  value={asString(current)}
+                  targets={linkTargets}
+                  onChange={(next) => set(field.key, next)}
+                />
+              );
+            }
+            return (
+              <FieldShell key={id} label={field.label} help={field.help} htmlFor={id}>
+                <Input
+                  id={id}
+                  value={asString(current)}
+                  onChange={(e) => set(field.key, e.target.value)}
+                />
+              </FieldShell>
+            );
+
+          case "text":
             return (
               <FieldShell key={id} label={field.label} help={field.help} htmlFor={id}>
                 <Input
@@ -153,7 +192,7 @@ export function SectionFieldsForm({
                     {field.label}
                   </Label>
                   {field.help ? (
-                    <p className="text-xs text-muted-foreground">{field.help}</p>
+                    <p className="text-sm text-muted-foreground">{field.help}</p>
                   ) : null}
                 </div>
                 <Switch
@@ -181,32 +220,19 @@ export function SectionFieldsForm({
               </FieldShell>
             );
 
-          /* lead / accent / trail. The accent renders in the theme's serif
-           * italic, so it is a separate input rather than inline markup. */
-          case "headline": {
-            const h = asRecord(current);
+          /* lead / accent / trail. One plain box; the highlighted words (the
+           * theme's serif italic) are an advanced option. */
+          case "headline":
             return (
-              <FieldShell key={id} label={field.label} help={field.help}>
-                <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/30 p-3">
-                  <Input
-                    placeholder="Headline"
-                    value={asString(h.lead)}
-                    onChange={(e) => set(field.key, { ...h, lead: e.target.value })}
-                  />
-                  <Input
-                    placeholder="Emphasised words (optional)"
-                    value={asString(h.accent)}
-                    onChange={(e) => set(field.key, { ...h, accent: e.target.value })}
-                  />
-                  <Input
-                    placeholder="Words after the emphasis (optional)"
-                    value={asString(h.trail)}
-                    onChange={(e) => set(field.key, { ...h, trail: e.target.value })}
-                  />
-                </div>
-              </FieldShell>
+              <HeadlineField
+                key={id}
+                id={id}
+                label={field.label}
+                help={field.help}
+                value={asRecord(current) as HeadlineParts}
+                onChange={(next) => set(field.key, next)}
+              />
             );
-          }
 
           case "image": {
             const img = asRecord(current);
@@ -260,7 +286,7 @@ export function SectionFieldsForm({
                       <Button
                         type="button"
                         variant="ghost"
-                        size="icon"
+                        className="self-start"
                         aria-label={`Remove paragraph ${i + 1}`}
                         onClick={() =>
                           set(
@@ -269,14 +295,13 @@ export function SectionFieldsForm({
                           )
                         }
                       >
-                        <Trash2 className="size-4" />
+                        <Trash2 className="size-4" aria-hidden /> Remove
                       </Button>
                     </div>
                   ))}
                   <Button
                     type="button"
                     variant="outline"
-                    size="sm"
                     className="self-start"
                     onClick={() => set(field.key, [...paragraphs, ""])}
                   >
@@ -297,6 +322,7 @@ export function SectionFieldsForm({
                     onChange={(next) => set(field.key, next)}
                     idPrefix={id}
                     depth={depth + 1}
+                    linkTargets={linkTargets}
                   />
                 </div>
               </FieldShell>
@@ -313,15 +339,17 @@ export function SectionFieldsForm({
                       className="rounded-lg border border-border bg-muted/30 p-3"
                     >
                       <div className="mb-2 flex items-center justify-between gap-2">
-                        <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        <span className="text-[15px] font-semibold text-foreground">
                           {(field.titleKey && asString(item[field.titleKey])) ||
                             `${field.label} ${i + 1}`}
                         </span>
                         <Button
                           type="button"
                           variant="ghost"
-                          size="icon"
-                          aria-label={`Remove ${field.label} ${i + 1}`}
+                          aria-label={`Remove ${
+                            (field.titleKey && asString(item[field.titleKey])) ||
+                            `${field.label} ${i + 1}`
+                          }`}
                           onClick={() =>
                             set(
                               field.key,
@@ -329,7 +357,7 @@ export function SectionFieldsForm({
                             )
                           }
                         >
-                          <Trash2 className="size-4" />
+                          <Trash2 className="size-4" aria-hidden /> Remove
                         </Button>
                       </div>
                       <SectionFieldsForm
@@ -342,13 +370,13 @@ export function SectionFieldsForm({
                         }}
                         idPrefix={`${id}-${i}`}
                         depth={depth + 1}
+                        linkTargets={linkTargets}
                       />
                     </div>
                   ))}
                   <Button
                     type="button"
                     variant="outline"
-                    size="sm"
                     className="self-start"
                     onClick={() =>
                       set(field.key, [...items, emptyItem(field.itemFields)])
@@ -365,6 +393,172 @@ export function SectionFieldsForm({
             return null;
         }
       })}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+/**
+ * One "Headline" box. The three stored parts (lead / highlighted words /
+ * trail) are rebuilt from what is typed, keeping the highlight on the same
+ * words while they are still there. Choosing which words to highlight is an
+ * advanced option.
+ */
+function HeadlineField({
+  id,
+  label,
+  help,
+  value,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  help?: string;
+  value: HeadlineParts;
+  onChange: (next: HeadlineParts) => void;
+}) {
+  const joined = joinHeadline(value);
+  // Local text, so typing a space at the end is not trimmed away mid-word.
+  const [text, setText] = useState(joined);
+  const accent = typeof value.accent === "string" ? value.accent : "";
+  const [highlight, setHighlight] = useState(accent);
+  const [missing, setMissing] = useState(false);
+
+  // A reset (or undo) from outside replaces the value; follow it.
+  useEffect(() => {
+    if (joinHeadline(splitHeadline(text, value)) !== joined) setText(joined);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only external changes
+  }, [joined]);
+
+  useEffect(() => {
+    setHighlight(accent);
+    setMissing(false);
+  }, [accent]);
+
+  return (
+    <div className="flex flex-col gap-2">
+      <FieldShell label={label} help={help} htmlFor={id}>
+        <Input
+          id={id}
+          value={text}
+          onChange={(e) => {
+            setText(e.target.value);
+            onChange(splitHeadline(e.target.value, value));
+          }}
+        />
+      </FieldShell>
+      <AdvancedSection
+        title="Highlight some words"
+        description="Show a few words of the headline in the special lettering."
+      >
+        <FieldShell
+          label="Words to highlight"
+          htmlFor={`${id}-highlight`}
+          help={
+            missing
+              ? "Type whole words exactly as they appear in the headline above."
+              : "Leave empty for no highlight."
+          }
+        >
+          <Input
+            id={`${id}-highlight`}
+            value={highlight}
+            aria-invalid={missing || undefined}
+            onChange={(e) => {
+              setHighlight(e.target.value);
+              const next = highlightWords(value, e.target.value);
+              if (next) {
+                setMissing(false);
+                onChange(next);
+              } else {
+                setMissing(true);
+              }
+            }}
+          />
+        </FieldShell>
+      </AdvancedSection>
+    </div>
+  );
+}
+
+const CUSTOM_LINK = "__custom__";
+
+/**
+ * "Goes to": a picker of this page's sections, so nobody has to know that
+ * "#about" means the About section. Any other address can still be typed,
+ * under "More options".
+ */
+function LinkField({
+  id,
+  label,
+  help,
+  value,
+  targets,
+  onChange,
+}: {
+  id: string;
+  label: string;
+  help?: string;
+  value: string;
+  targets: LinkTarget[];
+  onChange: (next: string) => void;
+}) {
+  const matched = targets.find((target) => target.value === value);
+  const [custom, setCustom] = useState(!matched && value.trim() !== "");
+
+  // Follow a value replaced from outside (a reset, or undo).
+  useEffect(() => {
+    if (value.trim()) setCustom(!targets.some((target) => target.value === value));
+  }, [value, targets]);
+
+  const selectValue = custom ? CUSTOM_LINK : (matched?.value ?? "");
+
+  return (
+    <div className="flex flex-col gap-2">
+      <FieldShell label={label} help={help} htmlFor={id}>
+        <Select
+          id={id}
+          value={selectValue}
+          onChange={(e) => {
+            if (e.target.value === CUSTOM_LINK) {
+              setCustom(true);
+              return;
+            }
+            setCustom(false);
+            onChange(e.target.value);
+          }}
+        >
+          <option value="">Choose a part of your page…</option>
+          {targets.map((target) => (
+            <option key={target.value} value={target.value}>
+              {target.label}
+            </option>
+          ))}
+          <option value={CUSTOM_LINK}>Another web address…</option>
+        </Select>
+      </FieldShell>
+      <AdvancedSection
+        title="Type the link yourself"
+        description="For another website, a phone number, or an email address."
+        forceOpen={custom}
+      >
+        <FieldShell
+          label="Web address"
+          htmlFor={`${id}-custom`}
+          help="For example https://example.com, tel:5025550134 or mailto:office@church.org"
+        >
+          <Input
+            id={`${id}-custom`}
+            value={value}
+            onChange={(e) => {
+              const next = e.target.value;
+              setCustom(!targets.some((target) => target.value === next));
+              onChange(next);
+            }}
+          />
+        </FieldShell>
+      </AdvancedSection>
     </div>
   );
 }

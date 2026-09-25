@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { parseStatementYear } from "@/lib/giving/statement-year";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getChurchAuth } from "@/lib/auth/church";
 import { renderGivingStatementPdf } from "@/lib/giving/statement-pdf";
@@ -20,8 +21,8 @@ export async function GET(request: Request, context: RouteContext) {
   if (denied) return denied;
 
   const { searchParams } = new URL(request.url);
-  const year =
-    Number.parseInt(searchParams.get("year") ?? String(new Date().getFullYear()), 10);
+  // Defaults to last year until April, when year-end statements go out.
+  const year = parseStatementYear(searchParams.get("year"));
 
   const admin = createAdminClient();
   const { data: church } = await admin
@@ -38,7 +39,10 @@ export async function GET(request: Request, context: RouteContext) {
     .maybeSingle();
 
   if (!donor) {
-    return NextResponse.json({ error: "Donor not found" }, { status: 404 });
+    return NextResponse.json(
+      { error: "We couldn't find that donor. Refresh the page and try again." },
+      { status: 404 },
+    );
   }
 
   const gifts = await getDonorGiftsForYear(auth.churchId, donorId, year);

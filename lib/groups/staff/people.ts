@@ -156,6 +156,60 @@ export async function searchPeopleForGroup(
   }));
 }
 
+export type StaffPersonOption = { memberId: string; name: string; hasApp: boolean; inGroup: boolean };
+
+/**
+ * Everyone on the church's People roster, for the dashboard's type-ahead
+ * picker (create a group, add people). Scoped to the staff member's church;
+ * with a group, people already in it are marked so the picker can show
+ * "Already in this group" instead of offering them again.
+ */
+export async function listStaffPeopleOptions(
+  ctx: StaffContext,
+  groupId: string | null,
+): Promise<{ people: StaffPersonOption[]; truncated: boolean }> {
+  const LIMIT = 5000;
+  const group = groupId ? await loadStaffGroup(ctx, groupId) : null;
+  const [{ data: people }, { data: links }, existing] = await Promise.all([
+    ctx.admin
+      .from("members")
+      .select("id, first_name, last_name")
+      .eq("church_id", ctx.churchId)
+      .eq("is_active", true)
+      .order("first_name", { ascending: true })
+      .order("last_name", { ascending: true })
+      .limit(LIMIT + 1),
+    ctx.admin
+      .from("visitor_people_links")
+      .select("member_id")
+      .eq("church_id", ctx.churchId)
+      .is("revoked_at", null)
+      .limit(20000),
+    group
+      ? ctx.admin
+          .from("group_memberships")
+          .select("member_id")
+          .eq("group_id", group.id)
+          .eq("church_id", ctx.churchId)
+          .eq("status", "active")
+          .not("member_id", "is", null)
+          .limit(5000)
+      : Promise.resolve({ data: [] as { member_id: string }[] }),
+  ]);
+  const rows = (people ?? []) as { id: string; first_name: string | null; last_name: string | null }[];
+  const linked = new Set(((links ?? []) as { member_id: string }[]).map((l) => l.member_id));
+  const inGroup = new Set(((existing.data ?? []) as { member_id: string }[]).map((r) => r.member_id));
+  return {
+    truncated: rows.length > LIMIT,
+    people: rows.slice(0, LIMIT).map((p) => ({
+      memberId: p.id,
+      name: `${p.first_name ?? ""} ${p.last_name ?? ""}`.replace(/\s+/g, " ").trim() || "Unnamed person",
+      hasApp: linked.has(p.id),
+      inGroup: inGroup.has(p.id),
+    })),
+  };
+}
+
 export async function addStaffMembers(
   ctx: StaffContext,
   groupId: string,
@@ -171,8 +225,8 @@ export async function addStaffMembers(
     throw new VisitorError(
       "conflict",
       capacityLeft <= 0
-        ? "This group is full. Raise its capacity or add them anyway."
-        : `Only ${capacityLeft} more ${capacityLeft === 1 ? "person fits" : "people fit"} in this group.`,
+        ? "This group is full. Raise its size in Group settings before adding more people."
+        : `Only ${capacityLeft} more ${capacityLeft === 1 ? "person fits" : "people fit"} in this group. Choose fewer people, or raise its size in Group settings.`,
     );
   }
   return addPeopleToGroup(ctx.admin, {

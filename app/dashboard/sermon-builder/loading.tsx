@@ -1,61 +1,55 @@
-import { Card } from "@/components/ui/card";
+import { BookOpen, Layers, Plus } from "lucide-react";
+import { buttonVariants } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
+import { SERMONS_DESCRIPTION, SERMONS_TITLE } from "@/lib/sermon-builder/page-copy";
 
+/** Mirrors `page.tsx`: header with its real buttons, the two tabs, big rows. */
 export default function SermonBuilderLoading() {
   return (
-    <SkeletonContainer
-      className="mx-auto flex w-full max-w-3xl flex-col gap-5"
-      label="sermon builder"
-    >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-1">
-          <div className="border-l-4 border-accent pl-3">
-            <Skeleton className="h-8 w-52" />
-          </div>
-          <Skeleton className="h-4 w-80 max-w-full" />
-        </div>
-        <div className="flex gap-2">
-          <Skeleton className="h-10 w-28 rounded-lg" />
-          <Skeleton className="h-10 w-32 rounded-lg" />
-        </div>
-      </div>
+    <SkeletonContainer className="flex w-full flex-col gap-8" label="sermons">
+      <PageHeader
+        title={SERMONS_TITLE}
+        description={SERMONS_DESCRIPTION}
+        icon={BookOpen}
+        secondary={
+          <span aria-hidden className={buttonVariants({ variant: "outline", size: "lg" })}>
+            <Layers className="size-5" />
+            New series
+          </span>
+        }
+        action={
+          <span aria-hidden className={buttonVariants({ size: "lg" })}>
+            <Plus className="size-5" />
+            New sermon
+          </span>
+        }
+      />
 
-      <div className="flex gap-2 border-b border-border pb-2">
-        <Skeleton className="h-9 w-28 rounded-md" />
-        <Skeleton className="h-9 w-24 rounded-md" />
-      </div>
+      <div>
+        <div className="inline-flex min-h-11 items-center gap-1 border-b border-border text-muted-foreground">
+          <span className="inline-flex min-h-11 items-center px-4 py-2 text-[15px] font-semibold text-primary dark:text-accent">
+            Sermons
+            <Skeleton className="ml-2 h-4 w-8" />
+          </span>
+          <span className="inline-flex min-h-11 items-center px-4 py-2 text-[15px] font-semibold">
+            Series
+            <Skeleton className="ml-2 h-4 w-6" />
+          </span>
+        </div>
 
-      <div className="flex flex-col gap-3">
-        {Array.from({ length: 5 }).map((_, i) => (
-          <Card key={i} className="p-4 shadow-card dark:shadow-none space-y-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="space-y-1.5 flex-1">
-                <Skeleton className="h-5 w-48" />
-                <div className="flex flex-wrap items-center gap-2">
-                  <Skeleton className="h-4 w-28 rounded-full" />
-                  <Skeleton className="h-4 w-20" />
-                </div>
+        <ul className="mt-6 divide-y divide-border rounded-3xl border border-border bg-card p-2 shadow-sm">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <li key={i} className="flex min-h-[80px] items-center gap-4 px-4 py-3">
+              <Skeleton className="size-14 shrink-0 rounded-2xl" />
+              <div className="min-w-0 flex-1 space-y-2">
+                <Skeleton className="h-5 w-56 max-w-full" />
+                <Skeleton className="h-4 w-72 max-w-full" />
               </div>
-              <Skeleton className="h-6 w-24 rounded-full" />
-            </div>
-            <div className="flex items-center justify-between border-t border-border pt-3">
-              <Skeleton className="h-4 w-32" />
-              <div className="flex gap-2">
-                <Skeleton className="h-8 w-20 rounded-md" />
-                <Skeleton className="h-8 w-8 rounded-md" />
-              </div>
-            </div>
-          </Card>
-        ))}
-      </div>
-
-      <div className="flex items-center justify-between pt-2">
-        <Skeleton className="h-4 w-24" />
-        <div className="flex gap-1.5">
-          <Skeleton className="h-8 w-8 rounded-md" />
-          <Skeleton className="h-8 w-8 rounded-md" />
-          <Skeleton className="h-8 w-8 rounded-md" />
-        </div>
+              <Skeleton className="hidden h-7 w-24 rounded-full sm:block" />
+            </li>
+          ))}
+        </ul>
       </div>
     </SkeletonContainer>
   );

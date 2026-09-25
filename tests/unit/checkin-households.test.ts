@@ -203,7 +203,7 @@ test("a release only ever moves a session that is still open", () => {
 });
 
 test("only household dependents can be checked in or checked out", () => {
-  assert.match(actions, /Only children in a household can be checked in/);
+  assert.match(actions, /Only children in a family can be checked in/);
   assert.match(actions, /Only children can be checked out/);
   assert.match(actions, /relationship !== "dependent"/);
   assert.match(
@@ -235,8 +235,11 @@ test("a household found by name can only be released as an override", () => {
 });
 
 test("the checkout console never offers release without a confirm step", () => {
-  assert.match(console_, /Confirm release/);
-  // Looking a credential up must not release anybody on its own.
+  // The release is its own button ("Release 2 children"), pressed after the
+  // children are ticked and the adult taking them has been tapped.
+  assert.match(console_, /releaseButtonLabel\(selected\.size\)/);
+  assert.match(console_, /disabled=\{pending \|\| selected\.size === 0 \|\| !releasedTo \|\| reasonMissing\}/);
+  // Looking a code up must not release anybody on its own.
   assert.doesNotMatch(
     console_,
     /runLookup[\s\S]{0,600}completeCheckout/,
@@ -277,6 +280,7 @@ test("the Rooms tab shows who is in each room right now", () => {
 // ---------------------------------------------------------------------------
 
 const peopleLayout = readFileSync("app/dashboard/people/layout.tsx", "utf8");
+const peopleTabs = readFileSync("components/people/people-tabs.tsx", "utf8");
 const checkinLayout = readFileSync("app/dashboard/checkin/layout.tsx", "utf8");
 const oldIndex = readFileSync("app/dashboard/checkin/households/page.tsx", "utf8");
 const oldDetail = readFileSync(
@@ -288,8 +292,10 @@ const detailView = readFileSync("components/people/household-detail.tsx", "utf8"
 const memberPanel = readFileSync("components/people/member-form-panel.tsx", "utf8");
 
 test("households are a tab of People and no longer a Check-In tab", () => {
-  assert.match(peopleLayout, /href: "\/dashboard\/people\/households"/);
-  assert.match(peopleLayout, /label: "Households"/);
+  // The address stays /households; on screen they are called Families.
+  assert.match(peopleTabs, /href: "\/dashboard\/people\/households"/);
+  assert.match(peopleTabs, /label: "Families"/);
+  assert.match(peopleLayout, /<FeatureGate feature="people">/);
   assert.doesNotMatch(peopleLayout, /canAccessFeature\(access, "checkin"\)/);
   assert.doesNotMatch(checkinLayout, /href: "\/dashboard\/checkin\/households"/);
   assert.doesNotMatch(

@@ -8,6 +8,7 @@ import {
 import { getDonationById } from "@/lib/queries/giving";
 import { refundPaymentIntent } from "@/lib/stripe/giving";
 import { featureAccessDenied } from "@/lib/features/guard";
+import { refundErrorMessage } from "@/lib/giving/provider-errors";
 
 const bodySchema = z.object({
   donationId: z.string().uuid(),
@@ -31,21 +32,33 @@ export async function POST(request: Request) {
   try {
     json = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    return NextResponse.json(
+      { error: "We couldn't read that request. Refresh the page and try again." },
+      { status: 400 },
+    );
   }
 
   const parsed = bodySchema.safeParse(json);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+    return NextResponse.json(
+      { error: "We couldn't tell which gift to refund. Refresh the page and try again." },
+      { status: 400 },
+    );
   }
 
   const donation = await getDonationById(auth.churchId, parsed.data.donationId);
   if (!donation?.stripePaymentIntentId || !donation.stripeAccountId) {
-    return NextResponse.json({ error: "Gift not found" }, { status: 404 });
+    return NextResponse.json(
+      { error: "We couldn't find that gift. Refresh the page and try again." },
+      { status: 404 },
+    );
   }
 
   if (donation.status !== "succeeded") {
-    return NextResponse.json({ error: "Only succeeded gifts can be refunded" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Only received gifts can be refunded. This one isn't marked as received." },
+      { status: 400 },
+    );
   }
 
   try {
@@ -61,7 +74,8 @@ export async function POST(request: Request) {
     });
     return NextResponse.json({ ok: true });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Refund failed";
-    return NextResponse.json({ error: message }, { status: 500 });
+    // The provider's own text stays in the log; the treasurer gets a sentence.
+    console.error("[giving] refund failed", parsed.data.donationId, err);
+    return NextResponse.json({ error: refundErrorMessage(err) }, { status: 500 });
   }
 }

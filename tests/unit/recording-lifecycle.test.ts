@@ -188,7 +188,7 @@ test("scenario A: a normal service records, finishes and verifies without anyone
 
   const ended = await end(w, session);
   assert.equal(ended?.status, "processing", "still waiting for the relay to account for the take");
-  assert.equal(recordingPhase(toState(ended!)).label, "Preparing recording");
+  assert.equal(recordingPhase(toState(ended!)).label, "Processing");
 
   // Two more segments the encoder sent after End are not part of the service.
   const after = await relay.record(2);

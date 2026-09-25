@@ -133,9 +133,9 @@ test("one person's ways of being recorded are gathered, once each", async () => 
 });
 
 test("staff are told how someone was recorded, in words, in a stable order", () => {
-  assert.equal(describePresence(["room", "automatic"]), "Checked in automatically · Room check-in");
-  assert.equal(describePresence(["scanned"]), "Scanned the code");
-  assert.equal(describePresence(["kiosk", "marked"]), "Kiosk · Marked on Services");
+  assert.equal(describePresence(["room", "automatic"]), "Checked in on their phone · Checked in to a kids room");
+  assert.equal(describePresence(["scanned"]), "Scanned the code on screen");
+  assert.equal(describePresence(["kiosk", "marked"]), "Checked in at the kiosk · Marked by staff");
 });
 
 test("a Sunday is a Sunday in any timezone", () => {
@@ -205,36 +205,40 @@ test("Attendance is one set of tabs, each shown to whoever holds its grant", () 
     attendanceSectionTabs(allowed).map((tab) => tab.label);
 
   assert.deepEqual(labels(["attendance", "attendance_follow_up", "checkin"]), [
-    "Weekly",
+    "Sunday count",
     "Follow-up",
-    "Events",
-    "Automatic Attendance",
-    "Kids check-in",
+    "Services",
+    "Setup",
   ]);
-  assert.deepEqual(labels(["checkin"]), ["Kids check-in"]);
+  // Kids Check-in has its own sidebar row, so it is not one of these tabs.
+  assert.deepEqual(labels(["checkin"]), []);
+  assert.deepEqual(labels(["attendance"]), ["Sunday count", "Services", "Setup"]);
   assert.deepEqual(labels(["attendance_follow_up"]), ["Follow-up"]);
   assert.deepEqual(labels(["people"]), []);
 });
 
-test("the sidebar has one Attendance row, and it covers kids check-in", () => {
-  assert.equal(navItems.filter((item) => item.href === "/dashboard/checkin").length, 0);
-
+test("Kids Check-in is its own sidebar row, one click from anywhere", () => {
+  // Used at speed while families arrive, so it is not a tab inside
+  // Attendance's tabs (which stacked two tab bars on one page).
   const everything = filterNavByFeatures(navItems, ["attendance", "checkin"]);
   const attendance = everything.find((item) => item.label === "Attendance");
+  const checkin = everything.find((item) => item.label === "Kids Check-in");
   assert.equal(attendance?.href, "/dashboard/attendance");
-  assert.equal(isNavItemActive("/dashboard/checkin/stats", attendance!), true);
+  assert.equal(checkin?.href, "/dashboard/checkin");
+  assert.equal(isNavItemActive("/dashboard/checkin/stats", checkin!), true);
+  assert.equal(isNavItemActive("/dashboard/checkin/stats", attendance!), false);
   assert.equal(isNavItemActive("/dashboard/attendance/services", attendance!), true);
   assert.equal(isNavItemActive("/dashboard/people", attendance!), false);
 
-  // Someone who holds only the room desk still finds it, one click away.
+  // Someone who holds only the room desk sees the desk, not Attendance.
   const deskOnly = filterNavByFeatures(navItems, ["checkin"]);
-  assert.equal(deskOnly.find((item) => item.label === "Attendance")?.href, "/dashboard/checkin");
+  assert.equal(deskOnly.some((item) => item.label === "Attendance"), false);
+  assert.equal(deskOnly.find((item) => item.label === "Kids Check-in")?.href, "/dashboard/checkin");
 
-  // And someone with neither grant does not see the row at all.
-  assert.equal(
-    filterNavByFeatures(navItems, ["people"]).some((item) => item.label === "Attendance"),
-    false,
-  );
+  // And someone with neither grant sees neither row.
+  const neither = filterNavByFeatures(navItems, ["people"]);
+  assert.equal(neither.some((item) => item.label === "Attendance"), false);
+  assert.equal(neither.some((item) => item.label === "Kids Check-in"), false);
 });
 
 test("Home stays exact while every other row owns its nested routes", () => {
@@ -265,7 +269,7 @@ test("the weekly pages, follow-up, the chart and the report count check-ins", ()
 
 test("the weekly sheet starts with everyone already checked in marked present", () => {
   const wizard = read("app/dashboard/attendance/(record)/[date]/attendance-wizard.tsx");
-  assert.match(wizard, /isCheckedIn\(memberId\) \? "present" : "unmarked"/);
+  assert.match(wizard, /isCheckedIn\(memberId\) \? "present" : \(initialStatuses\?\.\[memberId\] \?\? "unmarked"\)/);
   // A check-in cannot be un-counted from the sheet.
   assert.match(wizard, /function setMemberStatus\(memberId: string, status: MemberStatus\) \{\s+if \(isCheckedIn\(memberId\)\) return;/);
 });
@@ -274,8 +278,11 @@ test("People shows who is on the app only where the church offers the app", () =
   const page = read("app/dashboard/people/page.tsx");
   assert.match(page, /access\?\.flags\.member_app/);
   assert.match(page, /showAppStatus\s*\?\s*listAppConnections\(supabase, auth\.churchId\)/);
-  assert.match(page, /<PeopleClaimsPanel/);
-  assert.match(page, /<AppMembersNotInPeoplePanel/);
+  // The reconciliation lists live in one "Needs your attention" card.
+  assert.match(page, /<NeedsAttentionCard/);
+  const attention = read("components/people/needs-attention-card.tsx");
+  assert.match(attention, /<PeopleClaimsPanel/);
+  assert.match(attention, /<AppMembersNotInPeoplePanel/);
   // A photo is the person's own, not a fact about the church's app plan, so
   // it is loaded whatever that flag says.
   assert.match(page, /listAppPhotos\(createAdminClient\(\), auth\.churchId\)/);

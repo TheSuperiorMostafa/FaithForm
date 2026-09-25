@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { requireChurchAuth } from "@/lib/auth/church";
 import { sendDomainRequestEmail } from "@/lib/email/domain-request";
+import { toUserError } from "@/lib/errors/user-error";
 import { featureActionError } from "@/lib/features/guard";
 import { getCanonicalSiteUrl } from "@/lib/site-url";
 import {
@@ -196,7 +197,7 @@ export async function submitDomainRequest(
     if (/site_domain_requests_one_open_idx/.test(error.message)) {
       return fail("You already have a domain request open.");
     }
-    return fail(error.message);
+    return fail(toUserError(error, "We couldn't send your web address request."));
   }
 
   const { data: church } = await supabase
@@ -259,7 +260,13 @@ async function ensureDomainRow(params: {
   const registered = await provider.register(params.hostname);
 
   if (!registered.ok) {
-    return { ok: false, error: registered.error };
+    // The provider's own wording is written for engineers; log it, say it plainly.
+    console.error("[domains] provider register failed:", registered.error);
+    return {
+      ok: false,
+      error:
+        "We couldn't add that address right now. Please try again in a few minutes, or ask FaithForm to do it for you.",
+    };
   }
 
   const dns = await checkDns(params.hostname);
@@ -293,7 +300,9 @@ async function ensureDomainRow(params: {
     .select("id")
     .single();
 
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    return { ok: false, error: toUserError(error, "We couldn't add that address.") };
+  }
 
   return { ok: true, domainId: data.id as string };
 }
@@ -320,7 +329,7 @@ export async function cancelDomainRequest(
     .in("status", ["submitted", "in_review", "awaiting_church"])
     .select("id");
 
-  if (error) return fail(error.message);
+  if (error) return fail(toUserError(error, "We couldn't cancel that request."));
 
   if (!data || data.length === 0) {
     return fail(
@@ -415,9 +424,68 @@ export async function recheckDomainDns(
     .eq("id", domainId)
     .eq("church_id", auth.churchId);
 
-  if (error) return fail(error.message);
+  if (error) return fail(toUserError(error, "We couldn't check your web address."));
 
   refresh(auth.churchId);
 
   return { ok: true, dnsOk: dns.ok, detail: dns.detail, status };
+}
+
+// ---------------------------------------------------------------------------
+// REMOVE A WEB ADDRESS
+// ---------------------------------------------------------------------------
+
+/**
+ * Disconnects one of this church's own domains.
+ *
+ * The church-side twin of the control center's `removeChurchDomain`: release the
+ * hostname at the platform first (so another church could claim it later, and
+ * so nothing keeps serving it), then delete the routing row. Scoped by
+ * church_id on the read and the delete, so a guessed uuid cannot detach
+ * another church's address.
+ *
+ * Nothing else points at the row except `site_domain_requests.domain_id`,
+ * which is `on delete set null`. If the removed address was the primary one,
+ * the oldest remaining address takes over, so the dashboard still has one
+ * canonical URL to show. The free FaithForm address is never a row here, so
+ * the site stays reachable there.
+ */
+export async function removeDomain(domainId: string): Promise<DomainActionResult> {
+  const auth = await guardAdmin();
+  if (!auth.ok) return fail(auth.error);
+
+  const domains = await getChurchDomains(auth.churchId);
+  const domain = domains.find((d) => d.id === domainId);
+  if (!domain) return fail("We couldn't find that web address on your account.");
+
+  const released = await getDomainProvider().remove(domain.hostname);
+  if (!released.ok) {
+    console.error("[domains] provider remove failed:", released.error);
+    return fail(
+      "We couldn't remove that web address right now. Please try again in a few minutes.",
+    );
+  }
+
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("site_domains")
+    .delete()
+    .eq("id", domainId)
+    .eq("church_id", auth.churchId);
+
+  if (error) return fail(toUserError(error, "We couldn't remove that web address."));
+
+  if (domain.isPrimary) {
+    const next = domains.find((d) => d.id !== domainId);
+    if (next) {
+      await supabase
+        .from("site_domains")
+        .update({ is_primary: true })
+        .eq("id", next.id)
+        .eq("church_id", auth.churchId);
+    }
+  }
+
+  refresh(auth.churchId);
+  return { ok: true };
 }

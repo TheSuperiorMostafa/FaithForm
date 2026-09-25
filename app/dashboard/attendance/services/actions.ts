@@ -7,7 +7,8 @@ import { revalidatePath } from "next/cache";
 import { getChurchAuth } from "@/lib/auth/church";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { featureActionError } from "@/lib/features/guard";
-import { fail, toVisitorResult, type VisitorResult } from "@/lib/faithform/errors";
+import { VisitorError, fail, type VisitorResult } from "@/lib/faithform/errors";
+import { checkRateLimit } from "@/lib/security/rate-limit";
 import {
   cancelOccurrence,
   createManualOccurrence,
@@ -71,6 +72,30 @@ function revalidateAttendance() {
   revalidatePath("/dashboard/people");
 }
 
+/**
+ * A failure in words a pastor can act on. Domain errors already carry one;
+ * the guards above throw bare codes ("forbidden"), and anything else is a bug
+ * whose detail belongs in the server log, not on the page.
+ */
+function plainResult<T>(error: unknown, fallback: string): VisitorResult<T> {
+  if (error instanceof VisitorError) {
+    const message = error.message && error.message !== error.code ? error.message : fallback;
+    return fail(error.code, message);
+  }
+  const code = error instanceof Error ? error.message : "";
+  if (code === "forbidden") return fail("forbidden", "Only a church admin can do that.");
+  if (code === "unauthenticated") return fail("unauthenticated", "Sign in again to continue.");
+  if (code) {
+    // A feature guard's own sentence ("Attendance isn't turned on…") is
+    // written for people; pass it through. Anything else is a bug.
+    if (/^[A-Z].*[.!]$/.test(code) && !/[{}<>]|error|exception|violat|relation|column/i.test(code)) {
+      return fail("forbidden", code);
+    }
+  }
+  console.error("[attendance/services]", error);
+  return fail("unavailable", fallback);
+}
+
 export async function getOccurrences(input?: {
   campusId?: string;
   status?: "scheduled" | "active" | "completed" | "cancelled";
@@ -94,22 +119,53 @@ export type ServiceMethodCounts = {
 export type ServicesBoardData = {
   upcoming: ServiceOccurrence[];
   recent: ServiceOccurrence[];
+  /** Other services from the schedule (Bible study, weeknights, classes). */
+  other: { upcoming: ServiceOccurrence[]; recent: ServiceOccurrence[] };
   counts: Record<string, ServiceMethodCounts>;
+  /** The board could not be read. Not the same as "no services yet". */
+  failed: boolean;
 };
 
 /**
  * The Services board: open and upcoming services, recent ones, and for each
  * how many were counted and by which method. Counted in SQL by
  * `attendance_report`, never by loading facts.
+ *
+ * Services are kept in line with the schedule after every Setup change and by
+ * the generation cron. If nothing is coming up at all, the board also brings
+ * the schedule forward itself (at most every ten minutes per church), so
+ * nobody has to press a "refresh" button to see this week's services.
  */
 export async function getServicesBoard(): Promise<ServicesBoardData> {
-  const empty: ServicesBoardData = { upcoming: [], recent: [], counts: {} };
+  const empty: ServicesBoardData = {
+    upcoming: [],
+    recent: [],
+    other: { upcoming: [], recent: [] },
+    counts: {},
+    failed: false,
+  };
   try {
     const { churchId } = await requireAttendanceStaff();
-    const { upcoming, recent } = await listBoardOccurrences(churchId);
+    let board = await listBoardOccurrences(churchId);
 
-    const all = [...upcoming, ...recent];
-    if (all.length === 0) return { ...empty, upcoming, recent };
+    if (board.upcoming.length === 0 && board.other.upcoming.length === 0) {
+      const allowed = await checkRateLimit(`attendance:board-sync:${churchId}`, {
+        limit: 1,
+        windowMs: 10 * 60 * 1000,
+      });
+      if (allowed.ok) {
+        try {
+          const synced = await syncChurchOccurrences(churchId);
+          if (synced.created + synced.refreshed > 0) board = await listBoardOccurrences(churchId);
+        } catch {
+          // The cron catches up; the board still shows what it has.
+        }
+      }
+    }
+
+    const { upcoming, recent, other } = board;
+    const all = [...upcoming, ...recent, ...other.upcoming, ...other.recent];
+    if (all.length === 0) return { ...empty, upcoming, recent, other };
 
     const starts = all.map((occurrence) => Date.parse(occurrence.startsAtUtc));
     const report = await getAttendanceReport({
@@ -123,18 +179,24 @@ export async function getServicesBoard(): Promise<ServicesBoardData> {
     for (const row of report) {
       counts[row.occurrenceId] = { counted: row.counted, bySource: row.bySource };
     }
-    return { upcoming, recent, counts };
-  } catch {
-    return empty;
+    return { upcoming, recent, other, counts, failed: false };
+  } catch (error) {
+    console.error("[attendance/services] board:", error);
+    return { ...empty, failed: true };
   }
 }
 
+/**
+ * Everyone in People, with whether and how they were counted for one service.
+ * Null when it could not be read, so the page never says "nobody here" about
+ * a roster it failed to load.
+ */
 export async function getOccurrenceRoster(
   occurrenceId: string,
-): Promise<RosterEntry[]> {
+): Promise<RosterEntry[] | null> {
   const auth = await getChurchAuth();
-  if (!auth) return [];
-  return getRoster(auth.churchId, occurrenceId).catch(() => []);
+  if (!auth) return null;
+  return getRoster(auth.churchId, occurrenceId).catch(() => null);
 }
 
 /** One person, through the same command a geofence attempt uses. */
@@ -153,7 +215,7 @@ export async function markMemberPresent(input: {
     revalidateAttendance();
     return { ok: true, data: { outcome: result.outcome, reason: result.reason } };
   } catch (error) {
-    return toVisitorResult(error);
+    return plainResult(error, "We couldn't mark them here. Try again.");
   }
 }
 
@@ -182,7 +244,7 @@ export async function markRosterPresent(input: {
     revalidateAttendance();
     return { ok: true, data: results };
   } catch (error) {
-    return toVisitorResult(error);
+    return plainResult(error, "We couldn't mark everyone here. Nobody was marked twice. Try again.");
   }
 }
 
@@ -204,7 +266,7 @@ export async function applyCorrection(input: {
     revalidateAttendance();
     return { ok: true, data: { newStatus: result.newStatus } };
   } catch (error) {
-    return toVisitorResult(error);
+    return plainResult(error, "We couldn't change that. Try again.");
   }
 }
 
@@ -221,7 +283,7 @@ export async function addManualService(
     revalidateAttendance();
     return { ok: true, data: occurrence };
   } catch (error) {
-    return toVisitorResult(error);
+    return plainResult(error, "We couldn't add that service. Try again.");
   }
 }
 
@@ -241,7 +303,7 @@ export async function cancelService(input: {
     revalidateAttendance();
     return { ok: true, data: null };
   } catch (error) {
-    return toVisitorResult(error);
+    return plainResult(error, "We couldn't cancel that service. Try again.");
   }
 }
 
@@ -261,7 +323,7 @@ export async function refreshOccurrenceHorizon(): Promise<
     revalidateAttendance();
     return { ok: true, data: result };
   } catch (error) {
-    return toVisitorResult(error);
+    return plainResult(error, "We couldn't bring your services up to date. Try again in a few minutes.");
   }
 }
 
@@ -324,7 +386,7 @@ export async function getCheckinDisplayState(
       },
     };
   } catch (error) {
-    return toVisitorResult(error);
+    return plainResult(error, "We couldn't load the check-in screen. Try again.");
   }
 }
 
@@ -404,7 +466,7 @@ export async function startCheckinDisplay(input: {
       },
     };
   } catch (error) {
-    return toVisitorResult(error);
+    return plainResult(error, "We couldn't start the check-in screen. Try again.");
   }
 }
 
@@ -437,7 +499,7 @@ export async function refreshDisplayPairing(input: {
       data: { pairingCode: pairing.display, pairingExpiresAt: pairing.expiresAt },
     };
   } catch (error) {
-    return toVisitorResult(error);
+    return plainResult(error, "We couldn't make a new code. Try again.");
   }
 }
 
@@ -462,7 +524,7 @@ export async function stopCheckinDisplay(input: {
     revalidateAttendance();
     return { ok: true, data: { stopped } };
   } catch (error) {
-    return toVisitorResult(error);
+    return plainResult(error, "We couldn't stop the check-in screen. Try again.");
   }
 }
 
@@ -509,7 +571,7 @@ export async function listKiosks(
       })),
     };
   } catch (error) {
-    return toVisitorResult(error);
+    return plainResult(error, "We couldn't load your check-in stations. Try again.");
   }
 }
 
@@ -553,7 +615,7 @@ export async function startKiosk(input: {
       },
     };
   } catch (error) {
-    return toVisitorResult(error);
+    return plainResult(error, "We couldn't set up a check-in station. Try again.");
   }
 }
 
@@ -571,7 +633,7 @@ export async function endKiosk(input: {
     revalidateAttendance();
     return { ok: true, data: { ended } };
   } catch (error) {
-    return toVisitorResult(error);
+    return plainResult(error, "We couldn't turn off that check-in station. Try again.");
   }
 }
 

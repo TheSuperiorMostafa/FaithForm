@@ -15,19 +15,27 @@ export function OnboardingProgress({
 
   return (
     <div className="w-full">
-      <div className="mb-2 flex items-center justify-between text-sm">
-        <span className="font-medium text-foreground">
+      <div className="mb-2 flex items-center justify-between text-base">
+        <span className="font-semibold text-foreground">
           Step {step} of {total}
         </span>
         <span className="text-muted-foreground">{labels[step - 1]}</span>
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-muted">
+      <div
+        className="h-2 overflow-hidden rounded-full bg-muted"
+        role="progressbar"
+        aria-label="Setup progress"
+        aria-valuemin={1}
+        aria-valuemax={total}
+        aria-valuenow={step}
+        aria-valuetext={`Step ${step} of ${total}: ${labels[step - 1] ?? ""}`}
+      >
         <div
-          className="h-full rounded-full bg-accent transition-all duration-500 ease-out"
+          className="h-full rounded-full bg-accent transition-all duration-500 ease-out motion-reduce:transition-none"
           style={{ width: `${pct}%` }}
         />
       </div>
-      <div className="mt-3 hidden justify-between gap-1 sm:flex">
+      <div className="mt-3 hidden justify-between gap-1 sm:flex" aria-hidden>
         {labels.map((label, i) => {
           const idx = i + 1;
           const active = idx === step;
@@ -36,7 +44,7 @@ export function OnboardingProgress({
             <span
               key={label}
               className={cn(
-                "flex-1 truncate text-center text-[11px]",
+                "flex-1 truncate text-center text-sm",
                 active && "font-semibold text-accent",
                 done && "text-foreground",
                 !active && !done && "text-muted-foreground",

@@ -1,231 +1,159 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ExternalLink } from "lucide-react";
-import { DonationsTable } from "@/components/giving/donations-table";
-import { FundBreakdown } from "@/components/giving/fund-breakdown";
-import { GivingSetupCta } from "@/components/giving/giving-setup-cta";
-import { QrCodeCard } from "@/components/giving/qr-code-card";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { FaithFormGivingPanel } from "@/components/giving/faithform-giving-panel";
+import { Suspense } from "react";
+import { HandHeart } from "lucide-react";
+
+import { loadFaithFormGiving } from "@/app/dashboard/giving/faithform-actions";
+import { GIVING_COPY } from "@/components/giving/giving-page-parts";
+import { GivingOverview } from "@/components/giving/giving-overview";
+import { GivingSetup, type SetupFund } from "@/components/giving/giving-setup";
+import { GivingOverviewSkeleton, GivingSetupSkeleton } from "@/components/giving/skeletons";
+import { StripeReturn } from "@/components/giving/stripe-return";
+import { EmptyState } from "@/components/ui/empty-state";
+import { ErrorState } from "@/components/ui/error-state";
+import { PageHeader } from "@/components/ui/page-header";
 import { getChurchAuth } from "@/lib/auth/church";
-import {
-  getChurchGivingProfile,
-  getGivingByFundPeriods,
-  getGivingSummary,
-} from "@/lib/queries/giving";
-import { formatCents } from "@/lib/utils/currency";
+import { feeExplanation } from "@/lib/giving/fee-copy";
+import { ensureDefaultFunds } from "@/lib/giving/funds";
+import { resolveSetupStep, type SetupStep } from "@/lib/giving/setup";
+import { getChurchAddressLine, getChurchGivingProfile } from "@/lib/queries/giving";
+import { applicationFeeAmount } from "@/lib/stripe/config";
+import type { ChurchGivingProfile } from "@/types/giving";
 
 export const dynamic = "force-dynamic";
 
-export default async function GivingPage() {
+type PageProps = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+function first(value: string | string[] | undefined): string | undefined {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+export default async function GivingPage({ searchParams }: PageProps) {
+  const query = await searchParams;
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");
+
+  // Back from the payment partner's onboarding (lib/stripe/connect.ts).
+  if (first(query.stripe_return) || first(query.stripe_refresh)) {
+    return (
+      <StripeReturn mode={first(query.stripe_return) ? "return" : "refresh"} isAdmin={auth.isAdmin} />
+    );
+  }
 
   const profile = await getChurchGivingProfile(auth.churchId);
   if (!profile) {
     return (
-      <div className="mx-auto max-w-md py-16 text-center text-sm text-muted-foreground">
-        <p>Unable to load your church giving profile.</p>
-        <p className="mt-2">
-          If this continues, contact support or check that your account is linked to a
-          church in Settings.
-        </p>
+      <div className="flex w-full flex-col gap-8">
+        <PageHeader title={GIVING_COPY.overview.title} description={GIVING_COPY.overview.description} />
+        <ErrorState
+          title="Giving didn't load"
+          description="No gifts were lost. Refresh the page to try again, and if it keeps happening, contact FaithForm support."
+        />
       </div>
     );
   }
 
-  if (!profile.stripeChargesEnabled) {
+  const step = resolveSetupStep({
+    requested: first(query.step),
+    chargesEnabled: profile.stripeChargesEnabled,
+    hasEin: Boolean(profile.ein),
+    hasAccount: Boolean(profile.stripeAccountId),
+  });
+
+  if (step && !(profile.stripeChargesEnabled && !auth.isAdmin)) {
     return (
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-6">
-        <GivingPageHeader showSettingsLink={auth.isAdmin} />
-        <GivingSetupCta />
+      <div className="flex w-full flex-col gap-8">
+        <PageHeader title={GIVING_COPY.setup.title} description={GIVING_COPY.setup.description} />
+        {auth.isAdmin ? (
+          <Suspense key={step} fallback={<GivingSetupSkeleton step={step} />}>
+            <SetupSection churchId={auth.churchId} profile={profile} step={step} />
+          </Suspense>
+        ) : (
+          <EmptyState
+            icon={HandHeart}
+            title="Giving isn't set up yet"
+            description="A church admin can connect your church's bank here. Once that's done, you'll see every gift on this page."
+          />
+        )}
       </div>
     );
   }
 
-  const [summary, fundPeriods] = await Promise.all([
-    getGivingSummary(auth.churchId),
-    getGivingByFundPeriods(auth.churchId),
-  ]);
-  const fundMonth = fundPeriods.month;
-  const fundYtd = fundPeriods.ytd;
-
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
-      <GivingPageHeader showSettingsLink={auth.isAdmin} />
-
-      {/*
-        Which funds appear in the visitor app. Deliberately on this page rather
-        than in settings: publishing a fund is a giving decision, and the person
-        making it is already looking at giving.
-      */}
-      <FaithFormGivingPanel isAdmin={auth.isAdmin} />
-
-      {summary.failedSubscriptionCount > 0 && (
-        <div className="rounded-lg border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm">
-          <strong>{summary.failedSubscriptionCount}</strong> recurring{" "}
-          {summary.failedSubscriptionCount === 1 ? "donor needs" : "donors need"}{" "}
-          attention —{" "}
-          <Link
-            href="/dashboard/giving/recurring"
-            className="font-medium text-accent underline"
-          >
-            View failed payments
-          </Link>
-        </div>
-      )}
-
-      <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard
-          label="Today"
-          value={summary.todayCents}
-          givers={summary.todayGivers}
+    <div className="flex w-full flex-col gap-8">
+      <PageHeader title={GIVING_COPY.overview.title} description={GIVING_COPY.overview.description} />
+      <Suspense fallback={<GivingOverviewSkeleton headerless />}>
+        <GivingOverview
+          churchId={auth.churchId}
+          isAdmin={auth.isAdmin}
+          givePageUrl={profile.givePageUrl}
         />
-        <StatCard
-          label="This month"
-          value={summary.monthCents}
-          givers={summary.monthGivers}
-        />
-        <StatCard
-          label="Year to date"
-          value={summary.yearCents}
-          givers={summary.yearGivers}
-        />
-      </div>
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">By fund — this month</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <FundBreakdown title="" funds={fundMonth} />
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">By fund — YTD</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <FundBreakdown title="" funds={fundYtd} />
-          </CardContent>
-        </Card>
-      </div>
-
-      <Card>
-        <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-medium text-foreground">Your giving page</p>
-            <p className="text-sm text-muted-foreground break-all">{profile.givePageUrl}</p>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <a
-              href={profile.givePageUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex h-8 items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 text-sm font-medium hover:bg-muted"
-            >
-              <ExternalLink className="h-4 w-4" />
-              Open page
-            </a>
-          </div>
-        </CardContent>
-      </Card>
-
-      <QrCodeCard givePageUrl={profile.givePageUrl} />
-
-      <div className="flex flex-wrap gap-2 text-sm">
-        <Link
-          href="/dashboard/giving/gifts"
-          className="rounded-lg border border-border px-3 py-2 font-medium hover:border-accent"
-        >
-          All gifts
-        </Link>
-        <Link
-          href="/dashboard/giving/donors"
-          className="rounded-lg border border-border px-3 py-2 font-medium hover:border-accent"
-        >
-          Donors
-        </Link>
-        <Link
-          href="/dashboard/giving/recurring"
-          className="rounded-lg border border-border px-3 py-2 font-medium hover:border-accent"
-        >
-          Recurring gifts
-        </Link>
-        <Link
-          href="/dashboard/giving/payouts"
-          className="rounded-lg border border-border px-3 py-2 font-medium hover:border-accent"
-        >
-          Payouts
-        </Link>
-        <Link
-          href="/dashboard/giving/statements"
-          className="rounded-lg border border-border px-3 py-2 font-medium hover:border-accent"
-        >
-          Statements
-        </Link>
-      </div>
-
-      <Card className="overflow-hidden">
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Recent gifts</CardTitle>
-          <Link
-            href="/dashboard/giving/gifts"
-            className="text-sm text-accent hover:underline"
-          >
-            View all
-          </Link>
-        </CardHeader>
-        <CardContent className="p-0">
-          <DonationsTable donations={summary.recentDonations} showFund />
-        </CardContent>
-      </Card>
+      </Suspense>
     </div>
   );
 }
 
-function GivingPageHeader({ showSettingsLink = false }: { showSettingsLink?: boolean }) {
-  return (
-    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-      <div>
-        <h1 className="border-l-4 border-accent pl-3 font-heading text-[26px] font-bold">
-          Giving
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Track gifts, donors, recurring donations, and payouts to your church account.
-        </p>
-      </div>
-      {showSettingsLink && (
-        <Link
-          href="/dashboard/settings?tab=giving"
-          className="shrink-0 text-sm font-medium text-accent hover:underline"
-        >
-          Giving settings
-        </Link>
-      )}
-    </div>
-  );
-}
-
-function StatCard({
-  label,
-  value,
-  givers,
+async function SetupSection({
+  churchId,
+  profile,
+  step,
 }: {
-  label: string;
-  value: number;
-  givers: number;
+  churchId: string;
+  profile: ChurchGivingProfile;
+  step: SetupStep;
 }) {
+  let funds: SetupFund[] = [];
+  let appBlockedReason: string | null = null;
+  let addressLine = profile.statementAddress ?? "";
+
+  if (step === "details" && !addressLine) {
+    addressLine = await getChurchAddressLine(churchId);
+  }
+  if (step === "funds") {
+    await ensureDefaultFunds(churchId);
+    const state = await loadFaithFormGiving();
+    if (!state) {
+      return (
+        <ErrorState
+          compact
+          title="Your funds didn't load"
+          description="Nothing was lost. Refresh the page to try again."
+        />
+      );
+    }
+    funds = state.funds
+      .filter((f) => f.isActive)
+      .map((f) => ({
+        fundId: f.fundId,
+        name: f.name,
+        isDefault: f.isDefault,
+        inApp: f.visibility !== "none",
+      }));
+    if (!state.readiness.canAcceptPayments) {
+      appBlockedReason = state.readiness.givingFeatureEnabled
+        ? "Your bank connection isn't finished, so funds can't be shown in the app yet."
+        : "Giving in the app is switched off for your church. Your giving page still works.";
+    }
+  }
+
   return (
-    <Card>
-      <CardContent className="p-4">
-        <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
-        <p className="mt-1 font-heading text-2xl font-bold">{formatCents(value)}</p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {givers} {givers === 1 ? "giver" : "givers"}
-        </p>
-      </CardContent>
-    </Card>
+    <GivingSetup
+      step={step}
+      churchName={profile.churchName}
+      ein={profile.ein ?? null}
+      statementAddress={addressLine}
+      connection={{
+        hasAccount: Boolean(profile.stripeAccountId),
+        status: profile.stripeOnboardingStatus,
+        chargesEnabled: profile.stripeChargesEnabled,
+        payoutsEnabled: profile.stripePayoutsEnabled,
+        requirementsDue: profile.stripeRequirementsDue,
+      }}
+      funds={funds}
+      appBlockedReason={appBlockedReason}
+      givePageUrl={profile.givePageUrl}
+      feeSummary={feeExplanation(applicationFeeAmount()).summary}
+    />
   );
 }

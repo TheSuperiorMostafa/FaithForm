@@ -33,7 +33,7 @@ export const LESSON_ANCHOR = "lesson";
 
 /** Said on the card and by the server, so a non-admin never meets a surprise. */
 export const ONLY_ADMINS_CAN_SHARE =
-  "Only church admins can share sermons in the FaithForm app.";
+  "Only church admins can publish sermons to the app.";
 
 /**
  * Whether the app would show a member anything worth opening.

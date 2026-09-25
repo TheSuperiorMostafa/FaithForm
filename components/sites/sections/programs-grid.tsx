@@ -39,7 +39,7 @@ export const programsGridSection = defineSection<ProgramsGridContent>({
   type: "programs_grid",
   label: "Programs",
   fields: [
-    { key: "eyebrow", label: "Eyebrow", type: "text" },
+    { key: "eyebrow", label: "Small heading above", type: "text" },
     { key: "headline", label: "Headline", type: "headline" },
     {
       key: "link",

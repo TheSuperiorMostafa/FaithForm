@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, RefreshCw, Search, Sparkles } from "lucide-react";
 import { ThemePreview } from "@/components/sermon-builder/theme-preview";
 import { ThemeUploadButton } from "@/components/sermon-builder/theme-upload-button";
+import { AdvancedSection } from "@/components/ui/advanced-section";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -17,6 +18,11 @@ import { cn } from "@/lib/utils";
 type ThemePickerProps = {
   selectedId: string;
   onSelect: (id: string) => void;
+  /**
+   * Called when the picker swaps a theme that is no longer in the catalog
+   * for a current one, which is not the person's choice. Defaults to onSelect.
+   */
+  onCoerce?: (id: string) => void;
   context?: {
     title?: string;
     scripture?: string;
@@ -35,21 +41,23 @@ type FilterPillsProps = {
 function FilterPills({ label, value, options, onChange }: FilterPillsProps) {
   if (options.length === 0) return null;
 
+  const pill = (active: boolean) =>
+    cn(
+      "min-h-10 rounded-full border px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+      active
+        ? "border-primary bg-primary text-primary-foreground"
+        : "border-border hover:border-primary/50",
+    );
+
   return (
-    <div className="space-y-1.5">
-      <p className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-        {label}
-      </p>
+    <div role="group" aria-label={label} className="space-y-2">
+      <p className="text-sm font-semibold text-foreground">{label}</p>
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
+          aria-pressed={value === "all"}
           onClick={() => onChange("all")}
-          className={cn(
-            "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-            value === "all"
-              ? "border-primary bg-primary text-primary-foreground"
-              : "border-border hover:border-primary/50",
-          )}
+          className={pill(value === "all")}
         >
           All
         </button>
@@ -57,13 +65,9 @@ function FilterPills({ label, value, options, onChange }: FilterPillsProps) {
           <button
             key={opt.id}
             type="button"
+            aria-pressed={value === opt.id}
             onClick={() => onChange(opt.id)}
-            className={cn(
-              "rounded-full border px-3 py-1 text-xs font-medium capitalize transition-colors",
-              value === opt.id
-                ? "border-primary bg-primary text-primary-foreground"
-                : "border-border hover:border-primary/50",
-            )}
+            className={cn(pill(value === opt.id), "capitalize")}
           >
             {opt.id.replace(/-/g, " ")} ({opt.count})
           </button>
@@ -73,7 +77,10 @@ function FilterPills({ label, value, options, onChange }: FilterPillsProps) {
   );
 }
 
-export function ThemePicker({ selectedId, onSelect, context }: ThemePickerProps) {
+/** How many themes the "Suggested" row shows before "More themes". */
+const SUGGESTED_COUNT = 6;
+
+export function ThemePicker({ selectedId, onSelect, onCoerce, context }: ThemePickerProps) {
   const [themes, setThemes] = useState<SlideTheme[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -109,14 +116,14 @@ export function ThemePicker({ selectedId, onSelect, context }: ThemePickerProps)
             !nextThemes.some((t) => t.id === selectedId)
           ) {
             const featured = nextThemes.find((t) => t.featured);
-            onSelect(featured?.id ?? nextThemes[0]!.id);
+            (onCoerce ?? onSelect)(featured?.id ?? nextThemes[0]!.id);
           }
         } else {
-          setLoadError(data.error ?? "Could not load themes");
+          setLoadError("We couldn't load the slide themes. Refresh the page to try again.");
         }
       })
       .catch(() => {
-        if (!cancelled) setLoadError("Could not load themes");
+        if (!cancelled) setLoadError("We couldn't load the slide themes. Refresh the page to try again.");
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -139,20 +146,6 @@ export function ThemePicker({ selectedId, onSelect, context }: ThemePickerProps)
       }),
     [themes, debouncedQuery, category, visualStyle, seasonal],
   );
-
-  const showFeatured =
-    !debouncedQuery &&
-    category === "all" &&
-    visualStyle === "all" &&
-    seasonal === "all";
-  const featured = useMemo(
-    () => filtered.filter((t) => t.featured),
-    [filtered],
-  );
-  const featuredIds = new Set(featured.map((t) => t.id));
-  const nonFeaturedFiltered = showFeatured
-    ? filtered.filter((t) => !featuredIds.has(t.id))
-    : filtered;
 
   const suggestedThemes = useMemo(
     () =>
@@ -196,10 +189,33 @@ export function ThemePicker({ selectedId, onSelect, context }: ThemePickerProps)
     onSelect(id);
   }
 
+  // Suggested first: themes matched to the passage, then featured ones, and
+  // always the one already chosen so it never hides behind "More themes".
+  const suggestedRow = useMemo(() => {
+    const row: SlideTheme[] = [];
+    const add = (theme: SlideTheme | undefined) => {
+      if (theme && !row.some((t) => t.id === theme.id)) row.push(theme);
+    };
+    add(themes.find((t) => t.id === selectedId));
+    suggestedThemes.forEach(add);
+    themes.filter((t) => t.featured).forEach(add);
+    themes.forEach((t) => {
+      if (row.length < SUGGESTED_COUNT) add(t);
+    });
+    return row.slice(0, SUGGESTED_COUNT);
+  }, [themes, suggestedThemes, selectedId]);
+
+  const selectedTheme = themes.find((t) => t.id === selectedId);
+  const moreOpen =
+    Boolean(debouncedQuery) ||
+    category !== "all" ||
+    visualStyle !== "all" ||
+    seasonal !== "all";
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-        <Loader2 className="mr-2 size-4 animate-spin" />
+      <div className="flex items-center justify-center py-12 text-[15px] text-muted-foreground">
+        <Loader2 aria-hidden className="mr-2 size-5 animate-spin motion-reduce:animate-none" />
         Loading themes…
       </div>
     );
@@ -207,154 +223,128 @@ export function ThemePicker({ selectedId, onSelect, context }: ThemePickerProps)
 
   if (loadError) {
     return (
-      <p className="py-8 text-center text-sm text-destructive">{loadError}</p>
+      <p role="alert" className="py-8 text-center text-[15px] text-destructive">
+        {loadError}
+      </p>
     );
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by theme, season, symbol, or style…"
-            className="pl-9"
-          />
-        </div>
-        <ThemeUploadButton
-          onUploaded={(theme) => {
-            // Show it immediately and select it — that's why they uploaded it.
-            setThemes((prev) => [theme, ...prev.filter((t) => t.id !== theme.id)]);
-            setCategory(UPLOADS_CATEGORY);
-            onSelect(theme.id);
-          }}
-        />
-      </div>
-
+    <div className="space-y-5">
       <div className="space-y-3">
-        <FilterPills
-          label="Category"
-          value={category}
-          options={filterOptions.categories}
-          onChange={setCategory}
-        />
-        <FilterPills
-          label="Visual style"
-          value={visualStyle}
-          options={filterOptions.visualStyles}
-          onChange={setVisualStyle}
-        />
-        <FilterPills
-          label="Seasonal"
-          value={seasonal}
-          options={filterOptions.seasonal}
-          onChange={setSeasonal}
-        />
-      </div>
-
-      {scriptureText && (
-        <div className="space-y-2 rounded-xl border border-accent/40 bg-accent/5 p-3">
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <p className="flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                <Sparkles className="size-3.5 text-accent" />
-                Suggested for you
-              </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Matched to the imagery in
-                {context?.scripture ? ` ${context.scripture}` : " your passage"}.
-              </p>
-            </div>
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="flex items-center gap-2 text-base font-semibold text-foreground">
+              <Sparkles aria-hidden className="size-5 text-accent" />
+              Suggested
+            </p>
+            <p className="text-[15px] text-muted-foreground">
+              {suggestedThemes.length > 0
+                ? `Matched to the imagery in ${context?.scripture || "your passage"}.`
+                : suggestLoading
+                  ? "Reading your passage to suggest a theme…"
+                  : "Popular themes. Choose a passage and we'll suggest ones that fit it."}
+            </p>
+          </div>
+          {scriptureText && (
             <Button
               type="button"
               variant="ghost"
-              size="sm"
-              className="h-7 text-xs"
               disabled={suggestLoading}
               onClick={() => fetchSuggestions(true)}
             >
               {suggestLoading ? (
-                <Loader2 className="size-3 animate-spin" />
+                <Loader2 aria-hidden className="size-5 animate-spin motion-reduce:animate-none" />
               ) : (
-                <RefreshCw className="size-3" />
+                <RefreshCw aria-hidden className="size-5" />
               )}
-              Refresh
+              Suggest others
             </Button>
+          )}
+        </div>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {suggestedRow.map((theme) => (
+            <ThemePreview
+              key={theme.id}
+              theme={theme}
+              selected={selectedId === theme.id}
+              onSelect={() => handleSelect(theme.id)}
+            />
+          ))}
+        </div>
+        {selectedTheme && (
+          <p className="text-[15px] text-muted-foreground" role="status">
+            Chosen: <strong className="text-foreground">{selectedTheme.name}</strong>
+          </p>
+        )}
+      </div>
+
+      <AdvancedSection
+        title="More themes"
+        description="Search every theme, filter by style or season, or upload your own photo."
+        forceOpen={moreOpen}
+      >
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+          <div className="relative flex-1">
+            <Search aria-hidden className="absolute left-3 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search by theme, season, symbol, or style"
+              aria-label="Search themes"
+              className="pl-10"
+            />
           </div>
-          {suggestLoading && suggestedThemes.length === 0 ? (
-            <p className="text-xs text-muted-foreground">
-              Reading your passage…
+          <ThemeUploadButton
+            onUploaded={(theme) => {
+              // Show it immediately and select it — that's why they uploaded it.
+              setThemes((prev) => [theme, ...prev.filter((t) => t.id !== theme.id)]);
+              setCategory(UPLOADS_CATEGORY);
+              onSelect(theme.id);
+            }}
+          />
+        </div>
+
+        <div className="space-y-4">
+          <FilterPills
+            label="Category"
+            value={category}
+            options={filterOptions.categories}
+            onChange={setCategory}
+          />
+          <FilterPills
+            label="Look"
+            value={visualStyle}
+            options={filterOptions.visualStyles}
+            onChange={setVisualStyle}
+          />
+          <FilterPills
+            label="Season"
+            value={seasonal}
+            options={filterOptions.seasonal}
+            onChange={setSeasonal}
+          />
+        </div>
+
+        <div className="max-h-[560px] overflow-y-auto pr-1">
+          {filtered.length === 0 ? (
+            <p className="py-8 text-center text-[15px] text-muted-foreground">
+              No themes match. Try a different word, or choose All.
             </p>
-          ) : suggestedThemes.length > 0 ? (
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-              {suggestedThemes.map((theme) => (
+          ) : (
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+              {filtered.map((theme) => (
                 <ThemePreview
                   key={theme.id}
                   theme={theme}
                   selected={selectedId === theme.id}
                   onSelect={() => handleSelect(theme.id)}
-                  compact
                 />
               ))}
             </div>
-          ) : (
-            <p className="text-xs text-muted-foreground">
-              No standout imagery in this passage — browse the full catalog
-              below.
-            </p>
           )}
         </div>
-      )}
-
-      <div className="max-h-[520px] space-y-4 overflow-y-auto pr-1">
-        {filtered.length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">
-            No themes match your search. Try a different keyword or filter.
-          </p>
-        ) : (
-          <>
-            {showFeatured && featured.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  Featured
-                </p>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                  {featured.map((theme) => (
-                    <ThemePreview
-                      key={theme.id}
-                      theme={theme}
-                      selected={selectedId === theme.id}
-                      onSelect={() => handleSelect(theme.id)}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {nonFeaturedFiltered.length > 0 && (
-              <div className="space-y-2">
-                {showFeatured && (
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    All themes ({nonFeaturedFiltered.length})
-                  </p>
-                )}
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                  {nonFeaturedFiltered.map((theme) => (
-                    <ThemePreview
-                      key={theme.id}
-                      theme={theme}
-                      selected={selectedId === theme.id}
-                      onSelect={() => handleSelect(theme.id)}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-          </>
-        )}
-      </div>
+      </AdvancedSection>
     </div>
   );
 }

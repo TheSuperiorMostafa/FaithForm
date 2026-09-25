@@ -12,6 +12,7 @@ import { requireChurchAuth } from "@/lib/auth/church";
 import { verifySermonAccess } from "@/lib/queries/sermons";
 import { createClient } from "@/lib/supabase/server";
 import { featureAccessDenied } from "@/lib/features/guard";
+import { SERMON_NOT_FOUND_MESSAGE, sermonRouteError } from "@/lib/sermon-builder/route-error";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -29,7 +30,7 @@ export async function GET(
     const supabase = createClient();
     const sermon = await verifySermonAccess(supabase, id, auth.churchId);
     if (!sermon) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+      return NextResponse.json({ error: SERMON_NOT_FOUND_MESSAGE }, { status: 404 });
     }
 
     let buffer: Buffer;
@@ -40,7 +41,7 @@ export async function GET(
 
       if (refs.length === 0 || !translation) {
         return NextResponse.json(
-          { error: "Simple sermon is missing scripture or translation" },
+          { error: "This sermon has no Bible passage yet. Add one in Edit sermon, then download again." },
           { status: 400 },
         );
       }
@@ -53,7 +54,13 @@ export async function GET(
         // reading on the wall is worse than a message saying which one broke.
         const resolved = await resolveNumberedPassage(ref, translation);
         if (!resolved.ok) {
-          return NextResponse.json({ error: resolved.error }, { status: 400 });
+          console.error("[sermon/pptx] passage lookup failed", resolved.ref, resolved.error);
+          return NextResponse.json(
+            {
+              error: `We couldn't look up ${resolved.ref}, so the PowerPoint wasn't made. Check that passage in Edit sermon, then try again.`,
+            },
+            { status: 400 },
+          );
         }
 
         translationLabel = resolved.passage.translation;
@@ -97,8 +104,6 @@ export async function GET(
       },
     });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "PPTX export failed";
-    const status = message === "Unauthorized" ? 401 : 500;
-    return NextResponse.json({ error: message }, { status });
+    return sermonRouteError(e, "We couldn't make the PowerPoint file.");
   }
 }

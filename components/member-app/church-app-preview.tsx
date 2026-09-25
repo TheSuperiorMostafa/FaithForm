@@ -120,7 +120,7 @@ export function ChurchAppPreview({
       <div
         role="radiogroup"
         aria-label="Preview as"
-        className="inline-flex rounded-full border border-border bg-muted/50 p-1 text-xs font-semibold"
+        className="inline-flex rounded-full border border-border bg-muted/50 p-1 text-sm font-semibold"
       >
         {(
           [
@@ -135,7 +135,7 @@ export function ChurchAppPreview({
             aria-checked={mode === value}
             onClick={() => setMode(value)}
             className={cn(
-              "rounded-full px-3.5 py-1.5 transition-colors",
+              "inline-flex min-h-11 items-center rounded-full px-4 transition-colors",
               mode === value
                 ? "bg-background text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground",

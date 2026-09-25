@@ -10,6 +10,9 @@ type ThemeUploadButtonProps = {
   onUploaded: (theme: SlideTheme) => void;
 };
 
+const UPLOAD_FAILED =
+  "We couldn't upload that photo. Please try again, or pick a different JPG, PNG or WebP image.";
+
 async function readError(res: Response): Promise<string> {
   // A body over the platform's limit is refused before the route runs, and
   // that refusal is not JSON. Reading it as JSON first turned the real message
@@ -17,9 +20,9 @@ async function readError(res: Response): Promise<string> {
   if (res.status === 413) return "That image is too large. Try one under 4MB.";
   try {
     const data = (await res.json()) as { error?: string };
-    return data.error ?? "Could not upload that image";
+    return data.error ?? UPLOAD_FAILED;
   } catch {
-    return `Could not upload that image (${res.status}).`;
+    return UPLOAD_FAILED;
   }
 }
 
@@ -39,13 +42,19 @@ export function ThemeUploadButton({ onUploaded }: ThemeUploadButtonProps) {
         method: "POST",
         body,
       });
-      if (!res.ok) throw new Error(await readError(res));
+      if (!res.ok) {
+        setError(await readError(res));
+        return;
+      }
 
       const data = (await res.json()) as { theme?: SlideTheme };
-      if (!data.theme) throw new Error("Could not upload that image");
+      if (!data.theme) {
+        setError(UPLOAD_FAILED);
+        return;
+      }
       onUploaded(data.theme);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not upload that image");
+    } catch {
+      setError(UPLOAD_FAILED);
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = "";
@@ -67,26 +76,25 @@ export function ThemeUploadButton({ onUploaded }: ThemeUploadButtonProps) {
       <Button
         type="button"
         variant="outline"
-        size="sm"
         disabled={uploading}
         onClick={() => inputRef.current?.click()}
       >
         {uploading ? (
           <>
-            <Loader2 className="size-4 animate-spin" />
+            <Loader2 aria-hidden className="size-5 animate-spin motion-reduce:animate-none" />
             Uploading…
           </>
         ) : (
           <>
-            <ImagePlus className="size-4" />
-            Upload your own theme
+            <ImagePlus aria-hidden className="size-5" />
+            Upload your own photo
           </>
         )}
       </Button>
       {error ? (
-        <p className="text-xs text-destructive">{error}</p>
+        <p role="alert" className="text-sm text-destructive">{error}</p>
       ) : (
-        <p className="text-xs text-muted-foreground">
+        <p className="max-w-xs text-sm text-muted-foreground">
           JPG, PNG, or WebP. Large photos are shrunk to fit on the way up. Saved
           under Uploads so you can reuse it.
         </p>

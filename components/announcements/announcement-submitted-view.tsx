@@ -7,201 +7,142 @@ import {
   Circle,
   ExternalLink,
   Mail,
-  Plus,
+  Pencil,
   Share2,
   Smartphone,
 } from "lucide-react";
-import { PublishedSwitch } from "@/components/announcements/published-switch";
+
+import { TakeDownButton } from "@/components/announcements/published-switch";
 import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/ui/status-badge";
+import {
+  ANNOUNCEMENT_STATE_LABEL,
+  ANNOUNCEMENT_STATE_TONE,
+  announcementState,
+  describeWhen,
+} from "@/lib/announcements/composer";
 import {
   describeAppAudience,
-  hasUnpublishedChannel,
   publishedChannels,
 } from "@/lib/announcements/published-channels";
 import type { CalendarSource } from "@/lib/integrations/types";
-import {
-  formatDateTimeRange,
-  type AnnouncementRow,
-} from "@/lib/queries/announcements";
+import type { AnnouncementRow } from "@/lib/queries/announcements";
 import { cn } from "@/lib/utils";
 
 type AnnouncementSubmittedViewProps = {
   announcement: AnnouncementRow;
   eventHtmlLink?: string | null;
   calendarSource?: CalendarSource;
-  /** Put in this week's email from the weekly queue rather than by publishing. */
+  /** Put in this week's email from the email card rather than by posting. */
   queuedForWeeklyEmail?: boolean;
   isAdmin?: boolean;
-  /** Opens the form for publishing it to the places it is not in yet. */
-  onPublishMore?: () => void;
-  /** Runs once it has gone back to the pending queue. */
-  onUnsubmitted?: () => void;
+  timeZone?: string | null;
+  /** Opens the composer to change it or share it in more places. */
+  onChange?: () => void;
+  /** Runs once it has been taken down. */
+  onTakenDown?: () => void;
 };
 
+/** A posted calendar event in the calendar's side panel: where it went, and what to do. */
 export function AnnouncementSubmittedView({
   announcement,
   eventHtmlLink,
   calendarSource = "google",
   queuedForWeeklyEmail = false,
   isAdmin = false,
-  onPublishMore,
-  onUnsubmitted,
+  timeZone,
+  onChange,
+  onTakenDown,
 }: AnnouncementSubmittedViewProps) {
   const channels = publishedChannels(announcement, { queuedForWeeklyEmail });
   const facebook = channels.facebook;
+  const state = announcementState(announcement, { queuedForWeeklyEmail });
 
   return (
     <div className="flex flex-col gap-5">
-      <div className="flex items-start gap-3 rounded-lg border border-green-200 bg-green-50 px-4 py-3 dark:border-green-500/30 dark:bg-green-500/10">
-        <Check className="mt-0.5 size-5 shrink-0 text-green-700 dark:text-green-400" />
-        <div className="min-w-0 flex-1">
-          <p
-            id={`published-${announcement.id}`}
-            className="font-semibold text-green-800 dark:text-green-300"
-          >
-            Published
-          </p>
-          <p className="text-sm text-green-700/90 dark:text-green-300/90">
-            This event was verified and sent to the places below.
-            {isAdmin && " Switch it off to unsubmit."}
-          </p>
-        </div>
+      <div className="flex flex-wrap items-center gap-3">
+        <StatusBadge tone={ANNOUNCEMENT_STATE_TONE[state]} size="lg">
+          {ANNOUNCEMENT_STATE_LABEL[state]}
+        </StatusBadge>
+        <span className="text-[15px] text-muted-foreground">
+          {describeWhen(
+            {
+              startAt: announcement.start_at,
+              endAt: announcement.end_at,
+              allDay: Boolean(announcement.all_day),
+            },
+            timeZone,
+          )}
+        </span>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        {onChange && (
+          <Button type="button" variant="outline" onClick={onChange}>
+            <Pencil aria-hidden strokeWidth={1.75} />
+            Change
+          </Button>
+        )}
         {isAdmin && (
-          <PublishedSwitch
+          <TakeDownButton
             announcementId={announcement.id}
             title={announcement.title}
+            calendarLinked
             facebookIsLive={facebook.published && !facebook.scheduledFor}
-            labelledBy={`published-${announcement.id}`}
-            onUnsubmitted={onUnsubmitted}
-            className="mt-0.5"
+            onTakenDown={onTakenDown}
           />
         )}
       </div>
 
       <section className="flex flex-col gap-2" aria-labelledby={`where-${announcement.id}`}>
-        <h3
-          id={`where-${announcement.id}`}
-          className="text-xs font-medium uppercase tracking-wide text-muted-foreground"
-        >
-          Where it&apos;s published
+        <h3 id={`where-${announcement.id}`} className="text-[15px] font-semibold text-foreground">
+          Where it went
         </h3>
-        <ul className="flex flex-col divide-y divide-border rounded-lg border border-border">
+        <ul className="flex flex-col divide-y divide-border rounded-xl border border-border">
           <ChannelRow
             icon={<Smartphone className="size-4" strokeWidth={1.75} />}
-            name="FaithForm app"
-            published={channels.app.published}
+            name="The FaithForm app"
+            done={channels.app.published}
             status={describeAppAudience(channels.app.visibility)}
           />
           <ChannelRow
             icon={<Share2 className="size-4" strokeWidth={1.75} />}
             name="Facebook"
-            published={facebook.published}
+            done={facebook.published}
             status={
               !facebook.published
-                ? "Not posted"
+                ? "Not on Facebook"
                 : facebook.scheduledFor
-                  ? `Scheduled for ${formatPostTime(facebook.scheduledFor)}`
-                  : "Posted to your Page"
+                  ? `Scheduled for ${describeWhen(
+                      { startAt: facebook.scheduledFor, endAt: null, allDay: false },
+                      timeZone,
+                    )}`
+                  : "Posted on your Page"
             }
-            action={
-              facebook.published ? (
-                <ExternalAction href={facebook.url} label="View post" />
-              ) : null
-            }
+            action={facebook.published ? <ExternalAction href={facebook.url} label="View post" /> : null}
           />
           <ChannelRow
             icon={<Mail className="size-4" strokeWidth={1.75} />}
-            name="Weekly email"
-            published={channels.weeklyEmail.published}
-            status={
-              channels.weeklyEmail.published
-                ? "Included in the Monday email"
-                : "Not in the weekly email"
-            }
+            name="Monday's email"
+            done={channels.weeklyEmail.published}
+            status={channels.weeklyEmail.published ? "In Monday's email" : "Not in the email"}
           />
           <ChannelRow
             icon={<Calendar className="size-4" strokeWidth={1.75} />}
             name={calendarSource === "apple" ? "iCloud Calendar" : "Google Calendar"}
-            published
+            done
             status="On your church calendar"
-            action={
-              eventHtmlLink ? (
-                <ExternalAction href={eventHtmlLink} label="Open" />
-              ) : null
-            }
+            action={eventHtmlLink ? <ExternalAction href={eventHtmlLink} label="Open" /> : null}
           />
         </ul>
-        {onPublishMore && hasUnpublishedChannel(channels) && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="self-start"
-            onClick={onPublishMore}
-          >
-            <Plus className="size-4" strokeWidth={1.75} />
-            Publish somewhere else
-          </Button>
-        )}
       </section>
 
-      <dl className="grid gap-4 text-sm">
+      {announcement.body?.trim() && (
         <div>
-          <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            Title
-          </dt>
-          <dd className="mt-1 text-base font-semibold">{announcement.title}</dd>
+          <p className="text-[15px] font-semibold text-foreground">Message</p>
+          <p className="mt-1 whitespace-pre-wrap text-[15px]">{announcement.body}</p>
         </div>
-        {announcement.event_location && (
-          <div>
-            <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Where
-            </dt>
-            <dd className="mt-1">{announcement.event_location}</dd>
-          </div>
-        )}
-        <div>
-          <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-            When
-          </dt>
-          <dd className="mt-1 text-base">
-            {formatDateTimeRange(
-              announcement.start_at,
-              announcement.end_at,
-              null,
-              announcement.all_day,
-            )}
-          </dd>
-        </div>
-        {announcement.body?.trim() && (
-          <div>
-            <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Notes
-            </dt>
-            <dd className="mt-1 whitespace-pre-wrap">{announcement.body}</dd>
-          </div>
-        )}
-        {announcement.published_at && (
-          <div>
-            <dt className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              Published at
-            </dt>
-            <dd className="mt-1">
-              {new Date(announcement.published_at).toLocaleString()}
-            </dd>
-          </div>
-        )}
-        {announcement.last_publish_error && (
-          <div>
-            <dt className="text-xs font-medium uppercase tracking-wide text-amber-700 dark:text-amber-300">
-              Publish note
-            </dt>
-            <dd className="mt-1 text-amber-800 dark:text-amber-200">
-              {announcement.last_publish_error}
-            </dd>
-          </div>
-        )}
-      </dl>
+      )}
     </div>
   );
 }
@@ -209,13 +150,13 @@ export function AnnouncementSubmittedView({
 function ChannelRow({
   icon,
   name,
-  published,
+  done,
   status,
   action,
 }: {
   icon: ReactNode;
   name: string;
-  published: boolean;
+  done: boolean;
   status: string;
   action?: ReactNode;
 }) {
@@ -224,8 +165,8 @@ function ChannelRow({
       <span
         className={cn(
           "flex size-8 shrink-0 items-center justify-center rounded-full",
-          published
-            ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-400"
+          done
+            ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400"
             : "bg-muted text-muted-foreground",
         )}
         aria-hidden
@@ -233,20 +174,15 @@ function ChannelRow({
         {icon}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-1.5 text-sm font-semibold">
+        <span className="flex items-center gap-1.5 text-[15px] font-semibold">
           {name}
-          {published ? (
-            <Check className="size-3.5 text-green-700 dark:text-green-400" aria-label="Published" />
+          {done ? (
+            <Check className="size-4 text-emerald-700 dark:text-emerald-400" aria-label="Shared here" />
           ) : (
-            <Circle className="size-3 text-muted-foreground" aria-label="Not published" />
+            <Circle className="size-3 text-muted-foreground" aria-label="Not shared here" />
           )}
         </span>
-        <span
-          className={cn(
-            "block text-xs",
-            published ? "text-foreground/80" : "text-muted-foreground",
-          )}
-        >
+        <span className={cn("block text-sm", done ? "text-foreground/80" : "text-muted-foreground")}>
           {status}
         </span>
       </span>
@@ -261,20 +197,10 @@ function ExternalAction({ href, label }: { href: string; label: string }) {
       href={href}
       target="_blank"
       rel="noopener noreferrer"
-      className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground"
+      className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-foreground underline-offset-4 hover:underline"
     >
       {label}
-      <ExternalLink className="size-3.5" strokeWidth={1.75} aria-hidden />
+      <ExternalLink className="size-4" strokeWidth={1.75} aria-hidden />
     </a>
   );
-}
-
-function formatPostTime(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
 }

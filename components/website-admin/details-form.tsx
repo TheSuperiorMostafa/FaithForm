@@ -9,11 +9,14 @@ import {
   type SavedRowIds,
   type SiteDetailsInput,
 } from "@/app/dashboard/website/actions";
+import { DesignForm, type DesignFormProps } from "@/components/website-admin/design-form";
 import { ImageUploadField } from "@/components/website-admin/image-upload-field";
+import { LiveEditsNote } from "@/components/website-admin/live-edits-note";
 import { SaveStatus } from "@/components/website-admin/save-status";
 import { SitePreview } from "@/components/website-admin/site-preview";
 import { useAutosave } from "@/components/website-admin/use-autosave";
 import { Button } from "@/components/ui/button";
+import { confirmAction } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
@@ -36,14 +39,22 @@ function newId() {
   return Math.random().toString(36).slice(2);
 }
 
+/** Where the same church details are also edited, so it reads as one set. */
+const SHARED_NOTE = "Also shown in Settings → Church info.";
+
 export function DetailsForm({
   initial,
   canEdit,
   previewUrl,
+  isLive,
+  design,
 }: {
   initial: SiteDetailsInput;
   canEdit: boolean;
   previewUrl: string;
+  isLive: boolean;
+  /** Theme and colours, rendered as the "Look" part of this page. */
+  design?: DesignFormProps;
 }) {
   const [form, setForm] = useState<SiteDetailsInput>(initial);
   const [savedAt, setSavedAt] = useState(0);
@@ -103,19 +114,56 @@ export function DetailsForm({
   const times = form.serviceTimes ?? [];
   const staff = form.staff ?? [];
 
+  async function removeService(index: number) {
+    const row = times[index];
+    const name = row?.label.trim() || "this service";
+    const ok = await confirmAction({
+      title: `Remove ${name}?`,
+      description: `This also removes ${name} from attendance and from what your phone assistant tells callers. Services already recorded stay in your history.`,
+      confirmLabel: "Remove service",
+      destructive: true,
+    });
+    if (!ok) return;
+    set(
+      "serviceTimes",
+      times.filter((_, i) => i !== index),
+    );
+  }
+
+  async function removePerson(index: number) {
+    const row = staff[index];
+    const name = row?.fullName.trim() || "this person";
+    const ok = await confirmAction({
+      title: `Remove ${name}?`,
+      description: `${name} will be taken off your website's team section and your church details, including what your phone assistant knows about your staff.`,
+      confirmLabel: "Remove person",
+      destructive: true,
+    });
+    if (!ok) return;
+    set(
+      "staff",
+      staff.filter((_, i) => i !== index),
+    );
+  }
+
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,480px)]">
       <div className="flex min-w-0 flex-col gap-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="max-w-xl text-sm text-muted-foreground">
-            Everything your website says about your church, editable here.
-            Changes save on their own. These are shared details — changing a
-            service time also updates what your phone assistant tells callers.
-          </p>
-          <SaveStatus status={status} />
+        <LiveEditsNote isLive={isLive} />
+
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="space-y-1">
+            <h2 className="font-heading text-xl font-bold">Details</h2>
+            <p className="max-w-xl text-[15px] text-muted-foreground">
+              What your website says about your church. These details are
+              shared: changing a service time also updates the app, attendance,
+              and what your phone assistant tells callers.
+            </p>
+          </div>
+          {canEdit ? <SaveStatus status={status} /> : null}
         </div>
 
-        <Panel title="Your church">
+        <Panel title="Your church" description={SHARED_NOTE}>
           <Field label="Church name" required>
             <Input
               value={form.name}
@@ -132,7 +180,7 @@ export function DetailsForm({
           </Field>
           <ImageUploadField
             label="Logo"
-            help="Shown in the header and footer, and as your church's picture in the app."
+            help="Shown in the header and footer, and as your church's picture in the app. Also in Settings → Church info."
             // One logo feeds the site and the apps, and the apps show it
             // square, so it is framed here rather than centre-cropped there.
             aspect="logo"
@@ -142,7 +190,7 @@ export function DetailsForm({
           />
           <ImageUploadField
             label="Cover photo"
-            help="Across the top of your page, and at the top of your church's page in the app. The photo beside your welcome text is set separately, in Pages → About."
+            help="Your banner photo, and the top of your church's page in the app. Changing it here changes both. Also in Settings → Church info."
             // Shared with the apps, so it is framed at their shape rather than
             // as the hero strip — the same cover crop on every surface.
             aspect="cover"
@@ -152,7 +200,7 @@ export function DetailsForm({
           />
         </Panel>
 
-        <Panel title="Where to find you">
+        <Panel title="Where to find you" description={SHARED_NOTE}>
           <Field label="Street address">
             <Input
               value={form.address}
@@ -183,12 +231,12 @@ export function DetailsForm({
 
         <Panel
           title="Service times"
+          description={SHARED_NOTE}
           action={
             canEdit ? (
               <Button
                 type="button"
                 variant="outline"
-                size="sm"
                 onClick={() =>
                   set("serviceTimes", [
                     ...times,
@@ -251,17 +299,11 @@ export function DetailsForm({
                 <Button
                   type="button"
                   variant="ghost"
-                  size="icon"
                   aria-label={`Remove ${row.label || `service ${i + 1}`}`}
                   disabled={!canEdit}
-                  onClick={() =>
-                    set(
-                      "serviceTimes",
-                      times.filter((_, index) => index !== i),
-                    )
-                  }
+                  onClick={() => void removeService(i)}
                 >
-                  <Trash2 className="size-4" />
+                  <Trash2 className="size-4" aria-hidden /> Remove
                 </Button>
               </div>
             ))
@@ -275,7 +317,6 @@ export function DetailsForm({
               <Button
                 type="button"
                 variant="outline"
-                size="sm"
                 onClick={() =>
                   set("staff", [
                     ...staff,
@@ -334,7 +375,7 @@ export function DetailsForm({
                     onChange={(url) => update({ photoUrl: url })}
                   />
                   <div className="flex items-center justify-between gap-4">
-                    <Label className="text-sm font-medium">Show on the website</Label>
+                    <Label className="text-[15px] font-medium">Show on the website</Label>
                     <div className="flex items-center gap-2">
                       <Switch
                         checked={row.isPublic}
@@ -344,17 +385,11 @@ export function DetailsForm({
                       <Button
                         type="button"
                         variant="ghost"
-                        size="icon"
                         aria-label={`Remove ${row.fullName || `person ${i + 1}`}`}
                         disabled={!canEdit}
-                        onClick={() =>
-                          set(
-                            "staff",
-                            staff.filter((_, index) => index !== i),
-                          )
-                        }
+                        onClick={() => void removePerson(i)}
                       >
-                        <Trash2 className="size-4" />
+                        <Trash2 className="size-4" aria-hidden /> Remove
                       </Button>
                     </div>
                   </div>
@@ -384,12 +419,23 @@ export function DetailsForm({
         </Panel>
 
         {!canEdit ? (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             Only church admins can change these.
           </p>
         ) : (
           <SaveStatus status={status} />
         )}
+
+        {design ? (
+          <div className="mt-4 border-t border-border pt-8">
+            <DesignForm
+              {...design}
+              canEdit={canEdit}
+              isLive={isLive}
+              onSaved={() => setSavedAt(Date.now())}
+            />
+          </div>
+        ) : null}
       </div>
 
       <SitePreview previewUrl={previewUrl} refreshToken={savedAt} sticky />
@@ -409,12 +455,12 @@ function Panel({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded-2xl border border-border bg-card p-5 shadow-card">
+    <section className="rounded-2xl border border-border bg-card p-6 shadow-card">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
         <div>
           <h2 className="font-heading text-lg font-bold">{title}</h2>
           {description ? (
-            <p className="text-sm text-muted-foreground">{description}</p>
+            <p className="text-[15px] text-muted-foreground">{description}</p>
           ) : null}
         </div>
         {action}
@@ -445,7 +491,7 @@ function Field({
        * a field with help pushes its input down and stops lining up with the
        * field beside it in the same row. */}
       {children}
-      {help ? <p className="text-xs text-muted-foreground">{help}</p> : null}
+      {help ? <p className="text-sm text-muted-foreground">{help}</p> : null}
     </div>
   );
 }

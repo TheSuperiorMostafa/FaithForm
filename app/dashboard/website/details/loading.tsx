@@ -1,52 +1,84 @@
-import { Card } from "@/components/ui/card";
-import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
+import { Skeleton, SkeletonContainer, SkeletonText } from "@/components/ui/skeleton";
+import {
+  FieldSkeleton,
+  LiveNoteSkeleton,
+  PanelSkeleton,
+  SitePreviewSkeleton,
+} from "@/components/website-admin/skeletons";
 
+const SHARED_NOTE = "Also shown in Settings → Church info.";
+
+/** Mirrors Website → Look & details: details panels, then Look, beside the preview. */
 export default function WebsiteDetailsLoading() {
   return (
     <SkeletonContainer
-      className="flex flex-col gap-6"
-      label="website details"
+      className="grid w-full gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,480px)]"
+      label="website look and details"
     >
-      <div className="space-y-1">
-        <Skeleton className="h-6 w-36" />
-        <Skeleton className="h-4 w-96 max-w-full" />
+      <div className="flex min-w-0 flex-col gap-6">
+        <LiveNoteSkeleton />
+
+        <div className="space-y-1">
+          <h2 className="font-heading text-xl font-bold">Details</h2>
+          <p className="max-w-xl text-[15px] text-muted-foreground">
+            What your website says about your church. These details are
+            shared: changing a service time also updates the app, attendance,
+            and what your phone assistant tells callers.
+          </p>
+        </div>
+
+        <PanelSkeleton title="Your church" description={SHARED_NOTE}>
+          <FieldSkeleton label="Church name" />
+          <FieldSkeleton label="Denomination or sub-line" />
+          <div className="flex flex-col gap-2">
+            <span className="text-sm font-semibold">Logo</span>
+            <Skeleton className="size-32 rounded-xl" />
+          </div>
+          <div className="flex flex-col gap-2">
+            <span className="text-sm font-semibold">Cover photo</span>
+            <Skeleton className="aspect-[16/9] w-full max-w-md rounded-xl" />
+          </div>
+        </PanelSkeleton>
+
+        <PanelSkeleton title="Where to find you" description={SHARED_NOTE}>
+          <FieldSkeleton label="Street address" />
+          <div className="grid gap-4 sm:grid-cols-3">
+            <FieldSkeleton label="City" />
+            <FieldSkeleton label="State" />
+            <FieldSkeleton label="ZIP" />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FieldSkeleton label="Phone" />
+            <FieldSkeleton label="Email" />
+          </div>
+        </PanelSkeleton>
+
+        <PanelSkeleton title="Service times" description={SHARED_NOTE}>
+          {Array.from({ length: 2 }).map((_, i) => (
+            <div
+              key={i}
+              className="grid items-center gap-3 rounded-lg border border-border bg-muted/30 p-3 sm:grid-cols-[minmax(0,1fr)_11rem_9rem_auto]"
+            >
+              <Skeleton className="h-12 w-full rounded-[10px]" />
+              <Skeleton className="h-12 w-full rounded-[10px]" />
+              <Skeleton className="h-12 w-full rounded-[10px]" />
+              <Skeleton className="h-11 w-28 rounded-[10px]" />
+            </div>
+          ))}
+        </PanelSkeleton>
+
+        <PanelSkeleton title="Your team">
+          <div className="flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-3">
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Skeleton className="h-12 w-full rounded-[10px]" />
+              <Skeleton className="h-12 w-full rounded-[10px]" />
+            </div>
+            <SkeletonText lines={2} />
+          </div>
+        </PanelSkeleton>
       </div>
 
-      <Card className="p-6 space-y-4 shadow-card dark:shadow-none">
-        <Skeleton className="h-5 w-32" />
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-28" />
-            <Skeleton className="h-10 w-full rounded-md" />
-          </div>
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-28" />
-            <Skeleton className="h-10 w-full rounded-md" />
-          </div>
-        </div>
-      </Card>
-
-      <Card className="p-6 space-y-4 shadow-card dark:shadow-none">
-        <Skeleton className="h-5 w-36" />
-        <div className="grid gap-4 sm:grid-cols-3">
-          <div className="space-y-2 sm:col-span-3">
-            <Skeleton className="h-4 w-20" />
-            <Skeleton className="h-10 w-full rounded-md" />
-          </div>
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-16" />
-            <Skeleton className="h-10 w-full rounded-md" />
-          </div>
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-16" />
-            <Skeleton className="h-10 w-full rounded-md" />
-          </div>
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-16" />
-            <Skeleton className="h-10 w-full rounded-md" />
-          </div>
-        </div>
-      </Card>
+      <SitePreviewSkeleton sticky />
     </SkeletonContainer>
   );
 }

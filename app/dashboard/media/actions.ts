@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { getChurchAuth } from "@/lib/auth/church";
 import { featureActionError } from "@/lib/features/guard";
 import { hideChatMessage } from "@/lib/stream/chat";
+import { humanizeStreamError } from "@/lib/stream/user-errors";
 
 export type MediaActionState = {
   ok: boolean;
@@ -33,8 +34,7 @@ export async function hideStreamChatMessage(
   } catch (error) {
     return {
       ok: false,
-      error:
-        error instanceof Error ? error.message : "Could not hide message.",
+      error: humanizeStreamError(error, "We couldn't hide that message."),
     };
   }
 }

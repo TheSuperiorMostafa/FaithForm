@@ -5,6 +5,8 @@ import { UPLOADS_CATEGORY } from "@/lib/queries/slide-themes";
 import { rowToSlideTheme, type SlideThemeRow } from "@/lib/sermon-builder/slide-theme-shared";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { toUserError } from "@/lib/errors/user-error";
+import { sermonRouteError } from "@/lib/sermon-builder/route-error";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -88,7 +90,7 @@ export async function POST(request: Request) {
     if (uploadError) {
       console.error("[sermon-themes] upload failed:", uploadError.message);
       return NextResponse.json(
-        { error: `Could not store the image: ${uploadError.message}` },
+        { error: "We couldn't store that photo. Please try again, or pick a different image." },
         { status: 500 },
       );
     }
@@ -118,16 +120,14 @@ export async function POST(request: Request) {
       await storage.remove([path]);
       console.error("[sermon-themes] row insert failed:", error?.message);
       return NextResponse.json(
-        { error: error?.message ?? "Could not save the theme" },
+        { error: "We couldn't save that photo as a theme. Please try again." },
         { status: 500 },
       );
     }
 
     return NextResponse.json({ theme: rowToSlideTheme(data as SlideThemeRow) });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Upload failed";
-    const status = message === "Unauthorized" ? 401 : 500;
-    return NextResponse.json({ error: message }, { status });
+    return sermonRouteError(e, "We couldn't upload that photo.");
   }
 }
 
@@ -139,7 +139,7 @@ export async function DELETE(request: Request) {
 
     const id = new URL(request.url).searchParams.get("id");
     if (!id) {
-      return NextResponse.json({ error: "Missing theme id" }, { status: 400 });
+      return NextResponse.json({ error: "We couldn't tell which theme to delete. Refresh the page and try again." }, { status: 400 });
     }
 
     const supabase = createClient();
@@ -151,12 +151,15 @@ export async function DELETE(request: Request) {
       .maybeSingle();
 
     if (!existing) {
-      return NextResponse.json({ error: "Theme not found" }, { status: 404 });
+      return NextResponse.json({ error: "We couldn't find that theme. It may already have been deleted." }, { status: 404 });
     }
 
     const { error } = await supabase.from("slide_themes").delete().eq("id", id);
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json(
+        { error: toUserError(error, "We couldn't delete that theme.") },
+        { status: 500 },
+      );
     }
 
     // Same service client as the upload: the bucket grants browsers no writes.
@@ -168,8 +171,6 @@ export async function DELETE(request: Request) {
 
     return NextResponse.json({ ok: true });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Delete failed";
-    const status = message === "Unauthorized" ? 401 : 500;
-    return NextResponse.json({ error: message }, { status });
+    return sermonRouteError(e, "We couldn't delete that theme.");
   }
 }

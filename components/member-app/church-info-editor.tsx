@@ -22,6 +22,7 @@ import { saveChurchAppInfo, uploadChurchAppImage } from "@/app/dashboard/app/act
 import { ChurchAppPreview, SOCIAL_STYLE } from "@/components/member-app/church-app-preview";
 import { ImageUploadField } from "@/components/website-admin/image-upload-field";
 import { Button } from "@/components/ui/button";
+import { confirmAction } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
@@ -56,6 +57,9 @@ const SECTIONS = [
   { id: "social", label: "Social", icon: Users },
   { id: "links", label: "Links", icon: Link2 },
 ] as const;
+
+/** Where the same church details are also edited, so it reads as one set. */
+const SHARED_NOTE = "Also shown in Settings → Church info.";
 
 let idCounter = 0;
 const newId = () => `new-${Date.now().toString(36)}-${(idCounter += 1)}`;
@@ -134,6 +138,22 @@ export function ChurchInfoEditor({
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [dirty]);
 
+  async function removeService(index: number) {
+    const row = form.serviceTimes[index];
+    const name = row?.label.trim() || "this service";
+    const ok = await confirmAction({
+      title: `Remove ${name}?`,
+      description: `Once you save, this also removes ${name} from attendance, your website, and what your phone assistant tells callers. Services already recorded stay in your history.`,
+      confirmLabel: "Remove service",
+      destructive: true,
+    });
+    if (!ok) return;
+    set(
+      "serviceTimes",
+      form.serviceTimes.filter((_, i) => i !== index),
+    );
+  }
+
   const errorFor = (field: string) =>
     fieldError?.field === field ? fieldError.message : undefined;
 
@@ -167,9 +187,9 @@ export function ChurchInfoEditor({
             <a
               key={section.id}
               href={`#church-${section.id}`}
-              className="inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-accent/10 hover:text-foreground"
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-muted-foreground transition-colors hover:bg-accent/10 hover:text-foreground"
             >
-              <section.icon className="size-3.5" aria-hidden />
+              <section.icon className="size-4" aria-hidden />
               {section.label}
             </a>
           ))}
@@ -180,8 +200,8 @@ export function ChurchInfoEditor({
                 style={{ width: `${completeness}%` }}
               />
             </div>
-            <span className="text-xs font-semibold tabular-nums text-muted-foreground">
-              {completeness}%
+            <span className="text-sm font-semibold tabular-nums text-muted-foreground">
+              {completeness}% complete
             </span>
           </div>
         </div>
@@ -192,7 +212,12 @@ export function ChurchInfoEditor({
           </p>
         )}
 
-        <Section id="identity" icon={ImageIcon} title="Look & name" description="The first thing people see when they open your church.">
+        <Section
+          id="identity"
+          icon={ImageIcon}
+          title="Look & name"
+          description={`The first thing people see when they open your church. ${SHARED_NOTE}`}
+        >
           <ImageUploadField
             label="Cover photo"
             value={form.coverImageUrl}
@@ -259,7 +284,7 @@ export function ChurchInfoEditor({
           id="services"
           icon={Clock}
           title="Service times"
-          description="Shown as “Next service” with a countdown, then the full list. Times are your church's local time."
+          description={`Shown as “Next service” with a countdown, then the full list. Times are your church's local time. ${SHARED_NOTE}`}
         >
           <div className="flex flex-col gap-2">
             {form.serviceTimes.length === 0 && (
@@ -322,12 +347,11 @@ export function ChurchInfoEditor({
                 <Button
                   type="button"
                   variant="ghost"
-                  size="icon-sm"
                   aria-label={`Remove ${row.label || "service"}`}
                   disabled={disabled}
-                  onClick={() => set("serviceTimes", form.serviceTimes.filter((_, i) => i !== index))}
+                  onClick={() => void removeService(index)}
                 >
-                  <Trash2 aria-hidden />
+                  <Trash2 aria-hidden /> Remove
                 </Button>
               </div>
             ))}
@@ -335,7 +359,6 @@ export function ChurchInfoEditor({
               <Button
                 type="button"
                 variant="outline"
-                size="sm"
                 disabled={disabled || form.serviceTimes.length >= 20}
                 onClick={() =>
                   set("serviceTimes", [
@@ -350,7 +373,6 @@ export function ChurchInfoEditor({
                 <Button
                   type="button"
                   variant="ghost"
-                  size="sm"
                   disabled={disabled}
                   onClick={() =>
                     set("serviceTimes", [
@@ -369,7 +391,7 @@ export function ChurchInfoEditor({
           id="contact"
           icon={MapPin}
           title="Location & contact"
-          description="Powers the Directions, Call, Email and Website buttons at the top of your page."
+          description={`Powers the Directions, Call, Email and Website buttons at the top of your page. ${SHARED_NOTE}`}
         >
           <div className="grid gap-4 sm:grid-cols-6">
             <Field label="Street address" field="address" className="sm:col-span-6">
@@ -446,16 +468,16 @@ export function ChurchInfoEditor({
           title="Links"
           description="Point people to what you want them to do next. Shown in this order."
           aside={
-            <span className="text-xs font-semibold tabular-nums text-muted-foreground">
-              {form.quickLinks.length}/{MAX_QUICK_LINKS}
+            <span className="text-sm font-semibold tabular-nums text-muted-foreground">
+              {form.quickLinks.length} of {MAX_QUICK_LINKS}
             </span>
           }
         >
           {!context.quickLinksAvailable && (
-            <p className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-900 dark:text-amber-200">
+            <p className="flex items-start gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-900 dark:text-amber-200">
               <CircleAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
-              Links need a quick database update (migration 0090) before they can be saved.
-              Everything else on this page works now.
+              Links aren&apos;t available for your church yet. Everything else on
+              this page saves as normal.
             </p>
           )}
           <div className="flex flex-col gap-2">
@@ -465,7 +487,7 @@ export function ChurchInfoEditor({
             {form.quickLinks.map((link, index) => (
               <div
                 key={link.clientId}
-                className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2 rounded-xl border border-border bg-background p-2 sm:grid-cols-[200px_minmax(0,1fr)_auto]"
+                className="grid grid-cols-1 items-start gap-2 rounded-xl border border-border bg-background p-3 sm:grid-cols-[200px_minmax(0,1fr)]"
               >
                 <Input
                   aria-label="Link name"
@@ -474,7 +496,6 @@ export function ChurchInfoEditor({
                   maxLength={MAX_QUICK_LINK_LABEL}
                   disabled={disabled}
                   placeholder="Plan a visit"
-                  className="col-span-2 sm:col-span-1"
                   onChange={(event) =>
                     set(
                       "quickLinks",
@@ -499,26 +520,27 @@ export function ChurchInfoEditor({
                     }
                   />
                   {(errorFor(`quickLinks.${index}.url`) ?? linkProblem(link.url)) && (
-                    <span className="text-[11px] font-medium text-destructive">
+                    <span className="text-sm font-medium text-destructive">
                       {errorFor(`quickLinks.${index}.url`) ?? linkProblem(link.url)}
                     </span>
                   )}
                 </div>
-                <div className="flex items-center">
-                  <Button type="button" variant="ghost" size="icon-sm" aria-label="Move up"
+                <div className="flex flex-wrap items-center gap-1 sm:col-span-2">
+                  <Button type="button" variant="ghost" aria-label={`Move ${link.label || "link"} up`}
                     disabled={disabled || index === 0}
                     onClick={() => set("quickLinks", move(form.quickLinks, index, index - 1))}>
-                    <ArrowUp aria-hidden />
+                    <ArrowUp aria-hidden /> Move up
                   </Button>
-                  <Button type="button" variant="ghost" size="icon-sm" aria-label="Move down"
+                  <Button type="button" variant="ghost" aria-label={`Move ${link.label || "link"} down`}
                     disabled={disabled || index === form.quickLinks.length - 1}
                     onClick={() => set("quickLinks", move(form.quickLinks, index, index + 1))}>
-                    <ArrowDown aria-hidden />
+                    <ArrowDown aria-hidden /> Move down
                   </Button>
-                  <Button type="button" variant="ghost" size="icon-sm" aria-label={`Remove ${link.label || "link"}`}
+                  <Button type="button" variant="ghost" aria-label={`Remove ${link.label || "link"}`}
+                    className="ml-auto"
                     disabled={disabled}
                     onClick={() => set("quickLinks", form.quickLinks.filter((_, i) => i !== index))}>
-                    <Trash2 aria-hidden />
+                    <Trash2 aria-hidden /> Remove
                   </Button>
                 </div>
               </div>
@@ -527,7 +549,6 @@ export function ChurchInfoEditor({
               <Button
                 type="button"
                 variant="outline"
-                size="sm"
                 disabled={disabled || form.quickLinks.length >= MAX_QUICK_LINKS}
                 onClick={() =>
                   set("quickLinks", [...form.quickLinks, { clientId: newId(), label: "", url: "" }])
@@ -548,7 +569,7 @@ export function ChurchInfoEditor({
                       { clientId: newId(), label: suggestion, url: "" },
                     ])
                   }
-                  className="rounded-full border border-dashed border-border px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-accent hover:text-foreground disabled:opacity-40"
+                  className="inline-flex min-h-11 items-center rounded-full border border-dashed border-border px-4 text-sm font-semibold text-muted-foreground transition-colors hover:border-accent hover:text-foreground disabled:opacity-40"
                 >
                   + {suggestion}
                 </button>
@@ -569,16 +590,16 @@ export function ChurchInfoEditor({
             <div className="flex items-center gap-3 rounded-2xl border border-border bg-card/95 p-3 pl-5 shadow-[0_12px_40px_-12px_rgba(0,0,0,0.35)] backdrop-blur">
               <span className="size-2 rounded-full bg-accent" aria-hidden />
               <p className="text-sm font-semibold text-foreground">Unsaved changes</p>
-              <p className="hidden text-xs text-muted-foreground sm:block">⌘S to save</p>
+              <p className="hidden text-sm text-muted-foreground sm:block">⌘S to save</p>
               <div className="ml-auto flex gap-2">
-                <Button type="button" variant="ghost" size="sm" disabled={pending}
+                <Button type="button" variant="ghost" disabled={pending}
                   onClick={() => {
                     setForm(saved);
                     setFieldError(null);
                   }}>
                   Discard
                 </Button>
-                <Button type="submit" size="sm" disabled={pending}>
+                <Button type="submit" disabled={pending}>
                   {pending ? "Saving…" : "Save & publish"}
                 </Button>
               </div>
@@ -589,12 +610,12 @@ export function ChurchInfoEditor({
 
       <aside className="xl:sticky xl:top-6 xl:self-start">
         <div className="mb-3 flex items-center justify-between xl:justify-center">
-          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          <p className="text-sm font-semibold text-muted-foreground">
             Live preview
           </p>
         </div>
         <ChurchAppPreview info={form} context={context} />
-        <p className="mx-auto mt-3 max-w-[320px] text-center text-xs text-muted-foreground">
+        <p className="mx-auto mt-3 max-w-[320px] text-center text-sm text-muted-foreground">
           Updates as you type. People see changes the next time they open your page.
         </p>
       </aside>
@@ -667,13 +688,13 @@ function Field({
     <div className={cn("flex flex-col gap-1.5", className)} data-field-wrapper={field}>
       <div className="flex items-baseline justify-between gap-2">
         <Label className="text-sm font-semibold">{label}</Label>
-        {counter && <span className="text-[11px] tabular-nums text-muted-foreground">{counter}</span>}
+        {counter && <span className="text-sm tabular-nums text-muted-foreground">{counter}</span>}
       </div>
       {children}
       {error ? (
-        <span className="text-xs font-medium text-destructive">{error}</span>
+        <span className="text-sm font-medium text-destructive">{error}</span>
       ) : (
-        hint && <span className="text-xs text-muted-foreground">{hint}</span>
+        hint && <span className="text-sm text-muted-foreground">{hint}</span>
       )}
     </div>
   );
@@ -715,7 +736,7 @@ function SocialField({
         <style.icon className="size-5" aria-hidden />
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-1">
-        <Label htmlFor={`social-${platform}`} className="text-xs font-semibold">
+        <Label htmlFor={`social-${platform}`} className="text-sm font-semibold">
           {label}
         </Label>
         <Input
@@ -726,17 +747,17 @@ function SocialField({
           disabled={disabled}
           placeholder={placeholder}
           aria-invalid={Boolean(problem) || undefined}
-          className="min-h-9 py-1.5 text-sm"
+          className="text-base"
           onChange={(event) => onChange(event.target.value)}
         />
         {problem ? (
-          <span className="text-[11px] font-medium text-destructive">{problem}</span>
+          <span className="text-sm font-medium text-destructive">{problem}</span>
         ) : normalized ? (
           <a
             href={normalized}
             target="_blank"
             rel="noreferrer"
-            className="truncate text-[11px] font-medium text-muted-foreground hover:text-foreground hover:underline"
+            className="truncate text-sm font-medium text-muted-foreground hover:text-foreground hover:underline"
           >
             ✓ {normalized.replace(/^https?:\/\/(www\.)?/, "").replace(/\/$/, "")}
           </a>

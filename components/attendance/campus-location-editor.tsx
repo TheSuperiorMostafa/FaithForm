@@ -14,6 +14,7 @@ import { GEOFENCE_RADIUS_BOUNDS } from "@/lib/attendance/v2/setup-bounds";
 import { RADIUS_PRESETS } from "@/lib/attendance/v2/setup-view";
 import { CampusRadiusMap } from "@/components/attendance/campus-radius-map";
 import { Segmented } from "@/components/attendance/setup-step";
+import { AdvancedSection } from "@/components/ui/advanced-section";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -181,7 +182,7 @@ export function CampusLocationEditor({
             <span className="font-semibold">
               {locating ? "Finding you…" : "Use my current location"}
             </span>
-            <span className="text-xs font-normal text-muted-foreground">
+            <span className="text-sm font-normal text-muted-foreground">
               Best when you&apos;re standing inside the building
             </span>
           </span>
@@ -200,7 +201,7 @@ export function CampusLocationEditor({
             <MapPin className="size-5 shrink-0 text-accent" aria-hidden />
             <span className="flex min-w-0 flex-col">
               <span className="font-semibold">Use the church address</span>
-              <span className="truncate text-xs font-normal text-muted-foreground">
+              <span className="truncate text-sm font-normal text-muted-foreground">
                 {knownAddress}
               </span>
             </span>
@@ -209,7 +210,7 @@ export function CampusLocationEditor({
       </div>
 
       <form onSubmit={search} className="flex flex-col gap-2">
-        <Label htmlFor={`campus-search-${campus.id}`} className="text-xs font-semibold">
+        <Label htmlFor={`campus-search-${campus.id}`} className="text-[15px] font-semibold">
           Or search for an address
         </Label>
         <div className="flex gap-2">
@@ -226,7 +227,7 @@ export function CampusLocationEditor({
           </Button>
         </div>
         {matches && matches.length === 0 && (
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             No match. Try just the street and city, or click the building on the map.
           </p>
         )}
@@ -242,7 +243,7 @@ export function CampusLocationEditor({
                     type="button"
                     onClick={() => choose(match)}
                     aria-pressed={chosen}
-                    className={`w-full rounded-lg border px-3 py-2 text-left text-xs transition-colors ${
+                    className={`min-h-11 w-full rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
                       chosen
                         ? "border-accent bg-brand-gold/10 text-foreground"
                         : "border-border bg-background hover:border-brand-gold/60"
@@ -270,12 +271,12 @@ export function CampusLocationEditor({
               setSource("Pin moved on the map.");
             }}
           />
-          <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
-            <Crosshair className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+          <p className="flex items-start gap-1.5 text-sm text-muted-foreground">
+            <Crosshair className="mt-0.5 size-4 shrink-0" aria-hidden />
             <span>
               {source ? `${source} ` : ""}
-              Click the map to put the pin on the main entrance. Phones count
-              arriving anywhere inside the circle.
+              Click the map to put the pin on the main entrance. Anyone who
+              arrives inside the circle counts as here.
             </span>
           </p>
         </div>
@@ -288,78 +289,81 @@ export function CampusLocationEditor({
         </div>
       )}
 
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <span className="text-sm font-semibold text-foreground">How close counts as arriving</span>
-          <span className="text-sm font-semibold tabular-nums text-foreground">{radius} m</span>
-        </div>
-        {radius < 100 ? (
-          <p className="text-xs text-amber-700 dark:text-amber-300">
-            This area is small for reliable phone detection. Use 100–150 m where practical,
-            with the pin centered on the building. Indoor GPS can miss a 50 m boundary.
+      <AdvancedSection
+        title="Fine-tune the location"
+        description={`How close counts as "here" (now ${radius} metres), or type exact map coordinates.`}
+      >
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-[15px] font-semibold text-foreground">How close counts as &ldquo;here&rdquo;</span>
+            <span className="text-[15px] font-semibold tabular-nums text-foreground">{radius} metres</span>
+          </div>
+          {radius < 100 ? (
+            <p className="text-sm text-amber-700 dark:text-amber-300">
+              This is small for phones to notice reliably, especially indoors. 100 to 150
+              metres works better, with the pin on the building.
+            </p>
+          ) : null}
+          <Segmented
+            label="How close counts as here"
+            options={
+              radiusOptions.some((option) => option.value === radius)
+                ? radiusOptions
+                : [...radiusOptions, { value: radius, label: `${radius} m`, hint: "Custom" }]
+            }
+            value={radius}
+            onChange={setRadius}
+            disabled={pending}
+          />
+          <input
+            id={`campus-radius-${campus.id}`}
+            type="range"
+            min={RADIUS_MIN}
+            max={RADIUS_MAX}
+            step={10}
+            value={radius}
+            onChange={(event) => setRadius(Number(event.target.value))}
+            className="h-11 w-full accent-accent"
+            aria-label="How close counts as here, in metres"
+            aria-valuetext={`${radius} metres`}
+          />
+          <p className="text-sm text-muted-foreground">
+            Big enough to include the parking lot, so people are counted as they
+            walk in; small enough to leave out the neighbours. 150 metres suits
+            most churches.
           </p>
-        ) : null}
-        <Segmented
-          label="Check-in area size"
-          options={
-            radiusOptions.some((option) => option.value === radius)
-              ? radiusOptions
-              : [...radiusOptions, { value: radius, label: `${radius} m`, hint: "Custom" }]
-          }
-          value={radius}
-          onChange={setRadius}
-          disabled={pending}
-        />
-        <input
-          id={`campus-radius-${campus.id}`}
-          type="range"
-          min={RADIUS_MIN}
-          max={RADIUS_MAX}
-          step={10}
-          value={radius}
-          onChange={(event) => setRadius(Number(event.target.value))}
-          className="w-full accent-accent"
-          aria-label="Check-in area radius"
-          aria-valuetext={`${radius} metres`}
-        />
-        <p className="text-xs text-muted-foreground">
-          Big enough to include the parking lot, so people are counted while
-          they walk in; small enough to leave out the neighbours. 150 m suits
-          most churches.
-        </p>
-      </div>
+        </div>
 
-      <details className="rounded-lg border border-border px-3 py-2 text-sm">
-        <summary className="cursor-pointer select-none text-xs font-semibold text-muted-foreground">
-          Enter coordinates instead
-        </summary>
-        <div className="mt-3 grid gap-3 pb-1 sm:grid-cols-2">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor={`campus-lat-${campus.id}`} className="text-xs font-semibold">
-              Latitude
-            </Label>
-            <Input
-              id={`campus-lat-${campus.id}`}
-              value={latitude}
-              inputMode="decimal"
-              placeholder="38.252700"
-              onChange={(event) => setLatitude(event.target.value)}
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor={`campus-lng-${campus.id}`} className="text-xs font-semibold">
-              Longitude
-            </Label>
-            <Input
-              id={`campus-lng-${campus.id}`}
-              value={longitude}
-              inputMode="decimal"
-              placeholder="-85.758500"
-              onChange={(event) => setLongitude(event.target.value)}
-            />
+        <div className="flex flex-col gap-3 border-t border-border pt-5">
+          <p className="text-[15px] font-semibold text-foreground">Enter coordinates instead</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={`campus-lat-${campus.id}`} className="text-sm font-semibold">
+                Latitude
+              </Label>
+              <Input
+                id={`campus-lat-${campus.id}`}
+                value={latitude}
+                inputMode="decimal"
+                placeholder="38.252700"
+                onChange={(event) => setLatitude(event.target.value)}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={`campus-lng-${campus.id}`} className="text-sm font-semibold">
+                Longitude
+              </Label>
+              <Input
+                id={`campus-lng-${campus.id}`}
+                value={longitude}
+                inputMode="decimal"
+                placeholder="-85.758500"
+                onChange={(event) => setLongitude(event.target.value)}
+              />
+            </div>
           </div>
         </div>
-      </details>
+      </AdvancedSection>
 
       <div className="flex flex-wrap gap-2">
         <Button onClick={save} disabled={pending || !positioned}>

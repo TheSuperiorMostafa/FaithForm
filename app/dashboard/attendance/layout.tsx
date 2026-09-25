@@ -11,14 +11,13 @@ import { getFeatureAccess } from "@/lib/features/access";
 /**
  * Attendance holds the tools that different people run.
  *
- * Marking a service is volunteer work; deciding who gets a check-in text is the
- * pastor's; the kids' room desk is its own grant. They are granted separately
- * (`attendance` / `attendance_follow_up` / `checkin`), so this layout only checks
- * that the member holds at least one of this section's own two — each tab's
- * own layout gates its half. The tab strip is shared with Kids check-in (see
- * `lib/attendance/section-tabs.ts`) and lists only what the member can open:
- * Attendance brings Weekly, Services and Setup (automatic, QR and kiosk
- * check-in), and someone holding only Follow-up sees no tabs at all.
+ * Counting a Sunday is volunteer work; deciding who gets a check-in text is the
+ * pastor's. They are granted separately (`attendance` / `attendance_follow_up`),
+ * so this layout only checks that the member holds at least one of the two —
+ * each tab's own layout gates its half. The tab strip (see
+ * `lib/attendance/section-tabs.ts`) lists only what the member can open:
+ * Attendance brings Sunday count, Services and Setup, and someone holding only
+ * Follow-up sees no tabs at all. Kids Check-in has its own sidebar row.
  */
 export default async function AttendanceLayout({
   children,
@@ -46,7 +45,7 @@ export default async function AttendanceLayout({
             <ShieldOff className="size-7 text-accent" strokeWidth={1.5} aria-hidden />
           </span>
         </div>
-        <span className="mb-3 rounded-full bg-muted px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+        <span className="mb-3 rounded-full bg-muted px-3 py-1 text-sm font-semibold text-muted-foreground">
           No access
         </span>
         <h2 className="font-heading text-2xl font-bold tracking-tight text-foreground sm:text-[28px]">
@@ -66,9 +65,9 @@ export default async function AttendanceLayout({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-5">
+    <div className="flex w-full flex-col gap-6">
       <LiveAttendanceRefresh />
-      {tabs.length > 1 && <SectionLinkTabs tabs={tabs} />}
+      {tabs.length > 1 && <SectionLinkTabs tabs={tabs} label="Attendance sections" />}
       {children}
     </div>
   );

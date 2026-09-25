@@ -116,7 +116,7 @@ export const footerMapSection = defineSection<FooterMapContent>({
       type: "list",
       addLabel: "Add column",
       titleKey: "heading",
-      help: "The service-times column is added automatically from Church Profile.",
+      help: "The service-times column is added automatically from your church details.",
       itemFields: [
         { key: "heading", label: "Heading", type: "text" },
         {

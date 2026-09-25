@@ -11,6 +11,7 @@ import {
   scoreThemesByTagOverlap,
   type SlideTheme,
 } from "@/lib/queries/slide-themes";
+import { sermonRouteError } from "@/lib/sermon-builder/route-error";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -96,15 +97,13 @@ Return exactly 6 theme IDs whose imagery best matches this passage.`,
 
     const selected = themes.find((t) => t.id === selectedThemeId);
     if (!selected) {
-      return NextResponse.json({ error: "Theme not found" }, { status: 404 });
+      return NextResponse.json({ error: "We couldn't find that theme." }, { status: 404 });
     }
 
     return NextResponse.json({
       suggestions: scoreThemesByTagOverlap(selected, themes, 6),
     });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Suggestion failed";
-    const status = message === "Unauthorized" ? 401 : 500;
-    return NextResponse.json({ error: message }, { status });
+    return sermonRouteError(e, "We couldn't suggest themes just now.");
   }
 }

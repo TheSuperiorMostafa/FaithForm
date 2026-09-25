@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
-import { MediaTileCard } from "@/components/media/media-tile";
+import { MediaTileCard, type TileStatus } from "@/components/media/media-tile";
 import {
   itemTile,
   seriesTile,
@@ -25,7 +25,9 @@ export function MediaGrid({
   links,
   shape = "wide",
   emptyMessage,
+  statuses,
 }: {
+  statuses?: Record<string, TileStatus>;
   items?: BrowseItemInput[];
   series?: BrowseSeriesInput[];
   links: BrowseLinks;
@@ -39,7 +41,7 @@ export function MediaGrid({
 
   if (tiles.length === 0) {
     return (
-      <p className="rounded-xl border border-dashed border-border px-5 py-10 text-center text-sm text-muted-foreground">
+      <p className="rounded-2xl border border-dashed border-border px-5 py-10 text-center text-[15px] text-muted-foreground">
         {emptyMessage}
       </p>
     );
@@ -54,13 +56,19 @@ export function MediaGrid({
       }
     >
       {tiles.map((tile) => (
-        <MediaTileCard key={`${tile.kind}:${tile.id}`} tile={tile} shape={shape} fluid />
+        <MediaTileCard
+          key={`${tile.kind}:${tile.id}`}
+          tile={tile}
+          shape={shape}
+          fluid
+          status={tile.kind === "item" ? statuses?.[tile.id] : undefined}
+        />
       ))}
     </div>
   );
 }
 
-/** Heading with a way back. Every media sub-page is reached from the library. */
+/** Heading with a way back. Every series or tag page is reached from Recordings › Series. */
 export function MediaPageHeader({
   title,
   description,
@@ -78,16 +86,16 @@ export function MediaPageHeader({
     <div className="flex flex-col gap-3">
       <Link
         href={backHref}
-        className="inline-flex w-fit items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-accent"
+        className="inline-flex min-h-11 w-fit items-center gap-2 text-[15px] font-medium text-muted-foreground hover:text-accent"
       >
-        <ArrowLeft className="size-3.5" aria-hidden />
+        <ArrowLeft className="size-4" aria-hidden />
         {backLabel}
       </Link>
 
       <div className="flex flex-col gap-1">
-        <h2 className="font-heading text-lg font-bold">{title}</h2>
+        <h2 className="font-heading text-2xl font-bold">{title}</h2>
         {description ? (
-          <p className="text-sm text-muted-foreground">{description}</p>
+          <p className="text-[15px] text-muted-foreground">{description}</p>
         ) : null}
       </div>
 

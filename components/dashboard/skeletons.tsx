@@ -1,80 +1,93 @@
 import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
 import { Card } from "@/components/ui/card";
+import { SectionHeader } from "@/components/ui/page-header";
 
+/** Mirrors HeroHoursSaved: the compact "time saved" card. */
 export function HeroSkeleton() {
   return (
-    <Card className="overflow-hidden border-0 p-0 shadow-card">
-      <div className="space-y-4 bg-gradient-to-br from-accent/15 via-card to-card p-6 md:p-8">
-        <Skeleton className="h-4 w-32" />
-        <Skeleton className="h-14 w-48 md:h-16" />
-        <Skeleton className="h-4 w-56" />
-        <div className="flex gap-2 pt-2">
-          <Skeleton className="h-7 w-20 rounded-full" />
-          <Skeleton className="h-7 w-24 rounded-full" />
-          <Skeleton className="h-7 w-16 rounded-full" />
+    <Card className="flex h-full flex-col gap-5 p-6">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <Skeleton className="size-12 rounded-2xl" />
+          <Skeleton className="h-5 w-40" />
         </div>
+      </div>
+      <Skeleton className="h-12 w-32" />
+      <Skeleton className="h-4 w-56" />
+      <Skeleton className="mt-auto h-11 w-full max-w-[280px] rounded-full" />
+    </Card>
+  );
+}
+
+/** Mirrors AttendanceChartSection. */
+export function ChartSkeleton() {
+  return (
+    <Card>
+      <div className="flex items-start gap-3 p-6 pb-2">
+        <Skeleton className="size-12 shrink-0 rounded-xl" />
+        <div className="flex-1 space-y-2">
+          <Skeleton className="h-5 w-40" />
+          <Skeleton className="h-4 w-64" />
+        </div>
+      </div>
+      <div className="px-6 pb-6 pt-4">
+        <Skeleton className="h-48 w-full rounded-lg" />
       </div>
     </Card>
   );
 }
 
-export function StatRowSkeleton() {
+/** Mirrors NeedsYou: the calm "all caught up" line is the common case. */
+export function NeedsYouSkeleton() {
+  return <Skeleton className="h-[58px] w-full rounded-2xl" />;
+}
+
+/** Mirrors QuickActionsSection's ActionCards. */
+export function QuickActionsSkeleton() {
   return (
-    <div className="grid gap-4 sm:grid-cols-3">
-      {Array.from({ length: 3 }).map((_, i) => (
-        <Card key={i} className="border-t-[3px] border-t-accent p-4 sm:p-5">
-          <Skeleton className="mb-2 size-7 rounded-lg" />
-          <Skeleton className="mb-1.5 h-3 w-20" />
-          <Skeleton className="h-7 w-12" />
-          <Skeleton className="mt-3 h-9 w-full" />
+    <div className="grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 lg:grid-cols-3">
+      {Array.from({ length: 6 }).map((_, i) => (
+        <Card key={i} className="flex min-h-[152px] flex-col justify-between gap-5 p-5 sm:p-6">
+          <Skeleton className="size-14 shrink-0 rounded-2xl" />
+          <div className="space-y-2">
+            <Skeleton className="h-5 w-40" />
+            <Skeleton className="h-4 w-44" />
+          </div>
         </Card>
       ))}
     </div>
   );
 }
 
-export function ChartSkeleton() {
-  return (
-    <Card className="p-6">
-      <Skeleton className="mb-2 h-5 w-40" />
-      <Skeleton className="mb-6 h-4 w-64" />
-      <Skeleton className="h-48 w-full rounded-lg" />
-    </Card>
-  );
-}
-
-export function QuickActionsSkeleton() {
-  return (
-    <section className="flex flex-col gap-3">
-      <div className="border-l-4 border-accent pl-3">
-        <Skeleton className="h-8 w-48" />
-      </div>
-      <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <Card key={i} className="flex items-center gap-4 p-5">
-            <Skeleton className="size-11 shrink-0 rounded-xl" />
-            <div className="space-y-1.5 flex-1">
-              <Skeleton className="h-4 w-28" />
-              <Skeleton className="h-3 w-20" />
-            </div>
-          </Card>
-        ))}
-      </div>
-    </section>
-  );
-}
-
+/**
+ * Home's loading state. Section headings are static text, so they render for
+ * real; only the greeting (it carries the church name) and data shimmer.
+ */
 export function DashboardPageSkeleton() {
   return (
-    <SkeletonContainer
-      className="mx-auto flex w-full max-w-5xl flex-col gap-5"
-      label="dashboard"
-    >
-      <HeroSkeleton />
-      <StatRowSkeleton />
-      <QuickActionsSkeleton />
-      <ChartSkeleton />
+    <SkeletonContainer className="flex w-full flex-col gap-10" label="Home">
+      <div className="space-y-2.5">
+        <Skeleton className="h-9 w-80 max-w-full sm:h-10" />
+        <Skeleton className="h-5 w-96 max-w-full" />
+      </div>
+
+      <section className="flex flex-col gap-4">
+        <SectionHeader title="Waiting on you" />
+        <NeedsYouSkeleton />
+      </section>
+
+      <section className="flex flex-col gap-4">
+        <SectionHeader title="What would you like to do?" />
+        <QuickActionsSkeleton />
+      </section>
+
+      <section className="flex flex-col gap-4">
+        <SectionHeader title="How things are going" />
+        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
+          <HeroSkeleton />
+          <ChartSkeleton />
+        </div>
+      </section>
     </SkeletonContainer>
   );
 }
-

@@ -277,18 +277,39 @@ export async function listOccurrences(
  * generated sixty days ahead, so its first page was services two months away
  * and today's service was not on it.
  *
- * Sunday worship and calendar events that explicitly count attendance are
- * listed. Which rows
- * those are cannot be asked of PostgREST, so each side reads a wider page and
- * keeps the first matches.
+ * Sunday worship, services added by hand and calendar events that count
+ * attendance are the main list. Everything else the church's schedule
+ * produces — Bible study, a Wednesday night service, Sunday school — is
+ * returned separately as `other`, so those services can still be opened and
+ * marked by hand without crowding Sunday worship. Which rows are which cannot
+ * be asked of PostgREST, so each side reads a wider page and sorts them here.
+ *
+ * Dashboard only: the phones find their service with `findOpenOccurrence`.
  */
-/** How many rows each side of the board reads before keeping Sunday worship. */
+/** How many rows each side of the board reads before sorting them. */
 const BOARD_SCAN_LIMIT = 120;
+
+export type BoardOccurrences = {
+  upcoming: ServiceOccurrence[];
+  recent: ServiceOccurrence[];
+  /** Other services from the schedule, on any day. */
+  other: { upcoming: ServiceOccurrence[]; recent: ServiceOccurrence[] };
+};
+
+export function isMainBoardOccurrence(occurrence: ServiceOccurrence): boolean {
+  return Boolean(occurrence.calendarEventId) || isSundayWorshipOccurrence(occurrence);
+}
 
 export async function listBoardOccurrences(
   churchId: string,
-  options?: { now?: Date; client?: SupabaseClient; upcomingLimit?: number; recentLimit?: number },
-): Promise<{ upcoming: ServiceOccurrence[]; recent: ServiceOccurrence[] }> {
+  options?: {
+    now?: Date;
+    client?: SupabaseClient;
+    upcomingLimit?: number;
+    recentLimit?: number;
+    otherLimit?: number;
+  },
+): Promise<BoardOccurrences> {
   const admin = options?.client ?? createAdminClient();
   const now = (options?.now ?? new Date()).toISOString();
 
@@ -317,17 +338,25 @@ export async function listBoardOccurrences(
     throw new VisitorError("unavailable", "Could not load services.");
   }
 
-  const attendanceEvents = (rows: unknown[] | null, limit: number) =>
-    ((rows ?? []) as Record<string, unknown>[])
-      .map(mapOccurrence)
-      .filter((occurrence) =>
-        Boolean(occurrence.calendarEventId) || isSundayWorshipOccurrence(occurrence),
-      )
-      .slice(0, limit);
+  const split = (rows: unknown[] | null) => {
+    const all = ((rows ?? []) as Record<string, unknown>[]).map(mapOccurrence);
+    return {
+      main: all.filter(isMainBoardOccurrence),
+      other: all.filter((occurrence) => !isMainBoardOccurrence(occurrence)),
+    };
+  };
+
+  const upcomingRows = split(upcoming.data);
+  const recentRows = split(recent.data);
+  const otherLimit = Math.min(options?.otherLimit ?? 10, 50);
 
   return {
-    upcoming: attendanceEvents(upcoming.data, Math.min(options?.upcomingLimit ?? 8, 50)),
-    recent: attendanceEvents(recent.data, Math.min(options?.recentLimit ?? 20, 50)),
+    upcoming: upcomingRows.main.slice(0, Math.min(options?.upcomingLimit ?? 8, 50)),
+    recent: recentRows.main.slice(0, Math.min(options?.recentLimit ?? 20, 50)),
+    other: {
+      upcoming: upcomingRows.other.slice(0, otherLimit),
+      recent: recentRows.other.slice(0, otherLimit),
+    },
   };
 }
 

@@ -1,22 +1,63 @@
 "use client";
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { ArrowUpRight, CalendarDays, Clock3, Search, UsersRound } from "lucide-react";
+import { CalendarDays, Inbox, Search, ShieldCheck, UserRound, UsersRound } from "lucide-react";
 import type { StaffGroupListItem, StaffGroupType } from "@/lib/groups/staff/groups";
 import type { ChurchGroupSummary } from "@/lib/groups/staff/insights";
 import { cn } from "@/lib/utils";
-import { base, Empty, GroupAvatar, GroupBackdrop, PageHeading, Pill, TextLink } from "./shared";
-import { GroupFormButton } from "./group-form";
+import { base, Empty, GroupAvatar, Pill, Tag, TextLink } from "./shared";
+import { CreateGroupButton } from "./group-form";
+import { peopleCount } from "./labels";
+
+type Filter = "active" | "attention" | "archived";
+
 export function GroupList({ groups, summary, types, campuses }: { groups: StaffGroupListItem[]; summary: ChurchGroupSummary; types: StaffGroupType[]; campuses: { id: string; name: string }[] }) {
-  const [query, setQuery] = useState(""); const [filter, setFilter] = useState("active"); const [category, setCategory] = useState("");
-  const filtered = useMemo(() => groups.filter(g => (filter === "archived" ? g.status === "archived" : g.status === "active") && (filter !== "attention" || g.pendingRequestCount > 0) && (!category || g.type?.id === category) && `${g.name} ${g.leaders.join(" ")}`.toLowerCase().includes(query.toLowerCase())), [groups, filter, category, query]);
-  const create = <GroupFormButton types={types} campuses={campuses} />;
-  return <><PageHeading title="Better together." description="Create belonging. Nurture relationships. Make space for everyone.">{create}</PageHeading>
-    <section className="g-hero"><div><div className="g-eyebrow">YOUR COMMUNITY, CONNECTED</div><h2>Small groups. Meaningful connections.</h2><p>A place for every person to be known, find encouragement, and grow in faith.</p></div><div className="g-hero-stats"><div><strong>{summary.activeGroups}</strong><span>Active groups</span></div><div><strong>{summary.peopleInGroups}</strong><span>People connected</span></div><div><strong>{summary.leaders}</strong><span>Group leaders</span></div></div></section>
-    {summary.pendingRequests > 0 && <div className="mt-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200/70 bg-amber-50/60 px-5 py-4 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100"><span><strong>{summary.pendingRequests} {summary.pendingRequests === 1 ? "person is" : "people are"}</strong> waiting to find their place.</span><TextLink href={`${base}/requests`}>Review join requests</TextLink></div>}
-    <div className="g-toolbar"><div className="g-segment" aria-label="Group status">{[["active", "Active groups"], ["attention", "Needs attention"], ["archived", "Archived"]].map(([value, name]) => <button key={value} onClick={() => setFilter(value)} aria-pressed={filter === value} className={cn(filter === value && "is-active")}>{name}</button>)}</div><div className="flex flex-1 flex-wrap justify-end gap-3"><label className="g-search"><Search /><span className="sr-only">Search groups and leaders</span><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Search groups or leaders…" /></label><select aria-label="Filter by category" value={category} onChange={e => setCategory(e.target.value)} style={{ width: "auto" }}><option value="">All categories</option>{types.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></div></div>
-    <div className="mb-4 flex justify-between text-xs text-muted-foreground" aria-live="polite"><span>{filtered.length} {filtered.length === 1 ? "group" : "groups"}</span><span>Made for life together</span></div>
-    {filtered.length ? <div className="g-grid">{filtered.map(g => <Link className="g-group-card" key={g.id} href={`${base}/${g.id}`}><div className="g-card-top"><GroupBackdrop url={g.coverImageUrl} /><GroupAvatar name={g.name} url={g.coverImageUrl} size={78} /><span className="g-card-top-pill">{g.status === "archived" ? <Pill>Archived</Pill> : g.pendingRequestCount ? <Pill tone="amber">{g.pendingRequestCount} pending</Pill> : <Pill tone="green">{g.enrollment === "open" ? "Open to join" : g.enrollment === "approval_required" ? "Ask to join" : g.enrollment === "closed" ? "Closed" : "By invitation"}</Pill>}</span></div><div className="g-card-body"><Pill>{g.type?.name ?? "Community"}</Pill><h3>{g.name}</h3><div className="g-meta"><UsersRound />{g.memberCount} {g.memberCount === 1 ? "member" : "members"}{g.capacity && ` · ${Math.max(0, g.capacity - g.memberCount)} spots left`}</div><div className="g-meta mt-2"><CalendarDays />{g.scheduleText ?? "A rhythm is taking shape"}</div><div className="g-card-footer"><span className="truncate text-muted-foreground">{g.leaders.length ? `Led by ${g.leaders.join(" & ")}` : "Ready for a leader"}</span><ArrowUpRight className="size-4 shrink-0 text-muted-foreground" /></div></div></Link>)}</div> : <Empty icon={query || category ? "search" : "groups"} title={query || category ? "No groups match just yet" : filter === "archived" ? "No archived groups" : filter === "attention" ? "You’re all caught up" : "Belonging starts with a group"} description={query || category ? "Try another name or choose a different category." : filter === "active" ? "Gather people around a shared interest, a season of life, or a simple invitation to grow together." : "Groups will appear here when they need your attention."}>{filter === "active" && !query && !category && create}</Empty>}
-    <div className="mt-8 flex items-center gap-2 text-xs text-muted-foreground"><Clock3 className="size-3.5" />Groups and membership counts reflect your church’s current activity.</div>
-  </>;
+  const [query, setQuery] = useState(""); const [filter, setFilter] = useState<Filter>("active"); const [category, setCategory] = useState("");
+  const active = groups.filter(g => g.status === "active");
+  const counts: Record<Filter, number> = { active: active.length, attention: active.filter(g => g.pendingRequestCount > 0).length, archived: groups.length - active.length };
+  const filtered = useMemo(() => groups.filter(g => (filter === "archived" ? g.status === "archived" : g.status === "active") && (filter !== "attention" || g.pendingRequestCount > 0) && (!category || g.type?.id === category) && `${g.name} ${g.leaders.join(" ")}`.toLowerCase().includes(query.trim().toLowerCase())), [groups, filter, category, query]);
+  const searching = Boolean(query.trim() || category);
+
+  return <div className="flex flex-col gap-6">
+    <dl className="g-summary" aria-label="Groups at a glance">
+      <div><dt>Active groups</dt><dd>{summary.activeGroups}</dd></div>
+      <div><dt>People in groups</dt><dd>{summary.peopleInGroups}</dd></div>
+      <div><dt>Group leaders</dt><dd>{summary.leaders}</dd></div>
+    </dl>
+
+    {summary.pendingRequests > 0 && <div className="g-callout"><span className="flex items-center gap-3"><Inbox className="size-6 shrink-0" aria-hidden /><span><strong>{peopleCount(summary.pendingRequests)}</strong> {summary.pendingRequests === 1 ? "has" : "have"} asked to join a group.</span></span><TextLink href={`${base}/requests`}>Review join requests</TextLink></div>}
+
+    <div className="g-toolbar">
+      <div className="g-segment" role="group" aria-label="Show">
+        {([["active", "Active"], ["attention", "Waiting to join"], ["archived", "Archived"]] as const).map(([value, name]) => <button type="button" key={value} onClick={() => setFilter(value)} aria-pressed={filter === value} className={cn(filter === value && "is-active")}>{name} <span className="g-segment-count">{counts[value]}</span></button>)}
+      </div>
+      <div className="flex flex-1 flex-wrap justify-end gap-3">
+        <label className="g-search"><Search aria-hidden /><span className="sr-only">Search groups or leaders</span><input type="search" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search groups or leaders" /></label>
+        <label className="g-select-inline"><span className="sr-only">Show one kind of group</span><select value={category} onChange={e => setCategory(e.target.value)}><option value="">All kinds of groups</option>{types.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
+      </div>
+    </div>
+
+    <p className="sr-only" aria-live="polite">{filtered.length} {filtered.length === 1 ? "group" : "groups"} shown</p>
+
+    {filtered.length ? <ul className="g-grid" aria-label="Groups">{filtered.map(g => <li key={g.id}><Link className="g-group-card" href={`${base}/${g.id}`}>
+      <div className="g-card-head">
+        <GroupAvatar name={g.name} url={g.coverImageUrl} size={64} />
+        <div className="min-w-0 flex-1">
+          <h2 className="g-card-title">{g.name}</h2>
+          <div className="mt-1.5 flex flex-wrap gap-2">{g.type && <Tag>{g.type.name}</Tag>}{g.isYouth && <Tag><ShieldCheck className="size-4" aria-hidden />Youth</Tag>}</div>
+        </div>
+      </div>
+      {(g.status === "archived" || g.pendingRequestCount > 0) && <div>{g.status === "archived" ? <Pill>Archived</Pill> : <Pill tone="attention">{peopleCount(g.pendingRequestCount)} asked to join</Pill>}</div>}
+      <ul className="g-card-meta">
+        <li><UsersRound aria-hidden />{peopleCount(g.memberCount)}{g.capacity !== null && ` · ${Math.max(0, g.capacity - g.memberCount)} spots left`}</li>
+        <li><CalendarDays aria-hidden />{g.scheduleText ?? "No regular meeting time yet"}</li>
+        <li><UserRound aria-hidden /><span className="truncate">{g.leaders.length ? `Led by ${g.leaders.join(" & ")}` : "No leader yet"}</span></li>
+      </ul>
+    </Link></li>)}</ul>
+      : <Empty icon={searching ? "search" : "groups"}
+          title={searching ? "No groups match" : filter === "archived" ? "No archived groups" : filter === "attention" ? "No one is waiting to join" : "No groups yet"}
+          description={searching ? "Try another name, or show all kinds of groups." : filter === "active" ? "Groups are small groups, classes and teams. Create one and add its people in one step." : filter === "attention" ? "When someone asks to join a group, it shows up here." : "Groups you archive are kept here. You can restore them at any time."}>
+          {filter === "active" && !searching && <CreateGroupButton types={types} campuses={campuses} label="Create your first group" />}
+        </Empty>}
+  </div>;
 }

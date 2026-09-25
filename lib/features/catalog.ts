@@ -178,8 +178,8 @@ export const FEATURES: FeatureDefinition[] = [
   },
   {
     key: "library",
-    label: "Media & Documents",
-    description: "Shared document library and uploaded media assets.",
+    label: "Reports",
+    description: "Monthly attendance reports to download.",
     href: "/dashboard/library",
     icon: FolderOpen,
     routes: ["/dashboard/library", "/dashboard/media"],

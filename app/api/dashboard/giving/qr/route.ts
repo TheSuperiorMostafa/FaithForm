@@ -32,16 +32,16 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const url = searchParams.get("url");
   if (!url) {
-    return NextResponse.json({ error: "url required" }, { status: 400 });
+    return NextResponse.json({ error: "We couldn't tell which link to make a QR code for." }, { status: 400 });
   }
 
   const profile = await getChurchGivingProfile(auth.churchId);
   if (!profile?.slug) {
-    return NextResponse.json({ error: "Giving page not configured" }, { status: 400 });
+    return NextResponse.json({ error: "Your giving page isn't set up yet." }, { status: 400 });
   }
 
   if (!isAllowedGiveUrl(url, profile.slug)) {
-    return NextResponse.json({ error: "URL not allowed" }, { status: 400 });
+    return NextResponse.json({ error: "QR codes can only be made for your own giving page." }, { status: 400 });
   }
 
   const png = await QRCode.toBuffer(url, {

@@ -87,16 +87,20 @@ export function toBrowseSeries(
     });
 }
 
-/** Route builders for the staff dashboard. */
+/**
+ * Route builders for the staff dashboard. Everything lives under the
+ * Recordings tab, so opening a tile never moves the highlighted tab; the old
+ * `/dashboard/live-streaming/media/**` addresses redirect here.
+ */
 export const DASHBOARD_MEDIA_LINKS: BrowseLinks = {
-  itemBase: "/dashboard/live-streaming/media",
-  seriesBase: "/dashboard/live-streaming/media/series",
-  topicBase: "/dashboard/live-streaming/media/tag/topic",
-  speakerBase: "/dashboard/live-streaming/media/tag/speaker",
-  allSeries: "/dashboard/live-streaming/media/series",
-  allItems: "/dashboard/live-streaming/media/all",
-  // The dashboard's live surface is the broadcast console, not a watch page,
-  // so the featured slot never points at a stream from here.
+  itemBase: "/dashboard/live-streaming/recordings",
+  seriesBase: "/dashboard/live-streaming/recordings/series",
+  topicBase: "/dashboard/live-streaming/recordings/tag/topic",
+  speakerBase: "/dashboard/live-streaming/recordings/tag/speaker",
+  allSeries: "/dashboard/live-streaming/recordings/series",
+  allItems: "/dashboard/live-streaming/recordings",
+  // The dashboard's live surface is the Go live tab, not a watch page, so the
+  // featured slot never points at a stream from here.
   live: null,
 };
 

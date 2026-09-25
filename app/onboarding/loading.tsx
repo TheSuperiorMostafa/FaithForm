@@ -1,37 +1,49 @@
 import { Card } from "@/components/ui/card";
 import { Skeleton, SkeletonContainer, SkeletonText } from "@/components/ui/skeleton";
+import { ONBOARDING_STEP_LABELS } from "@/components/onboarding/step-labels";
+import { cn } from "@/lib/utils";
 
+/**
+ * Mirrors `OnboardingWizard`: the same 560px column, the progress row with
+ * its step labels (fixed text, so real), then the step card with the same
+ * padding. Only what depends on the invite (which step, the church's name)
+ * shimmers.
+ */
 export default function OnboardingLoading() {
   return (
-    <SkeletonContainer
-      className="mx-auto flex min-h-[80vh] w-full max-w-xl flex-col items-center justify-center p-4"
-      label="onboarding"
-    >
-      <Card className="w-full p-8 shadow-card dark:shadow-none space-y-6">
-        <div className="flex items-center justify-between">
-          <Skeleton className="h-6 w-32" />
-          <Skeleton className="h-4 w-16" />
+    <SkeletonContainer className="w-full max-w-[560px]" label="Setup">
+      <div className="w-full">
+        <div className="mb-2 flex items-center justify-between text-base">
+          <Skeleton className="h-6 w-28" />
+          <Skeleton className="h-5 w-24" />
         </div>
-
-        <div className="flex gap-2">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-2 flex-1 rounded-full" />
+        <div className="h-2 overflow-hidden rounded-full bg-muted" />
+        <div className="mt-3 hidden justify-between gap-1 sm:flex" aria-hidden>
+          {ONBOARDING_STEP_LABELS.map((label) => (
+            <span key={label} className="flex-1 truncate text-center text-sm text-muted-foreground">
+              {label}
+            </span>
           ))}
         </div>
+      </div>
 
-        <div className="space-y-4 pt-4">
-          <Skeleton className="h-8 w-3/4" />
-          <SkeletonText lines={2} lastLineWidth="w-5/6" size="base" />
-        </div>
-
-        <div className="space-y-3 pt-4">
-          <Skeleton className="h-10 w-full rounded-md" />
-          <Skeleton className="h-10 w-full rounded-md" />
-        </div>
-
-        <div className="flex justify-between pt-6">
-          <Skeleton className="h-10 w-24 rounded-lg" />
-          <Skeleton className="h-10 w-28 rounded-lg" />
+      <Card
+        className={cn(
+          "mt-6 overflow-hidden rounded-[20px] border-border shadow-card",
+          "px-4 py-8 sm:px-10 sm:py-10",
+        )}
+      >
+        <div className="space-y-6">
+          <div>
+            <Skeleton className="h-8 w-3/4 sm:h-9" />
+            <SkeletonText lines={2} lastLineWidth="w-5/6" size="base" className="mt-3" />
+          </div>
+          <div className="space-y-4">
+            <Skeleton className="h-6 w-4/5" />
+            <Skeleton className="h-6 w-3/4" />
+            <Skeleton className="h-6 w-1/2" />
+          </div>
+          <Skeleton className="h-12 w-full rounded-[10px]" />
         </div>
       </Card>
     </SkeletonContainer>

@@ -1,5 +1,11 @@
 import { redirect } from "next/navigation";
+import { SermonBackLink } from "@/components/sermon-builder/sermon-back-link";
 import { SimpleSermonBuilder } from "@/components/sermon-builder/simple-sermon-builder";
+import { PageHeader } from "@/components/ui/page-header";
+import {
+  NEW_SERMON_DESCRIPTION,
+  NEW_SERMON_TITLE,
+} from "@/lib/sermon-builder/page-copy";
 import {
   getCuratedTranslations,
   getDefaultTranslationId,
@@ -9,6 +15,29 @@ import { getCurrentChurchId } from "@/lib/auth/current-church";
 import { getChurchAISettings } from "@/lib/queries/sermons";
 
 export const dynamic = "force-dynamic";
+
+/**
+ * "John 3:16-21" → book, chapter, verses, so a week planned in a series opens
+ * with its passage already filled in. Anything unparseable is simply ignored.
+ */
+function parsePassage(raw: string | undefined): {
+  book?: string;
+  chapter?: number;
+  verseStart?: number;
+  verseEnd?: number;
+} {
+  if (!raw) return {};
+  const match = raw.trim().match(/^((?:[1-3]\s*)?[A-Za-z][A-Za-z .]*?)\s+(\d+)(?::(\d+)(?:\s*[-–]\s*(\d+))?)?/);
+  if (!match) return {};
+  const [, book, chapter, start, end] = match;
+  const verseStart = start ? Number(start) : undefined;
+  return {
+    book: book.trim(),
+    chapter: Number(chapter),
+    verseStart,
+    verseEnd: end ? Number(end) : verseStart,
+  };
+}
 
 type Props = {
   searchParams: Promise<{
@@ -39,16 +68,17 @@ export default async function NewSermonPage({ searchParams }: Props) {
   );
 
   return (
-    <div className="flex flex-col gap-4">
-      <h1 className="border-l-4 border-accent pl-3 font-heading text-[26px] font-bold">
-        New sermon
-      </h1>
+    <div className="flex w-full flex-col gap-8">
+      <SermonBackLink href="/dashboard/sermon-builder" label="Back to Sermons" />
+      <PageHeader title={NEW_SERMON_TITLE} description={NEW_SERMON_DESCRIPTION} />
       <SimpleSermonBuilder
         translationOptions={translationOptions}
         defaultTranslation={defaultTranslation}
         initial={{
           title: query.topic,
+          ...parsePassage(query.scripture),
         }}
+        seriesId={query.series}
       />
     </div>
   );

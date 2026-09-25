@@ -167,7 +167,12 @@ test("support is reachable from every legal page and the sign-in page links the 
     assert.match(frame, new RegExp(`LEGAL_PATHS\\.${key}`), key);
   }
 
-  const login = readFileSync("app/login/page.tsx", "utf8");
+  // The links live in the frame shared by the sign-in page and its loading
+  // state, so they are there before the form has even loaded.
+  const loginPage = readFileSync("app/login/page.tsx", "utf8");
+  assert.match(loginPage, /<LoginShell>/);
+  const login = readFileSync("app/login/login-shell.tsx", "utf8");
+  assert.match(login, /<LegalLinks \/>/);
   assert.match(login, /LEGAL_PATHS\.privacy/);
   assert.match(login, /LEGAL_PATHS\.terms/);
 });

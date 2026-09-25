@@ -1,16 +1,22 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Suspense } from "react";
+import { Download } from "lucide-react";
+
+import { GivingNotReady, GivingSubpageHeader, plural } from "@/components/giving/giving-page-parts";
 import { GiftsTable } from "@/components/giving/gifts-table";
 import { GiftsToolbar } from "@/components/giving/gifts-toolbar";
-import { GivingSetupCta } from "@/components/giving/giving-setup-cta";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { buttonVariants } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { ErrorState } from "@/components/ui/error-state";
 import { getChurchAuth } from "@/lib/auth/church";
 import {
   getChurchGivingProfile,
   getGivingFunds,
   searchGifts,
+  sumGifts,
 } from "@/lib/queries/giving";
+import { formatCents } from "@/lib/utils/currency";
+import { cn } from "@/lib/utils";
 import type { DonationStatus, GiftType, GiftsSearchFilters } from "@/types/giving";
 
 export const dynamic = "force-dynamic";
@@ -18,6 +24,9 @@ export const dynamic = "force-dynamic";
 type PageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
+
+const FILTER_KEYS = ["search", "fundId", "giftType", "status", "dateFrom", "dateTo"] as const;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export default async function GiftsPage({ searchParams }: PageProps) {
   const query = await searchParams;
@@ -27,74 +36,121 @@ export default async function GiftsPage({ searchParams }: PageProps) {
   const profile = await getChurchGivingProfile(auth.churchId);
   if (!profile?.stripeChargesEnabled) {
     return (
-      <div className="mx-auto max-w-3xl flex flex-col gap-6">
-        <BackLink />
-        <GivingSetupCta />
+      <div className="flex w-full flex-col gap-8">
+        <GiftsHeader exportHref={null} />
+        <GivingNotReady isAdmin={auth.isAdmin} />
       </div>
     );
   }
 
-  const page = Number.parseInt(String(query.page ?? "1"), 10) || 1;
+  const page = Math.max(1, Number.parseInt(String(str(query.page) ?? "1"), 10) || 1);
   const pageSize = 25;
+  const dateFrom = str(query.dateFrom);
+  const dateTo = str(query.dateTo);
 
   const filters: GiftsSearchFilters = {
     search: str(query.search),
     fundId: str(query.fundId),
     giftType: str(query.giftType) as GiftType | undefined,
     status: str(query.status) as DonationStatus | undefined,
-    dateFrom: str(query.dateFrom)
-      ? new Date(str(query.dateFrom)!).toISOString()
-      : undefined,
-    dateTo: str(query.dateTo)
-      ? new Date(`${str(query.dateTo)}T23:59:59`).toISOString()
-      : undefined,
+    dateFrom: dateFrom && DATE_RE.test(dateFrom) ? new Date(`${dateFrom}T00:00:00`).toISOString() : undefined,
+    dateTo: dateTo && DATE_RE.test(dateTo) ? new Date(`${dateTo}T23:59:59`).toISOString() : undefined,
   };
 
-  const [result, funds] = await Promise.all([
-    searchGifts(auth.churchId, filters, page, pageSize),
-    getGivingFunds(auth.churchId),
-  ]);
+  const exportParams = new URLSearchParams();
+  for (const key of FILTER_KEYS) {
+    const value = str(query[key]);
+    if (value) exportParams.set(key, value);
+  }
+  const exportHref = auth.isAdmin
+    ? `/api/dashboard/giving/export${exportParams.size ? `?${exportParams.toString()}` : ""}`
+    : null;
 
+  let data;
+  try {
+    const [result, totals, funds] = await Promise.all([
+      searchGifts(auth.churchId, filters, page, pageSize),
+      sumGifts(auth.churchId, filters),
+      getGivingFunds(auth.churchId),
+    ]);
+    data = { result, totals, funds };
+  } catch (error) {
+    console.error("[giving] gifts failed to load", error);
+    return (
+      <div className="flex w-full flex-col gap-8">
+        <GiftsHeader exportHref={null} />
+        <ErrorState
+          title="Gifts didn't load"
+          description="No gifts were lost. Refresh the page to try again, and if it keeps happening, contact FaithForm support."
+        />
+      </div>
+    );
+  }
+  const { result, totals, funds } = data;
   const totalPages = Math.max(1, Math.ceil(result.total / pageSize));
+  const filtered = FILTER_KEYS.some((key) => Boolean(str(query[key])));
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
-      <BackLink />
-      <h1 className="font-heading text-2xl font-bold">Gifts</h1>
+    <div className="flex w-full flex-col gap-8">
+      <GiftsHeader exportHref={exportHref} />
 
-      <Suspense fallback={null}>
-        <GiftsToolbar funds={funds.filter((f) => f.isActive)} />
-      </Suspense>
+      <GiftsToolbar funds={funds.filter((f) => f.isActive)} />
 
-      <Card className="overflow-hidden">
-        <CardHeader>
-          <CardTitle>
-            {result.total} gift{result.total === 1 ? "" : "s"}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <GiftsTable donations={result.donations} isAdmin={auth.isAdmin} />
-        </CardContent>
-      </Card>
+      <section aria-labelledby="gifts-summary" className="flex flex-col gap-4">
+        <p id="gifts-summary" className="text-lg text-foreground" aria-live="polite">
+          <strong className="font-heading text-2xl font-bold">{plural(result.total, "gift")}</strong>
+          <span className="text-muted-foreground"> · </span>
+          <strong className="font-heading text-2xl font-bold">
+            {formatCents(filters.status ? totals.totalCents : totals.receivedCents)}
+          </strong>{" "}
+          <span className="text-muted-foreground">
+            {filters.status ? "in total" : "received"}
+            {filtered ? " with these filters" : ""}
+          </span>
+        </p>
+
+        <Card className="overflow-hidden p-0">
+          <GiftsTable donations={result.donations} isAdmin={auth.isAdmin} filtered={filtered} />
+        </Card>
+        <p className="text-sm text-muted-foreground">
+          &ldquo;After fees&rdquo; is what reaches your bank once the card processing fee is taken out.
+        </p>
+      </section>
 
       {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-2">
+        <nav aria-label="Pages of gifts" className="flex flex-wrap items-center justify-center gap-3">
           {page > 1 && (
             <PaginationLink searchParams={query} page={page - 1}>
-              Previous
+              Previous page
             </PaginationLink>
           )}
-          <span className="text-sm text-muted-foreground">
+          <span className="text-[15px] text-muted-foreground">
             Page {page} of {totalPages}
           </span>
           {page < totalPages && (
             <PaginationLink searchParams={query} page={page + 1}>
-              Next
+              Next page
             </PaginationLink>
           )}
-        </div>
+        </nav>
       )}
     </div>
+  );
+}
+
+function GiftsHeader({ exportHref }: { exportHref: string | null }) {
+  return (
+    <GivingSubpageHeader
+      page="gifts"
+      secondary={
+        exportHref ? (
+          <a href={exportHref} className={buttonVariants({ variant: "outline" })}>
+            <Download aria-hidden />
+            Download spreadsheet (CSV)
+          </a>
+        ) : null
+      }
+    />
   );
 }
 
@@ -122,17 +178,9 @@ function PaginationLink({
   return (
     <Link
       href={`/dashboard/giving/gifts?${params.toString()}`}
-      className="inline-flex h-8 items-center justify-center rounded-lg border border-border bg-background px-3 text-sm font-medium hover:bg-muted"
+      className={cn(buttonVariants({ variant: "outline" }))}
     >
       {children}
-    </Link>
-  );
-}
-
-function BackLink() {
-  return (
-    <Link href="/dashboard/giving" className="text-sm text-accent hover:underline">
-      ← Back to Giving
     </Link>
   );
 }

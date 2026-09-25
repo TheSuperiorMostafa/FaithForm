@@ -12,6 +12,7 @@ import {
 } from "@/lib/queries/sermons";
 import { createClient } from "@/lib/supabase/server";
 import { featureAccessDenied } from "@/lib/features/guard";
+import { SERMON_NOT_FOUND_MESSAGE, sermonRouteError } from "@/lib/sermon-builder/route-error";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
     const supabase = createClient();
     const sermon = await verifySermonAccess(supabase, sermonId, auth.churchId);
     if (!sermon) {
-      return NextResponse.json({ error: "Sermon not found" }, { status: 404 });
+      return NextResponse.json({ error: SERMON_NOT_FOUND_MESSAGE }, { status: 404 });
     }
 
     const [settings, profile] = await Promise.all([
@@ -66,9 +67,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ questions: object.questions, modelUsed });
   } catch (e) {
-    const message =
-      e instanceof Error ? e.message : "Discussion generation failed";
-    const status = message === "Unauthorized" ? 401 : 500;
-    return NextResponse.json({ error: message }, { status });
+    return sermonRouteError(e, "We couldn't write the discussion questions.");
   }
 }

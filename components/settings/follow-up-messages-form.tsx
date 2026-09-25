@@ -1,14 +1,19 @@
 "use client";
 
-import { useFormState, useFormStatus } from "react-dom";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
+import { useActionState, useEffect, useState } from "react";
+import { useFormStatus } from "react-dom";
+import { toast } from "sonner";
+
 import {
   updateFollowUpMessages,
   type SettingsFormState,
 } from "@/app/dashboard/settings/actions";
+import { ConfirmResetButton } from "@/components/settings/confirm-reset-button";
+import { PlaceholderChips } from "@/components/settings/placeholder-chips";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   FOLLOW_UP_TEMPLATE_COUNT,
   FOLLOW_UP_TEMPLATE_LABELS,
@@ -19,27 +24,14 @@ function SaveButton() {
   const { pending } = useFormStatus();
   return (
     <Button type="submit" disabled={pending}>
-      {pending ? "Saving…" : "Save messages"}
+      {pending ? "Saving…" : "Save text messages"}
     </Button>
   );
 }
 
-function ResetButton() {
-  const { pending } = useFormStatus();
-  return (
-    <Button
-      type="submit"
-      name="reset"
-      value="1"
-      variant="outline"
-      formNoValidate
-      disabled={pending}
-    >
-      Reset to defaults
-    </Button>
-  );
-}
+const NAME_CHIP = [{ token: "[Name]", meaning: "Their first name" }];
 
+/** The words each absence sends, and a live example of how it will read. */
 export function FollowUpMessagesForm({
   templates,
   isAdmin,
@@ -47,80 +39,81 @@ export function FollowUpMessagesForm({
   templates: string[];
   isAdmin: boolean;
 }) {
-  const [state, formAction] = useFormState<SettingsFormState, FormData>(
+  const [state, formAction] = useActionState<SettingsFormState, FormData>(
     updateFollowUpMessages,
     { ok: false },
   );
+  const [drafts, setDrafts] = useState<string[]>(templates);
 
-  if (!isAdmin) {
-    return (
-      <Card>
-        <CardContent className="p-6 text-sm text-muted-foreground">
-          Only church admins can edit attendance follow-up messages. Messages
-          are sent automatically when you submit attendance with follow-up
-          checked for absent members.
-        </CardContent>
-      </Card>
-    );
-  }
+  useEffect(() => {
+    setDrafts(templates);
+  }, [templates]);
+
+  useEffect(() => {
+    if (state.ok) toast.success("Follow-up text messages saved.");
+  }, [state]);
+
+  if (!isAdmin) return null;
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Attendance follow-up messages</CardTitle>
-        <p className="text-sm text-muted-foreground">
-          Customize the five SMS templates sent when you follow up with absent
-          members. Use{" "}
-          <code className="rounded bg-muted px-1 py-0.5 text-xs">[Name]</code>{" "}
-          for the member&apos;s first name. The message escalates based on
-          consecutive absences (1st miss through 5th+).
-        </p>
+        <CardTitle>Follow-up text messages</CardTitle>
+        <CardDescription className="text-[15px]">
+          When you follow up with someone who missed church, FaithForm texts them one of these.
+          The message changes the more Sundays in a row they have missed.
+        </CardDescription>
       </CardHeader>
       <CardContent>
-        <form
-          key={templates.join("\n")}
-          action={formAction}
-          className="flex flex-col gap-5"
-        >
+        <form key={templates.join("\n")} action={formAction} className="flex flex-col gap-6">
           {Array.from({ length: FOLLOW_UP_TEMPLATE_COUNT }, (_, index) => {
-            const template = templates[index] ?? "";
-            const preview = pickFollowUpMessage("Alex", index + 1, templates);
+            const id = `message_${index}`;
+            const preview = pickFollowUpMessage("Alex", index + 1, drafts);
 
             return (
-              <div key={index} className="grid gap-2">
-                <Label htmlFor={`message_${index}`}>
-                  Message {index + 1}{" "}
-                  <span className="font-normal text-muted-foreground">
-                    ({FOLLOW_UP_TEMPLATE_LABELS[index]})
-                  </span>
+              <div key={index} className="flex flex-col gap-3 rounded-2xl border border-border p-5">
+                <Label htmlFor={id} className="text-base font-semibold">
+                  {FOLLOW_UP_TEMPLATE_LABELS[index]}
                 </Label>
                 <Textarea
-                  id={`message_${index}`}
-                  name={`message_${index}`}
-                  defaultValue={template}
+                  id={id}
+                  name={id}
+                  defaultValue={templates[index] ?? ""}
                   rows={3}
                   maxLength={480}
                   required
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setDrafts((current) => current.map((row, i) => (i === index ? value : row)));
+                  }}
                 />
-                <p className="text-xs text-muted-foreground">
-                  Preview: {preview}
-                </p>
+                <PlaceholderChips chips={NAME_CHIP} targetId={id} label="Must include their name. Tap to add it:" />
+                <div className="rounded-xl bg-muted/50 px-4 py-3">
+                  <p className="text-sm font-semibold text-muted-foreground">How it reads</p>
+                  <p className="mt-1 text-[15px] text-foreground">{preview}</p>
+                </div>
               </div>
             );
           })}
 
           {state.error ? (
-            <p className="text-sm text-destructive">{state.error}</p>
+            <p className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive" role="alert">
+              {state.error}
+            </p>
           ) : null}
           {state.ok ? (
-            <p className="text-sm text-emerald-600 dark:text-emerald-400">
-              Follow-up messages saved.
+            <p className="text-sm font-medium text-emerald-700 dark:text-emerald-300" role="status">
+              Follow-up text messages saved.
             </p>
           ) : null}
 
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-3">
             <SaveButton />
-            <ResetButton />
+            <ConfirmResetButton
+              title="Go back to FaithForm's text messages?"
+              description="All five of your follow-up messages are replaced with our standard wording. This can't be undone."
+              confirmLabel="Reset text messages"
+            />
           </div>
         </form>
       </CardContent>

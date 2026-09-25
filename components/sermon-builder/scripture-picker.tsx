@@ -151,7 +151,7 @@ export const ScripturePicker = forwardRef<
                     )}
                   >
                     <span>{b.name}</span>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-sm text-muted-foreground">
                       {b.testament} · {b.chapters} ch
                     </span>
                   </button>
@@ -237,7 +237,7 @@ export const ScripturePicker = forwardRef<
           {value.map((ref) => (
             <span
               key={ref}
-              className="inline-flex items-center gap-1 rounded-full border border-accent/25 bg-accent/10 px-3 py-1 text-xs font-semibold"
+              className="inline-flex items-center gap-1 rounded-full border border-accent/25 bg-accent/10 px-3 py-1 text-sm font-semibold"
             >
               <button
                 type="button"
@@ -258,7 +258,7 @@ export const ScripturePicker = forwardRef<
           ))}
         </div>
       ) : (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           Add one or more passages. They’ll be pulled into the outline, draft,
           and exports.
         </p>

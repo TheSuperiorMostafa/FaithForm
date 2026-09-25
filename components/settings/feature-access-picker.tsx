@@ -40,7 +40,7 @@ export function FeatureAccessPicker({
   if (options.length === 0) {
     return (
       <p className="rounded-lg border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
-        No features are enabled for your account yet.
+        No tools are switched on for your church yet.
       </p>
     );
   }
@@ -52,8 +52,8 @@ export function FeatureAccessPicker({
       ))}
 
       <div className="flex items-center justify-between">
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Feature access
+        <p className="text-[15px] font-semibold text-foreground">
+          Tools they can open
         </p>
         <button
           type="button"
@@ -61,9 +61,9 @@ export function FeatureAccessPicker({
           onClick={() =>
             onChange(allSelected ? [] : options.map((f) => f.key))
           }
-          className="text-xs font-semibold text-accent transition-colors hover:text-brand-lightGold disabled:opacity-50"
+          className="inline-flex min-h-11 items-center rounded-xl px-3 text-sm font-semibold text-primary underline-offset-4 transition-colors hover:underline disabled:opacity-50 dark:text-accent"
         >
-          {allSelected ? "Clear all" : "Select all"}
+          {allSelected ? "Untick all" : "Tick all"}
         </button>
       </div>
 
@@ -113,7 +113,7 @@ export function FeatureAccessPicker({
                     />
                   )}
                 </span>
-                <span className="mt-0.5 block text-xs leading-snug text-muted-foreground">
+                <span className="mt-0.5 block text-sm leading-snug text-muted-foreground">
                   {feature.description}
                 </span>
               </span>
@@ -130,8 +130,8 @@ export function AdminAccessNotice() {
     <p className="flex items-start gap-2 rounded-xl border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
       <Lock className="mt-0.5 size-4 shrink-0 text-accent" strokeWidth={1.75} aria-hidden />
       <span>
-        Admins get every feature your account has enabled, plus billing,
-        integrations, and team management.
+        Admins can open every tool your church has, plus Settings, connected
+        accounts and the team.
       </span>
     </p>
   );

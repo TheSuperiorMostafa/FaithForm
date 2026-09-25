@@ -1,6 +1,7 @@
 "use server";
 
 import { getChurchAuth } from "@/lib/auth/church";
+import { toUserError } from "@/lib/errors/user-error";
 import { featureActionError } from "@/lib/features/guard";
 import {
   listHouseholds,
@@ -90,6 +91,9 @@ export async function getMemberCareDetails(
     };
   }
 
+  if (error) {
+    return { ok: false, error: toUserError(error, "We couldn't load this person's care notes.") };
+  }
   if (!member) return { ok: false, error: "That person could not be found." };
 
   const [locations, files, households, { data: membership }] = await Promise.all([
@@ -162,8 +166,8 @@ export async function saveMemberCareDetails(input: {
     return {
       ok: false,
       error: /medical_notes|default_location_id/i.test(error.message)
-        ? "Check-In has not been set up on this database yet."
-        : "Could not save those details.",
+        ? "Kids check-in isn't turned on for your church yet. Contact FaithForm support to turn it on."
+        : toUserError(error, "We couldn't save the care notes."),
     };
   }
 

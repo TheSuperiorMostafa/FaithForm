@@ -1,9 +1,12 @@
-import { ProfileAvatar } from "./profile-avatar";
+"use client";
+
 import Link from "next/link";
-import { LogOut, ShieldCheck } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { CircleHelp, ShieldCheck } from "lucide-react";
 import { Logo } from "@/components/brand/logo";
-import { Button } from "@/components/ui/button";
 import { isBootstrapSuperAdminEmail } from "@/lib/auth/superadmin-emails";
+import { cn } from "@/lib/utils";
+import { currentNavLabel } from "./nav-items";
 
 type TopbarProps = {
   churchName?: string | null;
@@ -11,55 +14,53 @@ type TopbarProps = {
   userEmail?: string;
 };
 
-export function Topbar({ churchName, userEmail, avatarUrl }: TopbarProps) {
-  const initials = userEmail
-    ? userEmail.charAt(0).toUpperCase()
-    : (churchName ?? "F").charAt(0).toUpperCase();
+/**
+ * Says where you are (the section name, matching the sidebar) and keeps Help
+ * in the same place on every page and every screen size (WCAG 3.2.6).
+ */
+export function Topbar({ churchName, userEmail }: TopbarProps) {
+  const pathname = usePathname();
+  const section = currentNavLabel(pathname);
   const showAdminLink = isBootstrapSuperAdminEmail(userEmail);
+  const onHelp = pathname.startsWith("/dashboard/support");
 
   return (
-    <header className="flex h-16 shrink-0 items-center justify-between border-b border-border bg-card/90 px-5 shadow-sm backdrop-blur-xl md:px-8">
+    <header className="flex h-16 shrink-0 items-center justify-between gap-3 border-b border-border bg-card/90 px-5 backdrop-blur-xl md:px-8">
       <div className="flex min-w-0 flex-1 items-center gap-3">
         <Logo size={36} className="md:hidden" />
         <div className="flex min-w-0 flex-col">
-          <p className="text-[11px] font-bold uppercase tracking-[0.22em] text-accent">
-            Dashboard
-          </p>
-          <h1 className="truncate font-heading text-lg font-bold text-foreground md:text-xl">
+          <p className="truncate text-sm font-semibold text-muted-foreground">
             {churchName ?? "FaithForm"}
-          </h1>
+          </p>
+          <p className="truncate font-heading text-lg font-bold leading-tight text-foreground">
+            {section ?? "Dashboard"}
+          </p>
         </div>
       </div>
 
-      {/* Mobile: show avatar + signout. Desktop: hidden (sidebar handles this). */}
-      <div className="flex items-center gap-2 md:hidden">
+      <div className="flex items-center gap-2">
         {showAdminLink && (
           <Link
             href="/admin"
-            aria-label="Admin dashboard"
-            className="inline-flex min-h-10 items-center justify-center gap-1 rounded-lg border border-primary/35 bg-background px-3 text-sm font-semibold text-primary transition-colors hover:border-accent hover:bg-accent/10"
+            className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-xl border border-primary/35 bg-background px-3 text-sm font-semibold text-primary transition-colors hover:border-accent hover:bg-accent/10"
           >
-            <ShieldCheck className="size-4" strokeWidth={1.75} />
+            <ShieldCheck className="size-4" strokeWidth={1.75} aria-hidden />
             Admin
           </Link>
         )}
-        <div
-          className="flex size-10 items-center justify-center rounded-full bg-accent text-sm font-bold text-accent-foreground shadow-sm"
-          aria-hidden
+        <Link
+          href="/dashboard/support"
+          aria-current={onHelp ? "page" : undefined}
+          className={cn(
+            "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border px-4 text-[15px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+            onHelp
+              ? "border-accent bg-accent/15 text-primary dark:text-accent"
+              : "border-border bg-card text-foreground hover:border-accent hover:bg-accent/10",
+          )}
         >
-          <ProfileAvatar url={avatarUrl} initials={initials} />
-        </div>
-        <form action="/auth/signout" method="post">
-          <Button
-            type="submit"
-            variant="ghost"
-            size="icon-lg"
-            className="text-muted-foreground hover:text-foreground"
-            aria-label="Sign out"
-          >
-            <LogOut className="size-5" strokeWidth={1.75} />
-          </Button>
-        </form>
+          <CircleHelp className="size-5" strokeWidth={1.75} aria-hidden />
+          Help
+        </Link>
       </div>
     </header>
   );

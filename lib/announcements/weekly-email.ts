@@ -119,6 +119,112 @@ export function weeklyQueueToEmailEvents(
     });
 }
 
+/**
+ * An announcement posted from the composer without a calendar event.
+ *
+ * `undated` is an announcement that is not about an event at all ("Office
+ * closed", "Pray for the Smiths"): saved with no `event_date`.
+ */
+export type StandaloneEmailRow = {
+  title: string;
+  body: string | null;
+  start_at: string;
+  end_at: string | null;
+  all_day: boolean;
+  event_location: string | null;
+  push_to_team: boolean;
+  published_at: string | null;
+  undated: boolean;
+};
+
+const WEEK_MS = 7 * 86_400_000;
+
+/**
+ * Whether an announcement with no calendar event belongs in this week's email.
+ *
+ * It must have been sent to the email. One about an event is in while the
+ * event is still to come, the same rule the calendar's events follow. One
+ * that is not about an event is in when it was posted since the start of the
+ * previous week, so something posted on Thursday still reaches Monday's email
+ * and then drops out a week later.
+ */
+export function standaloneBelongsInWeeklyEmail(
+  row: StandaloneEmailRow,
+  now: Date,
+  weekStartISO: string,
+): boolean {
+  if (!row.push_to_team) return false;
+  if (row.undated) {
+    if (!row.published_at) return false;
+    const since = new Date(weekStartISO).getTime() - WEEK_MS;
+    return new Date(row.published_at).getTime() >= since;
+  }
+  return new Date(row.start_at).getTime() >= now.getTime();
+}
+
+export function standaloneToEmailEvents(
+  rows: StandaloneEmailRow[],
+  now: Date,
+  weekStartISO: string,
+): WeeklyEmailEvent[] {
+  return rows
+    .filter((row) => standaloneBelongsInWeeklyEmail(row, now, weekStartISO))
+    .map((row) => ({
+      title: row.title,
+      location: row.event_location ?? "",
+      startAt: row.start_at,
+      endAt: row.end_at,
+      allDay: row.all_day,
+      notes: row.body?.trim() || undefined,
+    }));
+}
+
+/**
+ * The published announcements with no calendar event that were sent to the
+ * weekly email. A database without 0066 has no `all_day`; the read is retried
+ * without it rather than leaving these out.
+ */
+export async function listStandaloneEmailRows(
+  churchId: string,
+  supabase: SupabaseClient,
+): Promise<StandaloneEmailRow[]> {
+  const select = (columns: string) =>
+    supabase
+      .from("announcements")
+      .select(columns)
+      .eq("church_id", churchId)
+      .eq("status", "published")
+      .eq("push_to_team", true)
+      .is("google_event_id", null);
+
+  let { data, error } = await select(
+    "title, event_title, body, notes, start_at, end_at, all_day, event_location, push_to_team, published_at, event_date",
+  );
+  if (error && /all_day/i.test(error.message)) {
+    ({ data, error } = await select(
+      "title, event_title, body, notes, start_at, end_at, event_location, push_to_team, published_at, event_date",
+    ));
+  }
+  if (error) {
+    console.error("[weekly-email] standalone announcements:", error.message);
+    return [];
+  }
+
+  return ((data ?? []) as unknown as Record<string, unknown>[])
+    .filter((row) => row.start_at)
+    .map((row) => ({
+      title: (row.title as string) || (row.event_title as string) || "",
+      body: (row.body as string | null) || (row.notes as string | null) || null,
+      start_at: row.start_at as string,
+      end_at: (row.end_at as string | null) ?? null,
+      all_day: Boolean(row.all_day),
+      event_location: (row.event_location as string | null) ?? null,
+      push_to_team: Boolean(row.push_to_team),
+      published_at: (row.published_at as string | null) ?? null,
+      undated: !row.event_date,
+    }));
+}
+
 export type WeeklyDraftResult =
   | {
       ok: true;
@@ -144,12 +250,12 @@ function draftFailureMessage(channel: WeeklyEmailChannel, err: unknown): string 
   const detail = err instanceof Error ? err.message : "";
   console.error(`[weekly-email] ${channel} draft failed:`, detail || err);
 
+  // The detail stays in the log. What Google said is not something a church
+  // can act on, and it can carry technical text.
   if (channel === "icloud") {
     return "iCloud Mail wouldn't save this week's email. Try again in a moment.";
   }
-  return detail
-    ? `Google email wouldn't save this week's draft. ${detail}`
-    : "Google email wouldn't save this week's draft. Try again in a moment.";
+  return "Google email wouldn't save this week's draft. Try again in a moment. If it keeps happening, reconnect Google in Settings.";
 }
 
 /**
@@ -229,9 +335,10 @@ export async function createWeeklyAnnouncementGmailDraft(
 
   // The draft lands in one mailbox, but the events in it come from every
   // calendar the church has linked.
-  const [calendar, queued] = await Promise.all([
+  const [calendar, queued, standalone] = await Promise.all([
     listChurchCalendarEvents(churchId, week.weekStartISO, horizonEnd, supabase),
     listEmailQueue(churchId, week.weekStartKey, supabase),
+    listStandaloneEmailRows(churchId, supabase),
   ]);
   const events = calendar.events;
 
@@ -284,7 +391,7 @@ export async function createWeeklyAnnouncementGmailDraft(
 
   // An event that has already finished is dropped, however it got queued. Any
   // other still-to-come event stays in, whatever week it falls in.
-  const emailEvents = weeklyQueueToEmailEvents(queue, publishedByGoogleId).filter(
+  const calendarEmailEvents = weeklyQueueToEmailEvents(queue, publishedByGoogleId).filter(
     (event) =>
       eventStartsInFuture(
         {
@@ -299,6 +406,13 @@ export async function createWeeklyAnnouncementGmailDraft(
         now,
       ),
   );
+
+  // Announcements posted without a calendar event ride along, in date order
+  // with the rest.
+  const emailEvents = [
+    ...calendarEmailEvents,
+    ...standaloneToEmailEvents(standalone, now, week.weekStartISO),
+  ].sort((a, b) => Date.parse(a.startAt) - Date.parse(b.startAt));
 
   if (emailEvents.length === 0) {
     return {

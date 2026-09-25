@@ -19,6 +19,8 @@ import {
   saveEventAttendance,
 } from "@/lib/attendance/v2/event-attendance";
 import { getMondayWeekWindowInTimeZone } from "@/lib/utils/calendar";
+import { toUserError } from "@/lib/errors/user-error";
+import { VisitorError } from "@/lib/faithform/errors";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -40,7 +42,7 @@ export async function GET(request: Request) {
   const supabase = createClient();
   const auth = await getChurchAuth(supabase);
   if (!auth) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Please sign in again." }, { status: 401 });
   }
   const denied = await featureAccessDenied("announcements", supabase);
   if (denied) return denied;
@@ -95,6 +97,10 @@ export async function GET(request: Request) {
       calendar.events.map((event) => event.googleEventId),
     );
 
+    if (calendar.errors.length > 0) {
+      console.error("[announcements] calendar read:", calendar.errors.join(" "));
+    }
+
     return NextResponse.json({
       connected: true,
       events: calendar.events,
@@ -103,12 +109,18 @@ export async function GET(request: Request) {
       attendanceByEventId,
       emailQueuedEventIds: queued.map((item) => item.googleEventId),
       // One calendar failing still returns the other's events; the client
-      // shows this beside them rather than instead of them.
-      calendarError: calendar.errors.join(" ") || null,
+      // shows this beside them rather than instead of them. What the provider
+      // said goes to the log, not the page.
+      calendarError:
+        calendar.errors.length > 0
+          ? "Some of your calendar couldn't be read just now."
+          : null,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Calendar sync failed";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      { error: toUserError(err, "We couldn't load your calendar") },
+      { status: 500 },
+    );
   }
 }
 
@@ -116,7 +128,7 @@ export async function POST(request: Request) {
   const supabase = createClient();
   const auth = await getChurchAuth(supabase);
   if (!auth) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.json({ error: "Please sign in again." }, { status: 401 });
   }
   const denied = await featureAccessDenied("announcements", supabase);
   if (denied) return denied;
@@ -130,7 +142,7 @@ export async function POST(request: Request) {
   const connected = await hasAnyCalendar(auth.churchId, supabase);
   if (!connected) {
     return NextResponse.json(
-      { error: "No calendar is connected.", reconnect: true },
+      { error: "No calendar is connected. Connect one in Settings.", reconnect: true },
       { status: 409 },
     );
   }
@@ -139,7 +151,10 @@ export async function POST(request: Request) {
   try {
     body = (await request.json()) as CreateEventBody;
   } catch {
-    return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Something in the form isn't right. Check it and try again." },
+      { status: 400 },
+    );
   }
 
   const title = body.title?.trim();
@@ -150,19 +165,19 @@ export async function POST(request: Request) {
 
   if (!title) {
     return NextResponse.json(
-      { error: "A title is required." },
+      { error: "Give the event a title." },
       { status: 400 },
     );
   }
   if (!isValidIso(startAt)) {
     return NextResponse.json(
-      { error: "A valid start date and time is required." },
+      { error: "Choose a start date and time." },
       { status: 400 },
     );
   }
   if (endAt && !isValidIso(endAt)) {
     return NextResponse.json(
-      { error: "The end date and time is invalid." },
+      { error: "Choose a valid end date and time." },
       { status: 400 },
     );
   }
@@ -199,10 +214,14 @@ export async function POST(request: Request) {
           },
         });
       } catch (attendanceError) {
-        attendanceWarning =
-          attendanceError instanceof Error
-            ? `The event was created, but attendance needs attention: ${attendanceError.message}`
-            : "The event was created, but attendance could not be enabled.";
+        // A VisitorError was written for people; anything else is logged.
+        if (attendanceError instanceof VisitorError) {
+          attendanceWarning = `The event was created, but check-in needs attention: ${attendanceError.message}`;
+        } else {
+          console.error("[announcements] event attendance:", attendanceError);
+          attendanceWarning =
+            "The event was created, but check-in couldn't be turned on. Open the event to try again.";
+        }
       }
     }
     return NextResponse.json({ event, attendance, attendanceWarning }, { status: 201 });
@@ -222,8 +241,9 @@ export async function POST(request: Request) {
         { status: 409 },
       );
     }
-    const message =
-      err instanceof Error ? err.message : "Failed to create the event.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      { error: toUserError(err, "We couldn't add the event to your calendar") },
+      { status: 500 },
+    );
   }
 }

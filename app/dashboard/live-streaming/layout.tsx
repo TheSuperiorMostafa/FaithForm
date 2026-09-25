@@ -1,31 +1,24 @@
 import type { ReactNode } from "react";
 import { FeatureGate } from "@/components/dashboard/feature-gate";
-import {
-  SectionLinkTabs,
-  type SectionLinkTab,
-} from "@/components/dashboard/section-link-tabs";
+import { LIVE_PAGE_DESCRIPTION, LIVE_PAGE_TITLE, LIVE_TABS } from "@/components/live-streaming/live-tabs";
+import { SectionLinkTabs } from "@/components/dashboard/section-link-tabs";
+import { PageHeader } from "@/components/ui/page-header";
 
 /**
- * The weekly job first (Broadcast), what it produced second (Recordings), the
- * organized library third, and the one-time setup last — where a volunteer on
- * a Sunday morning never has to look at it.
+ * The weekly job first (Go live), what it produced second (Recordings), the
+ * services coming up third, and the one-time setup last — where a volunteer
+ * on a Sunday morning never has to look at it.
+ *
+ * The header and tabs live here, so every tab's loading skeleton sits under a
+ * real title and real tab labels (static-first).
  */
-const liveStreamTabs: SectionLinkTab[] = [
-  { label: "Broadcast", href: "/dashboard/live-streaming", match: "exact" },
-  { label: "Recordings", href: "/dashboard/live-streaming/recordings", match: "prefix" },
-  { label: "Library", href: "/dashboard/live-streaming/media", match: "prefix" },
-  { label: "Setup", href: "/dashboard/live-streaming/setup", match: "prefix" },
-];
-
 export default function LiveStreamingLayout({ children }: { children: ReactNode }) {
   return (
     <FeatureGate feature="live_stream">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-        <header>
-          <h1 className="font-heading text-2xl font-bold tracking-tight">Live Stream</h1>
-        </header>
+      <div className="flex w-full flex-col gap-8">
+        <PageHeader title={LIVE_PAGE_TITLE} description={LIVE_PAGE_DESCRIPTION} />
 
-        <SectionLinkTabs tabs={liveStreamTabs} />
+        <SectionLinkTabs tabs={LIVE_TABS} label="Live sections" />
 
         {children}
       </div>

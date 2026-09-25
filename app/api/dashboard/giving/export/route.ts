@@ -4,7 +4,7 @@ import {
   forbiddenResponse,
   requireChurchAdmin,
 } from "@/lib/auth/require-church-admin";
-import { searchGifts } from "@/lib/queries/giving";
+import { searchAllGifts } from "@/lib/queries/giving";
 import type { DonationStatus, GiftType, GiftsSearchFilters } from "@/types/giving";
 import { featureAccessDenied } from "@/lib/features/guard";
 
@@ -43,7 +43,17 @@ export async function GET(request: Request) {
       : undefined,
   };
 
-  const result = await searchGifts(auth.churchId, filters, 1, 10000);
+  let donations;
+  try {
+    // Every matching gift, not just the first page the database returns.
+    donations = await searchAllGifts(auth.churchId, filters);
+  } catch (error) {
+    console.error("[giving] export failed", error);
+    return NextResponse.json(
+      { error: "We couldn't make the spreadsheet. Please try again." },
+      { status: 500 },
+    );
+  }
 
   const header = [
     "date",
@@ -58,7 +68,7 @@ export async function GET(request: Request) {
     "refund_reason",
   ].join(",");
 
-  const rows = result.donations.map((d) =>
+  const rows = donations.map((d) =>
     [
       new Date(d.createdAt).toISOString(),
       d.donorName ?? "",
@@ -79,7 +89,7 @@ export async function GET(request: Request) {
 
   await logAdminAction({
     churchId: auth.churchId,
-    taskName: `Exported ${result.donations.length} gifts to CSV`,
+    taskName: `Exported ${donations.length} gifts to CSV`,
     triggerSource: "admin:export:gifts",
   });
 

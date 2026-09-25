@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { logAdminAction } from "@/lib/activity/admin-log";
+import { toUserError } from "@/lib/errors/user-error";
 import { getChurchAuth } from "@/lib/auth/church";
 import { featureActionError } from "@/lib/features/guard";
 import { assertRateLimit } from "@/lib/security/rate-limit";
@@ -54,7 +55,7 @@ async function requireAdmin(): Promise<
 function revalidate(recordingId?: string) {
   revalidatePath("/dashboard/live-streaming");
   revalidatePath("/dashboard/live-streaming/recordings");
-  revalidatePath("/dashboard/live-streaming/media");
+  revalidatePath("/dashboard/live-streaming/upcoming");
   if (recordingId) revalidatePath(`/dashboard/live-streaming/recordings/${recordingId}`);
 }
 
@@ -91,7 +92,7 @@ export async function unpublishRecordingAction(recordingId: string): Promise<Rec
   if (!UUID.test(recordingId)) return { ok: false, error: "That recording is no longer available." };
   const result = await unpublishRecording({ churchId: auth.churchId, recordingId, actorUserId: auth.userId });
   revalidate(recordingId);
-  return result.ok ? { ok: true, data: undefined } : { ok: false, error: result.error ?? "Could not unpublish." };
+  return result.ok ? { ok: true, data: undefined } : { ok: false, error: result.error ?? "We couldn't unpublish that recording. Please try again." };
 }
 
 export async function deleteRecordingAction(recordingId: string): Promise<RecordingActionResult> {
@@ -107,7 +108,7 @@ export async function deleteRecordingAction(recordingId: string): Promise<Record
     });
   }
   revalidate();
-  return result.ok ? { ok: true, data: undefined } : { ok: false, error: result.error ?? "Could not delete." };
+  return result.ok ? { ok: true, data: undefined } : { ok: false, error: result.error ?? "We couldn't delete that recording. Please try again." };
 }
 
 export async function saveRecordingDetailsAction(input: {
@@ -171,7 +172,7 @@ export async function chooseThumbnailAction(input: {
   if (!UUID.test(input.recordingId)) return { ok: false, error: "That recording is no longer available." };
   const result = await chooseThumbnail({ churchId: auth.churchId, recordingId: input.recordingId, url: input.url });
   revalidate(input.recordingId);
-  return result.ok ? { ok: true, data: undefined } : { ok: false, error: result.error ?? "Could not save." };
+  return result.ok ? { ok: true, data: undefined } : { ok: false, error: result.error ?? "We couldn't save that. Please try again." };
 }
 
 export async function saveRecordingSettingsAction(settings: RecordingSettings): Promise<RecordingActionResult> {
@@ -196,7 +197,7 @@ export async function saveRecordingSettingsAction(settings: RecordingSettings): 
     },
   });
   revalidatePath("/dashboard/live-streaming/setup");
-  return result.ok ? { ok: true, data: undefined } : { ok: false, error: result.error ?? "Could not save." };
+  return result.ok ? { ok: true, data: undefined } : { ok: false, error: result.error ?? "We couldn't save that. Please try again." };
 }
 
 /**
@@ -244,7 +245,11 @@ export async function retryRecordingAction(recordingId: string): Promise<Recordi
   const deps = productionLifecycleDeps();
   const row = await deps.repo.getRecording(auth.churchId, recordingId);
   if (!row) return { ok: false, error: "That recording is no longer available." };
-  await retryRecording(deps, row);
+  try {
+    await retryRecording(deps, row);
+  } catch (error) {
+    return { ok: false, error: toUserError(error, "We couldn't try that recording again.") };
+  }
   revalidate(recordingId);
   return { ok: true, data: await getStaffRecording(auth.churchId, recordingId) };
 }

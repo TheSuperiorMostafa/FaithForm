@@ -13,6 +13,8 @@ export type SundayRecordStatus = {
   totalPresent: number;
   totalAbsent: number;
   followedUp: number;
+  /** False when the Sunday was counted as "just a number", with no names. */
+  byName: boolean;
 };
 
 export type AttendanceEntryWithMember = {
@@ -84,8 +86,10 @@ export async function getRecentSundayRecords(
     .in("service_date", dates);
 
   if (recordsError) {
+    // A failed read is not "nothing saved yet": the page would offer to count
+    // Sundays that are already counted. Let the section's error page say so.
     console.error("getRecentSundayRecords:", recordsError.message);
-    return result;
+    throw new Error("Attendance could not be loaded.");
   }
 
   if (!records?.length) {
@@ -102,6 +106,7 @@ export async function getRecentSundayRecords(
       totalPresent: record.total_present ?? 0,
       totalAbsent: record.total_absent ?? 0,
       followedUp,
+      byName: entries.length > 0,
     });
   }
 
@@ -113,6 +118,8 @@ export type RecordedService = {
   serviceDate: string;
   totalPresent: number;
   totalAbsent: number;
+  /** False when counted as "just a number": nobody to follow up with. */
+  byName: boolean;
 };
 
 /** Services that already have attendance saved — the Follow-up page's picker. */
@@ -123,14 +130,14 @@ export async function listRecordedServices(
 ): Promise<RecordedService[]> {
   const { data, error } = await supabase
     .from("attendance_records")
-    .select("id, service_date, total_present, total_absent")
+    .select("id, service_date, total_present, total_absent, attendance_entries(count)")
     .eq("church_id", churchId)
     .order("service_date", { ascending: false })
     .limit(limit);
 
   if (error) {
     console.error("listRecordedServices:", error.message);
-    return [];
+    throw new Error("Attendance could not be loaded.");
   }
 
   return (data ?? []).map((row) => ({
@@ -138,6 +145,7 @@ export async function listRecordedServices(
     serviceDate: row.service_date as string,
     totalPresent: (row.total_present as number | null) ?? 0,
     totalAbsent: (row.total_absent as number | null) ?? 0,
+    byName: ((row.attendance_entries as { count: number }[] | null)?.[0]?.count ?? 0) > 0,
   }));
 }
 
@@ -156,8 +164,9 @@ export async function getRecordByDate(
     .maybeSingle();
 
   if (recordError) {
+    // Null means "not counted yet", so a failure must not look like one.
     console.error("getRecordByDate:", recordError.message);
-    return null;
+    throw new Error("Attendance could not be loaded.");
   }
 
   if (!record) {
@@ -213,7 +222,7 @@ export async function getRecordByDate(
 
   if (entriesError) {
     console.error("getRecordByDate entries:", entriesError.message);
-    return null;
+    throw new Error("Attendance could not be loaded.");
   }
 
   type RawEntry = {
@@ -270,8 +279,10 @@ export async function getActiveMembers(
     .order("first_name", { ascending: true });
 
   if (error) {
+    // An empty list would read as "nobody in People" and save a Sunday with
+    // no one on it.
     console.error("getActiveMembers:", error.message);
-    return [];
+    throw new Error("People could not be loaded.");
   }
 
   return (data ?? []).map((member) => {

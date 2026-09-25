@@ -16,11 +16,11 @@ export default async function CheckinLocationsPage() {
   const today = localDateInTimeZone(auth.churchTimezone);
 
   const [locations, sessions] = await Promise.all([
-    listLocations(auth.churchId, { includeInactive: true }, supabase),
-    getRoster(auth.churchId, today, {}, supabase),
+    listLocations(auth.churchId, { includeInactive: true, strict: true }, supabase),
+    getRoster(auth.churchId, today, { strict: true }, supabase),
   ]);
 
-  // Who is in each room right now, so the Rooms tab answers the question a
+  // Who is in each room right now, so the Rooms page answers the question a
   // director actually walks over to ask, not only how a room is configured.
   const occupancy: Record<string, string[]> = {};
   for (const session of sessions) {

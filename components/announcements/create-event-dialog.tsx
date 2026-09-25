@@ -123,7 +123,7 @@ export function CreateEventDialog({
       const data = await res.json();
       if (!res.ok) {
         if (data?.reconnect) setNeedsReconnect(true);
-        throw new Error(data?.error ?? "Failed to create the event.");
+        throw new Error(data?.error ?? "We couldn't add the event. Please try again.");
       }
       onCreated(
         data.event as CalendarEventPreview,
@@ -135,8 +135,11 @@ export function CreateEventDialog({
       }
       onOpenChange(false);
     } catch (err) {
+      // The route's messages are written for people; a network failure is not.
       setError(
-        err instanceof Error ? err.message : "Failed to create the event.",
+        err instanceof Error && !(err instanceof TypeError || err instanceof SyntaxError)
+          ? err.message
+          : "We couldn't reach FaithForm. Check your connection and try again.",
       );
     } finally {
       setSubmitting(false);
@@ -149,8 +152,8 @@ export function CreateEventDialog({
         <DialogHeader>
           <DialogTitle>New calendar event</DialogTitle>
           <DialogDescription>
-            Add an event to your church calendar. It appears here instantly,
-            ready to verify and announce.
+            Add an event to your church calendar. It shows up here right away,
+            ready to announce.
           </DialogDescription>
         </DialogHeader>
 
@@ -229,7 +232,7 @@ export function CreateEventDialog({
                 <>
                   {" "}
                   <Link
-                    href="/dashboard/settings?tab=integrations"
+                    href="/dashboard/settings?tab=accounts"
                     className="font-semibold underline underline-offset-2"
                   >
                     Reconnect it in Settings

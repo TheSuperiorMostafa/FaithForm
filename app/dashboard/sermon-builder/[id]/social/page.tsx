@@ -1,7 +1,11 @@
-import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { SermonBackLink } from "@/components/sermon-builder/sermon-back-link";
 import { SocialSnippetsPanel } from "@/components/sermon-builder/social-snippets";
+import { PageHeader } from "@/components/ui/page-header";
+import {
+  SOCIAL_POSTS_DESCRIPTION,
+  SOCIAL_POSTS_TITLE,
+} from "@/lib/sermon-builder/page-copy";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentChurchId } from "@/lib/auth/current-church";
 import { getLatestAsset, getSermon } from "@/lib/queries/sermons";
@@ -31,18 +35,9 @@ export default async function SocialPage({
   const initial = asset?.payload as SocialSnippets | undefined;
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-4">
-      <Link
-        href={`/dashboard/sermon-builder/${id}`}
-        className="inline-flex w-fit items-center gap-1 text-sm font-semibold text-muted-foreground hover:text-accent"
-      >
-        <ArrowLeft className="size-4" strokeWidth={1.75} />
-        Back to editor
-      </Link>
-      <h1 className="border-l-4 border-accent pl-3 font-heading text-[26px] font-bold">
-        Social snippets
-      </h1>
-      <p className="text-sm text-muted-foreground">{sermon.title}</p>
+    <div className="flex w-full flex-col gap-8">
+      <SermonBackLink href={`/dashboard/sermon-builder/${id}`} label="Back to the sermon" />
+      <PageHeader title={SOCIAL_POSTS_TITLE} description={SOCIAL_POSTS_DESCRIPTION} />
       <SocialSnippetsPanel sermonId={id} initial={initial} />
     </div>
   );

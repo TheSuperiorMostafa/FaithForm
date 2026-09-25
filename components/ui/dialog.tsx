@@ -63,8 +63,17 @@ function DialogContent({
   className,
   children,
   showClose = true,
+  onRequestClose,
   ...props
-}: React.ComponentProps<"dialog"> & { showClose?: boolean }) {
+}: React.ComponentProps<"dialog"> & {
+  showClose?: boolean;
+  /**
+   * Called instead of closing when the person clicks outside, presses Escape
+   * or uses the close button. Return false to keep the dialog open, e.g. to
+   * ask "Discard changes?" first on a form with unsaved input.
+   */
+  onRequestClose?: () => boolean | void;
+}) {
   const { open, setOpen } = useDialog();
   const ref = React.useRef<HTMLDialogElement>(null);
   const [mounted, setMounted] = React.useState(false);
@@ -91,6 +100,11 @@ function DialogContent({
   // Render into <body> via a portal so the native modal <dialog> escapes any
   // scrollable / transformed ancestor (e.g. the dashboard's overflow-y-auto
   // main), which otherwise paints the dialog twice (top layer + in-flow ghost).
+  const requestClose = () => {
+    if (onRequestClose && onRequestClose() === false) return;
+    setOpen(false);
+  };
+
   if (!mounted) return null;
 
   return createPortal(
@@ -101,16 +115,21 @@ function DialogContent({
         className,
       )}
       onClose={() => setOpen(false)}
+      onCancel={(e) => {
+        // Escape: route through the same guard as the other ways out.
+        e.preventDefault();
+        requestClose();
+      }}
       onClick={(e) => {
-        if (e.target === ref.current) setOpen(false);
+        if (e.target === ref.current) requestClose();
       }}
       {...props}
     >
       {showClose && (
         <button
           type="button"
-          onClick={() => setOpen(false)}
-          className="absolute right-3 top-3 z-10 flex size-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent/10 hover:text-accent"
+          onClick={requestClose}
+          className="absolute right-3 top-3 z-10 flex size-11 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent/10 hover:text-accent"
           aria-label="Close"
         >
           <X className="size-4" strokeWidth={1.75} />

@@ -11,6 +11,7 @@ import {
   getStaffRecording,
   listThumbnailChoices,
 } from "@/lib/stream/recording-publication";
+import { isStillChanging } from "@/lib/stream/recording-status";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +41,7 @@ export default async function RecordingReviewPage({
     getMediaStats(auth.churchId, id, recording.sessionId),
   ]);
 
-  const stillChanging = recording.phase.phase === "preparing" || recording.phase.phase === "recording";
+  const stillChanging = isStillChanging(recording.phase.phase);
 
   return (
     <>
@@ -56,16 +57,13 @@ export default async function RecordingReviewPage({
         stats={{ live: stats.liveViews, replay: stats.replayViews }}
         artworkSlot={
           auth.isAdmin && mediaItem ? (
-            <div className="flex flex-col gap-2">
-              <p className="text-sm font-medium">Custom artwork</p>
-              <ItemArtworkPanel
-                recordingId={mediaItem.id}
-                artwork={mediaItem.artwork}
-                seriesArtwork={mediaItem.seriesArtwork}
-                seriesName={mediaItem.seriesName}
-                seriesSlug={mediaItem.seriesSlug}
-              />
-            </div>
+            <ItemArtworkPanel
+              recordingId={mediaItem.id}
+              artwork={mediaItem.artwork}
+              seriesArtwork={mediaItem.seriesArtwork}
+              seriesName={mediaItem.seriesName}
+              seriesSlug={mediaItem.seriesSlug}
+            />
           ) : null
         }
       />

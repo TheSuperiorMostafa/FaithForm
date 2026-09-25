@@ -109,27 +109,30 @@ export function SitePreview({
               onClick={() => setDevice(key)}
               aria-pressed={device === key}
               className={cn(
-                "inline-flex min-h-8 items-center gap-1.5 rounded-md px-3 text-xs font-semibold transition-colors",
+                "inline-flex min-h-11 items-center gap-1.5 rounded-md px-4 text-sm font-semibold transition-colors",
                 device === key
                   ? "bg-background text-foreground shadow-sm"
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
-              <Icon className="size-3.5" aria-hidden />
+              <Icon className="size-4" aria-hidden />
               {label}
             </button>
           ))}
         </div>
 
         <div className="flex gap-1">
-          <Button type="button" variant="ghost" size="sm" onClick={reload}>
-            <RefreshCw className={cn("mr-1 size-3.5", loading && "animate-spin")} />
+          <Button type="button" variant="ghost" onClick={reload}>
+            <RefreshCw
+              className={cn("size-4", loading && "animate-spin motion-reduce:animate-none")}
+              aria-hidden
+            />
             Refresh
           </Button>
           <a href={previewUrl} target="_blank" rel="noopener noreferrer">
-            <Button type="button" variant="ghost" size="sm">
-              <SquareArrowOutUpRight className="mr-1 size-3.5" />
-              Open
+            <Button type="button" variant="ghost">
+              <SquareArrowOutUpRight className="size-4" aria-hidden />
+              Open in new tab
             </Button>
           </a>
         </div>
@@ -170,8 +173,8 @@ export function SitePreview({
         />
       </div>
 
-      <p className="text-xs text-muted-foreground">
-        This is your draft, exactly as a visitor would see it.
+      <p className="text-sm text-muted-foreground">
+        Your website exactly as a visitor sees it.
       </p>
     </div>
   );

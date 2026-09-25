@@ -1,6 +1,7 @@
 "use client";
 
-import { useFormState, useFormStatus } from "react-dom";
+import { useActionState } from "react";
+import { useFormStatus } from "react-dom";
 import { useRouter } from "next/navigation";
 
 import { setOwnPassword, type SetPasswordState } from "./actions";
@@ -37,7 +38,7 @@ export function SetPasswordForm({
   reason?: "first_run" | "recovery";
 }) {
   const router = useRouter();
-  const [state, formAction] = useFormState(
+  const [state, formAction] = useActionState(
     async (prev: SetPasswordState, formData: FormData) => {
       const result = await setOwnPassword(prev, formData);
       if (result.ok) {

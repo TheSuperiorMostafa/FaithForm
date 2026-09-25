@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { redirect, notFound } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
 import { DeleteSeriesButton } from "@/components/sermon-builder/delete-series-button";
+import { SermonBackLink } from "@/components/sermon-builder/sermon-back-link";
 import { SeriesTimeline } from "@/components/sermon-builder/series-timeline";
+import { PageHeader } from "@/components/ui/page-header";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentChurchId } from "@/lib/auth/current-church";
 import { getSeries } from "@/lib/queries/sermons";
@@ -28,28 +28,23 @@ export default async function SeriesDetailPage({
   if (!series || series.church_id !== churchId) notFound();
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-5">
-      <Link
-        href="/dashboard/sermon-builder"
-        className="inline-flex w-fit items-center gap-1 text-sm font-semibold text-muted-foreground hover:text-accent"
-      >
-        <ArrowLeft className="size-4" strokeWidth={1.75} />
-        Back
-      </Link>
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="border-l-4 border-accent pl-3 font-heading text-[26px] font-bold">{series.title}</h1>
-          <p className="text-muted-foreground">{series.theme}</p>
-          {series.description && (
-            <p className="mt-2 text-sm">{series.description}</p>
-          )}
-        </div>
-        <DeleteSeriesButton
-          seriesId={series.id}
-          seriesTitle={series.title}
-        />
-      </div>
+    <div className="flex w-full flex-col gap-8">
+      <SermonBackLink href="/dashboard/sermon-builder" label="Back to Sermons" />
+      <PageHeader
+        title={series.title}
+        description={
+          <>
+            {series.theme}
+            {series.description && (
+              <span className="mt-1 block text-[15px]">{series.description}</span>
+            )}
+          </>
+        }
+      />
       <SeriesTimeline series={series} />
+      <div className="border-t border-border pt-8">
+        <DeleteSeriesButton seriesId={series.id} seriesTitle={series.title} />
+      </div>
     </div>
   );
 }

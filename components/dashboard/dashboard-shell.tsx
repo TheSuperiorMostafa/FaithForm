@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
+import { ConfirmHost } from "@/components/ui/confirm-dialog";
+import { cn } from "@/lib/utils";
 import { BottomNav } from "@/components/dashboard/bottom-nav";
 import { DashboardUsageTracker } from "@/components/dashboard/usage-tracker";
 import { Sidebar } from "@/components/dashboard/sidebar";
@@ -31,6 +34,8 @@ export function DashboardShell({
   children,
 }: DashboardShellProps) {
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const pathname = usePathname();
+  const fullWidth = isFullWidthRoute(pathname);
   useEffect(() => {
     const controller = new AbortController();
     let inFlight = false;
@@ -57,6 +62,13 @@ export function DashboardShell({
   }, []);
   return (
     <div className="h-dvh overflow-hidden bg-background">
+      <a
+        href="#main-content"
+        className="sr-only z-[60] rounded-xl bg-primary px-4 py-3 font-semibold text-primary-foreground focus:not-sr-only focus:fixed focus:left-4 focus:top-4"
+      >
+        Skip to main content
+      </a>
+      <ConfirmHost />
       <DashboardUsageTracker />
       <VoiceAgentAutoSync />
       <Sidebar
@@ -68,21 +80,43 @@ export function DashboardShell({
       />
 
       {/*
-        Always the rail's 72px, never the expanded width: the sidebar draws over
-        this column when it opens rather than pushing it. See
-        lib/dashboard/sidebar-layout.ts — a dashboard of tables and charts must
-        not reflow because a pointer crossed the nav.
+        On tablets, always the rail's 72px, never the expanded width: the
+        sidebar draws over this column when it opens rather than pushing it.
+        On large screens the sidebar is pinned open and this reserves its full
+        256px. See lib/dashboard/sidebar-layout.ts.
       */}
-      <div className="flex h-dvh min-w-0 flex-col overflow-hidden md:ml-[72px]">
+      <div className="flex h-dvh min-w-0 flex-col overflow-hidden md:ml-[72px] lg:ml-[256px]">
         {banner}
         <Topbar avatarUrl={avatarUrl} userEmail={userEmail} churchName={churchName} />
 
-        <main className="flex-1 overflow-y-auto [scrollbar-gutter:stable] p-5 pb-24 md:p-8 md:pb-8">
-          {children}
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="flex-1 overflow-y-auto [scrollbar-gutter:stable] px-4 pb-28 pt-6 outline-none sm:px-6 md:px-8 md:pb-10 md:pt-8"
+        >
+          {/*
+            One page width for the whole dashboard, so moving between sections
+            never changes where things sit. Announcements is the one exception:
+            its month calendar and side panel need the full width.
+          */}
+          <div
+            data-page-width={fullWidth ? "full" : "standard"}
+            className={cn("mx-auto w-full", !fullWidth && DASHBOARD_PAGE_WIDTH)}
+          >
+            {children}
+          </div>
         </main>
       </div>
 
       <BottomNav allowedFeatures={allowedFeatures} />
     </div>
   );
+}
+
+/** The one content width every dashboard page uses. */
+export const DASHBOARD_PAGE_WIDTH = "max-w-6xl";
+
+/** Routes that use the full content width instead. */
+export function isFullWidthRoute(pathname: string): boolean {
+  return pathname === "/dashboard/announcements" || pathname.startsWith("/dashboard/announcements/");
 }

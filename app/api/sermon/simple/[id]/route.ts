@@ -5,6 +5,7 @@ import type { SimpleSermonSaveBody } from "@/lib/sermon-builder/simple-sermon-sa
 import { updateSermon, verifySermonAccess } from "@/lib/queries/sermons";
 import { createClient } from "@/lib/supabase/server";
 import { featureAccessDenied } from "@/lib/features/guard";
+import { SERMON_NOT_FOUND_MESSAGE, sermonRouteError } from "@/lib/sermon-builder/route-error";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,11 +22,11 @@ export async function PATCH(
     const supabase = createClient();
     const sermon = await verifySermonAccess(supabase, id, auth.churchId);
     if (!sermon) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+      return NextResponse.json({ error: SERMON_NOT_FOUND_MESSAGE }, { status: 404 });
     }
     if ((sermon.kind ?? "advanced") !== "simple") {
       return NextResponse.json(
-        { error: "Only slide decks can be edited here" },
+        { error: "This sermon was made with the full-manuscript builder, so edit it from its own page." },
         { status: 400 },
       );
     }
@@ -49,8 +50,6 @@ export async function PATCH(
 
     return NextResponse.json({ sermon: updated });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Update failed";
-    const status = message === "Unauthorized" ? 401 : 500;
-    return NextResponse.json({ error: message }, { status });
+    return sermonRouteError(e, "We couldn't save your changes. Your work is still on the page.");
   }
 }

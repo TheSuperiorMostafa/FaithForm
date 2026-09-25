@@ -161,7 +161,9 @@ export function ServiceScheduleEditor({
         return;
       }
       setRows(result.data.serviceTimes.map(toRow));
-      toast.success("Service times saved. Check-in windows are ready.");
+      toast.success(
+        `${result.data.serviceTimes.length} service ${result.data.serviceTimes.length === 1 ? "time" : "times"} saved. They show on Services and your website.`,
+      );
       onSaved();
     });
   };
@@ -170,8 +172,8 @@ export function ServiceScheduleEditor({
     <div className="flex flex-col gap-4">
       {rows.length === 0 ? (
         <div className="flex flex-col gap-3">
-          <p className="text-sm text-muted-foreground">
-            Start from a common schedule, then adjust it — or add services one by one.
+          <p className="text-[15px] text-muted-foreground">
+            Start from a common schedule, then adjust it, or add services one by one.
           </p>
           {isAdmin ? (
             <div className="grid gap-2 sm:grid-cols-2">
@@ -180,10 +182,10 @@ export function ServiceScheduleEditor({
                   key={template.id}
                   type="button"
                   onClick={() => applyTemplate(template.id)}
-                  className="flex flex-col items-start gap-1 rounded-xl border border-border bg-background p-3 text-left transition-colors hover:border-accent hover:bg-brand-gold/5"
+                  className="flex min-h-16 flex-col items-start gap-1 rounded-xl border border-border bg-background p-4 text-left transition-colors hover:border-accent hover:bg-brand-gold/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <span className="text-sm font-semibold text-foreground">{template.title}</span>
-                  <span className="text-xs text-muted-foreground">{template.detail}</span>
+                  <span className="text-sm text-muted-foreground">{template.detail}</span>
                 </button>
               ))}
             </div>
@@ -202,11 +204,11 @@ export function ServiceScheduleEditor({
           <fieldset
             key={row.key}
             disabled={!isAdmin || pending}
-            className="flex flex-col gap-3 rounded-xl border border-border bg-background p-3 sm:p-4"
+            className="flex flex-col gap-4 rounded-xl border border-border bg-background p-4 sm:p-5"
           >
             <legend className="sr-only">{row.label || "New service"}</legend>
             <div className="flex items-start gap-2">
-              <label className="flex min-w-0 flex-1 flex-col gap-1 text-xs font-semibold text-foreground">
+              <label className="flex min-w-0 flex-1 flex-col gap-1 text-sm font-semibold text-foreground">
                 Name
                 <Input
                   value={row.label}
@@ -221,12 +223,12 @@ export function ServiceScheduleEditor({
                 <Button
                   type="button"
                   variant="ghost"
-                  size="sm"
-                  className="mt-5 text-muted-foreground hover:text-destructive"
+                  className="mt-6 text-muted-foreground hover:text-destructive"
                   aria-label={`Remove ${row.label || "this service"}`}
                   onClick={() => setRows((current) => current.filter((item) => item.key !== row.key))}
                 >
                   <Trash2 className="size-4" aria-hidden />
+                  Remove
                 </Button>
               ) : null}
             </div>
@@ -248,7 +250,7 @@ export function ServiceScheduleEditor({
                     title={DAY_NAMES[day]}
                     onClick={() => update(row.key, { dayOfWeek: day })}
                     className={cn(
-                      "flex size-9 items-center justify-center rounded-full text-sm font-semibold transition-colors disabled:cursor-not-allowed",
+                      "flex size-11 items-center justify-center rounded-full text-[15px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed",
                       selected
                         ? "bg-primary text-primary-foreground"
                         : "border border-border bg-card text-muted-foreground hover:border-accent hover:text-foreground",
@@ -261,7 +263,7 @@ export function ServiceScheduleEditor({
             </div>
 
             <div className={cn("grid gap-3", multiCampus ? "sm:grid-cols-3" : "grid-cols-2")}>
-              <label className="flex flex-col gap-1 text-xs font-semibold text-foreground">
+              <label className="flex flex-col gap-1 text-sm font-semibold text-foreground">
                 Starts
                 <Input
                   type="time"
@@ -269,7 +271,7 @@ export function ServiceScheduleEditor({
                   onChange={(event) => update(row.key, { startTime: event.target.value })}
                 />
               </label>
-              <label className="flex flex-col gap-1 text-xs font-semibold text-foreground">
+              <label className="flex flex-col gap-1 text-sm font-semibold text-foreground">
                 Ends
                 <Input
                   type="time"
@@ -278,7 +280,7 @@ export function ServiceScheduleEditor({
                 />
               </label>
               {multiCampus ? (
-                <label className="col-span-2 flex flex-col gap-1 text-xs font-semibold text-foreground sm:col-span-1">
+                <label className="col-span-2 flex flex-col gap-1 text-sm font-semibold text-foreground sm:col-span-1">
                   Campus
                   <Select
                     value={row.campusId}
@@ -297,8 +299,8 @@ export function ServiceScheduleEditor({
               ) : null}
             </div>
 
-            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Clock className="size-3.5 shrink-0" aria-hidden />
+            <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <Clock className="size-4 shrink-0" aria-hidden />
               <span>
                 Every {DAY_NAMES[row.dayOfWeek]}, check-in is open{" "}
                 <span className="font-semibold text-foreground">
@@ -307,13 +309,13 @@ export function ServiceScheduleEditor({
                 {row.endTime ? "" : " (a service without an end time is taken to last 90 minutes)"}
               </span>
             </p>
-            {/* The Services board lists Sunday worship only; say so rather than
-                let a service go missing from it without explanation. */}
+            {/* Sunday worship is the main list on Services; everything else is
+                listed underneath it. Say where a service will show up. */}
             {row.dayOfWeek === 0 &&
             isWorshipLabel(row.label.trim() || suggestServiceName(row.dayOfWeek, row.startTime)) ? null : (
-              <p className="text-xs text-muted-foreground">
-                Not on the Services board, which lists Sunday worship. Check-ins
-                here still count toward each person&apos;s attendance.
+              <p className="text-sm text-muted-foreground">
+                Shows on Services under &ldquo;Other services on your schedule&rdquo;,
+                where you can mark who came.
               </p>
             )}
           </fieldset>
@@ -342,9 +344,9 @@ export function ServiceScheduleEditor({
         </div>
       ) : null}
 
-      <p className="text-xs text-muted-foreground">
-        Local time where the service is held; daylight saving is handled for
-        you. These are the same service times your website shows.
+      <p className="text-sm text-muted-foreground">
+        Use the local time where the service is held. These are the same service
+        times your website shows.
       </p>
     </div>
   );

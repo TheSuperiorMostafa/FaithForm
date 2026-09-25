@@ -83,7 +83,7 @@ export function SlidePreview({
       </p>
       {translation && (
         <p
-          className="absolute bottom-3 right-4 text-[10px] italic opacity-70"
+          className="absolute bottom-3 right-4 text-xs italic opacity-80"
           style={{ color: `#${theme.accent}` }}
         >
           {translation}

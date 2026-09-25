@@ -1,10 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { BookOpen, FileDown, Loader2, RefreshCw, Sparkles } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { confirmAction } from "@/components/ui/confirm-dialog";
 import type { DiscussionQuestion, SermonOutline } from "@/types/sermon";
 
 type CreateLessonPanelProps = {
@@ -22,6 +25,9 @@ const CATEGORY_LABEL: Record<DiscussionQuestion["category"], string> = {
   application: "Application",
 };
 
+const LESSON_FAILED =
+  "We couldn't make the lesson just now. Nothing was changed. Please try again in a minute.";
+
 export function CreateLessonPanel({
   sermonId,
   sermonTitle,
@@ -36,6 +42,16 @@ export function CreateLessonPanel({
   const hasLesson = Boolean(outline);
 
   async function generateLesson() {
+    if (hasLesson) {
+      const ok = await confirmAction({
+        title: "Make a new lesson?",
+        description:
+          "This replaces the current outline and discussion questions with new ones. The slides aren't changed.",
+        confirmLabel: "Replace the lesson",
+        destructive: true,
+      });
+      if (!ok) return;
+    }
     setGenerating(true);
     setError(null);
     try {
@@ -53,15 +69,15 @@ export function CreateLessonPanel({
         }),
       });
       if (!res.ok) {
-        const data = await res.json().catch(() => null);
-        throw new Error(
-          data?.error ?? "Could not build the lesson. Please try again.",
-        );
+        const data = (await res.json().catch(() => null)) as { error?: unknown } | null;
+        setError(typeof data?.error === "string" ? data.error : LESSON_FAILED);
+        return;
       }
 
+      toast.success(hasLesson ? `New lesson ready for "${sermonTitle}".` : `Lesson ready for "${sermonTitle}".`);
       router.refresh();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong");
+    } catch {
+      setError(LESSON_FAILED);
     } finally {
       setGenerating(false);
     }
@@ -75,28 +91,28 @@ export function CreateLessonPanel({
             <BookOpen className="size-6 text-accent" strokeWidth={1.75} />
             Turn this into a lesson
           </CardTitle>
-          <p className="text-sm text-muted-foreground">
-            Build a teaching outline and small-group discussion questions from
-            the passages in this deck — then download the whole thing as a PDF.
+          <p className="text-[15px] text-muted-foreground">
+            Make a teaching outline and small-group discussion questions from
+            this sermon&rsquo;s passages, then print it or download it as a PDF.
           </p>
         </CardHeader>
         <CardContent className="flex flex-col items-start gap-2">
           <Button size="lg" disabled={generating} onClick={generateLesson}>
             {generating ? (
               <>
-                <Loader2 className="size-4 animate-spin" />
-                Building your lesson…
+                <Loader2 aria-hidden className="size-5 animate-spin motion-reduce:animate-none" />
+                Making your lesson…
               </>
             ) : (
               <>
-                <Sparkles className="size-4" />
+                <Sparkles aria-hidden className="size-5" />
                 Create lesson
               </>
             )}
           </Button>
           {generating && (
-            <p className="text-xs text-muted-foreground">
-              This usually takes 15–30 seconds.
+            <p className="text-sm text-muted-foreground" role="status">
+              This usually takes 15 to 30 seconds.
             </p>
           )}
           {error && (
@@ -117,39 +133,37 @@ export function CreateLessonPanel({
             <BookOpen className="size-6 text-accent" strokeWidth={1.75} />
             Lesson
           </CardTitle>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-[15px] text-muted-foreground">
             Outline and discussion questions for {sermonTitle}.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button
+            nativeButton={false}
+            render={
+              <a href={`/api/sermon/${sermonId}/export/pdf`} download>
+                <FileDown aria-hidden className="size-5" strokeWidth={1.75} />
+                Download lesson (PDF)
+              </a>
+            }
+          />
+          <Button
             variant="outline"
-            size="sm"
             disabled={generating}
             onClick={generateLesson}
           >
             {generating ? (
-              <Loader2 className="size-4 animate-spin" />
+              <Loader2 aria-hidden className="size-5 animate-spin motion-reduce:animate-none" />
             ) : (
-              <RefreshCw className="size-4" />
+              <RefreshCw aria-hidden className="size-5" />
             )}
-            Regenerate
+            {generating ? "Making a new lesson…" : "Make a new lesson"}
           </Button>
-          <Button
-            size="sm"
-            nativeButton={false}
-            render={
-              <a href={`/api/sermon/${sermonId}/export/pdf`} download>
-                <FileDown className="size-4" strokeWidth={1.75} />
-                Download PDF
-              </a>
-            }
-          />
         </div>
       </CardHeader>
       <CardContent className="flex flex-col gap-5">
         {error && (
-          <p role="alert" className="text-sm text-destructive">
+          <p role="alert" className="text-[15px] text-destructive">
             {error}
           </p>
         )}
@@ -157,10 +171,10 @@ export function CreateLessonPanel({
         {outline && (
           <div className="flex flex-col gap-4">
             <section className="space-y-1">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              <h3 className="text-sm font-semibold text-muted-foreground">
                 Introduction
               </h3>
-              <p className="text-sm leading-relaxed">{outline.intro}</p>
+              <p className="text-[15px] leading-relaxed">{outline.intro}</p>
             </section>
 
             {outline.points.map((point, i) => (
@@ -168,9 +182,9 @@ export function CreateLessonPanel({
                 <h3 className="font-heading text-base font-semibold">
                   {i + 1}. {point.title}
                 </h3>
-                <p className="text-sm leading-relaxed">{point.summary}</p>
+                <p className="text-[15px] leading-relaxed">{point.summary}</p>
                 {point.scripture && (
-                  <p className="text-xs text-muted-foreground">
+                  <p className="text-sm text-muted-foreground">
                     {point.scripture}
                   </p>
                 )}
@@ -178,30 +192,30 @@ export function CreateLessonPanel({
             ))}
 
             <section className="space-y-1">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              <h3 className="text-sm font-semibold text-muted-foreground">
                 Application
               </h3>
-              <p className="text-sm leading-relaxed">{outline.application}</p>
+              <p className="text-[15px] leading-relaxed">{outline.application}</p>
             </section>
 
             <section className="space-y-1">
-              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              <h3 className="text-sm font-semibold text-muted-foreground">
                 Closing
               </h3>
-              <p className="text-sm leading-relaxed">{outline.closing}</p>
+              <p className="text-[15px] leading-relaxed">{outline.closing}</p>
             </section>
           </div>
         )}
 
         {questions.length > 0 && (
           <div className="space-y-2 rounded-xl border border-border bg-muted/30 p-4">
-            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            <h3 className="text-sm font-semibold text-muted-foreground">
               Discussion questions
             </h3>
             <ol className="flex flex-col gap-3">
               {questions.map((q, i) => (
-                <li key={i} className="text-sm">
-                  <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                <li key={i} className="text-[15px]">
+                  <span className="text-sm font-semibold text-muted-foreground">
                     {CATEGORY_LABEL[q.category] ?? q.category}
                   </span>
                   <p className="leading-relaxed">
@@ -212,6 +226,16 @@ export function CreateLessonPanel({
             </ol>
           </div>
         )}
+
+        <p className="text-[15px] text-muted-foreground">
+          Only want different discussion questions?{" "}
+          <Link
+            href={`/dashboard/sermon-builder/${sermonId}/discussion`}
+            className="font-medium text-primary underline underline-offset-4 hover:text-accent"
+          >
+            Open discussion questions
+          </Link>
+        </p>
       </CardContent>
     </Card>
   );

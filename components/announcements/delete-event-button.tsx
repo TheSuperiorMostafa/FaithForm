@@ -174,7 +174,7 @@ export function DeleteEventButton({
                       />
                       Also delete the Facebook post
                     </label>
-                    <p className="flex items-start gap-2 text-xs text-amber-800 dark:text-amber-200">
+                    <p className="flex items-start gap-2 text-sm text-amber-800 dark:text-amber-200">
                       <TriangleAlert
                         className="mt-0.5 size-3.5 shrink-0"
                         strokeWidth={1.75}

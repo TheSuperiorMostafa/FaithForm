@@ -44,7 +44,7 @@ function SiteNav({ content, ctx }: SectionComponentProps<NavContent>) {
 
 export const siteNavSection = defineSection<NavContent>({
   type: "site_nav",
-  label: "Navigation",
+  label: "Menu",
   fields: [
     {
       key: "title",
@@ -61,7 +61,7 @@ export const siteNavSection = defineSection<NavContent>({
       titleKey: "label",
       itemFields: [
         { key: "label", label: "Label", type: "text" },
-        { key: "href", label: "Link", type: "url", help: "Use #about to jump to a section." },
+        { key: "href", label: "Goes to", type: "url" },
       ],
     },
     {

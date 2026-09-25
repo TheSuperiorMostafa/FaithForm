@@ -14,27 +14,28 @@ export function StepWelcome({ churchName, onNext }: StepWelcomeProps) {
           Welcome to FaithForm, {churchName}!
         </h1>
         <p className="mt-2 text-muted-foreground">
-          Let&apos;s get your church set up. This takes about 5 minutes.
+          Let&apos;s get your church set up. It takes about 5 minutes, and
+          you can skip anything and come back to it later.
         </p>
       </div>
 
       <ul className="space-y-4">
         <li className="flex items-start gap-3">
           <Building2 className="mt-0.5 size-5 shrink-0 text-accent" strokeWidth={1.75} />
-          <span className="text-foreground">Your church profile</span>
+          <span className="text-base text-foreground">Create your account and add your church&apos;s details</span>
         </li>
         <li className="flex items-start gap-3">
           <Link2 className="mt-0.5 size-5 shrink-0 text-accent" strokeWidth={1.75} />
-          <span className="text-foreground">Connect your tools (Google, Facebook)</span>
+          <span className="text-base text-foreground">Connect Google and Facebook if you use them (optional)</span>
         </li>
         <li className="flex items-start gap-3">
           <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-accent" strokeWidth={1.75} />
-          <span className="text-foreground">You&apos;re ready to go</span>
+          <span className="text-base text-foreground">Then you&apos;re ready to go</span>
         </li>
       </ul>
 
-      <Button type="button" className="h-12 w-full text-base" onClick={onNext}>
-        Let&apos;s Get Started →
+      <Button type="button" size="lg" className="h-12 w-full" onClick={onNext}>
+        Get started
       </Button>
     </div>
   );

@@ -105,7 +105,7 @@ export function normalizeHostname(input: string): HostnameResult {
   if (rootHost && (value === rootHost || value.endsWith(`.${rootHost}`))) {
     return {
       ok: false,
-      error: `${rootHost} addresses are assigned by FaithForm — ask us to change your subdomain instead.`,
+      error: `${rootHost} addresses are given out by FaithForm. Contact us if you would like yours changed.`,
     };
   }
 

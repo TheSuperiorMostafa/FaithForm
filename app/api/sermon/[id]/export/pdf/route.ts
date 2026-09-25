@@ -7,6 +7,7 @@ import { renderSermonPdf } from "@/lib/sermon/export-pdf";
 import { resolveExportPassages } from "@/lib/sermon/passages";
 import { createClient } from "@/lib/supabase/server";
 import { featureAccessDenied } from "@/lib/features/guard";
+import { SERMON_NOT_FOUND_MESSAGE, sermonRouteError } from "@/lib/sermon-builder/route-error";
 
 export const runtime = "nodejs";
 export const maxDuration = 120;
@@ -24,7 +25,7 @@ export async function GET(
     const supabase = createClient();
     const sermon = await verifySermonAccess(supabase, id, auth.churchId);
     if (!sermon) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
+      return NextResponse.json({ error: SERMON_NOT_FOUND_MESSAGE }, { status: 404 });
     }
 
     // The deck's own translation wins; otherwise the church default, the same
@@ -58,8 +59,6 @@ export async function GET(
       },
     });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "PDF export failed";
-    const status = message === "Unauthorized" ? 401 : 500;
-    return NextResponse.json({ error: message }, { status });
+    return sermonRouteError(e, "We couldn't make the lesson PDF.");
   }
 }

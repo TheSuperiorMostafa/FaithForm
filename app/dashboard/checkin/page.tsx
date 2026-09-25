@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 
-import { RosterBoard } from "@/components/checkin/roster-board";
+import { CheckinDesk } from "@/components/checkin/checkin-desk";
 import { getChurchAuth } from "@/lib/auth/church";
 import { localDateInTimeZone } from "@/lib/checkin/service-week";
 import {
@@ -12,6 +12,11 @@ import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * Check in: the desk. Reads are strict, so a failed load reaches the
+ * section's error screen instead of looking like "No rooms yet" or an empty
+ * room while families are waiting.
+ */
 export default async function CheckinTodayPage() {
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");
@@ -20,24 +25,19 @@ export default async function CheckinTodayPage() {
   const today = localDateInTimeZone(auth.churchTimezone);
 
   const [locations, sessions, children] = await Promise.all([
-      listLocations(auth.churchId, {}, supabase),
-      getRoster(auth.churchId, today, {}, supabase),
-      listCheckinChildren(auth.churchId, supabase),
-    ]);
-
-  const defaultLocationByMember = Object.fromEntries(
-    children
-      .filter((child) => child.defaultLocationId)
-      .map((child) => [child.id, child.defaultLocationId as string]),
-  );
+    listLocations(auth.churchId, { strict: true }, supabase),
+    getRoster(auth.churchId, today, { strict: true }, supabase),
+    listCheckinChildren(auth.churchId, supabase, { strict: true }),
+  ]);
 
   return (
-    <RosterBoard
+    <CheckinDesk
       sessions={sessions}
       locations={locations}
       members={children}
-      defaultLocationByMember={defaultLocationByMember}
       serviceDate={today}
+      canAddFamily={auth.isAdmin}
+      currentUserId={auth.userId}
     />
   );
 }

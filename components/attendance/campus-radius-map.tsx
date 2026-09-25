@@ -167,7 +167,7 @@ export function CampusRadiusMap({
         <div className="absolute right-2 top-2 flex flex-col overflow-hidden rounded-md border border-border bg-background/95 shadow-sm">
           <button
             type="button"
-            className="flex size-8 items-center justify-center hover:bg-muted disabled:opacity-40"
+            className="flex size-11 items-center justify-center hover:bg-muted disabled:opacity-40"
             onClick={() => changeZoom(1)}
             disabled={zoom >= MAX_ZOOM}
             aria-label="Zoom in"
@@ -176,7 +176,7 @@ export function CampusRadiusMap({
           </button>
           <button
             type="button"
-            className="flex size-8 items-center justify-center border-t border-border hover:bg-muted disabled:opacity-40"
+            className="flex size-11 items-center justify-center border-t border-border hover:bg-muted disabled:opacity-40"
             onClick={() => changeZoom(-1)}
             disabled={zoom <= MIN_ZOOM}
             aria-label="Zoom out"
@@ -185,7 +185,7 @@ export function CampusRadiusMap({
           </button>
           <button
             type="button"
-            className="flex size-8 items-center justify-center border-t border-border hover:bg-muted"
+            className="flex size-11 items-center justify-center border-t border-border hover:bg-muted"
             onClick={() => setZoomTouched(false)}
             aria-label="Fit the check-in area"
           >
@@ -197,7 +197,7 @@ export function CampusRadiusMap({
           href="https://www.openstreetmap.org/copyright"
           target="_blank"
           rel="noopener noreferrer"
-          className="absolute bottom-0 right-0 rounded-tl bg-background/85 px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+          className="absolute bottom-0 right-0 rounded-tl bg-background/85 px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground"
         >
           © OpenStreetMap contributors
         </a>

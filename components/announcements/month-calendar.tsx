@@ -1,22 +1,21 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
-  Calendar,
   CalendarPlus,
   Check,
   ChevronLeft,
   ChevronRight,
   Loader2,
   MapPin,
+  Megaphone,
   Radio,
   Users,
 } from "lucide-react";
 import { AnnouncementSubmittedView } from "@/components/announcements/announcement-submitted-view";
-import { AnnouncementVerifyForm } from "@/components/announcements/announcement-verify-form";
+import { useAnnouncementComposer } from "@/components/announcements/composer-context";
 import { CreateEventDialog } from "@/components/announcements/create-event-dialog";
 import { DeleteEventButton } from "@/components/announcements/delete-event-button";
 import {
@@ -31,6 +30,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { SectionHeader } from "@/components/ui/page-header";
+import { describeWhen } from "@/lib/announcements/composer";
 import type { AnnouncementRow } from "@/lib/queries/announcements";
 import type { CalendarEventPreview } from "@/lib/integrations/types";
 import type { AttendanceSetupPolicy } from "@/lib/attendance/v2/setup";
@@ -50,7 +51,6 @@ import {
 import { cn } from "@/lib/utils";
 
 type MonthCalendarProps = {
-  churchId: string;
   initialYear: number;
   initialMonthIndex: number;
   initialEvents: CalendarEventPreview[];
@@ -62,18 +62,11 @@ type MonthCalendarProps = {
   calendarConnected: boolean;
   /** False when the only calendar is a read-only iCloud link. */
   canCreateEvents: boolean;
-  /** Google specifically: the weekly email is a Gmail draft. */
-  googleConnected: boolean;
-  /**
-   * Whether this church can make the weekly email at all — through Gmail or
-   * iCloud Mail. Falls back to `googleConnected` when not given.
-   */
-  emailAvailable?: boolean;
-  facebookConnected: boolean;
   initialAttendanceByEventId: Record<string, EventAttendanceSettings>;
   attendanceCampuses: EventAttendanceCampus[];
   attendancePolicy: AttendanceSetupPolicy;
   isAdmin: boolean;
+  timeZone: string | null;
 };
 
 const MAX_CHIPS_PER_CELL = 4;
@@ -84,11 +77,11 @@ const MAX_CHIPS_PER_CELL = 4;
  * compiles to nothing, which is why the selected day used to show no highlight
  * at all. `color-mix` does the same job for real.
  */
-const NEEDS_VERIFY_TINT =
+const NOT_ANNOUNCED_TINT =
   "border-[color:color-mix(in_srgb,var(--accent)_60%,transparent)] bg-[color:color-mix(in_srgb,var(--accent)_15%,transparent)] text-foreground";
-const NEEDS_VERIFY_HOVER =
+const NOT_ANNOUNCED_HOVER =
   "hover:bg-[color:color-mix(in_srgb,var(--accent)_25%,transparent)]";
-const SUBMITTED_TINT = "border-border bg-secondary text-secondary-foreground";
+const POSTED_TINT = "border-border bg-secondary text-secondary-foreground";
 
 function eventChipClassName(opts: {
   published: boolean;
@@ -97,7 +90,7 @@ function eventChipClassName(opts: {
   const { published, selected } = opts;
   return cn(
     "flex w-full flex-col gap-0.5 rounded-md border px-1.5 py-1 text-left leading-tight transition-colors",
-    published ? SUBMITTED_TINT : cn(NEEDS_VERIFY_TINT, NEEDS_VERIFY_HOVER),
+    published ? POSTED_TINT : cn(NOT_ANNOUNCED_TINT, NOT_ANNOUNCED_HOVER),
     selected &&
       "ring-2 ring-accent ring-offset-1 ring-offset-background shadow-sm",
   );
@@ -119,7 +112,6 @@ function defaultDayForMonth(year: number, monthIndex: number): Date {
  * up among the selected day's events rather than kept as its own copy.
  */
 export function MonthCalendar({
-  churchId,
   initialYear,
   initialMonthIndex,
   initialEvents,
@@ -128,15 +120,14 @@ export function MonthCalendar({
   initialEmailQueuedEventIds,
   calendarConnected,
   canCreateEvents,
-  googleConnected,
-  emailAvailable,
-  facebookConnected,
   initialAttendanceByEventId,
   attendanceCampuses,
   attendancePolicy,
   isAdmin,
+  timeZone,
 }: MonthCalendarProps) {
   const router = useRouter();
+  const { openComposer } = useAnnouncementComposer();
   const [year, setYear] = useState(initialYear);
   const [monthIndex, setMonthIndex] = useState(initialMonthIndex);
   const [events, setEvents] = useState(initialEvents);
@@ -152,8 +143,6 @@ export function MonthCalendar({
   const [emailQueuedIds, setEmailQueuedIds] = useState(
     () => new Set(initialEmailQueuedEventIds ?? []),
   );
-  /** The published event whose "publish somewhere else" form is open. */
-  const [addingChannelsFor, setAddingChannelsFor] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
@@ -190,11 +179,6 @@ export function MonthCalendar({
     initialMonthIndex,
   ]);
 
-  const defaults = {
-    googleConnected,
-    facebookConnected,
-    emailAvailable: emailAvailable ?? googleConnected,
-  };
   const today = useMemo(() => new Date(), []);
 
   const cells = useMemo(
@@ -230,7 +214,7 @@ export function MonthCalendar({
         );
         const data = await res.json();
         if (!res.ok) {
-          throw new Error(data.error ?? "Failed to load calendar");
+          throw new Error(data.error ?? "We couldn't load this month.");
         }
         const nextEvents: CalendarEventPreview[] = data.events ?? [];
         setEvents(nextEvents);
@@ -247,8 +231,10 @@ export function MonthCalendar({
             setSelectedEventId(preferred.googleEventId);
           }
         }
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to load calendar");
+      } catch {
+        setError(
+          "We couldn't load this month of your calendar. Try again, or reconnect your calendar in Settings.",
+        );
       } finally {
         setLoading(false);
       }
@@ -307,59 +293,8 @@ export function MonthCalendar({
     revealPanel();
   };
 
-  const handlePublished = (announcement: AnnouncementRow) => {
-    if (!selectedEvent?.googleEventId) return;
-
-    // Prefer the Google event id from the submitted announcement when present.
-    const eventId = announcement.google_event_id ?? selectedEvent.googleEventId;
-
-    const updatedEvent: CalendarEventPreview = {
-      ...selectedEvent,
-      googleEventId: eventId,
-      title: announcement.title,
-      location: announcement.event_location ?? "",
-      startAt: announcement.start_at,
-      endAt: announcement.end_at,
-    };
-
-    setPublishedByGoogleId((prev) => ({
-      ...prev,
-      [eventId]: announcement.id,
-    }));
-    setPublishedAnnouncements((prev) => ({
-      ...prev,
-      [eventId]: announcement,
-    }));
-
-    // Immediately reflect edits on the month grid (title, day, time).
-    setEvents((prev) => {
-      const without = prev.filter((e) => e.googleEventId !== eventId);
-      return [...without, updatedEvent];
-    });
-
-    const eventDay = eventStartDay(updatedEvent);
-    setSelectedDay(eventDay);
-    setSelectedEventId(eventId);
-
-    const y = eventDay.getFullYear();
-    const m = eventDay.getMonth();
-    if (y !== year || m !== monthIndex) {
-      setYear(y);
-      setMonthIndex(m);
-    }
-    // Refetch so calendar patches (and published maps) stay in sync, and
-    // refresh the page so the weekly queue above picks up the change.
-    void fetchMonth(y, m, eventId);
-    router.refresh();
-  };
-
-  const handleChannelsAdded = (announcement: AnnouncementRow) => {
-    setAddingChannelsFor(null);
-    handlePublished(announcement);
-  };
-
-  /** Back to "needs verify" at once; the refresh the dialog starts confirms it. */
-  const handleUnsubmitted = (eventId: string) => {
+  /** Back to "not announced" at once; the refresh the dialog starts confirms it. */
+  const handleTakenDown = (eventId: string) => {
     const without = <T,>(record: Record<string, T>) => {
       const next = { ...record };
       delete next[eventId];
@@ -367,7 +302,6 @@ export function MonthCalendar({
     };
     setPublishedByGoogleId(without);
     setPublishedAnnouncements(without);
-    setAddingChannelsFor(null);
   };
 
   /** Takes a deleted event off the grid at once; the refresh confirms it. */
@@ -382,7 +316,6 @@ export function MonthCalendar({
     setPublishedAnnouncements(without);
     setAttendanceByEventId(without);
     setSelectedEventId(null);
-    setAddingChannelsFor(null);
     router.refresh();
   };
 
@@ -426,30 +359,23 @@ export function MonthCalendar({
 
   const dayHeading = formatDayAgendaHeading(selectedDay);
 
-  if (!calendarConnected) {
-    return (
-      <Card className="border-dashed">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Calendar className="size-6 text-accent" strokeWidth={1.75} />
-            Connect a calendar
-          </CardTitle>
-          <CardDescription>
-            Link Google Calendar or iCloud Calendar in Settings to see your
-            church calendar here and prefill announcements.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Link href="/dashboard/settings?tab=integrations">
-            <Button>Go to Settings</Button>
-          </Link>
-        </CardContent>
-      </Card>
-    );
-  }
+  // "From your calendar" already offers to connect one.
+  if (!calendarConnected) return null;
+
+  const announceSelected = (event: CalendarEventPreview) =>
+    openComposer({
+      kind: "calendar",
+      event,
+      announcementId: publishedByGoogleId[event.googleEventId] ?? null,
+    });
 
   return (
-    <div className="flex flex-col gap-4">
+    <section aria-labelledby="church-calendar-heading" className="flex flex-col gap-4">
+      <SectionHeader
+        id="church-calendar-heading"
+        title="Church calendar"
+        description="Pick any day to see its events, announce one, or add a new event."
+      />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-1">
           <Button
@@ -480,13 +406,13 @@ export function MonthCalendar({
           {loading && (
             <Loader2 className="size-4 animate-spin text-muted-foreground" />
           )}
-          <Button type="button" variant="outline" size="sm" onClick={goToday}>
+          <Button type="button" variant="outline" onClick={goToday}>
             Today
           </Button>
           {canCreateEvents && (
             <Button
               type="button"
-              size="sm"
+              variant="outline"
               onClick={() => setCreateOpen(true)}
             >
               <CalendarPlus className="size-4" strokeWidth={1.75} />
@@ -497,9 +423,11 @@ export function MonthCalendar({
       </div>
 
       {error && (
-        <p className="rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-          {error.replace(/[.!?]$/, "")}. Check the calendar connection in
-          Settings.
+        <p
+          role="alert"
+          className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-[15px] text-destructive"
+        >
+          {error}
         </p>
       )}
 
@@ -590,32 +518,32 @@ export function MonthCalendar({
                           >
                             <span className="flex items-center gap-1">
                               {published && (
-                                <Check className="size-3 shrink-0 text-accent" />
+                                <Check className="size-3.5 shrink-0 text-accent" />
                               )}
                               {attendance?.enabled && (
                                 attendance.automaticEnabled ? (
-                                  <Radio className="size-2.5 shrink-0 text-accent" />
+                                  <Radio className="size-3 shrink-0 text-accent" />
                                 ) : (
-                                  <Users className="size-2.5 shrink-0 text-accent/80" />
+                                  <Users className="size-3 shrink-0 text-accent/80" />
                                 )
                               )}
                               <span
                                 className={cn(
-                                  "truncate text-[11px] font-bold tabular-nums sm:text-xs",
+                                  "truncate text-xs font-bold tabular-nums",
                                   !published && "text-accent",
                                 )}
                               >
                                 {formatEventStart(event)}
                               </span>
                             </span>
-                            <span className="line-clamp-2 text-[11px] font-semibold text-foreground sm:text-xs">
+                            <span className="line-clamp-2 text-xs font-semibold text-foreground">
                               {event.title}
                             </span>
                           </span>
                         );
                       })}
                       {overflow > 0 && (
-                        <span className="rounded px-1 text-[11px] font-semibold text-accent">
+                        <span className="rounded px-1 text-xs font-semibold text-accent">
                           +{overflow} more
                         </span>
                       )}
@@ -626,16 +554,16 @@ export function MonthCalendar({
             </div>
           </div>
 
-          <p className="text-xs text-muted-foreground">
+          <p className="text-sm text-muted-foreground">
             <span className="inline-flex items-center gap-1.5">
-              <span className={cn("inline-block size-2.5 rounded border", NEEDS_VERIFY_TINT)} />
-              Needs verify
+              <span className={cn("inline-block size-3 rounded border", NOT_ANNOUNCED_TINT)} />
+              Not announced yet
             </span>
             <span className="mx-2">·</span>
             <span className="inline-flex items-center gap-1.5">
-              <span className={cn("inline-block size-2.5 rounded border", SUBMITTED_TINT)} />
-              <Check className="size-3 text-accent" />
-              Submitted
+              <span className={cn("inline-block size-3 rounded border", POSTED_TINT)} />
+              <Check className="size-3.5 text-accent" />
+              Posted
             </span>
           </p>
         </div>
@@ -649,7 +577,7 @@ export function MonthCalendar({
                     <button
                       type="button"
                       onClick={() => setSelectedEventId(null)}
-                      className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+                      className="inline-flex min-h-11 w-fit items-center gap-1.5 rounded-lg text-[15px] font-medium text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <ArrowLeft className="size-4" />
                       {dayEvents.length > 1
@@ -669,64 +597,75 @@ export function MonthCalendar({
                       />
                     )}
                   </div>
-                  <CardTitle>Announcement details</CardTitle>
-                  <CardDescription>
-                    {selectedIsPublished
-                      ? "See where this event is published, or publish it somewhere else."
-                      : "Verify the prefilled details, then publish."}
+                  <CardTitle>{selectedEvent.title}</CardTitle>
+                  <CardDescription className="text-[15px]">
+                    {describeWhen(
+                      {
+                        startAt: selectedEvent.startAt,
+                        endAt: selectedEvent.endAt,
+                        allDay: Boolean(selectedEvent.allDay),
+                      },
+                      timeZone,
+                    )}
+                    {selectedEvent.location ? ` · ${selectedEvent.location}` : ""}
                   </CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="flex flex-col gap-6">
                   {selectedIsPublished ? (
                     selectedAnnouncement ? (
-                      addingChannelsFor === selectedEvent.googleEventId ? (
-                        <AnnouncementVerifyForm
-                          key={`add-${selectedEvent.googleEventId}`}
-                          churchId={churchId}
-                          event={selectedEvent}
-                          defaults={defaults}
-                          publishedAnnouncementId={selectedAnnouncement.id}
-                          addChannelsTo={selectedAnnouncement}
-                          queuedForWeeklyEmail={emailQueuedIds.has(
-                            selectedEvent.googleEventId,
-                          )}
-                          onPublished={handleChannelsAdded}
-                          onCancel={() => setAddingChannelsFor(null)}
-                        />
-                      ) : (
-                        <AnnouncementSubmittedView
-                          announcement={selectedAnnouncement}
-                          eventHtmlLink={selectedEvent.htmlLink}
-                          calendarSource={selectedEvent.source}
-                          queuedForWeeklyEmail={emailQueuedIds.has(
-                            selectedEvent.googleEventId,
-                          )}
-                          isAdmin={isAdmin}
-                          onPublishMore={() =>
-                            setAddingChannelsFor(selectedEvent.googleEventId)
-                          }
-                          onUnsubmitted={() =>
-                            handleUnsubmitted(selectedEvent.googleEventId)
-                          }
-                        />
-                      )
+                      <AnnouncementSubmittedView
+                        announcement={selectedAnnouncement}
+                        eventHtmlLink={selectedEvent.htmlLink}
+                        calendarSource={selectedEvent.source}
+                        queuedForWeeklyEmail={emailQueuedIds.has(
+                          selectedEvent.googleEventId,
+                        )}
+                        isAdmin={isAdmin}
+                        timeZone={timeZone}
+                        onChange={() =>
+                          openComposer({
+                            kind: "change",
+                            item: {
+                              announcement: selectedAnnouncement,
+                              undated: false,
+                              queuedForWeeklyEmail: emailQueuedIds.has(
+                                selectedEvent.googleEventId,
+                              ),
+                              calendar: {
+                                source: selectedEvent.source === "apple" ? "apple" : "google",
+                                readOnly: Boolean(selectedEvent.readOnly),
+                              },
+                            },
+                          })
+                        }
+                        onTakenDown={() => handleTakenDown(selectedEvent.googleEventId)}
+                      />
                     ) : (
-                      <p className="text-sm text-muted-foreground">
-                        This event was submitted. Switch months or refresh to
-                        load saved details.
+                      <p className="text-[15px] text-muted-foreground">
+                        This event is posted. Refresh the page to see where it went.
                       </p>
                     )
                   ) : (
-                    <AnnouncementVerifyForm
-                      key={selectedEvent.googleEventId}
-                      churchId={churchId}
-                      event={selectedEvent}
-                      defaults={defaults}
-                      publishedAnnouncementId={
-                        publishedByGoogleId[selectedEvent.googleEventId]
-                      }
-                      onPublished={handlePublished}
-                    />
+                    <div className="flex flex-col gap-3">
+                      {selectedEvent.description?.trim() && (
+                        <p className="line-clamp-4 whitespace-pre-wrap text-[15px] text-foreground/85">
+                          {selectedEvent.description.trim()}
+                        </p>
+                      )}
+                      <p className="text-[15px] text-muted-foreground">
+                        Not announced yet. Announce it to share it in the app, Monday&apos;s
+                        email or on Facebook.
+                      </p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="self-start"
+                        onClick={() => announceSelected(selectedEvent)}
+                      >
+                        <Megaphone aria-hidden strokeWidth={1.75} />
+                        Announce
+                      </Button>
+                    </div>
                   )}
                   <EventAttendanceEditor
                     event={selectedEvent}
@@ -747,7 +686,7 @@ export function MonthCalendar({
               <>
                 <CardHeader>
                   <CardTitle>{dayHeading}</CardTitle>
-                  <CardDescription>
+                  <CardDescription className="text-[15px]">
                     {dayEvents.length === 0
                       ? "Nothing on the calendar this day."
                       : dayEvents.length === 1
@@ -774,8 +713,8 @@ export function MonthCalendar({
                                 className={cn(
                                   "group flex w-full items-start gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent",
                                   published
-                                    ? cn(SUBMITTED_TINT, "hover:brightness-95")
-                                    : cn(NEEDS_VERIFY_TINT, NEEDS_VERIFY_HOVER),
+                                    ? cn(POSTED_TINT, "hover:brightness-95")
+                                    : cn(NOT_ANNOUNCED_TINT, NOT_ANNOUNCED_HOVER),
                                 )}
                               >
                                 <span className="min-w-0 flex-1">
@@ -787,7 +726,7 @@ export function MonthCalendar({
                                       {formatEventStart(event)}
                                     </span>
                                     {attendance?.enabled && (
-                                      <span className="inline-flex items-center gap-1 rounded-full bg-accent/10 px-2 py-0.5 text-[11px] font-medium text-accent">
+                                      <span className="inline-flex items-center gap-1 rounded-full bg-accent/10 px-2 py-0.5 text-sm font-medium text-accent">
                                         {attendance.automaticEnabled ? (
                                           <>
                                             <Radio className="size-3" />
@@ -802,18 +741,18 @@ export function MonthCalendar({
                                       </span>
                                     )}
                                   </span>
-                                  <span className="mt-0.5 block font-semibold text-foreground">
+                                  <span className="mt-0.5 block text-[15px] font-semibold text-foreground">
                                     {event.title}
                                   </span>
                                   {event.location ? (
-                                    <span className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
-                                      <MapPin className="size-3 shrink-0" />
+                                    <span className="mt-0.5 flex items-center gap-1 text-sm text-muted-foreground">
+                                      <MapPin className="size-3.5 shrink-0" />
                                       <span className="truncate">{event.location}</span>
                                     </span>
                                   ) : null}
                                 </span>
-                                <span className="shrink-0 self-center text-xs font-medium text-muted-foreground group-hover:text-foreground">
-                                  {published ? "View" : "Verify"}
+                                <span className="shrink-0 self-center text-sm font-semibold text-foreground">
+                                  {published ? "Open" : "Announce"}
                                 </span>
                               </button>
                             </li>
@@ -824,7 +763,6 @@ export function MonthCalendar({
                         <Button
                           type="button"
                           variant="outline"
-                          size="sm"
                           className="self-start"
                           onClick={() => setCreateOpen(true)}
                         >
@@ -843,12 +781,12 @@ export function MonthCalendar({
                         className="size-6 text-accent"
                         strokeWidth={1.75}
                       />
-                      <span className="text-sm font-semibold text-foreground">
+                      <span className="text-[15px] font-semibold text-foreground">
                         Create a new event for this day.
                       </span>
                     </button>
                   ) : (
-                    <p className="rounded-xl border border-dashed border-border px-4 py-10 text-center text-sm text-muted-foreground">
+                    <p className="rounded-xl border border-dashed border-border px-4 py-10 text-center text-[15px] text-muted-foreground">
                       Nothing on this day. Add an event in Apple Calendar and
                       it will show up here within a few minutes.
                     </p>
@@ -868,6 +806,6 @@ export function MonthCalendar({
         attendancePolicy={attendancePolicy}
         onCreated={handleEventCreated}
       />
-    </div>
+    </section>
   );
 }

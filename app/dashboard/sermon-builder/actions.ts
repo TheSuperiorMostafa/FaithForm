@@ -7,6 +7,7 @@ import { getBooks } from "@/lib/bible/api";
 import { getBooksTranslationId } from "@/lib/bible/translations";
 import type { TranslationBookChapter, TranslationBooks } from "@/lib/bible/types";
 import { requireChurchAuth } from "@/lib/auth/church";
+import { toUserError } from "@/lib/errors/user-error";
 import { featureActionError } from "@/lib/features/guard";
 import {
   deleteSeries,
@@ -15,6 +16,11 @@ import {
   verifySermonAccess,
 } from "@/lib/queries/sermons";
 import {
+  buildPresentSlides,
+  type PresentSlides,
+} from "@/lib/sermon-builder/present-slides";
+import {
+  getActivePresentationVersion,
   publishPresentationToFaithForm,
   unpublishPresentationFromFaithForm,
 } from "@/lib/sermons/v1/presentation";
@@ -22,7 +28,7 @@ import {
   publishSermonToFaithForm,
   unpublishSermonFromFaithForm,
 } from "@/lib/sermons/v1/publication";
-import { ONLY_ADMINS_CAN_SHARE } from "@/lib/sermons/v1/share-rules";
+import { isSermonShared, ONLY_ADMINS_CAN_SHARE } from "@/lib/sermons/v1/share-rules";
 import { createClient } from "@/lib/supabase/server";
 
 /**
@@ -62,19 +68,30 @@ export async function deleteSermonAction(
     const supabase = createClient();
     const sermon = await verifySermonAccess(supabase, sermonId, auth.churchId);
     if (!sermon) {
-      return { error: "Sermon not found" };
+      return { error: "We couldn't find that sermon. It may already have been deleted." };
     }
     if (sermon.status !== "draft") {
-      return { error: "Only draft sermons can be deleted" };
+      // A sermon that has been in the app is a publishing record, so only an
+      // admin (the people who can publish) may delete it, and only once it is
+      // out of the app: deleting never silently pulls something off members'
+      // phones. Its earlier slide versions go with it (on delete cascade).
+      if (!auth.isAdmin) {
+        return { error: "Only church admins can delete a sermon that was published to the app." };
+      }
+      const presentation = await getActivePresentationVersion({
+        churchId: auth.churchId,
+        sermonId,
+      });
+      if (isSermonShared(sermon) || presentation) {
+        return { error: "This sermon is still in the app. Remove it from the app first, then delete it." };
+      }
     }
 
     await deleteSermon(sermonId);
     revalidatePath("/dashboard/sermon-builder");
     return {};
   } catch (e) {
-    return {
-      error: e instanceof Error ? e.message : "Could not delete sermon",
-    };
+    return { error: toUserError(e, "We couldn't delete this sermon.") };
   }
 }
 
@@ -90,24 +107,54 @@ export async function deleteSeriesAction(
     const supabase = createClient();
     const series = await verifySeriesAccess(supabase, seriesId, auth.churchId);
     if (!series) {
-      return { error: "Series not found" };
+      return { error: "We couldn't find that series. It may already have been deleted." };
     }
 
     await deleteSeries(seriesId);
     revalidatePath("/dashboard/sermon-builder");
     return {};
   } catch (e) {
-    return {
-      error: e instanceof Error ? e.message : "Could not delete series",
-    };
+    return { error: toUserError(e, "We couldn't delete this series.") };
   }
 }
 
+/**
+ * The slides for Present mode, built from the same page model as the app and
+ * the PowerPoint export. Read-only, but it looks scripture up on our key, so it
+ * carries the same feature gate as the Bible lookups above.
+ */
+export async function getSermonSlidesAction(
+  sermonId: string,
+): Promise<
+  | { ok: true; slides: PresentSlides }
+  | { ok: false; error: string }
+> {
+  try {
+    const auth = await requireChurchAuth();
+
+    const denied = await featureActionError("sermon_builder");
+    if (denied) return { ok: false, error: denied };
+
+    const supabase = createClient();
+    const sermon = await verifySermonAccess(supabase, sermonId, auth.churchId);
+    if (!sermon) {
+      return { ok: false, error: "We couldn't find that sermon. Refresh the page and try again." };
+    }
+
+    return { ok: true, slides: await buildPresentSlides(sermon) };
+  } catch (e) {
+    return { ok: false, error: toUserError(e, "We couldn't load the slides.") };
+  }
+}
+
+const SERMON_NOT_FOUND =
+  "We couldn't find that sermon. Refresh the page and try again.";
+
 const APP_UPDATE_FAILED =
-  "We couldn't update the FaithForm app just now. Please try again.";
+  "We couldn't update the app just now. Please try again.";
 
 const MEMBER_APP_OFF =
-  "The Member App is switched off for this church, so nothing can be shared there.";
+  "The app is switched off for your church, so nothing can be published there. Turn it on in Settings, or contact FaithForm support.";
 
 /**
  * Shares a sermon's notes in the FaithForm app, or updates how it is shared.
@@ -138,7 +185,7 @@ export async function shareSermonInAppAction(input: {
 
     const supabase = createClient();
     const sermon = await verifySermonAccess(supabase, input.sermonId, auth.churchId);
-    if (!sermon) return { error: "Sermon not found" };
+    if (!sermon) return { error: SERMON_NOT_FOUND };
 
     const result = await publishSermonToFaithForm({
       churchId: auth.churchId,
@@ -193,7 +240,7 @@ export async function unshareSermonInAppAction(
 
     const supabase = createClient();
     const sermon = await verifySermonAccess(supabase, sermonId, auth.churchId);
-    if (!sermon) return { error: "Sermon not found" };
+    if (!sermon) return { error: SERMON_NOT_FOUND };
 
     const result = await unpublishSermonFromFaithForm({
       churchId: auth.churchId,
@@ -234,7 +281,7 @@ export async function sharePresentationInAppAction(input: {
 
     const supabase = createClient();
     const sermon = await verifySermonAccess(supabase, input.sermonId, auth.churchId);
-    if (!sermon) return { error: "Sermon not found" };
+    if (!sermon) return { error: SERMON_NOT_FOUND };
 
     const result = await publishPresentationToFaithForm({
       churchId: auth.churchId,
@@ -284,7 +331,7 @@ export async function unsharePresentationInAppAction(
 
     const supabase = createClient();
     const sermon = await verifySermonAccess(supabase, sermonId, auth.churchId);
-    if (!sermon) return { error: "Sermon not found" };
+    if (!sermon) return { error: SERMON_NOT_FOUND };
 
     const result = await unpublishPresentationFromFaithForm({
       churchId: auth.churchId,

@@ -148,7 +148,7 @@ export function ImageUploadField({
         </Label>
         <button
           type="button"
-          className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground underline underline-offset-4 hover:text-foreground"
+          className="inline-flex items-center gap-1 text-sm font-medium text-muted-foreground underline underline-offset-4 hover:text-foreground"
           onClick={() => setShowUrl((s) => !s)}
         >
           <Link2 className="size-3" aria-hidden />
@@ -157,7 +157,7 @@ export function ImageUploadField({
       </div>
 
       {help || preset.ratio ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           {[help, preset.ratio ? preset.hint : null].filter(Boolean).join(" ")}
         </p>
       ) : null}
@@ -239,7 +239,7 @@ export function ImageUploadField({
                 </button>{" "}
                 <span className="text-muted-foreground">or drag one here</span>
               </p>
-              <p className="text-xs text-muted-foreground">
+              <p className="text-sm text-muted-foreground">
                 JPG, PNG, or a photo straight from your phone. Up to 12MB.
               </p>
             </>
@@ -284,7 +284,7 @@ export function ImageUploadField({
         />
       ) : null}
 
-      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+      {error ? <p className="text-sm text-destructive">{error}</p> : null}
     </div>
   );
 }

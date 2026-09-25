@@ -38,7 +38,7 @@ export const staffGridSection = defineSection<StaffGridContent>({
   type: "staff_grid",
   label: "Our team",
   fields: [
-    { key: "eyebrow", label: "Eyebrow", type: "text" },
+    { key: "eyebrow", label: "Small heading above", type: "text" },
     { key: "headline", label: "Headline", type: "headline" },
     { key: "note", label: "Side note", type: "textarea" },
     {
@@ -47,7 +47,7 @@ export const staffGridSection = defineSection<StaffGridContent>({
       type: "list",
       addLabel: "Add person",
       titleKey: "name",
-      help: "Left empty, this follows the public staff in Church Profile — edit there and it updates everywhere.",
+      help: "Left empty, this shows the people in Website → Look & details. Edit them there and they update everywhere.",
       itemFields: [
         { key: "name", label: "Name", type: "text" },
         { key: "role", label: "Role", type: "text" },

@@ -4,7 +4,16 @@ import { revalidatePath } from "next/cache";
 
 import { getChurchAuth } from "@/lib/auth/church";
 import { featureActionError } from "@/lib/features/guard";
-import { toVisitorResult, type VisitorResult } from "@/lib/faithform/errors";
+import {
+  toVisitorResult,
+  VisitorError,
+  type VisitorResult,
+} from "@/lib/faithform/errors";
+import {
+  isUserFacingError,
+  toUserError,
+  UserFacingError,
+} from "@/lib/errors/user-error";
 import {
   addClaimAsNewPerson,
   connectAppMember,
@@ -43,10 +52,28 @@ async function requirePeopleAdmin(): Promise<StaffContext> {
   if (!auth) throw new Error("unauthenticated");
 
   const featureError = await featureActionError("people");
-  if (featureError) throw new Error(featureError);
+  if (featureError) throw new UserFacingError(featureError);
 
   if (!auth.isAdmin) throw new Error("forbidden");
   return { churchId: auth.churchId, userId: auth.userId };
+}
+
+/**
+ * Domain errors carry sentences written for staff; anything else is logged
+ * and replaced with a plain one, so no driver text reaches the page.
+ */
+function toStaffResult<T>(error: unknown, fallback: string): VisitorResult<T> {
+  if (error instanceof VisitorError) return toVisitorResult(error);
+  if (error instanceof Error && error.message === "unauthenticated") {
+    return { ok: false, code: "unauthenticated", message: "You must be signed in." };
+  }
+  if (error instanceof Error && error.message === "forbidden") {
+    return { ok: false, code: "forbidden", message: "Only church admins can change People." };
+  }
+  if (isUserFacingError(error)) {
+    return { ok: false, code: "forbidden", message: error.message };
+  }
+  return { ok: false, code: "unavailable", message: toUserError(error, fallback) };
 }
 
 function revalidatePeople() {
@@ -93,7 +120,7 @@ export async function approvePeopleClaim(input: {
     revalidatePeople();
     return { ok: true, data: null };
   } catch (error) {
-    return toVisitorResult(error);
+    return toStaffResult(error, "We couldn't link this person.");
   }
 }
 
@@ -115,7 +142,7 @@ export async function addPeopleClaimAsNewPerson(input: {
     revalidatePeople();
     return { ok: true, data: { memberId } };
   } catch (error) {
-    return toVisitorResult(error);
+    return toStaffResult(error, "We couldn't add them to People.");
   }
 }
 
@@ -137,7 +164,7 @@ export async function addAppMemberToPeople(input: {
     revalidatePeople();
     return { ok: true, data: { outcome } };
   } catch (error) {
-    return toVisitorResult(error);
+    return toStaffResult(error, "We couldn't add them to People.");
   }
 }
 
@@ -157,7 +184,7 @@ export async function moveAppConnectionToPerson(input: {
     revalidatePeople();
     return { ok: true, data: null };
   } catch (error) {
-    return toVisitorResult(error);
+    return toStaffResult(error, "We couldn't move the app connection.");
   }
 }
 
@@ -178,7 +205,7 @@ export async function rejectPeopleClaim(input: {
     revalidatePeople();
     return { ok: true, data: null };
   } catch (error) {
-    return toVisitorResult(error);
+    return toStaffResult(error, "We couldn't decline this request.");
   }
 }
 
@@ -197,7 +224,7 @@ export async function revokePeopleLink(input: {
     revalidatePeople();
     return { ok: true, data: null };
   } catch (error) {
-    return toVisitorResult(error);
+    return toStaffResult(error, "We couldn't remove that link.");
   }
 }
 
@@ -269,6 +296,6 @@ export async function decideVisitorRelationship(input: {
       },
     };
   } catch (error) {
-    return toVisitorResult(error);
+    return toStaffResult(error, "We couldn't save your decision.");
   }
 }

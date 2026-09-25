@@ -26,12 +26,27 @@ export function getAllTimezones(): string[] {
   return [...COMMON_US_TIMEZONES];
 }
 
+/** "Eastern Time" for America/Louisville, from the browser's own names. */
+function genericZoneName(tz: string): string | null {
+  try {
+    const part = new Intl.DateTimeFormat("en-US", { timeZone: tz, timeZoneName: "longGeneric" })
+      .formatToParts(new Date())
+      .find((p) => p.type === "timeZoneName")?.value;
+    // Some zones only have an offset ("GMT+03:00"), which reads worse than the city.
+    return part && !/^GMT/.test(part) ? part : null;
+  } catch {
+    return null;
+  }
+}
+
 export function formatTimezoneLabel(tz: string): string {
   const friendly = FRIENDLY_LABELS[tz];
   const place = tz.replace(/_/g, " ").split("/").pop() ?? tz;
   if (friendly) {
     return `${friendly} — ${place}`;
   }
+  const generic = genericZoneName(tz);
+  if (generic) return `${generic} — ${place}`;
   return tz.replace(/_/g, " ");
 }
 

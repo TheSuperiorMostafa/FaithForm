@@ -7,6 +7,7 @@ import {
 } from "@/lib/auth/require-church-admin";
 import { getSubscriptionById } from "@/lib/queries/giving";
 import { featureAccessDenied } from "@/lib/features/guard";
+import { recurringErrorMessage } from "@/lib/giving/provider-errors";
 import {
   cancelSubscription,
   pauseSubscription,
@@ -37,17 +38,26 @@ export async function POST(request: Request, context: RouteContext) {
   try {
     json = await request.json();
   } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+    return NextResponse.json(
+      { error: "We couldn't read that request. Refresh the page and try again." },
+      { status: 400 },
+    );
   }
 
   const parsed = bodySchema.safeParse(json);
   if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+    return NextResponse.json(
+      { error: "We couldn't tell what to do with this recurring gift. Refresh the page and try again." },
+      { status: 400 },
+    );
   }
 
   const sub = await getSubscriptionById(auth.churchId, id);
   if (!sub?.stripeAccountId) {
-    return NextResponse.json({ error: "Subscription not found" }, { status: 404 });
+    return NextResponse.json(
+      { error: "We couldn't find that recurring gift. Refresh the page and try again." },
+      { status: 404 },
+    );
   }
 
   try {
@@ -67,7 +77,10 @@ export async function POST(request: Request, context: RouteContext) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Action failed";
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error("[giving] recurring gift action failed", parsed.data.action, id, err);
+    return NextResponse.json(
+      { error: recurringErrorMessage(parsed.data.action, err) },
+      { status: 500 },
+    );
   }
 }

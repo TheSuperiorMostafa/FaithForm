@@ -19,6 +19,7 @@ import {
 } from "@/lib/stream/events";
 import { getActiveStreamSession, updateStreamSession } from "@/lib/stream/sessions";
 import { renameLiveDestinations } from "@/lib/stream/syndication";
+import { humanizeStreamError, renameOutcomeMessage, type SyndicatedPlatform } from "@/lib/stream/user-errors";
 import { assertRateLimit } from "@/lib/security/rate-limit";
 import {
   buildStaticStreamName,
@@ -98,10 +99,7 @@ export async function updateStreamRelaySettings(
   } catch (error) {
     return {
       ok: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Could not save live streaming settings.",
+      error: humanizeStreamError(error, "We couldn't save your streaming settings."),
     };
   }
 }
@@ -134,10 +132,7 @@ export async function provisionPlatformLiveStreaming(
   } catch (error) {
     return {
       ok: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Could not set up live streaming.",
+      error: humanizeStreamError(error, "We couldn't set up streaming to that platform."),
     };
   }
 }
@@ -170,10 +165,7 @@ export async function createStreamingPcPairingCode(): Promise<
   } catch (error) {
     return {
       ok: false,
-      error:
-        error instanceof Error
-          ? error.message
-          : "Could not create pairing code.",
+      error: humanizeStreamError(error, "We couldn't create a pairing code."),
     };
   }
 }
@@ -217,7 +209,10 @@ export async function revealIngestKey(): Promise<RevealIngestKeyState> {
     await ensureStreamRelayCredentials(auth.churchId, auth.userId);
     const publishSecret = await getIntegrationPublishSecret(auth.churchId);
     if (!publishSecret) {
-      return { ok: false, error: "Stream is not configured for this church." };
+      return {
+        ok: false,
+        error: "Streaming isn't set up for this church yet. Contact FaithForm support and we'll turn it on.",
+      };
     }
 
     await logAdminAction({
@@ -233,8 +228,7 @@ export async function revealIngestKey(): Promise<RevealIngestKeyState> {
   } catch (error) {
     return {
       ok: false,
-      error:
-        error instanceof Error ? error.message : "Could not load the stream key.",
+      error: humanizeStreamError(error, "We couldn't show the stream key."),
     };
   }
 }
@@ -263,12 +257,11 @@ export async function goLiveBroadcast(
       triggerSource: "Live Streaming",
     });
     revalidateLiveStreaming();
-    return { ok: true, message: "Broadcast started." };
+    return { ok: true, message: "You're live. Recording has started." };
   } catch (error) {
     return {
       ok: false,
-      error:
-        error instanceof Error ? error.message : "Could not start broadcast.",
+      error: humanizeStreamError(error, "We couldn't start the livestream."),
     };
   }
 }
@@ -289,12 +282,11 @@ export async function endLiveBroadcastAction(): Promise<StreamRelayActionState> 
       triggerSource: "Live Streaming",
     });
     revalidateLiveStreaming();
-    return { ok: true, message: "Broadcast ended." };
+    return { ok: true, message: "Service ended. Your recording is being prepared." };
   } catch (error) {
     return {
       ok: false,
-      error:
-        error instanceof Error ? error.message : "Could not end broadcast.",
+      error: humanizeStreamError(error, "We couldn't end the livestream."),
     };
   }
 }
@@ -308,14 +300,14 @@ export async function renameLiveService(
   if (!auth.isAdmin) return { ok: false, error: "Only church admins can rename broadcasts." };
 
   const nextTitle = title.trim();
-  if (!nextTitle) return { ok: false, error: "Give the broadcast a title first." };
-  if (nextTitle.length > 100) return { ok: false, error: "Keep the broadcast title to 100 characters or fewer." };
+  if (!nextTitle) return { ok: false, error: "Give the service a title first." };
+  if (nextTitle.length > 100) return { ok: false, error: "Keep the title to 100 characters or fewer." };
 
   try {
     const session = await getActiveStreamSession(auth.churchId);
-    if (!session?.streamEventId) return { ok: false, error: "There is no active broadcast to rename." };
+    if (!session?.streamEventId) return { ok: false, error: "There's no live service to rename right now." };
     const event = await getStreamEvent(session.streamEventId);
-    if (!event || event.churchId !== auth.churchId) return { ok: false, error: "The active service could not be found." };
+    if (!event || event.churchId !== auth.churchId) return { ok: false, error: "We couldn't find the live service. Refresh the page and try again." };
 
     await updateStreamEvent(event.id, auth.churchId, { title: nextTitle });
     await updateStreamSession(session.id, { title: nextTitle });
@@ -325,15 +317,13 @@ export async function renameLiveService(
       facebook: event.syndicateFacebook,
     });
     revalidateLiveStreaming();
-    const failed = Object.entries(external.errors).map(([platform, error]) => `${platform}: ${error}`);
-    return {
-      ok: true,
-      message: failed.length
-        ? `Title updated in FaithForm. ${failed.join(" ")}`
-        : "Broadcast title updated everywhere.",
-    };
+    // The platforms' own error text stays in the server log: it is written
+    // for developers, not for the person running the service.
+    const failed = Object.keys(external.errors) as SyndicatedPlatform[];
+    if (failed.length) console.error("[stream] live title not accepted", external.errors);
+    return { ok: true, message: renameOutcomeMessage(failed) };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "Could not rename the broadcast." };
+    return { ok: false, error: humanizeStreamError(error, "We couldn't rename the service.") };
   }
 }
 
@@ -350,12 +340,12 @@ export async function createScheduledStream(
   const title = formData.get("title")?.toString().trim();
   const startsAtRaw = formData.get("starts_at")?.toString().trim();
   if (!title || !startsAtRaw) {
-    return { ok: false, error: "Title and start time are required." };
+    return { ok: false, error: "Give the service a name and a start time." };
   }
 
   const startsAt = new Date(startsAtRaw);
   if (Number.isNaN(startsAt.getTime())) {
-    return { ok: false, error: "Invalid start time." };
+    return { ok: false, error: "Choose a start date and time." };
   }
 
   try {
@@ -398,8 +388,7 @@ export async function createScheduledStream(
   } catch (error) {
     return {
       ok: false,
-      error:
-        error instanceof Error ? error.message : "Could not schedule stream.",
+      error: humanizeStreamError(error, "We couldn't schedule that service."),
     };
   }
 }
@@ -417,12 +406,11 @@ export async function cancelScheduledStream(
   try {
     await cancelStreamEvent(eventId, auth.churchId);
     revalidateLiveStreaming();
-    return { ok: true, message: "Scheduled stream cancelled." };
+    return { ok: true, message: "Service cancelled." };
   } catch (error) {
     return {
       ok: false,
-      error:
-        error instanceof Error ? error.message : "Could not cancel stream.",
+      error: humanizeStreamError(error, "We couldn't cancel that service."),
     };
   }
 }

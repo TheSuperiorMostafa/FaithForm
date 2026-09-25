@@ -1,98 +1,100 @@
-import { ChurchBrandingImages } from "@/components/settings/church-branding-images";
-import { SettingsTabs } from "@/components/settings/settings-tabs";
-import { getGivingFundsForSettings } from "@/app/dashboard/settings/giving-actions";
-import { listCommunicationAttachments } from "@/lib/announcements/attachments";
-import { getChurchGivingProfile } from "@/lib/queries/giving";
-import { getFollowUpMessageTemplates } from "@/lib/queries/follow-up-settings";
-import { getAnnouncementEmailSettings } from "@/lib/queries/announcement-email-settings";
+import { Suspense } from "react";
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { Church, Info } from "lucide-react";
+
+import { SettingsTabPanel } from "@/app/dashboard/settings/tab-panels";
+import { SettingsPageHeader, SettingsTabSkeleton } from "@/components/settings/settings-skeletons";
+import { SettingsTabNav } from "@/components/settings/settings-tab-nav";
+import {
+  resolveSettingsTab,
+  visibleSettingsTabs,
+} from "@/components/settings/settings-tabs-config";
+import { buttonVariants } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { getChurchAuth } from "@/lib/auth/church";
-import {
-  defaultFeatureFlags,
-  getFeatureAccess,
-  resolveAllowedFeatures,
-} from "@/lib/features/access";
-import { FEATURE_KEYS } from "@/lib/features/catalog";
-import { getIntegrationStatus } from "@/lib/integrations/tokens";
-import {
-  getChurchTeamMembers,
-  usesFeaturePermissionsColumn,
-} from "@/lib/queries/team";
-import { createClient } from "@/lib/supabase/server";
+import { defaultFeatureFlags, getFeatureAccess } from "@/lib/features/access";
 
 export const dynamic = "force-dynamic";
 
-export default async function SettingsPage() {
-  const supabase = createClient();
-  const [auth, featureAccess] = await Promise.all([
+type PageProps = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+function paramReader(query: Record<string, string | string[] | undefined>) {
+  return {
+    get(name: string): string | null {
+      const value = query[name];
+      if (Array.isArray(value)) return value[0] ?? null;
+      return value ?? null;
+    },
+  };
+}
+
+/**
+ * Settings: the church's details, the team, connected accounts, the weekly
+ * email and texts, and a few rare options. One section at a time, each one
+ * linkable with `?tab=`.
+ */
+export default async function SettingsPage({ searchParams }: PageProps) {
+  const [query, auth, featureAccess] = await Promise.all([
+    searchParams,
     getChurchAuth(),
     getFeatureAccess(),
   ]);
-  if (!auth) {
+
+  if (!auth?.churchId) {
     return (
-      <div className="mx-auto max-w-lg py-16 text-center text-sm text-muted-foreground">
-        Link your account to a church to manage settings.
+      <div className="flex w-full flex-col gap-8">
+        <SettingsPageHeader />
+        <EmptyState
+          icon={Church}
+          title="Your account isn't connected to a church yet"
+          description="Starting a new church on FaithForm? Set it up now, it takes a minute. Joining an existing church? Ask its admin to invite you."
+          action={
+            <Link href="/setup" className={buttonVariants({ size: "lg" })}>
+              Set up your church
+            </Link>
+          }
+        />
       </div>
     );
   }
 
-  const [
-    integrationStatus,
-    givingProfile,
-    givingFunds,
-    followUpTemplates,
-    announcementEmailSettings,
-    communicationAttachments,
-    teamMembers,
-    grantsInProperColumn,
-  ] =
-    await Promise.all([
-      getIntegrationStatus(auth.churchId, supabase),
-      getChurchGivingProfile(auth.churchId),
-      getGivingFundsForSettings(auth.churchId),
-      getFollowUpMessageTemplates(auth.churchId, supabase),
-      getAnnouncementEmailSettings(auth.churchId, supabase),
-      listCommunicationAttachments(auth.churchId),
-      getChurchTeamMembers(auth.churchId),
-      usesFeaturePermissionsColumn(),
-    ]);
-
-  const { data: branding } = auth.isAdmin ? await supabase.from("churches").select("logo_url, cover_image_url").eq("id", auth.churchId).maybeSingle() : { data: null };
-
-  const featureFlags = featureAccess?.flags ?? defaultFeatureFlags();
-
-  // Grantable features are the ones the account has switched on.
-  const availableFeatures = FEATURE_KEYS.filter((key) => featureFlags[key]);
+  const flags = featureAccess?.flags ?? defaultFeatureFlags();
+  const allowedFeatures = featureAccess?.allowed ?? [];
+  const params = paramReader(query);
+  const tabs = visibleSettingsTabs({ isAdmin: auth.isAdmin, allowedFeatures });
+  const tab = resolveSettingsTab(params, tabs, {
+    givingAvailable: allowedFeatures.includes("giving"),
+  });
+  // Stripe onboarding now returns to the Giving page; links made before that
+  // change still arrive here, so pass them along.
+  if (params.get("stripe_return")) redirect("/dashboard/giving?stripe_return=1");
+  if (params.get("stripe_refresh")) redirect("/dashboard/giving?stripe_refresh=1");
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
-      <div>
-        <h1 className="border-l-4 border-accent pl-3 font-heading text-[26px] font-bold">
-          Settings
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Connect services, manage your team, and set preferences for your
-          church.
+    <div className="flex w-full flex-col gap-8">
+      <SettingsPageHeader />
+      <SettingsTabNav tabs={tabs} active={tab} />
+
+      {!auth.isAdmin && (
+        <p className="flex items-start gap-3 rounded-2xl border border-border bg-muted/40 px-5 py-4 text-[15px] leading-relaxed text-foreground/80">
+          <Info className="mt-0.5 size-5 shrink-0 text-accent" strokeWidth={1.75} aria-hidden />
+          <span>
+            Only church admins can change church details, the team and connected accounts. If
+            something needs changing, ask an admin on your team.
+          </span>
         </p>
-      </div>
+      )}
 
-      {auth.isAdmin && <ChurchBrandingImages logoUrl={branding?.logo_url ?? null} coverUrl={branding?.cover_image_url ?? null} />}
-
-      <SettingsTabs
-        isAdmin={auth.isAdmin}
-        integrationStatus={integrationStatus}
-        givingProfile={givingProfile}
-        givingFunds={givingFunds}
-        followUpTemplates={followUpTemplates}
-        announcementEmailTemplate={announcementEmailSettings}
-        communicationAttachments={communicationAttachments}
-        team={{
-          members: teamMembers,
-          availableFeatures,
-          currentUserId: auth.userId,
-          grantsInProperColumn,
-        }}
-        allowedFeatures={resolveAllowedFeatures(auth, featureFlags)}
-      />
+      {/* Keyed on the section so switching shows that section's skeleton. */}
+      <Suspense key={tab} fallback={<SettingsTabSkeleton tab={tab} />}>
+        <SettingsTabPanel
+          tab={tab}
+          context={{ auth, flags, allowedFeatures }}
+        />
+      </Suspense>
     </div>
   );
 }

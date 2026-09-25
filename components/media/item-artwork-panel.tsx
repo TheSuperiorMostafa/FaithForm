@@ -35,18 +35,18 @@ export function ItemArtworkPanel({
     <Card>
       <CardContent className="flex flex-col gap-5 pt-6">
         <div className="flex flex-col gap-1">
-          <h3 className="font-heading text-base font-bold">Artwork</h3>
+          <h3 className="font-heading text-lg font-bold">Artwork</h3>
           <p className="text-sm text-muted-foreground">
             {seriesName && seriesSlug ? (
               <>
                 This message inherits its artwork from{" "}
                 <Link
-                  href={`/dashboard/live-streaming/media/series/${seriesSlug}`}
+                  href={`/dashboard/live-streaming/recordings/series/${seriesSlug}`}
                   className="font-medium text-accent underline underline-offset-4"
                 >
                   {seriesName}
                 </Link>
-                . Override a shape here only if this one needs its own image.
+                . Add an image here only if this one needs its own.
               </>
             ) : (
               "Add images so this message shows a picture instead of its title. Filing it into a series lets it share one set of images with everything else in that series."

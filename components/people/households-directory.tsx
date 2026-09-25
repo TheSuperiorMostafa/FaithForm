@@ -1,16 +1,25 @@
 "use client";
 
-import Link from "next/link";
 import { useMemo, useState, useTransition } from "react";
-import { Plus, Search, Users } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Home, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 
 import { createHousehold } from "@/app/dashboard/checkin/actions";
-import { Badge } from "@/components/ui/badge";
+import {
+  familyStatus,
+  familySummary,
+} from "@/components/people/people-format";
+import { FAMILIES_DESCRIPTION, PeopleTabs } from "@/components/people/people-tabs";
+import { AdvancedSection } from "@/components/ui/advanced-section";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { List, ListRow } from "@/components/ui/list-row";
+import { PageHeader } from "@/components/ui/page-header";
+import { StatusBadge } from "@/components/ui/status-badge";
 import type { HouseholdSummary } from "@/types/checkin";
 
 type Props = {
@@ -24,9 +33,9 @@ type Props = {
 /**
  * The directory, searched the way a front desk actually searches it.
  *
- * Typing "John Doe" matches the *person* and returns the household, which is
+ * Typing "John Doe" matches the *person* and returns the family, which is
  * the whole point of the feature, and the reason this does not simply filter
- * household names. A child whose surname differs from the household's would be
+ * family names. A child whose surname differs from the family's would be
  * invisible to a name filter, and that child is exactly who someone is looking
  * for.
  */
@@ -36,6 +45,7 @@ export function HouseholdsDirectory({
   isAdmin,
   unassignedCount,
 }: Props) {
+  const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [search, setSearch] = useState("");
   const [adding, setAdding] = useState(false);
@@ -57,135 +67,162 @@ export function HouseholdsDirectory({
     );
   }, [households, householdByPersonName, search]);
 
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="min-w-[16rem] flex-1 space-y-2">
-          <Label htmlFor="household-search" className="flex items-center gap-1.5">
-            <Search className="size-3.5" aria-hidden />
-            Search by anyone&rsquo;s name
-          </Label>
-          <Input
-            id="household-search"
-            value={search}
-            placeholder="John Doe"
-            onChange={(event) => setSearch(event.target.value)}
-          />
-        </div>
-        {isAdmin && !adding && (
-          <Button type="button" variant="outline" onClick={() => setAdding(true)}>
-            <Plus className="mr-1.5 size-3.5" aria-hidden />
-            New household
-          </Button>
-        )}
-      </div>
+  const newFamilyButton = isAdmin ? (
+    <Button type="button" size="lg" onClick={() => setAdding(true)} disabled={adding}>
+      <Plus aria-hidden />
+      New family
+    </Button>
+  ) : null;
 
-      {adding && (
-        <Card>
-          <CardHeader>
-            <CardTitle>New household</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form
-              className="grid gap-3 sm:grid-cols-[2fr_3fr_auto] sm:items-end"
-              onSubmit={(event) => {
-                event.preventDefault();
-                const form = event.currentTarget;
-                const formData = new FormData(form);
-                startTransition(async () => {
-                  const result = await createHousehold(formData);
-                  if (!result.ok) {
-                    toast.error(result.error);
-                    return;
-                  }
-                  toast.success("Household created.");
-                  form.reset();
-                  setAdding(false);
-                });
-              }}
-            >
-              <div className="space-y-2">
-                <Label htmlFor="household-name">Name</Label>
+  return (
+    <div className="flex w-full flex-col gap-8">
+      <PageHeader title="Families" description={FAMILIES_DESCRIPTION} action={newFamilyButton} />
+
+      <PeopleTabs />
+
+      {adding ? (
+        <Card className="p-6">
+          <form
+            className="flex flex-col gap-5"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const formData = new FormData(event.currentTarget);
+              const name = formData.get("name")?.toString().trim() ?? "";
+              startTransition(async () => {
+                const result = await createHousehold(formData);
+                if (!result.ok) {
+                  toast.error(result.error);
+                  return;
+                }
+                toast.success(`${name || "Family"} created. Now add the people in it.`);
+                // Straight into the new family: the next job is adding people.
+                router.push(`/dashboard/people/households/${result.data.householdId}`);
+              });
+            }}
+          >
+            <h2 className="font-heading text-xl font-bold">New family</h2>
+            <div className="flex max-w-xl flex-col gap-2">
+              <Label htmlFor="household-name" className="text-base">
+                Family name
+              </Label>
+              <Input
+                id="household-name"
+                name="name"
+                required
+                autoFocus
+                placeholder="The Lopez family"
+              />
+            </div>
+            <AdvancedSection title="Add a note (optional)">
+              <div className="flex max-w-xl flex-col gap-2">
+                <Label htmlFor="household-notes" className="text-base">
+                  Note for your team
+                </Label>
                 <Input
-                  id="household-name"
-                  name="name"
-                  required
-                  placeholder="The Doe Household"
+                  id="household-notes"
+                  name="notes"
+                  placeholder="Grandma usually picks up on Wednesdays"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="household-notes">Notes (optional)</Label>
-                <Input id="household-notes" name="notes" />
-              </div>
-              <div className="flex gap-2">
-                <Button type="submit" disabled={pending}>
-                  Create
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  onClick={() => setAdding(false)}
-                >
-                  Cancel
-                </Button>
-              </div>
-            </form>
-          </CardContent>
+            </AdvancedSection>
+            <div className="flex flex-wrap gap-3">
+              <Button type="submit" size="lg" disabled={pending}>
+                {pending ? "Creating…" : "Create family"}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={pending}
+                onClick={() => setAdding(false)}
+              >
+                Cancel
+              </Button>
+            </div>
+          </form>
         </Card>
-      )}
+      ) : null}
 
-      {visible.length === 0 ? (
-        <Card>
-          <CardContent className="py-8 text-center text-sm text-muted-foreground">
-            {search.trim()
-              ? "Nobody by that name is in a household yet."
-              : "No households yet. Create one, then add people to it."}
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {visible.map((household) => (
-            <Link
-              key={household.id}
-              href={`/dashboard/people/households/${household.id}`}
-              className="rounded-xl border border-border bg-card p-4 transition-colors hover:border-accent"
-            >
-              <p className="font-heading text-base font-semibold">
-                {household.name}
-              </p>
-              <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Users className="size-3.5" aria-hidden />
-                {household.memberCount}{" "}
-                {household.memberCount === 1 ? "person" : "people"}
-              </p>
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                <Badge variant="muted">
-                  {household.guardianCount} guardian
-                  {household.guardianCount === 1 ? "" : "s"}
-                </Badge>
-                {household.dependentCount > 0 && (
-                  <Badge variant="info">
-                    {household.dependentCount}{" "}
-                    {household.dependentCount === 1 ? "child" : "children"}
-                  </Badge>
-                )}
-                {household.guardianCount === 0 && (
-                  <Badge variant="warning">No guardian</Badge>
-                )}
-              </div>
-            </Link>
-          ))}
+      <section aria-label="Find a family" className="flex flex-col gap-5">
+        <div className="relative">
+          <label htmlFor="household-search" className="sr-only">
+            Search families
+          </label>
+          <Search
+            className="pointer-events-none absolute left-5 top-1/2 size-6 -translate-y-1/2 text-muted-foreground"
+            aria-hidden
+          />
+          <input
+            id="household-search"
+            type="search"
+            value={search}
+            autoComplete="off"
+            placeholder="Search by family name or anyone in it"
+            onChange={(event) => setSearch(event.target.value)}
+            className="min-h-14 w-full rounded-2xl border-[1.5px] border-border bg-card pl-14 pr-5 text-lg text-foreground shadow-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-accent focus:ring-2 focus:ring-accent/25"
+          />
         </div>
-      )}
 
-      {unassignedCount > 0 && (
-        <p className="text-xs text-muted-foreground">
-          {unassignedCount}{" "}
-          {unassignedCount === 1 ? "person is" : "people are"} not in a household
-          yet. They can still be checked in: they just have no pickup
-          credential, so releasing them needs a staff override.
-        </p>
-      )}
+        {households.length === 0 ? (
+          <EmptyState
+            icon={Home}
+            title="No families yet"
+            description="Put people who live together in a family, so their children can be checked in and picked up safely."
+            action={
+              isAdmin && !adding ? (
+                <Button type="button" size="lg" onClick={() => setAdding(true)}>
+                  <Plus aria-hidden />
+                  New family
+                </Button>
+              ) : undefined
+            }
+          />
+        ) : visible.length === 0 ? (
+          <EmptyState
+            compact
+            icon={Search}
+            title={`No family matches “${search.trim()}”`}
+            description="Try a first name, a last name or the family's name. Someone not in a family yet won't show up here."
+            action={
+              <Button type="button" variant="outline" onClick={() => setSearch("")}>
+                Show all families
+              </Button>
+            }
+          />
+        ) : (
+          <List label="Families">
+            {visible.map((household) => {
+              const status = familyStatus(household);
+              return (
+                <ListRow
+                  key={household.id}
+                  href={`/dashboard/people/households/${household.id}`}
+                  leading={
+                    <span
+                      aria-hidden
+                      className="flex size-12 items-center justify-center rounded-full bg-primary/[0.08] text-primary dark:bg-accent/15 dark:text-accent"
+                    >
+                      <Home className="size-6" />
+                    </span>
+                  }
+                  title={household.name}
+                  subtitle={familySummary(household)}
+                  status={
+                    status ? <StatusBadge tone={status.tone}>{status.label}</StatusBadge> : undefined
+                  }
+                />
+              );
+            })}
+          </List>
+        )}
+
+        {unassignedCount > 0 ? (
+          <p className="text-[15px] text-muted-foreground">
+            {unassignedCount} {unassignedCount === 1 ? "person isn't" : "people aren't"} in
+            a family yet. They can still be checked in, but a staff member has
+            to release them without a code at pickup.
+          </p>
+        ) : null}
+      </section>
     </div>
   );
 }

@@ -2,10 +2,11 @@ import { redirect } from "next/navigation";
 
 import { EncoderDocsCard } from "@/components/live-streaming/encoder-docs-card";
 import { EncoderPairingCard } from "@/components/live-streaming/encoder-pairing-card";
-import { EncoderSetupCard } from "@/components/live-streaming/encoder-setup-card";
 import { PlatformsCard } from "@/components/live-streaming/platforms-card";
-import { RecordingSettingsCard } from "@/components/live-streaming/setup/recording-settings-card";
+import { StreamingSetupGuide } from "@/components/live-streaming/setup/streaming-setup-guide";
 import { WatchLinksCard } from "@/components/live-streaming/watch-links-card";
+import { AdvancedSection } from "@/components/ui/advanced-section";
+import { SectionHeader } from "@/components/ui/page-header";
 import { getChurchAuth } from "@/lib/auth/church";
 import { listEncoderDevices } from "@/lib/stream/encoder";
 import { getLiveBroadcastStatus } from "@/lib/stream/go-live";
@@ -16,8 +17,9 @@ import { createClient } from "@/lib/supabase/server";
 export const dynamic = "force-dynamic";
 
 /**
- * Stream setup: everything configured once and then left alone, kept off the
- * Sunday-morning screen.
+ * Set up streaming: three guided steps, done once and then left alone, kept
+ * off the Sunday-morning screen. Everything technical is one click away under
+ * "Technical details" (in step 1) or "Advanced" (below the steps).
  */
 export default async function StreamSetupPage() {
   const supabase = createClient();
@@ -42,21 +44,40 @@ export default async function StreamSetupPage() {
   });
 
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
-      <div className="flex flex-col gap-6">
-        <EncoderSetupCard ingestServerUrl={status.settings.ingestServerUrl} isAdmin={auth.isAdmin} />
-        <EncoderDocsCard />
+    <div className="flex w-full flex-col gap-8">
+      <SectionHeader
+        title="Set up streaming"
+        description="Three steps. You only need to do this once."
+      />
+
+      <StreamingSetupGuide
+        ingestServerUrl={status.settings.ingestServerUrl}
+        isAdmin={auth.isAdmin}
+        settings={settings}
+        series={series.map((item) => ({ id: item.id, name: item.name }))}
+        youtube={push("youtube")}
+        facebook={push("facebook")}
+      />
+
+      <AdvancedSection
+        title="Advanced"
+        description="Streaming PC pairing, encoder settings, embed code, and how your last service reached YouTube and Facebook"
+      >
         <EncoderPairingCard isAdmin={auth.isAdmin} devices={devices} />
-      </div>
-      <div className="flex flex-col gap-6">
-        <RecordingSettingsCard
-          initial={settings}
-          series={series.map((item) => ({ id: item.id, name: item.name }))}
-          isAdmin={auth.isAdmin}
-        />
-        <PlatformsCard isAdmin={auth.isAdmin} youtube={push("youtube")} facebook={push("facebook")} />
-        <WatchLinksCard shareLinks={status.shareLinks} />
-      </div>
+        <div className="border-t border-border pt-5">
+          <EncoderDocsCard />
+        </div>
+        <div className="border-t border-border pt-5">
+          <WatchLinksCard shareLinks={status.shareLinks} />
+        </div>
+        <div className="flex flex-col gap-4 border-t border-border pt-5">
+          <div className="flex flex-col gap-1">
+            <h3 className="font-heading text-lg font-semibold">YouTube and Facebook</h3>
+            <p className="text-[15px] text-muted-foreground">Whether your video reached them last time.</p>
+          </div>
+          <PlatformsCard isAdmin={auth.isAdmin} youtube={push("youtube")} facebook={push("facebook")} />
+        </div>
+      </AdvancedSection>
     </div>
   );
 }

@@ -1,5 +1,4 @@
 import { Suspense } from "react";
-import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getChurchAuth } from "@/lib/auth/church";
@@ -7,8 +6,8 @@ import { isPlatformAdminUser } from "@/lib/auth/superadmin";
 import { resolveSignedInLanding } from "@/lib/auth/signed-in-landing";
 import { Logo } from "@/components/brand/logo";
 import { Button } from "@/components/ui/button";
-import { LEGAL_PATHS } from "@/lib/legal/policy-versions";
-import { LoginForm } from "./login-form";
+import { LoginForm, LoginSkeleton } from "./login-form";
+import { LoginShell } from "./login-shell";
 
 export default async function LoginPage() {
   const supabase = createClient();
@@ -37,37 +36,11 @@ export default async function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top,var(--secondary),var(--background)_55%)] p-5">
-      <div className="w-full max-w-md">
-        <Suspense fallback={<div className="h-96 animate-pulse rounded-2xl bg-card" />}>
-          <LoginForm />
-        </Suspense>
-        <LegalLinks />
-      </div>
-    </main>
-  );
-}
-
-/**
- * Under the card rather than inside it: the card changes shape between sign-in,
- * magic link and reset, and these links should not move or disappear with it.
- * The sign-in page is also the first page anyone arriving at faithform.io sees,
- * so it is where a store reviewer looks for the policies.
- */
-function LegalLinks() {
-  return (
-    <nav
-      aria-label="Legal"
-      className="mt-6 flex items-center justify-center gap-4 text-sm text-muted-foreground"
-    >
-      <Link href={LEGAL_PATHS.privacy} className="hover:text-foreground hover:underline underline-offset-4">
-        Privacy
-      </Link>
-      <span aria-hidden>·</span>
-      <Link href={LEGAL_PATHS.terms} className="hover:text-foreground hover:underline underline-offset-4">
-        Terms
-      </Link>
-    </nav>
+    <LoginShell>
+      <Suspense fallback={<LoginSkeleton />}>
+        <LoginForm />
+      </Suspense>
+    </LoginShell>
   );
 }
 

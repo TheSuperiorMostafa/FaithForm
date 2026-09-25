@@ -68,7 +68,7 @@ function MethodCard({
       <span className="rounded-lg bg-secondary p-2 text-accent"><Icon className="size-4" /></span>
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-semibold">{title}</span>
-        <span className="block text-xs leading-5 text-muted-foreground">{description}</span>
+        <span className="block text-sm leading-5 text-muted-foreground">{description}</span>
       </span>
       <Switch checked={checked} disabled={disabled} onCheckedChange={onChange} aria-label={title} />
     </div>
@@ -117,21 +117,21 @@ export function EventAttendanceFields({ value, onChange, campuses, policy, allDa
           <div className="space-y-2">
             <div>
               <p className="text-sm font-semibold">How can people check in?</p>
-              <p className="text-xs text-muted-foreground">Staff can always mark the roster. Add any self check-in methods you want.</p>
+              <p className="text-sm text-muted-foreground">Staff can always mark the roster. Add any self check-in methods you want.</p>
             </div>
             <MethodCard icon={Radio} title="Automatic arrival" description={!policy.geofenceEnabled ? "Enable automatic check-in in Attendance setup first." : !campus?.hasCoordinates ? "Choose a published campus with a mapped location." : "The app recognizes arrival during the check-in window."} checked={value.automaticEnabled} disabled={disabled || locked || !policy.geofenceEnabled || !campus?.hasCoordinates} onChange={(automaticEnabled) => update({ automaticEnabled })} />
             <MethodCard icon={QrCode} title="Event code" description={policy.qrEnabled ? "People scan or enter the event code." : "Enable code check-in in Attendance setup first."} checked={value.codeEnabled} disabled={disabled || locked || !policy.qrEnabled} onChange={(codeEnabled) => update({ codeEnabled })} />
             <MethodCard icon={Tablet} title="Check-in station" description={policy.kioskEnabled ? "Use a shared device at the welcome desk." : "Enable kiosk check-in in Attendance setup first."} checked={value.kioskEnabled} disabled={disabled || locked || !policy.kioskEnabled} onChange={(kioskEnabled) => update({ kioskEnabled })} />
             {(!policy.geofenceEnabled || !policy.qrEnabled || !policy.kioskEnabled) && (
-              <Link href="/dashboard/attendance/setup" className="inline-flex text-xs font-semibold text-accent underline underline-offset-2">Manage church-wide check-in methods</Link>
+              <Link href="/dashboard/attendance/setup" className="inline-flex text-sm font-semibold text-accent underline underline-offset-2">Manage church-wide check-in methods</Link>
             )}
           </div>
 
           <div className="space-y-2">
             <div className="flex items-center gap-2 text-sm font-semibold"><Clock3 className="size-4 text-accent" />Check-in window</div>
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1"><Label className="text-xs">Opens before</Label><Select disabled={disabled || locked} value={value.checkinOpensMinutesBefore} onChange={(event) => update({ checkinOpensMinutesBefore: Number(event.target.value) })}>{[0, 15, 30, 45, 60, 90, 120].map((minutes) => <option key={minutes} value={minutes}>{minutes === 0 ? "At start time" : `${minutes} minutes`}</option>)}</Select></div>
-              <div className="space-y-1"><Label className="text-xs">Closes after</Label><Select disabled={disabled || locked} value={value.checkinClosesMinutesAfter} onChange={(event) => update({ checkinClosesMinutesAfter: Number(event.target.value) })}>{[15, 30, 45, 60, 90, 120, 180, 240].map((minutes) => <option key={minutes} value={minutes}>{minutes} minutes</option>)}</Select></div>
+              <div className="space-y-1"><Label className="text-sm">Opens before</Label><Select disabled={disabled || locked} value={value.checkinOpensMinutesBefore} onChange={(event) => update({ checkinOpensMinutesBefore: Number(event.target.value) })}>{[0, 15, 30, 45, 60, 90, 120].map((minutes) => <option key={minutes} value={minutes}>{minutes === 0 ? "At start time" : `${minutes} minutes`}</option>)}</Select></div>
+              <div className="space-y-1"><Label className="text-sm">Closes after</Label><Select disabled={disabled || locked} value={value.checkinClosesMinutesAfter} onChange={(event) => update({ checkinClosesMinutesAfter: Number(event.target.value) })}>{[15, 30, 45, 60, 90, 120, 180, 240].map((minutes) => <option key={minutes} value={minutes}>{minutes} minutes</option>)}</Select></div>
             </div>
           </div>
         </div>
@@ -162,10 +162,17 @@ export function EventAttendanceEditor({ event, campuses, policy, initial, canEdi
         body: JSON.stringify({ ...draft, calendarEventId: event.googleEventId, calendarId: event.calendarId, calendarSource: event.source ?? (event.googleEventId.startsWith("apple:") ? "apple" : "google"), title: event.title, startAt: event.startAt, endAt: event.endAt, allDay: Boolean(event.allDay) }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "Could not save attendance.");
+      if (!response.ok) throw new Error(data.error ?? "We couldn't save check-in for this event. Please try again.");
       setDraft(data.settings); onSaved?.(data.settings);
       setMessage(data.settings.enabled ? "Attendance is ready for this event." : "Attendance is off for this event.");
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Could not save attendance."); }
+    } catch (error) {
+      // The route answers in plain words; a dropped connection does not.
+      setMessage(
+        error instanceof Error && !(error instanceof TypeError || error instanceof SyntaxError)
+          ? error.message
+          : "We couldn't save check-in for this event. Check your connection and try again.",
+      );
+    }
     finally { setSaving(false); }
   }
 
@@ -173,7 +180,7 @@ export function EventAttendanceEditor({ event, campuses, policy, initial, canEdi
     <div className="mt-6 space-y-3 border-t pt-6">
       <div><h3 className="font-heading text-lg font-bold">Event attendance</h3><p className="text-sm text-muted-foreground">Choose whether and how this event counts attendance.</p></div>
       <EventAttendanceFields value={draft} onChange={setDraft} campuses={campuses} policy={policy} allDay={event.allDay || !event.endAt} disabled={!canEdit || saving} locked={locked} />
-      {locked && <p className="text-xs text-muted-foreground">Settings are locked because check-in has opened. You can still turn attendance off in an emergency.</p>}
+      {locked && <p className="text-sm text-muted-foreground">Settings are locked because check-in has opened. You can still turn attendance off in an emergency.</p>}
       {message && <p className="flex items-center gap-2 rounded-lg border px-3 py-2 text-sm"><CheckCircle2 className="size-4 text-accent" />{message}</p>}
       {canEdit && <Button type="button" onClick={save} disabled={saving || (locked && draft.enabled)}>{saving ? <><Loader2 className="size-4 animate-spin" />Saving…</> : "Save attendance"}</Button>}
     </div>

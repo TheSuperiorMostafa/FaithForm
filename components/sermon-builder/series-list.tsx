@@ -1,32 +1,54 @@
 import Link from "next/link";
-import { formatDistanceToNow } from "@/lib/format-date";
-import { Card, CardContent } from "@/components/ui/card";
+import { ChevronRight, Layers, Plus } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import type { SermonSeriesListItem } from "@/lib/queries/sermons";
 
 export function SeriesList({ series }: { series: SermonSeriesListItem[] }) {
   if (series.length === 0) {
     return (
-      <p className="rounded-xl border border-dashed border-border bg-card/60 p-8 text-center text-sm text-muted-foreground">
-        No series yet. Plan a multi-week series to organize your preaching calendar.
-      </p>
+      <EmptyState
+        icon={Layers}
+        title="No series yet"
+        description="Plan several weeks of sermons around one theme. Each week gets a title and a passage to start from."
+        action={
+          <Button
+            variant="outline"
+            nativeButton={false}
+            render={<Link href="/dashboard/sermon-builder/series/new" />}
+          >
+            <Plus aria-hidden className="size-5" />
+            New series
+          </Button>
+        }
+      />
     );
   }
 
   return (
-    <ul className="flex flex-col gap-3">
+    <ul
+      aria-label="Series"
+      className="divide-y divide-border rounded-3xl border border-border bg-card p-2 shadow-sm"
+    >
       {series.map((s) => (
         <li key={s.id}>
-          <Link href={`/dashboard/sermon-builder/series/${s.id}`}>
-            <Card className="transition-all hover:border-accent/50 hover:shadow-card-hover">
-              <CardContent className="p-5">
-                <p className="font-heading text-lg font-semibold">{s.title}</p>
-                <p className="text-sm text-muted-foreground">{s.theme}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {s.weeks_planned} weeks · updated{" "}
-                  {formatDistanceToNow(s.updated_at)}
-                </p>
-              </CardContent>
-            </Card>
+          <Link
+            href={`/dashboard/sermon-builder/series/${s.id}`}
+            className="flex min-h-[80px] items-center gap-4 rounded-2xl px-4 py-3 transition-colors hover:bg-accent/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <span
+              aria-hidden
+              className="flex size-14 shrink-0 items-center justify-center rounded-2xl bg-primary/[0.07] text-primary dark:bg-accent/15 dark:text-accent"
+            >
+              <Layers className="size-6" strokeWidth={1.75} />
+            </span>
+            <span className="min-w-0 flex-1 space-y-1">
+              <span className="block truncate text-base font-semibold text-foreground">{s.title}</span>
+              <span className="block truncate text-[15px] text-muted-foreground">
+                {s.weeks_planned} weeks{s.theme ? ` · ${s.theme}` : ""}
+              </span>
+            </span>
+            <ChevronRight aria-hidden className="size-5 shrink-0 text-muted-foreground" />
           </Link>
         </li>
       ))}

@@ -25,41 +25,39 @@ export function SermonsPagination({
   }
 
   return (
-    <div className="flex items-center justify-between gap-4 pt-2">
-      <p className="text-sm text-muted-foreground">
+    <div className="flex flex-wrap items-center justify-between gap-4">
+      <p className="text-[15px] text-muted-foreground">
         Page {page} of {totalPages} · {total} sermon{total === 1 ? "" : "s"}
       </p>
       <div className="flex gap-2">
         {prevPage ? (
           <Button
             variant="outline"
-            size="sm"
             nativeButton={false}
             render={<Link href={pageHref(prevPage)} />}
           >
-            <ChevronLeft className="size-4" />
+            <ChevronLeft aria-hidden className="size-5" />
             Previous
           </Button>
         ) : (
-          <Button variant="outline" size="sm" disabled>
-            <ChevronLeft className="size-4" />
+          <Button variant="outline" disabled>
+            <ChevronLeft aria-hidden className="size-5" />
             Previous
           </Button>
         )}
         {nextPage ? (
           <Button
             variant="outline"
-            size="sm"
             nativeButton={false}
             render={<Link href={pageHref(nextPage)} />}
           >
             Next
-            <ChevronRight className="size-4" />
+            <ChevronRight aria-hidden className="size-5" />
           </Button>
         ) : (
-          <Button variant="outline" size="sm" disabled>
+          <Button variant="outline" disabled>
             Next
-            <ChevronRight className="size-4" />
+            <ChevronRight aria-hidden className="size-5" />
           </Button>
         )}
       </div>

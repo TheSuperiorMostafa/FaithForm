@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { Smartphone } from "lucide-react";
 
 import {
   getCampusesForSettings,
@@ -6,10 +7,12 @@ import {
 } from "@/app/dashboard/settings/faithform-actions";
 import { getPendingJoinRequests } from "@/app/dashboard/people/claim-actions";
 import { AutomaticCheckinSummaryCard } from "@/components/attendance/automatic-checkin-summary-card";
+import { FaithFormVisibilityCard } from "@/components/member-app/app-visibility-card";
 import { ChurchInfoEditor } from "@/components/member-app/church-info-editor";
 import { JoinRequestsPanel } from "@/components/people/join-requests-panel";
-import { FaithFormVisibilityCard } from "@/components/settings/faithform-visibility-card";
 import { VisitorInvitationsCard } from "@/components/settings/visitor-invitations-card";
+import { ErrorState } from "@/components/ui/error-state";
+import { PageHeader, SectionHeader } from "@/components/ui/page-header";
 import { readChurchAutomaticReadiness } from "@/lib/attendance/v2/geofence-config";
 import { getChurchAuth } from "@/lib/auth/church";
 import { getFeatureAccess } from "@/lib/features/access";
@@ -29,12 +32,13 @@ export default async function MemberAppPage() {
 
   if (!auth.churchId) {
     return (
-      <div className="mx-auto flex w-full max-w-2xl flex-col items-center justify-center gap-3 py-16 text-center">
+      <div className="flex w-full flex-col items-center justify-center gap-3 py-16 text-center">
         <h2 className="text-xl font-semibold text-foreground">
-          No church linked yet
+          Your account isn&apos;t connected to a church yet
         </h2>
         <p className="max-w-md text-base text-muted-foreground">
-          Link your account to a church to manage how it appears in the app.
+          Ask your church admin for an invite, then come back here to manage
+          how your church appears in the app.
         </p>
       </div>
     );
@@ -58,30 +62,24 @@ export default async function MemberAppPage() {
     (relationship) => relationship.state === "pending",
   );
 
+  const canUseAttendance = access?.allowed.includes("attendance") ?? false;
+
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-8">
-      <div>
-        <h1 className="border-l-4 border-accent pl-3 font-heading text-[26px] font-bold">
-          Member App
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Your church&apos;s page in the app — what people see when they tap
-          Church info — and how people find and add your church.
-        </p>
-      </div>
+    <div className="flex w-full flex-col gap-8">
+      <PageHeader
+        title="Church App"
+        icon={Smartphone}
+        description="Your church's page in the FaithForm app, and how people find and add your church."
+      />
 
       {joinRequests.length > 0 && <JoinRequestsPanel requests={joinRequests} />}
 
       <section className="flex flex-col gap-4" aria-labelledby="church-page-heading">
-        <div>
-          <h2 id="church-page-heading" className="font-heading text-xl font-bold">
-            Church page
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Everything here shows on your church&apos;s page in the iPhone and
-            Android apps. The website and phone assistant use the same details.
-          </p>
-        </div>
+        <SectionHeader
+          id="church-page-heading"
+          title="Your church page"
+          description="What people see when they open your church in the app. Your website and phone assistant use the same details, so a change here updates them too."
+        />
         {churchInfo ? (
           <ChurchInfoEditor
             initial={churchInfo.info}
@@ -89,22 +87,20 @@ export default async function MemberAppPage() {
             canEdit={auth.isAdmin}
           />
         ) : (
-          <p className="rounded-xl border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
-            Your church page could not be loaded right now. Refresh to try again.
-          </p>
+          <ErrorState
+            title="We couldn't load your church page"
+            description="Nothing was changed. Refresh the page to try again."
+            compact
+          />
         )}
       </section>
 
       <section className="flex flex-col gap-4" aria-labelledby="church-access-heading">
-        <div>
-          <h2 id="church-access-heading" className="font-heading text-xl font-bold">
-            How people add your church
-          </h2>
-          <p className="text-sm text-muted-foreground">
-            Each person has one church in the app. Invitation links are the
-            easiest way in; listing in search is optional.
-          </p>
-        </div>
+        <SectionHeader
+          id="church-access-heading"
+          title="How people add your church"
+          description="Each person has one church in the app. Invitation links are the easiest way in; being listed in search is optional."
+        />
         <div className="grid gap-5 lg:grid-cols-2">
           <FaithFormVisibilityCard
             isAdmin={auth.isAdmin}
@@ -113,6 +109,7 @@ export default async function MemberAppPage() {
             joinPolicy={discovery.joinPolicy}
             slug={discovery.slug}
             campuses={campuses}
+            canFindAddress={auth.isAdmin && canUseAttendance}
           />
           <VisitorInvitationsCard
             isAdmin={auth.isAdmin}
@@ -129,7 +126,7 @@ export default async function MemberAppPage() {
             radiusMeters: region.radiusMeters,
           }))}
           nextWindow={readiness.windows[0] ?? null}
-          canOpenSetup={access?.allowed.includes("attendance") ?? false}
+          canOpenSetup={canUseAttendance}
         />
       ) : null}
     </div>

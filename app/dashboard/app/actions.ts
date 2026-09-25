@@ -9,6 +9,7 @@ import { syncChurchOccurrencesAfterChange } from "@/lib/attendance/v2/occurrence
 import { normalizeSiteImage } from "@/lib/security/validate-image";
 import { getAspect, type ImageAspectKey } from "@/lib/sites/image-aspects";
 import { getChurchAuth } from "@/lib/auth/church";
+import { toUserError } from "@/lib/errors/user-error";
 import {
   MAX_QUICK_LINKS,
   MAX_QUICK_LINK_LABEL,
@@ -111,8 +112,7 @@ export async function uploadChurchAppImage(formData: FormData): Promise<UploadRe
     .from("church-covers")
     .upload(path, normalized.buffer, { contentType: normalized.contentType, upsert: false });
   if (error) {
-    console.error("[member-app] image upload failed:", error.message);
-    return { ok: false, error: "That image could not be uploaded. Please try again." };
+    return { ok: false, error: toUserError(error, "That image could not be uploaded.") };
   }
   return { ok: true, url: admin.storage.from("church-covers").getPublicUrl(path).data.publicUrl };
 }
@@ -241,8 +241,7 @@ export async function saveChurchAppInfo(input: ChurchAppInfo): Promise<SaveChurc
       admin,
     );
   } catch (error) {
-    console.error("[member-app] church info save failed:", error);
-    return fail("Those details could not be saved. Please try again.");
+    return fail(toUserError(error, "Those details could not be saved."));
   }
 
   const { error: linksError } = await admin
@@ -261,11 +260,17 @@ export async function saveChurchAppInfo(input: ChurchAppInfo): Promise<SaveChurc
   revalidatePath("/dashboard/website/details");
 
   if (linksError) {
-    // 42703: `app_links` does not exist yet. Everything else saved.
+    // 42703: `app_links` does not exist yet (the column arrives with a
+    // database update). Everything else saved. `field` stays "quickLinks" —
+    // Settings › Church info relies on that prefix to tell this apart.
+    if (linksError.code === "42703") {
+      return fail(
+        "Links aren't available for your church yet. Everything else was saved.",
+        "quickLinks",
+      );
+    }
     return fail(
-      linksError.code === "42703"
-        ? "Everything saved except your links — the database needs updating first (migration 0090)."
-        : "Everything saved except your links. Please try again.",
+      toUserError(linksError, "Everything was saved except your links."),
       "quickLinks",
     );
   }

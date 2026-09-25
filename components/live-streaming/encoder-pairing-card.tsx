@@ -2,16 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
-import { Laptop, RefreshCw } from "lucide-react";
+import { Laptop, Loader2, RefreshCw } from "lucide-react";
 import { createStreamingPcPairingCode } from "@/app/dashboard/live-streaming/actions";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import type { EncoderDevice } from "@/lib/stream/encoder";
 
 type EncoderPairingCardProps = {
@@ -19,6 +12,10 @@ type EncoderPairingCardProps = {
   devices: EncoderDevice[];
 };
 
+/**
+ * Pairing a streaming PC with FaithForm's helper program, so Go live can start
+ * OBS for you. Rare and technical, so it lives under Setup › Advanced.
+ */
 export function EncoderPairingCard({ isAdmin, devices }: EncoderPairingCardProps) {
   const [pending, startTransition] = useTransition();
   const [pairingCode, setPairingCode] = useState<string | null>(null);
@@ -30,12 +27,12 @@ export function EncoderPairingCard({ isAdmin, devices }: EncoderPairingCardProps
     startTransition(async () => {
       const result = await createStreamingPcPairingCode();
       if (!result.ok || !result.pairingCode) {
-        toast.error(result.error ?? "Could not create pairing code.");
+        toast.error(result.error ?? "We couldn't create a pairing code. Please try again.");
         return;
       }
       setPairingCode(result.pairingCode);
       setExpiresAt(result.expiresAt ?? null);
-      toast.success("Pairing code created.");
+      toast.success("Pairing code created. Enter it on your streaming PC.");
     });
   };
 
@@ -44,66 +41,57 @@ export function EncoderPairingCard({ isAdmin, devices }: EncoderPairingCardProps
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base">
-          <Laptop className="size-4 text-accent" aria-hidden />
-          Streaming PC
-        </CardTitle>
-        <CardDescription>
-          Pair the computer running OBS so FaithForm can start streams for you.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        {pairedDevice ? (
-          <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 text-sm">
-            <p className="font-medium">{pairedDevice.label}</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Paired {pairedDevice.pairedAt ? new Date(pairedDevice.pairedAt).toLocaleString() : ""}
-              {pairedDevice.lastSeenAt
-                ? ` · Last seen ${new Date(pairedDevice.lastSeenAt).toLocaleString()}`
-                : " · Agent not running"}
-            </p>
-          </div>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            No streaming PC paired yet.
+    <div className="flex flex-col gap-4">
+      <div className="flex items-start gap-3">
+        <Laptop className="mt-1 size-5 shrink-0 text-accent" aria-hidden />
+        <div className="flex flex-col gap-1">
+          <h3 className="font-heading text-lg font-semibold">Pair a streaming PC</h3>
+          <p className="text-[15px] text-muted-foreground">
+            Pair the computer running OBS so FaithForm can start streams for you.
           </p>
-        )}
+        </div>
+      </div>
 
-        {pairingCode ? (
-          <div className="rounded-xl border border-border bg-muted/30 p-4">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Pairing code
+      {pairedDevice ? (
+        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-4 text-[15px]">
+          <p className="font-medium">{pairedDevice.label}</p>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Paired {pairedDevice.pairedAt ? new Date(pairedDevice.pairedAt).toLocaleString() : ""}
+            {pairedDevice.lastSeenAt
+              ? ` · Last seen ${new Date(pairedDevice.lastSeenAt).toLocaleString()}`
+              : " · The helper program isn't running"}
+          </p>
+        </div>
+      ) : (
+        <p className="text-[15px] text-muted-foreground">No streaming PC paired yet.</p>
+      )}
+
+      {pairingCode ? (
+        <div className="rounded-xl border border-border bg-muted/30 p-4">
+          <p className="text-sm font-semibold text-muted-foreground">Pairing code</p>
+          <p className="mt-2 font-mono text-3xl font-bold tracking-[0.3em]">{pairingCode}</p>
+          {expiresAt ? (
+            <p className="mt-2 text-sm text-muted-foreground">
+              Expires {new Date(expiresAt).toLocaleTimeString()}
             </p>
-            <p className="mt-2 font-mono text-3xl font-bold tracking-[0.3em]">
-              {pairingCode}
-            </p>
-            {expiresAt ? (
-              <p className="mt-2 text-xs text-muted-foreground">
-                Expires {new Date(expiresAt).toLocaleTimeString()}
-              </p>
-            ) : null}
-            <pre className="mt-4 overflow-x-auto rounded-lg bg-background p-3 text-xs text-muted-foreground">
+          ) : null}
+          <p className="mt-4 text-sm text-muted-foreground">On the streaming PC, run:</p>
+          <pre className="mt-2 overflow-x-auto rounded-lg bg-background p-3 text-sm text-muted-foreground">
 {`cd infra/stream-agent
 npm install
 FAITHFORM_PAIRING_CODE=${pairingCode} npm start`}
-            </pre>
-          </div>
-        ) : null}
+          </pre>
+        </div>
+      ) : null}
 
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="gap-2"
-          disabled={pending}
-          onClick={createCode}
-        >
-          <RefreshCw className="size-4" />
-          {pairingCode ? "New pairing code" : "Pair streaming PC"}
-        </Button>
-      </CardContent>
-    </Card>
+      <Button type="button" variant="outline" className="w-fit gap-2" disabled={pending} onClick={createCode}>
+        {pending ? (
+          <Loader2 className="size-4 motion-safe:animate-spin" aria-hidden />
+        ) : (
+          <RefreshCw className="size-4" aria-hidden />
+        )}
+        {pairingCode ? "Create a new pairing code" : "Pair streaming PC"}
+      </Button>
+    </div>
   );
 }

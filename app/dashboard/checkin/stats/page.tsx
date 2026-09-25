@@ -21,7 +21,7 @@ export default async function CheckinStatsPage({
 
   const { weeks: weekStarts, rows } = await getLocationStats(
     auth.churchId,
-    { weeks, endWeekStart: serviceWeekStart(auth.churchTimezone) },
+    { weeks, endWeekStart: serviceWeekStart(auth.churchTimezone), strict: true },
     createClient(),
   );
 

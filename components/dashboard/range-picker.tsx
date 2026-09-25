@@ -5,9 +5,9 @@ import { cn } from "@/lib/utils";
 import type { DashboardRange } from "@/lib/queries/dashboard";
 
 const ranges: { value: DashboardRange; label: string }[] = [
-  { value: "week", label: "Week" },
-  { value: "month", label: "Month" },
-  { value: "all", label: "All" },
+  { value: "week", label: "This week" },
+  { value: "month", label: "This month" },
+  { value: "all", label: "All time" },
 ];
 
 type RangePickerProps = {
@@ -45,10 +45,10 @@ export function RangePicker({ value, className }: RangePickerProps) {
           type="button"
           onClick={() => setRange(v)}
           className={cn(
-            "rounded-full px-3 py-1.5 text-xs font-semibold transition-all",
+            "min-h-10 rounded-full px-4 text-[15px] font-semibold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
             value === v
-              ? "bg-accent text-accent-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground",
+              ? "bg-primary text-primary-foreground shadow-sm"
+              : "text-foreground/70 hover:text-foreground",
           )}
           aria-pressed={value === v}
         >

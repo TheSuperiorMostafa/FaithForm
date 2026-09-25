@@ -1,13 +1,16 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Plus } from "lucide-react";
+import { BookOpen, Layers, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PageHeader } from "@/components/ui/page-header";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SermonList } from "@/components/sermon-builder/sermon-list";
 import { SermonsPagination } from "@/components/sermon-builder/sermons-pagination";
 import { SeriesList } from "@/components/sermon-builder/series-list";
 import { getChurchAuth } from "@/lib/auth/church";
 import { listSermons, listSeries } from "@/lib/queries/sermons";
+import { SERMONS_DESCRIPTION, SERMONS_TITLE } from "@/lib/sermon-builder/page-copy";
+import { listSermonIdsWithSharedSlides } from "@/lib/sermons/v1/presentation";
 
 export const dynamic = "force-dynamic";
 
@@ -44,52 +47,59 @@ export default async function SermonBuilderPage({ searchParams }: PageProps) {
 
   const currentPage = Math.min(page, totalPages);
 
+  // Status comes from what members can see, so a sermon taken out of the app
+  // reads "Draft" again. Slides are shared separately from notes.
+  const withSharedSlides = await listSermonIdsWithSharedSlides({
+    churchId,
+    sermonIds: sermons.map((s) => s.id),
+  });
+
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="border-l-4 border-accent pl-3 font-heading text-[26px] font-bold">
-            Sermon Builder
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Scripture slide decks with themed PowerPoint exports — then turn any
-            deck into a lesson.
-          </p>
-        </div>
-        <div className="flex gap-2">
+    <div className="flex w-full flex-col gap-8">
+      <PageHeader
+        title={SERMONS_TITLE}
+        description={SERMONS_DESCRIPTION}
+        icon={BookOpen}
+        secondary={
           <Button
             variant="outline"
-            size="sm"
+            size="lg"
             nativeButton={false}
             render={<Link href="/dashboard/sermon-builder/series/new" />}
           >
+            <Layers aria-hidden className="size-5" />
             New series
           </Button>
+        }
+        action={
           <Button
-            size="sm"
+            size="lg"
             nativeButton={false}
             render={<Link href="/dashboard/sermon-builder/new" />}
           >
-            <Plus className="size-4" strokeWidth={1.75} />
+            <Plus aria-hidden className="size-5" />
             New sermon
           </Button>
-        </div>
-      </div>
+        }
+      />
 
       <Tabs defaultValue="sermons">
-        <TabsList>
+        <TabsList aria-label="Sermons or series">
           <TabsTrigger value="sermons">Sermons ({sermonTotal})</TabsTrigger>
           <TabsTrigger value="series">Series ({series.length})</TabsTrigger>
         </TabsList>
-        <TabsContent value="sermons" className="flex flex-col gap-4">
-          <SermonList sermons={sermons} />
+        <TabsContent value="sermons" className="mt-6 flex flex-col gap-6">
+          <SermonList
+            sermons={sermons}
+            sermonIdsWithSharedSlides={[...withSharedSlides]}
+          />
           <SermonsPagination
             page={currentPage}
             totalPages={totalPages}
             total={sermonTotal}
           />
         </TabsContent>
-        <TabsContent value="series">
+        <TabsContent value="series" className="mt-6">
           <SeriesList series={series} />
         </TabsContent>
       </Tabs>

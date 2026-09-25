@@ -57,6 +57,7 @@ export default async function WebsiteDomainPage() {
       faithformAddress={faithformAddress}
       previewUrl={slug ? `${getCanonicalSiteUrl()}/sites/${slug}?preview=1` : null}
       canEdit={auth.isAdmin}
+      churchName={(church?.name as string | null) ?? null}
       defaults={{
         contactName: null,
         contactEmail: (church?.email as string | null) ?? null,

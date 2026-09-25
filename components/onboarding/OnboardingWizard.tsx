@@ -11,12 +11,14 @@ import {
   uploadChurchLogo,
 } from "@/app/onboarding/actions";
 import { OnboardingProgress } from "@/components/onboarding/onboarding-progress";
+import { ONBOARDING_STEP_LABELS } from "@/components/onboarding/step-labels";
 import { StepAccount } from "@/components/onboarding/steps/step-account";
 import { StepDone } from "@/components/onboarding/steps/step-done";
 import { StepFacebook } from "@/components/onboarding/steps/step-facebook";
 import { StepGoogle } from "@/components/onboarding/steps/step-google";
 import { StepProfile } from "@/components/onboarding/steps/step-profile";
 import { StepWelcome } from "@/components/onboarding/steps/step-welcome";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
@@ -48,14 +50,7 @@ type OnboardingWizardProps = {
   integrationStatus: IntegrationStatus;
 };
 
-const STEP_LABELS = [
-  "Welcome",
-  "Account",
-  "Profile",
-  "Google",
-  "Facebook",
-  "Done",
-];
+const STEP_LABELS = [...ONBOARDING_STEP_LABELS];
 
 export function OnboardingWizard(props: OnboardingWizardProps) {
   const router = useRouter();
@@ -228,7 +223,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
             awaitingEmailConfirmation ? (
               <div role="status" className="space-y-3 text-center">
                 <h2 className="font-heading text-2xl font-semibold text-foreground">Check your email</h2>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-base text-muted-foreground">
                   We sent a confirmation link to {props.adminEmail}. Open it to continue setting up {props.churchName}.
                 </p>
               </div>
@@ -277,8 +272,14 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
           {step === 6 && (
             <StepDone
               churchName={props.churchName}
-              accountCreated={accountCreated}
-              profileSaved={profileSaved}
+              // State from this visit, or evidence it happened on an earlier
+              // one (returning from Google/Facebook reloads the page). Never
+              // assumed: the summary must not claim what did not happen.
+              accountCreated={accountCreated || props.initialStep > 2}
+              profileSaved={
+                profileSaved ||
+                Boolean(profile.address || profile.phone || profile.logoUrl || profile.website)
+              }
               integrations={integrations}
               pending={pending && !completionDone}
               error={error}
@@ -288,13 +289,9 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
 
         {step > 1 && step < 6 && step !== 2 && step !== 3 && (
           <div className="mt-8 flex items-center justify-between border-t border-border pt-6">
-            <button
-              type="button"
-              onClick={() => goToStep(step - 1)}
-              className="text-sm text-muted-foreground hover:text-foreground"
-            >
+            <Button type="button" variant="ghost" onClick={() => goToStep(step - 1)}>
               ← Back
-            </button>
+            </Button>
           </div>
         )}
       </Card>

@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { AlertTriangle, Check, ChevronDown, MessageSquare } from "lucide-react";
+import { ChevronDown, MessageSquare, MessagesSquare } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { describeFollowUpFailure } from "@/lib/attendance/follow-up-errors";
 import { formatPhoneDisplay } from "@/lib/people/validate-member";
 import type {
   FollowUpLogStatus,
@@ -13,7 +15,7 @@ import { cn } from "@/lib/utils";
 
 const STATUS_LABEL: Record<FollowUpLogStatus, string> = {
   sent: "Sent",
-  failed: "Failed",
+  failed: "Not delivered",
   skipped: "Not sent",
 };
 
@@ -33,20 +35,9 @@ function formatTime(iso: string): string {
   });
 }
 
-function StatusBadge({ status }: { status: FollowUpLogStatus }) {
-  if (status === "sent") {
-    return (
-      <Badge variant="secondary" className="gap-1">
-        <Check className="size-3" />
-        {STATUS_LABEL.sent}
-      </Badge>
-    );
-  }
+function LogStatus({ status }: { status: FollowUpLogStatus }) {
   return (
-    <Badge variant="destructive" className="gap-1">
-      <AlertTriangle className="size-3" />
-      {STATUS_LABEL[status]}
-    </Badge>
+    <StatusBadge tone={status === "sent" ? "done" : "attention"}>{STATUS_LABEL[status]}</StatusBadge>
   );
 }
 
@@ -58,10 +49,11 @@ export function FollowUpLog({ sundays }: { sundays: FollowUpLogSunday[] }) {
 
   if (sundays.length === 0) {
     return (
-      <p className="rounded-xl border border-dashed border-border px-5 py-12 text-center text-base text-muted-foreground">
-        No follow-up texts have been sent yet. Once you send check-ins from the
-        Follow-up page, every message shows up here.
-      </p>
+      <EmptyState
+        icon={MessagesSquare}
+        title="No texts sent yet"
+        description="When you text people from the Follow-up page, every message shows up here."
+      />
     );
   }
 
@@ -84,7 +76,7 @@ export function FollowUpLog({ sundays }: { sundays: FollowUpLogSunday[] }) {
               type="button"
               onClick={() => toggle(sunday.serviceDate)}
               aria-expanded={open}
-              className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-muted/40"
+              className="flex min-h-16 w-full items-center justify-between gap-3 px-5 py-4 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             >
               <div className="flex flex-col gap-1">
                 <span className="font-heading text-base font-semibold text-foreground">
@@ -94,7 +86,7 @@ export function FollowUpLog({ sundays }: { sundays: FollowUpLogSunday[] }) {
                   {sunday.entries.length}{" "}
                   {sunday.entries.length === 1 ? "message" : "messages"}
                   {sunday.failedCount > 0 &&
-                    ` · ${sunday.failedCount} needing attention`}
+                    ` · ${sunday.failedCount} not delivered`}
                 </span>
               </div>
               <ChevronDown
@@ -110,7 +102,7 @@ export function FollowUpLog({ sundays }: { sundays: FollowUpLogSunday[] }) {
                 {sunday.entries.map((entry) => (
                   <li
                     key={entry.id}
-                    className="flex flex-col gap-2 px-5 py-4 text-sm"
+                    className="flex flex-col gap-2 px-5 py-4 text-[15px]"
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex flex-wrap items-baseline gap-2">
@@ -122,22 +114,28 @@ export function FollowUpLog({ sundays }: { sundays: FollowUpLogSunday[] }) {
                             "No number on file"}
                         </span>
                       </div>
-                      <StatusBadge status={entry.status} />
+                      <LogStatus status={entry.status} />
                     </div>
 
-                    <p className="flex gap-2 rounded-xl bg-muted/50 px-3 py-2 leading-relaxed text-foreground">
-                      <MessageSquare
-                        className="mt-0.5 size-4 shrink-0 text-muted-foreground"
-                        strokeWidth={1.75}
-                      />
-                      {entry.message}
-                    </p>
+                    {entry.message && entry.message !== "(not sent)" ? (
+                      <p className="flex gap-2 rounded-xl bg-muted/50 px-3 py-2 leading-relaxed text-foreground">
+                        <MessageSquare
+                          className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+                          strokeWidth={1.75}
+                          aria-hidden
+                        />
+                        {entry.message}
+                      </p>
+                    ) : null}
 
-                    {entry.error && (
-                      <p className="text-xs text-destructive">{entry.error}</p>
-                    )}
+                    {/* The raw reason stays in the database for staff. */}
+                    {entry.status !== "sent" && describeFollowUpFailure(entry.error) ? (
+                      <p className="text-sm font-medium text-destructive">
+                        {describeFollowUpFailure(entry.error)}
+                      </p>
+                    ) : null}
 
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-sm text-muted-foreground">
                       Sent by {entry.senderName ?? "your church"}
                       {entry.senderPhone
                         ? ` from ${formatPhoneDisplay(entry.senderPhone) ?? entry.senderPhone}`

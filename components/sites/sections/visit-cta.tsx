@@ -59,7 +59,7 @@ export const visitCtaSection = defineSection<VisitCtaContent>({
   type: "visit_cta",
   label: "Plan a visit",
   fields: [
-    { key: "eyebrow", label: "Eyebrow", type: "text" },
+    { key: "eyebrow", label: "Small heading above", type: "text" },
     { key: "headline", label: "Headline", type: "headline" },
     { key: "body", label: "Intro paragraph", type: "textarea" },
     { key: "panelHeading", label: "Panel heading", type: "text" },
@@ -79,7 +79,7 @@ export const visitCtaSection = defineSection<VisitCtaContent>({
       key: "form",
       label: "Contact form",
       type: "group",
-      help: "Messages arrive in Website → Messages and are emailed to your church.",
+      help: "Messages arrive in Website → Inbox and are emailed to your church.",
       fields: [
         { key: "enabled", label: "Show the form", type: "toggle" },
         { key: "heading", label: "Form heading", type: "text" },

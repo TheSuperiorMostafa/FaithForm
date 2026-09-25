@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
-import { MediaTagChip, MediaTileCard } from "@/components/media/media-tile";
+import { MediaTagChip, MediaTileCard, type TileStatus } from "@/components/media/media-tile";
 import type { MediaShelf as Shelf } from "@/lib/media/shelves";
 import { cn } from "@/lib/utils";
 
@@ -17,7 +17,13 @@ import { cn } from "@/lib/utils";
  * of which a transform-based carousel has to reimplement and usually gets
  * wrong for someone. The arrows just call `scrollBy`.
  */
-export function MediaShelfRail({ shelf }: { shelf: Shelf }) {
+export function MediaShelfRail({
+  shelf,
+  statuses,
+}: {
+  shelf: Shelf;
+  statuses?: Record<string, TileStatus>;
+}) {
   const trackRef = useRef<HTMLDivElement | null>(null);
   const [atStart, setAtStart] = useState(true);
   const [atEnd, setAtEnd] = useState(true);
@@ -61,11 +67,11 @@ export function MediaShelfRail({ shelf }: { shelf: Shelf }) {
     <section className="flex flex-col gap-3">
       <div className="flex items-end justify-between gap-3">
         <div className="flex min-w-0 items-baseline gap-3">
-          <h3 className="font-heading text-base font-bold text-foreground">{shelf.title}</h3>
+          <h3 className="font-heading text-lg font-bold text-foreground">{shelf.title}</h3>
           {shelf.viewAll ? (
             <Link
               href={shelf.viewAll.href}
-              className="shrink-0 text-xs font-medium text-muted-foreground underline underline-offset-4 hover:text-accent"
+              className="inline-flex min-h-11 shrink-0 items-center text-[15px] font-medium text-muted-foreground underline underline-offset-4 hover:text-accent"
             >
               {shelf.viewAll.label}
             </Link>
@@ -80,11 +86,11 @@ export function MediaShelfRail({ shelf }: { shelf: Shelf }) {
               disabled={atStart}
               onClick={() => nudge(-1)}
               className={cn(
-                "flex size-7 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors",
+                "flex size-11 items-center justify-center rounded-xl border border-border text-muted-foreground transition-colors",
                 "hover:border-accent/60 hover:text-foreground disabled:opacity-30 disabled:hover:border-border",
               )}
             >
-              <ChevronLeft className="size-4" />
+              <ChevronLeft className="size-5" aria-hidden />
             </button>
             <button
               type="button"
@@ -92,11 +98,11 @@ export function MediaShelfRail({ shelf }: { shelf: Shelf }) {
               disabled={atEnd}
               onClick={() => nudge(1)}
               className={cn(
-                "flex size-7 items-center justify-center rounded-lg border border-border text-muted-foreground transition-colors",
+                "flex size-11 items-center justify-center rounded-xl border border-border text-muted-foreground transition-colors",
                 "hover:border-accent/60 hover:text-foreground disabled:opacity-30 disabled:hover:border-border",
               )}
             >
-              <ChevronRight className="size-4" />
+              <ChevronRight className="size-5" aria-hidden />
             </button>
           </div>
         ) : null}
@@ -114,7 +120,11 @@ export function MediaShelfRail({ shelf }: { shelf: Shelf }) {
             {shelf.shape === "row" ? (
               <MediaTagChip tile={tile} />
             ) : (
-              <MediaTileCard tile={tile} shape={shelf.shape} />
+              <MediaTileCard
+                tile={tile}
+                shape={shelf.shape}
+                status={tile.kind === "item" ? statuses?.[tile.id] : undefined}
+              />
             )}
           </div>
         ))}

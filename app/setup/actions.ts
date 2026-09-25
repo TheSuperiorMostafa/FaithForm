@@ -7,6 +7,11 @@ import { getRequestIpFromHeaders } from "@/lib/security/request-ip";
 import { dashboardEmailRedirect } from "@/lib/auth/auth-redirects";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import {
+  ALREADY_REGISTERED_MESSAGE,
+  isAlreadyRegistered,
+  signUpErrorMessage,
+} from "@/app/login/auth-messages";
 
 /**
  * Self-serve church setup.
@@ -28,6 +33,8 @@ export type SetupAccountState = {
   ok: boolean;
   /** Signup succeeded but the project requires email confirmation first. */
   needsEmailConfirmation?: boolean;
+  /** The email already has an account and the password did not open it. */
+  existingAccount?: boolean;
   error?: string;
 };
 
@@ -74,6 +81,11 @@ export async function createSetupAccount(
   const lastName = formData.get("lastName")?.toString().trim() ?? "";
   const email = formData.get("email")?.toString().trim() ?? "";
   const password = formData.get("password")?.toString() ?? "";
+  // Optional here: the one-screen form sends it so an email confirmation that
+  // is opened later (or on another device) can bring the name back. It is
+  // only ever used to prefill the church-name box; the church itself is still
+  // created by `createChurchForCurrentUser`, which validates it again.
+  const pendingChurchName = (formData.get("name")?.toString().trim() ?? "").slice(0, 120);
 
   if (!firstName) return { ok: false, error: "Please enter your first name." };
   if (!EMAIL_REGEX.test(email)) {
@@ -96,17 +108,14 @@ export async function createSetupAccount(
       data: {
         first_name: firstName,
         last_name: lastName,
+        ...(pendingChurchName ? { pending_church_name: pendingChurchName } : {}),
       },
       emailRedirectTo,
     },
   });
 
   if (signUpError) {
-    const alreadyRegistered =
-      signUpError.message.toLowerCase().includes("already") ||
-      signUpError.message.toLowerCase().includes("registered");
-
-    if (alreadyRegistered) {
+    if (isAlreadyRegistered(signUpError)) {
       // The same person coming back, most likely. Their password either works
       // — carry on — or it does not, and the honest answer names both doors.
       const { error: signInError } = await supabase.auth.signInWithPassword({
@@ -114,15 +123,12 @@ export async function createSetupAccount(
         password,
       });
       if (signInError) {
-        return {
-          ok: false,
-          error:
-            "An account with this email already exists. Sign in with your existing password or use Forgot Password on the sign-in page.",
-        };
+        return { ok: false, existingAccount: true, error: ALREADY_REGISTERED_MESSAGE };
       }
       return { ok: true };
     }
-    return { ok: false, error: signUpError.message };
+    console.error("[setup] sign-up refused:", signUpError.message);
+    return { ok: false, error: signUpErrorMessage(signUpError, MIN_PASSWORD_LENGTH) };
   }
 
   // With email confirmation switched on, Supabase returns the user without a
@@ -145,12 +151,12 @@ export async function createChurchForCurrentUser(
   const timezone =
     formData.get("timezone")?.toString().trim() || "America/New_York";
 
-  if (!name) return { ok: false, error: "Church name is required." };
+  if (!name) return { ok: false, error: "Please enter your church's name." };
   if (name.length > 120) {
     return { ok: false, error: "Church name must be 120 characters or fewer." };
   }
   if (!isUsableTimezone(timezone)) {
-    return { ok: false, error: "Choose a valid timezone." };
+    return { ok: false, error: "Choose your time zone from the list." };
   }
 
   const supabase = createClient();
@@ -176,7 +182,7 @@ export async function createChurchForCurrentUser(
     .maybeSingle();
 
   if (existingError) {
-    return { ok: false, error: "Could not verify your account. Try again." };
+    return { ok: false, error: "We couldn't check your account just now. Please try again." };
   }
   if (existing) {
     return {
@@ -202,7 +208,7 @@ export async function createChurchForCurrentUser(
     .single();
 
   if (churchError || !church) {
-    return { ok: false, error: "Could not create the church. Try again." };
+    return { ok: false, error: "We couldn't create your church. Please try again." };
   }
 
   const { error: linkError } = await admin.from("church_users").insert({
@@ -216,7 +222,7 @@ export async function createChurchForCurrentUser(
     // A church without its admin is an orphan nobody can reach; undo it so a
     // retry starts clean instead of tripping over a half-made workspace.
     await admin.from("churches").delete().eq("id", church.id);
-    return { ok: false, error: "Could not finish setup. Try again." };
+    return { ok: false, error: "We couldn't finish setting up your church. Please try again." };
   }
 
   return { ok: true };

@@ -1,8 +1,12 @@
 import Link from "next/link";
 import { Play } from "lucide-react";
 
+import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
 import type { MediaTile as Tile, ShelfShape } from "@/lib/media/shelves";
 import { cn } from "@/lib/utils";
+
+/** A recording's state, shown under its title so a tile never hides it. */
+export type TileStatus = { label: string; tone: StatusTone };
 
 /** The CSS aspect for each shape. Mirrors `ARTWORK_SPECS` ratios. */
 const SHAPE_RATIO: Record<Exclude<ShelfShape, "row">, string> = {
@@ -49,11 +53,13 @@ export function MediaTileCard({
   tile,
   shape,
   fluid = false,
+  status,
 }: {
   tile: Tile;
   shape: Exclude<ShelfShape, "row">;
   /** Fill a wrapping grid column instead of using a rail's fixed card width. */
   fluid?: boolean;
+  status?: TileStatus;
 }) {
   // When the preferred crop is absent, `bestArtwork` deliberately returns a
   // different shape. Honour it: forcing a 16:9 still through a 4:5 frame is
@@ -93,7 +99,7 @@ export function MediaTileCard({
         )}
 
         {tile.badge ? (
-          <span className="absolute left-2 top-2 rounded-md bg-background/90 px-1.5 py-0.5 text-[11px] font-semibold text-foreground">
+          <span className="absolute left-2 top-2 rounded-md bg-background/90 px-2 py-0.5 text-xs font-semibold text-foreground">
             {tile.badge}
           </span>
         ) : null}
@@ -122,11 +128,16 @@ export function MediaTileCard({
       </div>
 
       <div className="flex min-w-0 flex-col gap-0.5">
-        <p className="truncate text-sm font-semibold text-foreground group-hover:text-accent">
+        <p className="truncate text-[15px] font-semibold text-foreground group-hover:text-accent">
           {tile.title}
         </p>
         {tile.subtitle ? (
-          <p className="truncate text-xs text-muted-foreground">{tile.subtitle}</p>
+          <p className="truncate text-sm text-muted-foreground">{tile.subtitle}</p>
+        ) : null}
+        {status ? (
+          <StatusBadge tone={status.tone} className="mt-1 w-fit max-w-full truncate">
+            {status.label}
+          </StatusBadge>
         ) : null}
       </div>
     </Link>
@@ -139,15 +150,15 @@ export function MediaTagChip({ tile }: { tile: Tile }) {
     <Link
       href={tile.href}
       className={cn(
-        "flex shrink-0 flex-col gap-0.5 rounded-xl border border-border bg-card px-4 py-3",
+        "flex min-h-12 shrink-0 flex-col gap-0.5 rounded-xl border border-border bg-card px-4 py-3",
         "shadow-card transition-colors hover:border-accent/60 hover:bg-accent/5",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40",
         "dark:shadow-none",
       )}
     >
-      <span className="text-sm font-semibold text-foreground">{tile.title}</span>
+      <span className="text-[15px] font-semibold text-foreground">{tile.title}</span>
       {tile.subtitle ? (
-        <span className="text-xs text-muted-foreground">{tile.subtitle}</span>
+        <span className="text-sm text-muted-foreground">{tile.subtitle}</span>
       ) : null}
     </Link>
   );

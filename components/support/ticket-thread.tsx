@@ -47,7 +47,7 @@ export function TicketThread({
               </p>
               <time
                 dateTime={comment.createdAt}
-                className="text-xs text-muted-foreground"
+                className="text-sm text-muted-foreground"
               >
                 {new Date(comment.createdAt).toLocaleString(undefined, {
                   month: "short",
@@ -57,7 +57,7 @@ export function TicketThread({
                 })}
               </time>
             </div>
-            <p className="mt-2 whitespace-pre-wrap text-sm text-foreground">
+            <p className="mt-2 whitespace-pre-wrap text-[15px] text-foreground">
               {comment.body}
             </p>
           </li>

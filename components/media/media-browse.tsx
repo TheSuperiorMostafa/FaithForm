@@ -5,7 +5,7 @@ import Link from "next/link";
 import { Search } from "lucide-react";
 
 import { MediaShelfRail } from "@/components/media/media-shelf";
-import { MediaTileCard } from "@/components/media/media-tile";
+import { MediaTileCard, type TileStatus } from "@/components/media/media-tile";
 import { Input } from "@/components/ui/input";
 import { readProgress } from "@/lib/media/local-progress";
 import {
@@ -37,7 +37,10 @@ export function MediaBrowseView({
   links,
   churchId,
   searchPlaceholder = "Search by title, series, speaker, passage, or topic…",
+  statuses,
 }: {
+  /** Each recording's state, by id, shown on its tile. */
+  statuses?: Record<string, TileStatus>;
   browse: MediaBrowse;
   /** The full set, for search. Shelves only ever carry a slice of it. */
   items: BrowseItemInput[];
@@ -91,8 +94,8 @@ export function MediaBrowseView({
 
   if (browse.empty) {
     return (
-      <p className="rounded-xl border border-dashed border-border px-5 py-12 text-center text-sm text-muted-foreground">
-        No recordings yet. They appear here after a live broadcast ends.
+      <p className="rounded-2xl border border-dashed border-border px-5 py-12 text-center text-[15px] text-muted-foreground">
+        No recordings yet. They appear here after your first livestream ends.
       </p>
     );
   }
@@ -101,20 +104,20 @@ export function MediaBrowseView({
     <div className="flex flex-col gap-8">
       <div className="relative">
         <Search
-          className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+          className="absolute left-3.5 top-1/2 size-5 -translate-y-1/2 text-muted-foreground"
           aria-hidden
         />
         <Input
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder={searchPlaceholder}
-          className="pl-9"
-          aria-label="Search the media library"
+          className="h-12 pl-10 text-base"
+          aria-label="Search recordings"
         />
       </div>
 
       {results ? (
-        <SearchResults results={results} links={links} />
+        <SearchResults results={results} links={links} statuses={statuses} />
       ) : (
         <>
           {withContinue.featured ? (
@@ -122,7 +125,7 @@ export function MediaBrowseView({
           ) : null}
 
           {withContinue.shelves.map((shelf) => (
-            <MediaShelfRail key={shelf.id} shelf={shelf} />
+            <MediaShelfRail key={shelf.id} shelf={shelf} statuses={statuses} />
           ))}
         </>
       )}
@@ -133,13 +136,15 @@ export function MediaBrowseView({
 function SearchResults({
   results,
   links,
+  statuses,
 }: {
   results: BrowseItemInput[];
   links: BrowseLinks;
+  statuses?: Record<string, TileStatus>;
 }) {
   if (results.length === 0) {
     return (
-      <p className="rounded-xl border border-dashed border-border px-5 py-10 text-center text-sm text-muted-foreground">
+      <p className="rounded-2xl border border-dashed border-border px-5 py-10 text-center text-[15px] text-muted-foreground">
         Nothing matches that search.
       </p>
     );
@@ -147,7 +152,7 @@ function SearchResults({
 
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-xs text-muted-foreground">
+      <p className="text-sm text-muted-foreground">
         {results.length === 1 ? "1 result" : `${results.length} results`}
       </p>
       {/* A wrapping grid, not a rail: search results have no meaningful order
@@ -159,6 +164,7 @@ function SearchResults({
             tile={itemTile(item, links, { shape: "wide" })}
             shape="wide"
             fluid
+            status={statuses?.[item.id]}
           />
         ))}
       </div>

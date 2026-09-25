@@ -168,15 +168,17 @@ test("every state reads as plain language, never as a status code", () => {
   };
   const cases: Array<[Partial<RecordingRowState>, string]> = [
     [{ status: "recording" }, "Live"],
-    [{ status: "processing" }, "Preparing recording"],
+    [{ status: "processing" }, "Processing"],
     [{}, "Ready to publish"],
-    [{ mobileVisibility: "public", mobilePublishedAt: "x" }, "Published"],
-    [{ webPublishedAt: "x" }, "Published"],
+    // "Published" always says where: a website-only recording is not in the app.
+    [{ mobileVisibility: "public", mobilePublishedAt: "x" }, "Published in the app"],
+    [{ webPublishedAt: "x" }, "On the website only"],
+    [{ mobileVisibility: "public", mobilePublishedAt: "x", webPublishedAt: "x" }, "In the app and on the website"],
     [{ mobileVisibility: "public", mobilePublishedAt: "x", mobileUnpublishedAt: "y" }, "Not published"],
-    [{ status: "failed", failureReason: "nothing_recorded" }, "Needs attention"],
-    [{ mobilePlayable: false, renditionReason: "video_codec_unsupported" }, "Needs attention"],
-    [{ mobilePlayable: false, renditionReason: "probe_timeout" }, "Preparing recording"],
-    [{ mobilePlayable: false, renditionVerifiedAt: null }, "Preparing recording"],
+    [{ status: "failed", failureReason: "nothing_recorded" }, "Problem"],
+    [{ mobilePlayable: false, renditionReason: "video_codec_unsupported" }, "Problem"],
+    [{ mobilePlayable: false, renditionReason: "probe_timeout" }, "Processing"],
+    [{ mobilePlayable: false, renditionVerifiedAt: null }, "Processing"],
   ];
   for (const [patch, label] of cases) {
     const view = recordingPhase({ ...base, ...patch });

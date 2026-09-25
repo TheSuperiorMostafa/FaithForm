@@ -21,6 +21,8 @@ export type SimpleSermonSaveBody = {
   translation: string;
   theme_id: string;
   sermon_date?: string | null;
+  /** The series this sermon belongs to (from a series plan's week). */
+  series_id?: string | null;
   passages?: SimplePassageInput[];
   book?: string;
   chapter?: number;
@@ -97,17 +99,17 @@ export async function validateSimpleSermonBody(
   const passages = normalizePassages(body);
 
   if (!title) {
-    return { error: "Title is required", status: 400 };
+    return { error: "Give the sermon a title.", status: 400 };
   }
   const normalizedTranslation = normalizeTranslationId(translation);
   if (!translation || !isCuratedTranslationId(normalizedTranslation)) {
-    return { error: "Invalid translation", status: 400 };
+    return { error: "Choose a Bible translation.", status: 400 };
   }
   const translationOption = (await getCuratedTranslations()).find(
     (t) => t.id === normalizedTranslation,
   );
   if (!translationOption?.enabled) {
-    return { error: "This translation is not available yet", status: 400 };
+    return { error: "That Bible translation isn't available yet. Choose another one.", status: 400 };
   }
   if (!theme_id || !(await isValidSlideThemeId(theme_id))) {
     const themes = await listSlideThemes();
@@ -116,19 +118,19 @@ export async function validateSimpleSermonBody(
       themes.find((t) => t.featured) ??
       themes[0];
     if (!fallback) {
-      return { error: "Invalid theme", status: 400 };
+      return { error: "That slide theme isn't available any more. Choose another one.", status: 400 };
     }
     theme_id = fallback.id;
   }
   if (!isValidSermonDate(sermon_date)) {
-    return { error: "Invalid sermon date", status: 400 };
+    return { error: "Choose the date you'll preach this sermon.", status: 400 };
   }
   if (passages.length === 0) {
-    return { error: "At least one passage is required", status: 400 };
+    return { error: "Choose at least one Bible passage.", status: 400 };
   }
   if (passages.length > MAX_SIMPLE_PASSAGES) {
     return {
-      error: `Maximum ${MAX_SIMPLE_PASSAGES} passages per deck`,
+      error: `One sermon can hold up to ${MAX_SIMPLE_PASSAGES} passages. Remove one and save again.`,
       status: 400,
     };
   }
@@ -140,10 +142,10 @@ export async function validateSimpleSermonBody(
     const verseEnd = Number(passage.verseEnd) || verseStart;
 
     if (!bookName || !chapter) {
-      return { error: "Each passage needs a book and chapter", status: 400 };
+      return { error: "Each passage needs a book and a chapter.", status: 400 };
     }
     if (verseEnd < verseStart) {
-      return { error: "Invalid verse range in one or more passages", status: 400 };
+      return { error: "One of the passages has its verses the wrong way round. Check the From and To verses.", status: 400 };
     }
   }
 

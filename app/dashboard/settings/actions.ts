@@ -15,6 +15,7 @@ import {
 } from "@/lib/announcements/attachments";
 import { getChurchAuth } from "@/lib/auth/church";
 import { featureActionError } from "@/lib/features/guard";
+import { toUserError } from "@/lib/errors/user-error";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { upsertFollowUpMessageTemplates } from "@/lib/queries/follow-up-settings";
 import { upsertAnnouncementEmailSettings } from "@/lib/queries/announcement-email-settings";
@@ -75,7 +76,7 @@ export async function updateFollowUpMessages(
   } catch (e) {
     return {
       ok: false,
-      error: e instanceof Error ? e.message : "Could not save messages.",
+      error: toUserError(e, "We couldn't save your follow-up text messages."),
     };
   }
 }
@@ -131,7 +132,7 @@ export async function updateAnnouncementEmailSettings(
   } catch (e) {
     return {
       ok: false,
-      error: e instanceof Error ? e.message : "Could not save email template.",
+      error: toUserError(e, "We couldn't save your weekly email settings."),
     };
   }
 }
@@ -220,7 +221,7 @@ export async function uploadCommunicationAttachment(
       // `pnpm storage:buckets`, not by a migration, and "try again" was the
       // wrong advice for as long as it was missing.
       error: /bucket not found/i.test(uploadError.message)
-        ? "The attachment storage bucket has not been created on this project yet. Run `pnpm storage:buckets`, then try again."
+        ? "File attachments aren't available for your church yet. Nothing was uploaded. Contact FaithForm support."
         : "That file could not be uploaded. Please try again.",
     };
   }
@@ -248,7 +249,7 @@ export async function uploadCommunicationAttachment(
     return {
       ok: false,
       error: missingTable
-        ? "Attachments aren't set up on this database yet — run `pnpm db:communications`."
+        ? "File attachments aren't available for your church yet. Nothing was uploaded. Contact FaithForm support."
         : "That file could not be attached. Please try again.",
     };
   }

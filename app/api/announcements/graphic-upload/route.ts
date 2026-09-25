@@ -8,6 +8,7 @@ import { requireChurchAuth } from "@/lib/auth/church";
 import { featureAccessDenied } from "@/lib/features/guard";
 import { SOCIAL_GRAPHICS_BUCKET } from "@/lib/social/constants";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { toUserError } from "@/lib/errors/user-error";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -81,8 +82,12 @@ export async function POST(request: Request) {
     const { data } = storage.getPublicUrl(graphicPath);
     return NextResponse.json({ graphicUrl: data.publicUrl, graphicPath });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Upload failed";
-    const status = message === "Unauthorized" ? 401 : 500;
-    return NextResponse.json({ error: message }, { status });
+    if (e instanceof Error && e.message === "Unauthorized") {
+      return NextResponse.json({ error: "Please sign in again." }, { status: 401 });
+    }
+    return NextResponse.json(
+      { error: toUserError(e, "That picture could not be uploaded") },
+      { status: 500 },
+    );
   }
 }

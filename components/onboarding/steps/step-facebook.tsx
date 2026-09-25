@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Megaphone } from "lucide-react";
+import { OptionalNote } from "@/components/onboarding/steps/optional-note";
 import { Button } from "@/components/ui/button";
 
 function FacebookIcon() {
@@ -31,57 +32,57 @@ export function StepFacebook({
     <div className="space-y-5">
       <div>
         <h2 className="font-heading text-2xl font-semibold text-foreground">
-          Connect Facebook
+          Connect your Facebook Page
         </h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Post announcements directly to your church&apos;s Facebook Page.
+        <p className="mt-1 text-base text-muted-foreground">
+          If your church has a Facebook Page, connecting lets FaithForm post to
+          it for you.
         </p>
       </div>
 
-      <ul className="space-y-3 text-sm text-foreground">
-        <li className="flex items-start gap-2">
-          <Megaphone className="mt-0.5 size-4 shrink-0 text-accent" />
-          Publish announcements to Facebook in one click
+      <ul className="space-y-3 text-base text-foreground">
+        <li className="flex items-start gap-3">
+          <Megaphone className="mt-0.5 size-5 shrink-0 text-accent" aria-hidden />
+          Share an announcement on your Facebook Page in one click. Nothing is
+          posted unless you choose to post it.
         </li>
       </ul>
+
+      <OptionalNote />
 
       {connected ? (
         <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
           <p className="font-medium text-emerald-700 dark:text-emerald-400">
-            Facebook Connected ✓
+            Facebook is connected
           </p>
           {pageName && (
             <p className="mt-1 text-sm text-muted-foreground">{pageName}</p>
           )}
-          <Button type="button" className="mt-4" onClick={onContinue}>
-            Continue →
+          <Button type="button" size="lg" className="mt-4 h-12" onClick={onContinue}>
+            Continue
           </Button>
         </div>
       ) : (
         <Link
           href={connectUrl}
-          className="flex h-12 w-full items-center justify-center gap-3 rounded-[10px] bg-[#1877F2] text-[15px] font-medium text-white transition-opacity hover:opacity-90"
+          className="flex h-12 w-full items-center justify-center gap-3 rounded-[10px] bg-[#1877F2] text-base font-semibold text-white transition-opacity hover:opacity-90"
         >
           <FacebookIcon />
-          Connect Facebook Page
+          Connect Facebook
         </Link>
       )}
 
       {error && (
-        <p className="text-sm text-destructive" role="alert">
+        <p className="text-base text-destructive" role="alert">
           {error}
         </p>
       )}
 
       {!connected && (
-        <div className="text-right">
-          <button
-            type="button"
-            onClick={onSkip}
-            className="text-sm text-muted-foreground hover:text-foreground"
-          >
+        <div className="flex justify-end">
+          <Button type="button" variant="ghost" onClick={onSkip}>
             Skip for now
-          </button>
+          </Button>
         </div>
       )}
     </div>

@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
-import { DonorsTable } from "@/components/giving/donors-table";
-import { GivingSetupCta } from "@/components/giving/giving-setup-cta";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+import { DonorsList } from "@/components/giving/donors-list";
+import { GivingNotReady, GivingSubpageHeader } from "@/components/giving/giving-page-parts";
+import { ErrorState } from "@/components/ui/error-state";
 import { getChurchAuth } from "@/lib/auth/church";
 import { getChurchGivingProfile, getDonorsList } from "@/lib/queries/giving";
 
@@ -15,39 +15,33 @@ export default async function DonorsPage() {
   const profile = await getChurchGivingProfile(auth.churchId);
   if (!profile?.stripeChargesEnabled) {
     return (
-      <div className="mx-auto max-w-3xl flex flex-col gap-6">
-        <BackLink />
-        <GivingSetupCta />
+      <div className="flex w-full flex-col gap-8">
+        <GivingSubpageHeader page="donors" />
+        <GivingNotReady isAdmin={auth.isAdmin} />
       </div>
     );
   }
 
-  const donors = await getDonorsList(auth.churchId);
+  let donors;
+  try {
+    donors = await getDonorsList(auth.churchId);
+  } catch (error) {
+    console.error("[giving] donors failed to load", error);
+    return (
+      <div className="flex w-full flex-col gap-8">
+        <GivingSubpageHeader page="donors" />
+        <ErrorState
+          title="Donors didn't load"
+          description="Nothing was lost. Refresh the page to try again, and if it keeps happening, contact FaithForm support."
+        />
+      </div>
+    );
+  }
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
-      <BackLink />
-      <h1 className="font-heading text-2xl font-bold">Donors</h1>
-      <p className="text-sm text-muted-foreground">
-        Unique givers with year-to-date totals (successful gifts only).
-      </p>
-
-      <Card className="overflow-hidden">
-        <CardHeader>
-          <CardTitle>All donors</CardTitle>
-        </CardHeader>
-        <CardContent className="p-0">
-          <DonorsTable donors={donors} />
-        </CardContent>
-      </Card>
+    <div className="flex w-full flex-col gap-8">
+      <GivingSubpageHeader page="donors" />
+      <DonorsList donors={donors} />
     </div>
-  );
-}
-
-function BackLink() {
-  return (
-    <Link href="/dashboard/giving" className="text-sm text-accent hover:underline">
-      ← Back to Giving
-    </Link>
   );
 }

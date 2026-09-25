@@ -7,6 +7,7 @@ import type { FeatureKey } from "@/lib/features/catalog";
 import { featureActionError } from "@/lib/features/guard";
 import type { ChurchMember } from "@/lib/queries/members";
 import { validateMemberInput } from "@/lib/people/validate-member";
+import { toUserError } from "@/lib/errors/user-error";
 import { createClient } from "@/lib/supabase/server";
 
 export type MemberActionResult =
@@ -93,7 +94,7 @@ async function insertMember(
     .single();
 
   if (error || !data) {
-    return { ok: false, error: error?.message ?? "Could not add person." };
+    return { ok: false, error: toUserError(error, "We couldn't add this person.") };
   }
 
   revalidatePeoplePaths();
@@ -168,7 +169,7 @@ export async function updateMember(input: {
     .single();
 
   if (error || !data) {
-    return { ok: false, error: error?.message ?? "Could not update person." };
+    return { ok: false, error: toUserError(error, "We couldn't save this person's details.") };
   }
 
   revalidatePeoplePaths();
@@ -190,7 +191,7 @@ export async function deactivateMember(memberId: string): Promise<MemberActionRe
     .single();
 
   if (error || !data) {
-    return { ok: false, error: error?.message ?? "Could not deactivate person." };
+    return { ok: false, error: toUserError(error, "We couldn't deactivate this person.") };
   }
 
   revalidatePeoplePaths();
@@ -212,7 +213,7 @@ export async function reactivateMember(memberId: string): Promise<MemberActionRe
     .single();
 
   if (error || !data) {
-    return { ok: false, error: error?.message ?? "Could not reactivate person." };
+    return { ok: false, error: toUserError(error, "We couldn't reactivate this person.") };
   }
 
   revalidatePeoplePaths();

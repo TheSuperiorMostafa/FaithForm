@@ -11,6 +11,7 @@ import {
   verifySeriesAccess,
 } from "@/lib/queries/sermons";
 import { createClient } from "@/lib/supabase/server";
+import { sermonRouteError } from "@/lib/sermon-builder/route-error";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -40,7 +41,7 @@ export async function POST(request: Request) {
 
     if (!title?.trim() || !theme?.trim()) {
       return NextResponse.json(
-        { error: "Title and theme are required" },
+        { error: "Give the series a title and say what it is about." },
         { status: 400 },
       );
     }
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
     // Checked before the model call, not left to the update: a series id from
     // another church should cost nothing and change nothing.
     if (seriesId && !(await verifySeriesAccess(createClient(), seriesId, auth.churchId))) {
-      return NextResponse.json({ error: "Series not found" }, { status: 404 });
+      return NextResponse.json({ error: "We couldn't find that series. It may have been deleted." }, { status: 404 });
     }
 
     const settings = await getChurchAISettings(auth.churchId);
@@ -90,8 +91,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ series, plan: object, modelUsed });
   } catch (e) {
-    const message = e instanceof Error ? e.message : "Series generation failed";
-    const status = message === "Unauthorized" ? 401 : 500;
-    return NextResponse.json({ error: message }, { status });
+    return sermonRouteError(e, "We couldn't plan the series.");
   }
 }

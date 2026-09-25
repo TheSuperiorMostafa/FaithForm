@@ -59,8 +59,8 @@ export function SiteBuilder({
           <div>
             <h2 className="font-heading text-xl font-bold">Build your website</h2>
             <p className="mt-1 max-w-xl text-sm leading-relaxed text-muted-foreground">
-              We&apos;ll build a first draft from your Church Profile — your
-              service times, staff, address and beliefs — and write the wording
+              We&apos;ll build a first draft from your church details (your
+              service times, staff, address and beliefs) and write the wording
               to go around them. It saves as a draft, so nothing is public until
               you say so. You can change every word afterwards.
             </p>
@@ -92,7 +92,7 @@ export function SiteBuilder({
             >
               <div className="font-heading text-base font-bold">{theme.name}</div>
               {theme.description ? (
-                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
                   {theme.description}
                 </p>
               ) : null}
@@ -147,7 +147,7 @@ export function SiteBuilder({
       </div>
 
       {!canBuild ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           Only church admins can build the website.
         </p>
       ) : null}

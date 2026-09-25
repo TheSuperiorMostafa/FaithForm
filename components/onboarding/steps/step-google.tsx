@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Calendar, Mail } from "lucide-react";
+import { OptionalNote } from "@/components/onboarding/steps/optional-note";
 import { Button } from "@/components/ui/button";
 
 function GoogleIcon() {
@@ -46,61 +47,60 @@ export function StepGoogle({
     <div className="space-y-5">
       <div>
         <h2 className="font-heading text-2xl font-semibold text-foreground">
-          Connect Google
+          Connect your Google account
         </h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Sync your church calendar and send Gmail drafts for announcements.
+        <p className="mt-1 text-base text-muted-foreground">
+          If your church uses Google Calendar or Gmail, connecting lets
+          FaithForm do this for you:
         </p>
       </div>
 
-      <ul className="space-y-3 text-sm text-foreground">
-        <li className="flex items-start gap-2">
-          <Calendar className="mt-0.5 size-4 shrink-0 text-accent" />
-          Pull events from Google Calendar automatically
+      <ul className="space-y-3 text-base text-foreground">
+        <li className="flex items-start gap-3">
+          <Calendar className="mt-0.5 size-5 shrink-0 text-accent" aria-hidden />
+          Your church calendar&apos;s events show up in FaithForm, so you don&apos;t type them twice.
         </li>
-        <li className="flex items-start gap-2">
-          <Mail className="mt-0.5 size-4 shrink-0 text-accent" />
-          Create Gmail drafts for announcements in one click
+        <li className="flex items-start gap-3">
+          <Mail className="mt-0.5 size-5 shrink-0 text-accent" aria-hidden />
+          Your weekly announcement email is written for you as a Gmail draft. You check it and send it.
         </li>
       </ul>
+
+      <OptionalNote />
 
       {connected ? (
         <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-4">
           <p className="font-medium text-emerald-700 dark:text-emerald-400">
-            Google Connected ✓
+            Google is connected
           </p>
           {email && (
             <p className="mt-1 text-sm text-muted-foreground">{email}</p>
           )}
-          <Button type="button" className="mt-4" onClick={onContinue}>
-            Continue →
+          <Button type="button" size="lg" className="mt-4 h-12" onClick={onContinue}>
+            Continue
           </Button>
         </div>
       ) : (
         <Link
           href={connectUrl}
-          className="flex h-12 w-full items-center justify-center gap-3 rounded-[10px] border-2 border-primary bg-card text-[15px] font-medium text-foreground transition-colors hover:bg-muted"
+          className="flex h-12 w-full items-center justify-center gap-3 rounded-[10px] border-2 border-primary bg-card text-base font-semibold text-foreground transition-colors hover:bg-muted"
         >
           <GoogleIcon />
-          Connect Google Account
+          Connect Google
         </Link>
       )}
 
       {error && (
-        <p className="text-sm text-destructive" role="alert">
+        <p className="text-base text-destructive" role="alert">
           {error}
         </p>
       )}
 
       {!connected && (
-        <div className="text-right">
-          <button
-            type="button"
-            onClick={onSkip}
-            className="text-sm text-muted-foreground hover:text-foreground"
-          >
+        <div className="flex justify-end">
+          <Button type="button" variant="ghost" onClick={onSkip}>
             Skip for now
-          </button>
+          </Button>
         </div>
       )}
     </div>

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { applySeriesArtworkToItems } from "@/app/dashboard/live-streaming/media/actions";
 import { ArtworkField } from "@/components/media/artwork-field";
 import { Button } from "@/components/ui/button";
+import { confirmAction } from "@/components/ui/confirm-dialog";
 import { Card, CardContent } from "@/components/ui/card";
 import { ARTWORK_CROPS, hasAnyArtwork, type ArtworkSet } from "@/lib/media/artwork";
 
@@ -35,7 +36,17 @@ export function SeriesArtworkPanel({
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  function applyToAll() {
+  async function applyToAll() {
+    const ok = await confirmAction({
+      title: "Use the series artwork for every message?",
+      description: `${
+        overriddenCount === 1 ? "1 message loses its own image" : `${overriddenCount} messages lose their own images`
+      } and shows the series artwork instead. Their own images can't be brought back without uploading them again.`,
+      confirmLabel: "Use series artwork",
+      cancelLabel: "Keep their images",
+      destructive: true,
+    });
+    if (!ok) return;
     setError(null);
     setNotice(null);
 
@@ -66,8 +77,8 @@ export function SeriesArtworkPanel({
     <Card>
       <CardContent className="flex flex-col gap-5 pt-6">
         <div className="flex flex-col gap-1">
-          <h3 className="font-heading text-base font-bold">Series artwork</h3>
-          <p className="text-sm text-muted-foreground">
+          <h3 className="font-heading text-lg font-bold">Series artwork</h3>
+          <p className="text-[15px] text-muted-foreground">
             {itemCount === 0
               ? "Set these now and anything you file into this series picks them up automatically."
               : `Inherited by every message in this series that doesn't have its own.`}
@@ -91,31 +102,25 @@ export function SeriesArtworkPanel({
             that always reports "0 changed" teaches a church to distrust it. */}
         {overriddenCount > 0 && hasAnyArtwork(artwork) ? (
           <div className="flex flex-col gap-2 rounded-lg border border-border bg-muted/30 p-4">
-            <p className="text-sm">
+            <p className="text-[15px]">
               {overriddenCount === 1
                 ? "1 message in this series has its own artwork"
                 : `${overriddenCount} messages in this series have their own artwork`}
               , so they ignore the images above.
             </p>
             <div className="flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={pending}
-                onClick={applyToAll}
-              >
+              <Button type="button" variant="outline" disabled={pending} onClick={() => void applyToAll()}>
                 {pending ? "Applying…" : "Use series artwork everywhere"}
               </Button>
-              <p className="text-xs text-muted-foreground">
-                Clears the individual images. Future changes here apply to all of them.
+              <p className="text-sm text-muted-foreground">
+                Clears their own images. Future changes here apply to all of them.
               </p>
             </div>
           </div>
         ) : null}
 
-        {notice ? <p className="text-xs text-muted-foreground">{notice}</p> : null}
-        {error ? <p className="text-xs text-destructive">{error}</p> : null}
+        {notice ? <p className="text-[15px] text-emerald-700 dark:text-emerald-300" role="status">{notice}</p> : null}
+        {error ? <p className="text-[15px] text-destructive" role="alert">{error}</p> : null}
       </CardContent>
     </Card>
   );

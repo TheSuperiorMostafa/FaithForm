@@ -8,7 +8,7 @@ export const giveCtaSection = defineSection<GiveCtaContent>({
   type: "give_cta",
   label: "Giving",
   fields: [
-    { key: "eyebrow", label: "Eyebrow", type: "text" },
+    { key: "eyebrow", label: "Small heading above", type: "text" },
     { key: "headline", label: "Headline", type: "headline" },
     { key: "body", label: "Intro paragraph", type: "textarea" },
     { key: "panelHeading", label: "Panel heading", type: "text" },

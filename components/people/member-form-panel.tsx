@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { Smartphone, X } from "lucide-react";
+import { Home, Smartphone, UserPlus, Users, X } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -12,17 +12,26 @@ import {
   updateMember,
 } from "@/app/dashboard/people/actions";
 import { moveAppConnectionToPerson } from "@/app/dashboard/people/claim-actions";
-import { Button } from "@/components/ui/button";
-import { PhoneInput } from "@/components/ui/phone-input";
-import { Select } from "@/components/ui/select";
 import { ProfileAvatar } from "@/components/dashboard/profile-avatar";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ContactActions } from "@/components/people/contact-actions";
 import {
   MemberCareSection,
   MemberDocumentsSection,
   MemberHouseholdSection,
   useMemberCareDetails,
 } from "@/components/people/member-care-panel";
+import {
+  formatFriendlyDate,
+  fullName,
+  getInitials,
+} from "@/components/people/people-format";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { confirmAction } from "@/components/ui/confirm-dialog";
+import { PhoneInput } from "@/components/ui/phone-input";
+import { SearchPicker } from "@/components/ui/search-picker";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { SuccessState } from "@/components/ui/success-state";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ChurchMember } from "@/lib/queries/members";
 import { formatPhoneDisplay } from "@/lib/people/validate-member";
 
@@ -33,6 +42,10 @@ type MemberFormPanelProps = {
   onSaved: (member: ChurchMember) => void;
   onDeactivated?: (memberId: string) => void;
   onReactivated?: (member: ChurchMember) => void;
+  /** This person was added a moment ago: offer the next steps. */
+  justAdded?: boolean;
+  /** Start a fresh "Add person" form. */
+  onAddAnother?: () => void;
   /** The church offers the member app, so say whether this person is on it. */
   showAppStatus?: boolean;
   /** Set when this person is connected to an app account. */
@@ -44,28 +57,7 @@ type MemberFormPanelProps = {
   onAppConnectionMoved?: () => void;
 };
 
-function getInitials(firstName: string, lastName: string) {
-  return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
-}
-
-function formatDay(value: string | null | undefined): string | null {
-  if (!value) return null;
-  // A church's calendar day ("2026-09-13") is read at noon UTC and printed in
-  // UTC, so no viewer's timezone can move it to the day before.
-  const isCalendarDay = /^\d{4}-\d{2}-\d{2}$/.test(value);
-  const date = new Date(isCalendarDay ? `${value}T12:00:00Z` : value);
-  if (Number.isNaN(date.getTime())) return null;
-  return date.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-    ...(isCalendarDay ? { timeZone: "UTC" } : {}),
-  });
-}
-
-function fullName(member: Pick<ChurchMember, "first_name" | "last_name">): string {
-  return `${member.first_name} ${member.last_name}`.trim();
-}
+type PanelTab = "details" | "care" | "documents" | "household";
 
 /**
  * Whether this person is on the app, and — for when the automatic match got
@@ -85,19 +77,19 @@ function MemberAppSection({
   onMoved?: () => void;
 }) {
   const [moving, setMoving] = useState(false);
-  const [target, setTarget] = useState("");
+  const [target, setTarget] = useState<string[]>([]);
   const [pending, startTransition] = useTransition();
 
   if (!connection) {
     return (
-      <section className="flex items-start gap-3 rounded-xl border border-border bg-muted/30 p-4">
+      <section className="flex items-start gap-3 rounded-2xl border border-border bg-muted/30 p-4">
         <Smartphone className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden />
-        <div className="flex flex-col gap-1 text-sm">
+        <div className="flex flex-col gap-1 text-[15px]">
           <p className="font-semibold text-foreground">Not on the app yet</p>
           <p className="text-muted-foreground">
-            When {member.first_name} joins your church in the FaithForm app,
-            they are connected here and their check-ins count automatically.{" "}
-            <Link href="/dashboard/app" className="font-medium text-accent hover:underline">
+            When {member.first_name} joins your church in the app, they&apos;re
+            connected here and their check-ins count automatically.{" "}
+            <Link href="/dashboard/app" className="font-semibold text-primary underline-offset-4 hover:underline dark:text-accent">
               Share an invitation link
             </Link>
           </p>
@@ -106,45 +98,45 @@ function MemberAppSection({
     );
   }
 
-  const sortedTargets = [...moveTargets].sort((a, b) =>
-    fullName(a).localeCompare(fullName(b)),
-  );
+  const chosenId = target[0] ?? "";
+  const chosen = moveTargets.find((candidate) => candidate.id === chosenId) ?? null;
 
   const move = () => {
-    if (!target) {
+    if (!chosenId) {
       toast.error("Choose who this app account belongs to.");
       return;
     }
-    const chosen = sortedTargets.find((candidate) => candidate.id === target);
     startTransition(async () => {
       const result = await moveAppConnectionToPerson({
         fromMemberId: member.id,
-        toMemberId: target,
+        toMemberId: chosenId,
       });
       if (!result.ok) {
         toast.error(result.message);
         return;
       }
       toast.success(
-        chosen ? `The app connection is now ${fullName(chosen)}'s.` : "App connection moved.",
+        chosen
+          ? `The app account now belongs to ${fullName(chosen)}.`
+          : "The app account was moved.",
       );
       onMoved?.();
     });
   };
 
-  const since = formatDay(connection.linkedAt);
+  const since = formatFriendlyDate(connection.linkedAt);
 
   return (
-    <section className="flex flex-col gap-3 rounded-xl border border-brand-navy/20 bg-brand-navy/5 p-4 dark:border-brand-gold/30 dark:bg-brand-gold/10">
+    <section className="flex flex-col gap-3 rounded-2xl border border-primary/15 bg-primary/[0.04] p-4 dark:border-accent/30 dark:bg-accent/10">
       <div className="flex items-start gap-3">
         <Smartphone className="mt-0.5 size-5 shrink-0 text-primary dark:text-accent" aria-hidden />
-        <div className="flex flex-col gap-1 text-sm">
+        <div className="flex flex-col gap-1 text-[15px]">
           <p className="font-semibold text-foreground">
-            On the FaithForm app{since ? ` since ${since}` : ""}
+            On the app{since ? ` since ${since}` : ""}
           </p>
           <p className="text-muted-foreground">
-            Check-ins from the app — automatic on arrival, or by scanning the
-            service code — count as {member.first_name}&apos;s attendance.
+            When {member.first_name} checks in with the app, it counts as
+            their attendance.
             {member.source === "app"
               ? " This record was added when they joined in the app."
               : ""}
@@ -154,40 +146,40 @@ function MemberAppSection({
 
       {isAdmin ? (
         moving ? (
-          <div className="flex flex-col gap-2">
-            <label htmlFor={`move-${member.id}`} className="text-sm font-semibold text-foreground">
-              Which person is this app account?
-            </label>
-            <Select
-              id={`move-${member.id}`}
+          <div className="flex flex-col gap-3">
+            <SearchPicker
+              label="Which person is this app account?"
+              items={moveTargets.map((candidate) => ({
+                id: candidate.id,
+                label: fullName(candidate),
+                description: candidate.phone
+                  ? formatPhoneDisplay(candidate.phone) ?? undefined
+                  : candidate.email ?? undefined,
+              }))}
               value={target}
-              onChange={(event) => setTarget(event.target.value)}
-              disabled={pending}
-            >
-              <option value="">Choose someone…</option>
-              {sortedTargets.map((candidate) => (
-                <option key={candidate.id} value={candidate.id}>
-                  {fullName(candidate)}
-                </option>
-              ))}
-            </Select>
-            <p className="text-xs text-muted-foreground">
+              onChange={setTarget}
+              placeholder="Start typing their name…"
+            />
+            <p className="text-sm text-muted-foreground">
               {member.source === "app"
-                ? `Their check-ins move with the connection, and this record is deactivated — it only existed for this app account.`
-                : `Check-ins already recorded stay with ${member.first_name}; new ones go to the person you choose.`}
+                ? `Their check-ins move with it, and this record is deactivated. It only existed for this app account.`
+                : `Check-ins already recorded stay with ${member.first_name}. New ones go to the person you choose.`}
             </p>
             <div className="flex flex-wrap gap-2">
-              <Button type="button" size="sm" disabled={pending || !target} onClick={move}>
-                {pending ? "Moving…" : "Move the app connection"}
+              <Button type="button" disabled={pending || !chosenId} onClick={move}>
+                {pending
+                  ? "Moving…"
+                  : chosen
+                    ? `Move to ${fullName(chosen)}`
+                    : "Move app account"}
               </Button>
               <Button
                 type="button"
-                size="sm"
                 variant="outline"
                 disabled={pending}
                 onClick={() => {
                   setMoving(false);
-                  setTarget("");
+                  setTarget([]);
                 }}
               >
                 Cancel
@@ -195,13 +187,14 @@ function MemberAppSection({
             </div>
           </div>
         ) : (
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            className="self-start"
             onClick={() => setMoving(true)}
-            className="self-start text-sm font-medium text-accent hover:underline"
           >
-            Not the right person? Move this app connection
-          </button>
+            Wrong person? Move this app account
+          </Button>
         )
       ) : null}
     </section>
@@ -209,15 +202,15 @@ function MemberAppSection({
 }
 
 const inputClassName =
-  "min-h-12 rounded-[10px] border-[1.5px] border-border bg-background px-4 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
+  "min-h-12 w-full rounded-[10px] border-[1.5px] border-border bg-background px-4 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 read-only:bg-muted/40";
 
 /**
- * One person, in tabs.
+ * One person.
  *
- * Details, care, documents and household used to sit in one column that had
- * to be scrolled top to bottom and back, with two Save buttons a screen apart.
- * Each is now its own tab, and the panel is wide enough that the upload form
- * lays out in two columns instead of a stack of five.
+ * The title is their name. Under it: Call, Text and Email, when those exist.
+ * Then four tabs — Details, Care, Documents, Family — each with a button that
+ * says exactly what it saves, so nobody wonders whether "Save" on one tab
+ * also saved the other.
  */
 export function MemberFormPanel({
   member,
@@ -226,6 +219,8 @@ export function MemberFormPanel({
   onSaved,
   onDeactivated,
   onReactivated,
+  justAdded = false,
+  onAddAnother,
   showAppStatus = false,
   appConnection = null,
   photoUrl = null,
@@ -242,7 +237,7 @@ export function MemberFormPanel({
   );
   const [email, setEmail] = useState(member?.email ?? "");
   const [error, setError] = useState<string | null>(null);
-  const [confirmDeactivate, setConfirmDeactivate] = useState(false);
+  const [tab, setTab] = useState<PanelTab>("details");
 
   const [isSaving, startSaveTransition] = useTransition();
   const [isDeactivating, startDeactivateTransition] = useTransition();
@@ -270,14 +265,25 @@ export function MemberFormPanel({
         return;
       }
 
-      toast.success(isEdit ? "Person updated" : "Person added");
+      const name = fullName(result.member);
+      toast.success(isEdit ? `${name}'s details saved.` : `${name} added.`);
       onSaved(result.member);
     });
   }
 
-  function handleDeactivate() {
+  async function handleDeactivate() {
     if (!member) return;
     setError(null);
+    const name = fullName(member);
+
+    const confirmed = await confirmAction({
+      title: `Deactivate ${name}?`,
+      description: `${member.first_name} moves to your Inactive list and off the weekly attendance sheet. Their attendance history, family and documents are all kept, and you can reactivate them at any time.`,
+      confirmLabel: `Deactivate ${member.first_name}`,
+      cancelLabel: "Keep active",
+      destructive: true,
+    });
+    if (!confirmed) return;
 
     startDeactivateTransition(async () => {
       const result = await deactivateMember(member.id);
@@ -286,7 +292,7 @@ export function MemberFormPanel({
         return;
       }
 
-      toast.success(`${member.first_name} deactivated`);
+      toast.success(`${name} deactivated. Their history is kept.`);
       onDeactivated?.(member.id);
       onClose();
     });
@@ -303,20 +309,20 @@ export function MemberFormPanel({
         return;
       }
 
-      toast.success(`${member.first_name} reactivated`);
+      toast.success(`${fullName(member)} is active again.`);
       onReactivated?.(result.member);
     });
   }
 
   const detailsForm = (
     <form
-      className="flex flex-col gap-4"
+      className="flex flex-col gap-5"
       onSubmit={(event) => {
         event.preventDefault();
         if (!readOnly) handleSave();
       }}
     >
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-5 sm:grid-cols-2">
         <div className="flex flex-col gap-2">
           <label htmlFor="member-first-name" className="text-base font-semibold">
             First name
@@ -327,6 +333,8 @@ export function MemberFormPanel({
             onChange={(event) => setFirstName(event.target.value)}
             required
             readOnly={readOnly}
+            autoFocus={!isEdit}
+            autoComplete="off"
             className={inputClassName}
           />
         </div>
@@ -340,6 +348,7 @@ export function MemberFormPanel({
             value={lastName}
             onChange={(event) => setLastName(event.target.value)}
             readOnly={readOnly}
+            autoComplete="off"
             className={inputClassName}
           />
         </div>
@@ -347,18 +356,20 @@ export function MemberFormPanel({
 
       <div className="flex flex-col gap-2">
         <label htmlFor="member-phone" className="text-base font-semibold">
-          Phone
+          Phone (optional)
         </label>
         <PhoneInput
           id="member-phone"
           value={phone}
           onValueChange={setPhone}
           readOnly={readOnly}
+          aria-describedby={readOnly ? undefined : "member-phone-hint"}
           className={inputClassName}
         />
         {!readOnly ? (
-          <p className="text-xs text-muted-foreground">
-            Used for attendance follow-up texts.
+          <p id="member-phone-hint" className="text-sm text-muted-foreground">
+            So you can call or text them, and so attendance follow-up texts
+            reach them.
           </p>
         ) : null}
       </div>
@@ -373,6 +384,7 @@ export function MemberFormPanel({
           value={email}
           onChange={(event) => setEmail(event.target.value)}
           readOnly={readOnly}
+          autoComplete="off"
           className={inputClassName}
         />
       </div>
@@ -383,88 +395,69 @@ export function MemberFormPanel({
         </p>
       ) : null}
 
-      <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:items-center">
-        {readOnly ? (
-          <Button
-            type="button"
-            variant="outline"
-            className="h-12 text-base sm:w-auto"
-            onClick={onClose}
-          >
-            Close
+      {readOnly ? (
+        <p className="text-[15px] text-muted-foreground">
+          Only church admins can change these details.
+        </p>
+      ) : (
+        <div className="flex flex-col gap-3 pt-1 sm:flex-row sm:items-center">
+          <Button type="submit" size="lg" className="sm:min-w-44" disabled={isSaving}>
+            {isSaving ? "Saving…" : isEdit ? "Save details" : "Add person"}
           </Button>
-        ) : (
-          <>
-            <Button
-              type="submit"
-              className="h-12 text-base sm:min-w-40"
-              disabled={isSaving}
-            >
-              {isSaving ? "Saving..." : isEdit ? "Save" : "Add person"}
+          {!isEdit ? (
+            <Button type="button" variant="ghost" onClick={onClose}>
+              Cancel
             </Button>
+          ) : null}
+        </div>
+      )}
 
-            {isEdit && member ? (
-              member.is_active ? (
-                confirmDeactivate ? (
-                  <div className="flex flex-col gap-2 rounded-xl border border-destructive/30 bg-destructive/5 p-4 sm:flex-1">
-                    <p className="text-sm text-foreground">
-                      Remove {member.first_name} from the active roster?
-                      Attendance history is kept.
-                    </p>
-                    <div className="flex gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        className="h-11 flex-1 text-base"
-                        onClick={() => setConfirmDeactivate(false)}
-                      >
-                        Keep
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        className="h-11 flex-1 text-base"
-                        disabled={isDeactivating}
-                        onClick={handleDeactivate}
-                      >
-                        {isDeactivating ? "Removing..." : "Deactivate"}
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    className="h-11 text-base text-destructive sm:ml-auto"
-                    onClick={() => setConfirmDeactivate(true)}
-                  >
-                    Deactivate person
-                  </Button>
-                )
-              ) : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="h-11 text-base sm:ml-auto"
-                  disabled={isReactivating}
-                  onClick={handleReactivate}
-                >
-                  {isReactivating ? "Reactivating..." : "Reactivate person"}
-                </Button>
-              )
-            ) : null}
-          </>
-        )}
-      </div>
+      {!readOnly && isEdit && member ? (
+        <div className="mt-4 flex flex-col gap-3 border-t border-border pt-5">
+          {member.is_active ? (
+            <>
+              <p className="text-[15px] text-muted-foreground">
+                No longer coming? Deactivate {member.first_name} to take them
+                off your list. Their history is kept.
+              </p>
+              <Button
+                type="button"
+                variant="destructive"
+                className="self-start"
+                disabled={isDeactivating}
+                onClick={handleDeactivate}
+              >
+                {isDeactivating ? "Deactivating…" : `Deactivate ${member.first_name}`}
+              </Button>
+            </>
+          ) : (
+            <>
+              <p className="text-[15px] text-muted-foreground">
+                {member.first_name} is inactive. Their history is kept.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                className="self-start"
+                disabled={isReactivating}
+                onClick={handleReactivate}
+              >
+                {isReactivating ? "Reactivating…" : `Reactivate ${member.first_name}`}
+              </Button>
+            </>
+          )}
+        </div>
+      ) : null}
     </form>
   );
 
   const documentCount = care.details?.files.length ?? null;
+  const title = isEdit && member ? fullName(member) : "Add person";
 
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex flex-col gap-6">
       <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-start gap-4">
+        <div className="flex min-w-0 items-center gap-4">
           {/*
             The list draws this person small; here there is room for a face.
             Someone still being added has no photo and no name to draw one
@@ -472,7 +465,7 @@ export function MemberFormPanel({
           */}
           {isEdit && member ? (
             <div
-              className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-accent/15 text-xl font-bold text-accent"
+              className="flex size-16 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary/[0.08] font-heading text-xl font-bold text-primary dark:bg-accent/15 dark:text-accent"
               aria-hidden
             >
               <ProfileAvatar
@@ -481,59 +474,108 @@ export function MemberFormPanel({
               />
             </div>
           ) : null}
-          <div className="min-w-0">
-            <h2 className="font-heading text-xl font-semibold text-foreground">
-              {readOnly
-                ? "Person details"
-                : isEdit && member
-                  ? `${member.first_name} ${member.last_name}`.trim()
-                  : "Add person"}
+          <div className="min-w-0 space-y-1.5">
+            <h2
+              id="person-panel-title"
+              className="truncate font-heading text-2xl font-bold text-foreground"
+            >
+              {title}
             </h2>
-            <p className="mt-1 text-base text-muted-foreground">
-              {readOnly
-                ? "Phone numbers are managed by church admins."
-                : isEdit
-                  ? "Details, care notes, documents and household in one place."
-                  : "Phone numbers are used for attendance follow-up texts."}
-            </p>
+            {isEdit && member ? (
+              !member.is_active ? (
+                <StatusBadge tone="neutral">Inactive</StatusBadge>
+              ) : showAppStatus && appConnection ? (
+                <StatusBadge tone="ready">On the app</StatusBadge>
+              ) : null
+            ) : (
+              <p className="text-base text-muted-foreground">
+                Only a first name is needed. You can add the rest later.
+              </p>
+            )}
           </div>
         </div>
         <button
           type="button"
           onClick={onClose}
-          aria-label="Close panel"
-          className="flex size-9 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          aria-label="Close"
+          className="flex size-11 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
-          <X className="size-5" aria-hidden />
+          <X className="size-6" aria-hidden />
         </button>
       </div>
 
+      {isEdit && member ? (
+        <ContactActions
+          firstName={member.first_name}
+          phone={member.phone}
+          email={member.email}
+          emptyText={
+            isAdmin
+              ? `No phone or email for ${member.first_name} yet. Add one under Details.`
+              : `No phone or email for ${member.first_name} yet.`
+          }
+        />
+      ) : null}
+
+      {justAdded && member ? (
+        <SuccessState
+          title={`${fullName(member)} added.`}
+          description="What would you like to do next?"
+          className="gap-4 px-5 py-6"
+          actions={
+            <>
+              <Button type="button" variant="outline" onClick={() => setTab("household")}>
+                <Home aria-hidden />
+                Add to a family
+              </Button>
+              <Link
+                href="/dashboard/groups"
+                className={buttonVariants({ variant: "outline" })}
+              >
+                <Users aria-hidden className="size-5" />
+                Add to a group
+              </Link>
+              <Button type="button" variant="outline" onClick={onAddAnother}>
+                <UserPlus aria-hidden />
+                Add another
+              </Button>
+            </>
+          }
+        />
+      ) : null}
+
       {/*
-        The care, document and household sections carry forms of their own, so
+        The care, document and family sections carry forms of their own, so
         they sit beside the details form as tab panels rather than inside it: a
         nested <form> is invalid HTML that browsers resolve by dropping the
         inner one, silently, and only at runtime.
       */}
       {isEdit && member ? (
-        <Tabs defaultValue="details" className="mt-4">
+        <Tabs
+          defaultValue="details"
+          value={tab}
+          onValueChange={(value) => setTab(value as PanelTab)}
+        >
           <TabsList className="w-full justify-start overflow-x-auto">
-            <TabsTrigger value="details">Details</TabsTrigger>
-            <TabsTrigger value="care">Care</TabsTrigger>
+            <TabsTrigger value="details"><span className="text-[15px]">Details</span></TabsTrigger>
+            <TabsTrigger value="care"><span className="text-[15px]">Care</span></TabsTrigger>
             <TabsTrigger value="documents">
-              Documents{documentCount != null && documentCount > 0 ? ` (${documentCount})` : ""}
+              <span className="text-[15px]">
+                Documents{documentCount != null && documentCount > 0 ? ` (${documentCount})` : ""}
+              </span>
             </TabsTrigger>
-            <TabsTrigger value="household">Household</TabsTrigger>
+            <TabsTrigger value="household"><span className="text-[15px]">Family</span></TabsTrigger>
           </TabsList>
-          <TabsContent value="details" className="mt-5 flex flex-col gap-5">
-            <p className="text-sm text-muted-foreground">
+          <TabsContent value="details" className="mt-6 flex flex-col gap-6">
+            <p className="text-[15px] text-muted-foreground">
               {member.attendance_count > 0
                 ? `At church ${member.attendance_count} ${
                     member.attendance_count === 1 ? "day" : "days"
                   }${
                     member.last_attended
-                      ? `, most recently ${formatDay(member.last_attended)}`
+                      ? `, most recently on ${formatFriendlyDate(member.last_attended)}`
                       : ""
-                  } — marked on the weekly sheet, or checked in by the app, a code, the kiosk or a room.`
+                  }.`
                 : "No attendance recorded yet."}
             </p>
             {showAppStatus ? (
@@ -547,7 +589,7 @@ export function MemberFormPanel({
             ) : null}
             {detailsForm}
           </TabsContent>
-          <TabsContent value="care" className="mt-5">
+          <TabsContent value="care" className="mt-6">
             <MemberCareSection
               memberId={member.id}
               memberName={member.first_name}
@@ -555,24 +597,26 @@ export function MemberFormPanel({
               state={care}
             />
           </TabsContent>
-          <TabsContent value="documents" className="mt-5">
+          <TabsContent value="documents" className="mt-6">
             <MemberDocumentsSection
-              memberId={member.id}
-              isAdmin={isAdmin}
-              state={care}
-            />
-          </TabsContent>
-          <TabsContent value="household" className="mt-5">
-            <MemberHouseholdSection
               memberId={member.id}
               memberName={member.first_name}
               isAdmin={isAdmin}
               state={care}
             />
           </TabsContent>
+          <TabsContent value="household" className="mt-6">
+            <MemberHouseholdSection
+              memberId={member.id}
+              memberName={member.first_name}
+              memberLastName={member.last_name}
+              isAdmin={isAdmin}
+              state={care}
+            />
+          </TabsContent>
         </Tabs>
       ) : (
-        <div className="mt-5">{detailsForm}</div>
+        detailsForm
       )}
     </div>
   );

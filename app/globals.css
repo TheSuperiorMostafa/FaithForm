@@ -15,9 +15,10 @@
     --secondary: #F0EDE6;
     --secondary-foreground: #002D5F;
     --muted: #EAE7E0;
-    --muted-foreground: #6B7280;
+    --muted-foreground: #5B6272;
     --accent: #C5A059;
-    --accent-foreground: #ffffff;
+    /* Navy on gold is 5.55:1. White on gold was 2.46:1 and failed WCAG AA. */
+    --accent-foreground: #002D5F;
     --destructive: #B42318;
     --destructive-foreground: #ffffff;
     --border: #DDD9D0;

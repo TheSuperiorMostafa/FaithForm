@@ -10,3 +10,10 @@
 - Always wrap loading states in `<SkeletonContainer label="...">` to enforce the 180ms anti-flicker delay (suppressing flashing on sub-150ms cached loads) and provide accessible `role="status"`, `aria-busy="true"`, and screen-reader announcements.
 - Use `<SkeletonText lines={n} />` for paragraph placeholders with organic varying line widths and font leading parity.
 - Static-First Principle (Text That Doesn't Change Loads Normally): Static text and UI chrome (page titles, descriptions, action buttons, section labels, table/calendar headers) must load as real text without skeleton shimmer. Skeletons should only mask dynamic, data-dependent values.
+
+### Mandatory Requirement: Dashboard Simplicity Standard
+- Every web dashboard change must pass `docs/ux/DASHBOARD_UX_CHECKLIST.md` (full rules in `docs/ux/DASHBOARD_SIMPLICITY_STANDARD.md`). If ordinary pastors would need a manual, it is not finished.
+- One page width: the dashboard shell sets `max-w-6xl` for every page (Announcements is the only full-width exception). Page roots use `flex w-full flex-col` and never set their own `max-w-*`.
+- Use the shared primitives (`PageHeader`, `ActionCard`, `List`/`ListRow`, `EmptyState`, `ErrorState`, `SuccessState`, `StatusBadge`, `AdvancedSection`, `SearchPicker`, `confirmAction`, `undoToast`, `toUserError`) instead of ad-hoc versions.
+- Never return or render raw `error.message`; never use `window.confirm`/`window.prompt`; no icon-only or hover-only actions; targets ≥ 44px; plain church language (no slug, RTMP, credential, raw enums, vendor names).
+- The iPhone and Android apps are separate; dashboard simplicity work never touches `apps/`.

@@ -6,6 +6,7 @@ import {
 } from "@/lib/security/rate-limit";
 import { getRequestIpFromHeaders } from "@/lib/security/request-ip";
 import { dashboardEmailRedirect } from "@/lib/auth/auth-redirects";
+import { signInErrorMessage, signInLinkErrorMessage } from "./auth-messages";
 
 export type LoginFormState = {
   ok: boolean;
@@ -94,7 +95,12 @@ export async function sendMagicLink(
   });
 
   if (error) {
-    return { ok: false, error: describeAuthError(error.message) ?? error.message };
+    // Throttling first, in its own words; anything else in plain words rather
+    // than the provider's text.
+    return {
+      ok: false,
+      error: describeAuthError(error.message) ?? signInLinkErrorMessage(error),
+    };
   }
 
   return { ok: true };
@@ -164,7 +170,7 @@ export async function signInWithPassword(
   const password = formData.get("password")?.toString();
 
   if (!email || !password) {
-    return { ok: false, error: "Email and password are required." };
+    return { ok: false, error: "Please enter your email and password." };
   }
 
   const supabase = createClient();
@@ -174,7 +180,7 @@ export async function signInWithPassword(
     // A throttled sign-in and a wrong password are not the same problem, and
     // "Invalid login credentials" sends someone to reset a password that was
     // right all along.
-    return { ok: false, error: describeAuthError(error.message) ?? error.message };
+    return { ok: false, error: describeAuthError(error.message) ?? signInErrorMessage(error) };
   }
 
   return { ok: true };

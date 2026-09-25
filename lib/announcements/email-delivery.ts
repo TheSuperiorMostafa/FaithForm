@@ -113,7 +113,7 @@ export const WEEKLY_EMAIL_SWITCHED_OFF_MESSAGE =
 
 /** Said wherever there is no mailbox to make the email in. */
 export const NO_WEEKLY_EMAIL_CHANNEL_MESSAGE =
-  "There's nowhere to create the weekly email yet. In Settings, under Integrations, connect Google, or connect iCloud with an Apple ID and turn on iCloud Mail.";
+  "There's nowhere to create the weekly email yet. In Settings, under Connected accounts, connect Google, or connect iCloud with an Apple ID and turn on iCloud Mail.";
 
 /**
  * Which mailbox made a draft, from the id stored for it. iCloud ids carry a

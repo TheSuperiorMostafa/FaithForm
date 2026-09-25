@@ -33,6 +33,8 @@ export function ThemePreview({
     <button
       type="button"
       onClick={onSelect}
+      aria-pressed={selected}
+      aria-label={`${theme.name} theme${selected ? " (chosen)" : ""}`}
       className={cn(
         "group flex flex-col overflow-hidden rounded-xl border-2 text-left transition-all",
         selected
@@ -51,8 +53,10 @@ export function ThemePreview({
           <div className="absolute inset-0 bg-black/25" aria-hidden />
         )}
         <p
+          aria-hidden
           className={cn(
             "relative line-clamp-3 text-center leading-tight",
+            // A picture of a slide, not text anyone reads to decide.
             compact ? "text-[8px]" : "text-[9px]",
             theme.textShadow && "drop-shadow-md",
           )}
@@ -65,15 +69,10 @@ export function ThemePreview({
         </p>
       </div>
       {!compact && (
-        <div className="border-t border-border bg-card px-2.5 py-2">
-          <div className="flex items-start justify-between gap-1">
-            <p className="text-xs font-medium">{theme.name}</p>
-            <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-[9px] capitalize text-muted-foreground">
-              {getCategoryLabel(theme.category)}
-            </span>
-          </div>
-          <p className="line-clamp-1 text-[10px] text-muted-foreground">
-            {theme.description}
+        <div className="border-t border-border bg-card px-3 py-2.5">
+          <p className="text-sm font-semibold text-foreground">{theme.name}</p>
+          <p className="line-clamp-1 text-sm capitalize text-muted-foreground">
+            {getCategoryLabel(theme.category)}
           </p>
         </div>
       )}

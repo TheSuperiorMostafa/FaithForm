@@ -10,6 +10,7 @@ const invitationsCard = readFileSync(
 );
 const peoplePage = readFileSync("app/dashboard/people/page.tsx", "utf8");
 const joinPanel = readFileSync("components/people/join-requests-panel.tsx", "utf8");
+const attentionCard = readFileSync("components/people/needs-attention-card.tsx", "utf8");
 
 // ---------------------------------------------------------------------------
 // The pastor-facing controls actually exist on a screen
@@ -29,7 +30,10 @@ test("the Member App page is in the sidebar and renders the app controls", () =>
 });
 
 test("the People page surfaces pending join requests for a decision", () => {
-  assert.match(peoplePage, /<JoinRequestsPanel/);
+  // Folded into the one "Needs your attention" card above the list.
+  assert.match(peoplePage, /<NeedsAttentionCard/);
+  assert.match(peoplePage, /joinRequests=\{joinRequests\}/);
+  assert.match(attentionCard, /<JoinRequestsPanel/);
   assert.match(peoplePage, /state === "pending"/);
   assert.match(joinPanel, /decideVisitorRelationship/);
   // Both doors, not just the yes.

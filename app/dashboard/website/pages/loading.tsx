@@ -1,52 +1,47 @@
-import { Card } from "@/components/ui/card";
 import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
+import { LiveNoteSkeleton, SitePreviewSkeleton } from "@/components/website-admin/skeletons";
 
+/** Mirrors Website → Pages: section list beside the 520px preview. */
 export default function WebsitePagesLoading() {
   return (
     <SkeletonContainer
-      className="grid gap-6 md:grid-cols-[300px_1fr]"
-      label="page sections"
+      className="grid w-full gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,520px)]"
+      label="website pages"
     >
-      {/* Sections list column */}
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-between pb-1">
-          <Skeleton className="h-5 w-24" />
-          <Skeleton className="h-4 w-16" />
-        </div>
-        <div className="space-y-2">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Card key={i} className="flex items-center justify-between p-3.5 shadow-card dark:shadow-none">
-              <div className="flex items-center gap-2.5">
-                <Skeleton className="size-4 rounded" />
-                <Skeleton className="h-4 w-28" />
+      <div className="flex min-w-0 flex-col gap-4">
+        <LiveNoteSkeleton />
+
+        <p className="text-[15px] text-muted-foreground">
+          Each block below is one part of your home page, top to bottom. Choose
+          Edit to change its words and photos, move it up or down, or switch it
+          off to hide it. The preview updates after each change saves.
+        </p>
+
+        <div className="flex flex-col gap-3">
+          {Array.from({ length: 7 }).map((_, i) => (
+            <div
+              key={i}
+              className="flex flex-wrap items-center gap-3 rounded-2xl border border-border bg-card p-4 shadow-card sm:p-5"
+            >
+              <div className="min-w-0 flex-1 space-y-2">
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-6 w-44" />
+                  <Skeleton className="h-6 w-20 rounded-full" />
+                </div>
+                <Skeleton className="h-4 w-40" />
               </div>
-              <Skeleton className="h-5 w-9 rounded-full" />
-            </Card>
+              <div className="flex flex-wrap items-center gap-2">
+                <Skeleton className="h-11 w-28 rounded-[10px]" />
+                <Skeleton className="h-11 w-32 rounded-[10px]" />
+                <Skeleton className="h-11 w-24 rounded-[10px]" />
+                <Skeleton className="h-11 w-20 rounded-[10px]" />
+              </div>
+            </div>
           ))}
         </div>
       </div>
 
-      {/* Section editor column */}
-      <Card className="p-6 space-y-6 shadow-card dark:shadow-none">
-        <div className="flex items-center justify-between border-b border-border pb-4">
-          <div className="space-y-1">
-            <Skeleton className="h-6 w-40" />
-            <Skeleton className="h-3.5 w-60" />
-          </div>
-          <Skeleton className="h-9 w-24 rounded-lg" />
-        </div>
-
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-20" />
-            <Skeleton className="h-10 w-full rounded-md" />
-          </div>
-          <div className="space-y-2">
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-28 w-full rounded-md" />
-          </div>
-        </div>
-      </Card>
+      <SitePreviewSkeleton sticky />
     </SkeletonContainer>
   );
 }

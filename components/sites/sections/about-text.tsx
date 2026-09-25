@@ -62,7 +62,7 @@ export const aboutTextSection = defineSection<AboutTextContent>({
   // already there. A section's image is a primary choice, so it is asked for
   // like one.
   fields: [
-    { key: "eyebrow", label: "Eyebrow", type: "text" },
+    { key: "eyebrow", label: "Small heading above", type: "text" },
     { key: "headline", label: "Headline", type: "headline" },
     {
       key: "image",

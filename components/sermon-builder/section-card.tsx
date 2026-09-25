@@ -26,6 +26,7 @@ export function SectionCard({
       </CardHeader>
       <CardContent>
         <Textarea
+          aria-label={title}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onBlur={onBlur}
@@ -48,7 +49,6 @@ export function SectionCardActions({
   return (
     <Button
       variant="outline"
-      size="sm"
       onClick={onRegenerate}
       disabled={loading}
     >

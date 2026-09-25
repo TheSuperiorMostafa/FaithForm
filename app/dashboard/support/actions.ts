@@ -10,22 +10,32 @@ import { absoluteAppPath } from "@/lib/site-url";
 import { postTicketComment } from "@/lib/support/comments";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { toUserError } from "@/lib/errors/user-error";
+import {
+  SUPPORT_SUBJECT_MAX,
+  deriveTicketSubject,
+  sanitizeFromPath,
+  withFromPath,
+} from "@/app/dashboard/support/ticket-helpers";
 
 export async function submitSupportTicket(params: {
-  subject: string;
+  /** Optional: the first line of the message is used when it is empty. */
+  subject?: string;
   body: string;
+  /** The dashboard page they came from, if known (`?from=`). */
+  fromPath?: string | null;
 }): Promise<{ error?: string }> {
   const auth = await requireChurchAuth();
 
-  const subject = params.subject.trim();
-  const body = params.body.trim();
-
-  if (!subject) {
-    return { error: "Subject is required." };
+  const message = String(params.body ?? "").trim();
+  if (!message) {
+    return { error: "Write a message so we know how to help." };
   }
-  if (subject.length > 200) {
-    return { error: "Subject must be 200 characters or fewer." };
+  const subject = deriveTicketSubject(String(params.subject ?? ""), message);
+  if (subject.length > SUPPORT_SUBJECT_MAX) {
+    return { error: `Keep the subject under ${SUPPORT_SUBJECT_MAX} characters.` };
   }
+  const body = withFromPath(message, sanitizeFromPath(params.fromPath));
 
   const admin = createAdminClient();
   const { data: ticket, error } = await admin
@@ -42,7 +52,7 @@ export async function submitSupportTicket(params: {
     .single();
 
   if (error) {
-    return { error: error.message };
+    return { error: toUserError(error, "We couldn't send your message.") };
   }
 
   // The ticket is saved; from here nothing may fail loudly. A church that has
@@ -113,7 +123,7 @@ export async function replyToSupportTicket(params: {
     .eq("id", params.ticketId)
     .maybeSingle();
 
-  if (error) return { error: error.message };
+  if (error) return { error: toUserError(error, "We couldn't send your reply.") };
   if (!ticket || ticket.church_id !== auth.churchId) {
     return { error: "That ticket could not be found." };
   }
@@ -127,7 +137,15 @@ export async function replyToSupportTicket(params: {
     body: params.body,
   });
 
-  if (posted.error) return posted;
+  if (posted.error) {
+    // Length and empty-message checks are written for people; anything else
+    // (a database failure) is not.
+    return {
+      error: /^(Write a message|Keep it under)/.test(posted.error)
+        ? posted.error
+        : toUserError(posted.error, "We couldn't send your reply."),
+    };
+  }
 
   // A church replying to a ticket we had closed is reopening it. Leaving it
   // resolved is how a reply goes unread.

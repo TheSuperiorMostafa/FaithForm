@@ -10,11 +10,14 @@ import type { FeatureKey } from "@/lib/features/catalog";
 import { resolveSidebarLayout } from "@/lib/dashboard/sidebar-layout";
 import { cn } from "@/lib/utils";
 import {
+  NAV_GROUP_LABELS,
   navItems,
   filterNavByFeatures,
   footerUtilityNavItems,
   isNavItemActive,
+  type NavItem,
 } from "./nav-items";
+import { SIDEBAR_PINNED_QUERY, useMediaQuery } from "./use-media-query";
 import { useSidebarHoverIntent } from "./use-sidebar-hover-intent";
 
 type SidebarProps = {
@@ -25,12 +28,22 @@ type SidebarProps = {
   allowedFeatures: FeatureKey[];
 };
 
-function isActive(pathname: string, href: string) {
-  if (href === "/dashboard") {
-    return pathname === "/dashboard";
-  }
-  return pathname === href || pathname.startsWith(`${href}/`);
+/** Plain words for the stored role. */
+export function roleLabel(role: string | null): string {
+  if (role === "admin" || role === "owner") return "Admin";
+  return "Team member";
 }
+
+/*
+ * Collapsed styling only applies below `lg`. At ≥1024px the sidebar is always
+ * open (see lib/dashboard/sidebar-layout.ts), and CSS — not JS — decides that,
+ * so the first paint is already correct and nothing jumps on hydration.
+ */
+const labelVisibility = (collapsed: boolean) =>
+  collapsed
+    ? "max-w-0 opacity-0 overflow-hidden lg:max-w-full lg:opacity-100 lg:overflow-visible"
+    : "max-w-full opacity-100";
+const blockVisibility = (collapsed: boolean) => (collapsed ? "hidden lg:block" : "block");
 
 function SidebarLink({
   item,
@@ -39,7 +52,7 @@ function SidebarLink({
   pending,
   onNavigate,
 }: {
-  item: (typeof navItems)[number];
+  item: NavItem;
   pathname: string;
   collapsed: boolean;
   pending: boolean;
@@ -52,7 +65,7 @@ function SidebarLink({
   return (
     <Link
       href={item.href}
-      title={collapsed ? item.label : undefined}
+      aria-label={collapsed ? item.label : undefined}
       aria-current={active ? "page" : undefined}
       aria-busy={pending || undefined}
       onClick={(event) => {
@@ -60,10 +73,11 @@ function SidebarLink({
         onNavigate(item.href);
       }}
       className={cn(
-        "group relative flex h-11 w-full min-w-0 items-center overflow-hidden rounded-lg text-sm font-semibold",
+        "group relative flex h-11 w-full min-w-0 items-center overflow-hidden rounded-xl text-[15px] font-semibold transition-colors",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-accent",
         selected
           ? "bg-sidebar-accent/15 text-sidebar-accent"
-          : "text-white/82 hover:bg-brand-lightGold/15 hover:text-white",
+          : "text-white/85 hover:bg-white/[0.07] hover:text-white",
       )}
     >
       <span
@@ -76,10 +90,7 @@ function SidebarLink({
 
       <span className="flex size-11 shrink-0 items-center justify-center">
         <Icon
-          className={cn(
-            "size-[22px] shrink-0",
-            selected && "text-sidebar-accent",
-          )}
+          className={cn("size-[22px] shrink-0", selected && "text-sidebar-accent")}
           strokeWidth={1.75}
           aria-hidden
         />
@@ -88,7 +99,7 @@ function SidebarLink({
       <span
         className={cn(
           "min-w-0 flex-1 truncate pr-3 transition-[opacity,max-width] duration-200 ease-out motion-reduce:transition-none",
-          collapsed ? "max-w-0 opacity-0 overflow-hidden" : "max-w-full opacity-100",
+          labelVisibility(collapsed),
         )}
       >
         {item.label}
@@ -123,12 +134,14 @@ export function Sidebar({
 }: SidebarProps) {
   const pathname = usePathname();
   const [pendingHref, setPendingHref] = useState<string | null>(null);
+  const pinned = useMediaQuery(SIDEBAR_PINNED_QUERY);
 
   const hoverIntent = useSidebarHoverIntent();
   const { expanded, panelWidth, overlaying } = resolveSidebarLayout({
     hovering: hoverIntent.hovering,
     keyboardFocusWithin: hoverIntent.keyboardFocusWithin,
     touchOpen: hoverIntent.touchOpen,
+    pinned,
   });
   const collapsed = !expanded;
   const closeSidebar = hoverIntent.close;
@@ -154,127 +167,91 @@ export function Sidebar({
   }, [overlaying, closeSidebar]);
 
   const initial = (userEmail ?? "F").charAt(0).toUpperCase();
-  const navItemsForSidebar = filterNavByFeatures(navItems, allowedFeatures);
+  const visible = filterNavByFeatures(navItems, allowedFeatures);
+  const home = visible.filter((item) => item.group === "home");
+  const groups = (["weekly", "online"] as const)
+    .map((group) => ({ group, items: visible.filter((item) => item.group === group) }))
+    .filter(({ items }) => items.length > 0);
+
+  const link = (item: NavItem) => (
+    <SidebarLink
+      key={item.href}
+      item={item}
+      pathname={pathname}
+      collapsed={collapsed}
+      pending={pendingHref === item.href}
+      onNavigate={setPendingHref}
+    />
+  );
 
   return (
     <aside
       ref={hoverIntent.sidebarRef}
-      {...hoverIntent.handlers}
+      {...(pinned ? {} : hoverIntent.handlers)}
+      aria-label="Main"
       data-collapsed={collapsed}
-      style={{ width: panelWidth }}
+      style={{ "--sidebar-panel": `${panelWidth}px` } as React.CSSProperties}
       className={cn(
-        "fixed inset-y-0 left-0 z-30 hidden flex-col overflow-x-hidden overflow-y-hidden border-r border-sidebar bg-sidebar text-sidebar shadow-2xl md:flex",
+        "fixed inset-y-0 left-0 z-30 hidden w-[var(--sidebar-panel)] flex-col overflow-x-hidden overflow-y-hidden border-r border-sidebar bg-sidebar text-sidebar md:flex lg:w-64",
+        overlaying && "shadow-2xl",
         "transition-[width] duration-200 ease-out motion-reduce:transition-none",
       )}
     >
       {/* Brand header */}
-      <div className="relative h-[72px] shrink-0 border-b border-sidebar">
-        {/* Always left-anchored so the logo stays put while the width animates;
-            14px inset centers it on the nav icons (nav p-3 + half of size-11). */}
+      <div className="relative h-16 shrink-0 border-b border-sidebar">
         <div className="flex h-full items-center gap-3 pl-3.5 pr-4">
           <div className="flex size-10 shrink-0 items-center justify-center">
             <Logo size={40} priority className="shadow-lg shadow-black/20" />
           </div>
           <div
             className={cn(
-              "min-w-0 overflow-hidden transition-[opacity,max-width] duration-200 ease-out motion-reduce:transition-none",
-              collapsed ? "hidden" : "max-w-full flex-1 opacity-100",
+              "min-w-0 flex-1 overflow-hidden transition-[opacity,max-width] duration-200 ease-out motion-reduce:transition-none",
+              blockVisibility(collapsed),
             )}
           >
             <p className="truncate font-heading text-lg font-bold leading-tight text-sidebar-accent">
               FaithForm
             </p>
             {churchName && (
-              <p className="truncate text-xs font-semibold uppercase tracking-wide text-white/65">
-                {churchName}
-              </p>
+              <p className="truncate text-sm font-semibold text-white/75">{churchName}</p>
             )}
           </div>
         </div>
       </div>
 
       {/* Nav items */}
-      <nav className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain p-3">
-        {navItemsForSidebar.length > 0 && (
-          <p
-            className={cn(
-              "h-6 shrink-0 overflow-hidden whitespace-nowrap px-1 pb-1 pt-2 text-[11px] font-bold uppercase tracking-[0.22em] text-sidebar-accent",
-              "transition-[opacity,max-width] duration-200 ease-out motion-reduce:transition-none",
-              collapsed ? "max-w-0 opacity-0" : "max-w-full opacity-100",
-            )}
-          >
-            Ministry Tools
-          </p>
-        )}
-        <div className="space-y-1.5">
-          {navItemsForSidebar.map((item) => (
-            <SidebarLink
-              key={item.href}
-              item={item}
-              pathname={pathname}
-              collapsed={collapsed}
-              pending={pendingHref === item.href}
-              onNavigate={setPendingHref}
-            />
-          ))}
-        </div>
+      <nav
+        aria-label="Sections"
+        className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain p-3"
+      >
+        <div className="space-y-1">{home.map(link)}</div>
+        {groups.map(({ group, items }) => (
+          <div key={group} className="mt-3">
+            <p
+              className={cn(
+                "mb-1 h-6 overflow-hidden whitespace-nowrap px-3 text-xs font-bold uppercase tracking-[0.14em] text-white/55",
+                "transition-[opacity,max-width] duration-200 ease-out motion-reduce:transition-none",
+                labelVisibility(collapsed),
+              )}
+            >
+              {NAV_GROUP_LABELS[group]}
+            </p>
+            <div className="space-y-1">{items.map(link)}</div>
+          </div>
+        ))}
       </nav>
 
-      {/* Utility + user footer */}
+      {/* Help, Settings, account */}
       <div className="shrink-0 space-y-2 overflow-x-hidden border-t border-sidebar p-3">
-        {/* Stacked in both states so nothing reflows while the width animates;
-            the fixed 42px icon slot (+1px border, +p-3) centers each icon on
-            the nav icons, same as the brand logo. */}
-        <div className="flex flex-col gap-1.5">
-          {footerUtilityNavItems.map((item) => {
-            const active = isActive(pathname, item.href);
-            const pending = pendingHref === item.href;
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                title={item.label}
-                aria-current={active ? "page" : undefined}
-                aria-busy={pending || undefined}
-                onClick={(event) => {
-                  if (isModifiedClick(event) || active) return;
-                  setPendingHref(item.href);
-                }}
-                className={cn(
-                  "flex h-9 w-full min-w-0 items-center overflow-hidden rounded-lg border text-xs font-semibold transition-colors",
-                  active || pending
-                    ? "border-sidebar-accent/40 bg-sidebar-accent/15 text-sidebar-accent"
-                    : "border-white/10 bg-white/5 text-white/75 hover:border-white/20 hover:bg-brand-lightGold/15 hover:text-white",
-                )}
-              >
-                <span className="flex h-full w-[42px] shrink-0 items-center justify-center">
-                  <Icon className="size-4 shrink-0" strokeWidth={1.75} aria-hidden />
-                </span>
-                <span
-                  className={cn(
-                    "min-w-0 flex-1 truncate whitespace-nowrap pr-2 transition-opacity duration-200 ease-out motion-reduce:transition-none",
-                    collapsed ? "sr-only" : "opacity-100",
-                  )}
-                >
-                  {item.label}
-                </span>
-                {pending && !collapsed && (
-                  <span
-                    className="mr-3 size-1.5 shrink-0 animate-pulse rounded-full bg-sidebar-accent"
-                    aria-hidden
-                  />
-                )}
-              </Link>
-            );
-          })}
+        {/* Side by side when labelled, so the whole menu fits a laptop screen. */}
+        <div className={cn("grid gap-1", collapsed ? "grid-cols-1 lg:grid-cols-2" : "grid-cols-2")}>
+          {footerUtilityNavItems.map(link)}
         </div>
 
-        <div className="flex h-[52px] min-w-0 items-center overflow-hidden rounded-xl border border-sidebar bg-white/5 py-2 pr-2">
-          <div className="flex h-full w-[42px] shrink-0 items-center justify-center">
+        <div className="flex min-h-[52px] min-w-0 items-center gap-1 overflow-hidden rounded-xl border border-sidebar bg-white/5 py-1.5 pr-2">
+          <div className="flex h-full w-11 shrink-0 items-center justify-center">
             <div
-              className="flex size-9 items-center justify-center rounded-full bg-sidebar-accent text-sm font-bold text-white"
-              title={userEmail}
+              className="flex size-9 items-center justify-center rounded-full bg-sidebar-accent text-sm font-bold text-brand-navy"
               aria-hidden
             >
               <ProfileAvatar url={avatarUrl} initials={initial} />
@@ -282,26 +259,24 @@ export function Sidebar({
           </div>
           <div
             className={cn(
-              "min-w-0 overflow-hidden transition-[opacity,max-width] duration-200 ease-out motion-reduce:transition-none",
-              collapsed ? "hidden" : "max-w-full flex-1 opacity-100",
+              "min-w-0 flex-1 overflow-hidden transition-[opacity,max-width] duration-200 ease-out motion-reduce:transition-none",
+              blockVisibility(collapsed),
             )}
           >
             <p className="truncate text-sm font-semibold text-white">{userEmail}</p>
-            <p className="truncate text-xs capitalize text-white/60">
-              {role ?? "Member"}
-            </p>
+            <p className="truncate text-sm text-white/65">{roleLabel(role)}</p>
           </div>
           <form
             action="/auth/signout"
             method="post"
-            className={cn("shrink-0", collapsed && "hidden")}
+            className={cn("shrink-0", collapsed && "hidden lg:block")}
           >
             <button
               type="submit"
-              aria-label="Sign out"
-              className="flex size-9 items-center justify-center rounded-lg text-white/70 hover:bg-brand-lightGold/15 hover:text-white"
+              className="flex min-h-11 items-center gap-1.5 rounded-lg px-2.5 text-sm font-semibold text-white/80 hover:bg-white/[0.08] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-accent"
             >
-              <LogOut className="size-4" strokeWidth={1.75} />
+              <LogOut className="size-4" strokeWidth={1.75} aria-hidden />
+              Sign out
             </button>
           </form>
         </div>

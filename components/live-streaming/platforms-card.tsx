@@ -1,27 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import {
-  CheckCircle2,
-  Play,
-  RadioTower,
-  Share2,
-  TriangleAlert,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { CheckCircle2, CircleDashed, Play, Share2, TriangleAlert } from "lucide-react";
+
+import { buttonVariants } from "@/components/ui/button";
 import type { SyndicationStatus } from "@/lib/stream/syndication";
+import { cn } from "@/lib/utils";
 
 export type PlatformPushState = {
   connected: boolean;
   detail: string | null;
-  /** True once an RTMP destination is provisioned for the current service. */
+  /** True once a destination is ready for the current service. */
   destinationReady: boolean;
   lastPush: SyndicationStatus | null;
   /** Set when a stored connection went stale and needs re-authorization. */
@@ -33,99 +22,60 @@ type PlatformsCardProps = {
   isAdmin: boolean;
   youtube: PlatformPushState;
   facebook: PlatformPushState;
+  /** "compact" is the Setup step 3 list; "full" adds how the last service went. */
+  variant?: "compact" | "full";
 };
 
-export function PlatformsCard({
-  isAdmin,
-  youtube,
-  facebook,
-}: PlatformsCardProps) {
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Where to broadcast</CardTitle>
-        <CardDescription>
-          RTMP destinations are provisioned when you go live or when a scheduled
-          service starts. Channels are connected in Settings → Integrations.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <PlatformRow
-          icon={<Play className="size-4 text-red-500" />}
-          name="YouTube"
-          state={youtube}
-          isAdmin={isAdmin}
-        />
-        <PlatformRow
-          icon={<Share2 className="size-4 text-blue-500" />}
-          name="Facebook"
-          state={facebook}
-          isAdmin={isAdmin}
-        />
+/** All connect and disconnect flows live in Settings › Connected accounts. */
+export const CONNECTED_ACCOUNTS_HREF = "/dashboard/settings?tab=accounts";
 
-        {isAdmin && (
-          <Link
-            href={SETTINGS_INTEGRATIONS_HREF}
-            className="block text-xs font-medium text-accent hover:underline"
-          >
-            Manage integrations in Settings →
-          </Link>
-        )}
-      </CardContent>
-    </Card>
+/**
+ * YouTube and Facebook, in plain words: connected or not, and whether the
+ * last service actually reached them. The platforms' own error text is never
+ * shown; it is written for developers.
+ */
+export function PlatformsCard({ isAdmin, youtube, facebook, variant = "full" }: PlatformsCardProps) {
+  return (
+    <ul className="flex flex-col gap-3">
+      <PlatformRow
+        icon={<Play className="size-5 text-red-500" aria-hidden />}
+        name="YouTube"
+        state={youtube}
+        isAdmin={isAdmin}
+        showPush={variant === "full"}
+      />
+      <PlatformRow
+        icon={<Share2 className="size-5 text-blue-500" aria-hidden />}
+        name="Facebook"
+        state={facebook}
+        isAdmin={isAdmin}
+        showPush={variant === "full"}
+      />
+    </ul>
   );
 }
 
-/** All connect/disconnect flows live on the Settings → Integrations tab. */
-const SETTINGS_INTEGRATIONS_HREF = "/dashboard/settings?tab=integrations";
-
-/**
- * What the relay has actually managed to do, not what was handed to it.
- *
- * "Destination ready" used to be the whole story, which meant the card read
- * green for the length of a service that never reached the platform. The relay
- * now reports each push as it starts, holds, or drops, and that is what shows
- * here.
- */
-function PushStatus({ state }: { state: PlatformPushState }) {
+function PushStatus({ name, state }: { name: string; state: PlatformPushState }) {
   if (state.lastPush?.status === "failed") {
     return (
-      <p className="mt-1.5 flex items-start gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-medium text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200">
-        <TriangleAlert
-          className="mt-0.5 size-3.5 shrink-0"
-          strokeWidth={1.75}
-          aria-hidden
-        />
+      <p className="mt-2 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-800 dark:border-amber-500/20 dark:bg-amber-500/10 dark:text-amber-200">
+        <TriangleAlert className="mt-0.5 size-4 shrink-0" strokeWidth={1.75} aria-hidden />
         <span>
-          Last push failed
-          {state.lastPush.errorMessage
-            ? `: ${state.lastPush.errorMessage}`
-            : "."}
+          Your last service didn&apos;t reach {name}. If it happens again, reconnect {name} in Settings.
         </span>
       </p>
     );
   }
-
   if (state.lastPush?.status === "success") {
     return (
-      <p className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
-        <RadioTower className="size-3.5" strokeWidth={1.75} aria-hidden />
-        {state.destinationReady
-          ? "Video is reaching this platform"
-          : "Last service pushed successfully"}
+      <p className="mt-1 text-sm text-emerald-700 dark:text-emerald-300">
+        {state.destinationReady ? `Your video is reaching ${name}.` : `Your last service reached ${name}.`}
       </p>
     );
   }
-
   if (state.destinationReady) {
-    return (
-      <p className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-        <RadioTower className="size-3.5" strokeWidth={1.75} aria-hidden />
-        Destination handed to the relay — waiting for it to connect
-      </p>
-    );
+    return <p className="mt-1 text-sm text-muted-foreground">Waiting for {name} to start showing your video…</p>;
   }
-
   return null;
 }
 
@@ -134,43 +84,42 @@ function PlatformRow({
   name,
   state,
   isAdmin,
+  showPush,
 }: {
   icon: React.ReactNode;
   name: string;
   state: PlatformPushState;
   isAdmin: boolean;
+  showPush: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-border p-4 sm:flex-row sm:items-start sm:justify-between">
+    <li className="flex min-h-[72px] flex-col gap-3 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex min-w-0 items-start gap-3">
-        <div className="mt-0.5">{icon}</div>
+        <span className="mt-0.5">{icon}</span>
         <div className="min-w-0">
-          <p className="text-sm font-semibold">{name}</p>
+          <p className="text-base font-semibold">{name}</p>
           {state.connected ? (
             <>
-              <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-                <CheckCircle2 className="size-3.5 text-emerald-500" />
-                {state.detail ?? "Connected"} · Ready to stream
+              <p className="mt-0.5 flex items-center gap-1.5 text-[15px] text-emerald-700 dark:text-emerald-300">
+                <CheckCircle2 className="size-4" aria-hidden />
+                Connected{state.detail ? ` · ${state.detail}` : ""}. Your services show here too.
               </p>
-              <PushStatus state={state} />
+              {showPush ? <PushStatus name={name} state={state} /> : null}
             </>
           ) : (
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {state.needsReconnect
-                ? (state.reconnectReason ?? "Reconnect needed")
-                : "Not connected"}
+            <p className="mt-0.5 flex items-center gap-1.5 text-[15px] text-muted-foreground">
+              <CircleDashed className="size-4" aria-hidden />
+              {state.needsReconnect ? `${name} needs to be reconnected` : "Not connected"}
             </p>
           )}
         </div>
       </div>
 
       {isAdmin && !state.connected ? (
-        <Link href={SETTINGS_INTEGRATIONS_HREF} className="shrink-0">
-          <Button size="sm" variant="outline">
-            {state.needsReconnect ? "Reconnect" : "Connect"} in Settings
-          </Button>
+        <Link href={CONNECTED_ACCOUNTS_HREF} className={cn(buttonVariants({ variant: "outline" }), "shrink-0")}>
+          {state.needsReconnect ? `Reconnect ${name}` : `Connect ${name}`}
         </Link>
       ) : null}
-    </div>
+    </li>
   );
 }

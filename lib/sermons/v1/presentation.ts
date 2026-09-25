@@ -241,6 +241,42 @@ export async function getActivePresentationVersion(
 }
 
 /**
+ * Which of these sermons have slides in the app right now, for the sermon
+ * list's status badge. One query for the page; an unmigrated database (no
+ * versions table) simply has none.
+ */
+export async function listSermonIdsWithSharedSlides(
+  input: { churchId: string; sermonIds: string[] },
+  supabase?: SupabaseClient,
+): Promise<Set<string>> {
+  if (input.sermonIds.length === 0) return new Set();
+  const db = client(supabase);
+  const { data, error } = await db
+    .from("sermon_presentation_versions")
+    .select("sermon_id, mobile_visibility, published_at, unpublished_at")
+    .eq("church_id", input.churchId)
+    .in("sermon_id", input.sermonIds)
+    .neq("mobile_visibility", "none")
+    .is("unpublished_at", null);
+
+  if (error) {
+    if (
+      error.code !== "42P01" &&
+      error.code !== "PGRST205" &&
+      !/sermon_presentation_versions/i.test(error.message ?? "")
+    ) {
+      logDbError("list shared slides", error);
+    }
+    return new Set();
+  }
+  return new Set(
+    (data ?? [])
+      .filter((row) => isPresentationShared(row))
+      .map((row) => row.sermon_id as string),
+  );
+}
+
+/**
  * Publishes slides: inserts a new immutable version and retires any prior
  * active version for the sermon.
  */

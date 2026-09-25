@@ -57,10 +57,10 @@ export function StepAccount({
     <form onSubmit={handleSubmit} className="space-y-5">
       <div>
         <h2 className="font-heading text-2xl font-semibold text-foreground">
-          Create Your Account
+          Create your account
         </h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          You&apos;ll use this to sign in to FaithForm.
+        <p className="mt-1 text-base text-muted-foreground">
+          You&apos;ll use this email and password to sign in to FaithForm.
         </p>
       </div>
 
@@ -108,12 +108,12 @@ export function StepAccount({
             onChange={(e) => setPassword(e.target.value)}
             required
             minLength={8}
-            className={cn(inputClass, "pr-11")}
+            className={cn(inputClass, "pr-14")}
           />
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+            className="absolute right-1 top-1/2 flex size-11 -translate-y-1/2 items-center justify-center rounded-[10px] text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             aria-label={showPassword ? "Hide password" : "Show password"}
           >
             {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
@@ -135,18 +135,21 @@ export function StepAccount({
       </div>
 
       {error && (
-        <p className="text-sm text-destructive" role="alert">
+        <p className="text-base text-destructive" role="alert">
           {error}
         </p>
       )}
 
-      <Button type="submit" disabled={pending} className="w-full">
-        {pending ? "Creating account…" : "Continue →"}
+      <Button type="submit" size="lg" disabled={pending} className="h-12 w-full">
+        {pending ? "Creating your account…" : "Create account and continue"}
       </Button>
 
-      <p className="text-center text-sm text-muted-foreground">
-        Already have an account?{" "}
-        <Link href="/login" className="text-accent underline-offset-4 hover:underline">
+      <p className="flex flex-wrap items-center justify-center gap-x-2 text-center text-base text-muted-foreground">
+        Already have an account?
+        <Link
+          href="/login"
+          className="inline-flex min-h-11 items-center font-semibold text-primary underline underline-offset-4 hover:text-accent dark:text-accent"
+        >
           Sign in
         </Link>
       </p>

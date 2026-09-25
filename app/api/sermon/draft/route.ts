@@ -13,6 +13,7 @@ import {
 import { fetchPassages } from "@/lib/scripture/esv";
 import { createClient } from "@/lib/supabase/server";
 import { featureAccessDenied } from "@/lib/features/guard";
+import { SERMON_NOT_FOUND_MESSAGE, sermonRouteError } from "@/lib/sermon-builder/route-error";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -26,18 +27,18 @@ export async function POST(request: Request) {
     const { sermonId } = (await request.json()) as { sermonId: string };
 
     if (!sermonId) {
-      return NextResponse.json({ error: "sermonId required" }, { status: 400 });
+      return NextResponse.json({ error: "We couldn't tell which sermon to write. Refresh the page and try again." }, { status: 400 });
     }
 
     const supabase = createClient();
     const sermon = await verifySermonAccess(supabase, sermonId, auth.churchId);
     if (!sermon) {
-      return NextResponse.json({ error: "Sermon not found" }, { status: 404 });
+      return NextResponse.json({ error: SERMON_NOT_FOUND_MESSAGE }, { status: 404 });
     }
 
     if (!sermon.outline) {
       return NextResponse.json(
-        { error: "Generate an outline first" },
+        { error: "Make the outline first, then write the full draft." },
         { status: 400 },
       );
     }
@@ -72,12 +73,17 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ sermon: updated, content: object, modelUsed });
   } catch (e) {
-    console.error("[sermon/draft] failed", e);
-    const raw = e instanceof Error ? e.message : "Draft generation failed";
-    const message = raw.includes("could not parse")
-      ? "The AI draft was incomplete or malformed. Please try Generate again — if it keeps failing, lower the target duration in sermon settings."
-      : raw;
-    const status = message === "Unauthorized" ? 401 : 500;
-    return NextResponse.json({ error: message }, { status });
+    const raw = e instanceof Error ? e.message : "";
+    if (raw.includes("could not parse")) {
+      console.error("[sermon/draft] failed", e);
+      return NextResponse.json(
+        {
+          error:
+            "The draft came back incomplete. Please try again. If it keeps happening, choose a shorter sermon length.",
+        },
+        { status: 500 },
+      );
+    }
+    return sermonRouteError(e, "We couldn't write the draft.");
   }
 }

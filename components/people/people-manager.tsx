@@ -1,13 +1,29 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Plus, Search, Smartphone } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Plus, Search, UserPlus, Users } from "lucide-react";
 
 import { ProfileAvatar } from "@/components/dashboard/profile-avatar";
 import { MemberFormPanel } from "@/components/people/member-form-panel";
+import {
+  countPeople,
+  filterPeople,
+  fullName,
+  getInitials,
+  personContext,
+  personStatus,
+  type PeopleFilter,
+  type PeopleSort,
+} from "@/components/people/people-format";
+import { PEOPLE_DESCRIPTION, PeopleTabs } from "@/components/people/people-tabs";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { List, ListRow } from "@/components/ui/list-row";
+import { PageHeader } from "@/components/ui/page-header";
+import { Select } from "@/components/ui/select";
+import { StatusBadge } from "@/components/ui/status-badge";
 import type { ChurchMember } from "@/lib/queries/members";
-import { formatPhoneDisplay } from "@/lib/people/validate-member";
 import { cn } from "@/lib/utils";
 
 type PeopleManagerProps = {
@@ -22,14 +38,9 @@ type PeopleManagerProps = {
   appConnections?: Record<string, { linkedAt: string }>;
   /** The photo someone set in the app, by member id. Initials without one. */
   appPhotos?: Record<string, string>;
+  /** The "Needs your attention" card, drawn between the header and the list. */
+  attention?: React.ReactNode;
 };
-
-type FilterOption = "all" | "on-app" | "missing-phone" | "inactive";
-type SortOption = "last-name" | "first-name";
-
-function getInitials(firstName: string, lastName: string) {
-  return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
-}
 
 export function PeopleManager({
   initialMembers,
@@ -37,6 +48,7 @@ export function PeopleManager({
   showAppStatus = false,
   appConnections = {},
   appPhotos = {},
+  attention,
 }: PeopleManagerProps) {
   const [members, setMembers] = useState(initialMembers);
   // The panels above the list change People too — confirming someone from the
@@ -47,88 +59,97 @@ export function PeopleManager({
     setMembers(initialMembers);
   }, [initialMembers]);
   const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<FilterOption>("all");
-  const [sortBy, setSortBy] = useState<SortOption>("last-name");
+  const [filter, setFilter] = useState<PeopleFilter>("all");
+  const [sortBy, setSortBy] = useState<PeopleSort>("last-name");
   const [panelOpen, setPanelOpen] = useState(false);
   const [panelMode, setPanelMode] = useState<"create" | "edit">("edit");
   const [selectedMember, setSelectedMember] = useState<ChurchMember | null>(
     null,
   );
+  /** The person just added, so their panel can offer the next steps. */
+  const [justAddedId, setJustAddedId] = useState<string | null>(null);
+  /** Bumped by "Add another" so the add form starts clean every time. */
+  const [createKey, setCreateKey] = useState(0);
+  const returnFocus = useRef<HTMLElement | null>(null);
+  const panelRef = useRef<HTMLElement | null>(null);
 
-  const isOnApp = (memberId: string) =>
-    showAppStatus && Boolean(appConnections[memberId]);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
-  const stats = useMemo(() => {
-    const active = members.filter((member) => member.is_active);
-    const withPhone = active.filter((member) => member.phone?.trim()).length;
-    return {
-      total: active.length,
-      withPhone,
-      missingPhone: active.length - withPhone,
-      onApp: active.filter((member) => Boolean(appConnections[member.id])).length,
-    };
-  }, [members, appConnections]);
+  const isOnApp = useCallback(
+    (memberId: string) => showAppStatus && Boolean(appConnections[memberId]),
+    [showAppStatus, appConnections],
+  );
 
-  const filteredMembers = useMemo(() => {
-    const query = search.trim().toLowerCase();
+  const counts = useMemo(() => countPeople(members, isOnApp), [members, isOnApp]);
 
-    let list = members.filter((member) => {
-      if (filter === "inactive") return !member.is_active;
-      if (!member.is_active) return false;
-      if (filter === "missing-phone") return !member.phone?.trim();
-      if (filter === "on-app") return Boolean(appConnections[member.id]);
-      return true;
-    });
+  const filteredMembers = useMemo(
+    () => filterPeople(members, { search, filter, sortBy, isOnApp }),
+    [members, search, filter, sortBy, isOnApp],
+  );
 
-    if (query) {
-      // Numbers are stored as +15025551234 and shown as 502-555-1234; compare
-      // digits so "502-555", "(502) 555" and "5025551234" all find the person.
-      const queryDigits = query.replace(/\D/g, "");
-      list = list.filter((member) => {
-        const fullName = `${member.first_name} ${member.last_name}`.toLowerCase();
-        const phoneDigits = (member.phone ?? "").replace(/\D/g, "");
-        const email = member.email ?? "";
-        return (
-          fullName.includes(query) ||
-          (queryDigits.length > 0 && phoneDigits.includes(queryDigits)) ||
-          email.toLowerCase().includes(query)
-        );
-      });
-    }
-
-    const sorted = [...list];
-    if (sortBy === "first-name") {
-      sorted.sort((a, b) => {
-        const byFirst = a.first_name.localeCompare(b.first_name);
-        if (byFirst !== 0) return byFirst;
-        return a.last_name.localeCompare(b.last_name);
-      });
-    } else {
-      sorted.sort((a, b) => {
-        const byLast = a.last_name.localeCompare(b.last_name);
-        if (byLast !== 0) return byLast;
-        return a.first_name.localeCompare(b.first_name);
-      });
-    }
-
-    return sorted;
-  }, [members, search, filter, sortBy, appConnections]);
-
-  function openCreatePanel() {
+  const openCreatePanel = useCallback(() => {
+    returnFocus.current = document.activeElement as HTMLElement | null;
     setSelectedMember(null);
+    setJustAddedId(null);
+    setCreateKey((key) => key + 1);
     setPanelMode("create");
     setPanelOpen(true);
-  }
+  }, []);
+
+  // Home's "Add a person" links here with ?add=1. Open the form, then drop the
+  // flag so a refresh doesn't open it again.
+  const addRequested = searchParams.get("add") === "1";
+  useEffect(() => {
+    if (!addRequested) return;
+    if (isAdmin) openCreatePanel();
+    const next = new URLSearchParams(searchParams.toString());
+    next.delete("add");
+    const query = next.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }, [addRequested, isAdmin, openCreatePanel, pathname, router, searchParams]);
 
   function openMemberPanel(member: ChurchMember) {
+    returnFocus.current = document.activeElement as HTMLElement | null;
     setSelectedMember(member);
+    setJustAddedId(null);
     setPanelMode("edit");
     setPanelOpen(true);
   }
 
-  function closePanel() {
+  const closePanel = useCallback(() => {
     setPanelOpen(false);
-  }
+    setJustAddedId(null);
+    // Back to the row (or button) that opened the panel.
+    const target = returnFocus.current;
+    if (target && document.contains(target)) {
+      requestAnimationFrame(() => target.focus());
+    }
+  }, []);
+
+  // Move focus into the panel when it opens, unless a field already took it
+  // (the add form focuses First name itself).
+  const panelKey = panelMode === "edit" ? selectedMember?.id ?? "edit" : `new-${createKey}`;
+  useEffect(() => {
+    if (!panelOpen) return;
+    const frame = requestAnimationFrame(() => {
+      const panel = panelRef.current;
+      if (panel && !panel.contains(document.activeElement)) panel.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [panelOpen, panelKey]);
+
+  useEffect(() => {
+    if (!panelOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && !document.querySelector('[role="alertdialog"]')) {
+        closePanel();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [panelOpen, closePanel]);
 
   /**
    * A save replies with the row as stored, which knows nothing of attendance
@@ -148,8 +169,10 @@ export function PeopleManager({
 
   function handleSaved(member: ChurchMember) {
     const merged = withKnownHistory(member);
+    const isNew = !members.some((row) => row.id === member.id);
     setSelectedMember(merged);
     setPanelMode("edit");
+    setJustAddedId(isNew ? member.id : null);
     setMembers((prev) => {
       const index = prev.findIndex((row) => row.id === member.id);
       if (index === -1) {
@@ -188,273 +211,229 @@ export function PeopleManager({
     setFilter("all");
   }
 
+  const filters: { value: PeopleFilter; label: string }[] = [
+    { value: "all", label: "Everyone" },
+    ...(showAppStatus ? [{ value: "on-app" as const, label: "On the app" }] : []),
+    { value: "missing-phone", label: "No phone" },
+    { value: "inactive", label: "Inactive" },
+  ];
+
+  const openId = panelOpen && panelMode === "edit" ? selectedMember?.id : null;
+
   return (
-    <div className="flex w-full flex-col gap-6 pb-28 lg:flex-row lg:items-stretch">
-      {/*
-        The list keeps a readable width whether or not the panel is open; the
-        panel takes the rest of the row rather than a fixed 380px, which is
-        what had every form in it stacking into a single narrow column.
-      */}
-      <div className="flex w-full flex-col gap-5 lg:min-w-0 lg:flex-1 lg:max-w-3xl">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-        <p className="text-base text-muted-foreground">
-          Add phone numbers so follow-up texts can reach absent members.
-        </p>
-        {isAdmin ? (
-          <Button
-            type="button"
-            className="hidden h-12 shrink-0 gap-2 text-base sm:inline-flex"
-            onClick={openCreatePanel}
-          >
-            <Plus className="size-5" aria-hidden />
-            Add Person
-          </Button>
-        ) : null}
-      </div>
-
-      {!isAdmin ? (
-        <p className="rounded-xl border border-border bg-card px-4 py-3 text-sm text-muted-foreground shadow-card dark:shadow-none">
-          Contact your church admin to update phone numbers.
-        </p>
-      ) : null}
-
-      <div className="rounded-xl border border-border bg-card px-4 py-3 text-center text-base font-semibold text-foreground shadow-card dark:shadow-none">
-        {stats.total} people · {stats.withPhone} with phone · {stats.missingPhone}{" "}
-        missing phone
-        {showAppStatus ? ` · ${stats.onApp} on the app` : ""}
-      </div>
-
-      <div className="relative">
-        <Search
-          className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground"
-          aria-hidden
-        />
-        <input
-          type="search"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="Search people..."
-          className="min-h-12 w-full rounded-[10px] border-[1.5px] border-border bg-card pl-12 pr-4 text-base text-foreground outline-none ring-ring focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-        />
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        {(
-          [
-            ["all", "All"],
-            ...(showAppStatus ? ([["on-app", "On the app"]] as const) : []),
-            ["missing-phone", "Missing phone"],
-            ["inactive", "Inactive"],
-          ] as const
-        ).map(([value, label]) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() => setFilter(value)}
-            className={cn(
-              "rounded-full px-3 py-1.5 text-sm font-semibold transition-colors",
-              filter === value
-                ? "bg-accent text-accent-foreground"
-                : "bg-muted text-muted-foreground hover:text-foreground",
-            )}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="shrink-0 text-sm font-medium text-muted-foreground">
-          Sort by
-        </span>
-        <div
-          role="radiogroup"
-          aria-label="Sort people"
-          className="inline-flex flex-wrap rounded-lg border border-border bg-card p-1"
-        >
-          <button
-            type="button"
-            role="radio"
-            aria-checked={sortBy === "last-name"}
-            onClick={() => setSortBy("last-name")}
-            className={cn(
-              "rounded-md px-3 py-1.5 text-sm font-semibold transition-colors",
-              sortBy === "last-name"
-                ? "bg-accent text-accent-foreground"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            Last name
-          </button>
-          <button
-            type="button"
-            role="radio"
-            aria-checked={sortBy === "first-name"}
-            onClick={() => setSortBy("first-name")}
-            className={cn(
-              "rounded-md px-3 py-1.5 text-sm font-semibold transition-colors",
-              sortBy === "first-name"
-                ? "bg-accent text-accent-foreground"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            First name
-          </button>
-        </div>
-      </div>
-
-      {members.length === 0 ? (
-        <div className="flex flex-col items-center gap-4 rounded-xl border border-dashed border-border bg-card px-6 py-12 text-center shadow-card dark:shadow-none">
-          <p className="text-base text-muted-foreground">
-            No people on your roster yet.
-          </p>
-          {isAdmin ? (
-            <Button type="button" className="h-12 text-base" onClick={openCreatePanel}>
-              Add your first person
+    <div className="flex w-full flex-col gap-8 pb-28 sm:pb-0">
+      <PageHeader
+        title="People"
+        description={PEOPLE_DESCRIPTION}
+        action={
+          isAdmin ? (
+            <Button
+              type="button"
+              size="lg"
+              className="hidden sm:inline-flex"
+              onClick={openCreatePanel}
+            >
+              <Plus aria-hidden />
+              Add person
             </Button>
-          ) : null}
-        </div>
-      ) : filteredMembers.length === 0 ? (
-        <p className="py-8 text-center text-base text-muted-foreground">
-          No one matches your search.
-        </p>
-      ) : (
-        <ul className="flex flex-col gap-2">
-          {filteredMembers.map((member) => {
-            const phoneLabel = member.phone
-              ? formatPhoneDisplay(member.phone)
-              : null;
-            const hasPhone = Boolean(member.phone?.trim());
+          ) : null
+        }
+      />
 
-            return (
-              <li key={member.id}>
-                <button
-                  type="button"
-                  onClick={() => openMemberPanel(member)}
-                  aria-current={
-                    panelOpen &&
-                    panelMode === "edit" &&
-                    selectedMember?.id === member.id
-                      ? "true"
-                      : undefined
-                  }
+      <PeopleTabs />
+
+      {attention}
+
+      <section aria-label="Find a person" className="flex flex-col gap-5">
+        <div className="relative">
+          <label htmlFor="people-search" className="sr-only">
+            Search people
+          </label>
+          <Search
+            className="pointer-events-none absolute left-5 top-1/2 size-6 -translate-y-1/2 text-muted-foreground"
+            aria-hidden
+          />
+          <input
+            id="people-search"
+            type="search"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search by name, phone or email"
+            autoComplete="off"
+            className="min-h-14 w-full rounded-2xl border-[1.5px] border-border bg-card pl-14 pr-5 text-lg text-foreground shadow-sm outline-none transition-colors placeholder:text-muted-foreground focus:border-accent focus:ring-2 focus:ring-accent/25"
+          />
+        </div>
+
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div role="group" aria-label="Show" className="flex flex-wrap gap-2">
+            {filters.map(({ value, label }) => (
+              <button
+                key={value}
+                type="button"
+                aria-pressed={filter === value}
+                onClick={() => setFilter(value)}
+                className={cn(
+                  "inline-flex min-h-11 items-center gap-2 rounded-full border px-5 text-[15px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                  filter === value
+                    ? "border-primary bg-primary text-primary-foreground"
+                    : "border-border bg-card text-foreground/80 hover:border-accent hover:text-foreground",
+                )}
+              >
+                {label}
+                <span
                   className={cn(
-                    "flex min-h-[4.5rem] w-full items-center gap-3 rounded-xl border border-border bg-card px-4 py-3 text-left shadow-card transition-colors hover:bg-muted/30 dark:shadow-none",
-                    !member.is_active && "opacity-70",
-                    panelOpen &&
-                      panelMode === "edit" &&
-                      selectedMember?.id === member.id &&
-                      "border-accent ring-2 ring-accent/40",
+                    "tabular-nums",
+                    filter === value ? "text-primary-foreground/80" : "text-muted-foreground",
                   )}
                 >
-                  <div
-                    className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-accent/15 text-base font-bold text-accent"
-                    aria-hidden
-                  >
-                    <ProfileAvatar
-                      url={appPhotos[member.id] ?? member.photo_url}
-                      initials={getInitials(member.first_name, member.last_name)}
-                    />
-                  </div>
+                  {counts[value]}
+                </span>
+              </button>
+            ))}
+          </div>
 
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-base font-medium text-foreground">
-                        {member.first_name} {member.last_name}
-                      </span>
-                      {!member.is_active ? (
-                        <span className="rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">
-                          Inactive
-                        </span>
-                      ) : hasPhone ? (
-                        <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700 dark:bg-green-500/15 dark:text-green-300">
-                          Text ready
-                        </span>
-                      ) : (
-                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700 dark:bg-amber-500/15 dark:text-amber-300">
-                          No phone
-                        </span>
-                      )}
-                      {isOnApp(member.id) ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-brand-navy/10 px-2 py-0.5 text-xs font-semibold text-primary dark:bg-brand-gold/15 dark:text-accent">
-                          <Smartphone className="size-3" aria-hidden />
-                          On the app
-                        </span>
-                      ) : null}
-                    </div>
-                    <p
-                      className={cn(
-                        "text-sm",
-                        hasPhone
-                          ? "text-muted-foreground"
-                          : "text-amber-700 dark:text-amber-300",
-                      )}
+          <label className="flex items-center gap-3 text-[15px] font-medium text-muted-foreground">
+            <span className="shrink-0">Sort by</span>
+            <Select
+              value={sortBy}
+              onChange={(event) => setSortBy(event.target.value as PeopleSort)}
+              className="min-h-11 w-auto"
+            >
+              <option value="last-name">Last name</option>
+              <option value="first-name">First name</option>
+            </Select>
+          </label>
+        </div>
+
+        {!isAdmin ? (
+          <p className="text-[15px] text-muted-foreground">
+            Only church admins can add people or change their details.
+          </p>
+        ) : null}
+
+        {members.length === 0 ? (
+          <EmptyState
+            icon={Users}
+            title="No people yet"
+            description="Add the people in your church so you can take attendance, check children in and stay in touch."
+            action={
+              isAdmin ? (
+                <Button type="button" size="lg" onClick={openCreatePanel}>
+                  <UserPlus aria-hidden />
+                  Add your first person
+                </Button>
+              ) : undefined
+            }
+          />
+        ) : filteredMembers.length === 0 ? (
+          <EmptyState
+            compact
+            icon={Search}
+            title={search.trim() ? `No one matches “${search.trim()}”` : "No one here"}
+            description={
+              search.trim()
+                ? "Check the spelling, or search by phone number or email."
+                : "No one in your church fits this filter right now."
+            }
+            action={
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setSearch("");
+                  setFilter("all");
+                }}
+              >
+                Show everyone
+              </Button>
+            }
+          />
+        ) : (
+          <List label="People">
+            {filteredMembers.map((member) => {
+              const status = personStatus(member, isOnApp(member.id));
+              const hasPhone = Boolean(member.phone?.trim());
+              return (
+                <ListRow
+                  key={member.id}
+                  onClick={() => openMemberPanel(member)}
+                  selected={openId === member.id}
+                  className={cn(!member.is_active && "opacity-75")}
+                  leading={
+                    <span
+                      className="flex size-12 items-center justify-center overflow-hidden rounded-full bg-primary/[0.08] font-heading text-base font-bold text-primary dark:bg-accent/15 dark:text-accent"
+                      aria-hidden
                     >
-                      {phoneLabel ??
-                        (isAdmin
-                          ? "No phone — tap to add"
-                          : "No phone on file")}
-                    </p>
-                  </div>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+                      <ProfileAvatar
+                        url={appPhotos[member.id] ?? member.photo_url}
+                        initials={getInitials(member.first_name, member.last_name)}
+                      />
+                    </span>
+                  }
+                  title={fullName(member)}
+                  subtitle={
+                    <span className={cn(!hasPhone && "text-amber-800 dark:text-amber-300")}>
+                      {personContext(member)}
+                    </span>
+                  }
+                  status={
+                    status ? <StatusBadge tone={status.tone}>{status.label}</StatusBadge> : undefined
+                  }
+                />
+              );
+            })}
+          </List>
+        )}
+      </section>
 
       {isAdmin ? (
-        <div className="fixed bottom-20 left-0 right-0 z-40 border-t border-border bg-background/95 px-4 py-3 backdrop-blur sm:hidden md:bottom-0 md:left-60">
+        <div className="fixed bottom-20 left-0 right-0 z-40 border-t border-border bg-background/95 px-4 py-3 backdrop-blur sm:hidden">
           <Button
             type="button"
             size="lg"
-            className="mx-auto h-14 w-full max-w-2xl gap-2 text-base"
+            className="mx-auto h-14 w-full max-w-2xl text-base"
             onClick={openCreatePanel}
           >
-            <Plus className="size-5" aria-hidden />
-            Add Person
+            <Plus aria-hidden />
+            Add person
           </Button>
         </div>
       ) : null}
-      </div>
 
       {panelOpen ? (
         <>
-          <button
-            type="button"
-            aria-label="Close panel"
-            onClick={closePanel}
-            className="fixed inset-0 z-40 bg-brand-navy/50 lg:hidden"
-          />
           {/*
-            The outer element stretches to the full height of the row so the
-            inner card has somewhere to stick. With the row's `items-start`
-            alone the panel was only as tall as its own content, which left
-            sticky nothing to travel inside — scroll down the list and the panel
-            went with it, forcing a scroll back to the top to reach it.
+            The panel slides over the list at every width instead of squeezing
+            it: inside the shell's max-w-6xl there is no room for a readable
+            list and a readable form side by side, and a list that narrows
+            whenever someone is opened is a list that jumps.
           */}
+          <div
+            aria-hidden
+            onClick={closePanel}
+            className="fixed inset-0 z-50 bg-brand-navy/40 motion-safe:animate-in motion-safe:fade-in-0"
+          />
           <aside
-            className={cn(
-              "fixed inset-y-0 right-0 z-50 w-full max-w-lg overflow-y-auto border-l border-border bg-card shadow-card-hover",
-              "lg:relative lg:inset-y-auto lg:z-auto lg:w-[540px] lg:max-w-none lg:shrink-0 xl:w-[620px]",
-              "lg:self-stretch lg:overflow-visible lg:border-l-0 lg:bg-transparent lg:shadow-none",
-            )}
+            ref={panelRef}
+            tabIndex={-1}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="person-panel-title"
+            className="fixed inset-y-0 right-0 z-50 flex w-full max-w-xl flex-col overflow-y-auto outline-none border-l border-border bg-card shadow-2xl motion-safe:animate-in motion-safe:slide-in-from-right-8 motion-safe:duration-200"
           >
-            <div
-              className={cn(
-                "p-6",
-                "lg:sticky lg:top-6 lg:max-h-[calc(100vh-3rem)] lg:overflow-y-auto",
-                "lg:rounded-2xl lg:border lg:border-border lg:bg-card lg:shadow-card lg:dark:shadow-none",
-              )}
-            >
+            <div className="p-6 sm:p-8">
               <MemberFormPanel
-                key={panelMode === "edit" ? selectedMember?.id ?? "edit" : "new"}
+                key={panelKey}
                 member={panelMode === "edit" ? selectedMember : null}
                 isAdmin={isAdmin}
                 onClose={closePanel}
                 onSaved={handleSaved}
                 onDeactivated={handleDeactivated}
                 onReactivated={handleReactivated}
+                justAdded={Boolean(
+                  justAddedId && selectedMember?.id === justAddedId,
+                )}
+                onAddAnother={openCreatePanel}
                 showAppStatus={showAppStatus}
                 appConnection={
                   panelMode === "edit" && selectedMember

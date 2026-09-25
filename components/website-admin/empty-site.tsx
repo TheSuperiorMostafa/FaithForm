@@ -54,7 +54,7 @@ export async function EmptySite() {
       ready: Boolean(profile?.givingEnabled),
       hint: profile?.givingEnabled
         ? "your giving page is connected"
-        : "connect Stripe in Giving to switch the donate section on",
+        : "set up online giving in Giving to switch the donate section on",
     },
   ];
 

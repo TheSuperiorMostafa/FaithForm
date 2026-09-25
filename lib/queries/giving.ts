@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { startOfWeek } from "@/lib/giving/periods";
 import { getGivePageUrl } from "@/lib/stripe/config";
 import type {
   ChurchGivingProfile,
@@ -258,46 +259,89 @@ export async function getGivingFunds(churchId: string): Promise<GivingFundRow[]>
   }));
 }
 
-export async function getGivingKpis(churchId: string): Promise<GivingKpis> {
+/**
+ * Supabase caps a single read (usually at 1,000 rows), so totals read every
+ * page instead of silently summing the first thousand gifts.
+ */
+const PAGE_ROWS = 1000;
+const MAX_PAGES = 200;
+
+async function readAllRows<T>(
+  page: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+): Promise<T[]> {
+  const rows: T[] = [];
+  for (let i = 0; i < MAX_PAGES; i += 1) {
+    const from = i * PAGE_ROWS;
+    const { data, error } = await page(from, from + PAGE_ROWS - 1);
+    if (error) throw new Error(`giving read failed: ${error.message}`);
+    const chunk = data ?? [];
+    rows.push(...chunk);
+    if (chunk.length < PAGE_ROWS) break;
+  }
+  return rows;
+}
+
+function startOfWeekIso(d: Date): string {
+  return startOfWeek(d).toISOString();
+}
+
+export type GivingPeriodTotals = {
+  weekCents: number;
+  weekGifts: number;
+  weekGivers: number;
+  monthGifts: number;
+  yearGifts: number;
+};
+
+export async function getGivingKpis(
+  churchId: string,
+): Promise<GivingKpis & GivingPeriodTotals> {
   const supabase = createClient();
   const now = new Date();
   const todayStart = startOfDayIso(now);
+  const weekStart = startOfWeekIso(now);
   const monthStart = startOfMonthIso(now);
   const yearStart = startOfYearIso(now);
+  // In the first days of January the week can start last year.
+  const since = weekStart < yearStart ? weekStart : yearStart;
 
-  const { data: donations } = await supabase
-    .from("giving_donations")
-    .select("amount_cents, donor_id, donor_email, created_at")
-    .eq("church_id", churchId)
-    .eq("status", "succeeded")
-    .gte("created_at", yearStart);
+  const rows = await readAllRows<{
+    amount_cents: number;
+    donor_id: string | null;
+    donor_email: string | null;
+    created_at: string;
+  }>((from, to) =>
+    supabase
+      .from("giving_donations")
+      .select("amount_cents, donor_id, donor_email, created_at")
+      .eq("church_id", churchId)
+      .eq("status", "succeeded")
+      .gte("created_at", since)
+      .order("created_at", { ascending: true })
+      .range(from, to),
+  );
 
-  const rows = donations ?? [];
-  const sumSince = (iso: string) =>
-    rows
-      .filter((r) => (r.created_at as string) >= iso)
-      .reduce((acc, r) => acc + (r.amount_cents as number), 0);
+  const inRange = (iso: string) => rows.filter((r) => r.created_at >= iso);
+  const sum = (list: typeof rows) => list.reduce((acc, r) => acc + (r.amount_cents ?? 0), 0);
 
   return {
-    todayCents: sumSince(todayStart),
-    monthCents: sumSince(monthStart),
-    yearCents: sumSince(yearStart),
-    todayGivers: countUniqueGivers(
-      rows as { donor_id: string | null; donor_email: string | null; created_at: string }[],
-      todayStart,
-    ),
-    monthGivers: countUniqueGivers(
-      rows as { donor_id: string | null; donor_email: string | null; created_at: string }[],
-      monthStart,
-    ),
-    yearGivers: countUniqueGivers(
-      rows as { donor_id: string | null; donor_email: string | null; created_at: string }[],
-      yearStart,
-    ),
+    todayCents: sum(inRange(todayStart)),
+    monthCents: sum(inRange(monthStart)),
+    yearCents: sum(inRange(yearStart)),
+    todayGivers: countUniqueGivers(rows, todayStart),
+    monthGivers: countUniqueGivers(rows, monthStart),
+    yearGivers: countUniqueGivers(rows, yearStart),
+    weekCents: sum(inRange(weekStart)),
+    weekGifts: inRange(weekStart).length,
+    weekGivers: countUniqueGivers(rows, weekStart),
+    monthGifts: inRange(monthStart).length,
+    yearGifts: inRange(yearStart).length,
   };
 }
 
-export async function getGivingSummary(churchId: string): Promise<GivingSummary> {
+export async function getGivingSummary(
+  churchId: string,
+): Promise<GivingSummary & GivingPeriodTotals> {
   const supabase = createClient();
   const [kpis, recentResult, failedResult] = await Promise.all([
     getGivingKpis(churchId),
@@ -306,13 +350,17 @@ export async function getGivingSummary(churchId: string): Promise<GivingSummary>
       .select(DONATION_SELECT)
       .eq("church_id", churchId)
       .order("created_at", { ascending: false })
-      .limit(10),
+      .limit(6),
     supabase
       .from("giving_subscriptions")
       .select("id", { count: "exact", head: true })
       .eq("church_id", churchId)
       .in("status", ["past_due", "unpaid"]),
   ]);
+
+  if (recentResult.error) {
+    throw new Error(`recent gifts failed: ${recentResult.error.message}`);
+  }
 
   return {
     ...kpis,
@@ -360,14 +408,16 @@ export async function getGivingByFundPeriods(churchId: string): Promise<{
   const now = new Date();
   const monthStart = startOfMonthIso(now);
   const yearStart = startOfYearIso(now);
-  const { data } = await supabase
-    .from("giving_donations")
-    .select("amount_cents, fund_id, created_at, giving_funds ( id, name )")
-    .eq("church_id", churchId)
-    .eq("status", "succeeded")
-    .gte("created_at", yearStart);
-
-  const rows = (data ?? []) as Record<string, unknown>[];
+  const rows = await readAllRows<Record<string, unknown>>((from, to) =>
+    supabase
+      .from("giving_donations")
+      .select("amount_cents, fund_id, created_at, giving_funds ( id, name )")
+      .eq("church_id", churchId)
+      .eq("status", "succeeded")
+      .gte("created_at", yearStart)
+      .order("created_at", { ascending: true })
+      .range(from, to),
+  );
   return {
     month: aggregateGivingByFund(rows, monthStart),
     ytd: aggregateGivingByFund(rows, yearStart),
@@ -418,25 +468,34 @@ export async function getDonorsList(churchId: string): Promise<GivingDonorRow[]>
   const supabase = createClient();
   const yearStart = startOfYearIso(new Date());
 
-  const { data: donors } = await supabase
-    .from("giving_donors")
-    .select("id, name, email")
-    .eq("church_id", churchId)
-    .order("name", { ascending: true });
-
-  const { data: donations } = await supabase
-    .from("giving_donations")
-    .select("donor_id, amount_cents, created_at, status")
-    .eq("church_id", churchId)
-    .eq("status", "succeeded");
+  const [donors, donations] = await Promise.all([
+    readAllRows<{ id: string; name: string | null; email: string }>((from, to) =>
+      supabase
+        .from("giving_donors")
+        .select("id, name, email")
+        .eq("church_id", churchId)
+        .order("name", { ascending: true })
+        .range(from, to),
+    ),
+    readAllRows<{ donor_id: string | null; amount_cents: number; created_at: string }>(
+      (from, to) =>
+        supabase
+          .from("giving_donations")
+          .select("donor_id, amount_cents, created_at")
+          .eq("church_id", churchId)
+          .eq("status", "succeeded")
+          .order("created_at", { ascending: true })
+          .range(from, to),
+    ),
+  ]);
 
   const stats = new Map<
     string,
     { ytdCents: number; giftCount: number; lastGiftAt: string | null }
   >();
 
-  for (const d of donations ?? []) {
-    const donorId = d.donor_id as string | null;
+  for (const d of donations) {
+    const donorId = d.donor_id;
     if (!donorId) continue;
     const cur = stats.get(donorId) ?? {
       ytdCents: 0,
@@ -444,9 +503,9 @@ export async function getDonorsList(churchId: string): Promise<GivingDonorRow[]>
       lastGiftAt: null,
     };
     cur.giftCount += 1;
-    const createdAt = d.created_at as string;
+    const createdAt = d.created_at;
     if (createdAt >= yearStart) {
-      cur.ytdCents += d.amount_cents as number;
+      cur.ytdCents += d.amount_cents;
     }
     if (!cur.lastGiftAt || createdAt > cur.lastGiftAt) {
       cur.lastGiftAt = createdAt;
@@ -454,17 +513,73 @@ export async function getDonorsList(churchId: string): Promise<GivingDonorRow[]>
     stats.set(donorId, cur);
   }
 
-  return (donors ?? []).map((d) => {
-    const s = stats.get(d.id as string);
+  return donors.map((d) => {
+    const s = stats.get(d.id);
     return {
-      id: d.id as string,
-      name: (d.name as string) ?? null,
-      email: d.email as string,
+      id: d.id,
+      name: d.name ?? null,
+      email: d.email,
       ytdCents: s?.ytdCents ?? 0,
       giftCount: s?.giftCount ?? 0,
       lastGiftAt: s?.lastGiftAt ?? null,
     };
   });
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applyGiftFilters<Q extends { eq: any; gte: any; lte: any; or: any }>(
+  query: Q,
+  filters: GiftsSearchFilters,
+): Q {
+  let q = query;
+  if (filters.fundId) q = q.eq("fund_id", filters.fundId);
+  if (filters.giftType) q = q.eq("gift_type", filters.giftType);
+  if (filters.status) q = q.eq("status", filters.status);
+  if (filters.dateFrom) q = q.gte("created_at", filters.dateFrom);
+  if (filters.dateTo) q = q.lte("created_at", filters.dateTo);
+  const term = searchTerm(filters.search);
+  if (term) {
+    q = q.or(`donor_name.ilike.${term},donor_email.ilike.${term}`);
+  }
+  return q;
+}
+
+/**
+ * A search box value made safe for a PostgREST `or=(…)` filter: commas,
+ * parentheses and wildcards would otherwise change the filter itself.
+ */
+function searchTerm(search: string | undefined): string | null {
+  const cleaned = (search ?? "").trim().replace(/[,()%*\\]/g, " ").replace(/\s+/g, " ").trim();
+  return cleaned ? `%${cleaned}%` : null;
+}
+
+/**
+ * The money behind a gifts search: what was received (succeeded gifts) and
+ * the total of every matching gift, across all pages, not just the one shown.
+ */
+export async function sumGifts(
+  churchId: string,
+  filters: GiftsSearchFilters,
+): Promise<{ receivedCents: number; totalCents: number }> {
+  const supabase = createClient();
+  const rows = await readAllRows<{ amount_cents: number; status: string }>((from, to) =>
+    applyGiftFilters(
+      supabase
+        .from("giving_donations")
+        .select("amount_cents, status")
+        .eq("church_id", churchId),
+      filters,
+    )
+      .order("created_at", { ascending: false })
+      .range(from, to),
+  );
+  let receivedCents = 0;
+  let totalCents = 0;
+  for (const r of rows) {
+    totalCents += r.amount_cents ?? 0;
+    if (r.status === "succeeded") receivedCents += r.amount_cents ?? 0;
+  }
+  return { receivedCents, totalCents };
 }
 
 export async function searchGifts(
@@ -477,30 +592,19 @@ export async function searchGifts(
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
-  let query = supabase
-    .from("giving_donations")
-    .select(DONATION_SELECT, { count: "exact" })
-    .eq("church_id", churchId)
-    .order("created_at", { ascending: false });
-
-  if (filters.fundId) query = query.eq("fund_id", filters.fundId);
-  if (filters.giftType) query = query.eq("gift_type", filters.giftType);
-  if (filters.status) query = query.eq("status", filters.status);
-  if (filters.dateFrom) query = query.gte("created_at", filters.dateFrom);
-  if (filters.dateTo) query = query.lte("created_at", filters.dateTo);
-
-  if (filters.search?.trim()) {
-    const term = `%${filters.search.trim()}%`;
-    query = query.or(
-      `donor_name.ilike.${term},donor_email.ilike.${term}`,
-    );
-  }
+  const query = applyGiftFilters(
+    supabase
+      .from("giving_donations")
+      .select(DONATION_SELECT, { count: "exact" })
+      .eq("church_id", churchId),
+    filters,
+  ).order("created_at", { ascending: false });
 
   const { data, count, error } = await query.range(from, to);
 
   if (error) {
     console.error("searchGifts:", error.message);
-    return { donations: [], total: 0, page, pageSize };
+    throw new Error("gifts search failed");
   }
 
   return {
@@ -509,6 +613,23 @@ export async function searchGifts(
     page,
     pageSize,
   };
+}
+
+/** Every gift matching the filters, for the spreadsheet download. */
+export async function searchAllGifts(
+  churchId: string,
+  filters: GiftsSearchFilters,
+): Promise<GivingDonationRow[]> {
+  const supabase = createClient();
+  const rows = await readAllRows<Record<string, unknown>>((from, to) =>
+    applyGiftFilters(
+      supabase.from("giving_donations").select(DONATION_SELECT).eq("church_id", churchId),
+      filters,
+    )
+      .order("created_at", { ascending: false })
+      .range(from, to),
+  );
+  return rows.map((r) => mapDonation(r));
 }
 
 export async function getDonationById(
@@ -540,7 +661,7 @@ export async function getGivingSubscriptions(
   churchId: string,
 ): Promise<GivingSubscriptionRow[]> {
   const supabase = createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("giving_subscriptions")
     .select(
       `id, stripe_subscription_id, stripe_customer_id, amount_cents, currency, interval, status,
@@ -550,6 +671,7 @@ export async function getGivingSubscriptions(
     .eq("church_id", churchId)
     .order("created_at", { ascending: false });
 
+  if (error) throw new Error(`recurring gifts read failed: ${error.message}`);
   return (data ?? []).map((r) => mapSubscription(r as Record<string, unknown>));
 }
 
@@ -627,17 +749,21 @@ export async function getGivingStatements(churchId: string): Promise<{
   annual: StatementPeriod[];
 }> {
   const supabase = createClient();
-  const { data } = await supabase
-    .from("giving_donations")
-    .select("amount_cents, created_at")
-    .eq("church_id", churchId)
-    .eq("status", "succeeded");
+  const data = await readAllRows<{ amount_cents: number; created_at: string }>((from, to) =>
+    supabase
+      .from("giving_donations")
+      .select("amount_cents, created_at")
+      .eq("church_id", churchId)
+      .eq("status", "succeeded")
+      .order("created_at", { ascending: true })
+      .range(from, to),
+  );
 
   const monthlyMap = new Map<string, { total: number; count: number; year: number; month: number }>();
   const annualMap = new Map<string, { total: number; count: number; year: number }>();
 
-  for (const row of data ?? []) {
-    const d = new Date(row.created_at as string);
+  for (const row of data) {
+    const d = new Date(row.created_at);
     const year = d.getFullYear();
     const month = d.getMonth() + 1;
     const mKey = `${year}-${month}`;
@@ -689,4 +815,223 @@ export async function getGivingDonations(
 ): Promise<GivingDonationRow[]> {
   const result = await searchGifts(churchId, {}, 1, limit);
   return result.donations;
+}
+
+// ---------------------------------------------------------------------------
+// One donor
+// ---------------------------------------------------------------------------
+
+export type GivingDonorDetail = {
+  id: string;
+  name: string | null;
+  email: string;
+  createdAt: string | null;
+};
+
+/** A donor of this church, or null. Scoped by church on the read itself. */
+export async function getDonorById(
+  churchId: string,
+  donorId: string,
+): Promise<GivingDonorDetail | null> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("giving_donors")
+    .select("id, name, email, created_at")
+    .eq("church_id", churchId)
+    .eq("id", donorId)
+    .maybeSingle();
+  if (error) throw new Error(`donor read failed: ${error.message}`);
+  if (!data) return null;
+  return {
+    id: data.id as string,
+    name: (data.name as string | null) ?? null,
+    email: data.email as string,
+    createdAt: (data.created_at as string | null) ?? null,
+  };
+}
+
+/** Every gift from one donor, newest first, in any state. */
+export async function getDonorGifts(
+  churchId: string,
+  donorId: string,
+): Promise<GivingDonationRow[]> {
+  const supabase = createClient();
+  const rows = await readAllRows<Record<string, unknown>>((from, to) =>
+    supabase
+      .from("giving_donations")
+      .select(DONATION_SELECT)
+      .eq("church_id", churchId)
+      .eq("donor_id", donorId)
+      .order("created_at", { ascending: false })
+      .range(from, to),
+  );
+  return rows.map((r) => mapDonation(r));
+}
+
+export async function getDonorSubscriptions(
+  churchId: string,
+  donorId: string,
+): Promise<GivingSubscriptionRow[]> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("giving_subscriptions")
+    .select(
+      `id, stripe_subscription_id, stripe_customer_id, amount_cents, currency, interval, status,
+       donor_name, donor_email, donor_id, fund_id, fund_designation, paused_at, created_at,
+       giving_funds ( name )`,
+    )
+    .eq("church_id", churchId)
+    .eq("donor_id", donorId)
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(`donor recurring read failed: ${error.message}`);
+  return (data ?? []).map((r) => mapSubscription(r as Record<string, unknown>));
+}
+
+// ---------------------------------------------------------------------------
+// Year-end statements
+// ---------------------------------------------------------------------------
+
+export type StatementDonor = {
+  id: string;
+  name: string | null;
+  email: string;
+  totalCents: number;
+  giftCount: number;
+};
+
+export type GiftWithoutStatement = {
+  id: string;
+  donorName: string | null;
+  donorEmail: string | null;
+  amountCents: number;
+  currency: string;
+  createdAt: string;
+};
+
+export type StatementPreview = {
+  year: number;
+  donors: StatementDonor[];
+  totalCents: number;
+  giftCount: number;
+  /** Received gifts that can't go on anyone's statement: no donor email on file. */
+  giftsWithoutDonor: GiftWithoutStatement[];
+};
+
+/**
+ * Who gets a statement for `year`: every donor with at least one received
+ * gift in that year. Uses the same year window as the statement PDF
+ * (`getDonorGiftsForYear`) so the count matches what is sent.
+ */
+export async function getStatementPreview(
+  churchId: string,
+  year: number,
+): Promise<StatementPreview> {
+  const supabase = createClient();
+  const yearStart = new Date(year, 0, 1).toISOString();
+  const yearEnd = new Date(year + 1, 0, 1).toISOString();
+
+  const [gifts, donors] = await Promise.all([
+    readAllRows<{
+      id: string;
+      donor_id: string | null;
+      donor_name: string | null;
+      donor_email: string | null;
+      amount_cents: number;
+      currency: string;
+      created_at: string;
+    }>((from, to) =>
+      supabase
+        .from("giving_donations")
+        .select("id, donor_id, donor_name, donor_email, amount_cents, currency, created_at")
+        .eq("church_id", churchId)
+        .eq("status", "succeeded")
+        .gte("created_at", yearStart)
+        .lt("created_at", yearEnd)
+        .order("created_at", { ascending: true })
+        .range(from, to),
+    ),
+    readAllRows<{ id: string; name: string | null; email: string }>((from, to) =>
+      supabase
+        .from("giving_donors")
+        .select("id, name, email")
+        .eq("church_id", churchId)
+        .order("name", { ascending: true })
+        .range(from, to),
+    ),
+  ]);
+
+  const byDonor = new Map<string, { totalCents: number; giftCount: number }>();
+  const giftsWithoutDonor: GiftWithoutStatement[] = [];
+  let totalCents = 0;
+  for (const g of gifts) {
+    totalCents += g.amount_cents ?? 0;
+    if (!g.donor_id) {
+      giftsWithoutDonor.push({
+        id: g.id,
+        donorName: g.donor_name ?? null,
+        donorEmail: g.donor_email ?? null,
+        amountCents: g.amount_cents,
+        currency: g.currency ?? "usd",
+        createdAt: g.created_at,
+      });
+      continue;
+    }
+    const cur = byDonor.get(g.donor_id) ?? { totalCents: 0, giftCount: 0 };
+    cur.totalCents += g.amount_cents ?? 0;
+    cur.giftCount += 1;
+    byDonor.set(g.donor_id, cur);
+  }
+
+  const statementDonors: StatementDonor[] = [];
+  for (const d of donors) {
+    const stats = byDonor.get(d.id);
+    if (!stats) continue;
+    statementDonors.push({
+      id: d.id,
+      name: d.name ?? null,
+      email: d.email,
+      totalCents: stats.totalCents,
+      giftCount: stats.giftCount,
+    });
+  }
+
+  return {
+    year,
+    donors: statementDonors,
+    totalCents,
+    giftCount: gifts.length,
+    giftsWithoutDonor,
+  };
+}
+
+/**
+ * The church's own address from Church info, written as one line, to
+ * pre-fill the statement address when none has been saved yet.
+ */
+export async function getChurchAddressLine(churchId: string): Promise<string> {
+  const supabase = createClient();
+  const { data, error } = await supabase
+    .from("churches")
+    .select("address, city, state, zip")
+    .eq("id", churchId)
+    .maybeSingle();
+  if (error || !data) return "";
+  return formatAddressLine({
+    address: data.address as string | null,
+    city: data.city as string | null,
+    state: data.state as string | null,
+    zip: data.zip as string | null,
+  });
+}
+
+export function formatAddressLine(parts: {
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip?: string | null;
+}): string {
+  const street = parts.address?.trim() ?? "";
+  const city = parts.city?.trim() ?? "";
+  const stateZip = [parts.state?.trim(), parts.zip?.trim()].filter(Boolean).join(" ");
+  return [street, city, stateZip].filter(Boolean).join(", ");
 }

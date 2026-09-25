@@ -49,7 +49,7 @@ export function SetupStep({
         onClick={onToggle}
         aria-expanded={open}
         aria-controls={panelId}
-        className="flex w-full items-center gap-4 rounded-2xl p-4 text-left sm:p-5"
+        className="flex min-h-16 w-full items-center gap-4 rounded-2xl p-5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:p-6"
       >
         <span
           aria-hidden
@@ -65,15 +65,15 @@ export function SetupStep({
           {tone === "done" ? <Check className="size-4" strokeWidth={2.5} /> : number}
         </span>
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="font-heading text-base font-semibold text-foreground">
+          <span className="font-heading text-lg font-semibold text-foreground">
             {title}
             <span className="sr-only">
               {tone === "done" ? " (done)" : tone === "attention" ? " (needs attention)" : " (to do)"}
             </span>
           </span>
-          <span className="text-sm text-muted-foreground">{summary}</span>
+          <span className="text-[15px] text-muted-foreground">{summary}</span>
         </span>
-        <span className="hidden shrink-0 text-sm font-semibold text-accent sm:inline">
+        <span className="hidden shrink-0 text-[15px] font-semibold text-accent sm:inline">
           {open ? "Close" : actionLabel}
         </span>
         <ChevronDown
@@ -85,7 +85,7 @@ export function SetupStep({
         />
       </button>
       {open ? (
-        <div id={panelId} className="border-t border-border px-4 pb-5 pt-4 sm:px-5">
+        <div id={panelId} className="border-t border-border px-5 pb-6 pt-5 sm:px-6">
           {children}
         </div>
       ) : null}
@@ -148,7 +148,7 @@ export function Segmented<T extends string | number>({
             onClick={() => onChange(option.value)}
             onKeyDown={(event) => onKeyDown(event, index)}
             className={cn(
-              "flex min-h-9 flex-col items-center justify-center rounded-lg px-3 py-1.5 text-sm font-semibold leading-tight transition-colors disabled:cursor-not-allowed disabled:opacity-50",
+              "flex min-h-11 flex-col items-center justify-center rounded-lg px-4 py-1.5 text-[15px] font-semibold leading-tight transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50",
               selected
                 ? "bg-primary text-primary-foreground shadow-sm"
                 : "text-muted-foreground hover:bg-background hover:text-foreground",
@@ -158,7 +158,7 @@ export function Segmented<T extends string | number>({
             {option.hint ? (
               <span
                 className={cn(
-                  "text-[10px] font-medium uppercase tracking-wide",
+                  "text-sm font-medium",
                   selected ? "text-primary-foreground/80" : "text-accent",
                 )}
               >
@@ -182,7 +182,7 @@ export function StatusChip({
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold",
+        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-sm font-semibold",
         tone === "good" && "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300",
         tone === "warn" && "bg-amber-100 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300",
         tone === "info" && "bg-sky-100 text-sky-800 dark:bg-sky-500/15 dark:text-sky-300",

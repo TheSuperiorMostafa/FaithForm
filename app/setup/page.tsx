@@ -1,7 +1,8 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
 
-import { SetupFlow } from "@/components/setup/setup-flow";
+import { SetupFlow, SetupSkeleton } from "@/components/setup/setup-flow";
+import { SetupShell } from "@/components/setup/setup-shell";
 import { createClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -33,16 +34,20 @@ export default async function SetupPage() {
     if (membership) redirect("/dashboard");
   }
 
+  // Brought back from an email confirmation: the church name they typed
+  // before confirming, so they don't have to type it twice.
+  const pending = user?.user_metadata?.pending_church_name;
+  const pendingChurchName = typeof pending === "string" ? pending.slice(0, 120) : null;
+
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top,var(--secondary),var(--background)_55%)] p-5">
-      <div className="w-full max-w-md">
-        <Suspense>
-          <SetupFlow
-            initialStep={user ? "church" : "account"}
-            signedInEmail={user?.email ?? null}
-          />
-        </Suspense>
-      </div>
-    </main>
+    <SetupShell>
+      <Suspense fallback={<SetupSkeleton />}>
+        <SetupFlow
+          initialStep={user ? "church" : "account"}
+          signedInEmail={user?.email ?? null}
+          pendingChurchName={pendingChurchName}
+        />
+      </Suspense>
+    </SetupShell>
   );
 }

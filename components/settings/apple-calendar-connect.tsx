@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useTransition, type TransitionStartFunction } from "react";
-import { AlertTriangle, Apple, Check, ExternalLink, Info } from "lucide-react";
+import { Apple, Check, ExternalLink, Info, Unplug } from "lucide-react";
+import { toast } from "sonner";
 
 import {
   connectAppleCalendarAction,
@@ -10,7 +11,12 @@ import {
   listAppleCalendarsAction,
 } from "@/app/dashboard/settings/apple-calendar-actions";
 import type { AppleCalendarChoice } from "@/lib/integrations/apple-calendar";
-import { Badge } from "@/components/ui/badge";
+import { AccountRow } from "@/components/settings/account-row";
+import {
+  accountReturnTo,
+  type AccountNotice,
+} from "@/components/settings/connected-accounts-messages";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -45,17 +51,17 @@ export function AppleCalendarConnect({
   status,
   onDisconnect,
   disconnectDisabled,
+  notice,
 }: {
   status: AppleCalendarStatus;
   onDisconnect: () => void;
   disconnectDisabled: boolean;
+  notice?: Pick<AccountNotice, "kind" | "message"> | null;
 }) {
   const [open, setOpen] = useState(false);
   const [advanced, setAdvanced] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
-  const [mailAddress, setMailAddress] = useState(status.mailAddress ?? "");
-  const [mailEnabled, setMailEnabled] = useState(status.mailEnabled);
 
   function close() {
     setOpen(false);
@@ -65,105 +71,57 @@ export function AppleCalendarConnect({
 
   function connected() {
     close();
-    window.location.href = "/dashboard/settings?tab=integrations&apple_connected=1";
-  }
-
-  function configureMail(enabled: boolean) {
-    setError(null);
-    const formData = new FormData();
-    formData.set("enabled", String(enabled));
-    formData.set("mailAddress", mailAddress);
-    startTransition(async () => {
-      const result = await configureICloudMailAction(formData);
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      setMailEnabled(enabled);
-      setError(null);
-    });
+    window.location.href = `${accountReturnTo("apple")}&apple_connected=1`;
   }
 
   const detail = !status.connected
-    ? "Not connected"
+    ? null
     : status.readOnly
-      ? `${status.calendarName ?? "iCloud calendar"} · read-only link`
-      : `${status.appleId ?? "Connected"} · calendar: ${status.calendarName ?? "iCloud"}`;
+      ? `Showing “${status.calendarName ?? "iCloud calendar"}”. FaithForm can read it but not change it.`
+      : `Signed in as ${status.appleId ?? "your Apple ID"} · Calendar: ${status.calendarName ?? "iCloud"}`;
 
   return (
-    <div className="flex flex-col gap-3 rounded-xl border border-border bg-background/45 p-4 transition-colors hover:border-accent/40 hover:bg-accent/5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-start gap-3">
-          <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-accent/10 text-accent">
-            <Apple className="size-5" strokeWidth={1.75} />
-          </div>
-          <div>
-            <div className="flex flex-wrap items-center gap-2">
-              <p className="font-medium">iCloud Calendar</p>
-              <Badge
-                variant={
-                  status.connected
-                    ? "default"
-                    : status.needsReconnect
-                      ? "destructive"
-                      : "secondary"
-                }
-              >
-                {status.connected
-                  ? "Connected"
-                  : status.needsReconnect
-                    ? "Reconnect needed"
-                    : "Not connected"}
-              </Badge>
-            </div>
-            <p className="text-sm text-muted-foreground">{detail}</p>
-            {!status.connected && status.needsReconnect && status.reconnectReason && (
-              <p className="mt-1.5 flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-300">
-                <AlertTriangle
-                  className="mt-0.5 size-3.5 shrink-0"
-                  strokeWidth={1.75}
-                  aria-hidden
-                />
-                <span>{status.reconnectReason}</span>
-              </p>
-            )}
-          </div>
-        </div>
-        <div className="flex gap-2">
-          {status.connected ? (
-            <>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => (open ? close() : setOpen(true))}
-              >
-                Change calendar
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={onDisconnect}
-                disabled={disconnectDisabled}
-              >
-                Disconnect
-              </Button>
-            </>
-          ) : (
+    <AccountRow
+      icon={<Apple className="size-6" strokeWidth={1.75} />}
+      name="iCloud Calendar"
+      purpose="Fills in your announcements from the calendar you keep on iPhone or Mac."
+      state={status}
+      detail={detail}
+      notice={notice}
+      actions={
+        status.connected ? (
+          <>
             <Button
-              size="sm"
               type="button"
+              variant="outline"
+              aria-expanded={open}
               onClick={() => (open ? close() : setOpen(true))}
             >
-              {status.needsReconnect ? "Reconnect" : "Connect"}
+              Change calendar
             </Button>
-          )}
-        </div>
-      </div>
-
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={onDisconnect}
+              disabled={disconnectDisabled}
+            >
+              <Unplug aria-hidden />
+              Disconnect
+            </Button>
+          </>
+        ) : (
+          <Button
+            type="button"
+            aria-expanded={open}
+            onClick={() => (open ? close() : setOpen(true))}
+          >
+            {status.needsReconnect ? "Reconnect" : "Connect"}
+          </Button>
+        )
+      }
+    >
       {open && (
-        <div className="flex flex-col gap-4 rounded-xl border border-border bg-background p-4">
+        <div className="flex flex-col gap-5 rounded-2xl border border-border bg-background p-5">
           {advanced ? (
             <AppleIdForm
               pending={pending}
@@ -193,43 +151,81 @@ export function AppleCalendarConnect({
           )}
         </div>
       )}
+    </AccountRow>
+  );
+}
 
-      {status.connected && !status.readOnly && (
-        <div className="flex flex-col gap-3 rounded-xl border border-border bg-background p-4">
-          <div>
-            <p className="text-sm font-semibold text-foreground">Apple Mail drafts</p>
-            <p className="text-sm text-muted-foreground">
-              Use the same app-specific password to create weekly announcement drafts in iCloud Mail.
-            </p>
-          </div>
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-            <div className="flex flex-1 flex-col gap-2">
-              <Label htmlFor="icloud_mail_address">iCloud Mail address</Label>
-              <Input
-                id="icloud_mail_address"
-                type="email"
-                placeholder="yourchurch@icloud.com"
-                value={mailAddress}
-                onChange={(event) => setMailAddress(event.target.value)}
-                disabled={pending || mailEnabled}
-              />
-            </div>
-            <Button
-              type="button"
-              variant={mailEnabled ? "outline" : "default"}
-              onClick={() => configureMail(!mailEnabled)}
-              disabled={pending || (!mailEnabled && !mailAddress.trim())}
-            >
-              {pending ? "Checking…" : mailEnabled ? "Turn off drafts" : "Enable drafts"}
-            </Button>
-          </div>
-          {mailEnabled && (
-            <p className="text-xs text-green-700 dark:text-green-300">
-              Weekly announcements will be created as drafts in Apple Mail.
-            </p>
-          )}
-          {error && <p className="text-sm text-destructive" role="alert">{error}</p>}
+/**
+ * Weekly announcement drafts in iCloud Mail. Rare, and only possible once
+ * iCloud is connected with an Apple ID, so it lives under Advanced.
+ */
+export function AppleMailDraftsCard({ status }: { status: AppleCalendarStatus }) {
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const [mailAddress, setMailAddress] = useState(status.mailAddress ?? "");
+  const [mailEnabled, setMailEnabled] = useState(status.mailEnabled);
+
+  function configureMail(enabled: boolean) {
+    setError(null);
+    const formData = new FormData();
+    formData.set("enabled", String(enabled));
+    formData.set("mailAddress", mailAddress);
+    startTransition(async () => {
+      try {
+        const result = await configureICloudMailAction(formData);
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        setMailEnabled(enabled);
+        toast.success(
+          enabled
+            ? "Apple Mail drafts are on. The weekly email will wait in your iCloud Drafts."
+            : "Apple Mail drafts are off.",
+        );
+      } catch {
+        setError("We couldn't change Apple Mail drafts. Please try again.");
+      }
+    });
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <StatusBadge tone={mailEnabled ? "done" : "neutral"}>
+          {mailEnabled ? "On" : "Off"}
+        </StatusBadge>
+        <p className="text-[15px] text-muted-foreground">
+          {mailEnabled
+            ? `The weekly email is drafted in ${mailAddress || "iCloud Mail"}.`
+            : "The weekly email is not drafted in Apple Mail."}
+        </p>
+      </div>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+        <div className="flex flex-1 flex-col gap-2">
+          <Label htmlFor="icloud_mail_address">iCloud Mail address</Label>
+          <Input
+            id="icloud_mail_address"
+            type="email"
+            placeholder="yourchurch@icloud.com"
+            value={mailAddress}
+            onChange={(event) => setMailAddress(event.target.value)}
+            disabled={pending || mailEnabled}
+          />
         </div>
+        <Button
+          type="button"
+          variant={mailEnabled ? "outline" : "default"}
+          onClick={() => configureMail(!mailEnabled)}
+          disabled={pending || (!mailEnabled && !mailAddress.trim())}
+        >
+          {pending ? "Checking…" : mailEnabled ? "Turn off Apple Mail drafts" : "Turn on Apple Mail drafts"}
+        </Button>
+      </div>
+      {error && (
+        <p className="text-sm text-destructive" role="alert">
+          {error}
+        </p>
       )}
     </div>
   );
@@ -378,7 +374,7 @@ function CalendarLinkForm({
           value={link}
           onChange={(event) => setLink(event.target.value)}
         />
-        <ul className="flex flex-col gap-1 text-xs text-muted-foreground">
+        <ul className="flex flex-col gap-1 text-sm text-muted-foreground">
           <li>
             Anyone with this link can see the calendar, so use one that only
             holds church events.
@@ -405,14 +401,16 @@ function CalendarLinkForm({
         </Button>
       </div>
 
-      <button
-        type="button"
-        onClick={onAdvanced}
-        className="self-start text-xs font-medium text-muted-foreground underline underline-offset-4 hover:text-foreground"
-      >
-        Want FaithForm to change your iCloud events too? Connect with an Apple ID
-        instead.
-      </button>
+      <div className="flex flex-col gap-2 border-t border-border pt-4">
+        <p className="text-[15px] font-semibold text-foreground">Other ways to connect</p>
+        <p className="text-sm text-muted-foreground">
+          Want FaithForm to add and change your iCloud events too? That needs your
+          Apple ID and a special password from Apple.
+        </p>
+        <Button type="button" variant="ghost" className="self-start" onClick={onAdvanced}>
+          Connect with an Apple ID
+        </Button>
+      </div>
     </>
   );
 }
@@ -577,13 +575,13 @@ function AppleIdForm({
                         {calendar.name}
                       </span>
                       {active && (
-                        <span className="rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-accent-foreground">
+                        <span className="rounded-full bg-accent px-2.5 py-0.5 text-sm font-semibold text-accent-foreground">
                           Selected
                         </span>
                       )}
                     </span>
                     {!calendar.writable && (
-                      <span className="mt-0.5 block text-xs text-muted-foreground">
+                      <span className="mt-0.5 block text-sm text-muted-foreground">
                         Read-only. Events show up here, but new ones have to be
                         added in Apple Calendar.
                       </span>
@@ -625,13 +623,9 @@ function AppleIdForm({
         </Button>
       </div>
 
-      <button
-        type="button"
-        onClick={onBack}
-        className="self-start text-xs font-medium text-muted-foreground underline underline-offset-4 hover:text-foreground"
-      >
-        Use a calendar link instead, no password needed.
-      </button>
+      <Button type="button" variant="ghost" className="self-start" onClick={onBack}>
+        Use a calendar link instead (no password needed)
+      </Button>
     </>
   );
 }

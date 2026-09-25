@@ -1,9 +1,12 @@
 import { redirect } from "next/navigation";
 
-import { AppMembersNotInPeoplePanel } from "@/components/people/app-members-not-in-people-panel";
-import { JoinRequestsPanel } from "@/components/people/join-requests-panel";
-import { PeopleClaimsPanel } from "@/components/people/people-claims-panel";
+import { Users } from "lucide-react";
+
+import { NeedsAttentionCard } from "@/components/people/needs-attention-card";
 import { PeopleManager } from "@/components/people/people-manager";
+import { PEOPLE_DESCRIPTION } from "@/components/people/people-tabs";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageHeader } from "@/components/ui/page-header";
 import {
   getAppMembersNotInPeople,
   getPendingClaims,
@@ -24,14 +27,13 @@ export default async function PeoplePage() {
 
   if (!auth.churchId) {
     return (
-      <div className="mx-auto flex w-full max-w-2xl flex-col items-center justify-center gap-3 py-16 text-center">
-        <h2 className="text-xl font-semibold text-foreground">
-          No church linked yet
-        </h2>
-        <p className="max-w-md text-base text-muted-foreground">
-          Your account is not linked to a church yet. Contact support to connect
-          your church before managing people.
-        </p>
+      <div className="flex w-full flex-col gap-8">
+        <PageHeader title="People" description={PEOPLE_DESCRIPTION} />
+        <EmptyState
+          icon={Users}
+          title="Your account isn't connected to a church yet"
+          description="Set up your church, or ask your church admin to invite you. Then you can add and find people here."
+        />
       </div>
     );
   }
@@ -65,17 +67,21 @@ export default async function PeoplePage() {
   );
 
   return (
-    <div className="flex w-full flex-col gap-5">
-      <JoinRequestsPanel requests={joinRequests} />
-      <PeopleClaimsPanel claims={pendingClaims} />
-      <AppMembersNotInPeoplePanel people={notInPeople} />
-      <PeopleManager
-        initialMembers={members}
-        isAdmin={auth.isAdmin}
-        showAppStatus={showAppStatus}
-        appConnections={Object.fromEntries(connections)}
-        appPhotos={Object.fromEntries(photos)}
-      />
-    </div>
+    <PeopleManager
+      initialMembers={members}
+      isAdmin={auth.isAdmin}
+      showAppStatus={showAppStatus}
+      appConnections={Object.fromEntries(connections)}
+      appPhotos={Object.fromEntries(photos)}
+      attention={
+        // Join requests, identity questions and app members not yet in People,
+        // folded into one card so the list stays above the fold.
+        <NeedsAttentionCard
+          joinRequests={joinRequests}
+          claims={pendingClaims}
+          notInPeople={notInPeople}
+        />
+      }
+    />
   );
 }

@@ -36,6 +36,8 @@ export type CheckinChild = RosterSearchChild & {
   householdId: string;
   /** The room an admin set as this child's usual place, if any. */
   defaultLocationId: string | null;
+  /** Allergies and medical notes, shown on the desk's family card. */
+  medicalNotes?: string | null;
 };
 
 export type RosterMatch<T extends RosterSearchChild = RosterSearchChild> = {
@@ -312,6 +314,7 @@ export type HouseholdMembership = {
   lastName: string;
   isActive: boolean;
   defaultLocationId: string | null;
+  medicalNotes?: string | null;
 };
 
 /**
@@ -347,6 +350,7 @@ export function childrenFromMemberships(
         (a, b) => a.localeCompare(b),
       ),
       defaultLocationId: row.defaultLocationId,
+      medicalNotes: row.medicalNotes ?? null,
     }))
     .sort(
       (a, b) =>

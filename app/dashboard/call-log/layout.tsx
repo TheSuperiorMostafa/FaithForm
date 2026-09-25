@@ -9,13 +9,11 @@ import { FeatureGate } from "@/components/dashboard/feature-gate";
  * the phone did, not to tune what it is, and every support ticket about the
  * assistant came back to a setting a pastor had no reason to have touched. So
  * this section is the log alone, and there are no tabs above it any more.
+ * Each page sets its own root (`flex w-full flex-col gap-8`), so the
+ * skeletons can mirror it exactly.
  */
 export default function CallLogLayout({ children }: { children: ReactNode }) {
   return (
-    <FeatureGate feature="voice_assistant">
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
-        {children}
-      </div>
-    </FeatureGate>
+    <FeatureGate feature="voice_assistant">{children}</FeatureGate>
   );
 }

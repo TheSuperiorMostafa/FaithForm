@@ -1,87 +1,136 @@
-import Link from "next/link";
-import { BookOpen, Megaphone, Users } from "lucide-react";
-import { Card } from "@/components/ui/card";
-import type { FeatureKey } from "@/lib/features/catalog";
-import { cn } from "@/lib/utils";
+import {
+  Baby,
+  BookOpen,
+  ClipboardCheck,
+  HandHeart,
+  Megaphone,
+  MessageCircle,
+  UserPlus,
+  Video,
+  type LucideIcon,
+} from "lucide-react";
 
-type QuickActionsSectionProps = {
-  churchId: string;
-  allowedFeatures: FeatureKey[];
+import { ActionCard, ActionGrid } from "@/components/ui/action-card";
+import type { FeatureKey } from "@/lib/features/catalog";
+
+type QuickAction = {
+  title: string;
+  description: string;
+  href: string;
+  icon: LucideIcon;
+  feature: FeatureKey;
+  /** Moves to the front on Sundays, when it is what the day is about. */
+  sunday?: boolean;
 };
 
-const actions = [
+/**
+ * The things a church does most, as big labelled tiles. Each goes straight to
+ * the task, not to a section index.
+ */
+const ACTIONS: QuickAction[] = [
   {
-    label: "Add announcement",
-    description: "Email & social",
-    href: "/dashboard/announcements",
+    title: "Check kids in",
+    description: "Families arriving now",
+    href: "/dashboard/checkin",
+    icon: Baby,
+    feature: "checkin",
+    sunday: true,
+  },
+  {
+    title: "Go live",
+    description: "Stream the service",
+    href: "/dashboard/live-streaming",
+    icon: Video,
+    feature: "live_stream",
+    sunday: true,
+  },
+  {
+    title: "Record attendance",
+    description: "Who came on Sunday",
+    href: "/dashboard/attendance",
+    icon: ClipboardCheck,
+    feature: "attendance",
+    sunday: true,
+  },
+  {
+    title: "Post an announcement",
+    description: "App, email and Facebook",
+    href: "/dashboard/announcements?compose=1",
     icon: Megaphone,
     feature: "announcements",
   },
   {
-    label: "Track attendance",
-    description: "Sunday roll",
-    href: "/dashboard/attendance",
-    icon: Users,
-    feature: "attendance",
+    title: "Add a person",
+    description: "Someone new to your church",
+    href: "/dashboard/people?add=1",
+    icon: UserPlus,
+    feature: "people",
   },
   {
-    label: "Create sermon",
-    description: "Sermon builder",
-    href: "/dashboard/sermon-builder",
+    title: "Message a group",
+    description: "Send to a small group or team",
+    href: "/dashboard/groups/messages",
+    icon: MessageCircle,
+    feature: "groups",
+  },
+  {
+    title: "Build a sermon",
+    description: "Scripture slides for Sunday",
+    href: "/dashboard/sermon-builder/new",
     icon: BookOpen,
     feature: "sermon_builder",
   },
-] as const satisfies ReadonlyArray<{ feature: FeatureKey } & Record<string, unknown>>;
+  {
+    title: "See giving",
+    description: "What came in this week",
+    href: "/dashboard/giving",
+    icon: HandHeart,
+    feature: "giving",
+  },
+];
+
+const MAX_TILES = 6;
 
 /** Features that put at least one tile in this section. */
-export const QUICK_ACTION_FEATURES: FeatureKey[] = actions.map((a) => a.feature);
+export const QUICK_ACTION_FEATURES: FeatureKey[] = ACTIONS.map((a) => a.feature);
 
 export function hasQuickActions(allowedFeatures: FeatureKey[]): boolean {
   return QUICK_ACTION_FEATURES.some((key) => allowedFeatures.includes(key));
 }
 
-export function QuickActionsSection({
-  churchId: _churchId,
-  allowedFeatures,
-}: QuickActionsSectionProps) {
-  const visibleActions = actions.filter((action) =>
-    allowedFeatures.includes(action.feature),
-  );
+export function pickQuickActions(
+  allowedFeatures: FeatureKey[],
+  isSunday: boolean,
+): QuickAction[] {
+  const allowed = ACTIONS.filter((action) => allowedFeatures.includes(action.feature));
+  const ordered = isSunday
+    ? [...allowed.filter((a) => a.sunday), ...allowed.filter((a) => !a.sunday)]
+    : [...allowed.filter((a) => !a.sunday), ...allowed.filter((a) => a.sunday)];
+  return ordered.slice(0, MAX_TILES);
+}
 
-  if (visibleActions.length === 0) return null;
+export function QuickActionsSection({
+  allowedFeatures,
+  isSunday,
+}: {
+  allowedFeatures: FeatureKey[];
+  isSunday: boolean;
+}) {
+  const actions = pickQuickActions(allowedFeatures, isSunday);
+  if (actions.length === 0) return null;
 
   return (
-    <div
-      className={cn(
-        "grid grid-cols-1 gap-6",
-        visibleActions.length === 2 ? "sm:grid-cols-2" : "sm:grid-cols-3",
-      )}
-    >
-      {visibleActions.map((action) => {
-        const Icon = action.icon;
-        return (
-          <Link key={action.label} href={action.href} className="group">
-            <Card
-              className={cn(
-                "flex min-h-[148px] flex-col items-center justify-center gap-4 border-border/80 p-7 text-center transition-all sm:min-h-[160px] sm:p-8",
-                "hover:-translate-y-0.5 hover:border-accent/50 hover:shadow-card-hover",
-              )}
-            >
-              <div className="flex size-14 items-center justify-center rounded-xl bg-accent/10 text-accent transition-colors group-hover:bg-accent/20 sm:size-16">
-                <Icon className="size-7 sm:size-8" strokeWidth={1.75} aria-hidden />
-              </div>
-              <div>
-                <p className="text-base font-semibold text-foreground sm:text-lg">
-                  {action.label}
-                </p>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {action.description}
-                </p>
-              </div>
-            </Card>
-          </Link>
-        );
-      })}
-    </div>
+    <ActionGrid>
+      {actions.map((action, index) => (
+        <ActionCard
+          key={action.href}
+          href={action.href}
+          icon={action.icon}
+          title={action.title}
+          description={action.description}
+          tone={index === 0 ? "primary" : "default"}
+        />
+      ))}
+    </ActionGrid>
   );
 }

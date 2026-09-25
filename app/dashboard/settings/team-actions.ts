@@ -22,6 +22,7 @@ import {
 } from "@/lib/auth/feature-grants";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { toUserError } from "@/lib/errors/user-error";
 
 export type TeamFormState = {
   ok: boolean;
@@ -106,7 +107,7 @@ export async function inviteTeamMember(
   if (role === "viewer" && grants.length === 0) {
     return {
       ok: false,
-      error: "Give this member access to at least one feature.",
+      error: "Choose at least one tool this person can open.",
     };
   }
 
@@ -118,7 +119,7 @@ export async function inviteTeamMember(
   } catch (err) {
     return {
       ok: false,
-      error: err instanceof Error ? err.message : "Could not look up that email.",
+      error: toUserError(err, "We couldn't check that email address."),
     };
   }
 
@@ -140,7 +141,7 @@ export async function inviteTeamMember(
     if (error || !data.user) {
       return {
         ok: false,
-        error: error?.message ?? "Could not create an account for that email.",
+        error: toUserError(error, "We couldn't create an account for that email."),
       };
     }
 
@@ -154,7 +155,9 @@ export async function inviteTeamMember(
     .select("id, church_id")
     .eq("user_id", authUser.id);
 
-  if (linkError) return { ok: false, error: linkError.message };
+  if (linkError) {
+    return { ok: false, error: toUserError(linkError, "We couldn't add that person to your team.") };
+  }
 
   const linkedHere = existingLinks?.find((row) => row.church_id === churchId);
   if (linkedHere) {
@@ -199,14 +202,15 @@ export async function inviteTeamMember(
       if (!stored) {
         return {
           ok: false,
-          error:
-            "Could not save this member's feature access. Check that the service role key is configured.",
+          error: toUserError(null, "We couldn't save what this person can open."),
         };
       }
     }
   }
 
-  if (insertError) return { ok: false, error: insertError.message };
+  if (insertError) {
+    return { ok: false, error: toUserError(insertError, "We couldn't add that person to your team.") };
+  }
 
   const { data: church } = await admin
     .from("churches")
@@ -225,14 +229,13 @@ export async function inviteTeamMember(
     });
     if (!result.sent) {
       emailNote = tempPassword
-        ? " Email delivery is not configured, so pass the temporary password on yourself."
-        : " Email delivery is not configured, so let them know they can sign in at the login page.";
+        ? " We couldn't email them, so pass the temporary password on yourself."
+        : " We couldn't email them, so let them know they can sign in at the login page.";
     }
   } catch (err) {
     // The membership is already live; a failed email must not roll that back.
-    emailNote = ` The invite email could not be sent (${
-      err instanceof Error ? err.message : "unknown error"
-    }). ${
+    console.error("[team] invite email failed:", err);
+    emailNote = ` The invite email could not be sent. ${
       tempPassword
         ? "Pass the temporary password on yourself."
         : "They can still sign in from the login page."
@@ -278,7 +281,9 @@ export async function resetTeamMemberPassword(
     .eq("church_id", churchId)
     .maybeSingle();
 
-  if (loadError) return { ok: false, error: loadError.message };
+  if (loadError) {
+    return { ok: false, error: toUserError(loadError, "We couldn't find that team member.") };
+  }
   if (!member) return { ok: false, error: "Team member not found." };
 
   const { data: existing } = await admin.auth.admin.getUserById(
@@ -297,7 +302,9 @@ export async function resetTeamMemberPassword(
     },
   );
 
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    return { ok: false, error: toUserError(error, "We couldn't make a new temporary password.") };
+  }
 
   revalidatePath("/dashboard/settings");
 
@@ -331,7 +338,7 @@ export async function updateTeamMemberAccess(
   if (role === "viewer" && grants.length === 0) {
     return {
       ok: false,
-      error: "Give this member access to at least one feature.",
+      error: "Choose at least one tool this person can open.",
     };
   }
 
@@ -344,7 +351,9 @@ export async function updateTeamMemberAccess(
     .eq("church_id", churchId)
     .maybeSingle();
 
-  if (loadError) return { ok: false, error: loadError.message };
+  if (loadError) {
+    return { ok: false, error: toUserError(loadError, "We couldn't find that team member.") };
+  }
   if (!member) return { ok: false, error: "Team member not found." };
 
   const demotingAnAdmin = member.role === "admin" && role !== "admin";
@@ -390,14 +399,15 @@ export async function updateTeamMemberAccess(
       if (!stored) {
         return {
           ok: false,
-          error:
-            "Could not save this member's feature access. Check that the service role key is configured.",
+          error: toUserError(null, "We couldn't save what this person can open."),
         };
       }
     }
   }
 
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    return { ok: false, error: toUserError(error, "We couldn't change this person's access.") };
+  }
 
   revalidatePath("/dashboard/settings");
   revalidatePath("/dashboard");
@@ -425,7 +435,9 @@ export async function removeTeamMember(
     .eq("church_id", churchId)
     .maybeSingle();
 
-  if (loadError) return { ok: false, error: loadError.message };
+  if (loadError) {
+    return { ok: false, error: toUserError(loadError, "We couldn't find that team member.") };
+  }
   if (!member) return { ok: false, error: "Team member not found." };
 
   if (member.user_id === userId) {
@@ -447,7 +459,9 @@ export async function removeTeamMember(
     .eq("id", memberId)
     .eq("church_id", churchId);
 
-  if (error) return { ok: false, error: error.message };
+  if (error) {
+    return { ok: false, error: toUserError(error, "We couldn't remove this person from your team.") };
+  }
 
   revalidatePath("/dashboard/settings");
 

@@ -10,7 +10,7 @@ import {
   verifyAppleCalendarReadable,
   type AppleCalendarChoice,
 } from "@/lib/integrations/apple-calendar";
-import { verifyICloudMailDrafts } from "@/lib/integrations/icloud-mail";
+import { ICloudMailError, verifyICloudMailDrafts } from "@/lib/integrations/icloud-mail";
 import { CalendarFeedError } from "@/lib/integrations/apple-feed";
 import { CalDavAuthError, CalDavError } from "@/lib/integrations/caldav";
 import {
@@ -20,6 +20,7 @@ import {
 } from "@/lib/integrations/tokens";
 import type { AppleIntegrationMetadata } from "@/lib/integrations/types";
 import { createClient } from "@/lib/supabase/server";
+import { toUserError } from "@/lib/errors/user-error";
 
 /**
  * Connecting iCloud Calendar.
@@ -60,9 +61,9 @@ async function requireAnnouncementsAdmin(): Promise<Gate> {
   const supabase = createClient();
   const auth = await getChurchAuth(supabase);
 
-  if (!auth) return { ok: false, error: "No church linked" };
+  if (!auth) return { ok: false, error: "Your account isn't connected to a church yet." };
   if (!auth.isAdmin) {
-    return { ok: false, error: "Only church admins can change integrations." };
+    return { ok: false, error: "Only church admins can change connected accounts." };
   }
   const denied = await featureActionError("announcements", supabase);
   if (denied) return { ok: false, error: denied };
@@ -269,7 +270,9 @@ export async function configureICloudMailAction(
   try {
     await verifyICloudMailDrafts({ address, password: existing.access_token });
   } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : "Could not verify iCloud Mail." };
+    // These messages are written for churches (see lib/integrations/icloud-mail.ts).
+    if (err instanceof ICloudMailError) return { ok: false, error: err.message };
+    return { ok: false, error: toUserError(err, "We couldn't check that iCloud Mail address.") };
   }
 
   await saveIntegration({

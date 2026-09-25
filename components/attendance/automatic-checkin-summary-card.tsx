@@ -42,7 +42,7 @@ export function AutomaticCheckinSummaryCard({
   const live = problem === null;
   const detail = live
     ? [
-        watching.map((campus) => `${campus.campusName} · ${campus.radiusMeters} m`).join(", "),
+        watching.map((campus) => campus.campusName).join(", "),
         nextWindow ? `Next check-in ${formatWindow(nextWindow)}` : "No services in the next 7 days",
       ].join(" · ")
     : problem === "no_campus_configured"
@@ -61,10 +61,10 @@ export function AutomaticCheckinSummaryCard({
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <h2 className="flex flex-wrap items-center gap-2 font-heading text-base font-semibold text-foreground">
-          Automatic Attendance
+          Phone check-in
           <span
             className={cn(
-              "rounded-full px-2 py-0.5 text-xs font-semibold",
+              "rounded-full px-2.5 py-0.5 text-sm font-semibold",
               live
                 ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300"
                 : "bg-muted text-muted-foreground",
@@ -78,7 +78,7 @@ export function AutomaticCheckinSummaryCard({
       {canOpenSetup ? (
         <Link
           href="/dashboard/attendance/setup"
-          className="inline-flex shrink-0 items-center gap-1.5 self-start rounded-lg border border-border px-3 py-2 text-sm font-semibold text-foreground transition-colors hover:border-accent hover:text-accent sm:self-center"
+          className="inline-flex min-h-11 shrink-0 items-center gap-1.5 self-start rounded-lg border border-border px-4 py-2 text-[15px] font-semibold text-foreground transition-colors hover:border-accent hover:text-accent sm:self-center"
         >
           {live ? "Manage" : "Set it up"}
           <ArrowRight className="size-4" aria-hidden />

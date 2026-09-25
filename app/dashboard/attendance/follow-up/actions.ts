@@ -3,7 +3,9 @@
 import { revalidatePath } from "next/cache";
 
 import { checkedInOtherwise, getPresenceOnDate } from "@/lib/attendance/presence";
+import { validateFollowUpOverride } from "@/lib/attendance/follow-up-message";
 import { sendAttendanceFollowUpTexts } from "@/lib/attendance/send-follow-up-texts";
+import { toUserError } from "@/lib/errors/user-error";
 import { featureActionError } from "@/lib/features/guard";
 import { getChurchAuth } from "@/lib/auth/church";
 import { getPriorConsecutiveAbsences } from "@/lib/queries/attendance";
@@ -31,6 +33,11 @@ export type SendFollowUpsResult =
 export async function sendFollowUps(input: {
   serviceDate: string;
   memberIds: string[];
+  /**
+   * One message for this send, with `[Name]` for each first name. Checked by
+   * the same rules as the church's saved messages, and never saved over them.
+   */
+  message?: string;
 }): Promise<SendFollowUpsResult> {
   const denied = await featureActionError("attendance_follow_up");
   if (denied) return { ok: false, error: denied };
@@ -44,6 +51,13 @@ export async function sendFollowUps(input: {
     return { ok: false, error: "Pick at least one person to follow up with." };
   }
 
+  let messageTemplate: string | undefined;
+  if (input.message !== undefined) {
+    const checked = validateFollowUpOverride(String(input.message));
+    if (!checked.ok) return { ok: false, error: checked.error };
+    messageTemplate = checked.message;
+  }
+
   const { data: record } = await supabase
     .from("attendance_records")
     .select("id")
@@ -52,7 +66,7 @@ export async function sendFollowUps(input: {
     .maybeSingle();
 
   if (!record) {
-    return { ok: false, error: "No attendance saved for that Sunday yet." };
+    return { ok: false, error: "Attendance isn't saved for that Sunday yet. Count it first, then send texts." };
   }
 
   // Who the log will show as the sender. Staff accounts carry no profile row,
@@ -92,7 +106,9 @@ export async function sendFollowUps(input: {
     ));
   }
 
-  if (entriesError) return { ok: false, error: entriesError.message };
+  if (entriesError) {
+    return { ok: false, error: toUserError(entriesError, "We couldn't load who missed. Nothing was sent.") };
+  }
 
   type EntryRow = {
     id: string;
@@ -138,7 +154,9 @@ export async function sendFollowUps(input: {
       .in("id", eligibleIds));
   }
 
-  if (markError) return { ok: false, error: markError.message };
+  if (markError) {
+    return { ok: false, error: toUserError(markError, "We couldn't start the texts. Nothing was sent.") };
+  }
 
   const eligibleMemberIds = eligible.map((entry) => entry.member_id as string);
 
@@ -183,6 +201,7 @@ export async function sendFollowUps(input: {
         userId: auth.userId,
         name: senderName,
       },
+      { messageTemplate },
     );
   } catch (err) {
     console.error("sendFollowUps:", err);

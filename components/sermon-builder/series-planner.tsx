@@ -2,11 +2,16 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Loader2, Sparkles } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+const PLAN_FAILED =
+  "We couldn't plan the series just now. Nothing was saved. Please try again in a minute.";
 
 export function SeriesPlanner() {
   const router = useRouter();
@@ -34,18 +39,25 @@ export function SeriesPlanner() {
           description: description || undefined,
         }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed");
+      const data = (await res.json().catch(() => null)) as {
+        series?: { id?: string };
+        error?: unknown;
+      } | null;
+      if (!res.ok || !data?.series?.id) {
+        setError(typeof data?.error === "string" ? data.error : PLAN_FAILED);
+        setLoading(false);
+        return;
+      }
+      toast.success(`"${title.trim()}" is planned.`);
       router.push(`/dashboard/sermon-builder/series/${data.series.id}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed");
-    } finally {
+    } catch {
+      setError(PLAN_FAILED);
       setLoading(false);
     }
   }
 
   return (
-    <Card className="w-full">
+    <Card className="w-full max-w-3xl">
       <CardHeader>
         <CardTitle>Plan a sermon series</CardTitle>
       </CardHeader>
@@ -62,16 +74,17 @@ export function SeriesPlanner() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="theme">Theme</Label>
+            <Label htmlFor="theme">What the series is about</Label>
             <Input
               id="theme"
               value={theme}
               onChange={(e) => setTheme(e.target.value)}
               required
+              placeholder="Living by the Spirit day to day"
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="anchor">Anchor scripture</Label>
+            <Label htmlFor="anchor">Main Bible passage (optional)</Label>
             <Input
               id="anchor"
               value={scriptureAnchor}
@@ -80,7 +93,7 @@ export function SeriesPlanner() {
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="weeks">Weeks</Label>
+            <Label htmlFor="weeks">How many weeks</Label>
             <Input
               id="weeks"
               type="number"
@@ -99,10 +112,24 @@ export function SeriesPlanner() {
               rows={3}
             />
           </div>
-          {error && <p className="text-sm text-destructive">{error}</p>}
-          <Button type="submit" disabled={loading}>
-            {loading ? "Planning series…" : "Generate series plan"}
+          {error && (
+            <p role="alert" className="text-[15px] text-destructive">
+              {error}
+            </p>
+          )}
+          <Button type="submit" size="lg" className="w-fit" disabled={loading}>
+            {loading ? (
+              <Loader2 aria-hidden className="size-5 animate-spin motion-reduce:animate-none" />
+            ) : (
+              <Sparkles aria-hidden className="size-5" />
+            )}
+            {loading ? "Planning your series…" : "Plan the series"}
           </Button>
+          {loading && (
+            <p className="text-sm text-muted-foreground" role="status">
+              This usually takes 15 to 30 seconds.
+            </p>
+          )}
         </form>
       </CardContent>
     </Card>

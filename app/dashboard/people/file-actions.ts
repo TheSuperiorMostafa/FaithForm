@@ -13,6 +13,7 @@ import {
   sanitizeMemberFileName,
   ALLOWED_MEMBER_FILE_EXTENSIONS,
 } from "@/lib/checkin/member-files";
+import { toUserError } from "@/lib/errors/user-error";
 import { featureActionError } from "@/lib/features/guard";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -118,7 +119,7 @@ export async function uploadMemberFile(
     return {
       ok: false,
       error: /bucket not found/i.test(uploadError.message)
-        ? "The document storage bucket has not been created on this project yet. Run `pnpm storage:buckets`, then try again."
+        ? "Document uploads aren't available yet for your church. Nothing was uploaded. Contact FaithForm support and we'll turn them on."
         : "That file could not be uploaded. Try again.",
     };
   }
@@ -141,8 +142,10 @@ export async function uploadMemberFile(
     // The object is removed rather than left behind: a stored file with no row
     // is invisible to every screen and to every deletion path.
     await guard.admin.storage.from(MEMBER_FILES_BUCKET).remove([storagePath]);
-    console.error("[member-files] insert failed:", insertError.message);
-    return { ok: false, error: "That file could not be saved." };
+    return {
+      ok: false,
+      error: toUserError(insertError, "We couldn't save that document. Nothing was uploaded."),
+    };
   }
 
   revalidatePath("/dashboard/people");
@@ -169,7 +172,9 @@ export async function deleteMemberFile(
     .delete()
     .eq("id", fileId);
 
-  if (error) return { ok: false, error: "That document could not be removed." };
+  if (error) {
+    return { ok: false, error: toUserError(error, "We couldn't delete that document.") };
+  }
 
   await guard.admin.storage
     .from(MEMBER_FILES_BUCKET)

@@ -17,7 +17,7 @@ type Readiness = {
 const REASON_PHRASES: Record<PhoneCheckVerdict, string> = {
   ready: "is ready",
   no_people_link: "hasn't connected your app account to a People record",
-  geofence_disabled: "hasn't switched automatic check-in on",
+  geofence_disabled: "hasn't switched phone check-in on",
   no_campus_configured: "hasn't put its building on the map",
   not_enrolled: "isn't available to your account",
 };
@@ -109,7 +109,7 @@ export function PhoneCheckCard({
       readiness.problem === "geofence_disabled"
         ? {
             state: "problem",
-            title: `Automatic check-in is off for ${churchName}`,
+            title: `Phone check-in is off for ${churchName}`,
             action: { label: "Turn it on", onClick: () => onOpenStep("live") },
           }
         : readiness.problem === "no_campus_configured"
@@ -159,13 +159,12 @@ export function PhoneCheckCard({
         </div>
         <Button
           type="button"
-          variant="ghost"
-          size="sm"
+          variant="outline"
           onClick={recheck}
           disabled={refreshing}
-          aria-label="Check again"
         >
-          <RefreshCw className={cn("size-4", refreshing && "animate-spin")} aria-hidden />
+          <RefreshCw className={cn("size-4", refreshing && "animate-spin motion-reduce:animate-none")} aria-hidden />
+          Check again
         </Button>
       </div>
 
@@ -191,21 +190,21 @@ export function PhoneCheckCard({
                 <CircleDashed className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden />
               )}
               <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span className="text-sm font-semibold text-foreground">
+                <span className="text-[15px] font-semibold text-foreground">
                   {item.title}
                   <span className="sr-only">
                     {item.state === "done" ? " (done)" : item.state === "problem" ? " (needs attention)" : " (to do)"}
                   </span>
                 </span>
                 {item.detail ? (
-                  <span className="text-xs text-muted-foreground">{item.detail}</span>
+                  <span className="text-sm text-muted-foreground">{item.detail}</span>
                 ) : null}
               </div>
               {item.action ? (
                 item.action.href ? (
                   <Link
                     href={item.action.href}
-                    className="shrink-0 self-center text-sm font-semibold text-accent hover:underline"
+                    className="inline-flex min-h-11 shrink-0 items-center self-center rounded-lg px-2 text-[15px] font-semibold text-accent hover:underline"
                   >
                     {item.action.label}
                   </Link>
@@ -213,7 +212,7 @@ export function PhoneCheckCard({
                   <button
                     type="button"
                     onClick={item.action.onClick}
-                    className="shrink-0 self-center text-sm font-semibold text-accent hover:underline"
+                    className="inline-flex min-h-11 shrink-0 items-center self-center rounded-lg px-2 text-[15px] font-semibold text-accent hover:underline"
                   >
                     {item.action.label}
                   </button>

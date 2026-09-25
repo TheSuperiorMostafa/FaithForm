@@ -12,7 +12,7 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   const supabase = createClient();
   const auth = await getChurchAuth(supabase);
-  if (!auth) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!auth) return NextResponse.json({ error: "Please sign in again." }, { status: 401 });
   const denied = await featureAccessDenied("attendance", supabase);
   if (denied) return denied;
   if (!auth.isAdmin) {
@@ -36,7 +36,11 @@ export async function POST(request: Request) {
       const status = error.code === "conflict" ? 409 : error.code === "invalid_input" ? 400 : 500;
       return NextResponse.json({ error: error.message }, { status });
     }
-    return NextResponse.json({ error: "Could not save event attendance." }, { status: 500 });
+    console.error("[announcements] save event attendance:", error);
+    return NextResponse.json(
+      { error: "We couldn't save check-in for this event. Please try again." },
+      { status: 500 },
+    );
   }
 }
 

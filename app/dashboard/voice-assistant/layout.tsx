@@ -37,7 +37,7 @@ export default async function VoiceAssistantLayout({
 
   return (
     <FeatureGate feature="voice_assistant">
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
+      <div className="flex w-full flex-col gap-6">
         <header>
           <h1 className="font-heading text-2xl font-bold tracking-tight">
             Voice Assistant

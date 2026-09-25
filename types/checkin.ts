@@ -7,9 +7,9 @@ export const HOUSEHOLD_RELATIONSHIPS = [
 export type HouseholdRelationship = (typeof HOUSEHOLD_RELATIONSHIPS)[number];
 
 export const RELATIONSHIP_LABELS: Record<HouseholdRelationship, string> = {
-  guardian: "Guardian",
+  guardian: "Parent or guardian",
   dependent: "Child",
-  other: "Household member",
+  other: "Other family member",
 };
 
 /**
@@ -106,6 +106,8 @@ export type CheckinSessionRow = {
   localServiceDate: string;
   preCheckedInAt: string | null;
   checkedInAt: string | null;
+  /** The staff account that received the child, for "undo my check-in". */
+  checkedInBy?: string | null;
   checkedOutAt: string | null;
   checkinMethod: CheckinMethod | null;
   checkoutMethod: CheckoutMethod | null;

@@ -1,7 +1,10 @@
 import { redirect } from "next/navigation";
+import { SermonBackLink } from "@/components/sermon-builder/sermon-back-link";
 import { SeriesPlanner } from "@/components/sermon-builder/series-planner";
+import { PageHeader } from "@/components/ui/page-header";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentChurchId } from "@/lib/auth/current-church";
+import { NEW_SERIES_DESCRIPTION, NEW_SERIES_TITLE } from "@/lib/sermon-builder/page-copy";
 
 export const dynamic = "force-dynamic";
 
@@ -16,10 +19,9 @@ export default async function NewSeriesPage() {
   if (!churchId) redirect("/dashboard");
 
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
-      <h1 className="border-l-4 border-accent pl-3 font-heading text-[26px] font-bold">
-        New series
-      </h1>
+    <div className="flex w-full flex-col gap-8">
+      <SermonBackLink href="/dashboard/sermon-builder" label="Back to Sermons" />
+      <PageHeader title={NEW_SERIES_TITLE} description={NEW_SERIES_DESCRIPTION} />
       <SeriesPlanner />
     </div>
   );

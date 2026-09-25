@@ -1,64 +1,67 @@
-import { Card, CardContent } from "@/components/ui/card";
-import { Skeleton, SkeletonContainer, SkeletonText } from "@/components/ui/skeleton";
+import { Clock, Image as ImageIcon, Inbox } from "lucide-react";
 
+import { ActionCard, ActionGrid } from "@/components/ui/action-card";
+import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
+import { SitePreviewSkeleton } from "@/components/website-admin/skeletons";
+
+/** Mirrors Website → Overview. The header and tabs come from the layout. */
 export default function WebsiteOverviewLoading() {
   return (
-    <SkeletonContainer
-      className="flex flex-col gap-6"
-      label="website overview"
-    >
-      {/* Publish Card */}
-      <Card className="p-5">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-2">
-              <Skeleton className="h-5 w-28" />
-              <Skeleton className="h-5 w-20 rounded-full" />
+    <SkeletonContainer className="flex w-full flex-col gap-8" label="website overview">
+      {/* Publish card: live or draft is data, so it shimmers. */}
+      <section className="flex flex-col gap-5 rounded-2xl border border-border bg-card p-6 shadow-card">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-7 w-64 max-w-full" />
+              <Skeleton className="h-7 w-16 rounded-full" />
             </div>
-            <Skeleton className="h-4 w-72" />
+            <Skeleton className="h-5 w-full max-w-lg" />
+            <Skeleton className="h-4 w-56" />
           </div>
-          <div className="flex items-center gap-2">
-            <Skeleton className="h-9 w-24 rounded-lg" />
-            <Skeleton className="h-9 w-28 rounded-lg" />
-          </div>
+          <Skeleton className="h-12 w-44 rounded-[10px]" />
         </div>
-      </Card>
-
-      {/* 3 Stat Cards */}
-      <div className="grid gap-4 sm:grid-cols-3">
-        {Array.from({ length: 3 }).map((_, i) => (
-          <Card key={i} className="p-4 space-y-2">
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-8 w-20" />
-          </Card>
-        ))}
-      </div>
-
-      {/* Site Preview Frame */}
-      <Card className="overflow-hidden">
-        <div className="flex items-center justify-between border-b border-border bg-muted/30 px-4 py-2.5">
-          <div className="flex items-center gap-2">
-            <Skeleton className="size-3 rounded-full" />
-            <Skeleton className="size-3 rounded-full" />
-            <Skeleton className="size-3 rounded-full" />
-          </div>
-          <Skeleton className="h-6 w-64 rounded-md" />
-          <Skeleton className="size-6 rounded-md" />
+        <div className="flex flex-wrap gap-3">
+          <Skeleton className="h-11 w-44 rounded-[10px]" />
+          <Skeleton className="h-11 w-36 rounded-[10px]" />
         </div>
-        <CardContent className="flex h-96 items-center justify-center p-6">
-          <div className="space-y-4 text-center max-w-sm w-full">
-            <Skeleton className="h-6 w-3/4 mx-auto" />
-            <SkeletonText lines={2} lastLineWidth="w-2/3 mx-auto" size="base" />
-          </div>
-        </CardContent>
-      </Card>
+      </section>
 
-      {/* Web address card */}
-      <Card className="p-5 space-y-3">
-        <Skeleton className="h-5 w-32" />
-        <Skeleton className="h-4 w-80 max-w-full" />
-        <Skeleton className="h-10 w-full rounded-md" />
-      </Card>
+      <ActionGrid>
+        <ActionCard
+          href="/dashboard/website/pages?edit=banner"
+          icon={ImageIcon}
+          title="Change banner photo"
+          description="The big photo at the top of your home page. Changes only your website; your app keeps its cover photo."
+        />
+        <ActionCard
+          href="/dashboard/website/details"
+          icon={Clock}
+          title="Update service times"
+          description="Also updates the app, attendance, and your phone assistant."
+        />
+        <ActionCard
+          href="/dashboard/website/inbox"
+          icon={Inbox}
+          title="Read your inbox"
+          description="Messages visitors sent through your website."
+        />
+      </ActionGrid>
+
+      <section className="rounded-2xl border border-border bg-card p-6 shadow-card">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0 flex-1 space-y-1">
+            <h2 className="font-heading text-lg font-bold">Your web address</h2>
+            <Skeleton className="h-5 w-full max-w-md" />
+          </div>
+          <Skeleton className="h-11 w-48 rounded-[10px]" />
+        </div>
+        <div className="mt-4 flex flex-col gap-2">
+          <Skeleton className="h-[54px] w-full rounded-xl" />
+        </div>
+      </section>
+
+      <SitePreviewSkeleton />
     </SkeletonContainer>
   );
 }

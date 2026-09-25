@@ -2,14 +2,13 @@
 
 import { useCallback, useState } from "react";
 import Link from "next/link";
-import { MessageCircle, Share2 } from "lucide-react";
-import { DeleteDraftButton } from "@/components/sermon-builder/delete-draft-button";
+import { FileDown, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { SectionCard } from "@/components/sermon-builder/section-card";
-import { ExportMenu } from "@/components/sermon-builder/export-menu";
-import { ModelBadge } from "@/components/sermon-builder/model-badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { confirmAction } from "@/components/ui/confirm-dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { SectionCard } from "@/components/sermon-builder/section-card";
 import type { Sermon, SermonContent, SermonOutline } from "@/types/sermon";
 
 type Props = {
@@ -24,6 +23,17 @@ const emptyContent: SermonContent = {
   prayer: "",
 };
 
+const SAVE_FAILED =
+  "We couldn't save your last change. Check your internet connection; your text is still here.";
+const DRAFT_FAILED =
+  "We couldn't write the draft just now. Nothing was changed. Please try again in a minute.";
+
+/**
+ * The full-manuscript editor for sermons made with the older outline-and-draft
+ * builder. Publishing, slides, social posts and deleting live on the sermon
+ * page around it; this is only the writing. (Its old "Mark published" button
+ * is gone: "Publish to the app" is the one way to publish.)
+ */
 export function SermonEditor({ sermon: initial }: Props) {
   const [sermon, setSermon] = useState(initial);
   const [outline] = useState(initial.outline as SermonOutline | null);
@@ -31,28 +41,32 @@ export function SermonEditor({ sermon: initial }: Props) {
     (initial.content as SermonContent | null) ?? emptyContent,
   );
   const [draftLoading, setDraftLoading] = useState(false);
-  const [publishLoading, setPublishLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const save = useCallback(
     async (patch: Record<string, unknown>) => {
-      const res = await fetch(`/api/sermon/${sermon.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(patch),
-      });
-      if (!res.ok) {
+      try {
+        const res = await fetch(`/api/sermon/${sermon.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(patch),
+        });
+        if (!res.ok) {
+          setError(SAVE_FAILED);
+          return;
+        }
         const data = await res.json();
-        throw new Error(data.error ?? "Save failed");
+        setSermon(data.sermon);
+        setError(null);
+      } catch {
+        setError(SAVE_FAILED);
       }
-      const data = await res.json();
-      setSermon(data.sermon);
     },
     [sermon.id],
   );
 
   const saveContent = useCallback(() => {
-    save({ content, title: sermon.title }).catch(() => {});
+    void save({ content, title: sermon.title });
   }, [save, content, sermon.title]);
 
   async function generateDraft() {
@@ -67,84 +81,76 @@ export function SermonEditor({ sermon: initial }: Props) {
       const contentType = res.headers.get("content-type") ?? "";
       if (!res.ok) {
         if (res.status === 504) {
-          throw new Error(
-            "Draft generation timed out. Try again — large sermons can take up to a minute.",
+          setError(
+            "Writing the draft took too long. Please try again; long sermons can take up to a minute.",
           );
+          return;
         }
-        if (contentType.includes("application/json")) {
-          const data = await res.json();
-          throw new Error(data.error ?? "Draft failed");
-        }
-        throw new Error(`Draft failed (${res.status})`);
+        const data = contentType.includes("application/json")
+          ? ((await res.json().catch(() => null)) as { error?: unknown } | null)
+          : null;
+        setError(typeof data?.error === "string" ? data.error : DRAFT_FAILED);
+        return;
       }
       const data = await res.json();
       setContent(data.content);
       setSermon(data.sermon);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Draft failed");
+    } catch {
+      setError(DRAFT_FAILED);
     } finally {
       setDraftLoading(false);
     }
   }
 
-  async function publish() {
-    setPublishLoading(true);
-    try {
-      await save({ status: "published", content, title: sermon.title });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Publish failed");
-    } finally {
-      setPublishLoading(false);
-    }
+  async function regenerateDraft() {
+    const ok = await confirmAction({
+      title: "Write a new draft?",
+      description:
+        "This replaces the whole manuscript below, including anything you typed yourself. It can't be undone.",
+      confirmLabel: "Replace the draft",
+      destructive: true,
+    });
+    if (ok) await generateDraft();
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div className="flex w-full flex-col gap-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex-1 space-y-2">
+          <Label htmlFor={`title-${sermon.id}`}>Sermon title</Label>
           <Input
+            id={`title-${sermon.id}`}
             value={sermon.title}
             onChange={(e) => setSermon({ ...sermon, title: e.target.value })}
-            onBlur={() => save({ title: sermon.title }).catch(() => {})}
+            onBlur={() => void save({ title: sermon.title })}
             className="font-heading text-xl font-semibold"
           />
-          <p className="text-sm text-muted-foreground">
-            {sermon.scripture_refs.join(" · ")} · {sermon.duration_min} min
+          <p className="text-[15px] text-muted-foreground">
+            {sermon.scripture_refs.join(" · ")} · {sermon.duration_min} minutes.
+            Changes save when you click away from a box.
           </p>
-          <ModelBadge model={sermon.model_used} />
         </div>
         <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
-            size="sm"
             nativeButton={false}
             render={
-              <Link href={`/dashboard/sermon-builder/${sermon.id}/discussion`} />
+              <a href={`/api/sermon/${sermon.id}/export/pdf`} download>
+                <FileDown aria-hidden className="size-5" strokeWidth={1.75} />
+                Download lesson (PDF)
+              </a>
             }
-          >
-            <MessageCircle className="size-4" strokeWidth={1.75} />
-            Discussion
-          </Button>
+          />
           <Button
             variant="outline"
-            size="sm"
             nativeButton={false}
             render={
-              <Link href={`/dashboard/sermon-builder/${sermon.id}/social`} />
+              <Link href={`/dashboard/sermon-builder/${sermon.id}/discussion`}>
+                <MessageCircle aria-hidden className="size-5" strokeWidth={1.75} />
+                Discussion questions
+              </Link>
             }
-          >
-            <Share2 className="size-4" strokeWidth={1.75} />
-            Social
-          </Button>
-          <ExportMenu sermonId={sermon.id} />
-          {sermon.status === "draft" && (
-            <DeleteDraftButton
-              sermonId={sermon.id}
-              sermonTitle={sermon.title}
-              variant="outline"
-              redirectTo="/dashboard/sermon-builder"
-            />
-          )}
+          />
         </div>
       </div>
 
@@ -153,7 +159,7 @@ export function SermonEditor({ sermon: initial }: Props) {
           <CardHeader>
             <CardTitle>Outline</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2 text-sm">
+          <CardContent className="space-y-2 text-[15px]">
             <p>{outline.intro}</p>
             <ol className="list-decimal pl-5">
               {outline.points.map((p, i) => (
@@ -170,23 +176,27 @@ export function SermonEditor({ sermon: initial }: Props) {
       {!content.intro && !draftLoading && (
         <Card className="border-dashed">
           <CardContent className="flex flex-col items-center gap-3 p-6 text-center">
-            <p className="text-sm text-muted-foreground">
-              Your outline is ready. Generate a full draft manuscript next.
+            <p className="text-[15px] text-muted-foreground">
+              Your outline is ready. Write a full draft of the sermon next.
             </p>
             <Button onClick={generateDraft} disabled={draftLoading}>
-              Generate full draft
+              Write the full draft
             </Button>
           </CardContent>
         </Card>
       )}
 
       {draftLoading && (
-        <p className="text-center text-sm text-muted-foreground">
-          Writing your sermon draft… this may take a minute.
+        <p className="text-center text-[15px] text-muted-foreground" role="status">
+          Writing your sermon draft. This can take a minute.
         </p>
       )}
 
-      {error && <p className="text-sm text-destructive">{error}</p>}
+      {error && (
+        <p role="alert" className="text-[15px] text-destructive">
+          {error}
+        </p>
+      )}
 
       {content.intro && (
         <>
@@ -234,11 +244,8 @@ export function SermonEditor({ sermon: initial }: Props) {
             onBlur={saveContent}
           />
           <div className="flex gap-2 pb-8">
-            <Button variant="outline" onClick={generateDraft} disabled={draftLoading}>
-              Regenerate draft
-            </Button>
-            <Button onClick={publish} disabled={publishLoading}>
-              {publishLoading ? "Publishing…" : "Mark published"}
+            <Button variant="outline" onClick={regenerateDraft} disabled={draftLoading}>
+              Write a new draft
             </Button>
           </div>
         </>

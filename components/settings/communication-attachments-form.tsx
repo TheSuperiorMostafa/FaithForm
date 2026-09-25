@@ -7,8 +7,10 @@ import {
   removeCommunicationAttachment,
   uploadCommunicationAttachment,
 } from "@/app/dashboard/settings/actions";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { confirmAction } from "@/components/ui/confirm-dialog";
 import {
   ALLOWED_ATTACHMENT_EXTENSIONS,
   MAX_ATTACHMENTS_PER_CHURCH,
@@ -42,15 +44,7 @@ export function CommunicationAttachmentsForm({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  if (!isAdmin) {
-    return (
-      <Card>
-        <CardContent className="p-6 text-sm text-muted-foreground">
-          Only church admins can change what the weekly email carries.
-        </CardContent>
-      </Card>
-    );
-  }
+  if (!isAdmin) return null;
 
   const full = attachments.length >= MAX_ATTACHMENTS_PER_CHURCH;
 
@@ -83,6 +77,7 @@ export function CommunicationAttachmentsForm({
           return;
         }
         setNotice(`${picked.name} will go out with the weekly email.`);
+        toast.success(`${picked.name} added to the weekly email.`);
       } catch {
         setError(
           "That file could not be sent to the server. Check your connection and try again.",
@@ -91,17 +86,30 @@ export function CommunicationAttachmentsForm({
     });
   };
 
-  const handleRemove = (attachment: CommunicationAttachment) => {
+  const handleRemove = async (attachment: CommunicationAttachment) => {
+    const ok = await confirmAction({
+      title: `Remove ${attachment.fileName}?`,
+      description:
+        "It stops going out with the weekly email, and the file is deleted from FaithForm. You would need to add it again to use it.",
+      confirmLabel: "Remove file",
+      destructive: true,
+    });
+    if (!ok) return;
     setError(null);
     setNotice(null);
 
     startTransition(async () => {
-      const result = await removeCommunicationAttachment(attachment.id);
-      if (!result.ok) {
-        setError(result.error ?? "That attachment could not be removed.");
-        return;
+      try {
+        const result = await removeCommunicationAttachment(attachment.id);
+        if (!result.ok) {
+          setError(result.error ?? "That file could not be removed.");
+          return;
+        }
+        setNotice(`${attachment.fileName} removed from the weekly email.`);
+        toast.success(`${attachment.fileName} removed from the weekly email.`);
+      } catch {
+        setError("That file could not be removed. Please try again.");
       }
-      setNotice(`${attachment.fileName} removed.`);
     });
   };
 
@@ -109,23 +117,23 @@ export function CommunicationAttachmentsForm({
     <Card>
       <CardHeader>
         <CardTitle>Files in the weekly email</CardTitle>
-        <p className="text-sm text-muted-foreground">
-          Anything here is attached to every Monday draft — a bulletin, a sign-up
-          sheet, a flyer. Up to {MAX_ATTACHMENTS_PER_CHURCH} files, {MAX_MB}MB
-          each; photos larger than that are shrunk to fit.
-        </p>
+        <CardDescription className="text-[15px]">
+          Anything here is attached to every Monday draft, like a bulletin, a sign-up sheet or a
+          flyer. Up to {MAX_ATTACHMENTS_PER_CHURCH} files, {MAX_MB}MB each. Big photos are shrunk
+          to fit.
+        </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {attachments.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
-            No files attached. The weekly email goes out as text only.
+          <p className="rounded-2xl border border-dashed border-border p-5 text-[15px] text-muted-foreground">
+            No files yet. The weekly email goes out with just the text.
           </p>
         ) : (
           <ul className="flex flex-col gap-2">
             {attachments.map((attachment) => (
               <li
                 key={attachment.id}
-                className="flex items-center justify-between gap-3 rounded-lg border border-border p-3"
+                className="flex min-h-16 items-center justify-between gap-3 rounded-2xl border border-border px-4 py-3"
               >
                 <div className="flex min-w-0 items-center gap-3">
                   <Paperclip
@@ -136,7 +144,7 @@ export function CommunicationAttachmentsForm({
                     <p className="truncate text-sm font-medium">
                       {attachment.fileName}
                     </p>
-                    <p className="text-xs text-muted-foreground tabular-nums">
+                    <p className="text-sm text-muted-foreground tabular-nums">
                       {formatSize(attachment.sizeBytes)}
                     </p>
                   </div>
@@ -144,12 +152,12 @@ export function CommunicationAttachmentsForm({
                 <Button
                   type="button"
                   variant="ghost"
-                  size="sm"
                   disabled={pending}
                   onClick={() => handleRemove(attachment)}
                   aria-label={`Remove ${attachment.fileName}`}
                 >
-                  <Trash2 className="size-4" strokeWidth={1.75} />
+                  <Trash2 aria-hidden />
+                  Remove
                 </Button>
               </li>
             ))}
@@ -176,11 +184,11 @@ export function CommunicationAttachmentsForm({
             disabled={pending || full}
             onClick={() => inputRef.current?.click()}
           >
-            <Upload className="mr-2 size-4" strokeWidth={1.75} />
+            <Upload aria-hidden />
             {pending ? "Working…" : "Add a file"}
           </Button>
           {full && (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground">
               Remove a file to add another.
             </p>
           )}

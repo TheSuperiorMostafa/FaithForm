@@ -138,10 +138,10 @@ test("Services and Setup are reachable from the Attendance tabs", () => {
 
 test("staff see how each person was counted, in words and not by colour alone", () => {
   for (const [source, label] of [
-    ["geofence", "Automatic"],
-    ["qr", "Scanned"],
-    ["kiosk", "Kiosk"],
-    ["manual", "Marked"],
+    ["geofence", "Checked in on their phone"],
+    ["qr", "Scanned the code on screen"],
+    ["kiosk", "Checked in at the kiosk"],
+    ["manual", "Marked by staff"],
   ] as const) {
     assert.match(board, new RegExp(`${source}: \\{\\s*label: "${label}",\\s*icon: \\w+`), source);
   }

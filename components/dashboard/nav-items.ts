@@ -1,40 +1,52 @@
 import {
+  Baby,
   BookOpen,
-  Contact,
+  CircleHelp,
+  ClipboardCheck,
   Globe,
-  Heart,
-  LayoutDashboard,
-  LifeBuoy,
+  HandHeart,
+  House,
   Megaphone,
   Phone,
-  RadioTower,
   Settings,
   Smartphone,
+  UserRound,
   Users,
-  UsersRound,
+  Video,
   type LucideIcon,
 } from "lucide-react";
 import type { FeatureKey } from "@/lib/features/catalog";
+
+/**
+ * Sidebar groups follow a church's week, not the database: the things done
+ * every week first, then the church's presence online.
+ */
+export type NavGroup = "home" | "weekly" | "online";
+
+export const NAV_GROUP_LABELS: Record<Exclude<NavGroup, "home">, string> = {
+  weekly: "Every week",
+  online: "Your church online",
+};
 
 export type NavItem = {
   label: string;
   href: string;
   icon: LucideIcon;
   shortLabel?: string;
-  /** Hide from mobile bottom nav (sidebar only). */
+  group?: NavGroup;
+  /** Hide from the mobile bottom bar's first four slots (still under More). */
   sidebarOnly?: boolean;
   /**
    * Gate this row behind features: it shows when the member holds any one of
    * them. Attendance lists both of its grants, so a pastor with Follow-up only
    * still reaches the section (its layout forwards them to the right tab).
-   * Items with no features (Home, Support, Settings) are always available.
+   * Items with no features (Home, Help, Settings) are always available.
    */
   features?: FeatureKey[];
   /**
    * Parts of this section that live at their own routes under their own
    * feature. The row is active on them too, and a member who holds only a
    * part's feature still sees the row — it takes them straight to that part.
-   * Attendance lists Kids check-in this way: one section, several grants.
    */
   sections?: { href: string; features: FeatureKey[] }[];
 };
@@ -70,37 +82,36 @@ export function isNavItemActive(pathname: string, item: NavItem): boolean {
   );
 }
 
+/** The current row's label, for the topbar title. */
+export function currentNavLabel(pathname: string): string | null {
+  const all = [...navItems, ...footerUtilityNavItems];
+  const hit = all.find((item) => isNavItemActive(pathname, item));
+  return hit?.label ?? null;
+}
+
 export const navItems: NavItem[] = [
   {
     label: "Home",
     shortLabel: "Home",
     href: "/dashboard",
-    icon: LayoutDashboard,
-  },
-  {
-    // Check-ins are attendance. Kids check-in is a tab of this section rather
-    // than a second sidebar row, so "Attendance" and "Check-In" no longer
-    // read as two different things.
-    label: "Attendance",
-    shortLabel: "Attend",
-    href: "/dashboard/attendance",
-    icon: Users,
-    features: ["attendance", "attendance_follow_up"],
-    sections: [{ href: "/dashboard/checkin", features: ["checkin"] }],
+    icon: House,
+    group: "home",
   },
   {
     label: "People",
     shortLabel: "People",
     href: "/dashboard/people",
-    icon: Contact,
+    icon: UserRound,
     features: ["people"],
+    group: "weekly",
   },
   {
     label: "Groups",
     shortLabel: "Groups",
     href: "/dashboard/groups",
-    icon: UsersRound,
+    icon: Users,
     features: ["groups"],
+    group: "weekly",
   },
   {
     label: "Announcements",
@@ -108,60 +119,86 @@ export const navItems: NavItem[] = [
     href: "/dashboard/announcements",
     icon: Megaphone,
     features: ["announcements"],
+    group: "weekly",
   },
   {
-    label: "Sermon Builder",
-    shortLabel: "Sermon",
+    // Who came: the Sunday count, services and follow-up.
+    label: "Attendance",
+    shortLabel: "Attend",
+    href: "/dashboard/attendance",
+    icon: ClipboardCheck,
+    features: ["attendance", "attendance_follow_up"],
+    group: "weekly",
+  },
+  {
+    // Its own row: used at speed while families are arriving, so it should be
+    // one click from anywhere, not a tab inside another section's tabs.
+    label: "Kids Check-in",
+    shortLabel: "Check-in",
+    href: "/dashboard/checkin",
+    icon: Baby,
+    features: ["checkin"],
+    group: "weekly",
+  },
+  {
+    label: "Live",
+    shortLabel: "Live",
+    href: "/dashboard/live-streaming",
+    icon: Video,
+    features: ["live_stream"],
+    group: "weekly",
+  },
+  {
+    label: "Sermons",
+    shortLabel: "Sermons",
     href: "/dashboard/sermon-builder",
     icon: BookOpen,
     features: ["sermon_builder"],
-  },
-  {
-    label: "Live Stream",
-    shortLabel: "Live",
-    href: "/dashboard/live-streaming",
-    icon: RadioTower,
-    features: ["live_stream"],
-  },
-  {
-    // Assistant configuration lives in the control center now: a pastor wants
-    // to read what the phone did, not tune what it is.
-    label: "Call Log",
-    shortLabel: "Calls",
-    href: "/dashboard/call-log",
-    icon: Phone,
-    features: ["voice_assistant"],
+    group: "weekly",
   },
   {
     label: "Giving",
-    shortLabel: "Give",
+    shortLabel: "Giving",
     href: "/dashboard/giving",
-    icon: Heart,
+    icon: HandHeart,
     features: ["giving"],
+    group: "online",
   },
   {
     label: "Website",
-    shortLabel: "Site",
+    shortLabel: "Website",
     href: "/dashboard/website",
     icon: Globe,
     features: ["website"],
+    group: "online",
   },
   {
-    label: "Member App",
+    label: "Church App",
     shortLabel: "App",
     href: "/dashboard/app",
     icon: Smartphone,
     features: ["member_app"],
+    group: "online",
+  },
+  {
+    // A pastor wants to read what the phone did, not tune what it is:
+    // assistant configuration lives in the FaithForm control center.
+    label: "Phone Calls",
+    shortLabel: "Calls",
+    href: "/dashboard/call-log",
+    icon: Phone,
+    features: ["voice_assistant"],
+    group: "online",
   },
 ];
 
-/** Compact footer pills (Support + Settings). */
+/** Always reachable, on every screen size (WCAG 3.2.6 consistent help). */
 export const footerUtilityNavItems: NavItem[] = [
   {
-    label: "Support",
+    label: "Help",
     shortLabel: "Help",
     href: "/dashboard/support",
-    icon: LifeBuoy,
+    icon: CircleHelp,
     sidebarOnly: true,
   },
   {

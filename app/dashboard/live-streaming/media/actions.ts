@@ -11,6 +11,7 @@ import {
   getArtworkSpec,
   type ArtworkCrop,
 } from "@/lib/media/artwork";
+import { toUserError } from "@/lib/errors/user-error";
 import { normalizeSiteImage } from "@/lib/security/validate-image";
 import {
   clearSeriesItemArtwork,
@@ -37,9 +38,9 @@ async function requireAdmin(): Promise<
 }
 
 function revalidate(recordingId?: string) {
-  revalidatePath("/dashboard/live-streaming/media");
+  revalidatePath("/dashboard/live-streaming/recordings");
   if (recordingId) {
-    revalidatePath(`/dashboard/live-streaming/media/${recordingId}`);
+    revalidatePath(`/dashboard/live-streaming/recordings/${recordingId}`);
   }
 }
 
@@ -82,7 +83,7 @@ export async function uploadMediaArtwork(
   if (!guard.ok) return guard;
 
   const spec = getArtworkSpec(formData.get("crop") as string | null);
-  if (!spec) return { ok: false, error: "Unknown artwork shape." };
+  if (!spec) return { ok: false, error: "Choose one of the artwork shapes shown." };
 
   const targetKind = formData.get("targetKind");
   const targetId = formData.get("targetId");
@@ -175,7 +176,7 @@ export async function clearMediaArtwork(input: {
   if (!guard.ok) return guard;
 
   const spec = getArtworkSpec(input.crop);
-  if (!spec) return { ok: false, error: "Unknown artwork shape." };
+  if (!spec) return { ok: false, error: "Choose one of the artwork shapes shown." };
 
   const written =
     input.target.kind === "series"
@@ -184,7 +185,7 @@ export async function clearMediaArtwork(input: {
           artwork: { column: spec.column, url: null },
         });
 
-  if (!written.ok) return { ok: false, error: written.error ?? "Could not save." };
+  if (!written.ok) return { ok: false, error: toUserError(written.error, "We couldn't remove that image.") };
 
   revalidate(input.target.kind === "item" ? input.target.id : undefined);
   return { ok: true };
@@ -212,11 +213,11 @@ export async function applySeriesArtworkToItems(input: {
   if (!guard.ok) return guard;
 
   const spec = getArtworkSpec(input.crop);
-  if (!spec) return { ok: false, error: "Unknown artwork shape." };
+  if (!spec) return { ok: false, error: "Choose one of the artwork shapes shown." };
 
   const result = await clearSeriesItemArtwork(guard.churchId, input.seriesId, spec.column);
   if (!result.ok) {
-    return { ok: false, error: result.error ?? "Could not update that series." };
+    return { ok: false, error: toUserError(result.error, "We couldn't update that series.") };
   }
 
   revalidate();

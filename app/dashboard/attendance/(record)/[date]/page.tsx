@@ -20,10 +20,11 @@ import { isSundayDate, isValidDateParam } from "@/lib/utils/dates";
 
 type PageProps = {
   params: Promise<{ date: string }>;
+  searchParams: Promise<{ edit?: string }>;
 };
 
-export default async function AttendanceDatePage({ params }: PageProps) {
-  const { date } = await params;
+export default async function AttendanceDatePage({ params, searchParams }: PageProps) {
+  const [{ date }, query] = await Promise.all([params, searchParams]);
 
   if (!isValidDateParam(date)) {
     notFound();
@@ -63,8 +64,48 @@ export default async function AttendanceDatePage({ params }: PageProps) {
     if (other.length > 0) checkedIn.set(memberId, other);
   }
 
-  if (existing) {
+  // Correcting a saved Sunday: the same sheet, starting from what was saved.
+  if (existing && query.edit === "1") {
+    const active = await getActiveMembers(supabase, churchId);
+    const saved = new Map<string, "present" | "absent">();
+    const onSheet: AttendanceMember[] = [];
+    for (const entry of existing.entries) {
+      if (!entry.member) continue;
+      saved.set(entry.member.id, entry.status as "present" | "absent");
+      onSheet.push(entry.member);
+    }
+    const listed = new Set(active.map((member) => member.id));
+    const others = onSheet.filter((member) => !listed.has(member.id));
+    const unlisted = await getMembersByIds(
+      supabase,
+      churchId,
+      Array.from(checkedIn.keys()).filter((id) => !listed.has(id) && !saved.has(id)),
+    );
+
+    // Saved as one number: it opens as that number, and can be switched to
+    // names. Saved by name: names only, so nobody's mark is lost.
+    const countedByNumber = existing.entries.length === 0;
     const access = await getFeatureAccess(supabase);
+
+    return (
+      <AttendanceWizard
+        serviceDate={date}
+        members={[...active, ...others, ...unlisted.values()]}
+        checkedIn={Object.fromEntries(checkedIn)}
+        initialStatuses={Object.fromEntries(saved)}
+        initialNotes={existing.record.notes ?? ""}
+        initialMode={countedByNumber ? "number" : "names"}
+        initialHeadcount={countedByNumber ? existing.record.total_present : null}
+        numberAllowed={countedByNumber}
+        canFollowUp={access?.allowed.includes("attendance_follow_up") ?? false}
+        editing
+      />
+    );
+  }
+
+  const access = await getFeatureAccess(supabase);
+
+  if (existing) {
 
     const onSheetPresent = new Set(
       existing.entries
@@ -120,6 +161,7 @@ export default async function AttendanceDatePage({ params }: PageProps) {
       serviceDate={date}
       members={[...members, ...unlisted.values()]}
       checkedIn={Object.fromEntries(checkedIn)}
+      canFollowUp={access?.allowed.includes("attendance_follow_up") ?? false}
     />
   );
 }
