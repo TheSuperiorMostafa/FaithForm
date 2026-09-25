@@ -195,7 +195,7 @@ function AccessChooser({
         <legend className="mb-3 text-[15px] font-semibold text-foreground">
           What can they do?
         </legend>
-        <div className="grid gap-3 sm:grid-cols-3" role="radiogroup" aria-label="Access">
+        <div className="choice-grid choice-grid-3" role="radiogroup" aria-label="Access">
           {TEAM_PRESETS.map((preset) => {
             const available = isPresetAvailable(preset, availableFeatures);
             const active = selectedPreset === preset.id;

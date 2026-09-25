@@ -16,6 +16,7 @@ import {
 import { CopyBothButton, StreamTechnicalDetails, useStreamKey } from "@/components/live-streaming/encoder-setup-card";
 import {
   STREAMING_TOOLS,
+  STREAMING_TOOL_KEY,
   type StreamingToolId,
 } from "@/components/live-streaming/encoder-docs-card";
 import {
@@ -38,7 +39,6 @@ const TOOL_ICONS: Record<StreamingToolId, React.ComponentType<{ className?: stri
   someone_else: Users,
 };
 
-const TOOL_KEY = "ff-streaming-tool";
 const CHECK_EVERY_MS = 5000;
 
 type Props = {
@@ -67,7 +67,7 @@ export function StreamingSetupGuide({ ingestServerUrl, isAdmin, settings, series
 
   useEffect(() => {
     try {
-      const saved = window.localStorage.getItem(TOOL_KEY) as StreamingToolId | null;
+      const saved = window.localStorage.getItem(STREAMING_TOOL_KEY) as StreamingToolId | null;
       if (saved && STREAMING_TOOLS.some((entry) => entry.id === saved)) setTool(saved);
     } catch {
       // No storage (private window): the choice just isn't remembered.
@@ -77,7 +77,7 @@ export function StreamingSetupGuide({ ingestServerUrl, isAdmin, settings, series
   const choose = (id: StreamingToolId) => {
     setTool(id);
     try {
-      window.localStorage.setItem(TOOL_KEY, id);
+      window.localStorage.setItem(STREAMING_TOOL_KEY, id);
     } catch {
       // Ignore; see above.
     }
@@ -88,7 +88,7 @@ export function StreamingSetupGuide({ ingestServerUrl, isAdmin, settings, series
   return (
     <ol className="flex flex-col gap-6">
       <Step number={1} title="What do you stream with?" description="Pick the one you use. We'll show just the steps for it.">
-        <div role="radiogroup" aria-label="What do you stream with?" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div role="radiogroup" aria-label="What do you stream with?" className="choice-grid choice-grid-3">
           {STREAMING_TOOLS.map((entry) => {
             const Icon = TOOL_ICONS[entry.id];
             const selected = entry.id === tool;
@@ -139,8 +139,11 @@ export function StreamingSetupGuide({ ingestServerUrl, isAdmin, settings, series
             {chosen.usesKey ? (
               <CopyBothButton ingestServerUrl={ingestServerUrl} streamKey={streamKey} isAdmin={isAdmin} />
             ) : (
-              <Link href={GO_LIVE_HREF} className={cn(buttonVariants({ size: "lg" }), "w-fit")}>
-                Open Go live
+              <Link
+                href={chosen.id === "browser" ? `${GO_LIVE_HREF}?source=computer` : GO_LIVE_HREF}
+                className={cn(buttonVariants({ size: "lg" }), "w-fit")}
+              >
+                {chosen.id === "browser" ? "Go live from this computer" : "Open Go live"}
               </Link>
             )}
           </div>

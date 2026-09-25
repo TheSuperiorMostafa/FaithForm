@@ -213,32 +213,46 @@ export function Sidebar({
       {/* Nav items */}
       <nav
         aria-label="Sections"
-        className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain p-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-2 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
         <div className="space-y-1">{home.map(link)}</div>
         {groups.map(({ group, items }) => (
-          <div key={group} className="mt-3">
-            {collapsed ? (
-              // On the rail a heading has no room to read; a thin rule keeps the groups apart.
-              <div aria-hidden className="mx-3 mb-2 h-px bg-white/15" />
-            ) : (
-              <p className="mb-1 h-6 overflow-hidden whitespace-nowrap px-3 text-xs font-bold uppercase tracking-[0.14em] text-white/55">
+          <div key={group} className="mt-2">
+            {/*
+              Same 24px slot open or closed, so no link moves when the rail
+              expands: the heading fades in over a thin rule that fades out.
+            */}
+            <div className="relative mb-1 h-6">
+              <span
+                aria-hidden
+                className={cn(
+                  "absolute inset-x-3 top-1/2 h-px bg-white/15 transition-opacity duration-200 motion-reduce:transition-none",
+                  collapsed ? "opacity-100" : "opacity-0",
+                )}
+              />
+              <p
+                className={cn(
+                  "absolute inset-0 overflow-hidden whitespace-nowrap px-3 text-xs font-bold uppercase leading-6 tracking-[0.14em] text-white/55 transition-opacity duration-200 motion-reduce:transition-none",
+                  collapsed ? "opacity-0" : "opacity-100",
+                )}
+                aria-hidden={collapsed || undefined}
+              >
                 {NAV_GROUP_LABELS[group]}
               </p>
-            )}
+            </div>
             <div className="space-y-1">{items.map(link)}</div>
           </div>
         ))}
       </nav>
 
       {/* Help, Settings, account */}
-      <div className="shrink-0 space-y-2 overflow-x-hidden border-t border-sidebar p-3">
-        {/* Side by side when labelled, so the whole menu fits a laptop screen. */}
-        <div className={cn("grid gap-1", collapsed ? "grid-cols-1" : "grid-cols-2")}>
+      <div className="shrink-0 space-y-2 overflow-x-hidden border-t border-sidebar px-3 py-2.5">
+        {/* Stacked in both states, so Help and Settings never move. */}
+        <div className="space-y-1">
           {footerUtilityNavItems.map(link)}
         </div>
 
-        <div className="flex min-h-[52px] min-w-0 items-center gap-1 overflow-hidden rounded-xl border border-sidebar bg-white/5 py-1.5 pr-2">
+        <div className="flex h-14 min-w-0 items-center gap-1 overflow-hidden rounded-xl border border-sidebar bg-white/5 pr-2">
           <div className="flex h-full w-11 shrink-0 items-center justify-center">
             <div
               className="flex size-9 items-center justify-center rounded-full bg-sidebar-accent text-sm font-bold text-brand-navy"

@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import { toast } from "sonner";
 import {
   AlertTriangle,
+  Camera,
   CheckCircle2,
   ChevronDown,
   CircleDashed,
@@ -29,6 +30,7 @@ import {
   ReadyToPublishCard,
   type ReadyRecording,
 } from "@/components/live-streaming/broadcast/ready-to-publish-card";
+import { STREAMING_TOOL_KEY } from "@/components/live-streaming/encoder-docs-card";
 import { StreamShareLinksPanel } from "@/components/live-streaming/stream-share-links-panel";
 import { StudioSourceControls } from "@/components/live-streaming/studio-source-controls";
 import {
@@ -125,6 +127,8 @@ export function BroadcastControlCenter({
   const [title, setTitle] = useState(nextService?.title ?? DEFAULT_SERVICE_TITLE);
   const [dismissedPostLive, setDismissedPostLive] = useState<string | null>(null);
   const studio = useStudioBroadcast(branding);
+  /** Chosen in Setup ("This computer (camera)") or arrived with ?source=computer. */
+  const [useComputer, setUseComputer] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -138,7 +142,20 @@ export function BroadcastControlCenter({
   }, []);
 
   useEffect(() => {
-    setStudioSupported(isStudioSupported());
+    const supported = isStudioSupported();
+    setStudioSupported(supported);
+    let computer = false;
+    try {
+      computer =
+        new URLSearchParams(window.location.search).get("source") === "computer" ||
+        window.localStorage.getItem(STREAMING_TOOL_KEY) === "browser";
+    } catch {
+      // No storage (private window): the choice just isn't remembered.
+    }
+    if (supported && computer) {
+      setUseComputer(true);
+      setStudioOpen(true);
+    }
     const id = setInterval(() => {
       if (document.visibilityState === "visible") void refresh();
     }, POLL_MS);
@@ -166,8 +183,21 @@ export function BroadcastControlCenter({
     if (recordingPhase === "ready_to_publish" || recordingPhase === "published") router.refresh();
   }, [recordingPhase, router]);
 
+  /** One click from the Ready card: open the studio and turn the camera on. */
+  const startComputerCamera = async () => {
+    setStudioOpen(true);
+    setUseComputer(true);
+    return studio.startStudio();
+  };
+
   const goLive = () =>
     startTransition(async () => {
+      // Streaming from this computer: the camera has to be on before going
+      // live, so Go live turns it on first and stops if it can't.
+      if (useComputer && studioSupported && !studio.isLive) {
+        const started = await studio.startStudio();
+        if (!started) return;
+      }
       const result = await goLiveBroadcast(
         nextService ? undefined : title.trim() || DEFAULT_SERVICE_TITLE,
         nextService?.id,
@@ -292,8 +322,11 @@ export function BroadcastControlCenter({
             studioStream={studio.outputStream}
             platforms={platforms}
             isAdmin={isAdmin}
-            pending={pending}
+            pending={pending || studio.publishing}
             onGoLive={goLive}
+            canUseComputer={isAdmin && studioSupported}
+            startingCamera={studio.publishing}
+            onUseComputer={() => void startComputerCamera()}
           />
         )}
       </section>
@@ -430,6 +463,9 @@ function ReadyView({
   isAdmin,
   pending,
   onGoLive,
+  canUseComputer,
+  startingCamera,
+  onUseComputer,
 }: {
   overview: BroadcastOverview;
   nextService: UpcomingService | null;
@@ -441,6 +477,9 @@ function ReadyView({
   isAdmin: boolean;
   pending: boolean;
   onGoLive: () => void;
+  canUseComputer: boolean;
+  startingCamera: boolean;
+  onUseComputer: () => void;
 }) {
   const videoReady = overview.video.arriving || Boolean(studioStream);
   const sharing = [platforms.youtube ? "YouTube" : null, platforms.facebook ? "Facebook" : null].filter(
@@ -491,9 +530,27 @@ function ReadyView({
             state={videoReady ? "ok" : "waiting"}
             hint={
               videoReady ? undefined : (
-                <Link href={SETUP_HREF} className="font-medium text-primary underline underline-offset-4 dark:text-accent">
-                  How to connect your video
-                </Link>
+                <span className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                  {canUseComputer ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={onUseComputer}
+                      disabled={startingCamera}
+                      className="gap-2"
+                    >
+                      {startingCamera ? (
+                        <Loader2 className="size-4 motion-safe:animate-spin" aria-hidden />
+                      ) : (
+                        <Camera className="size-4" aria-hidden />
+                      )}
+                      Use this computer&apos;s camera
+                    </Button>
+                  ) : null}
+                  <Link href={SETUP_HREF} className="font-medium text-primary underline underline-offset-4 dark:text-accent">
+                    How to connect your video
+                  </Link>
+                </span>
               )
             }
           />

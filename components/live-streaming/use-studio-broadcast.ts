@@ -136,7 +136,7 @@ export function useStudioBroadcast(branding: StudioBranding) {
       cache: "no-store",
     });
     if (!configRes.ok) {
-      throw new Error("Could not load browser publish settings.");
+      throw new Error("ingest-config");
     }
 
     const config = (await configRes.json()) as {
@@ -214,13 +214,14 @@ export function useStudioBroadcast(branding: StudioBranding) {
     return screenStreamRef.current;
   }, [stopScreenVideoOnly]);
 
-  const startStudio = useCallback(async () => {
+  /** Starts this computer's camera and sends it to FaithForm. True once it is on air. */
+  const startStudio = useCallback(async (): Promise<boolean> => {
     if (!navigator.mediaDevices) {
-      toast.error("Your browser does not support camera capture.");
-      return;
+      toast.error("This browser can't use a camera. Open FaithForm in Chrome or Edge and try again.");
+      return false;
     }
 
-    if (isLive) return;
+    if (isLive) return true;
 
     try {
       setPublishing(true);
@@ -241,12 +242,13 @@ export function useStudioBroadcast(branding: StudioBranding) {
       setLayoutState("camera");
       setPipCornerState("bottom-right");
       setIsLive(true);
-      toast.success("Studio started.");
+      toast.success("This computer's camera is on.");
+      return true;
     } catch (error) {
+      console.error("[studio] could not start", error);
       stopStudio();
-      toast.error(
-        error instanceof Error ? error.message : "Could not start studio.",
-      );
+      toast.error(describeCaptureError(error));
+      return false;
     } finally {
       setPublishing(false);
     }
@@ -270,9 +272,8 @@ export function useStudioBroadcast(branding: StudioBranding) {
         compositorRef.current.setLayout(next);
         setLayoutState(next);
       } catch (error) {
-        toast.error(
-          error instanceof Error ? error.message : "Could not switch layout.",
-        );
+        console.error("[studio] could not switch layout", error);
+        toast.error(describeCaptureError(error));
       } finally {
         setPublishing(false);
       }
@@ -305,4 +306,27 @@ export function useStudioBroadcast(branding: StudioBranding) {
     switchLayout,
     setPipCorner,
   };
+}
+
+/**
+ * Camera and microphone failures in words a volunteer can act on. The browser's
+ * own text ("Permission denied", "Could not start video source") says nothing
+ * about what to do next.
+ */
+export function describeCaptureError(error: unknown): string {
+  const name = error && typeof error === "object" && "name" in error ? String((error as { name: unknown }).name) : "";
+  const message = error instanceof Error ? error.message : "";
+  if (name === "NotAllowedError" || name === "SecurityError" || /permission/i.test(message)) {
+    return "Your browser blocked the camera. Click the camera icon in the address bar, choose Allow, then try again.";
+  }
+  if (name === "NotFoundError" || name === "OverconstrainedError") {
+    return "We couldn't find a camera on this computer. Plug one in, then try again.";
+  }
+  if (name === "NotReadableError" || name === "AbortError") {
+    return "Your camera is being used by another app, like Zoom. Close that app, then try again.";
+  }
+  if (message === "ingest-config") {
+    return "We couldn't connect to FaithForm's streaming service. Check your internet connection and try again.";
+  }
+  return "We couldn't start this computer's camera. Please try again.";
 }

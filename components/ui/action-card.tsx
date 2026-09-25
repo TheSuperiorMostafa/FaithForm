@@ -85,8 +85,8 @@ export function ActionGrid({
   className?: string;
 }) {
   return (
-    <div className={cn("grid grid-cols-1 gap-4 min-[480px]:grid-cols-2 lg:grid-cols-3", className)}>
-      {children}
-    </div>
+    // Flex, not grid: each card is measured at its own width, so wrapped text
+    // never spills past the card (see .choice-grid in globals.css).
+    <div className={cn("choice-grid choice-grid-3 gap-4", className)}>{children}</div>
   );
 }

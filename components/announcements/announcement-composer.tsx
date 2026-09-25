@@ -1108,7 +1108,7 @@ export function AnnouncementComposer({
                       </p>
                     )}
                     {!calendar && (
-                      <div className="grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label="When is it?">
+                      <div className="choice-grid" role="radiogroup" aria-label="When is it?">
                         <ChoiceCard
                           name="composer-dated"
                           checked={!values.dated}
@@ -1216,7 +1216,7 @@ export function AnnouncementComposer({
                         To change who sees it, take it down and post it again.
                       </p>
                     ) : (
-                      <div className="grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label="Who sees it">
+                      <div className="choice-grid" role="radiogroup" aria-label="Who sees it">
                         <ChoiceCard
                           name="composer-audience"
                           checked={values.audience !== "members"}

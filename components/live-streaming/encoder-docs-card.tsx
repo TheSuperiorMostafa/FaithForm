@@ -5,6 +5,9 @@
 
 export type StreamingToolId = "obs" | "atem" | "vmix" | "browser" | "someone_else";
 
+/** Where the Setup choice is remembered, so Go live can act on "This computer". */
+export const STREAMING_TOOL_KEY = "ff-streaming-tool";
+
 export type StreamingTool = {
   id: StreamingToolId;
   name: string;
@@ -56,9 +59,9 @@ export const STREAMING_TOOLS: StreamingTool[] = [
     blurb: "Use this computer's camera or screen",
     usesKey: false,
     steps: [
-      "Open the Go live tab.",
-      "Open “Stream from this computer” and choose your camera or screen.",
-      "Press Go live. Keep the tab open while you stream.",
+      "Open the Go live tab (the button below takes you there).",
+      "Press Go live. FaithForm turns on this computer's camera first; allow it when your browser asks.",
+      "Keep the tab open while you stream. Switch to your screen any time under “Stream from this computer”.",
     ],
   },
   {

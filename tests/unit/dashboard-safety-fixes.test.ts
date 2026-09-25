@@ -157,3 +157,30 @@ test("the primary button is navy on gold, not white on gold", () => {
   const light = css.slice(css.indexOf(":root"), css.indexOf(".dark"));
   assert.match(light, /--accent-foreground: #002D5F;/);
 });
+
+// ---------------------------------------------------------------------------
+// Option cards grow to fit their text
+// ---------------------------------------------------------------------------
+
+test("rows of option cards use the flex choice-grid, never a stretched grid row", () => {
+  const css = read("app/globals.css");
+  assert.match(css, /\.choice-grid \{\s*display: flex;\s*flex-wrap: wrap;/);
+  for (const path of [
+    "app/dashboard/attendance/(record)/[date]/attendance-wizard.tsx",
+    "components/settings/brand-colors-card.tsx",
+    "components/settings/team-members-card.tsx",
+    "components/announcements/announcement-composer.tsx",
+    "components/live-streaming/setup/recording-settings-card.tsx",
+    "components/live-streaming/setup/streaming-setup-guide.tsx",
+    "components/checkin/checkout-console.tsx",
+    "components/theme-toggle.tsx",
+    "components/ui/action-card.tsx",
+  ]) {
+    const source = read(path);
+    assert.match(source, /choice-grid/, path);
+    assert.ok(
+      !/role="radiogroup"[^>]*className="grid |className="grid [^"]*"[^>]*role="radiogroup"/.test(source),
+      `${path} lays out option cards with a grid`,
+    );
+  }
+});

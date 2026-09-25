@@ -320,7 +320,7 @@ export function CheckoutConsole() {
               <p className="mb-2 text-[15px] text-muted-foreground">
                 Tap the person standing in front of you.
               </p>
-              <div role="radiogroup" aria-label="Who is picking them up" className="grid gap-3 sm:grid-cols-2">
+              <div role="radiogroup" aria-label="Who is picking them up" className="choice-grid">
                 {pickupPeople.map((person) => {
                   const chosen =
                     releasedTo?.kind === "person" && releasedTo.memberId === person.memberId;

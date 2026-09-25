@@ -407,7 +407,7 @@ export function AttendanceWizard({
         </div>
       ) : null}
 
-      <div role="radiogroup" aria-label="How do you want to count?" className="grid gap-4 sm:grid-cols-2">
+      <div role="radiogroup" aria-label="How do you want to count?" className="choice-grid">
         <ModeCard
           icon={Hash}
           title="Just a number"

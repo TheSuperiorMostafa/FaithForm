@@ -68,7 +68,7 @@ export function ThemeToggle({
       <div
         role="radiogroup"
         aria-label="Colours"
-        className={cn("grid gap-3 sm:grid-cols-3", className)}
+        className={cn("choice-grid choice-grid-3", className)}
       >
         {options.map(({ value, label, hint, icon: Icon }) => {
           const active = mode === value;

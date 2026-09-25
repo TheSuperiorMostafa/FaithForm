@@ -189,21 +189,28 @@ export function ThemePicker({ selectedId, onSelect, onCoerce, context }: ThemePi
     onSelect(id);
   }
 
-  // Suggested first: themes matched to the passage, then featured ones, and
-  // always the one already chosen so it never hides behind "More themes".
-  const suggestedRow = useMemo(() => {
+  // Suggested: themes matched to the passage, then featured ones. The order
+  // never depends on which theme is chosen, so picking one doesn't shuffle
+  // the cards under the pastor's pointer. A theme chosen from "More themes"
+  // is added at the end, so it stays visible without moving the others.
+  const baseSuggestedRow = useMemo(() => {
     const row: SlideTheme[] = [];
     const add = (theme: SlideTheme | undefined) => {
       if (theme && !row.some((t) => t.id === theme.id)) row.push(theme);
     };
-    add(themes.find((t) => t.id === selectedId));
     suggestedThemes.forEach(add);
     themes.filter((t) => t.featured).forEach(add);
     themes.forEach((t) => {
       if (row.length < SUGGESTED_COUNT) add(t);
     });
     return row.slice(0, SUGGESTED_COUNT);
-  }, [themes, suggestedThemes, selectedId]);
+  }, [themes, suggestedThemes]);
+
+  const suggestedRow = useMemo(() => {
+    if (baseSuggestedRow.some((t) => t.id === selectedId)) return baseSuggestedRow;
+    const chosen = themes.find((t) => t.id === selectedId);
+    return chosen ? [...baseSuggestedRow, chosen] : baseSuggestedRow;
+  }, [baseSuggestedRow, themes, selectedId]);
 
   const selectedTheme = themes.find((t) => t.id === selectedId);
   const moreOpen =

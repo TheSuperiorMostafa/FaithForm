@@ -76,7 +76,7 @@ export function RecordingSettingsCard({
 
   return (
     <div className="flex flex-col gap-5">
-      <div role="radiogroup" aria-label="After the service" className="grid gap-3 sm:grid-cols-2">
+      <div role="radiogroup" aria-label="After the service" className="choice-grid">
         <Choice
           selected={draft.autoPublish}
           disabled={!isAdmin || pending}

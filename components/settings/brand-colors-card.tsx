@@ -85,7 +85,7 @@ export function BrandColorsCard({
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-5">
-        <div role="radiogroup" aria-label="App colours" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div role="radiogroup" aria-label="App colours" className="choice-grid choice-grid-3">
           {BRAND_SWATCHES.map((swatch) => {
             const active = matching?.name === swatch.name;
             return (
