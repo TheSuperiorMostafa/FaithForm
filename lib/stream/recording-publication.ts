@@ -221,6 +221,9 @@ async function slugFor(db: SupabaseClient, churchId: string): Promise<string | n
   return (data?.slug as string | null) ?? null;
 }
 
+/** The most recordings one list read returns (a search reads this many). */
+export const MAX_STAFF_RECORDINGS = 1000;
+
 export async function listStaffRecordings(
   churchId: string,
   options: { limit?: number; client?: SupabaseClient } = {},
@@ -233,7 +236,7 @@ export async function listStaffRecordings(
       .eq("church_id", churchId)
       .is("deleted_at", null)
       .order("created_at", { ascending: false })
-      .limit(Math.min(100, Math.max(1, options.limit ?? 50))),
+      .limit(Math.min(MAX_STAFF_RECORDINGS, Math.max(1, options.limit ?? 50))),
     slugFor(db, churchId),
   ]);
   if (error) throw new Error(error.message);

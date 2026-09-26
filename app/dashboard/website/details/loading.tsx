@@ -19,10 +19,10 @@ export default function WebsiteDetailsLoading() {
         <LiveNoteSkeleton />
 
         <div className="inline-flex w-fit gap-1 rounded-xl border border-border bg-card p-1 shadow-card dark:shadow-none">
-          <span className="inline-flex min-h-11 items-center rounded-lg bg-primary px-6 text-[15px] font-semibold text-primary-foreground">
+          <span className="inline-flex min-h-11 items-center rounded-lg bg-primary px-4 text-[15px] font-semibold text-primary-foreground">
             Details
           </span>
-          <span className="inline-flex min-h-11 items-center rounded-lg px-6 text-[15px] font-semibold text-foreground/80">
+          <span className="inline-flex min-h-11 items-center rounded-lg px-4 text-[15px] font-semibold text-muted-foreground">
             Look
           </span>
         </div>

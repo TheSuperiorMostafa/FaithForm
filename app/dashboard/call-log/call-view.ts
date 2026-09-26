@@ -53,7 +53,8 @@ export function toCallListItem(
     id: call.id,
     callerLabel: contact.label,
     dial: contact.dial,
-    callerNumber: fullCallerNumber(call.caller_number, viewer),
+    // When the label already is the full number, don't show it twice.
+    callerNumber: contact.dial ? null : fullCallerNumber(call.caller_number, viewer),
     calledAt: call.called_at,
     duration: formatCallDuration(call.duration_seconds),
     summary: describeCallScore(call).summary,

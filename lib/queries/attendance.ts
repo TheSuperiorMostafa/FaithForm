@@ -120,7 +120,7 @@ export type RecordedService = {
   totalAbsent: number;
   /** False when counted as "just a number": nobody to follow up with. */
   byName: boolean;
-  /** People marked for a follow-up text on this service. */
+  /** People who were actually texted about this service. */
   followedUp: number;
 };
 
@@ -130,27 +130,43 @@ export async function listRecordedServices(
   churchId: string,
   limit = 8,
 ): Promise<RecordedService[]> {
-  const { data, error } = await supabase
-    .from("attendance_records")
-    .select("id, service_date, total_present, total_absent, attendance_entries(follow_up_requested)")
-    .eq("church_id", churchId)
-    .order("service_date", { ascending: false })
-    .limit(limit);
+  const load = (entryColumns: string) =>
+    supabase
+      .from("attendance_records")
+      .select(`id, service_date, total_present, total_absent, attendance_entries(${entryColumns})`)
+      .eq("church_id", churchId)
+      .order("service_date", { ascending: false })
+      .limit(limit);
+
+  // A text counts once it went out (`follow_up_sent_at`). Asking without a
+  // texting phone only marks people, and must not read as done. A database
+  // without migration 0014 has no send record, so the request is all there is.
+  let tracked = true;
+  let { data, error } = await load("follow_up_requested, follow_up_sent_at");
+  if (error) {
+    tracked = false;
+    ({ data, error } = await load("follow_up_requested"));
+  }
 
   if (error) {
     console.error("listRecordedServices:", error.message);
     throw new Error("Attendance could not be loaded.");
   }
 
-  return (data ?? []).map((row) => {
-    const entries = (row.attendance_entries ?? []) as { follow_up_requested: boolean }[];
+  return ((data ?? []) as unknown as Record<string, unknown>[]).map((row) => {
+    const entries = (row.attendance_entries ?? []) as {
+      follow_up_requested: boolean;
+      follow_up_sent_at?: string | null;
+    }[];
     return {
       id: row.id as string,
       serviceDate: row.service_date as string,
       totalPresent: (row.total_present as number | null) ?? 0,
       totalAbsent: (row.total_absent as number | null) ?? 0,
       byName: entries.length > 0,
-      followedUp: entries.filter((entry) => entry.follow_up_requested).length,
+      followedUp: entries.filter((entry) =>
+        tracked ? Boolean(entry.follow_up_sent_at) : entry.follow_up_requested,
+      ).length,
     };
   });
 }

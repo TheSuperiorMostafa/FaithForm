@@ -15,14 +15,26 @@ export function RecordingSearch({ initial }: { initial: string }) {
   const pathname = usePathname();
   const params = useSearchParams();
   const [value, setValue] = useState(initial);
-  const first = useRef(true);
+  // The search the address already holds. Typing changes the address only
+  // when the words differ.
+  const applied = useRef(initial);
+
+  // Back / Forward change the address without typing: bring the box along.
+  // Only then, so a slow page never overwrites what someone is still typing.
+  useEffect(() => {
+    const onPop = () => {
+      const q = new URLSearchParams(window.location.search).get("q")?.trim() ?? "";
+      applied.current = q;
+      setValue(q);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
 
   useEffect(() => {
-    if (first.current) {
-      first.current = false;
-      return;
-    }
+    if (value.trim() === applied.current) return;
     const timer = setTimeout(() => {
+      applied.current = value.trim();
       const next = new URLSearchParams(params.toString());
       if (value.trim()) next.set("q", value.trim());
       else next.delete("q");

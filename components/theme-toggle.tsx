@@ -83,14 +83,16 @@ export function ThemeToggle({
               title={`${label}. ${hint}`}
               onClick={() => setMode(value)}
               className={cn(
-                "flex size-11 items-center justify-center rounded-xl transition-colors motion-reduce:transition-none",
+                // Icon with its word under it: never an icon-only choice.
+                "flex min-h-11 min-w-14 flex-col items-center justify-center gap-0.5 rounded-xl px-2 py-1 text-xs font-semibold transition-colors motion-reduce:transition-none",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                 active
                   ? "bg-primary text-primary-foreground shadow-sm"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
             >
-              <Icon className="size-5" strokeWidth={1.75} aria-hidden />
+              <Icon className="size-[18px]" strokeWidth={1.75} aria-hidden />
+              <span aria-hidden>{value === "system" ? "Computer" : label}</span>
             </button>
           );
         })}

@@ -124,10 +124,17 @@ export default async function GivingSettingsPage() {
             </p>
           </div>
         </div>
-        <Link href="/dashboard/settings?tab=church" className={buttonVariants({ variant: "outline" })}>
-          Change logo and colors
-          <ArrowRight aria-hidden />
-        </Link>
+        {/* The logo lives on Church info, the colors on Member App. */}
+        <div className="flex flex-wrap gap-2">
+          <Link href="/dashboard/settings?tab=app" className={buttonVariants({ variant: "outline" })}>
+            Change colors
+            <ArrowRight aria-hidden />
+          </Link>
+          <Link href="/dashboard/settings?tab=church" className={buttonVariants({ variant: "outline" })}>
+            Change logo
+            <ArrowRight aria-hidden />
+          </Link>
+        </div>
       </Card>
     </div>
   );

@@ -16,13 +16,13 @@ import { SaveStatus } from "@/components/website-admin/save-status";
 import { SitePreview } from "@/components/website-admin/site-preview";
 import { useAutosave } from "@/components/website-admin/use-autosave";
 import { Button } from "@/components/ui/button";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { confirmAction } from "@/components/ui/confirm-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
 import { DAY_OF_WEEK_LABELS } from "@/types/church-profile";
 
 /**
@@ -157,7 +157,15 @@ export function DetailsForm({
       <div className="flex min-w-0 flex-col gap-6">
         <LiveEditsNote isLive={isLive} />
 
-        {design ? <ViewSwitch view={view} onChange={setView} /> : null}
+        {design ? (
+          <SegmentedControl
+            label="Show"
+            value={view}
+            options={VIEW_OPTIONS}
+            onChange={setView}
+            className="shadow-card dark:shadow-none"
+          />
+        ) : null}
 
         {/* Hidden rather than unmounted, so switching never loses an edit. */}
         <div className={view === "details" ? "flex min-w-0 flex-col gap-6" : "hidden"}>
@@ -510,35 +518,7 @@ function Field({
 type DetailsView = "details" | "look";
 
 /** Details or Look, one at a time, so the look is one tap away instead of a long scroll. */
-function ViewSwitch({ view, onChange }: { view: DetailsView; onChange: (view: DetailsView) => void }) {
-  const options: { value: DetailsView; label: string }[] = [
-    { value: "details", label: "Details" },
-    { value: "look", label: "Look" },
-  ];
-  return (
-    <div
-      role="radiogroup"
-      aria-label="Show"
-      className="inline-flex w-fit gap-1 rounded-xl border border-border bg-card p-1 shadow-card dark:shadow-none"
-    >
-      {options.map((option) => {
-        const selected = view === option.value;
-        return (
-          <button
-            key={option.value}
-            type="button"
-            role="radio"
-            aria-checked={selected}
-            onClick={() => onChange(option.value)}
-            className={cn(
-              "min-h-11 rounded-lg px-6 text-[15px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-              selected ? "bg-primary text-primary-foreground" : "text-foreground/80 hover:bg-muted hover:text-foreground",
-            )}
-          >
-            {option.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
+const VIEW_OPTIONS: { value: DetailsView; label: string }[] = [
+  { value: "details", label: "Details" },
+  { value: "look", label: "Look" },
+];

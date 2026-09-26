@@ -7,7 +7,11 @@ import { RecordingsLoadError } from "@/components/live-streaming/recordings/reco
 import { MediaBrowseView } from "@/components/media/media-browse";
 import { getChurchAuth } from "@/lib/auth/church";
 import { DASHBOARD_MEDIA_LINKS, loadLibraryBrowse } from "@/lib/media/browse";
-import { listStaffRecordings, type StaffRecording } from "@/lib/stream/recording-publication";
+import {
+  listStaffRecordings,
+  MAX_STAFF_RECORDINGS,
+  type StaffRecording,
+} from "@/lib/stream/recording-publication";
 import {
   filterRecordings,
   isStillChanging,
@@ -69,7 +73,10 @@ export default async function RecordingsPage({
 
   let recordings: StaffRecording[];
   try {
-    recordings = await listStaffRecordings(auth.churchId, { limit: 60 });
+    // A search looks through every recording, not only the newest page.
+    recordings = await listStaffRecordings(auth.churchId, {
+      limit: search ? MAX_STAFF_RECORDINGS : 60,
+    });
   } catch {
     return (
       <div className="flex w-full flex-col gap-6">
@@ -79,9 +86,11 @@ export default async function RecordingsPage({
     );
   }
 
+  // With a search, the tab counts are the matches in each tab.
+  const matching = searchRecordings(recordings, search);
   const counts = {
-    all: recordings.length,
-    published: recordings.filter((recording) => recording.phase.phase === "published").length,
+    all: matching.length,
+    published: matching.filter((recording) => recording.phase.phase === "published").length,
   };
 
   return (
@@ -89,7 +98,7 @@ export default async function RecordingsPage({
       <AutoRefresh active={recordings.some((recording) => isStillChanging(recording.phase.phase))} />
       <RecordingFilters active={filter} counts={counts} search={search} />
       <RecordingList
-        recordings={searchRecordings(filterRecordings(recordings, filter), search)}
+        recordings={filterRecordings(matching, filter)}
         filter={filter}
         search={search}
         timeZone={auth.churchTimezone ?? "America/New_York"}

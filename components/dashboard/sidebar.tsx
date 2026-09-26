@@ -68,8 +68,9 @@ function SidebarLink({
       className={cn(
         "group relative flex h-11 w-full min-w-0 items-center overflow-hidden rounded-xl text-[15px] font-semibold transition-colors",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-accent",
+        // Gold text and the gold bar mark the page; no gold wash behind it.
         selected
-          ? "bg-sidebar-accent/15 text-sidebar-accent"
+          ? "text-sidebar-accent"
           : "text-white/85 hover:bg-white/[0.07] hover:text-white",
       )}
     >

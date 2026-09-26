@@ -16,6 +16,7 @@ import {
 } from "@/components/attendance/attendance-draft";
 import { ServiceDayHeader } from "@/components/attendance/service-day-header";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { confirmAction } from "@/components/ui/confirm-dialog";
 import {
   Dialog,
@@ -519,29 +520,7 @@ export function AttendanceWizard({
 
             <div className="flex flex-wrap items-center gap-3">
               <span className="shrink-0 text-[15px] font-medium text-muted-foreground">Sort by</span>
-              <div
-                role="radiogroup"
-                aria-label="Sort people"
-                className="inline-flex flex-wrap gap-1 rounded-xl border border-border bg-card p-1"
-              >
-                {SORT_OPTIONS.map((option) => (
-                  <button
-                    key={option.value}
-                    type="button"
-                    role="radio"
-                    aria-checked={sortBy === option.value}
-                    onClick={() => setSortBy(option.value)}
-                    className={cn(
-                      "min-h-11 rounded-lg px-4 text-[15px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                      sortBy === option.value
-                        ? "bg-primary text-primary-foreground"
-                        : "text-muted-foreground hover:text-foreground",
-                    )}
-                  >
-                    {option.label}
-                  </button>
-                ))}
-              </div>
+              <SegmentedControl label="Sort people" value={sortBy} options={SORT_OPTIONS} onChange={setSortBy} />
             </div>
 
             <div className="flex flex-wrap gap-2">

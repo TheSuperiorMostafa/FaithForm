@@ -1,4 +1,4 @@
-import { notFound, redirect } from "next/navigation";
+import { redirect } from "next/navigation";
 
 import { FollowUpBoard, type FollowUpCandidate } from "./follow-up-board";
 import { LogLink } from "../log-link";
@@ -20,7 +20,8 @@ type PageProps = {
 
 export default async function AttendanceFollowUpDatePage({ params }: PageProps) {
   const { date: selectedDate } = await params;
-  if (!isValidDateParam(selectedDate)) notFound();
+  // A bad or stale link lands on the list of Sundays, not a dead end.
+  if (!isValidDateParam(selectedDate)) redirect("/dashboard/attendance/follow-up");
 
   const supabase = createClient();
   const auth = await getChurchAuth(supabase);
@@ -33,7 +34,7 @@ export default async function AttendanceFollowUpDatePage({ params }: PageProps) 
     // Read the way the sender reads them, so the preview is exactly what goes out.
     getFollowUpMessageTemplates(auth.churchId, createAdminClient()),
   ]);
-  if (!record) notFound();
+  if (!record) redirect("/dashboard/attendance/follow-up");
   // Marked absent, but checked in by the app, a code, the kiosk or a room:
   // they were there, and a "we missed you" text would be wrong.
   const cameAnyway = (memberId: string) =>

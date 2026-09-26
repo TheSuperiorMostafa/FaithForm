@@ -72,7 +72,8 @@ test("light or dark is three labelled icon buttons at the top of every section",
   assert.match(icons, /aria-label=\{label\}/);
   assert.match(icons, /title=/);
   assert.match(icons, /aria-checked=\{active\}/);
-  assert.match(icons, /size-11/);
+  assert.match(icons, /min-h-11/);
+  assert.match(icons, /value === "system" \? "Computer" : label/, "each icon has its word under it");
   assert.match(toggle, /label: "Match my computer"/);
 });
 

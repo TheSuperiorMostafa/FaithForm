@@ -58,11 +58,23 @@ export async function donorForAccount(input: {
   const email = await accountEmail(input.userId);
   if (!email) return { ok: false, reason: "no_email" };
 
-  const { donorId, stripeCustomerId } = await upsertGivingDonor({
-    churchId: input.churchId,
-    email,
-    name: input.displayName ?? email,
-  });
+  // An existing donor is used as it is: its name may be the one they typed on
+  // the web, and a gift from the app shouldn't rename it (or write at all).
+  const { data: existing } = await input.db
+    .from("giving_donors")
+    .select("id")
+    .eq("church_id", input.churchId)
+    .eq("email", email)
+    .maybeSingle();
+  const donorId =
+    (existing?.id as string | undefined) ??
+    (
+      await upsertGivingDonor({
+        churchId: input.churchId,
+        email,
+        name: input.displayName ?? email,
+      })
+    ).donorId;
 
   const { data: linkData } = await input.db.rpc("link_giving_donor", {
     p_account_id: input.accountId,
@@ -82,7 +94,7 @@ export async function donorForAccount(input: {
       donorId: effectiveDonorId,
       email: donor.email,
       name: donor.name,
-      customerId: effectiveDonorId === donorId ? (stripeCustomerId ?? donor.stripeCustomerId) : donor.stripeCustomerId,
+      customerId: donor.stripeCustomerId,
     },
   };
 }
