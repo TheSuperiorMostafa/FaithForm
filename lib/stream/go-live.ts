@@ -87,6 +87,16 @@ export async function startLiveBroadcast(
   supabase?: SupabaseClient,
 ) {
   const client = getClient(supabase);
+
+  // Refused before anything is touched. The session insert below refuses a
+  // second broadcast too, but only after the event is created and the
+  // platforms are provisioned — and provisioning ends whatever YouTube
+  // broadcast is bound to the church's stream. A second Go Live from a tab
+  // that had not refreshed ended the service's YouTube broadcast mid-sermon.
+  if (await getActiveStreamSession(churchId, client)) {
+    throw new Error("A broadcast is already in progress.");
+  }
+
   const integrationStatus = await getIntegrationStatus(churchId, client);
   const encoder = await getPrimaryEncoderDevice(churchId, client);
 
@@ -201,7 +211,10 @@ export async function startLiveBroadcast(
       startedBy: userId,
       encoderDeviceId: encoder?.id ?? null,
       streamEventId: event.id,
-      destinationsSnapshot: destinations,
+      // Names only. The URLs carry the YouTube and Facebook stream keys, and
+      // every staff member can read broadcast history; nothing reads the URL
+      // back from here (see getDestinationPlatforms).
+      destinationsSnapshot: destinations.map(({ name }) => ({ name, url: "" })),
     },
     client,
   );

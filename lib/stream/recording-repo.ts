@@ -233,7 +233,17 @@ export interface RecordingRepo {
   }): Promise<RecordingRecord>;
   updateRecording(churchId: string, recordingId: string, patch: RecordingPatch): Promise<void>;
   /** Recordings in any of these states across every church, oldest update first. */
-  listRecordingsByStatus(statuses: RecordingStatus[], limit: number): Promise<RecordingRecord[]>;
+  /**
+   * `actionable` leaves out what the reconciler can do nothing with — legacy
+   * single-file rows and failures with no segments — in the query itself.
+   * Those rows never change again, so filtered afterwards they kept the oldest
+   * `updated_at` and, once there were enough of them, filled every slot.
+   */
+  listRecordingsByStatus(
+    statuses: RecordingStatus[],
+    limit: number,
+    options?: { churchId?: string; actionable?: boolean },
+  ): Promise<RecordingRecord[]>;
   listRecordingsAwaitingPurge(limit: number): Promise<RecordingRecord[]>;
   refreshRecordingStats(churchId: string, recordingId: string): Promise<void>;
   /** The only way `mobile_playable` is written. Increments the verdict revision. */
@@ -592,14 +602,17 @@ export function createSupabaseRecordingRepo(client?: SupabaseClient): RecordingR
       assertOk(error, "updateRecording");
     },
 
-    async listRecordingsByStatus(statuses, limit) {
-      const { data, error } = await db
+    async listRecordingsByStatus(statuses, limit, options) {
+      let query = db
         .from("stream_recordings")
         .select("*")
         .in("status", statuses)
-        .is("deleted_at", null)
-        .order("updated_at", { ascending: true })
-        .limit(limit);
+        .is("deleted_at", null);
+      if (options?.churchId) query = query.eq("church_id", options.churchId);
+      if (options?.actionable) {
+        query = query.eq("source_kind", "segments").or("status.neq.failed,segment_count.gt.0");
+      }
+      const { data, error } = await query.order("updated_at", { ascending: true }).limit(limit);
       assertOk(error, "listRecordingsByStatus");
       return (data ?? []).map(mapRecording);
     },

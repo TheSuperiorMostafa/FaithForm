@@ -582,3 +582,35 @@ function toState(row: NonNullable<Awaited<ReturnType<FakeRecordingRepo["getRecor
     deletedAt: row.deletedAt,
   };
 }
+
+test("recordings that can never change do not crowd out one that can", async () => {
+  // The reconciler fetched the oldest 100 unsettled rows and only then dropped
+  // the ones it cannot act on — failures with nothing recorded, legacy files.
+  // Those never change, so they stay oldest forever; once there were 100 of
+  // them, no missed End and no dead relay was ever repaired again.
+  const w = world();
+  const church = w.repo.addChurch();
+  const relay = new FakeRelay(w, church.id);
+  await relay.connect();
+  const { session, recording } = await goLive(w, church.id, w.repo.addEvent(church.id).id);
+  await relay.record(6);
+  await end(w, session);
+
+  const template = (await w.repo.getRecording(church.id, recording.id))!;
+  for (let index = 0; index < 150; index += 1) {
+    const id = `00000000-0000-4000-8000-${String(index).padStart(12, "0")}`;
+    w.repo.recordings.set(id, {
+      ...template,
+      id,
+      streamSessionId: null,
+      status: index % 2 ? "failed" : "processing",
+      sourceKind: index % 2 ? "segments" : "file",
+      segmentCount: 0,
+      updatedAt: "2000-01-01T00:00:00.000Z",
+    });
+  }
+
+  w.clock.advance(16 * 60_000);
+  await reconcileRecordings(w.deps);
+  assert.equal((await w.repo.getRecording(church.id, recording.id))?.status, "ready");
+});

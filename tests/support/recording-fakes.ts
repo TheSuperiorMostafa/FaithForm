@@ -219,9 +219,19 @@ export class FakeRecordingRepo implements RecordingRepo {
     Object.assign(row, Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== undefined)));
     row.updatedAt = this.clock.iso();
   }
-  async listRecordingsByStatus(statuses: RecordingRecord["status"][], limit: number) {
+  async listRecordingsByStatus(
+    statuses: RecordingRecord["status"][],
+    limit: number,
+    options?: { churchId?: string; actionable?: boolean },
+  ) {
     return [...this.recordings.values()]
       .filter((row) => statuses.includes(row.status) && !row.deletedAt)
+      .filter((row) => !options?.churchId || row.churchId === options.churchId)
+      .filter(
+        (row) =>
+          !options?.actionable ||
+          (row.sourceKind === "segments" && !(row.status === "failed" && row.segmentCount === 0)),
+      )
       .sort((a, b) => a.updatedAt.localeCompare(b.updatedAt))
       .slice(0, limit)
       .map((row) => ({ ...row }));

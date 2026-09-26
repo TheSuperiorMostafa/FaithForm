@@ -467,8 +467,13 @@ export async function handleTakeEvent(
   log(deps, "ingest_disconnected", { churchId, lastSeq: body.lastSeq ?? null });
 
   // Anything waiting on this take may now be complete.
-  const open = await deps.repo.listRecordingsByStatus(["processing"], 50);
-  for (const recording of open.filter((row) => row.churchId === churchId)) {
+  // This church's own, in the query: a platform-wide top 50 could be all
+  // other churches' rows and never reach this one.
+  const open = await deps.repo.listRecordingsByStatus(["processing"], 50, {
+    churchId,
+    actionable: true,
+  });
+  for (const recording of open) {
     await advanceRecording(deps, recording);
   }
   void take;
@@ -915,14 +920,28 @@ export async function reconcileRecordings(
   // 3. Every recording that is not settled. (`ready` is settled: a verdict is
   //    only written once verification completed, and a segment that arrives
   //    afterwards re-verifies from its own commit.)
-  const open = (await deps.repo.listRecordingsByStatus(["recording", "processing", "failed"], limit * 4))
+  const open = (
+    await deps.repo.listRecordingsByStatus(["recording", "processing", "failed"], limit * 4, {
+      churchId: options.churchId,
+      actionable: true,
+    })
+  )
     .filter(inScope)
-    .filter(
-      (row) => row.sourceKind === "segments" && !(row.status === "failed" && row.segmentCount === 0),
-    )
     .slice(0, limit);
   for (const recording of open) {
-    const outcome = await advanceRecording(deps, recording);
+    // One recording that throws every time must not stop the rest of the
+    // run — it would stay at the head of the queue and stop them every run.
+    let outcome: Awaited<ReturnType<typeof advanceRecording>>;
+    try {
+      outcome = await advanceRecording(deps, recording);
+    } catch (error) {
+      log(deps, "reconciliation_item_failed", {
+        churchId: recording.churchId,
+        recordingId: recording.id,
+        error: error instanceof Error ? error.message.slice(0, 200) : "unknown",
+      });
+      continue;
+    }
     if (outcome === "ready") report.ready += 1;
     else if (outcome === "failed") report.failed += 1;
     if (outcome !== "unchanged" && outcome !== "recording" && outcome !== "waiting") report.advanced += 1;
