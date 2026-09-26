@@ -229,12 +229,14 @@ export async function updateGivingFund(
   }
   if (Object.keys(row).length === 0) return {};
 
-  const { error } = await admin
+  const { data: renamed, error } = await admin
     .from("giving_funds")
     .update(row)
     .eq("id", fundId)
-    .eq("church_id", auth.churchId);
+    .eq("church_id", auth.churchId)
+    .select("id");
 
+  if (!error && (renamed ?? []).length === 0) return { error: FUND_NOT_FOUND };
   if (error) {
     if (error.code === "23505") {
       return { error: "You already have a fund with that name. Choose a different name." };
@@ -262,35 +264,48 @@ export async function deleteGivingFund(fundId: string): Promise<{ error?: string
     return { error: "Your giving page needs at least one fund. Add another fund before removing this one." };
   }
 
-  const { error } = await admin
+  const { data: removed, error } = await admin
     .from("giving_funds")
     .update({ is_active: false })
     .eq("id", fundId)
-    .eq("church_id", auth.churchId);
+    .eq("church_id", auth.churchId)
+    .select("id");
 
   if (error) return { error: toUserError(error, "We couldn't remove that fund.") };
+  if ((removed ?? []).length === 0) return { error: FUND_NOT_FOUND };
   revalidateGivingDashboard();
   return {};
 }
+
+const FUND_NOT_FOUND = "That fund could not be found. Refresh the page and try again.";
 
 export async function setDefaultFund(fundId: string): Promise<{ error?: string }> {
   const auth = await requireChurchAuth();
   if (!auth.isAdmin) return { error: ADMINS_ONLY };
 
   const admin = createAdminClient();
-  const { error: clearError } = await admin
-    .from("giving_funds")
-    .update({ is_default: false })
-    .eq("church_id", auth.churchId);
-  if (clearError) return { error: toUserError(clearError, "We couldn't change the main fund.") };
 
-  const { error } = await admin
+  // The new main fund is set before the old one is cleared, and only once it
+  // is known to be one of this church's live funds. Clearing first meant a
+  // fund id that no longer matched — removed in another tab, or not this
+  // church's — left the church with no main fund at all.
+  const { data: chosen, error } = await admin
     .from("giving_funds")
     .update({ is_default: true })
     .eq("id", fundId)
-    .eq("church_id", auth.churchId);
-
+    .eq("church_id", auth.churchId)
+    .eq("is_active", true)
+    .select("id");
   if (error) return { error: toUserError(error, "We couldn't change the main fund.") };
+  if ((chosen ?? []).length === 0) return { error: FUND_NOT_FOUND };
+
+  const { error: clearError } = await admin
+    .from("giving_funds")
+    .update({ is_default: false })
+    .eq("church_id", auth.churchId)
+    .neq("id", fundId);
+  if (clearError) return { error: toUserError(clearError, "We couldn't change the main fund.") };
+
   revalidateGivingDashboard();
   return {};
 }

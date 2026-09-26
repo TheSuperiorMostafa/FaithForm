@@ -161,6 +161,18 @@ export async function updateCampus(
 
   const admin = createAdminClient();
 
+  // Proven to be this church's campus before anything changes: clearing the
+  // primary first for an id that then matched nothing left the church with no
+  // primary campus.
+  const { data: existing, error: existingError } = await admin
+    .from("church_campuses")
+    .select("id")
+    .eq("id", campusId)
+    .eq("church_id", churchId)
+    .maybeSingle();
+  if (existingError) throw new VisitorError("unavailable", "Could not save that campus.");
+  if (!existing) throw new VisitorError("invalid_input", "That campus could not be found. Refresh the page.");
+
   if (parsed.data.isPrimary) await clearPrimary(churchId, campusId);
 
   const { data, error } = await admin

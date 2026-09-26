@@ -186,6 +186,11 @@ export async function setDefaultAdultLocation(
 
   const id = text(formData, "locationId");
   if (!id) return fail("Pick a room.");
+  // Checked before the current adult room is cleared, or an id that is not
+  // this church's room left the church with none.
+  if (!(await isChurchLocation(context.admin, context.auth.churchId, id))) {
+    return fail("That room could not be found. Refresh the page and try again.");
+  }
 
   await context.admin
     .from("church_locations")

@@ -95,6 +95,20 @@ misc guards. 1,722 tests passing at end of session 1.
   link -> 6-step wizard (email field read-only; tampered email ignored,
   account created for the invitee) -> dashboard; church onboarding_completed,
   invite accepted, invitee is admin; reused link -> dashboard.
+- Live: go live (no relay) -> session waiting for video, second Go Live refused
+  (session-1 fix), end -> recording honestly "nothing recorded", second end
+  refused clearly.
+- Website: create (repeat refused), publish, public site renders; unpublished
+  Church A site 404; give/live public pages render.
+- Attendance: service time -> occurrences via cron; mark present counted, repeat
+  "already counted", Church A person rejected, Church A admin refused Church B's
+  service (session-1 fix at runtime).
+- AI-backed endpoints without provider keys degrade with plain messages;
+  scripture lookup works offline.
+- Giving settings: duplicate/similar fund names refused, 300-char name trimmed
+  to 80, Church A funds untouched by Church B actions, slug squatting refused.
+- Dev server restarts itself at its memory threshold (dev-mode only) — cause of
+  earlier unanswered requests; not a product bug.
 - Webhooks/relay (15): forged/absent signatures refused (Stripe 400, others 401,
   chat webhook 503 not_configured locally).
 
@@ -130,6 +144,13 @@ misc guards. 1,722 tests passing at end of session 1.
    the church the same request already made (same name, <10 min, no staff,
    same open invite). Verified: double click -> 1 church, 1 invite. Test:
    admin-create-church-repeat.test.ts.
+8. P3 — choosing a main giving fund with a stale/foreign id cleared the
+   church's main fund and set nothing (reproduced: Church B left with no main
+   fund). Same clear-first shape in updateCampus (primary campus) and
+   setDefaultAdultLocation. Fund rename/remove/default for a foreign id
+   answered "{}" (success). Fix: set-then-clear for funds (no unique index);
+   verify target first for campus/room; zero-row writes reported. Verified at
+   runtime; test set-then-clear-defaults.test.ts.
 6. P3 — Volunteer refusals said "Something went wrong" (settings discovery,
    invitations) or threw unhandled (fund publication). Now "Only church admins
    can…". Verified via actions.
