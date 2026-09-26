@@ -12,6 +12,7 @@ import {
   Smartphone,
 } from "lucide-react";
 
+import { useAnnouncementComposer } from "@/components/announcements/composer-context";
 import { TakeDownButton } from "@/components/announcements/published-switch";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
@@ -54,7 +55,11 @@ export function AnnouncementSubmittedView({
   onChange,
   onTakenDown,
 }: AnnouncementSubmittedViewProps) {
+  const { settings } = useAnnouncementComposer();
   const channels = publishedChannels(announcement, { queuedForWeeklyEmail });
+  // A channel the church doesn't have is left out, unless this already went there.
+  const showApp = settings.appAvailable || channels.app.published;
+  const showEmail = !settings.emailSwitchedOff || channels.weeklyEmail.published;
   const facebook = channels.facebook;
   const state = announcementState(announcement, { queuedForWeeklyEmail });
 
@@ -89,6 +94,8 @@ export function AnnouncementSubmittedView({
             title={announcement.title}
             calendarLinked
             facebookIsLive={facebook.published && !facebook.scheduledFor}
+            inApp={channels.app.published}
+            inEmail={showEmail}
             onTakenDown={onTakenDown}
           />
         )}
@@ -99,12 +106,14 @@ export function AnnouncementSubmittedView({
           Where it went
         </h3>
         <ul className="flex flex-col divide-y divide-border rounded-xl border border-border">
-          <ChannelRow
-            icon={<Smartphone className="size-4" strokeWidth={1.75} />}
-            name="The FaithForm app"
-            done={channels.app.published}
-            status={describeAppAudience(channels.app.visibility)}
-          />
+          {showApp && (
+            <ChannelRow
+              icon={<Smartphone className="size-4" strokeWidth={1.75} />}
+              name="The FaithForm app"
+              done={channels.app.published}
+              status={describeAppAudience(channels.app.visibility)}
+            />
+          )}
           <ChannelRow
             icon={<Share2 className="size-4" strokeWidth={1.75} />}
             name="Facebook"
@@ -121,12 +130,14 @@ export function AnnouncementSubmittedView({
             }
             action={facebook.published ? <ExternalAction href={facebook.url} label="View post" /> : null}
           />
-          <ChannelRow
-            icon={<Mail className="size-4" strokeWidth={1.75} />}
-            name="Monday's email"
-            done={channels.weeklyEmail.published}
-            status={channels.weeklyEmail.published ? "In Monday's email" : "Not in the email"}
-          />
+          {showEmail && (
+            <ChannelRow
+              icon={<Mail className="size-4" strokeWidth={1.75} />}
+              name="Monday's email"
+              done={channels.weeklyEmail.published}
+              status={channels.weeklyEmail.published ? "In Monday's email" : "Not in the email"}
+            />
+          )}
           <ChannelRow
             icon={<Calendar className="size-4" strokeWidth={1.75} />}
             name={calendarSource === "apple" ? "iCloud Calendar" : "Google Calendar"}

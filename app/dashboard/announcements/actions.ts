@@ -20,6 +20,7 @@ import {
 } from "@/lib/announcements/weekly-email";
 import { resolveWeeklyEmailChannel } from "@/lib/announcements/email-delivery";
 import { getChurchAuth } from "@/lib/auth/church";
+import { isChurchFeatureEnabled } from "@/lib/features/access";
 import { featureActionError } from "@/lib/features/guard";
 import {
   applyMobilePublication,
@@ -398,6 +399,15 @@ export async function publishAnnouncement(
   }
 
   const { payload } = parsed;
+  // With the Member App switched off nothing new goes to the app. Something
+  // already there keeps updating: people already connected keep its content.
+  if (
+    payload.mobileVisibility !== "none" &&
+    !payload.announcementId &&
+    !(await isChurchFeatureEnabled(ctx.churchId, "member_app"))
+  ) {
+    payload.mobileVisibility = "none";
+  }
   if (
     payload.socialGraphicPath &&
     !isStorageKeyWithin(payload.socialGraphicPath, `${ctx.churchId}/`)
@@ -1077,7 +1087,10 @@ export async function publishToMoreChannels(
   const addFacebook =
     formData.get("push_to_facebook") === "true" && !announcement.facebook_post_id;
   const addTeam = formData.get("push_to_team") === "true" && !announcement.push_to_team;
-  const addApp = appVisibility !== "none" && !inApp;
+  const addApp =
+    appVisibility !== "none" &&
+    !inApp &&
+    (await isChurchFeatureEnabled(ctx.churchId, "member_app"));
 
   if (!addFacebook && !addTeam && !addApp) {
     return { ok: false, errors: ["Choose at least one new place to share it."] };

@@ -68,14 +68,18 @@ type Switches = Pick<AttendanceSetupPolicy, "geofenceEnabled" | "qrEnabled" | "k
  * cannot say "ready" while phones are being refused.
  *
  * Every change applies to the services whose check-in has not opened yet, as
- * soon as it is saved.
+ * soon as it is saved. Both phone ways in (scanning a code, and checking in on
+ * arrival) happen in the FaithForm app, so they are hidden when the church's
+ * app is switched off.
  */
 export function CheckinSetup({
   view,
   isAdmin,
+  appEnabled,
 }: {
   view: CheckinSetupView;
   isAdmin: boolean;
+  appEnabled: boolean;
 }) {
   const { state, readiness, phone, churchAddress, churchName } = view;
   const router = useRouter();
@@ -98,7 +102,7 @@ export function CheckinSetup({
     (campus) => campus.latitude !== null && campus.longitude !== null,
   );
   const hiddenOnly = readiness.watching.length === 0 && positioned.some((campus) => !campus.isPublic);
-  const phoneOn = switches.geofenceEnabled;
+  const phoneOn = appEnabled && switches.geofenceEnabled;
   const live = readiness.problem === null;
   const nextWindow = readiness.windows[0] ?? null;
 
@@ -270,22 +274,24 @@ export function CheckinSetup({
         open={open === "other"}
         onToggle={() => toggle("other")}
         actionLabel="Change"
-        summary={`Scan a code: ${switches.qrEnabled ? "on" : "off"} · Welcome desk tablet: ${switches.kioskEnabled ? "on" : "off"} · Staff can always mark people on Services`}
+        summary={`${appEnabled ? `Scan a code: ${switches.qrEnabled ? "on" : "off"} · ` : ""}Welcome desk tablet: ${switches.kioskEnabled ? "on" : "off"} · Staff can always mark people on Services`}
       >
         <div className="flex flex-col gap-5">
-          <SwitchRow
-            id="setup-qr"
-            icon={<QrCode className="size-5" aria-hidden />}
-            title="Scan a code"
-            checked={switches.qrEnabled}
-            disabled={!isAdmin || pending}
-            onChange={(value) =>
-              saveSwitch({ qrEnabled: value }, value ? "Scanning a code is on." : "Scanning a code is off.")
-            }
-          >
-            Show a changing code on a screen from the Services page; people
-            scan it or type it in the app.
-          </SwitchRow>
+          {appEnabled ? (
+            <SwitchRow
+              id="setup-qr"
+              icon={<QrCode className="size-5" aria-hidden />}
+              title="Scan a code"
+              checked={switches.qrEnabled}
+              disabled={!isAdmin || pending}
+              onChange={(value) =>
+                saveSwitch({ qrEnabled: value }, value ? "Scanning a code is on." : "Scanning a code is off.")
+              }
+            >
+              Show a changing code on a screen from the Services page; people
+              scan it or type it in the app.
+            </SwitchRow>
+          ) : null}
           <SwitchRow
             id="setup-kiosk"
             icon={<TabletSmartphone className="size-5" aria-hidden />}
@@ -306,180 +312,182 @@ export function CheckinSetup({
         </div>
       </SetupStep>
 
-      <section
-        id="setup-phone"
-        aria-labelledby="setup-phone-title"
-        className={cn(
-          "scroll-mt-24 rounded-2xl border bg-card shadow-card dark:shadow-none",
-          phoneOn ? "border-brand-gold/50" : "border-border",
-        )}
-      >
-        <div className="flex items-start gap-4 p-5 sm:p-6">
-          <span
-            aria-hidden
-            className={cn(
-              "flex size-12 shrink-0 items-center justify-center rounded-xl",
-              phoneOn && live
-                ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300"
-                : "bg-muted text-muted-foreground",
-            )}
-          >
-            <Smartphone className="size-6" strokeWidth={1.75} />
-          </span>
-          <div className="flex min-w-0 flex-1 flex-col gap-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <label
-                id="setup-phone-title"
-                htmlFor="setup-automatic"
-                className="font-heading text-lg font-semibold text-foreground"
-              >
-                Let people check in on their phone when they arrive
-              </label>
-              <span className="text-sm font-medium text-muted-foreground">Optional</span>
-            </div>
-            <p id="setup-automatic-detail" className="text-[15px] leading-relaxed text-muted-foreground">
-              People who turn it on in the FaithForm app are counted when their
-              phone arrives at church during check-in. Their phone sends one
-              reading on arrival, which is checked and thrown away: you see that
-              they came, never where they were.
-            </p>
-            {phoneOn ? (
-              <div className="pt-1">
-                <StatusBadge tone={live ? "done" : "attention"}>
-                  {live ? "Working" : "Switched on, not working yet"}
-                </StatusBadge>
-              </div>
-            ) : null}
-          </div>
-          <Switch
-            id="setup-automatic"
-            checked={phoneOn}
-            disabled={!isAdmin || pending}
-            aria-describedby="setup-automatic-detail"
-            onCheckedChange={(value) =>
-              saveSwitch(
-                { geofenceEnabled: value },
-                value ? "Phone check-in is on." : "Phone check-in is off.",
-                value && readiness.watching.length === 0 ? () => openStep("location") : undefined,
-              )
-            }
-          />
-        </div>
-
-        {phoneOn ? (
-          <div className="flex flex-col gap-5 border-t border-border px-5 pb-6 pt-5 sm:px-6">
-            {!readiness.featureEnabled ? (
-              <Callout>
-                Attendance is switched off for this church by FaithForm, so phones
-                aren&apos;t checked in. Contact support to turn it back on.
-              </Callout>
-            ) : readiness.problem === "no_campus_configured" ? (
-              <Callout>
-                One more step: put your building on the map below, so phones
-                know where church is.
-              </Callout>
-            ) : null}
-
-            <dl className="grid gap-4 rounded-xl bg-muted/50 p-4 sm:grid-cols-3">
-              <div className="flex flex-col gap-0.5">
-                <dt className="text-sm text-muted-foreground">Next check-in</dt>
-                <dd className="text-[15px] font-semibold text-foreground">
-                  {nextWindow
-                    ? `${formatDay(nextWindow.checkinOpensAt, nextWindow.timezone)}, ${formatTime(nextWindow.checkinOpensAt, nextWindow.timezone)} to ${formatTime(nextWindow.checkinClosesAt, nextWindow.timezone)}`
-                    : "No services in the next 7 days"}
-                </dd>
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <dt className="text-sm text-muted-foreground">Using the app</dt>
-                <dd className="text-[15px] font-semibold text-foreground">
-                  {state.linkedPeople} {state.linkedPeople === 1 ? "person" : "people"}
-                </dd>
-              </div>
-              <div className="flex flex-col gap-0.5">
-                <dt className="text-sm text-muted-foreground">Turned phone check-in on</dt>
-                <dd className="text-[15px] font-semibold text-foreground">
-                  {state.optedInPeople !== null ? state.optedInPeople : `Fewer than ${CONSENT_COUNT_FLOOR}`}
-                </dd>
-              </div>
-            </dl>
-
-            <SetupStep
-              id="setup-location"
-              number={4}
-              title="Where your church is"
-              tone={tones.location}
-              open={open === "location"}
-              onToggle={() => toggle("location")}
-              actionLabel={tones.location === "done" ? "Change" : "Set up"}
-              summary={
-                readiness.watching.length > 0
-                  ? `On the map: ${readiness.watching.map((campus) => campus.campusName).join(", ")}`
-                  : hiddenOnly
-                    ? "Your building is hidden from the app"
-                    : "Not on the map yet"
-              }
+      {appEnabled ? (
+        <section
+          id="setup-phone"
+          aria-labelledby="setup-phone-title"
+          className={cn(
+            "scroll-mt-24 rounded-2xl border bg-card shadow-card dark:shadow-none",
+            phoneOn ? "border-brand-gold/50" : "border-border",
+          )}
+        >
+          <div className="flex items-start gap-4 p-5 sm:p-6">
+            <span
+              aria-hidden
+              className={cn(
+                "flex size-12 shrink-0 items-center justify-center rounded-xl",
+                phoneOn && live
+                  ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300"
+                  : "bg-muted text-muted-foreground",
+              )}
             >
-              <div className="flex flex-col gap-4">
-                {state.campuses.length === 0 ? (
-                  <div className="flex flex-col items-start gap-3 rounded-xl border border-dashed border-border p-5">
-                    <span className="flex size-10 items-center justify-center rounded-xl bg-brand-gold/15 text-accent">
-                      <MapPin className="size-5" aria-hidden />
-                    </span>
-                    <div className="flex flex-col gap-1">
-                      <p className="font-semibold text-foreground">Put your church on the map</p>
-                      <p className="text-[15px] text-muted-foreground">
-                        Phones notice when they arrive near your building. Start
-                        with your main building{churchAddress ? ` at ${churchAddress}` : ""};
-                        other campuses can be added on the App page.
-                      </p>
-                    </div>
-                    {isAdmin ? (
-                      <Button onClick={createCampus} disabled={pending}>
-                        <MapPin className="size-4" aria-hidden />
-                        Set your church&apos;s location
-                      </Button>
-                    ) : null}
-                  </div>
-                ) : null}
-
-                {state.campuses.map((campus) => (
-                  <CampusCard
-                    key={campus.id}
-                    campus={campus}
-                    editing={editingCampus === campus.id}
-                    isAdmin={isAdmin}
-                    disabled={pending}
-                    churchAddress={churchAddress}
-                    onEdit={() => setEditingCampus(campus.id)}
-                    onDone={() => {
-                      setEditingCampus(null);
-                      router.refresh();
-                    }}
-                    onCancel={() => setEditingCampus(null)}
-                  />
-                ))}
-
-                {state.campuses.length > 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    Another campus?{" "}
-                    <Link href="/dashboard/app" className="font-semibold text-accent hover:underline">
-                      Add it on the App page
-                    </Link>
-                    , then place it here.
-                  </p>
-                ) : null}
+              <Smartphone className="size-6" strokeWidth={1.75} />
+            </span>
+            <div className="flex min-w-0 flex-1 flex-col gap-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <label
+                  id="setup-phone-title"
+                  htmlFor="setup-automatic"
+                  className="font-heading text-lg font-semibold text-foreground"
+                >
+                  Let people check in on their phone when they arrive
+                </label>
+                <span className="text-sm font-medium text-muted-foreground">Optional</span>
               </div>
-            </SetupStep>
-
-            <PhoneCheckCard
-              phone={phone}
-              churchName={churchName}
-              readiness={{ problem: readiness.problem, watching: readiness.watching }}
-              onOpenStep={(step) => openStep(step === "live" ? "phone" : "location")}
+              <p id="setup-automatic-detail" className="text-[15px] leading-relaxed text-muted-foreground">
+                People who turn it on in the FaithForm app are counted when their
+                phone arrives at church during check-in. Their phone sends one
+                reading on arrival, which is checked and thrown away: you see that
+                they came, never where they were.
+              </p>
+              {phoneOn ? (
+                <div className="pt-1">
+                  <StatusBadge tone={live ? "done" : "attention"}>
+                    {live ? "Working" : "Switched on, not working yet"}
+                  </StatusBadge>
+                </div>
+              ) : null}
+            </div>
+            <Switch
+              id="setup-automatic"
+              checked={phoneOn}
+              disabled={!isAdmin || pending}
+              aria-describedby="setup-automatic-detail"
+              onCheckedChange={(value) =>
+                saveSwitch(
+                  { geofenceEnabled: value },
+                  value ? "Phone check-in is on." : "Phone check-in is off.",
+                  value && readiness.watching.length === 0 ? () => openStep("location") : undefined,
+                )
+              }
             />
           </div>
-        ) : null}
-      </section>
+
+          {phoneOn ? (
+            <div className="flex flex-col gap-5 border-t border-border px-5 pb-6 pt-5 sm:px-6">
+              {!readiness.featureEnabled ? (
+                <Callout>
+                  Attendance is switched off for this church by FaithForm, so phones
+                  aren&apos;t checked in. Contact support to turn it back on.
+                </Callout>
+              ) : readiness.problem === "no_campus_configured" ? (
+                <Callout>
+                  One more step: put your building on the map below, so phones
+                  know where church is.
+                </Callout>
+              ) : null}
+
+              <dl className="grid gap-4 rounded-xl bg-muted/50 p-4 sm:grid-cols-3">
+                <div className="flex flex-col gap-0.5">
+                  <dt className="text-sm text-muted-foreground">Next check-in</dt>
+                  <dd className="text-[15px] font-semibold text-foreground">
+                    {nextWindow
+                      ? `${formatDay(nextWindow.checkinOpensAt, nextWindow.timezone)}, ${formatTime(nextWindow.checkinOpensAt, nextWindow.timezone)} to ${formatTime(nextWindow.checkinClosesAt, nextWindow.timezone)}`
+                      : "No services in the next 7 days"}
+                  </dd>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <dt className="text-sm text-muted-foreground">Using the app</dt>
+                  <dd className="text-[15px] font-semibold text-foreground">
+                    {state.linkedPeople} {state.linkedPeople === 1 ? "person" : "people"}
+                  </dd>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <dt className="text-sm text-muted-foreground">Turned phone check-in on</dt>
+                  <dd className="text-[15px] font-semibold text-foreground">
+                    {state.optedInPeople !== null ? state.optedInPeople : `Fewer than ${CONSENT_COUNT_FLOOR}`}
+                  </dd>
+                </div>
+              </dl>
+
+              <SetupStep
+                id="setup-location"
+                number={4}
+                title="Where your church is"
+                tone={tones.location}
+                open={open === "location"}
+                onToggle={() => toggle("location")}
+                actionLabel={tones.location === "done" ? "Change" : "Set up"}
+                summary={
+                  readiness.watching.length > 0
+                    ? `On the map: ${readiness.watching.map((campus) => campus.campusName).join(", ")}`
+                    : hiddenOnly
+                      ? "Your building is hidden from the app"
+                      : "Not on the map yet"
+                }
+              >
+                <div className="flex flex-col gap-4">
+                  {state.campuses.length === 0 ? (
+                    <div className="flex flex-col items-start gap-3 rounded-xl border border-dashed border-border p-5">
+                      <span className="flex size-10 items-center justify-center rounded-xl bg-brand-gold/15 text-accent">
+                        <MapPin className="size-5" aria-hidden />
+                      </span>
+                      <div className="flex flex-col gap-1">
+                        <p className="font-semibold text-foreground">Put your church on the map</p>
+                        <p className="text-[15px] text-muted-foreground">
+                          Phones notice when they arrive near your building. Start
+                          with your main building{churchAddress ? ` at ${churchAddress}` : ""};
+                          other campuses can be added on the App page.
+                        </p>
+                      </div>
+                      {isAdmin ? (
+                        <Button onClick={createCampus} disabled={pending}>
+                          <MapPin className="size-4" aria-hidden />
+                          Set your church&apos;s location
+                        </Button>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  {state.campuses.map((campus) => (
+                    <CampusCard
+                      key={campus.id}
+                      campus={campus}
+                      editing={editingCampus === campus.id}
+                      isAdmin={isAdmin}
+                      disabled={pending}
+                      churchAddress={churchAddress}
+                      onEdit={() => setEditingCampus(campus.id)}
+                      onDone={() => {
+                        setEditingCampus(null);
+                        router.refresh();
+                      }}
+                      onCancel={() => setEditingCampus(null)}
+                    />
+                  ))}
+
+                  {state.campuses.length > 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      Another campus?{" "}
+                      <Link href="/dashboard/app" className="font-semibold text-accent hover:underline">
+                        Add it on the App page
+                      </Link>
+                      , then place it here.
+                    </p>
+                  ) : null}
+                </div>
+              </SetupStep>
+
+              <PhoneCheckCard
+                phone={phone}
+                churchName={churchName}
+                readiness={{ problem: readiness.problem, watching: readiness.watching }}
+                onOpenStep={(step) => openStep(step === "live" ? "phone" : "location")}
+              />
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       <UpcomingCard upcoming={state.upcoming} phoneOn={phoneOn} />
     </div>

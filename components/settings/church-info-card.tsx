@@ -62,20 +62,28 @@ const IMAGE_COPY: Record<ImageKind, { label: string; hint: string; ratio: number
   },
 };
 
+// The same fields when the church's app is switched off: nothing mentions it.
+const IMAGE_COPY_NO_APP: Record<ImageKind, { label: string; hint: string; ratio: number }> = {
+  logo: { label: "Logo", hint: "A square image. It shows on your website.", ratio: 1 },
+  cover: { label: "Cover photo", hint: "A wide photo of your building or people.", ratio: 16 / 9 },
+};
+
 function ChurchImageField({
   kind,
   url,
   canEdit,
+  appEnabled,
 }: {
   kind: ImageKind;
   url: string | null;
   canEdit: boolean;
+  appEnabled: boolean;
 }) {
   const router = useRouter();
   const [draft, setDraft] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const copy = IMAGE_COPY[kind];
+  const copy = (appEnabled ? IMAGE_COPY : IMAGE_COPY_NO_APP)[kind];
   const inputId = `church-${kind}-file`;
 
   async function save(file: File | null, crop?: Area) {
@@ -93,7 +101,7 @@ function ChurchImageField({
       }
       toast.success(
         file
-          ? `${copy.label} updated. It now shows in the app and on your website.`
+          ? `${copy.label} updated. It now shows ${appEnabled ? "in the app and " : ""}on your website.`
           : `${copy.label} removed.`,
       );
       router.refresh();
@@ -107,7 +115,7 @@ function ChurchImageField({
   async function remove() {
     const ok = await confirmAction({
       title: `Remove your ${copy.label.toLowerCase()}?`,
-      description: `It disappears from the app and your website. You can add a new one at any time.`,
+      description: `It disappears from ${appEnabled ? "the app and " : ""}your website. You can add a new one at any time.`,
       confirmLabel: `Remove ${copy.label.toLowerCase()}`,
       destructive: true,
     });
@@ -204,23 +212,26 @@ export function ChurchImagesCard({
   logoUrl,
   coverUrl,
   canEdit,
+  appEnabled,
 }: {
   logoUrl: string | null;
   coverUrl: string | null;
   canEdit: boolean;
+  /** The church's FaithForm app is switched on; off never mentions it. */
+  appEnabled: boolean;
 }) {
   return (
     <Card>
       <CardHeader>
         <CardTitle>Logo and cover photo</CardTitle>
         <CardDescription className="text-[15px]">
-          How your church looks in the app and on your website.
+          How your church looks {appEnabled ? "in the app and " : ""}on your website.
         </CardDescription>
       </CardHeader>
       <CardContent>
         <div className="grid gap-8 sm:grid-cols-[auto_minmax(0,1fr)]">
-          <ChurchImageField kind="logo" url={logoUrl} canEdit={canEdit} />
-          <ChurchImageField kind="cover" url={coverUrl} canEdit={canEdit} />
+          <ChurchImageField kind="logo" url={logoUrl} canEdit={canEdit} appEnabled={appEnabled} />
+          <ChurchImageField kind="cover" url={coverUrl} canEdit={canEdit} appEnabled={appEnabled} />
         </div>
       </CardContent>
     </Card>
@@ -266,11 +277,14 @@ export function ChurchDetailsForm({
   initial,
   timezone,
   canEdit,
+  appEnabled,
   appPageHref,
 }: {
   initial: ChurchBasics;
   timezone: string;
   canEdit: boolean;
+  /** The church's FaithForm app is switched on; off never mentions it. */
+  appEnabled: boolean;
   /** Where the rest of the church page is edited, when this person can open it. */
   appPageHref: string | null;
 }) {
@@ -309,7 +323,11 @@ export function ChurchDetailsForm({
           setSaved(result.basics);
           setForm(result.basics);
           setFieldError(null);
-          toast.success("Church details saved. The app and your website now show them.");
+          toast.success(
+            appEnabled
+              ? "Church details saved. The app and your website now show them."
+              : "Church details saved. Your website now shows them.",
+          );
           router.refresh();
           return;
         }
@@ -324,7 +342,7 @@ export function ChurchDetailsForm({
   };
 
   if (!canEdit) {
-    return <ChurchDetailsReadOnly basics={initial} timezone={timezone} />;
+    return <ChurchDetailsReadOnly basics={initial} timezone={timezone} appEnabled={appEnabled} />;
   }
 
   const updateService = (index: number, patch: Partial<ChurchBasics["serviceTimes"][number]>) =>
@@ -345,7 +363,8 @@ export function ChurchDetailsForm({
         <CardHeader>
           <CardTitle>Church details</CardTitle>
           <CardDescription className="text-[15px]">
-            Entered once and used everywhere: your app page, your website and the phone assistant.
+            Entered once and used everywhere: {appEnabled ? "your app page, " : ""}your website and the
+            phone assistant.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-5">
@@ -391,8 +410,8 @@ export function ChurchDetailsForm({
             Service times
           </CardTitle>
           <CardDescription className="text-[15px]">
-            Shown in the app as &ldquo;Next service&rdquo;. Attendance uses them to set up each
-            Sunday.
+            {appEnabled ? <>Shown in the app as &ldquo;Next service&rdquo;. </> : null}Attendance uses
+            them to set up each Sunday.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
@@ -479,7 +498,7 @@ export function ChurchDetailsForm({
             Address
           </CardTitle>
           <CardDescription className="text-[15px]">
-            Where people come on Sunday. It&apos;s shown with a map link in the app.
+            Where people come on Sunday.{appEnabled ? " It's shown with a map link in the app." : ""}
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-5">
@@ -584,7 +603,15 @@ export function ChurchDetailsForm({
   );
 }
 
-function ChurchDetailsReadOnly({ basics, timezone }: { basics: ChurchBasics; timezone: string }) {
+function ChurchDetailsReadOnly({
+  basics,
+  timezone,
+  appEnabled,
+}: {
+  basics: ChurchBasics;
+  timezone: string;
+  appEnabled: boolean;
+}) {
   const address = [basics.address, [basics.city, basics.state].filter(Boolean).join(", "), basics.zip]
     .filter((part) => part && part.trim())
     .join(" ");
@@ -609,7 +636,7 @@ function ChurchDetailsReadOnly({ basics, timezone }: { basics: ChurchBasics; tim
       <CardHeader>
         <CardTitle>Church details</CardTitle>
         <CardDescription className="text-[15px]">
-          What people see in the app and on your website.
+          What people see {appEnabled ? "in the app and " : ""}on your website.
         </CardDescription>
       </CardHeader>
       <CardContent>

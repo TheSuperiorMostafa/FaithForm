@@ -171,6 +171,7 @@ function PostedRow({
   now: number;
   onChange: () => void;
 }) {
+  const { settings } = useAnnouncementComposer();
   const row = item.announcement;
   const state = announcementState(row, {
     queuedForWeeklyEmail: item.queuedForWeeklyEmail,
@@ -215,6 +216,8 @@ function PostedRow({
               title={row.title}
               calendarLinked={Boolean(row.google_event_id)}
               facebookIsLive={channels.facebook.published && !channels.facebook.scheduledFor}
+              inApp={channels.app.published}
+              inEmail={!settings.emailSwitchedOff || channels.weeklyEmail.published}
             />
           )}
         </>

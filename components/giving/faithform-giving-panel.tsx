@@ -50,11 +50,16 @@ import { Textarea } from "@/components/ui/textarea";
 const VISIBILITY_LABELS = {
   none: "Not in the app",
   public: "Everyone",
-  followers: "People who follow your church, and members",
-  members: "Members only",
+  followers: "People who follow your church",
 } as const;
 
 type Visibility = keyof typeof VISIBILITY_LABELS;
+
+// Everyone who follows a church is a member, so an older "members only" fund
+// reads as "people who follow your church".
+function currentVisibility(value: string): Visibility {
+  return value === "members" ? "followers" : (value as Visibility);
+}
 
 function formatCents(cents: number): string {
   return (cents / 100).toLocaleString(undefined, {
@@ -181,7 +186,7 @@ export function FaithFormGivingPanel({ isAdmin }: { isAdmin: boolean }) {
                     <StatusBadge tone={fund.visibility === "none" ? "neutral" : "done"}>
                       {fund.visibility === "none"
                         ? VISIBILITY_LABELS.none
-                        : `In the app: ${VISIBILITY_LABELS[fund.visibility as Visibility]}`}
+                        : `In the app: ${VISIBILITY_LABELS[currentVisibility(fund.visibility)]}`}
                     </StatusBadge>
                     {fund.isActive ? null : <StatusBadge tone="neutral">Removed</StatusBadge>}
                   </div>
@@ -256,7 +261,7 @@ function FundDialog({
     maxAmountCents: number;
   }) => void;
 }) {
-  const [visibility, setVisibility] = useState<Visibility>(fund.visibility as Visibility);
+  const [visibility, setVisibility] = useState<Visibility>(currentVisibility(fund.visibility));
   const [title, setTitle] = useState(fund.title ?? "");
   const [description, setDescription] = useState(fund.description ?? "");
   const [minimum, setMinimum] = useState(String(fund.minAmountCents / 100));

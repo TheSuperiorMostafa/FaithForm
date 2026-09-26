@@ -87,6 +87,10 @@ export type ComposerSettings = {
   facebookConnected: boolean;
   /** Monday's email can be made (Google or iCloud Mail, and not switched off). */
   emailAvailable: boolean;
+  /** The church doesn't have announcement email: Monday's email isn't offered. */
+  emailSwitchedOff: boolean;
+  /** The church has the FaithForm app. Off: nothing new is offered for the app. */
+  appAvailable: boolean;
   calendarConnected: boolean;
   /** A calendar FaithForm can add events to (not a read-only iCloud link). */
   canCreateEvents: boolean;
@@ -389,7 +393,7 @@ function initialState(mode: ComposerMode, settings: ComposerSettings) {
           startTime: draft.startTime,
           endTime: draft.endTime,
           location: draft.location,
-          audience: draft.audience,
+          audience: "followers" as const,
         }
       : base,
     calendar: null,
@@ -497,6 +501,10 @@ export function AnnouncementComposer({
   const facebookNew = values.facebookOn && settings.facebookConnected && !facebookOnPage;
   const appAlready = Boolean(already?.app.published);
   const emailAlready = Boolean(already?.weeklyEmail.published);
+  // Something already in the app keeps updating there even with the app off.
+  const appOn = values.appOn && (settings.appAvailable || appAlready);
+  const showAppRow = settings.appAvailable || appAlready;
+  const showEmailRow = !settings.emailSwitchedOff || emailAlready;
   const willAddToCalendar =
     !calendar &&
     !createdEvent &&
@@ -708,7 +716,7 @@ export function AnnouncementComposer({
       return "Choose a start time for this event.";
     }
     const emailOn = values.emailOn && settings.emailAvailable;
-    if (!values.appOn && !emailOn && !facebookNew && !changing && !willAddToCalendar) {
+    if (!appOn && !emailOn && !facebookNew && !changing && !willAddToCalendar) {
       return "Choose at least one place to share it.";
     }
     if (facebookNew && aiStale) {
@@ -789,7 +797,7 @@ export function AnnouncementComposer({
         // "Change" with the same details only shares it in new places, so the
         // app is not changed and no one is notified again.
         if (mode.kind === "change" && !detailsChanged) {
-          const addApp = values.appOn && !appAlready;
+          const addApp = appOn && !appAlready;
           const addEmail = values.emailOn && !emailAlready;
           if (!addApp && !addEmail && !facebookNew) {
             setError("Nothing has changed yet. Change the details, or tick a new place to share it.");
@@ -861,7 +869,7 @@ export function AnnouncementComposer({
           "push_to_team",
           (values.emailOn && settings.emailAvailable) || emailAlready ? "true" : "false",
         );
-        form.set("mobile_visibility", values.appOn ? values.audience : "none");
+        form.set("mobile_visibility", appOn ? values.audience : "none");
         if (calendar) {
           form.set("original_title", calendar.original.title);
           form.set("original_location", calendar.original.location);
@@ -926,18 +934,14 @@ export function AnnouncementComposer({
   const busy = pending || uploading || pictureLoading || captionLoading;
 
   const whatHappens: string[] = [];
-  if (values.appOn || appAlready) {
+  if (appOn || appAlready) {
     if (alreadyOver) {
       whatHappens.push("Shows on the FaithForm app's calendar. It already happened, so no one gets a notification.");
     } else if (appAlready && !detailsChanged) {
       whatHappens.push("Stays in the FaithForm app as it is.");
     } else {
       whatHappens.push(appAlready ? "Updates it in the FaithForm app now." : "Posts to the FaithForm app now.");
-      whatHappens.push(
-        values.audience === "members"
-          ? "Members get a notification."
-          : "Everyone who follows your church gets a notification.",
-      );
+      whatHappens.push("Everyone who follows your church gets a notification.");
     }
   }
   if ((values.emailOn && settings.emailAvailable) || emailAlready) whatHappens.push("It's in Monday's email.");
@@ -979,7 +983,7 @@ export function AnnouncementComposer({
           <DialogTitle id="announcement-composer-title">{outcome ? outcome.title : heading}</DialogTitle>
           {!outcome && (
             <DialogDescription className="text-base">
-              Say what&apos;s happening, choose who sees it, and where it goes.
+              Say what&apos;s happening, when and where, and where to share it.
             </DialogDescription>
           )}
         </DialogHeader>
@@ -1073,30 +1077,6 @@ export function AnnouncementComposer({
                       />
                     </div>
 
-                    <PictureField
-                      graphic={currentGraphic}
-                      canRestoreAi={Boolean(graphic.setAsideAi) && usingOwnPicture}
-                      aiStale={aiStale}
-                      loading={pictureLoading}
-                      uploading={uploading}
-                      error={pictureError}
-                      note={pictureNote}
-                      alt={posterAltText || "Announcement picture"}
-                      onMake={() => void askForPicture("full", !values.caption.trim())}
-                      onUpload={() => fileInputRef.current?.click()}
-                      onRestoreAi={() => dispatchGraphic({ type: "restore-ai" })}
-                      onRemove={() => dispatchGraphic({ type: "remove" })}
-                    />
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp"
-                      className="hidden"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) void handleFile(file);
-                      }}
-                    />
                   </Section>
 
                   {/* When? */}
@@ -1206,80 +1186,81 @@ export function AnnouncementComposer({
                     )}
                   </Section>
 
-                  {/* Who? */}
-                  <Section title="Who sees it in the app?">
-                    {appAlready ? (
-                      <p className="text-[15px] text-muted-foreground">
-                        {values.audience === "members"
-                          ? "Members only."
-                          : "Everyone who follows your church."}{" "}
-                        To change who sees it, take it down and post it again.
-                      </p>
-                    ) : (
-                      <div className="choice-grid" role="radiogroup" aria-label="Who sees it">
-                        <ChoiceCard
-                          name="composer-audience"
-                          checked={values.audience !== "members"}
-                          onSelect={() => set("audience", "followers")}
-                          title="Everyone who follows your church"
-                          hint="Members and people who added your church in the app."
-                        />
-                        <ChoiceCard
-                          name="composer-audience"
-                          checked={values.audience === "members"}
-                          onSelect={() => set("audience", "members")}
-                          title="Members only"
-                          hint="Only people who joined your church in the app."
-                        />
-                      </div>
-                    )}
+                  {/* Picture — after the day, time and place it is drawn from */}
+                  <Section title="Add a picture">
+                    <PictureField
+                      graphic={currentGraphic}
+                      canRestoreAi={Boolean(graphic.setAsideAi) && usingOwnPicture}
+                      aiStale={aiStale}
+                      loading={pictureLoading}
+                      uploading={uploading}
+                      error={pictureError}
+                      note={pictureNote}
+                      alt={posterAltText || "Announcement picture"}
+                      onMake={() => void askForPicture("full", !values.caption.trim())}
+                      onUpload={() => fileInputRef.current?.click()}
+                      onRestoreAi={() => dispatchGraphic({ type: "restore-ai" })}
+                      onRemove={() => dispatchGraphic({ type: "remove" })}
+                    />
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) void handleFile(file);
+                      }}
+                    />
                   </Section>
 
                   {/* Where? */}
                   <Section title="Where should it go?">
                     <ul className="flex flex-col divide-y divide-border rounded-2xl border border-border">
-                      <CheckRow
-                        as="li"
-                        id="composer-app"
-                        icon={<Smartphone className="size-5" strokeWidth={1.75} aria-hidden />}
-                        label="The FaithForm app"
-                        checked={values.appOn || appAlready}
-                        disabled={appAlready}
-                        onChange={(checked) => set("appOn", checked)}
-                        hint={
-                          appAlready
-                            ? "Already in the app."
-                            : alreadyOver
-                              ? "This already happened, so it only shows on the app's calendar and no one gets a notification."
-                              : values.appOn
-                                ? values.audience === "members"
-                                  ? "Posts to the app now. Members get a notification."
-                                  : "Posts to the app now. Everyone who follows your church gets a notification."
-                                : "Leave this on so people see it in the app."
-                        }
-                        hintTone={alreadyOver && values.appOn ? "warning" : "muted"}
-                      />
-                      <CheckRow
-                        as="li"
-                        id="composer-email"
-                        icon={<Mail className="size-5" strokeWidth={1.75} aria-hidden />}
-                        label="Monday's weekly email"
-                        checked={(values.emailOn && settings.emailAvailable) || emailAlready}
-                        disabled={emailAlready || !settings.emailAvailable}
-                        onChange={(checked) => set("emailOn", checked)}
-                        hint={
-                          emailAlready
-                            ? "Already in Monday's email."
-                            : settings.emailAvailable
-                              ? "Added to the email of this week's announcements."
-                              : "Connect Google or iCloud in Settings to send a weekly email."
-                        }
-                      />
+                      {showAppRow && (
+                        <CheckRow
+                          as="li"
+                          id="composer-app"
+                          icon={<Smartphone className="size-5" strokeWidth={1.75} aria-hidden />}
+                          label="The FaithForm app"
+                          checked={appOn || appAlready}
+                          disabled={appAlready}
+                          onChange={(checked) => set("appOn", checked)}
+                          hint={
+                            appAlready
+                              ? "Already in the app."
+                              : alreadyOver
+                                ? "This already happened, so it only shows on the app's calendar and no one gets a notification."
+                                : appOn
+                                  ? "Posts to the app now. Everyone who follows your church gets a notification."
+                                  : "Leave this on so people see it in the app."
+                          }
+                          hintTone={alreadyOver && appOn ? "warning" : "muted"}
+                        />
+                      )}
+                      {showEmailRow && (
+                        <CheckRow
+                          as="li"
+                          id="composer-email"
+                          icon={<Mail className="size-5" strokeWidth={1.75} aria-hidden />}
+                          label="Monday's weekly email"
+                          checked={(values.emailOn && settings.emailAvailable) || emailAlready}
+                          disabled={emailAlready || !settings.emailAvailable}
+                          onChange={(checked) => set("emailOn", checked)}
+                          hint={
+                            emailAlready
+                              ? "Already in Monday's email."
+                              : settings.emailAvailable
+                                ? "Added to the email of this week's announcements."
+                                : "Connect Google or iCloud in Settings to send a weekly email."
+                          }
+                        />
+                      )}
                       <CheckRow
                         as="li"
                         id="composer-facebook"
                         icon={<Share2 className="size-5" strokeWidth={1.75} aria-hidden />}
-                        label="Also post on Facebook"
+                        label={showAppRow || showEmailRow ? "Also post on Facebook" : "Post on Facebook"}
                         checked={facebookOnPage || (values.facebookOn && settings.facebookConnected)}
                         disabled={facebookOnPage || !settings.facebookConnected}
                         onChange={toggleFacebook}
@@ -1622,8 +1603,8 @@ function PictureField({
 }) {
   return (
     <div className="flex flex-col gap-3">
-      <p className="text-[15px] font-semibold text-foreground">
-        Picture <span className="font-normal text-muted-foreground">(optional)</span>
+      <p className="text-[15px] text-muted-foreground">
+        Optional. We make it from your title, day, time and place, so fill those in first.
       </p>
       {loading && !graphic && (
         <div className="flex aspect-[1200/630] w-full max-w-md items-center justify-center gap-2 rounded-2xl bg-muted text-[15px] text-muted-foreground">

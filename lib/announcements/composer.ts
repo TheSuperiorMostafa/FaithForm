@@ -76,9 +76,7 @@ export function describeDestinations(
   });
   const parts: string[] = [];
   if (channels.app.published) {
-    parts.push(
-      channels.app.visibility === "members" ? "The FaithForm app (members)" : "The FaithForm app",
-    );
+    parts.push("The FaithForm app");
   }
   if (channels.facebook.published) {
     parts.push(
@@ -128,11 +126,7 @@ export function describePostOutcome(outcome: PostOutcome): string[] {
     } else {
       lines.push(outcome.updated ? "Updated in the FaithForm app." : "Posted to the FaithForm app.");
       if (outcome.notified) {
-        lines.push(
-          outcome.audience === "members"
-            ? "Members were notified."
-            : "Everyone who follows your church was notified.",
-        );
+        lines.push("Everyone who follows your church was notified.");
       }
     }
   }

@@ -33,9 +33,12 @@ const up = (value: string | null | undefined) => (value ?? "").trim().toUpperCas
 export function BrandColorsCard({
   primaryColor,
   accentColor,
+  appEnabled,
 }: {
   primaryColor: string | null;
   accentColor: string | null;
+  /** With the church's app switched off, these are the giving page's colors only. */
+  appEnabled: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -68,7 +71,7 @@ export function BrandColorsCard({
         }
         setCurrent(next);
         setCustom(next);
-        toast.success(`App colors changed to ${name}.`);
+        toast.success(`${appEnabled ? "App colors" : "Colors"} changed to ${name}.`);
         router.refresh();
       } catch {
         setError("We couldn't change your colors. Please try again.");
@@ -79,13 +82,15 @@ export function BrandColorsCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>App colors</CardTitle>
+        <CardTitle>{appEnabled ? "App colors" : "Colors"}</CardTitle>
         <CardDescription className="text-[15px]">
-          Used across your church&apos;s app and giving page. Tap a pair to use it.
+          {appEnabled
+            ? "Used across your church's app and giving page. Tap a pair to use it."
+            : "Used on your church's giving page. Tap a pair to use it."}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-5">
-        <div role="radiogroup" aria-label="App colors" className="choice-grid choice-grid-3">
+        <div role="radiogroup" aria-label={appEnabled ? "App colors" : "Colors"} className="choice-grid choice-grid-3">
           {BRAND_SWATCHES.map((swatch) => {
             const active = matching?.name === swatch.name;
             return (

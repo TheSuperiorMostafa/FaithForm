@@ -44,6 +44,7 @@ const CHECK_EVERY_MS = 5000;
 type Props = {
   ingestServerUrl: string;
   isAdmin: boolean;
+  appEnabled: boolean;
   settings: RecordingSettings;
   series: Array<{ id: string; name: string }>;
   youtube: PlatformPushState;
@@ -61,7 +62,15 @@ type Props = {
  * "Technical details"; pairing, encoder presets, embed code and destinations
  * are in the Advanced section below the steps.
  */
-export function StreamingSetupGuide({ ingestServerUrl, isAdmin, settings, series, youtube, facebook }: Props) {
+export function StreamingSetupGuide({
+  ingestServerUrl,
+  isAdmin,
+  appEnabled,
+  settings,
+  series,
+  youtube,
+  facebook,
+}: Props) {
   const [tool, setTool] = useState<StreamingToolId | null>(null);
   const streamKey = useStreamKey();
 
@@ -159,7 +168,7 @@ export function StreamingSetupGuide({ ingestServerUrl, isAdmin, settings, series
       </Step>
 
       <Step number={3} title="After the service" description="Every service is recorded automatically. What should happen next?">
-        <RecordingSettingsCard initial={settings} series={series} isAdmin={isAdmin} />
+        <RecordingSettingsCard initial={settings} series={series} isAdmin={isAdmin} appEnabled={appEnabled} />
         <div className="flex flex-col gap-3">
           <h3 className="font-heading text-lg font-semibold">Also show on YouTube or Facebook</h3>
           <p className="text-[15px] text-muted-foreground">

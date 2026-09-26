@@ -109,8 +109,8 @@ test("the weekly email counts whether it was published there or queued", () => {
 test("the app audience is said the way the publish form says it", () => {
   const inApp = publishedChannels(announcement({ mobile_visibility: "followers" }));
   assert.equal(inApp.app.published, true);
-  assert.equal(describeAppAudience(inApp.app.visibility), "Anyone who has added your church");
-  assert.equal(describeAppAudience("members"), "Members only");
+  assert.equal(describeAppAudience(inApp.app.visibility), "Everyone who follows your church");
+  assert.equal(describeAppAudience("members"), "Everyone who follows your church");
   assert.equal(describeAppAudience("none"), "Not shared in the app");
 });
 

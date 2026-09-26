@@ -60,6 +60,7 @@ import {
   getMondayWeekWindowInTimeZone,
   getMonthWindowForDate,
 } from "@/lib/utils/calendar";
+import { getFeatureAccess } from "@/lib/features/access";
 import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
@@ -97,10 +98,15 @@ export default async function AnnouncementsPage() {
   const week = getMondayWeekWindowInTimeZone(now, churchTimeZone);
   const { year, monthIndex, startISO, endISO } = getMonthWindowForDate(now);
 
-  const [integrationStatus, weeklyEmail] = await Promise.all([
+  const [integrationStatus, weeklyEmail, access] = await Promise.all([
     getIntegrationStatus(churchId, supabase),
     getWeeklyEmailAvailability(churchId, supabase),
+    getFeatureAccess(),
   ]);
+  // Member App switched off for the church: every app option here is hidden.
+  const appAvailable = access?.flags.member_app ?? true;
+  // Announcement email switched off: Monday's email leaves the page.
+  const showWeeklyEmail = !weeklyEmail.switchedOff;
   const googleConnected = integrationStatus.google.connected;
   const appleConnected = integrationStatus.apple.connected;
   const calendarConnected = googleConnected || appleConnected;
@@ -116,6 +122,8 @@ export default async function AnnouncementsPage() {
     isAdmin: auth.isAdmin,
     facebookConnected: integrationStatus.facebook.connected,
     emailAvailable: weeklyEmail.available,
+    emailSwitchedOff: weeklyEmail.switchedOff,
+    appAvailable,
     calendarConnected,
     canCreateEvents,
   };
@@ -139,12 +147,31 @@ export default async function AnnouncementsPage() {
       <div className="flex w-full flex-col gap-8">
         <PageHeader
           title="Announcements"
-          description="Tell your church what's happening, in the app, by email and on Facebook."
+          description="Tell your church what's happening, and share it where they'll see it."
           icon={Megaphone}
           action={<NewAnnouncementButton />}
         />
 
-        <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_380px]">
+        {/* The calendar leads: most announcements start from an event on it. */}
+        {calendarConnected && (
+          <Suspense fallback={<CalendarSectionSkeleton />}>
+            <CalendarSection
+              churchId={churchId}
+              year={year}
+              monthIndex={monthIndex}
+              startISO={startISO}
+              endISO={endISO}
+              connected={connected}
+              canCreateEvents={canCreateEvents}
+              isAdmin={auth.isAdmin}
+              timeZone={churchTimeZone}
+              publishedPromise={publishedPromise}
+              queuedPromise={queuedPromise}
+            />
+          </Suspense>
+        )}
+
+        <div className={showWeeklyEmail ? "grid gap-8 xl:grid-cols-[minmax(0,1fr)_380px]" : "flex flex-col gap-8"}>
           <div className="flex min-w-0 flex-col gap-8">
             <Suspense fallback={<CalendarSuggestionsSkeleton calendarConnected={calendarConnected} />}>
               <SuggestionsSection
@@ -168,42 +195,26 @@ export default async function AnnouncementsPage() {
             </Suspense>
           </div>
 
-          <div className="flex min-w-0 flex-col gap-8 xl:sticky xl:top-4 xl:self-start">
-            <Suspense fallback={<WeeklyEmailCardSkeleton />}>
-              <WeeklyEmailSection
-                churchId={churchId}
-                now={now}
-                timeZone={churchTimeZone}
-                week={week}
-                isAdmin={auth.isAdmin}
-                emailAvailable={weeklyEmail.available}
-                emailSwitchedOff={weeklyEmail.switchedOff}
-                emailChannel={weeklyEmail.channel}
-                upcomingPromise={upcomingPromise}
-                publishedPromise={publishedPromise}
-                queuedPromise={queuedPromise}
-              />
-            </Suspense>
-          </div>
+          {showWeeklyEmail && (
+            <div className="flex min-w-0 flex-col gap-8 xl:sticky xl:top-4 xl:self-start">
+              <Suspense fallback={<WeeklyEmailCardSkeleton />}>
+                <WeeklyEmailSection
+                  churchId={churchId}
+                  now={now}
+                  timeZone={churchTimeZone}
+                  week={week}
+                  isAdmin={auth.isAdmin}
+                  emailAvailable={weeklyEmail.available}
+                  emailSwitchedOff={weeklyEmail.switchedOff}
+                  emailChannel={weeklyEmail.channel}
+                  upcomingPromise={upcomingPromise}
+                  publishedPromise={publishedPromise}
+                  queuedPromise={queuedPromise}
+                />
+              </Suspense>
+            </div>
+          )}
         </div>
-
-        {calendarConnected && (
-          <Suspense fallback={<CalendarSectionSkeleton />}>
-            <CalendarSection
-              churchId={churchId}
-              year={year}
-              monthIndex={monthIndex}
-              startISO={startISO}
-              endISO={endISO}
-              connected={connected}
-              canCreateEvents={canCreateEvents}
-              isAdmin={auth.isAdmin}
-              timeZone={churchTimeZone}
-              publishedPromise={publishedPromise}
-              queuedPromise={queuedPromise}
-            />
-          </Suspense>
-        )}
       </div>
     </AnnouncementsComposerProvider>
   );

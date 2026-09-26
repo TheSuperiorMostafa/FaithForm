@@ -83,7 +83,8 @@ test("app colors live in the Member App section, spelled the American way", () =
   assert.doesNotMatch(church, /BrandColorsCard/);
   assert.match(panels.slice(panels.indexOf("async function MemberAppPanel")), /<BrandColorsCard/);
   const card = read("components/settings/brand-colors-card.tsx");
-  assert.match(card, /<CardTitle>App colors<\/CardTitle>/);
+  // "App colors" while the church has the app; plain "Colors" when it is switched off.
+  assert.match(card, /<CardTitle>\{appEnabled \? "App colors" : "Colors"\}<\/CardTitle>/);
   assert.doesNotMatch(card, /colour/i);
   assert.ok(!visibleSettingsTabs({ isAdmin: false, allowedFeatures: ALL }).includes("app"));
   assert.ok(!visibleSettingsTabs({ isAdmin: true, allowedFeatures: ["people"] }).includes("app"));

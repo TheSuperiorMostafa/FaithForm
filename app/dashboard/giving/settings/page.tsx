@@ -14,6 +14,7 @@ import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { getChurchAuth } from "@/lib/auth/church";
+import { getFeatureAccess } from "@/lib/features/access";
 import { feeExplanation } from "@/lib/giving/fee-copy";
 import { getChurchAddressLine, getChurchGivingProfile } from "@/lib/queries/giving";
 import { applicationFeeAmount } from "@/lib/stripe/config";
@@ -72,6 +73,8 @@ export default async function GivingSettingsPage() {
 
   const { profile, funds, suggestedAddress } = data;
   const fees = feeExplanation(applicationFeeAmount());
+  // With the church's app switched off, nothing here offers giving in the app.
+  const appEnabled = Boolean((await getFeatureAccess())?.flags.member_app);
 
   return (
     <div className="flex w-full flex-col gap-8">
@@ -101,7 +104,7 @@ export default async function GivingSettingsPage() {
 
       <FundsSettings funds={funds} />
 
-      <FaithFormGivingPanel isAdmin={auth.isAdmin} />
+      {appEnabled ? <FaithFormGivingPanel isAdmin={auth.isAdmin} /> : null}
 
       <StatementSettings
         ein={profile.ein ?? null}
@@ -122,8 +125,8 @@ export default async function GivingSettingsPage() {
           <div className="space-y-1.5">
             <h2 className="font-heading text-xl font-bold text-foreground">Logo and colors</h2>
             <p className="text-[15px] leading-relaxed text-muted-foreground">
-              Your giving page and receipts use your church&apos;s logo and colors, the same ones
-              as the app.
+              Your giving page and receipts use your church&apos;s logo and colors
+              {appEnabled ? ", the same ones as the app" : ""}.
             </p>
           </div>
         </div>

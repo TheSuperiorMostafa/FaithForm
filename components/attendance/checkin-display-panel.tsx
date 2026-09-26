@@ -43,9 +43,12 @@ import { StatusBadge } from "@/components/ui/status-badge";
 export function CheckinDisplayPanel({
   occurrenceId,
   isAdmin,
+  appEnabled,
 }: {
   occurrenceId: string;
   isAdmin: boolean;
+  /** The church's FaithForm app is switched on; off hides the code screen. */
+  appEnabled: boolean;
 }) {
   const [state, setState] = useState<CheckinDisplayState | null>(null);
   const [pairing, setPairing] = useState<{ code: string; expiresAt: string } | null>(null);
@@ -85,101 +88,106 @@ export function CheckinDisplayPanel({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-base font-semibold text-foreground">Check-in screen</span>
-        {running ? <StatusBadge tone="live">On</StatusBadge> : null}
+      {/* The screen's code is scanned in the FaithForm app, so it goes with the app. */}
+      {appEnabled ? (
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-base font-semibold text-foreground">Check-in screen</span>
+            {running ? <StatusBadge tone="live">On</StatusBadge> : null}
 
-        {running ? (
-          <>
-            <Button
+            {running ? (
+              <>
+                <Button
               
-              variant="outline"
-              disabled={pending}
-              onClick={() =>
-                startTransition(async () => {
-                  const result = await refreshDisplayPairing({ occurrenceId });
-                  if (result.ok) {
-                    setPairing({
-                      code: result.data.pairingCode,
-                      expiresAt: result.data.pairingExpiresAt,
-                    });
-                  } else toast.error(result.message);
-                })
-              }
-            >
-              Show another code
-            </Button>
-            <Button
+                  variant="outline"
+                  disabled={pending}
+                  onClick={() =>
+                    startTransition(async () => {
+                      const result = await refreshDisplayPairing({ occurrenceId });
+                      if (result.ok) {
+                        setPairing({
+                          code: result.data.pairingCode,
+                          expiresAt: result.data.pairingExpiresAt,
+                        });
+                      } else toast.error(result.message);
+                    })
+                  }
+                >
+                  Show another code
+                </Button>
+                <Button
               
-              variant="outline"
-              disabled={pending}
-              onClick={() =>
-                startTransition(async () => {
-                  const result = await stopCheckinDisplay({ sessionId: state!.sessionId! });
-                  if (result.ok) {
-                    setPairing(null);
-                    toast.success("Check-in screen turned off. Nobody already counted was affected.");
-                    refresh();
-                  } else toast.error(result.message);
-                })
-              }
-            >
-              Turn off the screen
-            </Button>
-          </>
-        ) : (
-          <Button
+                  variant="outline"
+                  disabled={pending}
+                  onClick={() =>
+                    startTransition(async () => {
+                      const result = await stopCheckinDisplay({ sessionId: state!.sessionId! });
+                      if (result.ok) {
+                        setPairing(null);
+                        toast.success("Check-in screen turned off. Nobody already counted was affected.");
+                        refresh();
+                      } else toast.error(result.message);
+                    })
+                  }
+                >
+                  Turn off the screen
+                </Button>
+              </>
+            ) : (
+              <Button
             
-            disabled={pending}
-            onClick={() =>
-              startTransition(async () => {
-                const result = await startCheckinDisplay({ occurrenceId });
-                if (result.ok) {
-                  setPairing({
-                    code: result.data.pairingCode,
-                    expiresAt: result.data.pairingExpiresAt,
-                  });
-                  refresh();
-                } else toast.error(result.message);
-              })
-            }
-          >
-            Show a check-in code on a screen
-          </Button>
-        )}
-      </div>
+                disabled={pending}
+                onClick={() =>
+                  startTransition(async () => {
+                    const result = await startCheckinDisplay({ occurrenceId });
+                    if (result.ok) {
+                      setPairing({
+                        code: result.data.pairingCode,
+                        expiresAt: result.data.pairingExpiresAt,
+                      });
+                      refresh();
+                    } else toast.error(result.message);
+                  })
+                }
+              >
+                Show a check-in code on a screen
+              </Button>
+            )}
+          </div>
 
-      {state && !state.qrEnabled ? (
-        <p className="rounded-xl border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
-          Scanning a code is turned off for this service, so phones will be told
-          this kind of check-in isn&rsquo;t on. Turn on &ldquo;Scan a code&rdquo;
-          in{" "}
-          <Link href="/dashboard/attendance/setup" className="font-semibold underline">
-            Setup
-          </Link>
-          . It applies to services whose check-in hasn&rsquo;t opened yet.
-        </p>
-      ) : null}
+          {state && !state.qrEnabled ? (
+            <p className="rounded-xl border border-amber-300/60 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-200">
+              Scanning a code is turned off for this service, so phones will be told
+              this kind of check-in isn&rsquo;t on. Turn on &ldquo;Scan a code&rdquo;
+              in{" "}
+              <Link href="/dashboard/attendance/setup" className="font-semibold underline">
+                Setup
+              </Link>
+              . It applies to services whose check-in hasn&rsquo;t opened yet.
+            </p>
+          ) : null}
 
-      {pairing ? (
-        <PairingCallout
-          code={pairing.code}
-          expiresAt={pairing.expiresAt}
-          path="/checkin/display"
-          instruction="On the computer connected to the screen, open this address and type the code."
-          onDone={() => setPairing(null)}
-        />
-      ) : null}
+          {pairing ? (
+            <PairingCallout
+              code={pairing.code}
+              expiresAt={pairing.expiresAt}
+              path="/checkin/display"
+              instruction="On the computer connected to the screen, open this address and type the code."
+              onDone={() => setPairing(null)}
+            />
+          ) : null}
 
-      {running ? (
-        <p className="text-sm text-muted-foreground">
-          The code on screen changes every {state?.rotationSeconds ?? 30} seconds,
-          so a photo of it stops working quickly.
-        </p>
+          {running ? (
+            <p className="text-sm text-muted-foreground">
+              The code on screen changes every {state?.rotationSeconds ?? 30} seconds,
+              so a photo of it stops working quickly.
+            </p>
+          ) : null}
+        </>
       ) : null}
 
       {isAdmin ? (
-        <div className="flex flex-col gap-3 border-t border-border pt-4">
+        <div className={appEnabled ? "flex flex-col gap-3 border-t border-border pt-4" : "flex flex-col gap-3"}>
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-base font-semibold text-foreground">Welcome desk</span>
             <Button

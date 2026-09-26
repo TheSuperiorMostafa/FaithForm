@@ -12,6 +12,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { getChurchAuth } from "@/lib/auth/church";
+import { getFeatureAccess } from "@/lib/features/access";
 import { feeExplanation } from "@/lib/giving/fee-copy";
 import { ensureDefaultFunds } from "@/lib/giving/funds";
 import { resolveSetupStep, type SetupStep } from "@/lib/giving/setup";
@@ -139,6 +140,7 @@ async function SetupSection({
         : "Giving in the app is switched off for your church. Your giving page still works.";
     }
   }
+  const appEnabled = Boolean((await getFeatureAccess())?.flags.member_app);
 
   return (
     <GivingSetup
@@ -155,6 +157,7 @@ async function SetupSection({
       }}
       funds={funds}
       appBlockedReason={appBlockedReason}
+      appEnabled={appEnabled}
       givePageUrl={profile.givePageUrl}
       feeSummary={feeExplanation(applicationFeeAmount()).summary}
     />

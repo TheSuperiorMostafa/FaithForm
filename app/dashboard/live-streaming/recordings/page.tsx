@@ -6,6 +6,7 @@ import { RecordingList } from "@/components/live-streaming/recordings/recording-
 import { RecordingsLoadError } from "@/components/live-streaming/recordings/recordings-load-error";
 import { MediaBrowseView } from "@/components/media/media-browse";
 import { getChurchAuth } from "@/lib/auth/church";
+import { getFeatureAccess } from "@/lib/features/access";
 import { DASHBOARD_MEDIA_LINKS, loadLibraryBrowse } from "@/lib/media/browse";
 import {
   listStaffRecordings,
@@ -95,6 +96,7 @@ export default async function RecordingsPage({
     all: matching.length,
     published: matching.filter((recording) => recording.phase.phase === "published").length,
   };
+  const access = await getFeatureAccess();
 
   return (
     <div className="flex w-full flex-col gap-6">
@@ -106,6 +108,7 @@ export default async function RecordingsPage({
         search={search}
         timeZone={auth.churchTimezone ?? "America/New_York"}
         isAdmin={auth.isAdmin}
+        appEnabled={Boolean(access?.flags.member_app)}
       />
     </div>
   );

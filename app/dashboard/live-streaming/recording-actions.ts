@@ -71,13 +71,21 @@ export async function publishRecordingAction(input: {
   if (input.appVisibility !== null && !["public", "followers", "members"].includes(input.appVisibility)) {
     return { ok: false, error: "Choose who can see it." };
   }
+  if (input.appVisibility !== null) {
+    if (await featureActionError("member_app")) {
+      return { ok: false, error: "The app is switched off for your church, so recordings can only go on your website." };
+    }
+  }
+  // Everyone who follows a church is a member, so "members" is saved as "followers".
+  const appVisibility: AppVisibility | null =
+    input.appVisibility === "members" ? "followers" : input.appVisibility;
 
   const result = await publishRecording({
     churchId: auth.churchId,
     recordingId: input.recordingId,
     actorUserId: auth.userId,
     via: "staff",
-    appVisibility: input.appVisibility,
+    appVisibility,
     website: Boolean(input.website),
     notifyMembers: Boolean(input.notifyMembers),
   });
@@ -189,7 +197,7 @@ export async function saveRecordingSettingsAction(settings: RecordingSettings): 
     userId: auth.userId,
     settings: {
       autoPublish: Boolean(settings.autoPublish),
-      defaultVisibility: settings.defaultVisibility,
+      defaultVisibility: settings.defaultVisibility === "members" ? "followers" : settings.defaultVisibility,
       defaultSeriesId: settings.defaultSeriesId,
       publishToWebsite: Boolean(settings.publishToWebsite),
       notifyOnLive: Boolean(settings.notifyOnLive),

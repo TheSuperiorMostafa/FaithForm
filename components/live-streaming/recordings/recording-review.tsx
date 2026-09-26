@@ -57,12 +57,22 @@ type Props = {
   thumbnails: ThumbnailChoice[];
   settings: RecordingSettings;
   isAdmin: boolean;
+  /** The church's FaithForm app is switched on; off hides every app option. */
+  appEnabled: boolean;
   timeZone: string;
   stats: { live: number; replay: number } | null;
   artworkSlot?: React.ReactNode;
 };
 
 const NEW_SERIES = "__new__";
+
+type Audience = RecordingSettings["defaultVisibility"];
+
+// Everyone who follows a church is a member now, so an older "members only"
+// recording reads as "people who follow your church".
+function currentAudience(value: Audience): Audience {
+  return value === "members" ? "followers" : value;
+}
 
 /**
  * Watch it, check the title, publish it.
@@ -82,6 +92,7 @@ export function RecordingReview({
   thumbnails,
   settings,
   isAdmin,
+  appEnabled,
   timeZone,
   stats,
   artworkSlot,
@@ -102,10 +113,15 @@ export function RecordingReview({
   const [chapters, setChapters] = useState(recording.chapters.join(", "));
   const [topics, setTopics] = useState(recording.topics.join(", "));
 
-  const [toApp, setToApp] = useState(recording.app.published || !recording.website.published);
-  const [toWebsite, setToWebsite] = useState(recording.website.published || settings.publishToWebsite);
-  const [audience, setAudience] = useState<RecordingSettings["defaultVisibility"]>(
-    recording.app.visibility ?? settings.defaultVisibility,
+  // With the app switched off, a new publish goes to the website only.
+  const [toApp, setToApp] = useState(
+    recording.app.published || (appEnabled && !recording.website.published),
+  );
+  const [toWebsite, setToWebsite] = useState(
+    recording.website.published || settings.publishToWebsite || !appEnabled,
+  );
+  const [audience, setAudience] = useState<Audience>(
+    currentAudience(recording.app.visibility ?? settings.defaultVisibility),
   );
   const [notify, setNotify] = useState(settings.notifyOnPublish);
 
@@ -137,7 +153,9 @@ export function RecordingReview({
   const publishingChange =
     (toApp && !recording.app.published) ||
     (toWebsite && !recording.website.published) ||
-    (recording.app.published && audience !== recording.app.visibility);
+    (recording.app.published &&
+      recording.app.visibility !== null &&
+      audience !== currentAudience(recording.app.visibility));
 
   const splitTags = (value: string) => value.split(",").map((tag) => tag.trim()).filter(Boolean);
 
@@ -180,15 +198,19 @@ export function RecordingReview({
   const publish = () =>
     startTransition(async () => {
       if (!toApp && !toWebsite) {
-        toast.error("Choose where to publish it: the app, your website, or both.");
+        toast.error(
+          appEnabled
+            ? "Choose where to publish it: the app, your website, or both."
+            : "Tick “Show it on your church website” to publish it.",
+        );
         return;
       }
       if (!(await saveDetails())) return;
       const result = await publishRecordingAction({
         recordingId: recording.id,
-        appVisibility: toApp ? audience : null,
+        appVisibility: toApp && appEnabled ? audience : null,
         website: toWebsite,
-        notifyMembers: toApp && notify,
+        notifyMembers: toApp && appEnabled && notify,
       });
       if (!result.ok) {
         toast.error(result.error);
@@ -204,7 +226,7 @@ export function RecordingReview({
         toast.success(`Publishing for “${name}” updated.`);
       } else {
         setJustPublished(where);
-        toast.success(`“${name}” is published. ${publishedWhereSentence(where)}`);
+        toast.success(`“${name}” is published. ${publishedWhereSentence(where, appEnabled)}`);
       }
       router.refresh();
     });
@@ -212,7 +234,7 @@ export function RecordingReview({
   const unpublish = async () => {
     const ok = await confirmAction({
       title: "Unpublish this recording?",
-      description: `It will be removed from the ${MEMBER_APP} and your website. The recording itself stays saved, and you can publish it again any time.`,
+      description: `It will be removed from ${recording.app.published ? `the ${MEMBER_APP} and ` : ""}your website. The recording itself stays saved, and you can publish it again any time.`,
       confirmLabel: "Unpublish recording",
       cancelLabel: "Keep it published",
       destructive: true,
@@ -233,7 +255,7 @@ export function RecordingReview({
   const remove = async () => {
     const ok = await confirmAction({
       title: "Delete this recording permanently?",
-      description: `The video is removed from FaithForm, the ${MEMBER_APP} and your website, and can't be recovered. If you only want to hide it, unpublish it instead.`,
+      description: `The video is removed from FaithForm${appEnabled ? `, the ${MEMBER_APP}` : ""} and your website, and can't be recovered. If you only want to hide it, unpublish it instead.`,
       confirmLabel: "Delete recording",
       cancelLabel: "Keep it",
       destructive: true,
@@ -295,7 +317,7 @@ export function RecordingReview({
     ? publishingChange
       ? "Update publishing"
       : "Save changes"
-    : toApp
+    : toApp && appEnabled
       ? "Publish to the app"
       : "Publish to the website";
   const showPrimary = !published || publishingChange || dirty;
@@ -361,7 +383,7 @@ export function RecordingReview({
       {justPublished ? (
         <SuccessState
           title="Published"
-          description={publishedWhereSentence(justPublished)}
+          description={publishedWhereSentence(justPublished, appEnabled)}
           actions={
             <>
               {recording.watchUrl ? (
@@ -482,7 +504,7 @@ export function RecordingReview({
                   </button>
                 ))}
               </div>
-              {recording.hasCustomArtwork ? (
+              {recording.hasCustomArtwork && appEnabled ? (
                 <p className="text-sm text-muted-foreground">Your own artwork is used in the app instead.</p>
               ) : null}
             </section>
@@ -504,22 +526,30 @@ export function RecordingReview({
                 </h3>
                 <p className="mt-1 text-[15px] leading-relaxed text-muted-foreground">
                   {published
-                    ? publishedWhereSentence({ app: recording.app.published, website: recording.website.published })
-                    : `Members will find it in the ${MEMBER_APP} under Services.`}
+                    ? publishedWhereSentence(
+                        { app: recording.app.published, website: recording.website.published },
+                        appEnabled,
+                      )
+                    : appEnabled
+                      ? `Members will find it in the ${MEMBER_APP} under Services.`
+                      : "Anyone can watch it on your church website."}
                 </p>
               </div>
             </div>
 
             {published ? (
               <ul className="flex flex-col gap-2 text-[15px]">
-                <li className="inline-flex items-center gap-2">
-                  {recording.app.published ? (
-                    <CheckCircle2 className="size-5 text-emerald-600 dark:text-emerald-300" aria-hidden />
-                  ) : (
-                    <Smartphone className="size-5 text-muted-foreground" aria-hidden />
-                  )}
-                  {recording.app.published ? `In the ${MEMBER_APP}` : `Not in the ${MEMBER_APP}`}
-                </li>
+                {/* With the app off, only say so when it genuinely is still there. */}
+                {appEnabled || recording.app.published ? (
+                  <li className="inline-flex items-center gap-2">
+                    {recording.app.published ? (
+                      <CheckCircle2 className="size-5 text-emerald-600 dark:text-emerald-300" aria-hidden />
+                    ) : (
+                      <Smartphone className="size-5 text-muted-foreground" aria-hidden />
+                    )}
+                    {recording.app.published ? `In the ${MEMBER_APP}` : `Not in the ${MEMBER_APP}`}
+                  </li>
+                ) : null}
                 <li className="inline-flex items-center gap-2">
                   {recording.website.published ? (
                     <CheckCircle2 className="size-5 text-emerald-600 dark:text-emerald-300" aria-hidden />
@@ -566,45 +596,55 @@ export function RecordingReview({
                 hint={
                   recording.website.published
                     ? "It's on your website. To take it down, use Unpublish below."
-                    : "Anyone can watch it on your church's watch page, without the app."
+                    : appEnabled
+                      ? "Anyone can watch it on your church's watch page, without the app."
+                      : "Anyone can watch it on your church's watch page."
                 }
               />
-              <Check
-                checked={toApp}
-                onChange={setToApp}
-                disabled={recording.app.published}
-                icon={<Smartphone className="size-5" aria-hidden />}
-                label={`Show it in the ${MEMBER_APP}`}
-                hint={
-                  recording.app.published
-                    ? "It's in the app. To take it out, use Unpublish below."
-                    : "Untick to put it on your website only."
-                }
-              />
+              {appEnabled ? (
+                <Check
+                  checked={toApp}
+                  onChange={setToApp}
+                  disabled={recording.app.published}
+                  icon={<Smartphone className="size-5" aria-hidden />}
+                  label={`Show it in the ${MEMBER_APP}`}
+                  hint={
+                    recording.app.published
+                      ? "It's in the app. To take it out, use Unpublish below."
+                      : "Untick to put it on your website only."
+                  }
+                />
+              ) : null}
             </fieldset>
 
             {artworkSlot}
 
-            <AdvancedSection title="More options" description="Who can watch, speaker and scripture">
+            <AdvancedSection
+              title="More options"
+              description={appEnabled ? "Who can watch, speaker and scripture" : "Speaker and scripture"}
+            >
               <fieldset disabled={!canEdit || pending} className="flex min-w-0 flex-col gap-5">
                 <legend className="sr-only">More options</legend>
-                <Field id="rec-audience" label="Who can watch it in the app">
-                  <Select
-                    id="rec-audience"
-                    value={audience}
-                    onChange={(event) => setAudience(event.target.value as RecordingSettings["defaultVisibility"])}
-                  >
-                    <option value="public">Everyone</option>
-                    <option value="followers">People who follow your church</option>
-                    <option value="members">Members only</option>
-                  </Select>
-                </Field>
-                <Check
-                  checked={notify}
-                  onChange={setNotify}
-                  label="Let members know it's available"
-                  hint="Sends one notification in the app when it's first published."
-                />
+                {appEnabled ? (
+                  <>
+                    <Field id="rec-audience" label="Who can watch it in the app">
+                      <Select
+                        id="rec-audience"
+                        value={audience}
+                        onChange={(event) => setAudience(event.target.value as Audience)}
+                      >
+                        <option value="public">Everyone</option>
+                        <option value="followers">People who follow your church</option>
+                      </Select>
+                    </Field>
+                    <Check
+                      checked={notify}
+                      onChange={setNotify}
+                      label="Let members know it's available"
+                      hint="Sends one notification in the app when it's first published."
+                    />
+                  </>
+                ) : null}
                 <Field id="rec-speaker" label="Speaker" optional>
                   <Input
                     id="rec-speaker"
@@ -718,7 +758,8 @@ export function RecordingReview({
               Delete recording
             </h3>
             <p className="text-[15px] text-muted-foreground">
-              Removes the video from FaithForm, the app and your website for good. To only hide it, unpublish it.
+              Removes the video from FaithForm{appEnabled ? ", the app" : ""} and your website for good. To only hide
+              it, unpublish it.
             </p>
           </div>
           <Button variant="destructive" onClick={() => void remove()} disabled={pending} className="shrink-0 gap-2">

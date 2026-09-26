@@ -91,9 +91,14 @@ export function planGettingStarted(
   }
 
   const known = checks.filter((check): check is [GettingStartedKey, boolean] => check[1] !== null);
+  // Without the church's app, service times are for the website alone.
+  const withoutApp: Partial<Record<GettingStartedKey, GettingStartedItem>> =
+    allowedFeatures.includes("member_app")
+      ? {}
+      : { serviceTimes: { ...ITEMS.serviceTimes, description: "So your website shows when to come." } };
   const todo = known
     .filter(([, done]) => !done)
-    .map(([key]) => ITEMS[key])
+    .map(([key]) => withoutApp[key] ?? ITEMS[key])
     .slice(0, GETTING_STARTED_MAX_ITEMS);
 
   return {

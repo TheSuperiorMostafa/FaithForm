@@ -35,7 +35,8 @@ import { cn } from "@/lib/utils";
 const AUDIENCE: Record<RecordingSettings["defaultVisibility"], string> = {
   public: "everyone",
   followers: "people who follow your church",
-  members: "members",
+  // Everyone who follows a church is a member; an older default reads the same.
+  members: "people who follow your church",
 };
 
 /**
@@ -45,19 +46,22 @@ const AUDIENCE: Record<RecordingSettings["defaultVisibility"], string> = {
  * Published — with one obvious action at each step. The church may leave at
  * any point; the recording keeps being prepared without this page, and the
  * "ready to publish" card on the Go live tab keeps pointing at it until it is
- * handled.
+ * handled. With the church's app switched off, publishing goes to the
+ * website only and the app is never mentioned.
  */
 export function PostLivePanel({
   recording,
   previewUrl,
   settings,
   isAdmin,
+  appEnabled,
   onChanged,
 }: {
   recording: StaffRecording;
   previewUrl: string | null;
   settings: RecordingSettings;
   isAdmin: boolean;
+  appEnabled: boolean;
   onChanged: () => void;
 }) {
   const [pending, startTransition] = useTransition();
@@ -68,15 +72,24 @@ export function PostLivePanel({
     startTransition(async () => {
       const result = await publishRecordingAction({
         recordingId: recording.id,
-        appVisibility: settings.defaultVisibility,
-        website: settings.publishToWebsite,
-        notifyMembers: settings.notifyOnPublish,
+        appVisibility: appEnabled
+          ? settings.defaultVisibility === "members"
+            ? "followers"
+            : settings.defaultVisibility
+          : null,
+        website: settings.publishToWebsite || !appEnabled,
+        notifyMembers: appEnabled && settings.notifyOnPublish,
       });
       if (!result.ok) {
         toast.error(result.error);
         return;
       }
-      toast.success(`“${recording.title}” is published. Members see it in the ${MEMBER_APP} under Services.`);
+      toast.success(
+        `“${recording.title}” is published. ${publishedWhereSentence(
+          { app: appEnabled, website: settings.publishToWebsite || !appEnabled },
+          appEnabled,
+        )}`,
+      );
       onChanged();
     });
 
@@ -169,7 +182,10 @@ export function PostLivePanel({
       {published ? (
         <div className="flex flex-col gap-4">
           <p className="text-base">
-            {publishedWhereSentence({ app: recording.app.published, website: recording.website.published })}
+            {publishedWhereSentence(
+              { app: recording.app.published, website: recording.website.published },
+              appEnabled,
+            )}
           </p>
           <div className="flex flex-wrap gap-2">
             {recording.watchUrl ? (
@@ -193,10 +209,12 @@ export function PostLivePanel({
         <div className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-[15px] text-muted-foreground">
             <span className="font-medium text-foreground">Publishing puts it in</span>
-            <span className="inline-flex items-center gap-1.5">
-              <Smartphone className="size-4" aria-hidden /> the {MEMBER_APP} ({AUDIENCE[settings.defaultVisibility]})
-            </span>
-            {settings.publishToWebsite ? (
+            {appEnabled ? (
+              <span className="inline-flex items-center gap-1.5">
+                <Smartphone className="size-4" aria-hidden /> the {MEMBER_APP} ({AUDIENCE[settings.defaultVisibility]})
+              </span>
+            ) : null}
+            {settings.publishToWebsite || !appEnabled ? (
               <span className="inline-flex items-center gap-1.5">
                 <Globe className="size-4" aria-hidden /> your church website
               </span>
@@ -215,7 +233,7 @@ export function PostLivePanel({
                 ) : (
                   <Send className="size-4" aria-hidden />
                 )}
-                {pending ? "Publishing…" : "Publish to the app"}
+                {pending ? "Publishing…" : appEnabled ? "Publish to the app" : "Publish to your website"}
               </Button>
               <Link href={reviewHref} className={cn(buttonVariants({ variant: "outline", size: "lg" }), "gap-2")}>
                 <PencilLine className="size-4" aria-hidden />

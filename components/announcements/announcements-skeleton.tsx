@@ -34,7 +34,7 @@ export function AnnouncementsHeaderSkeleton() {
   return (
     <PageHeader
       title="Announcements"
-      description="Tell your church what's happening, in the app, by email and on Facebook."
+      description="Tell your church what's happening, and share it where they'll see it."
       icon={Megaphone}
       action={
         <Button size="lg" disabled>
@@ -205,7 +205,7 @@ export function CalendarSectionSkeleton() {
                 <div
                   key={cell.date.toISOString()}
                   className={cn(
-                    "min-h-[7rem] border-b border-r border-border p-1.5 text-left sm:min-h-[9rem] lg:min-h-[10.5rem] xl:min-h-[11rem]",
+                    "min-h-[5.5rem] border-b border-r border-border p-1.5 text-left sm:min-h-[7rem] lg:min-h-[8rem]",
                     !cell.isCurrentMonth &&
                       "bg-[color:color-mix(in_srgb,var(--muted)_45%,transparent)]",
                     cell.isToday &&
@@ -255,6 +255,7 @@ export function AnnouncementsPageSkeleton() {
   return (
     <SkeletonContainer className="flex w-full flex-col gap-8" label="announcements">
       <AnnouncementsHeaderSkeleton />
+      <CalendarSectionSkeleton />
       <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_380px]">
         <div className="flex min-w-0 flex-col gap-8">
           <CalendarSuggestionsSkeleton />
@@ -264,7 +265,6 @@ export function AnnouncementsPageSkeleton() {
           <WeeklyEmailCardSkeleton />
         </div>
       </div>
-      <CalendarSectionSkeleton />
     </SkeletonContainer>
   );
 }

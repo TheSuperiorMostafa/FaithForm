@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 
 import { BroadcastControlCenter } from "@/components/live-streaming/broadcast/control-center";
 import { getChurchAuth } from "@/lib/auth/church";
+import { getFeatureAccess } from "@/lib/features/access";
 import { getBroadcastOverview } from "@/lib/stream/broadcast-overview";
 import { listStreamEvents } from "@/lib/stream/events";
 import { getLiveBroadcastStatus } from "@/lib/stream/go-live";
@@ -27,7 +28,7 @@ export default async function LiveStreamingPage() {
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");
 
-  const [broadcastStatus, overview, events, churchRow, settings, recordings] = await Promise.all([
+  const [broadcastStatus, overview, events, churchRow, settings, recordings, access] = await Promise.all([
     getLiveBroadcastStatus(auth.churchId, supabase),
     getBroadcastOverview(auth.churchId, { includePreview: auth.isAdmin }),
     listStreamEvents(auth.churchId, { limit: 10, supabase }),
@@ -39,6 +40,7 @@ export default async function LiveStreamingPage() {
     getRecordingSettings(auth.churchId),
     // A reminder, not the page's job: if it can't load, Go live still works.
     listStaffRecordings(auth.churchId, { limit: 30 }).catch(() => []),
+    getFeatureAccess(),
   ]);
 
   const now = Date.now();
@@ -63,6 +65,7 @@ export default async function LiveStreamingPage() {
         overview,
       }}
       isAdmin={auth.isAdmin}
+      appEnabled={Boolean(access?.flags.member_app)}
       nextService={next ? { id: next.id, title: next.title, startsAt: next.startsAt } : null}
       timeZone={auth.churchTimezone ?? "America/New_York"}
       settings={settings}

@@ -8,6 +8,7 @@ import { WatchLinksCard } from "@/components/live-streaming/watch-links-card";
 import { AdvancedSection } from "@/components/ui/advanced-section";
 import { SectionHeader } from "@/components/ui/page-header";
 import { getChurchAuth } from "@/lib/auth/church";
+import { getFeatureAccess } from "@/lib/features/access";
 import { listEncoderDevices } from "@/lib/stream/encoder";
 import { getLiveBroadcastStatus } from "@/lib/stream/go-live";
 import { listMediaSeries } from "@/lib/stream/media-library";
@@ -29,11 +30,12 @@ export default async function StreamSetupPage() {
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");
 
-  const [status, devices, settings, series] = await Promise.all([
+  const [status, devices, settings, series, access] = await Promise.all([
     getLiveBroadcastStatus(auth.churchId, supabase),
     auth.isAdmin ? listEncoderDevices(auth.churchId, supabase) : Promise.resolve([]),
     getRecordingSettings(auth.churchId),
     listMediaSeries(auth.churchId),
+    getFeatureAccess(),
   ]);
 
   const push = (platform: "youtube" | "facebook") => ({
@@ -56,6 +58,7 @@ export default async function StreamSetupPage() {
       <StreamingSetupGuide
         ingestServerUrl={status.settings.ingestServerUrl}
         isAdmin={auth.isAdmin}
+        appEnabled={Boolean(access?.flags.member_app)}
         settings={settings}
         series={series.map((item) => ({ id: item.id, name: item.name }))}
         youtube={push("youtube")}

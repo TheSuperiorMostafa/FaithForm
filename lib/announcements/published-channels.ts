@@ -56,10 +56,10 @@ export function describeAppAudience(visibility: MobileVisibility): string {
   switch (visibility) {
     case "public":
       return "Everyone in the app";
+    // Members and followers are one group now: whoever follows the church.
     case "followers":
-      return "Anyone who has added your church";
     case "members":
-      return "Members only";
+      return "Everyone who follows your church";
     case "none":
       return "Not shared in the app";
   }

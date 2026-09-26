@@ -36,29 +36,12 @@ import {
 } from "@/lib/sermons/v1/share-rules";
 import type { Sermon } from "@/types/sermon";
 
-type Audience = "followers" | "members";
-
-const AUDIENCES: Array<{ value: Audience; hint: string }> = [
-  {
-    value: "followers",
-    hint: "Everyone who has added your church in the app, members included.",
-  },
-  {
-    value: "members",
-    hint: "Only people who have joined your church in the app.",
-  },
-];
+// Everyone who has added a church is one of its members, so a sermon always
+// goes to the people who follow the church. Older "members only" sermons are
+// republished the same way.
+const AUDIENCE = "followers";
 
 const PUBLISH_FAILED = "We couldn't publish this to the app just now. Please try again.";
-
-function toAudience(
-  visibility: string | null | undefined,
-  fallback: Audience,
-): Audience {
-  if (visibility === "members") return "members";
-  if (visibility === "public" || visibility === "followers") return "followers";
-  return fallback;
-}
 
 /** What is in the app for this sermon right now: notes, slides, or neither. */
 export function appShareState(
@@ -103,12 +86,6 @@ export function PublishToAppButton({
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const [audience, setAudience] = useState<Audience>(
-    toAudience(
-      notesShared ? sermon.mobile_visibility : presentation?.mobile_visibility,
-      "members",
-    ),
-  );
   const [summary, setSummary] = useState(sermon.mobile_summary ?? "");
   // "Preached on" is the sermon date unless someone changes it under More
   // options: the date question was already answered when the sermon was made.
@@ -126,7 +103,7 @@ export function PublishToAppButton({
       if (canPublishNotes) {
         const result = await shareSermonInAppAction({
           sermonId: sermon.id,
-          visibility: audience,
+          visibility: AUDIENCE,
           summary: summary.trim() || null,
           preachedOn: preachedOn || null,
         });
@@ -137,7 +114,7 @@ export function PublishToAppButton({
       if (canPublishSlides) {
         const result = await sharePresentationInAppAction({
           sermonId: sermon.id,
-          visibility: audience,
+          visibility: AUDIENCE,
         });
         if (result.error) errors.push(result.error);
         else slidesOk = true;
@@ -198,37 +175,13 @@ export function PublishToAppButton({
           <DialogHeader>
             <DialogTitle>{inApp ? "Update in the app" : "Publish to the app"}</DialogTitle>
             <DialogDescription className="text-[15px]">
-              People see the title, the scripture, the lesson and its discussion
-              questions, and the slides. Your own notes are never shared.
+              Everyone who has added your church sees the title, the scripture,
+              the lesson and its discussion questions, and the slides. Your own
+              notes are never shared.
             </DialogDescription>
           </DialogHeader>
 
           <div className="flex flex-col gap-5 overflow-y-auto px-6 py-5">
-            <fieldset className="flex flex-col gap-2">
-              <legend className="mb-2 text-[15px] font-semibold">Who can see it</legend>
-              {AUDIENCES.map((option) => (
-                <label
-                  key={option.value}
-                  className="flex min-h-12 cursor-pointer items-start gap-3 rounded-xl border border-border px-4 py-3 has-[:checked]:border-accent has-[:checked]:bg-accent/10"
-                >
-                  <input
-                    type="radio"
-                    name={`app-audience-${sermon.id}`}
-                    value={option.value}
-                    checked={audience === option.value}
-                    onChange={() => setAudience(option.value)}
-                    className="mt-1 size-5 shrink-0"
-                  />
-                  <span>
-                    <span className="block text-[15px] font-semibold">
-                      {sermonAudienceLabel(option.value)}
-                    </span>
-                    <span className="block text-sm text-muted-foreground">{option.hint}</span>
-                  </span>
-                </label>
-              ))}
-            </fieldset>
-
             <div className="flex flex-col gap-2">
               <Label htmlFor={`summary-${sermon.id}`}>
                 One line about the sermon (optional)

@@ -72,13 +72,21 @@ export function recordingNextAction(
   }
 }
 
-/** One sentence saying where members find a published recording. */
-export function publishedWhereSentence(where: { app: boolean; website: boolean }): string {
+/**
+ * One sentence saying where members find a published recording. With the
+ * church's app switched off, a website-only recording never mentions the app.
+ */
+export function publishedWhereSentence(
+  where: { app: boolean; website: boolean },
+  appEnabled = true,
+): string {
   if (where.app && where.website) {
     return `Members see it in the ${MEMBER_APP} under Services, and anyone can watch it on your church website.`;
   }
   if (where.app) return `Members see it in the ${MEMBER_APP} under Services.`;
-  if (where.website) return `It's on your church website. It isn't in the ${MEMBER_APP}.`;
+  if (where.website) {
+    return appEnabled ? `It's on your church website. It isn't in the ${MEMBER_APP}.` : "It's on your church website.";
+  }
   return "It isn't showing anywhere yet.";
 }
 

@@ -22,19 +22,28 @@ import { cn } from "@/lib/utils";
  * itself or waits for someone to review it (the church's `autoPublish`
  * setting; off by default). It saves the moment it is chosen. Who sees it,
  * the website, a default series and notifications sit under "More publishing
- * options".
+ * options". With the church's app switched off, recordings publish to the
+ * website and every app option is hidden.
  */
 export function RecordingSettingsCard({
   initial,
   series,
   isAdmin,
+  appEnabled,
 }: {
   initial: RecordingSettings;
   series: Array<{ id: string; name: string }>;
   isAdmin: boolean;
+  appEnabled: boolean;
 }) {
-  const [saved, setSaved] = useState(initial);
-  const [draft, setDraft] = useState(initial);
+  // Everyone who follows a church is a member, so an older "members only"
+  // default reads as "people who follow your church".
+  const current = {
+    ...initial,
+    defaultVisibility: initial.defaultVisibility === "members" ? "followers" : initial.defaultVisibility,
+  } satisfies RecordingSettings;
+  const [saved, setSaved] = useState(current);
+  const [draft, setDraft] = useState(current);
   const [pending, startTransition] = useTransition();
   const dirty =
     JSON.stringify({ ...draft, autoPublish: saved.autoPublish }) !== JSON.stringify(saved);
@@ -56,7 +65,9 @@ export function RecordingSettingsCard({
       setSaved(next);
       toast.success(
         autoPublish
-          ? `Saved. New recordings will publish to the ${MEMBER_APP} by themselves.`
+          ? appEnabled
+            ? `Saved. New recordings will publish to the ${MEMBER_APP} by themselves.`
+            : "Saved. New recordings will publish to your church website by themselves."
           : "Saved. New recordings will wait for you to review and publish them.",
       );
     });
@@ -82,8 +93,12 @@ export function RecordingSettingsCard({
           disabled={!isAdmin || pending}
           onSelect={() => chooseAutoPublish(true)}
           icon={<Send className="size-5" aria-hidden />}
-          title="Publish to the app automatically"
-          description={`When the recording is ready, members see it in the ${MEMBER_APP} under Services. No clicks needed.`}
+          title={appEnabled ? "Publish to the app automatically" : "Publish automatically"}
+          description={
+            appEnabled
+              ? `When the recording is ready, members see it in the ${MEMBER_APP} under Services. No clicks needed.`
+              : "When the recording is ready, it goes on your church website. No clicks needed."
+          }
         />
         <Choice
           selected={!draft.autoPublish}
@@ -98,37 +113,43 @@ export function RecordingSettingsCard({
         <p className="text-[15px] text-muted-foreground">A church admin can change this.</p>
       ) : null}
 
-      <AdvancedSection title="More publishing options" description="Who can watch, your website, series and notifications">
+      <AdvancedSection
+        title="More publishing options"
+        description={appEnabled ? "Who can watch, your website, series and notifications" : "Series"}
+      >
         <fieldset disabled={!isAdmin || pending} className="flex flex-col divide-y divide-border">
           <legend className="sr-only">More publishing options</legend>
-          <div className="flex flex-col gap-2 pb-4">
-            <Label htmlFor="default-visibility" className="text-[15px]">
-              Who can watch recordings in the app
-            </Label>
-            <Select
-              id="default-visibility"
-              value={draft.defaultVisibility}
-              onChange={(event) =>
-                update("defaultVisibility", event.target.value as RecordingSettings["defaultVisibility"])
-              }
-            >
-              <option value="public">Everyone</option>
-              <option value="followers">People who follow your church</option>
-              <option value="members">Members only</option>
-            </Select>
-          </div>
-          <SettingRow
-            label="Also publish to your church website"
-            hint="Adds each recording to Past services on your watch page."
-            control={
-              <Switch
-                checked={draft.publishToWebsite}
-                onCheckedChange={(value) => update("publishToWebsite", value)}
-                aria-label="Also publish to your church website"
+          {appEnabled ? (
+            <>
+              <div className="flex flex-col gap-2 pb-4">
+                <Label htmlFor="default-visibility" className="text-[15px]">
+                  Who can watch recordings in the app
+                </Label>
+                <Select
+                  id="default-visibility"
+                  value={draft.defaultVisibility}
+                  onChange={(event) =>
+                    update("defaultVisibility", event.target.value as RecordingSettings["defaultVisibility"])
+                  }
+                >
+                  <option value="public">Everyone</option>
+                  <option value="followers">People who follow your church</option>
+                </Select>
+              </div>
+              <SettingRow
+                label="Also publish to your church website"
+                hint="Adds each recording to Past services on your watch page."
+                control={
+                  <Switch
+                    checked={draft.publishToWebsite}
+                    onCheckedChange={(value) => update("publishToWebsite", value)}
+                    aria-label="Also publish to your church website"
+                  />
+                }
               />
-            }
-          />
-          <div className="flex flex-col gap-2 py-4">
+            </>
+          ) : null}
+          <div className={cn("flex flex-col gap-2", appEnabled ? "py-4" : "pb-4")}>
             <Label htmlFor="default-series" className="text-[15px]">
               Put new recordings in a series
             </Label>
@@ -145,28 +166,32 @@ export function RecordingSettingsCard({
               ))}
             </Select>
           </div>
-          <SettingRow
-            label="Tell members when you go live"
-            hint={`One notification in the ${MEMBER_APP} when your video starts.`}
-            control={
-              <Switch
-                checked={draft.notifyOnLive}
-                onCheckedChange={(value) => update("notifyOnLive", value)}
-                aria-label="Tell members when you go live"
+          {appEnabled ? (
+            <>
+              <SettingRow
+                label="Tell members when you go live"
+                hint={`One notification in the ${MEMBER_APP} when your video starts.`}
+                control={
+                  <Switch
+                    checked={draft.notifyOnLive}
+                    onCheckedChange={(value) => update("notifyOnLive", value)}
+                    aria-label="Tell members when you go live"
+                  />
+                }
               />
-            }
-          />
-          <SettingRow
-            label="Tell members when a recording is published"
-            hint="“Sunday Worship is now available to watch.” Sent once per recording."
-            control={
-              <Switch
-                checked={draft.notifyOnPublish}
-                onCheckedChange={(value) => update("notifyOnPublish", value)}
-                aria-label="Tell members when a recording is published"
+              <SettingRow
+                label="Tell members when a recording is published"
+                hint="“Sunday Worship is now available to watch.” Sent once per recording."
+                control={
+                  <Switch
+                    checked={draft.notifyOnPublish}
+                    onCheckedChange={(value) => update("notifyOnPublish", value)}
+                    aria-label="Tell members when a recording is published"
+                  />
+                }
               />
-            }
-          />
+            </>
+          ) : null}
         </fieldset>
         {isAdmin ? (
           <Button onClick={saveMore} disabled={!dirty || pending} className="w-fit gap-2">

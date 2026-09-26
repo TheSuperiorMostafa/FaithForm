@@ -6,6 +6,7 @@ import { getServicesBoard } from "@/app/dashboard/attendance/services/actions";
 import { PageHeader } from "@/components/ui/page-header";
 import { ATTENDANCE_COPY } from "@/lib/attendance/page-copy";
 import { getChurchAuth } from "@/lib/auth/church";
+import { getFeatureAccess } from "@/lib/features/access";
 import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +17,7 @@ export default async function ServicesPage() {
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");
 
-  const board = await getServicesBoard();
+  const [board, access] = await Promise.all([getServicesBoard(), getFeatureAccess()]);
 
   return (
     <div className="flex w-full flex-col gap-8">
@@ -34,6 +35,7 @@ export default async function ServicesPage() {
           other={board.other}
           counts={board.counts}
           isAdmin={auth.isAdmin}
+          appEnabled={Boolean(access?.flags.member_app)}
         />
       )}
     </div>

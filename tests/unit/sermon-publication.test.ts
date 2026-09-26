@@ -349,7 +349,9 @@ test("audience labels promise only what the apps do", () => {
   // "public" sermon is not readable by "anyone".
   assert.equal(sermonAudienceLabel("public"), "Anyone who has added your church");
   assert.equal(sermonAudienceLabel("followers"), "Anyone who has added your church");
-  assert.equal(sermonAudienceLabel("members"), "Members only");
+  // Everyone who added a church is a member, so an older "members" sermon
+  // reads the same as the rest.
+  assert.equal(sermonAudienceLabel("members"), "Anyone who has added your church");
   assert.equal(sermonAudienceLabel("none"), null);
   for (const visibility of ["public", "followers", "members"]) {
     assert.doesNotMatch(sermonAudienceLabel(visibility) ?? "", /^Anyone$/);

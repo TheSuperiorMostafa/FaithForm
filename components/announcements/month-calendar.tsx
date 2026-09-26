@@ -69,7 +69,7 @@ type MonthCalendarProps = {
   timeZone: string | null;
 };
 
-const MAX_CHIPS_PER_CELL = 4;
+const MAX_CHIPS_PER_CELL = 2;
 
 /*
  * Tints of the church's accent. Theme colours are plain `var(--accent)` hex
@@ -467,7 +467,7 @@ export function MonthCalendar({
                         : `${cellEvents.length} event${cellEvents.length === 1 ? "" : "s"}`
                     }`}
                     className={cn(
-                      "min-h-[7rem] border-b border-r border-border p-1.5 text-left transition-all sm:min-h-[9rem] lg:min-h-[10.5rem] xl:min-h-[11rem]",
+                      "min-h-[5.5rem] border-b border-r border-border p-1.5 text-left transition-all sm:min-h-[7rem] lg:min-h-[8rem]",
                       !isSelected &&
                         "hover:bg-[color:color-mix(in_srgb,var(--accent)_10%,transparent)]",
                       !cell.isCurrentMonth &&
@@ -653,8 +653,7 @@ export function MonthCalendar({
                         </p>
                       )}
                       <p className="text-[15px] text-muted-foreground">
-                        Not announced yet. Announce it to share it in the app, Monday&apos;s
-                        email or on Facebook.
+                        Not announced yet. Announce it to share it with your church.
                       </p>
                       <Button
                         type="button"

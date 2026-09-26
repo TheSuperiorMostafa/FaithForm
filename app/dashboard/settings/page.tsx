@@ -81,7 +81,8 @@ export default async function SettingsPage({ searchParams }: PageProps) {
   return (
     <div className="flex w-full flex-col gap-8">
       <SettingsPageHeader />
-      <SettingsTabNav tabs={tabs} active={tab} />
+      {/* Without the app, that section only holds the giving page's colors. */}
+      <SettingsTabNav tabs={tabs} active={tab} labels={flags.member_app ? undefined : { app: "Colors" }} />
 
       {!auth.isAdmin && (
         <p className="flex items-start gap-3 rounded-2xl border border-border bg-muted/40 px-5 py-4 text-[15px] leading-relaxed text-foreground/80">

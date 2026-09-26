@@ -35,6 +35,8 @@ export type GivingSetupProps = {
   funds: SetupFund[];
   /** Why funds can't be shown in the app yet, when that is the case. */
   appBlockedReason: string | null;
+  /** The church's FaithForm app is switched on; off never offers it. */
+  appEnabled: boolean;
   givePageUrl: string;
   feeSummary: string;
 };
@@ -250,6 +252,7 @@ function ConnectStep({
 function FundsStep({
   funds,
   appBlockedReason,
+  appEnabled,
   onDone,
 }: GivingSetupProps & { onDone: () => void }) {
   const router = useRouter();
@@ -289,7 +292,7 @@ function FundsStep({
 
   const save = () => {
     const toShow = funds.filter((f) => checked.has(f.fundId) && !f.inApp).map((f) => f.fundId);
-    if (toShow.length === 0 || appBlockedReason) {
+    if (toShow.length === 0 || appBlockedReason || !appEnabled) {
       onDone();
       return;
     }
@@ -312,36 +315,56 @@ function FundsStep({
   return (
     <StepCard
       title="Choose where people can give"
-      description="All your funds are on your giving page. Tick the ones to show in the FaithForm app too. They'll be open to everyone, with $25, $50 and $100 buttons you can change later."
+      description={
+        appEnabled
+          ? "All your funds are on your giving page. Tick the ones to show in the FaithForm app too. They'll be open to everyone, with $25, $50 and $100 buttons you can change later."
+          : "All your funds are on your giving page. Add any others you need."
+      }
     >
-      {appBlockedReason && (
+      {appEnabled && appBlockedReason && (
         <p role="status" className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[15px] text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
           {appBlockedReason}
         </p>
       )}
-      <fieldset className="flex max-w-xl flex-col gap-3">
-        <legend className="sr-only">Funds to show in the app</legend>
-        {funds.map((fund) => (
-          <label
-            key={fund.fundId}
-            className="flex min-h-14 cursor-pointer items-center gap-4 rounded-2xl border border-border bg-card px-4 py-3 text-base font-semibold text-foreground has-[:checked]:border-accent has-[:checked]:bg-accent/10"
-          >
-            <input
-              type="checkbox"
-              className="size-5 shrink-0 accent-primary"
-              checked={checked.has(fund.fundId) || fund.inApp}
-              disabled={fund.inApp || Boolean(appBlockedReason) || pending}
-              onChange={() => toggle(fund.fundId)}
-            />
-            <span className="flex-1">{fund.name}</span>
-            {fund.inApp ? (
-              <span className="text-sm font-medium text-emerald-700 dark:text-emerald-300">Already in the app</span>
-            ) : fund.isDefault ? (
-              <span className="text-sm font-medium text-muted-foreground">Main fund</span>
-            ) : null}
-          </label>
-        ))}
-      </fieldset>
+      {appEnabled ? (
+        <fieldset className="flex max-w-xl flex-col gap-3">
+          <legend className="sr-only">Funds to show in the app</legend>
+          {funds.map((fund) => (
+            <label
+              key={fund.fundId}
+              className="flex min-h-14 cursor-pointer items-center gap-4 rounded-2xl border border-border bg-card px-4 py-3 text-base font-semibold text-foreground has-[:checked]:border-accent has-[:checked]:bg-accent/10"
+            >
+              <input
+                type="checkbox"
+                className="size-5 shrink-0 accent-primary"
+                checked={checked.has(fund.fundId) || fund.inApp}
+                disabled={fund.inApp || Boolean(appBlockedReason) || pending}
+                onChange={() => toggle(fund.fundId)}
+              />
+              <span className="flex-1">{fund.name}</span>
+              {fund.inApp ? (
+                <span className="text-sm font-medium text-emerald-700 dark:text-emerald-300">Already in the app</span>
+              ) : fund.isDefault ? (
+                <span className="text-sm font-medium text-muted-foreground">Main fund</span>
+              ) : null}
+            </label>
+          ))}
+        </fieldset>
+      ) : (
+        <ul className="flex max-w-xl flex-col gap-3">
+          {funds.map((fund) => (
+            <li
+              key={fund.fundId}
+              className="flex min-h-14 items-center gap-4 rounded-2xl border border-border bg-card px-4 py-3 text-base font-semibold text-foreground"
+            >
+              <span className="flex-1">{fund.name}</span>
+              {fund.isDefault ? (
+                <span className="text-sm font-medium text-muted-foreground">Main fund</span>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
 
       <div className="flex max-w-xl flex-col gap-2">
         <Label htmlFor={newFundId}>Add another fund</Label>

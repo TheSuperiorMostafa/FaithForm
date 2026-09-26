@@ -38,6 +38,7 @@ async function adminChurchId(): Promise<string | null> {
 }
 
 const ADMIN_ONLY = "Only church admins can choose which funds show in the app.";
+const MEMBER_APP_OFF = "The app is switched off for your church, so funds can't be shown there.";
 
 export async function loadFaithFormGiving(): Promise<{
   readiness: StripeReadiness;
@@ -65,13 +66,18 @@ export async function saveFundPublication(
 ): Promise<{ ok: boolean; error?: string }> {
   const churchId = await adminChurchId();
   if (!churchId) return { ok: false, error: ADMIN_ONLY };
+  // Taking a fund out of the app is always allowed; putting one in needs the app on.
+  if (input.visibility !== "none" && (await featureActionError("member_app"))) {
+    return { ok: false, error: MEMBER_APP_OFF };
+  }
 
   // Named fields only, church last: a server action accepts any JSON, and a
   // `churchId` in the payload spread over the session's church would publish or
   // hide another church's fund.
   const result = await publishFundToFaithForm({
     fundId: input.fundId,
-    visibility: input.visibility,
+    // Everyone who follows a church is a member, so "members" is saved as "followers".
+    visibility: input.visibility === "members" ? "followers" : input.visibility,
     title: input.title,
     description: input.description,
     suggestedAmounts: input.suggestedAmounts,
@@ -124,6 +130,7 @@ export async function showFundsInApp(
 ): Promise<{ ok: boolean; shown: number; error?: string }> {
   const churchId = await adminChurchId();
   if (!churchId) return { ok: false, shown: 0, error: ADMIN_ONLY };
+  if (await featureActionError("member_app")) return { ok: false, shown: 0, error: MEMBER_APP_OFF };
   const unique = Array.from(new Set(fundIds)).slice(0, 50);
   if (unique.length === 0) return { ok: true, shown: 0 };
 

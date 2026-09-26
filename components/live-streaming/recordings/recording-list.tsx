@@ -27,14 +27,16 @@ export function RecordingList({
   search = "",
   timeZone,
   isAdmin,
+  appEnabled,
 }: {
   recordings: StaffRecording[];
   filter: RecordingFilter;
   search?: string;
   timeZone: string;
   isAdmin: boolean;
+  appEnabled: boolean;
 }) {
-  if (recordings.length === 0) return <RecordingsEmpty filter={filter} search={search} />;
+  if (recordings.length === 0) return <RecordingsEmpty filter={filter} search={search} appEnabled={appEnabled} />;
 
   return (
     <ul
@@ -128,7 +130,15 @@ function RecordingRow({
   );
 }
 
-function RecordingsEmpty({ filter, search }: { filter: RecordingFilter; search: string }) {
+function RecordingsEmpty({
+  filter,
+  search,
+  appEnabled,
+}: {
+  filter: RecordingFilter;
+  search: string;
+  appEnabled: boolean;
+}) {
   if (search) {
     return (
       <EmptyState
@@ -143,7 +153,11 @@ function RecordingsEmpty({ filter, search }: { filter: RecordingFilter; search: 
       <EmptyState
         icon={PlayCircle}
         title="Nothing published yet"
-        description="Publish a recording and members can watch it in the FaithForm app under Services."
+        description={
+          appEnabled
+            ? "Publish a recording and members can watch it in the FaithForm app under Services."
+            : "Publish a recording and anyone can watch it on your church website."
+        }
       />
     );
   }

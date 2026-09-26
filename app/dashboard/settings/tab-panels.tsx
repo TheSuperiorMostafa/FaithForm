@@ -70,7 +70,7 @@ export async function SettingsTabPanel({
   }
 }
 
-async function ChurchInfoPanel({ auth, allowedFeatures }: SettingsPanelContext) {
+async function ChurchInfoPanel({ auth, flags, allowedFeatures }: SettingsPanelContext) {
   const appInfo = await getChurchAppInfo(auth.churchId);
 
   if (!appInfo) {
@@ -91,19 +91,21 @@ async function ChurchInfoPanel({ auth, allowedFeatures }: SettingsPanelContext) 
         initial={pickChurchBasics(info)}
         timezone={appInfo.context.timezone || auth.churchTimezone}
         canEdit={auth.isAdmin}
+        appEnabled={flags.member_app}
         appPageHref={allowedFeatures.includes("member_app") ? "/dashboard/app" : null}
       />
       <ChurchImagesCard
         logoUrl={info.logoUrl || null}
         coverUrl={info.coverImageUrl || null}
         canEdit={auth.isAdmin}
+        appEnabled={flags.member_app}
       />
     </div>
   );
 }
 
 /** The colors the church's app and giving page use. Admins only. */
-async function MemberAppPanel({ auth }: SettingsPanelContext) {
+async function MemberAppPanel({ auth, flags }: SettingsPanelContext) {
   const { data } = await createClient()
     .from("churches")
     .select("giving_primary_color, giving_accent_color")
@@ -115,6 +117,7 @@ async function MemberAppPanel({ auth }: SettingsPanelContext) {
     <BrandColorsCard
       primaryColor={colorRow?.giving_primary_color ?? null}
       accentColor={colorRow?.giving_accent_color ?? null}
+      appEnabled={flags.member_app}
     />
   );
 }

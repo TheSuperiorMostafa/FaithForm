@@ -4,6 +4,7 @@ import { AutoRefresh } from "@/components/live-streaming/recordings/auto-refresh
 import { RecordingReview } from "@/components/live-streaming/recordings/recording-review";
 import { ItemArtworkPanel } from "@/components/media/item-artwork-panel";
 import { getChurchAuth } from "@/lib/auth/church";
+import { getFeatureAccess } from "@/lib/features/access";
 import { getMediaItem, getMediaStats, listMediaSeries } from "@/lib/stream/media-library";
 import {
   getRecordingSettings,
@@ -33,7 +34,7 @@ export default async function RecordingReviewPage({
   const recording = await getStaffRecording(auth.churchId, id);
   if (!recording) notFound();
 
-  const [playback, series, thumbnails, settings, mediaItem, stats] = await Promise.all([
+  const [playback, series, thumbnails, settings, mediaItem, stats, access] = await Promise.all([
     recording.status === "ready" || recording.status === "processing"
       ? getStaffPlayback(auth.churchId, id)
       : Promise.resolve(null),
@@ -42,6 +43,7 @@ export default async function RecordingReviewPage({
     getRecordingSettings(auth.churchId),
     getMediaItem(auth.churchId, id),
     getMediaStats(auth.churchId, id, recording.sessionId),
+    getFeatureAccess(),
   ]);
 
   const stillChanging = isStillChanging(recording.phase.phase);
@@ -56,6 +58,7 @@ export default async function RecordingReviewPage({
         thumbnails={thumbnails}
         settings={settings}
         isAdmin={auth.isAdmin}
+        appEnabled={Boolean(access?.flags.member_app)}
         timeZone={auth.churchTimezone ?? "America/New_York"}
         stats={{ live: stats.liveViews, replay: stats.replayViews }}
         artworkSlot={

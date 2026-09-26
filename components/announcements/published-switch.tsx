@@ -24,6 +24,10 @@ type TakeDownButtonProps = {
   facebookIsLive?: boolean;
   /** It came from the church calendar, whose event is left as it is. */
   calendarLinked?: boolean;
+  /** Said only when it is in the app. Defaults to true. */
+  inApp?: boolean;
+  /** Said only when the church has Monday's email. Defaults to true. */
+  inEmail?: boolean;
   /** Runs once it is taken down, before the page refreshes. */
   onTakenDown?: () => void;
   className?: string;
@@ -39,6 +43,8 @@ export function TakeDownButton({
   title,
   facebookIsLive = false,
   calendarLinked = false,
+  inApp = true,
+  inEmail = true,
   onTakenDown,
   className,
 }: TakeDownButtonProps) {
@@ -63,6 +69,8 @@ export function TakeDownButton({
         title={title}
         facebookIsLive={facebookIsLive}
         calendarLinked={calendarLinked}
+        inApp={inApp}
+        inEmail={inEmail}
         onTakenDown={onTakenDown}
       />
     </>
@@ -76,6 +84,8 @@ type TakeDownDialogProps = {
   title: string;
   facebookIsLive?: boolean;
   calendarLinked?: boolean;
+  inApp?: boolean;
+  inEmail?: boolean;
   onTakenDown?: () => void;
 };
 
@@ -86,6 +96,8 @@ function TakeDownDialog({
   title,
   facebookIsLive = false,
   calendarLinked = false,
+  inApp = true,
+  inEmail = true,
   onTakenDown,
 }: TakeDownDialogProps) {
   const [pending, startTransition] = useTransition();
@@ -151,8 +163,8 @@ function TakeDownDialog({
 
         <div className="flex flex-col gap-3 px-6 py-5 text-[15px]">
           <ul className="flex flex-col gap-2 text-muted-foreground">
-            <Bullet>Removed from the FaithForm app right away.</Bullet>
-            <Bullet>Removed from this week&apos;s email.</Bullet>
+            {inApp && <Bullet>Removed from the FaithForm app right away.</Bullet>}
+            {inEmail && <Bullet>Removed from this week&apos;s email.</Bullet>}
             <Bullet>
               {facebookIsLive
                 ? "The Facebook post is already live and stays up."

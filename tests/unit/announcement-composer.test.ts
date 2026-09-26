@@ -103,14 +103,14 @@ test("the success lines name each destination", () => {
   const lines = describePostOutcome({
     inApp: true,
     notified: true,
-    audience: "members",
+    audience: "followers",
     queuedForWeeklyEmail: true,
     facebookScheduledAt: "2026-09-26T13:00:00Z",
     timeZone: "America/New_York",
   });
   assert.deepEqual(lines, [
     "Posted to the FaithForm app.",
-    "Members were notified.",
+    "Everyone who follows your church was notified.",
     "Added to Monday's email.",
     "Scheduled on Facebook for Sat, Sep 26 at 9:00 AM.",
   ]);
@@ -259,7 +259,7 @@ test("decision text is never smaller than 12px, and Facebook links use the helpe
 test("the page has one primary action and the composer guards unsent work", () => {
   const page = read("app/dashboard/announcements/page.tsx");
   assert.match(page, /title="Announcements"/);
-  assert.match(page, /Tell your church what's happening, in the app, by email and on Facebook\./);
+  assert.match(page, /Tell your church what's happening, and share it where they'll see it\./);
   assert.match(page, /action=\{<NewAnnouncementButton \/>\}/);
   assert.doesNotMatch(page, /max-w-/);
 

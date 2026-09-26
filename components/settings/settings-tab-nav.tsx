@@ -19,9 +19,12 @@ import { cn } from "@/lib/utils";
 export function SettingsTabNav({
   tabs,
   active,
+  labels = {},
 }: {
   tabs: readonly SettingsTabId[];
   active: ResolvedSettingsTab;
+  /** A section named differently for this church, e.g. colors without the app. */
+  labels?: Partial<Record<SettingsTabId, string>>;
 }) {
   const [pending, setPending] = useState<SettingsTabId | null>(null);
 
@@ -55,7 +58,7 @@ export function SettingsTabNav({
                 : "text-foreground/75 hover:bg-muted hover:text-foreground",
             )}
           >
-            {tab.label}
+            {labels[tab.id] ?? tab.label}
           </Link>
         );
       })}

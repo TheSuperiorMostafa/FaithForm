@@ -792,6 +792,10 @@ export async function autoPublishRecording(
   if (recording.mobilePublishedAt || recording.webPublishedAt) return null;
   if (recording.mobileUnpublishedAt || recording.webUnpublishedAt) return null;
 
+  // A church whose app is switched off publishes to its website only.
+  const { isChurchFeatureEnabled } = await import("@/lib/features/access");
+  const appEnabled = await isChurchFeatureEnabled(recording.churchId, "member_app");
+
   if (!recording.seriesId && settings.defaultSeriesId) {
     await db
       .from("stream_recordings")
@@ -807,9 +811,9 @@ export async function autoPublishRecording(
       recordingId: recording.id,
       actorUserId: null,
       via: "automatic",
-      appVisibility: settings.defaultVisibility,
-      website: settings.publishToWebsite,
-      notifyMembers: settings.notifyOnPublish,
+      appVisibility: appEnabled ? settings.defaultVisibility : null,
+      website: settings.publishToWebsite || !appEnabled,
+      notifyMembers: appEnabled && settings.notifyOnPublish,
     },
     db,
   );

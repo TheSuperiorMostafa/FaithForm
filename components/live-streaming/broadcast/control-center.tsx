@@ -72,6 +72,8 @@ export type UpcomingService = {
 type Props = {
   initialStatus: ControlCenterStatus;
   isAdmin: boolean;
+  /** The church's FaithForm app is switched on; off never mentions the app. */
+  appEnabled: boolean;
   nextService: UpcomingService | null;
   timeZone: string;
   settings: RecordingSettings;
@@ -111,6 +113,7 @@ const HELP_HREF = "/dashboard/support";
 export function BroadcastControlCenter({
   initialStatus,
   isAdmin,
+  appEnabled,
   nextService,
   timeZone,
   settings,
@@ -278,6 +281,7 @@ export function BroadcastControlCenter({
             status={status}
             studioStream={studio.outputStream}
             isAdmin={isAdmin}
+            appEnabled={appEnabled}
             pending={pending}
             onEnd={() => setConfirmEnd(true)}
             onRename={renameLive}
@@ -298,6 +302,7 @@ export function BroadcastControlCenter({
               previewUrl={overview.recordingPreviewUrl}
               settings={settings}
               isAdmin={isAdmin}
+              appEnabled={appEnabled}
               onChanged={() => {
                 void refresh();
                 router.refresh();
@@ -322,6 +327,7 @@ export function BroadcastControlCenter({
             studioStream={studio.outputStream}
             platforms={platforms}
             isAdmin={isAdmin}
+            appEnabled={appEnabled}
             pending={pending || studio.publishing}
             onGoLive={goLive}
             canUseComputer={isAdmin && studioSupported}
@@ -461,6 +467,7 @@ function ReadyView({
   studioStream,
   platforms,
   isAdmin,
+  appEnabled,
   pending,
   onGoLive,
   canUseComputer,
@@ -475,6 +482,7 @@ function ReadyView({
   studioStream: MediaStream | null;
   platforms: { youtube: boolean; facebook: boolean };
   isAdmin: boolean;
+  appEnabled: boolean;
   pending: boolean;
   onGoLive: () => void;
   canUseComputer: boolean;
@@ -486,7 +494,7 @@ function ReadyView({
     (name): name is string => Boolean(name),
   );
   const destinations = [
-    overview.readiness.appReady ? `the ${MEMBER_APP}` : "your church's watch page",
+    overview.readiness.appReady && appEnabled ? `the ${MEMBER_APP}` : "your church's watch page",
     ...sharing,
   ];
   const showingIn =
@@ -676,6 +684,7 @@ function LiveView({
   status,
   studioStream,
   isAdmin,
+  appEnabled,
   pending,
   onEnd,
   onRename,
@@ -684,6 +693,7 @@ function LiveView({
   status: ControlCenterStatus;
   studioStream: MediaStream | null;
   isAdmin: boolean;
+  appEnabled: boolean;
   pending: boolean;
   onEnd: () => void;
   onRename: (title: string) => void;
@@ -752,7 +762,7 @@ function LiveView({
             <StreamShareLinksPanel shareLinks={status.shareLinks} compact />
           </Disclosure>
           <Disclosure open={healthOpen} onToggle={() => setHealthOpen((open) => !open)} title="Technical details">
-            <StreamHealth overview={overview} />
+            <StreamHealth overview={overview} appEnabled={appEnabled} />
           </Disclosure>
         </div>
       </div>
@@ -889,7 +899,7 @@ function Disclosure({
   );
 }
 
-function StreamHealth({ overview }: { overview: BroadcastOverview }) {
+function StreamHealth({ overview, appEnabled }: { overview: BroadcastOverview; appEnabled: boolean }) {
   const stats = overview.video.stats;
   const rows: Array<[string, string]> = stats
     ? [
@@ -922,7 +932,7 @@ function StreamHealth({ overview }: { overview: BroadcastOverview }) {
           </li>
         ))}
       </ul>
-      {!overview.readiness.appReady ? (
+      {appEnabled && !overview.readiness.appReady ? (
         <p className="text-sm text-muted-foreground">
           Live video in the {MEMBER_APP} isn&apos;t turned on for your church yet. Contact FaithForm support to turn it
           on.

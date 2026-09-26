@@ -157,12 +157,14 @@ export function ServiceOccurrencesBoard({
   other,
   counts,
   isAdmin,
+  appEnabled,
 }: {
   upcoming: ServiceOccurrence[];
   recent: ServiceOccurrence[];
   other: { upcoming: ServiceOccurrence[]; recent: ServiceOccurrence[] };
   counts: Record<string, ServiceMethodCounts>;
   isAdmin: boolean;
+  appEnabled: boolean;
 }) {
   const [pending, startTransition] = useTransition();
   const [selected, setSelected] = useState<ServiceOccurrence | null>(null);
@@ -564,10 +566,14 @@ export function ServiceOccurrencesBoard({
 
             {!cancelled && (
               <AdvancedSection
-                title="Check-in screen and welcome desk"
-                description="Show a code on a screen for people to scan, or set up a tablet at the door."
+                title={appEnabled ? "Check-in screen and welcome desk" : "Welcome desk"}
+                description={
+                  appEnabled
+                    ? "Show a code on a screen for people to scan, or set up a tablet at the door."
+                    : "Set up a tablet at the door."
+                }
               >
-                <CheckinDisplayPanel occurrenceId={selected.id} isAdmin={isAdmin} />
+                <CheckinDisplayPanel occurrenceId={selected.id} isAdmin={isAdmin} appEnabled={appEnabled} />
               </AdvancedSection>
             )}
 
