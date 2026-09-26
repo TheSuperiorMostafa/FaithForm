@@ -72,6 +72,24 @@ misc guards. 1,722 tests passing at end of session 1.
   forced set-password -> dashboard.
 - Volunteer permissions: 28 gated routes (leaks found + fixed), 13 admin-only
   settings actions refused, settings fingerprint unchanged.
+- Kids check-in end to end in the browser: add room (double-click -> 1 room),
+  find family (allergy note shown), check in (double-click -> 1 session),
+  pickup code shown; Pick up: wrong code -> clear message; right code ->
+  guardian -> release (double-click) -> recorded method=code, released to
+  guardian. Forged releases (code without ticket, override w/o reason, adult not
+  on list) all refused.
+- Groups: create with Church A's category -> refused; with Church A's person ->
+  silently skipped; own person added as leader.
+- Announcements composer: post to app (members only) with HTML in title/body ->
+  saved, rendered as text, one notification queued for Church B members.
+- Mobile API as app user (Maria): bootstrap, consent, profile/follow/join
+  (non-discoverable church answers "not found" by design), follower does not
+  see members-only item, admin approval (volunteer refused), member sees it;
+  12 cross-church id probes via Church B's slug all refused; sign-out revokes
+  that session only.
+- Cron endpoints (10): 401 without/with wrong secret, run with right secret.
+- Webhooks/relay (15): forged/absent signatures refused (Stripe 400, others 401,
+  chat webhook 503 not_configured locally).
 
 ## Bugs found / fixed (this pass)
 
