@@ -88,6 +88,13 @@ misc guards. 1,722 tests passing at end of session 1.
   12 cross-church id probes via Church B's slug all refused; sign-out revokes
   that session only.
 - Cron endpoints (10): 401 without/with wrong secret, run with right secret.
+- Platform admin: /admin pages render; step into Church A (sees A's people),
+  "Leave this church"; leftover acting-as note + another user's session ->
+  note deleted by middleware, other user sees only own church.
+- Onboarding invite flow end to end: admin creates church+invite -> invite
+  link -> 6-step wizard (email field read-only; tampered email ignored,
+  account created for the invitee) -> dashboard; church onboarding_completed,
+  invite accepted, invitee is admin; reused link -> dashboard.
 - Webhooks/relay (15): forged/absent signatures refused (Stripe 400, others 401,
   chat webhook 503 not_configured locally).
 
@@ -118,6 +125,11 @@ misc guards. 1,722 tests passing at end of session 1.
    absent (older invites). Verified end to end in the browser: temp password ->
    /set-password -> own password -> /dashboard; self-clear attempt stays at
    /set-password. Also: raw auth error text no longer returned.
+7. P2 — platform admin "Add Church" double click created two identical churches
+   with an open invite each (reproduced in browser). Fix: createChurch returns
+   the church the same request already made (same name, <10 min, no staff,
+   same open invite). Verified: double click -> 1 church, 1 invite. Test:
+   admin-create-church-repeat.test.ts.
 6. P3 — Volunteer refusals said "Something went wrong" (settings discovery,
    invitations) or threw unhandled (fund publication). Now "Only church admins
    can…". Verified via actions.

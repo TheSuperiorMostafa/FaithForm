@@ -86,6 +86,16 @@ export async function createChurch(
   }
 
   const admin = createAdminClient();
+
+  // The same request again — a double click, a retry after a slow response —
+  // is answered with the church it already made. Two "Grace Chapel" rows with
+  // an open invite each was the result, and whichever link the pastor used,
+  // the other church sat in the list for good.
+  const repeat = await findRecentlyCreatedChurch(admin, name, invitingAdmin ? adminEmail : null);
+  if (repeat) {
+    return { ok: true, churchId: repeat, email: invitingAdmin ? adminEmail : null };
+  }
+
   const slug = generateChurchSlug(name);
 
   const { data: church, error: churchError } = await admin
@@ -142,6 +152,42 @@ export async function createChurch(
   revalidatePath("/admin");
   revalidatePath("/admin/churches");
   return { ok: true, churchId: church.id, email: adminEmail };
+}
+
+/** How long a second identical "Add church" counts as the same request. */
+const REPEAT_WINDOW_MS = 10 * 60 * 1000;
+
+/**
+ * A church with this exact name made in the last few minutes that has no
+ * staff yet and — when an admin is being invited — an open invite to the same
+ * address. Anything else is a real second church and is created.
+ */
+async function findRecentlyCreatedChurch(
+  admin: ReturnType<typeof createAdminClient>,
+  name: string,
+  adminEmail: string | null,
+): Promise<string | null> {
+  const since = new Date(Date.now() - REPEAT_WINDOW_MS).toISOString();
+  const { data: candidates } = await admin
+    .from("churches")
+    .select("id, church_invites(email, accepted_at), church_users(id)")
+    .eq("name", name)
+    .gte("created_at", since)
+    .order("created_at", { ascending: false })
+    .limit(5);
+
+  for (const row of (candidates ?? []) as {
+    id: string;
+    church_invites: { email: string; accepted_at: string | null }[] | null;
+    church_users: { id: string }[] | null;
+  }[]) {
+    if ((row.church_users ?? []).length > 0) continue;
+    const invites = row.church_invites ?? [];
+    if (adminEmail === null ? invites.length === 0 : invites.some((i) => i.email === adminEmail && !i.accepted_at)) {
+      return row.id;
+    }
+  }
+  return null;
 }
 
 export type InviteChurchAdminResult =
