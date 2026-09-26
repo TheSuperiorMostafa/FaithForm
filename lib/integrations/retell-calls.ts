@@ -99,10 +99,15 @@ export async function upsertPhoneCallFromRetell(
 
   const row = buildPhoneCallRow(churchId, call);
 
+  // Looked up inside the church the call was verified for. Found across all
+  // churches, a church holding its own Retell key could sign a payload naming
+  // another church's call id and move that call — transcript and caller's
+  // number — into its own account.
   const { data: existing } = await client
     .from("phone_calls")
     .select("id")
     .eq("retail_ai_call_id", call.call_id)
+    .eq("church_id", churchId)
     .maybeSingle();
 
   const minutesSaved = phoneCallMinutesSaved(row.duration_seconds);
@@ -111,7 +116,7 @@ export async function upsertPhoneCallFromRetell(
   let phoneCallId = existing?.id as string | undefined;
 
   if (phoneCallId) {
-    await client.from("phone_calls").update(row).eq("id", phoneCallId);
+    await client.from("phone_calls").update(row).eq("id", phoneCallId).eq("church_id", churchId);
   } else {
     const { data: inserted, error } = await client
       .from("phone_calls")

@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import { cookies, type UnsafeUnwrappedCookies } from "next/headers";
 import { cache } from "react";
 
+import { IMPERSONATION_COOKIE } from "@/lib/auth/impersonation-note";
 import { createAdminClientOrNull } from "@/lib/supabase/admin";
 
 /**
@@ -29,7 +30,7 @@ import { createAdminClientOrNull } from "@/lib/supabase/admin";
  * expires on its own, and it is cleared on sign-out.
  */
 
-export const IMPERSONATION_COOKIE = "faithform:acting-as";
+export { IMPERSONATION_COOKIE };
 
 /** Short on purpose: the window a withdrawn admin keeps data access. */
 export const IMPERSONATION_TTL_SECONDS = 30 * 60;

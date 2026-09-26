@@ -7,6 +7,7 @@ import { getMonthlyReportData } from "@/lib/reports/monthly-data";
 import { requireChurchContext } from "@/lib/reports/auth";
 import { createClient } from "@/lib/supabase/server";
 import { parseMonthParam } from "@/lib/utils/reports";
+import { featureAccessDenied } from "@/lib/features/guard";
 
 export const runtime = "nodejs";
 
@@ -25,6 +26,11 @@ export async function GET(
   if (!ctx) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  // The same gate as the Library page that links here, so a teammate without
+  // it cannot fetch the report by address.
+  const denied = await featureAccessDenied("library", supabase);
+  if (denied) return denied;
 
   try {
     const data = await getMonthlyReportData(

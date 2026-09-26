@@ -249,5 +249,9 @@ export async function uploadChurchCoverImage(
 }
 
 export async function loadChurchProfileForAdmin(churchId: string) {
+  // A "use server" export is a public endpoint whoever imports it: without
+  // this, anyone signed in could read any church's full profile — staff
+  // emails and phones included — through the service role.
+  await requireSuperAdmin();
   return getChurchProfile(churchId, createAdminClient());
 }

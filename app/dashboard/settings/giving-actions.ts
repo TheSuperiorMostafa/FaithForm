@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { requireChurchAuth } from "@/lib/auth/church";
+import { getChurchAuth, requireChurchAuth } from "@/lib/auth/church";
 import { prepareChurchLogo } from "@/lib/branding/church-logo";
 import { normalizeHexColor } from "@/lib/giving/branding";
 import { extractLogoTheme } from "@/lib/branding/church-theme";
@@ -371,6 +371,10 @@ export async function updateGivingBranding(params: {
 }
 
 export async function getGivingFundsForSettings(churchId: string) {
+  // Public as a "use server" export: only ever answered for the caller's own
+  // church, which is also what stops it inserting default funds elsewhere.
+  const auth = await getChurchAuth();
+  if (!auth || auth.churchId !== churchId) return [];
   await ensureDefaultFunds(churchId);
   const admin = createAdminClient();
   const { data } = await admin

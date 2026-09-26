@@ -1,5 +1,9 @@
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import {
+  IMPERSONATION_COOKIE,
+  impersonationNoteOwner,
+} from "@/lib/auth/impersonation-note";
 import { routeGate } from "@/lib/auth/route-access";
 import { isBootstrapSuperAdminEmail } from "@/lib/auth/superadmin-emails";
 import { mustChangePassword } from "@/lib/auth/temp-password";
@@ -180,6 +184,23 @@ export async function updateSession(request: NextRequest) {
     | Record<string, unknown>
     | null
     | undefined;
+
+  // A platform admin's "working inside this church" note switches data access
+  // to the service role for whoever carries it (lib/supabase/server.ts). It is
+  // only ever theirs: when the session is someone else's — a different person
+  // signed in on the same browser, or nobody — the note goes, before any page
+  // or action can build a client from it. Reading the payload unverified is
+  // fine here: it can only take access away.
+  const actingNote = request.cookies.get(IMPERSONATION_COOKIE)?.value;
+  if (actingNote && impersonationNoteOwner(actingNote) !== userId) {
+    request.cookies.delete(IMPERSONATION_COOKIE);
+    // Carried by every response below, redirects included.
+    pendingCookies = [
+      ...pendingCookies.filter((cookie) => cookie.name !== IMPERSONATION_COOKIE),
+      { name: IMPERSONATION_COOKIE, value: "", options: { path: "/", maxAge: 0 } },
+    ];
+    response = withSessionState(NextResponse.next({ request }));
+  }
 
   // What is gated lives in `routeGate`, where it can be tested without a
   // request. Anything it calls public — the legal pages, giving, watch, sign-in
