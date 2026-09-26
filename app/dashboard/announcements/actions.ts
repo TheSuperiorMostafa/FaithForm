@@ -37,6 +37,7 @@ import {
 import { GoogleReconnectRequiredError } from "@/lib/integrations/google-oauth";
 import { FacebookReconnectRequiredError } from "@/lib/integrations/facebook-token";
 import { generateEmergencySocialGraphic, downloadSocialGraphic } from "@/lib/social/generate-graphic";
+import { isStorageKeyWithin } from "@/lib/security/storage-path";
 import {
   deleteFacebookPost,
   postAnnouncementToFacebookPage,
@@ -101,6 +102,18 @@ async function requireChurchAndUser() {
   if (!churchId) return { supabase, user: null, churchId: null };
 
   return { supabase, user, churchId };
+}
+
+/**
+ * Only admins may change announcements: that is the database's own rule
+ * (row level security). Asked here, before anything outside the database is
+ * touched, because a teammate without admin otherwise had their write silently
+ * do nothing while the app, Facebook and the calendar changed anyway — and was
+ * told it worked.
+ */
+async function announcementAdminError(): Promise<string | null> {
+  const auth = await getChurchAuth();
+  return auth?.isAdmin ? null : "Only a church admin can change announcements.";
 }
 
 /**
@@ -279,12 +292,12 @@ async function postEventToFacebook(
   let image: ArrayBuffer | undefined;
 
   if (input.socialGraphicPath) {
-    if (!input.socialGraphicPath.startsWith(`${ctx.churchId}/`)) {
+    if (!isStorageKeyWithin(input.socialGraphicPath, `${ctx.churchId}/`)) {
       throw new UserFacingError(
         "It wasn't posted on Facebook because the picture couldn't be found. Choose the picture again.",
       );
     }
-    image = await downloadSocialGraphic(input.socialGraphicPath);
+    image = await downloadSocialGraphic(ctx.churchId, input.socialGraphicPath);
   }
 
   // Server actions run in UTC — dates must render in the church's zone.
@@ -372,6 +385,8 @@ export async function publishAnnouncement(
   if (featureError) {
     return { ok: false, errors: [featureError] };
   }
+  const adminError = await announcementAdminError();
+  if (adminError) return { ok: false, errors: [adminError] };
 
   const parsed = parsePublishForm(formData);
   if (!parsed.ok) {
@@ -379,6 +394,12 @@ export async function publishAnnouncement(
   }
 
   const { payload } = parsed;
+  if (
+    payload.socialGraphicPath &&
+    !isStorageKeyWithin(payload.socialGraphicPath, `${ctx.churchId}/`)
+  ) {
+    return { ok: false, errors: ["The picture couldn't be found. Choose the picture again."] };
+  }
   const errors: string[] = [];
   let facebookPostId: string | null = null;
   let facebookUrl: string | undefined;
@@ -456,20 +477,30 @@ export async function publishAnnouncement(
     id: string | null,
   ): Promise<{ id: string; error: string | null }> {
     if (id) {
-      let { error } = await ctx.supabase
+      // `.select` so a change that touched nothing is visible. Row level
+      // security lets only admins write announcements, and a teammate without
+      // admin — or an id from another church — updated zero rows with no
+      // error; the app notification, Facebook post and calendar change below
+      // then went out for an announcement that was never saved.
+      let { data: updated, error } = await ctx.supabase
         .from("announcements")
         .update(data)
         .eq("id", id)
-        .eq("church_id", ctx.churchId);
+        .eq("church_id", ctx.churchId)
+        .select("id");
 
       if (error && isMissingOptionalColumnError(error.message)) {
-        ({ error } = await ctx.supabase
+        ({ data: updated, error } = await ctx.supabase
           .from("announcements")
           .update(rowWithoutMissingColumns(data, error.message))
           .eq("id", id)
-          .eq("church_id", ctx.churchId));
+          .eq("church_id", ctx.churchId)
+          .select("id"));
       }
 
+      if (!error && (updated ?? []).length === 0) {
+        return { id, error: "announcement_not_saved" };
+      }
       return { id, error: error?.message ?? null };
     }
 
@@ -931,6 +962,8 @@ export async function deleteAnnouncement(id: string) {
 
   const featureError = await featureActionError("announcements", ctx.supabase);
   if (featureError) return { error: featureError };
+  const adminError = await announcementAdminError();
+  if (adminError) return { error: adminError };
 
   // Cancel any undelivered notification first: once the row is gone the
   // worker's own re-check would cancel it anyway, but a notification racing a
@@ -1014,6 +1047,8 @@ export async function publishToMoreChannels(
 
   const featureError = await featureActionError("announcements", ctx.supabase);
   if (featureError) return { ok: false, errors: [featureError] };
+  const adminError = await announcementAdminError();
+  if (adminError) return { ok: false, errors: [adminError] };
 
   const announcementId = String(formData.get("announcement_id") ?? "").trim();
   const announcement = announcementId
@@ -1050,7 +1085,7 @@ export async function publishToMoreChannels(
 
   const socialGraphicPath = String(formData.get("social_graphic_path") ?? "").trim();
   const socialGraphicUrl = String(formData.get("social_graphic_url") ?? "").trim();
-  if (socialGraphicPath && !socialGraphicPath.startsWith(`${ctx.churchId}/`)) {
+  if (socialGraphicPath && !isStorageKeyWithin(socialGraphicPath, `${ctx.churchId}/`)) {
     return {
       ok: false,
       errors: ["The picture couldn't be found. Choose the picture again."],

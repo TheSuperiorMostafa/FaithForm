@@ -7,6 +7,7 @@ import {
   formatDateTimeRange,
   formatEventWhenForPrompt,
 } from "@/lib/queries/announcements";
+import { storageKeySegment } from "@/lib/security/storage-path";
 import { resolveFlyerHeadline } from "@/lib/social/headline-display";
 import {
   generateSocialGraphic,
@@ -44,10 +45,10 @@ export type SocialPreviewResult = {
 };
 
 function buildDraftKey(input: GenerateSocialPreviewInput): string {
-  if (input.announcementId) return `announcement-${input.announcementId}`;
-  if (input.googleEventId) {
-    return `draft-${input.googleEventId.replace(/[^a-zA-Z0-9_-]/g, "_")}`;
-  }
+  // Both ids arrive from the browser and become part of a storage key written
+  // with the service role, so neither may carry a `/`, `..` or `#`.
+  if (input.announcementId) return `announcement-${storageKeySegment(input.announcementId)}`;
+  if (input.googleEventId) return `draft-${storageKeySegment(input.googleEventId)}`;
   return `draft-${Date.now()}`;
 }
 

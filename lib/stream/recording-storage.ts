@@ -1,3 +1,5 @@
+import { isStorageKeyWithin } from "@/lib/security/storage-path";
+
 export const STREAM_RECORDINGS_BUCKET = "stream-recordings";
 
 /** Keeps a relay-supplied name from escaping its church's folder. */
@@ -25,5 +27,6 @@ export function isRecordingStoragePathForChurch(
   storagePath: string,
   churchId: string,
 ): boolean {
-  return storagePath.startsWith(`relay/${churchId}/`);
+  // A prefix check alone lets `relay/<church>/../<other>/x.mp4` through.
+  return isStorageKeyWithin(storagePath, `relay/${churchId}/`);
 }

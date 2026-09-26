@@ -13,6 +13,7 @@ import {
   type SocialBackgroundTag,
   type SocialTemplateKey,
 } from "@/lib/social/constants";
+import { isStorageKeyWithin } from "@/lib/security/storage-path";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export type ChurchBranding = {
@@ -181,6 +182,9 @@ async function uploadSocialGraphic(
 
   const admin = createAdminClient();
   const graphicPath = `${churchId}/${draftKey}.png`;
+  if (!isStorageKeyWithin(graphicPath, `${churchId}/`)) {
+    throw new Error("Refusing a social graphic key outside the church's folder");
+  }
 
   const { error } = await admin.storage
     .from(SOCIAL_GRAPHICS_BUCKET)
@@ -278,8 +282,14 @@ export async function generateEmergencySocialGraphic(
 }
 
 export async function downloadSocialGraphic(
+  churchId: string,
   graphicPath: string,
 ): Promise<ArrayBuffer> {
+  // The path comes back from the browser. Read with the service role, so it
+  // must be proven to sit inside this church's folder first.
+  if (!isStorageKeyWithin(graphicPath, `${churchId}/`)) {
+    throw new Error("Social graphic not found");
+  }
   const admin = createAdminClient();
   const { data, error } = await admin.storage
     .from(SOCIAL_GRAPHICS_BUCKET)
