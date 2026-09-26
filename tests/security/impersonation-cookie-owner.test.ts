@@ -33,7 +33,7 @@ test("the edge reader names the note's owner, and nothing for junk", () => {
 
 test("the middleware drops a note that is not the signed-in person's", () => {
   const source = readFileSync("lib/supabase/middleware.ts", "utf8");
-  assert.match(source, /impersonationNoteOwner\(actingNote\) !== userId/);
+  assert.match(source, /actingNote && !claimsError && impersonationNoteOwner\(actingNote\) !== userId/);
   // After the session is known, before any gate returns.
   assert.ok(source.indexOf("impersonationNoteOwner(actingNote)") > source.indexOf("auth.getClaims()"));
   assert.ok(source.indexOf("impersonationNoteOwner(actingNote)") < source.indexOf("routeGate(request.nextUrl.pathname)"));

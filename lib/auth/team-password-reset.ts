@@ -27,6 +27,14 @@ export const PROVISIONED_BY_CHURCH_KEY = "provisioned_by_church_id";
 /** How far apart a login's creation and its team link can be and still be one invite. */
 const SAME_INVITE_WINDOW_MS = 10 * 60 * 1000;
 
+/**
+ * Logins made after this carry the `app_metadata` record when a church's
+ * invite made them, so the timing rule is only for the ones before it. Without
+ * the cutoff it would also cover logins people make for themselves from now on
+ * — a church founder who signs up and finishes setup within ten minutes.
+ */
+const TIMING_RULE_ENDS = Date.parse("2026-10-01T00:00:00Z");
+
 export type PasswordResetTarget = {
   churchId: string;
   isPlatformAdmin: boolean;
@@ -47,5 +55,6 @@ export function churchMayResetPassword(target: PasswordResetTarget): boolean {
   const created = Date.parse(target.accountCreatedAt ?? "");
   const linked = Date.parse(target.linkedAt ?? "");
   if (!Number.isFinite(created) || !Number.isFinite(linked)) return false;
+  if (created >= TIMING_RULE_ENDS) return false;
   return created <= linked + 60_000 && linked - created <= SAME_INVITE_WINDOW_MS;
 }

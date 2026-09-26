@@ -317,9 +317,20 @@ export async function resetTeamMemberPassword(
     return { ok: false, error: toUserError(userError ?? appAccountError, "We couldn't make a new temporary password.") };
   }
 
+  // Asked directly rather than through `isPlatformAdminUserId`, which answers
+  // "no" when the lookup fails: here a failed lookup must refuse the reset.
+  const { data: platformAdmin, error: platformAdminError } = await admin
+    .from("platform_admins")
+    .select("user_id")
+    .eq("user_id", member.user_id as string)
+    .maybeSingle();
+  if (platformAdminError) {
+    return { ok: false, error: toUserError(platformAdminError, "We couldn't make a new temporary password.") };
+  }
+
   const allowed = churchMayResetPassword({
     churchId,
-    isPlatformAdmin: await isPlatformAdminUserId(member.user_id as string),
+    isPlatformAdmin: Boolean(platformAdmin) || isBootstrapSuperAdminEmail(existing.user.email),
     hasAppAccount: Boolean(appAccount),
     appMetadata: existing.user.app_metadata,
     accountCreatedAt: existing.user.created_at,
@@ -329,7 +340,7 @@ export async function resetTeamMemberPassword(
     return {
       ok: false,
       error:
-        "This person made their own FaithForm login, so only they can change its password. Ask them to use “Forgot password” on the sign-in page.",
+        "Only this person can change their password. Ask them to use “Forgot password” on the sign-in page.",
     };
   }
 

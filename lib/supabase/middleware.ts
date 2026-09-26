@@ -192,7 +192,10 @@ export async function updateSession(request: NextRequest) {
   // or action can build a client from it. Reading the payload unverified is
   // fine here: it can only take access away.
   const actingNote = request.cookies.get(IMPERSONATION_COOKIE)?.value;
-  if (actingNote && impersonationNoteOwner(actingNote) !== userId) {
+  // Only on a definite answer: a transient failure to read the session is not
+  // proof the admin left, and dropping the note then threw them out of the
+  // church they were working in.
+  if (actingNote && !claimsError && impersonationNoteOwner(actingNote) !== userId) {
     request.cookies.delete(IMPERSONATION_COOKIE);
     // Carried by every response below, redirects included.
     pendingCookies = [

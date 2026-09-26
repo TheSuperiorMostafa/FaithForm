@@ -59,6 +59,23 @@ test("app accounts and platform administrators are never reset by a church", () 
   );
 });
 
+test("the timing rule covers only logins made before the record existed", () => {
+  assert.equal(
+    churchMayResetPassword({ ...base, accountCreatedAt: "2026-11-01T10:00:00Z", linkedAt: "2026-11-01T10:05:00Z" }),
+    false,
+    "a login made after the cutoff without the record is someone's own",
+  );
+  assert.equal(
+    churchMayResetPassword({
+      ...base,
+      accountCreatedAt: "2026-11-01T10:00:00Z",
+      linkedAt: "2026-11-01T10:00:01Z",
+      appMetadata: { [PROVISIONED_BY_CHURCH_KEY]: CHURCH },
+    }),
+    true,
+  );
+});
+
 test("missing or unreadable dates refuse", () => {
   assert.equal(churchMayResetPassword({ ...base, accountCreatedAt: null }), false);
   assert.equal(churchMayResetPassword({ ...base, linkedAt: "not a date" }), false);
@@ -72,6 +89,7 @@ test("the team actions apply the rule and never link a platform administrator", 
     "the rule must be checked before the password is changed",
   );
   assert.match(reset, /from\("visitor_accounts"\)/);
+  assert.match(reset, /if \(platformAdminError\)/, "a failed platform-admin lookup must refuse");
   assert.match(actions, /app_metadata: \{ \[PROVISIONED_BY_CHURCH_KEY\]: churchId \}/);
 
   const invite = actions.slice(
