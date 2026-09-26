@@ -153,3 +153,13 @@ jobs:
         run: pnpm test:concurrency
         env:
           FAITHFORM_TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/faithform_test
+
+      # Applies every file in supabase/migrations, in order, to a fresh
+      # database and runs the Groups and Messaging suite against the RLS that
+      # results. 0100 once shipped with a syntax error that no text-based test
+      # could see, and the Supabase SQL editor rolled it back in production;
+      # this is the gate that fails first instead.
+      - name: Full migration chain + Groups and Messaging RLS
+        run: pnpm test:groups-database
+        env:
+          FAITHFORM_TEST_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/faithform_test

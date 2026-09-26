@@ -64,8 +64,43 @@ else {
   const rlsStatement =
     /\b(?:enable|disable)\s+row\s+level\s+security\b/i;
 
+  // Post-baseline files that only ever take access away. A `revoke`, or a
+  // `drop policy` of a permissive policy (the only kind this schema has), can
+  // narrow what the baseline allowed but can never reopen what it closed —
+  // which is the thing this check exists to stop. Folding them into the
+  // baseline instead would never reach production: the baseline was applied
+  // long ago, and an applied file is not re-run. Each entry is reviewed, and
+  // the file is still refused below if it grants, creates a policy, or turns
+  // row level security off.
+  const narrowingOnly = new Set([
+    // Server-only writes to stream_recordings; no anonymous listing of the
+    // public church-covers and social-graphics buckets.
+    "0107_recording_writes_and_bucket_listing.sql",
+    // No direct writes to visitor_accounts by the account holder.
+    "0108_presentation_church_and_account_writes.sql",
+  ]);
+  const narrowingStatement = /^\s*(?:revoke\b|drop\s+policy\b)/i;
+
+  // 0077 gives signed-in callers EXECUTE on the helpers their own row level
+  // security calls. A policy's functions run as the querying role, so without
+  // it a database built from these files cannot read `church_users` at all
+  // (see the file). Exactly these four grants, to exactly that role.
+  const helperGrants = new Map([
+    [
+      "0077_rls_helper_execute_for_signed_in.sql",
+      /^\s*grant\s+execute\s+on\s+function\s+public\.(?:user_church_ids\(\)|is_church_admin\(uuid\)|is_church_staff\(uuid\)|current_visitor_account_id\(\))\s+to\s+authenticated\s*$/i,
+    ],
+  ]);
+
   for (const later of files.filter((file) => file > securityFile)) {
     const laterSql = readFileSync(join(directory, later), "utf8");
+
+    if (narrowingOnly.has(later)) {
+      const code = laterSql.replace(/--[^\n]*/g, "");
+      if (/\bgrant\b|\bcreate\s+policy\b|\bdisable\s+row\s+level\s+security\b|\bas\s+restrictive\b/i.test(code)) {
+        failures.push(`${later} is listed as narrowing-only but widens access`);
+      }
+    }
 
     const created = new Set([
       ...objectsIn(
@@ -89,6 +124,8 @@ else {
     }
 
     for (const match of laterSql.matchAll(securedStatement)) {
+      if (narrowingOnly.has(later) && narrowingStatement.test(match[0])) continue;
+      if (helperGrants.get(later)?.test(`${match[0]}${laterSql.slice(match.index + match[0].length).split(";")[0]}`)) continue;
       const target = match[1].toLowerCase().replace(/^public\./, "");
       if (baselineTables.has(target)) {
         failures.push(

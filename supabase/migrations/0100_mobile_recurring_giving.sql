@@ -129,7 +129,9 @@ returns table (
   created boolean,
   amount_cents integer,
   currency text,
-  interval text,
+  -- Quoted: `interval` is a type keyword, and unquoted it is a syntax error in
+  -- a RETURNS TABLE list, which rolled this whole migration back.
+  "interval" text,
   stripe_idempotency_key text,
   stripe_subscription_id text
 )
@@ -351,7 +353,7 @@ returns table (
   fund_title text,
   amount_cents integer,
   currency text,
-  interval text,
+  "interval" text,
   status text,
   started_at timestamptz
 )
