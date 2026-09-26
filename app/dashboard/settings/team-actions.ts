@@ -3,6 +3,12 @@
 import { revalidatePath } from "next/cache";
 
 import { findAuthUserByEmail } from "@/lib/auth/auth-users";
+import { isBootstrapSuperAdminEmail } from "@/lib/auth/superadmin-emails";
+import { isPlatformAdminUserId } from "@/lib/auth/superadmin";
+import {
+  churchMayResetPassword,
+  PROVISIONED_BY_CHURCH_KEY,
+} from "@/lib/auth/team-password-reset";
 import { getChurchAuth } from "@/lib/auth/church";
 import {
   generateTempPassword,
@@ -111,6 +117,12 @@ export async function inviteTeamMember(
     };
   }
 
+  // A platform administrator's login is never put on a church's team from a
+  // church's own settings; see lib/auth/team-password-reset.ts for why.
+  if (isBootstrapSuperAdminEmail(email)) {
+    return { ok: false, error: "That email can't be added to a church team." };
+  }
+
   const admin = createAdminClient();
 
   let authUser: { id: string; email: string | null } | null = null;
@@ -136,6 +148,9 @@ export async function inviteTeamMember(
       password: tempPassword,
       email_confirm: true,
       user_metadata: { [MUST_CHANGE_PASSWORD_KEY]: true },
+      // Records that this church made the login, which is what later lets it
+      // hand out a new temporary password. Only the service role can write it.
+      app_metadata: { [PROVISIONED_BY_CHURCH_KEY]: churchId },
     });
 
     if (error || !data.user) {
@@ -146,6 +161,8 @@ export async function inviteTeamMember(
     }
 
     authUser = { id: data.user.id, email: data.user.email ?? email };
+  } else if (await isPlatformAdminUserId(authUser.id)) {
+    return { ok: false, error: "That email can't be added to a church team." };
   }
 
   // A user belongs to exactly one church — the dashboard resolves a single
@@ -276,7 +293,7 @@ export async function resetTeamMemberPassword(
 
   const { data: member, error: loadError } = await admin
     .from("church_users")
-    .select("id, user_id")
+    .select("id, user_id, created_at")
     .eq("id", memberId)
     .eq("church_id", churchId)
     .maybeSingle();
@@ -286,9 +303,35 @@ export async function resetTeamMemberPassword(
   }
   if (!member) return { ok: false, error: "Team member not found." };
 
-  const { data: existing } = await admin.auth.admin.getUserById(
+  const { data: existing, error: userError } = await admin.auth.admin.getUserById(
     member.user_id as string,
   );
+  const { data: appAccount, error: appAccountError } = await admin
+    .from("visitor_accounts")
+    .select("id")
+    .eq("user_id", member.user_id as string)
+    .maybeSingle();
+
+  // Any lookup failure refuses: a reset must never be allowed by default.
+  if (userError || !existing?.user || appAccountError) {
+    return { ok: false, error: toUserError(userError ?? appAccountError, "We couldn't make a new temporary password.") };
+  }
+
+  const allowed = churchMayResetPassword({
+    churchId,
+    isPlatformAdmin: await isPlatformAdminUserId(member.user_id as string),
+    hasAppAccount: Boolean(appAccount),
+    appMetadata: existing.user.app_metadata,
+    accountCreatedAt: existing.user.created_at,
+    linkedAt: member.created_at as string | null,
+  });
+  if (!allowed) {
+    return {
+      ok: false,
+      error:
+        "This person made their own FaithForm login, so only they can change its password. Ask them to use “Forgot password” on the sign-in page.",
+    };
+  }
 
   const tempPassword = generateTempPassword();
   const { error } = await admin.auth.admin.updateUserById(

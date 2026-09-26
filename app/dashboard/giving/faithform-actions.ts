@@ -56,7 +56,19 @@ export async function saveFundPublication(
 ): Promise<{ ok: boolean; error?: string }> {
   const { churchId } = await requireAdmin();
 
-  const result = await publishFundToFaithForm({ churchId, ...input });
+  // Named fields only, church last: a server action accepts any JSON, and a
+  // `churchId` in the payload spread over the session's church would publish or
+  // hide another church's fund.
+  const result = await publishFundToFaithForm({
+    fundId: input.fundId,
+    visibility: input.visibility,
+    title: input.title,
+    description: input.description,
+    suggestedAmounts: input.suggestedAmounts,
+    minAmountCents: input.minAmountCents,
+    maxAmountCents: input.maxAmountCents,
+    churchId,
+  });
 
   if (!result.ok) {
     return { ok: false, error: publicationError(result.reason) };
