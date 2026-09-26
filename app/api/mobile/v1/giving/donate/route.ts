@@ -3,6 +3,7 @@ import { authenticatedRoute } from "@/lib/mobile/v1/handler";
 import { readJsonBody } from "@/lib/mobile/v1/protocol";
 import { startDonationRequestSchema } from "@/lib/mobile/v1/contract";
 import { startDonation } from "@/lib/giving/v1/giving-service";
+import { assertGivingStartAllowed } from "@/lib/giving/v1/start-rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +35,8 @@ export const POST = authenticatedRoute(
     if (!parsed.success) {
       throw new MobileError("invalid_request", "Could not start that gift.");
     }
+
+    await assertGivingStartAllowed(userId);
 
     const result = await startDonation({
       userId,

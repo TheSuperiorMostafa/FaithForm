@@ -87,6 +87,23 @@ async function fetchChargeFees(
   return { stripeFeeCents: null, netAmountCents: null };
 }
 
+/** Columns an update leaves alone rather than clear; see `upsertDonation`. */
+const NEVER_CLEARED_ON_UPDATE = [
+  "stripe_payment_intent_id",
+  "stripe_charge_id",
+  "stripe_invoice_id",
+  "stripe_subscription_id",
+  "donor_name",
+  "donor_email",
+  "fund_designation",
+  "fund_id",
+  "donor_id",
+  "intended_amount_cents",
+  "stripe_fee_cents",
+  "net_amount_cents",
+  "stripe_object_key",
+] as const;
+
 async function upsertDonation(params: {
   churchId: string;
   amountCents: number;
@@ -160,6 +177,21 @@ async function upsertDonation(params: {
     updated_at: now,
   };
 
+  // What an *update* may write. A renewal's payment event carries no metadata,
+  // and its invoice event usually carries the same timestamp, so whichever is
+  // handled second wins the `lte` guard. Writing the row whole let a payment
+  // event erase the donor, fund, invoice and subscription the invoice event
+  // had just filled in — and the gift fell off the donor's year-end statement.
+  // A known value is never replaced with nothing, and a payment event that
+  // knows nothing of a subscription cannot relabel a recurring gift one-time.
+  const updateRow: Partial<typeof row> = { ...row };
+  for (const key of NEVER_CLEARED_ON_UPDATE) {
+    if (updateRow[key] === null) delete updateRow[key];
+  }
+  if (params.giftType === "one_time" && !params.stripeInvoiceId && !params.stripeSubscriptionId) {
+    delete updateRow.gift_type;
+  }
+
   if (params.stripePaymentIntentId) {
     const { data: existing } = await admin
       .from("giving_donations")
@@ -169,13 +201,14 @@ async function upsertDonation(params: {
       .maybeSingle();
 
     if (existing?.id) {
-      await admin
+      const { error: updateError } = await admin
         .from("giving_donations")
-        .update(row)
+        .update(updateRow)
         .eq("id", existing.id)
         .or(
           `stripe_event_created_at.is.null,stripe_event_created_at.lte.${params.stripeEventCreatedAt}`,
         );
+      if (updateError) throw new Error("donation_reconciliation_failed");
       return existing.id as string;
     }
   }
@@ -189,13 +222,14 @@ async function upsertDonation(params: {
       .maybeSingle();
 
     if (existing?.id) {
-      await admin
+      const { error: updateError } = await admin
         .from("giving_donations")
-        .update(row)
+        .update(updateRow)
         .eq("id", existing.id)
         .or(
           `stripe_event_created_at.is.null,stripe_event_created_at.lte.${params.stripeEventCreatedAt}`,
         );
+      if (updateError) throw new Error("donation_reconciliation_failed");
       return existing.id as string;
     }
   }
@@ -214,14 +248,15 @@ async function upsertDonation(params: {
       .eq("stripe_object_key", row.stripe_object_key)
       .maybeSingle();
     if (raced?.id) {
-      await admin
+      const { error: updateError } = await admin
         .from("giving_donations")
-        .update(row)
+        .update(updateRow)
         .eq("id", raced.id)
         .eq("church_id", params.churchId)
         .or(
           `stripe_event_created_at.is.null,stripe_event_created_at.lte.${params.stripeEventCreatedAt}`,
         );
+      if (updateError) throw new Error("donation_reconciliation_failed");
       return raced.id as string;
     }
   }
@@ -358,6 +393,25 @@ function parseIntendedCents(meta: Stripe.Metadata | null | undefined): number | 
   return Number.isFinite(n) ? n : null;
 }
 
+/**
+ * The amount a receipt may state: what the donor meant to give, never more
+ * than Stripe actually took.
+ *
+ * `intended_amount_cents` reaches metadata from the give form, so it is only
+ * trusted as the smaller figure — the gift before the fees a donor chose to
+ * cover. Anything above the charge is not a gift that happened: it is a
+ * browser that asked for a $1 charge and a $10,000,000 tax receipt, or a
+ * recurring gift whose amount was lowered after its metadata was written.
+ */
+export function receiptAmountCents(
+  meta: Stripe.Metadata | null | undefined,
+  chargedCents: number,
+): number {
+  const intended = parseIntendedCents(meta);
+  if (intended === null || intended <= 0 || intended > chargedCents) return chargedCents;
+  return intended;
+}
+
 async function handlePaymentIntent(
   pi: Stripe.PaymentIntent,
   status: DonationStatus,
@@ -403,7 +457,7 @@ async function handlePaymentIntent(
     fundDesignation: pi.metadata?.fund_name || pi.metadata?.fund_designation || null,
     fundId: metaFundId(pi.metadata),
     donorId: pi.metadata?.donor_id || null,
-    intendedAmountCents: parseIntendedCents(pi.metadata) ?? pi.amount,
+    intendedAmountCents: receiptAmountCents(pi.metadata, pi.amount),
     feeCovered: pi.metadata?.cover_fees === "true",
     stripeFeeCents,
     netAmountCents,
@@ -616,7 +670,10 @@ async function handleInvoice(
       fundDesignation =
         sub.metadata?.fund_name || sub.metadata?.fund_designation || null;
       donorId = sub.metadata?.donor_id ?? null;
-      intendedAmountCents = parseIntendedCents(sub.metadata);
+      intendedAmountCents = receiptAmountCents(
+        sub.metadata,
+        invoice.amount_paid || invoice.amount_due,
+      );
     } catch {
       /* ignore */
     }
@@ -731,9 +788,14 @@ async function processStripeEventEffects(event: Stripe.Event): Promise<void> {
       break;
     }
     case "account.application.deauthorized": {
+      // The object here is the Application, which carries no account. The
+      // account that disconnected is the event's own — reading only the
+      // object meant a church that disconnected Stripe kept showing as able
+      // to take gifts.
       const app = event.data.object as { account?: string };
-      if (app.account) {
-        await markChurchDeauthorized(app.account);
+      const account = connectedAccount ?? app.account;
+      if (account) {
+        await markChurchDeauthorized(account);
       }
       break;
     }
@@ -767,9 +829,20 @@ async function processStripeEventEffects(event: Stripe.Event): Promise<void> {
         typeof charge.payment_intent === "string"
           ? charge.payment_intent
           : charge.payment_intent?.id;
-      if (piId) {
+      // `charge.refunded` also fires for a partial refund. Every total and
+      // statement counts only `succeeded`, so marking the gift refunded for a
+      // $10 refund of $1,000 took all $1,000 off the donor's statement. The
+      // gift stays counted until the whole charge has been returned.
+      if (piId && charge.refunded !== true) {
+        console.warn("[stripe] partial refund left the gift counted", {
+          churchId,
+          paymentIntent: piId,
+          amountRefunded: charge.amount_refunded,
+          amount: charge.amount,
+        });
+      } else if (piId) {
         const eventCreatedAt = new Date(event.created * 1000).toISOString();
-        await admin
+        const { error: refundError } = await admin
           .from("giving_donations")
           .update({
             status: "refunded",
@@ -781,6 +854,9 @@ async function processStripeEventEffects(event: Stripe.Event): Promise<void> {
           .or(
             `stripe_event_created_at.is.null,stripe_event_created_at.lte.${eventCreatedAt}`,
           );
+        // Thrown so Stripe redelivers: a refund marked processed but never
+        // written would leave the gift on the donor's statement for good.
+        if (refundError) throw new Error("refund_reconciliation_failed");
         // A refund is a state a donor must see. Only the webhook may write it,
         // there is no client path to `refunded`, which is what stops an app from
         // claiming a gift was returned when it was not.
@@ -856,9 +932,11 @@ async function processStripeEventEffects(event: Stripe.Event): Promise<void> {
       const churchId = await churchIdForStripeAccount(connectedAccount);
       if (!churchId) break;
       const admin = createAdminClient();
-      const status = dispute.status === "won" ? "succeeded" : "refunded";
+      // Only a lost dispute takes the money back. `won`, and `warning_closed`
+      // (an inquiry closed with the church keeping the gift), leave it counted.
+      const status = dispute.status === "lost" ? "refunded" : "succeeded";
       const eventCreatedAt = new Date(event.created * 1000).toISOString();
-      await admin
+      const { error: disputeError } = await admin
         .from("giving_donations")
         .update({
           status,
@@ -870,6 +948,7 @@ async function processStripeEventEffects(event: Stripe.Event): Promise<void> {
         .or(
           `stripe_event_created_at.is.null,stripe_event_created_at.lte.${eventCreatedAt}`,
         );
+      if (disputeError) throw new Error("dispute_reconciliation_failed");
       break;
     }
     case "payout.failed": {

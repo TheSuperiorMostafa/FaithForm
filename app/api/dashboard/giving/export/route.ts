@@ -7,13 +7,7 @@ import {
 import { searchAllGifts } from "@/lib/queries/giving";
 import type { DonationStatus, GiftType, GiftsSearchFilters } from "@/types/giving";
 import { featureAccessDenied } from "@/lib/features/guard";
-
-function escapeCsv(value: string): string {
-  if (value.includes(",") || value.includes('"') || value.includes("\n")) {
-    return `"${value.replace(/"/g, '""')}"`;
-  }
-  return value;
-}
+import { csvCell } from "@/lib/utils/csv";
 
 export async function GET(request: Request) {
   let auth;
@@ -81,7 +75,7 @@ export async function GET(request: Request) {
       d.netAmountCents != null ? (d.netAmountCents / 100).toFixed(2) : "",
       d.refundReason ?? "",
     ]
-      .map(escapeCsv)
+      .map(csvCell)
       .join(","),
   );
 

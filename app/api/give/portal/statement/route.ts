@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getDonorPortalSession } from "@/lib/giving/portal-session";
 import { renderGivingStatementPdf } from "@/lib/giving/statement-pdf";
 import { getDonorGiftsForYear } from "@/lib/queries/giving";
+import { parseStatementYear } from "@/lib/giving/statement-year";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -10,10 +11,10 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const slug = searchParams.get("slug");
-  const year = Number.parseInt(
-    searchParams.get("year") ?? String(new Date().getFullYear()),
-    10,
-  );
+  // An unreadable `year` was NaN, and NaN threw inside the date maths: a 500
+  // for a donor who edited the address. Absent still means this year.
+  const rawYear = searchParams.get("year");
+  const year = rawYear ? parseStatementYear(rawYear) : new Date().getFullYear();
 
   if (!slug) {
     return NextResponse.json({ error: "slug required" }, { status: 400 });

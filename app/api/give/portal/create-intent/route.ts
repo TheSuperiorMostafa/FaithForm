@@ -81,6 +81,7 @@ export async function POST(request: Request) {
     churchId: church.churchId,
     email: donorEmail,
     name: parsed.data.donorName,
+    replaceName: true,
   });
 
   const pi = await createConnectedPaymentIntent({

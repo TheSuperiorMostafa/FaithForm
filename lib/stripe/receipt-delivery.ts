@@ -145,6 +145,10 @@ export async function retryPendingDonationReceipts(limit = 25): Promise<{
     .from("giving_donations")
     .select("id")
     .eq("status", "succeeded")
+    // A gift with no address can never be claimed for a receipt, so it never
+    // leaves `pending`. Left in the sweep, the oldest 25 of them filled every
+    // run and no real retry was ever reached again.
+    .not("donor_email", "is", null)
     .in("receipt_delivery_status", ["pending", "retryable", "sending"])
     .or(`receipt_next_retry_at.is.null,receipt_next_retry_at.lte.${now}`)
     .order("created_at", { ascending: true })

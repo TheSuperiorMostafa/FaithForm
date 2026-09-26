@@ -76,6 +76,10 @@ export async function createConnectedPaymentIntent(
   const chargeAmount = input.coverFees
     ? chargeCentsWithFeeCoverage(input.intendedAmountCents)
     : input.amountCents;
+  // Without fee coverage the gift *is* the charge. The browser's own
+  // "intended" figure is what the receipt prints, so it cannot be allowed to
+  // differ from what is charged.
+  const intendedAmountCents = input.coverFees ? input.intendedAmountCents : input.amountCents;
 
   const metadata = buildMetadata({
     churchId: input.churchId,
@@ -86,7 +90,7 @@ export async function createConnectedPaymentIntent(
     fundSlug: input.fundSlug,
     fundName: input.fundName,
     giftType: "one_time",
-    intendedAmountCents: input.intendedAmountCents,
+    intendedAmountCents,
     coverFees: input.coverFees,
   });
 
@@ -134,6 +138,10 @@ export async function createConnectedSubscription(
   const chargeAmount = input.coverFees
     ? chargeCentsWithFeeCoverage(input.intendedAmountCents)
     : input.amountCents;
+  // Without fee coverage the gift *is* the charge. The browser's own
+  // "intended" figure is what the receipt prints, so it cannot be allowed to
+  // differ from what is charged.
+  const intendedAmountCents = input.coverFees ? input.intendedAmountCents : input.amountCents;
 
   const metadata = buildMetadata({
     churchId: input.churchId,
@@ -144,7 +152,7 @@ export async function createConnectedSubscription(
     fundSlug: input.fundSlug,
     fundName: input.fundName,
     giftType: "recurring",
-    intendedAmountCents: input.intendedAmountCents,
+    intendedAmountCents,
     coverFees: input.coverFees,
   });
 
@@ -325,6 +333,12 @@ export async function updateSubscriptionAmount(
     {
       items: [{ id: itemId, price: price.id }],
       proration_behavior: "none",
+      // Receipts print `intended_amount_cents`. Left alone, a gift lowered from
+      // $500 to $50 kept being receipted at $500.
+      metadata: {
+        intended_amount_cents: String(newAmountCents),
+        cover_fees: "false",
+      },
     },
     { stripeAccount: stripeAccountId },
   );

@@ -55,6 +55,11 @@ export async function getActiveFundsForChurch(
   return (data ?? []).map((r) => mapFund(r as Record<string, unknown>));
 }
 
+/**
+ * A fund a gift may be given to right now. Only the gift-creation routes ask,
+ * so a fund the church removed (`is_active` false) is not one: it had kept
+ * taking gifts from any page or saved form that still named it.
+ */
 export async function getFundById(
   fundId: string,
   churchId: string,
@@ -65,6 +70,7 @@ export async function getFundById(
     .select("*")
     .eq("id", fundId)
     .eq("church_id", churchId)
+    .eq("is_active", true)
     .maybeSingle();
 
   return data ? mapFund(data as Record<string, unknown>) : null;

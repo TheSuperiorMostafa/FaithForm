@@ -101,6 +101,7 @@ export async function POST(request: Request) {
     churchId: church.churchId,
     email: donorEmail,
     name: parsed.data.donorName,
+    replaceName: true,
     stripeCustomerId: donor.stripe_customer_id as string | null,
   });
 

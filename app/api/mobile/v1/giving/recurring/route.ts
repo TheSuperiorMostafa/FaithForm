@@ -3,6 +3,7 @@ import { authenticatedRoute } from "@/lib/mobile/v1/handler";
 import { readJsonBody } from "@/lib/mobile/v1/protocol";
 import { startRecurringGiftRequestSchema } from "@/lib/mobile/v1/contract";
 import { startRecurringGift } from "@/lib/giving/v1/giving-recurring-service";
+import { assertGivingStartAllowed } from "@/lib/giving/v1/start-rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +37,8 @@ export const POST = authenticatedRoute(
     if (!parsed.success) {
       throw new MobileError("invalid_request", "Could not start that gift.");
     }
+
+    await assertGivingStartAllowed(userId);
 
     const result = await startRecurringGift({
       userId,

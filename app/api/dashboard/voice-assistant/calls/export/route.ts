@@ -11,14 +11,7 @@ import {
 } from "@/lib/utils/voice-assistant";
 import { getRecentPhoneCalls } from "@/lib/queries/voice-assistant";
 import { featureAccessDenied } from "@/lib/features/guard";
-
-function escapeCsv(value: string | null | undefined): string {
-  const text = value ?? "";
-  if (text.includes(",") || text.includes('"') || text.includes("\n")) {
-    return `"${text.replace(/"/g, '""')}"`;
-  }
-  return text;
-}
+import { csvCell } from "@/lib/utils/csv";
 
 export async function GET() {
   let auth;
@@ -58,30 +51,30 @@ export async function GET() {
 
     return [
       new Date(call.called_at).toISOString(),
-      escapeCsv(maskPhoneNumber(call.caller_number)),
-      escapeCsv(formatCallDuration(call.duration_seconds)),
-      escapeCsv(score.classificationLabel),
-      escapeCsv(score.value != null ? String(score.value) : ""),
+      csvCell(maskPhoneNumber(call.caller_number)),
+      csvCell(formatCallDuration(call.duration_seconds)),
+      csvCell(score.classificationLabel),
+      csvCell(score.value != null ? String(score.value) : ""),
       // Two rubrics share this table; a bare number in a spreadsheet with no
       // scale beside it is the one place that difference goes unnoticed.
-      escapeCsv(score.value != null ? String(score.outOf) : ""),
+      csvCell(score.value != null ? String(score.outOf) : ""),
       // The export says what the log says: a crisis is marked, and nothing
       // else about urgency or who should reply is.
-      escapeCsv(score.urgent ? "Yes" : ""),
-      escapeCsv(score.callerMood),
-      escapeCsv(score.summary),
-      escapeCsv(score.flagReason),
-      escapeCsv(score.missingKnowledge),
-      escapeCsv(call.sentiment),
-      escapeCsv(
+      csvCell(score.urgent ? "Yes" : ""),
+      csvCell(score.callerMood),
+      csvCell(score.summary),
+      csvCell(score.flagReason),
+      csvCell(score.missingKnowledge),
+      csvCell(call.sentiment),
+      csvCell(
         call.call_successful == null
           ? ""
           : call.call_successful
             ? "Yes"
             : "No",
       ),
-      escapeCsv(call.recording_url),
-      escapeCsv(call.transcript),
+      csvCell(call.recording_url),
+      csvCell(call.transcript),
     ].join(",");
   });
 
