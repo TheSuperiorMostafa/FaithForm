@@ -94,6 +94,7 @@ export async function enqueuePublicationNotification(
  * an optimisation rather than the only guard.
  */
 export async function cancelNotificationsForSubject(
+  churchId: string,
   announcementId: string,
   client?: SupabaseClient,
 ): Promise<void> {
@@ -105,6 +106,8 @@ export async function cancelNotificationsForSubject(
       completed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     })
+    // The id arrives from a request; only this church's queue is touched.
+    .eq("church_id", churchId)
     .eq("subject_id", announcementId)
     .in("status", ["pending", "claimed"]);
 }
@@ -142,6 +145,29 @@ type PushRecipient = {
 };
 
 /**
+ * An `.in(...)` list travels in the request URL, and 5,000 ids is ~185 KB of
+ * it — past what the gateway accepts. Asked in slices, and any slice that fails
+ * fails the whole lookup, so the job retries rather than going out to a partial
+ * or unfiltered audience.
+ */
+const AUDIENCE_CHUNK = 200;
+
+async function inChunks(
+  ids: string[],
+  query: (
+    ids: string[],
+  ) => PromiseLike<{ data: Record<string, unknown>[] | null; error: unknown }>,
+): Promise<Record<string, unknown>[]> {
+  const rows: Record<string, unknown>[] = [];
+  for (let start = 0; start < ids.length; start += AUDIENCE_CHUNK) {
+    const { data, error } = await query(ids.slice(start, start + AUDIENCE_CHUNK));
+    if (error) throw new Error("push_audience_unavailable");
+    rows.push(...(data ?? []));
+  }
+  return rows;
+}
+
+/**
  * Resolves who should receive a job, at send time.
  *
  * Four independent conditions, all re-checked now rather than at publish time:
@@ -164,39 +190,45 @@ async function resolveRecipients(
         ? ["following", "joined"]
         : ["following", "joined"];
 
-  const { data: relationships } = await admin
+  const { data: relationships, error: relationshipsError } = await admin
     .from("visitor_church_relationships")
     .select("account_id")
     .eq("church_id", job.church_id)
     .in("state", states)
     .limit(5000);
 
+  if (relationshipsError) throw new Error("push_audience_unavailable");
   const accountIds = (relationships ?? []).map((row) => row.account_id as string);
   if (accountIds.length === 0) return [];
 
   // A preference row that says false removes the account. An absent row means
-  // "not yet decided", which is the topic default (on).
-  const { data: optedOut } = await admin
-    .from("visitor_notification_preferences")
-    .select("account_id")
-    .eq("church_id", job.church_id)
-    .eq("topic", job.topic)
-    .eq("is_enabled", false)
-    .in("account_id", accountIds);
+  // "not yet decided", which is the topic default (on). A failed read must not
+  // read as "nobody opted out": that would notify people who said no.
+  const optedOut = await inChunks(accountIds, (ids) =>
+    admin
+      .from("visitor_notification_preferences")
+      .select("account_id")
+      .eq("church_id", job.church_id)
+      .eq("topic", job.topic)
+      .eq("is_enabled", false)
+      .in("account_id", ids),
+  );
 
-  const excluded = new Set((optedOut ?? []).map((row) => row.account_id as string));
+  const excluded = new Set(optedOut.map((row) => row.account_id as string));
   const eligible = accountIds.filter((id) => !excluded.has(id));
   if (eligible.length === 0) return [];
 
-  const { data: installations } = await admin
-    .from("visitor_device_installations")
-    .select("id, provider, provider_token, apns_environment")
-    .in("account_id", eligible)
-    .eq("is_enabled", true)
-    .is("invalidated_at", null)
-    .limit(10000);
+  const installations = await inChunks(eligible, (ids) =>
+    admin
+      .from("visitor_device_installations")
+      .select("id, provider, provider_token, apns_environment")
+      .in("account_id", ids)
+      .eq("is_enabled", true)
+      .is("invalidated_at", null)
+      .limit(10000),
+  );
 
-  return ((installations ?? []) as Record<string, unknown>[])
+  return (installations as Record<string, unknown>[])
     .filter((row) => Boolean(row.provider_token))
     .map((row) => ({
       installationId: row.id as string,
@@ -217,7 +249,7 @@ async function resolveTargetedRecipients(
   job: OutboxJob,
   accountIds: string[],
 ): Promise<PushRecipient[]> {
-  const [{ data: relationships }, { data: switchedOff }] = await Promise.all([
+  const [{ data: relationships, error: relationshipsError }, { data: switchedOff, error: switchedOffError }] = await Promise.all([
     admin
       .from("visitor_church_relationships")
       .select("account_id")
@@ -232,19 +264,21 @@ async function resolveTargetedRecipients(
       .in("account_id", accountIds),
   ]);
 
+  if (relationshipsError || switchedOffError) throw new Error("push_audience_unavailable");
   const off = new Set((switchedOff ?? []).map((row) => row.account_id as string));
   const eligible = (relationships ?? [])
     .map((row) => row.account_id as string)
     .filter((id) => !off.has(id));
   if (eligible.length === 0) return [];
 
-  const { data: installations } = await admin
+  const { data: installations, error: installationsError } = await admin
     .from("visitor_device_installations")
     .select("id, provider, provider_token, apns_environment")
     .in("account_id", eligible)
     .eq("is_enabled", true)
     .is("invalidated_at", null)
     .limit(1000);
+  if (installationsError) throw new Error("push_audience_unavailable");
 
   return ((installations ?? []) as Record<string, unknown>[])
     .filter((row) => Boolean(row.provider_token))
@@ -338,6 +372,10 @@ async function subjectIsStillCurrent(
   return true;
 }
 
+/** Leaves room inside the 60-second function for the last sends and the bookkeeping. */
+const SEND_BUDGET_MS = 40_000;
+const SEND_CONCURRENCY = 8;
+
 export type WorkerResult = {
   claimed: number;
   sent: number;
@@ -356,8 +394,13 @@ export async function runNotificationWorker(options?: {
   limit?: number;
   adapters?: Partial<Record<"apns" | "fcm", PushAdapter>>;
   client?: SupabaseClient;
+  /** Stop starting sends after this long; the function itself is killed at 60 s. */
+  budgetMs?: number;
+  now?: () => number;
 }): Promise<WorkerResult> {
   const admin = options?.client ?? createAdminClient();
+  const now = options?.now ?? Date.now;
+  const deadline = now() + (options?.budgetMs ?? SEND_BUDGET_MS);
   const leaseToken = randomUUID();
   const result: WorkerResult = { claimed: 0, sent: 0, cancelled: 0, retried: 0, failed: 0 };
 
@@ -376,6 +419,20 @@ export async function runNotificationWorker(options?: {
   for (const raw of (jobs ?? []) as OutboxJob[]) {
     result.claimed += 1;
 
+    // Claimed but not reached in time: handed back now rather than left to
+    // sit out its lease.
+    if (now() >= deadline) {
+      await admin.rpc("complete_notification_job", {
+        p_id: raw.id,
+        p_lease_token: leaseToken,
+        p_outcome: "retryable",
+        p_error_category: "time_budget",
+        p_backoff_seconds: 10,
+      });
+      result.retried += 1;
+      continue;
+    }
+
     if (!(await subjectIsStillCurrent(admin, raw))) {
       await admin.rpc("complete_notification_job", {
         p_id: raw.id,
@@ -387,7 +444,32 @@ export async function runNotificationWorker(options?: {
       continue;
     }
 
-    const recipients = await resolveRecipients(admin, raw);
+    // Who already has this notification. Without it every retry — one device's
+    // 503, or the function killed mid-list — sent the whole audience the same
+    // push again, up to five times, and the end of the list never got it.
+    const { data: reached, error: reachedError } = await admin
+      .from("notification_delivery_attempts")
+      .select("installation_id")
+      .eq("outbox_id", raw.id)
+      .in("outcome", ["sent", "permanent"]);
+
+    let recipients: PushRecipient[];
+    try {
+      if (reachedError) throw new Error("push_history_unavailable");
+      recipients = await resolveRecipients(admin, raw);
+    } catch {
+      await admin.rpc("complete_notification_job", {
+        p_id: raw.id,
+        p_lease_token: leaseToken,
+        p_outcome: "retryable",
+        p_error_category: "audience_unavailable",
+      });
+      result.retried += 1;
+      continue;
+    }
+    const done = new Set((reached ?? []).map((row) => row.installation_id as string | null));
+    const pending = recipients.filter((recipient) => !done.has(recipient.installationId));
+
     const message: PushMessage = {
       title: raw.title,
       body: raw.body,
@@ -397,8 +479,9 @@ export async function runNotificationWorker(options?: {
     };
 
     let anyRetryable = false;
+    let outOfTime = false;
 
-    for (const recipient of recipients) {
+    const sendOne = async (recipient: PushRecipient) => {
       const adapter = adapters[recipient.provider];
       const outcome: DeliveryResult = await adapter.send(recipient.token, message, recipient.apnsEnvironment);
 
@@ -416,16 +499,27 @@ export async function runNotificationWorker(options?: {
         await invalidateToken(recipient.token, outcome.errorCategory ?? "invalid_token");
       }
       if (outcome.outcome === "retryable") anyRetryable = true;
+    };
+
+    // A few at a time: one by one, a few hundred devices outran the function.
+    for (let start = 0; start < pending.length; start += SEND_CONCURRENCY) {
+      if (now() >= deadline) {
+        outOfTime = true;
+        break;
+      }
+      await Promise.all(pending.slice(start, start + SEND_CONCURRENCY).map(sendOne));
     }
 
-    // A job is only retried when a provider asked us to. A permanent failure
-    // against one device is not a reason to re-notify everyone else.
-    const jobOutcome = anyRetryable ? "retryable" : "sent";
+    // A job is only retried when a provider asked us to, or time ran out. The
+    // retry reaches only the devices this pass did not, so a permanent failure
+    // against one device is never a reason to re-notify everyone else.
+    const jobOutcome = anyRetryable || outOfTime ? "retryable" : "sent";
     await admin.rpc("complete_notification_job", {
       p_id: raw.id,
       p_lease_token: leaseToken,
       p_outcome: jobOutcome,
-      p_error_category: anyRetryable ? "provider_retryable" : null,
+      p_error_category: outOfTime ? "time_budget" : anyRetryable ? "provider_retryable" : null,
+      ...(outOfTime ? { p_backoff_seconds: 10 } : {}),
     });
 
     if (anyRetryable) result.retried += 1;

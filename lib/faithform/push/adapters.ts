@@ -254,9 +254,15 @@ async function apnsRequest(input: {
       else resolve({ status, body });
     });
     stream.on("error", () => reject(new Error("apns_stream_error")));
+    // A timed-out stream is closed with NO_ERROR, which fires only `close` —
+    // not `end`, not `error` — so without this the send never settled and the
+    // worker hung until the function was killed. Settling twice is a no-op.
+    stream.on("close", () => reject(new Error("apns_stream_closed")));
     stream.end(input.body);
   });
 }
+
+const FCM_REQUEST_TIMEOUT_MS = 10_000;
 
 export class ApnsAdapter implements PushAdapter {
   readonly provider = "apns" as const;
@@ -361,6 +367,8 @@ export class FcmAdapter implements PushAdapter {
             "content-type": "application/json",
           },
           body: JSON.stringify(buildFcmPayload(token, message)),
+          // A hung connection must fail one device, not stall every send after it.
+          signal: AbortSignal.timeout(FCM_REQUEST_TIMEOUT_MS),
         },
       );
 

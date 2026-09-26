@@ -100,7 +100,7 @@ export async function applyMobilePublication(
 
   // Withdrawing from the app also withdraws anything not yet delivered.
   if (input.visibility === "none") {
-    await cancelNotificationsForSubject(input.announcementId, admin).catch(() => undefined);
+    await cancelNotificationsForSubject(input.churchId, input.announcementId, admin).catch(() => undefined);
     return { applied: true, enqueued: false };
   }
 
@@ -111,7 +111,7 @@ export async function applyMobilePublication(
   }
 
   // A prior version's pending notification is superseded by this one.
-  await cancelNotificationsForSubject(input.announcementId, admin).catch(() => undefined);
+  await cancelNotificationsForSubject(input.churchId, input.announcementId, admin).catch(() => undefined);
 
   // An event that is already over is on the Schedule calendar but not the Home
   // feed, so a notification would open a feed without it. Publishing last
@@ -153,5 +153,5 @@ export async function withdrawMobilePublication(
     .eq("id", announcementId)
     .eq("church_id", churchId);
 
-  await cancelNotificationsForSubject(announcementId, admin).catch(() => undefined);
+  await cancelNotificationsForSubject(churchId, announcementId, admin).catch(() => undefined);
 }
