@@ -120,9 +120,11 @@ export type RecordedService = {
   totalAbsent: number;
   /** False when counted as "just a number": nobody to follow up with. */
   byName: boolean;
+  /** People marked for a follow-up text on this service. */
+  followedUp: number;
 };
 
-/** Services that already have attendance saved — the Follow-up page's picker. */
+/** Services that already have attendance saved — the Follow-up page's list. */
 export async function listRecordedServices(
   supabase: SupabaseClient,
   churchId: string,
@@ -130,7 +132,7 @@ export async function listRecordedServices(
 ): Promise<RecordedService[]> {
   const { data, error } = await supabase
     .from("attendance_records")
-    .select("id, service_date, total_present, total_absent, attendance_entries(count)")
+    .select("id, service_date, total_present, total_absent, attendance_entries(follow_up_requested)")
     .eq("church_id", churchId)
     .order("service_date", { ascending: false })
     .limit(limit);
@@ -140,13 +142,17 @@ export async function listRecordedServices(
     throw new Error("Attendance could not be loaded.");
   }
 
-  return (data ?? []).map((row) => ({
-    id: row.id as string,
-    serviceDate: row.service_date as string,
-    totalPresent: (row.total_present as number | null) ?? 0,
-    totalAbsent: (row.total_absent as number | null) ?? 0,
-    byName: ((row.attendance_entries as { count: number }[] | null)?.[0]?.count ?? 0) > 0,
-  }));
+  return (data ?? []).map((row) => {
+    const entries = (row.attendance_entries ?? []) as { follow_up_requested: boolean }[];
+    return {
+      id: row.id as string,
+      serviceDate: row.service_date as string,
+      totalPresent: (row.total_present as number | null) ?? 0,
+      totalAbsent: (row.total_absent as number | null) ?? 0,
+      byName: entries.length > 0,
+      followedUp: entries.filter((entry) => entry.follow_up_requested).length,
+    };
+  });
 }
 
 export async function getRecordByDate(

@@ -15,20 +15,24 @@ export function ServiceDayHeader({
   description,
   action,
   secondary,
+  backHref = "/dashboard/attendance",
+  backLabel = "Back to Sunday count",
 }: {
   title: ReactNode;
   description: ReactNode;
   action?: ReactNode;
   secondary?: ReactNode;
+  backHref?: string;
+  backLabel?: string;
 }) {
   return (
     <div className="flex flex-col gap-3">
       <Link
-        href="/dashboard/attendance"
+        href={backHref}
         className="inline-flex min-h-11 w-fit items-center gap-2 rounded-lg text-base font-semibold text-muted-foreground transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <ArrowLeft className="size-5" strokeWidth={1.75} aria-hidden />
-        Back to Sunday count
+        {backLabel}
       </Link>
       <PageHeader title={title} description={description} action={action} secondary={secondary} />
     </div>

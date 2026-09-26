@@ -6,12 +6,11 @@ import { Checkbox } from "@base-ui/react/checkbox";
 import { AlertCircle, Check, Hash, MessageSquare, Pencil, PhoneOff, RotateCcw, Send } from "lucide-react";
 import { toast } from "sonner";
 
-import { sendFollowUps } from "./actions";
+import { sendFollowUps } from "../actions";
 import { Button } from "@/components/ui/button";
 import { confirmAction } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Label } from "@/components/ui/label";
-import { Select } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Textarea } from "@/components/ui/textarea";
 import { describeFollowUpFailure } from "@/lib/attendance/follow-up-errors";
@@ -22,7 +21,6 @@ import {
   personalizeFollowUpMessage,
   validateFollowUpOverride,
 } from "@/lib/attendance/follow-up-message";
-import type { RecordedService } from "@/lib/queries/attendance";
 import { formatServiceDate } from "@/lib/utils/dates";
 import { cn } from "@/lib/utils";
 
@@ -40,7 +38,6 @@ export type FollowUpCandidate = {
 };
 
 type FollowUpBoardProps = {
-  services: RecordedService[];
   selectedDate: string;
   candidates: FollowUpCandidate[];
   /** Whether this church has its own texting phone. Without one, nothing is sent. */
@@ -60,7 +57,6 @@ function texts(n: number) {
 }
 
 export function FollowUpBoard({
-  services,
   selectedDate,
   candidates,
   textingConnected,
@@ -109,12 +105,6 @@ export function FollowUpBoard({
       else next.add(memberId);
       return next;
     });
-  }
-
-  function changeService(date: string) {
-    setSelected(new Set());
-    setError(null);
-    router.push(`/dashboard/attendance/follow-up?date=${date}`);
   }
 
   async function handleSend() {
@@ -183,25 +173,6 @@ export function FollowUpBoard({
           </p>
         </div>
       )}
-
-      <div className="flex max-w-md flex-col gap-2">
-        <Label htmlFor="follow-up-service" className="text-base font-semibold">
-          Which Sunday?
-        </Label>
-        <Select
-          id="follow-up-service"
-          value={selectedDate}
-          onChange={(e) => changeService(e.target.value)}
-          className="min-h-12 text-base"
-        >
-          {services.map((service) => (
-            <option key={service.serviceDate} value={service.serviceDate}>
-              {formatServiceDate(service.serviceDate)} ·{" "}
-              {service.byName ? `${service.totalAbsent} not here` : "counted as a number"}
-            </option>
-          ))}
-        </Select>
-      </div>
 
       {countedByNumber ? (
         <EmptyState

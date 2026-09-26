@@ -25,16 +25,16 @@ export default function AttendanceDateLoading() {
       </div>
 
       {/* Either the two ways to count (a new Sunday) or the totals (a saved
-          one): the same height either way, so only the contents shimmer. */}
+          one), sized to the ways to count. */}
       <div className="grid gap-4 sm:grid-cols-2">
         {Array.from({ length: 2 }).map((_, index) => (
           <div
             key={index}
-            className="flex min-h-36 items-start gap-4 rounded-2xl border-2 border-border bg-card p-6 shadow-card dark:shadow-none"
+            className="flex min-h-24 items-start gap-3 rounded-2xl border-2 border-border bg-card p-4 shadow-card dark:shadow-none"
           >
-            <Skeleton className="size-12 shrink-0 rounded-xl" />
+            <Skeleton className="size-10 shrink-0 rounded-xl" />
             <span className="flex min-w-0 flex-1 flex-col gap-2">
-              <Skeleton className="h-6 w-36" />
+              <Skeleton className="h-5 w-36" />
               <Skeleton className="h-5 w-full max-w-60" />
             </span>
           </div>

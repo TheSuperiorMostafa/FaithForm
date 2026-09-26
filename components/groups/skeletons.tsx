@@ -71,7 +71,7 @@ function SectionBody({ section }: { section: GroupsSection }) {
     </div>}
     {section === "settings" && <div className="g-detail-grid">
       <div className="space-y-6"><section className="g-panel space-y-4"><h2>Messages in the app</h2><p className="g-row-sub">These apply to every group. A group can be stricter in its own settings.</p>{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</section><section className="g-panel space-y-4"><h2>Kinds of groups</h2>{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-14 w-full" />)}</section></div>
-      <aside className="space-y-6"><section className="g-panel space-y-3"><Skeleton className="h-28 w-full" /></section><section className="g-panel space-y-3"><h2>Is chat up to date?</h2><Skeleton className="h-5 w-full" /></section></aside>
+      <aside className="space-y-6"><section className="g-panel space-y-3"><Skeleton className="h-28 w-full" /></section></aside>
     </div>}
   </>;
 }

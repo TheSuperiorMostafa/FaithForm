@@ -1,24 +1,17 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { CalendarCheck, History } from "lucide-react";
+import { CalendarCheck, CalendarDays, ChevronRight, Hash } from "lucide-react";
 
-import { FollowUpBoard, type FollowUpCandidate } from "./follow-up-board";
-import { buttonVariants } from "@/components/ui/button";
+import { LogLink } from "./log-link";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { ATTENDANCE_COPY } from "@/lib/attendance/page-copy";
-import { checkedInOtherwise, getPresenceOnDate } from "@/lib/attendance/presence";
 import { getChurchAuth } from "@/lib/auth/church";
-import {
-  getPriorConsecutiveAbsences,
-  getRecordByDate,
-  listRecordedServices,
-} from "@/lib/queries/attendance";
-import { getFollowUpMessageTemplates } from "@/lib/queries/follow-up-settings";
-import { getChurchSmsStatus } from "@/lib/sms/church-sender";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { listRecordedServices } from "@/lib/queries/attendance";
 import { createClient } from "@/lib/supabase/server";
-import { isValidDateParam } from "@/lib/utils/dates";
+import { formatServiceDate, isValidDateParam } from "@/lib/utils/dates";
+import { cn } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
 
@@ -26,102 +19,19 @@ type PageProps = {
   searchParams: Promise<{ date?: string }>;
 };
 
-function LogLink() {
-  return (
-    <Link
-      href="/dashboard/attendance/follow-up/log"
-      className={buttonVariants({ variant: "outline" })}
-    >
-      <History aria-hidden />
-      Message log
-    </Link>
-  );
-}
-
-export default async function AttendanceFollowUpPage({
-  searchParams,
-}: PageProps) {
+/** Counted Sundays, newest first, laid out like Sunday count. Green once texts went out. */
+export default async function AttendanceFollowUpPage({ searchParams }: PageProps) {
   const query = await searchParams;
+  // Older links pointed at ?date=; each Sunday has its own page now.
+  if (query.date && isValidDateParam(query.date)) {
+    redirect(`/dashboard/attendance/follow-up/${query.date}`);
+  }
+
   const supabase = createClient();
   const auth = await getChurchAuth(supabase);
   if (!auth) redirect("/login");
 
-  const services = await listRecordedServices(supabase, auth.churchId);
-
-  if (services.length === 0) {
-    return (
-      <div className="flex w-full flex-col gap-8">
-        <PageHeader
-          title={ATTENDANCE_COPY.followUp.title}
-          description={ATTENDANCE_COPY.followUp.description}
-          secondary={<LogLink />}
-        />
-        <EmptyState
-          icon={CalendarCheck}
-          title="No Sundays counted yet"
-          description="Once a Sunday is counted by name, the people who missed it show up here."
-        />
-      </div>
-    );
-  }
-
-  const requested = query.date;
-  const selectedDate =
-    requested &&
-    isValidDateParam(requested) &&
-    services.some((service) => service.serviceDate === requested)
-      ? requested
-      : services[0].serviceDate;
-
-  const [record, presence, texting, templates] = await Promise.all([
-    getRecordByDate(supabase, auth.churchId, selectedDate),
-    getPresenceOnDate(supabase, auth.churchId, selectedDate),
-    getChurchSmsStatus(auth.churchId),
-    // Read the way the sender reads them, so the preview is exactly what goes out.
-    getFollowUpMessageTemplates(auth.churchId, createAdminClient()),
-  ]);
-  // Marked absent, but checked in by the app, a code, the kiosk or a room:
-  // they were there, and a "we missed you" text would be wrong.
-  const cameAnyway = (memberId: string) =>
-    checkedInOtherwise(presence?.get(memberId)).length > 0;
-  const absentEntries = (record?.entries ?? []).filter(
-    (entry) =>
-      entry.status === "absent" && entry.member && !cameAnyway(entry.member.id),
-  );
-
-  // Without migration 0014 there is nowhere to record a send, so the request
-  // flag is the only evidence someone was contacted. Treating it as such is
-  // what keeps the page from offering to text the same person again.
-  const trackingDelivery = record?.deliveryTrackingAvailable ?? true;
-
-  const streaks = await getPriorConsecutiveAbsences(
-    supabase,
-    auth.churchId,
-    selectedDate,
-    absentEntries.map((entry) => entry.member!.id),
-  );
-
-  const candidates: FollowUpCandidate[] = absentEntries
-    .map((entry) => ({
-      memberId: entry.member!.id,
-      name: `${entry.member!.first_name} ${entry.member!.last_name}`.trim(),
-      firstName: entry.member!.first_name?.trim() || "Friend",
-      phone: entry.member!.phone,
-      // This service counts too, so the streak the pastor sees includes today.
-      consecutiveAbsent: (streaks.get(entry.member!.id) ?? 0) + 1,
-      sentAt:
-        entry.follow_up_sent_at ??
-        (!trackingDelivery && entry.follow_up_requested ? "recorded" : null),
-      // Raw text from the texting service stays in the database.
-      error: entry.follow_up_error,
-      requested: entry.follow_up_requested,
-    }))
-    .sort((a, b) => {
-      if (b.consecutiveAbsent !== a.consecutiveAbsent) {
-        return b.consecutiveAbsent - a.consecutiveAbsent;
-      }
-      return a.name.localeCompare(b.name);
-    });
+  const services = await listRecordedServices(supabase, auth.churchId, 12);
 
   return (
     <div className="flex w-full flex-col gap-8">
@@ -130,14 +40,76 @@ export default async function AttendanceFollowUpPage({
         description={ATTENDANCE_COPY.followUp.description}
         secondary={<LogLink />}
       />
-      <FollowUpBoard
-        services={services}
-        selectedDate={selectedDate}
-        candidates={candidates}
-        textingConnected={texting.connected}
-        templates={templates}
-        countedByNumber={(record?.entries.length ?? 0) === 0}
-      />
+
+      {services.length === 0 ? (
+        <EmptyState
+          icon={CalendarCheck}
+          title="No Sundays counted yet"
+          description="Once a Sunday is counted by name, the people who missed it show up here."
+        />
+      ) : (
+        <section className="flex min-w-0 flex-col gap-3" aria-label="Counted Sundays">
+          {services.map((service, index) => {
+            const done = service.followedUp > 0;
+            const isLatest = index === 0;
+            return (
+              <Link
+                key={service.serviceDate}
+                href={`/dashboard/attendance/follow-up/${service.serviceDate}`}
+                className={cn(
+                  "group flex min-h-24 items-center gap-4 rounded-2xl border px-5 py-4 shadow-card transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:shadow-none",
+                  "border-border bg-card hover:border-accent/40 hover:bg-accent/5",
+                )}
+              >
+                <span
+                  aria-hidden
+                  className={cn(
+                    "hidden size-12 shrink-0 items-center justify-center rounded-xl sm:flex",
+                    done
+                      ? "bg-green-100 text-green-700 dark:bg-green-500/15 dark:text-green-300"
+                      : "bg-muted text-muted-foreground",
+                  )}
+                >
+                  <CalendarDays className="size-6" strokeWidth={1.75} />
+                </span>
+                <span className="flex min-w-0 flex-1 flex-col gap-1">
+                  <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span className="font-heading text-lg font-semibold text-foreground">
+                      {formatServiceDate(service.serviceDate, { isLatest })}
+                    </span>
+                    {isLatest ? (
+                      <span className="text-[15px] text-muted-foreground">
+                        {formatServiceDate(service.serviceDate)}
+                      </span>
+                    ) : null}
+                  </span>
+                  {!service.byName ? (
+                    <span className="flex items-center gap-1.5 text-base text-muted-foreground">
+                      <Hash className="size-4 shrink-0" aria-hidden />
+                      Counted as a number. No names to follow up with.
+                    </span>
+                  ) : done ? (
+                    <span className="text-base font-medium text-green-700 dark:text-green-300">
+                      {service.followedUp === 1 ? "1 person" : `${service.followedUp} people`} texted
+                    </span>
+                  ) : (
+                    <span className="text-base text-muted-foreground">
+                      {service.totalAbsent === 1 ? "1 person" : `${service.totalAbsent} people`} not here
+                    </span>
+                  )}
+                </span>
+                <span className="flex shrink-0 items-center gap-2">
+                  {done ? <StatusBadge tone="done">Followed up</StatusBadge> : null}
+                  <ChevronRight
+                    aria-hidden
+                    className="hidden size-5 text-muted-foreground transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none sm:block"
+                  />
+                </span>
+              </Link>
+            );
+          })}
+        </section>
+      )}
     </div>
   );
 }

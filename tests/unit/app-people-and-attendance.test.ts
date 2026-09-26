@@ -260,7 +260,7 @@ test("the weekly pages, follow-up, the chart and the report count check-ins", ()
   assert.match(read("app/api/reports/attendance/[month]/route.ts"), /getPresenceByDate\(/);
 
   // Nobody checked in gets a "we missed you" text — on the page, or by replaying the action.
-  assert.match(read("app/dashboard/attendance/follow-up/page.tsx"), /cameAnyway\(entry\.member\.id\)/);
+  assert.match(read("app/dashboard/attendance/follow-up/[date]/page.tsx"), /cameAnyway\(entry\.member\.id\)/);
   assert.match(
     read("app/dashboard/attendance/follow-up/actions.ts"),
     /checkedInOtherwise\(presence\?\.get\(entry\.member_id\)\)\.length > 0/,

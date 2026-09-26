@@ -60,7 +60,7 @@ test("every reader treats a Sunday's total as a floor, so a headcount shows ever
   assert.match(read("lib/queries/dashboard.ts"), /getPresenceByDate\(/);
   assert.match(read("app/api/reports/attendance/[month]/route.ts"), /getPresenceByDate\(/);
   // Follow-up says there are no names rather than "everyone was here".
-  assert.match(read("app/dashboard/attendance/follow-up/follow-up-board.tsx"), /counted as one number/);
+  assert.match(read("app/dashboard/attendance/follow-up/[date]/follow-up-board.tsx"), /counted as one number/);
 });
 
 // ---------------------------------------------------------------------------
@@ -191,7 +191,7 @@ test("the reworded message is validated on the server and sent as written", () =
 });
 
 test("sending texts asks first, naming how many", () => {
-  const board = read("app/dashboard/attendance/follow-up/follow-up-board.tsx");
+  const board = read("app/dashboard/attendance/follow-up/[date]/follow-up-board.tsx");
   assert.match(board, /title: `Text \$\{people\(count\)\} now\?`/);
   assert.match(board, /confirmLabel: `Send \$\{texts\(count\)\}`/);
   assert.match(board, /destructive: true/);
@@ -212,7 +212,7 @@ test("a texting failure is shown as a plain reason, never the raw response", () 
   assert.doesNotMatch(describeFollowUpFailure("<html>502</html>") ?? "", /html|502/);
 
   for (const path of [
-    "app/dashboard/attendance/follow-up/follow-up-board.tsx",
+    "app/dashboard/attendance/follow-up/[date]/follow-up-board.tsx",
     "app/dashboard/attendance/follow-up/log/follow-up-log.tsx",
     "app/dashboard/attendance/(record)/[date]/attendance-summary.tsx",
   ]) {
@@ -334,6 +334,7 @@ test("every attendance route has a loading skeleton at the shell's width", () =>
     "app/dashboard/attendance/loading.tsx",
     "app/dashboard/attendance/(record)/[date]/loading.tsx",
     "app/dashboard/attendance/follow-up/loading.tsx",
+    "app/dashboard/attendance/follow-up/[date]/loading.tsx",
     "app/dashboard/attendance/follow-up/log/loading.tsx",
     "app/dashboard/attendance/services/loading.tsx",
     "app/dashboard/attendance/setup/loading.tsx",

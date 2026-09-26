@@ -1,17 +1,16 @@
 "use client";
 import { useState } from "react";
-import { Pencil, Plus, RotateCcw, ShieldCheck, Trash2 } from "lucide-react";
+import { Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { confirmAction } from "@/components/ui/confirm-dialog";
 import type { StaffGroupType } from "@/lib/groups/staff/groups";
 import type { ChurchMessagingSettings } from "@/lib/messaging/settings";
-import type { syncHealth } from "@/lib/messaging/moderation";
 import { GROUP_TYPE_ICONS } from "@/lib/groups/types";
 import * as actions from "@/app/dashboard/groups/actions";
 import { Field, Modal, Notice, Pill, Submit, Toggle, useGroupAction } from "./shared";
 import { categoryIconLabel } from "./labels";
 
-export function Settings({ settings, types, health, isAdmin }: { settings: ChurchMessagingSettings; types: StaffGroupType[]; health: Awaited<ReturnType<typeof syncHealth>>; isAdmin: boolean }) {
+export function Settings({ settings, types, isAdmin }: { settings: ChurchMessagingSettings; types: StaffGroupType[]; isAdmin: boolean }) {
   const { pending, error, run } = useGroupAction(); const [category, setCategory] = useState<StaffGroupType | "new" | null>(null);
   return <div className="g-detail-grid">
     <div className="space-y-6">
@@ -37,7 +36,6 @@ export function Settings({ settings, types, health, isAdmin }: { settings: Churc
     </div>
     <aside className="space-y-6">
       <section className="g-panel space-y-3"><ShieldCheck className="size-7 text-accent" aria-hidden /><h2>Safety is built in</h2><p className="g-row-sub">People can report messages and block others in the app. Reports come to the Safety page, and every action your team takes is recorded.</p></section>
-      <section className="g-panel space-y-3" aria-labelledby="health-title"><h2 id="health-title">Is chat up to date?</h2><p className="g-row-sub">{health.failed || health.delayed ? `${health.failed} ${health.failed === 1 ? "change hasn’t" : "changes haven’t"} reached the app yet, and ${health.delayed} ${health.delayed === 1 ? "is" : "are"} slower than usual.` : "Yes. Every change has reached the app."}</p>{health.failed > 0 && isAdmin && <Button variant="outline" disabled={pending} onClick={() => run(() => actions.retrySync(), "Trying those changes again.")}><RotateCcw className="size-5" aria-hidden />Try again</Button>}</section>
     </aside>
     {category && <Modal open onClose={() => setCategory(null)} title={category === "new" ? "Add a kind of group" : `Edit “${category.name}”`}><CategoryForm category={category} close={() => setCategory(null)} /></Modal>}
   </div>;

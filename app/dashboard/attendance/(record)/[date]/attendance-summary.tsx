@@ -115,7 +115,7 @@ export function AttendanceSummary({
         action={
           offerFollowUp ? (
             <Link
-              href={`/dashboard/attendance/follow-up?date=${serviceDate}`}
+              href={`/dashboard/attendance/follow-up/${serviceDate}`}
               className={buttonVariants({ size: "lg" })}
             >
               <Send aria-hidden />

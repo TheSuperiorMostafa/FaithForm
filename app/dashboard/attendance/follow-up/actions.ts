@@ -213,6 +213,7 @@ export async function sendFollowUps(input: {
   }
 
   revalidatePath("/dashboard/attendance/follow-up");
+  revalidatePath(`/dashboard/attendance/follow-up/${input.serviceDate}`);
   revalidatePath(`/dashboard/attendance/${input.serviceDate}`);
   revalidatePath("/dashboard/attendance");
 

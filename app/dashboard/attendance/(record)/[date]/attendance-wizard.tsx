@@ -357,7 +357,7 @@ export function AttendanceWizard({
             <>
               {canFollowUp && saved.kind === "names" && saved.absent > 0 ? (
                 <Link
-                  href={`/dashboard/attendance/follow-up?date=${serviceDate}`}
+                  href={`/dashboard/attendance/follow-up/${serviceDate}`}
                   className={buttonVariants({ size: "lg" })}
                 >
                   Text people who missed
@@ -409,6 +409,13 @@ export function AttendanceWizard({
 
       <div role="radiogroup" aria-label="How do you want to count?" className="choice-grid">
         <ModeCard
+          icon={Users}
+          title="By name"
+          description="Mark who came, so you can follow up with who missed."
+          selected={mode === "names"}
+          onSelect={() => setMode("names")}
+        />
+        <ModeCard
           icon={Hash}
           title="Just a number"
           description="Type one total. The fastest way."
@@ -416,13 +423,6 @@ export function AttendanceWizard({
           disabled={!numberAllowed}
           disabledNote="This Sunday was saved by name. Edit the names so nobody's mark is lost."
           onSelect={() => setMode("number")}
-        />
-        <ModeCard
-          icon={Users}
-          title="By name"
-          description="Mark who came, so you can follow up with who missed."
-          selected={mode === "names"}
-          onSelect={() => setMode("names")}
         />
       </div>
 
@@ -806,21 +806,21 @@ function ModeCard({
       disabled={disabled}
       onClick={onSelect}
       className={cn(
-        "flex min-h-36 items-start gap-4 rounded-2xl border-2 bg-card p-6 text-left shadow-card transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 dark:shadow-none",
+        "flex min-h-24 items-start gap-3 rounded-2xl border-2 bg-card p-4 text-left shadow-card transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60 dark:shadow-none",
         selected ? "border-accent bg-accent/[0.06]" : "border-border hover:border-accent/50",
       )}
     >
       <span
         aria-hidden
         className={cn(
-          "flex size-12 shrink-0 items-center justify-center rounded-xl",
+          "flex size-10 shrink-0 items-center justify-center rounded-xl",
           selected ? "bg-accent text-accent-foreground" : "bg-muted text-muted-foreground",
         )}
       >
-        <Icon className="size-6" strokeWidth={1.75} />
+        <Icon className="size-5" strokeWidth={1.75} />
       </span>
       <span className="flex min-w-0 flex-1 flex-col gap-1">
-        <span className="flex items-center gap-2 font-heading text-lg font-semibold text-foreground">
+        <span className="flex items-center gap-2 font-heading text-base font-semibold text-foreground">
           {title}
           {selected ? <Check className="size-5 text-accent" aria-hidden /> : null}
         </span>
