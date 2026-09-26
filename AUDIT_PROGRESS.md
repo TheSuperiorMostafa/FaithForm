@@ -175,28 +175,45 @@ browser (slug `iglesia-beta-nono` confirms accent fix); re-seeded; IDOR sweep
 (11 routes) clean; action battery: Church A fingerprint unchanged; Volunteer
 invite via Team UI + leak sweep (13 gated routes) clean.
 
+Clean-state browser/API workflows also rerun: room -> check-in -> pickup code
+-> release to guardian (recorded method=code); members-only announcement ->
+app user bootstrap/consent/join (pending sees nothing) -> admin approval ->
+member feed shows it.
+
+## Final verification (final code, clean .next, CI env)
+
+- lint: 0 errors (43 pre-existing warnings)
+- typecheck: pass
+- unit + security + policies: 1,732 / 1,732 pass
+- full migration chain (111 files on Supabase Postgres 15) + RLS/isolation
+  suites: 40 / 40 pass; concurrency suite 204 / 204 pass
+- migration policy check: pass; secret scan: pass; audit:prod: 0 high/critical
+- production build: compiled successfully
+- verify:generated: contract + design tokens current; localization parity
+  FAILS — pre-existing on main (iOS/Android string parity), no app code changed
+
 ## Remaining areas
 
 - [x] Local stack up, migrations applied, two churches seeded
       (Alpha Grace Church / alice@alpha.test; Iglesia Beta / bob@beta.test;
       passwords LocalAudit-A1! / LocalAudit-B1! — local stack only; seed ids in
       table `audit_seed`, seed script `<scratch>/seed.sql`)
-- [ ] Auth: login, logout, magic link, password reset, set-password, stale session
-- [ ] Onboarding / setup flow (new church)
-- [ ] Dashboard home, settings, team (roles, invite, reset)
-- [ ] People / members / households / files / care
-- [ ] Groups (create/edit/archive/members/requests/gatherings/attendance)
-- [ ] Messaging (dashboard side, degrade without Stream Chat)
-- [ ] Announcements (compose, publish, app visibility, delete)
-- [ ] Attendance / services / check-in / kiosk / checkout
-- [ ] Live streaming / recordings / media library / publishing
-- [ ] Giving (degrade without Stripe), donor portal
-- [ ] Website builder, church app settings
-- [ ] Sermons / sermon builder
-- [ ] Platform admin (/admin), impersonation
-- [ ] Mobile API (bearer auth) incl. cross-church ID manipulation
-- [ ] Cron / webhook endpoints (auth, idempotency)
-- [ ] Second adversarial pass + full suite from clean state
+- [x] Auth: login, logout, magic link, password reset, set-password, stale session
+- [x] Onboarding / setup flow (new church)
+- [x] Dashboard home, settings, team (roles, invite, reset)
+- [x] People / members / households / files / care
+- [x] Groups (create/edit/archive/members/requests/gatherings/attendance)
+- [ ] Messaging (only degrade path checked: sync/webhook report not_configured; real Stream Chat not available locally)
+- [x] Announcements (compose, publish, app visibility, delete)
+- [x] Attendance / services / check-in / kiosk / checkout
+- [x] Live streaming / recordings / media library / publishing
+- [~] Giving: settings/funds verified; payments/donor portal need Stripe test keys (not available locally)
+- [x] Website builder, church app settings
+- [~] Sermons: pages, IDOR, degrade without AI keys verified; generation needs AI keys
+- [x] Platform admin (/admin), impersonation
+- [x] Mobile API (bearer auth) incl. cross-church ID manipulation
+- [x] Cron / webhook endpoints (auth, idempotency)
+- [x] Second adversarial pass + full suite from clean state
 
 ## Tooling notes (this pass)
 
