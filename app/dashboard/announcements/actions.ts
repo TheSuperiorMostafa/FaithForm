@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { logActivity } from "@/lib/activity/log";
 import { calendarEditFor } from "@/lib/announcements/calendar-edit";
@@ -24,6 +25,7 @@ import {
   applyMobilePublication,
   withdrawMobilePublication,
 } from "@/lib/faithform/push/publish-hook";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import {
   AppleReconnectRequiredError,
@@ -105,15 +107,19 @@ async function requireChurchAndUser() {
 }
 
 /**
- * Only admins may change announcements: that is the database's own rule
- * (row level security). Asked here, before anything outside the database is
- * touched, because a teammate without admin otherwise had their write silently
- * do nothing while the app, Facebook and the calendar changed anyway — and was
- * told it worked.
+ * The client an announcement row is written with, once the caller has passed
+ * the Announcements check.
+ *
+ * Row level security lets only admins write announcements, but the
+ * Announcements permission is granted to teammates precisely so they can
+ * publish. Through their own session their write silently changed nothing
+ * while the app, Facebook and the calendar — all written with the service
+ * role — changed anyway: the saved row no longer said what had gone out, and
+ * a Facebook post that was never recorded could be posted again. Every write
+ * through this client names the session's church.
  */
-async function announcementAdminError(): Promise<string | null> {
-  const auth = await getChurchAuth();
-  return auth?.isAdmin ? null : "Only a church admin can change announcements.";
+function announcementWriter(): SupabaseClient {
+  return createAdminClient();
 }
 
 /**
@@ -385,8 +391,6 @@ export async function publishAnnouncement(
   if (featureError) {
     return { ok: false, errors: [featureError] };
   }
-  const adminError = await announcementAdminError();
-  if (adminError) return { ok: false, errors: [adminError] };
 
   const parsed = parsePublishForm(formData);
   if (!parsed.ok) {
@@ -476,13 +480,14 @@ export async function publishAnnouncement(
     data: typeof row,
     id: string | null,
   ): Promise<{ id: string; error: string | null }> {
+    const writer = announcementWriter();
     if (id) {
       // `.select` so a change that touched nothing is visible. Row level
       // security lets only admins write announcements, and a teammate without
       // admin — or an id from another church — updated zero rows with no
       // error; the app notification, Facebook post and calendar change below
       // then went out for an announcement that was never saved.
-      let { data: updated, error } = await ctx.supabase
+      let { data: updated, error } = await writer
         .from("announcements")
         .update(data)
         .eq("id", id)
@@ -490,7 +495,7 @@ export async function publishAnnouncement(
         .select("id");
 
       if (error && isMissingOptionalColumnError(error.message)) {
-        ({ data: updated, error } = await ctx.supabase
+        ({ data: updated, error } = await writer
           .from("announcements")
           .update(rowWithoutMissingColumns(data, error.message))
           .eq("id", id)
@@ -504,14 +509,14 @@ export async function publishAnnouncement(
       return { id, error: error?.message ?? null };
     }
 
-    let { data: inserted, error } = await ctx.supabase
+    let { data: inserted, error } = await writer
       .from("announcements")
       .insert({ ...data, created_by: ctx.user!.id })
       .select("id")
       .single();
 
     if (error && isMissingOptionalColumnError(error.message)) {
-      ({ data: inserted, error } = await ctx.supabase
+      ({ data: inserted, error } = await writer
         .from("announcements")
         .insert({
           ...rowWithoutMissingColumns(data, error.message),
@@ -962,21 +967,21 @@ export async function deleteAnnouncement(id: string) {
 
   const featureError = await featureActionError("announcements", ctx.supabase);
   if (featureError) return { error: featureError };
-  const adminError = await announcementAdminError();
-  if (adminError) return { error: adminError };
 
   // Cancel any undelivered notification first: once the row is gone the
   // worker's own re-check would cancel it anyway, but a notification racing a
   // delete should not depend on that ordering.
   await withdrawMobilePublication(ctx.churchId, id).catch(() => undefined);
 
-  const { error } = await ctx.supabase
+  const { data: deleted, error } = await announcementWriter()
     .from("announcements")
     .delete()
     .eq("id", id)
-    .eq("church_id", ctx.churchId);
+    .eq("church_id", ctx.churchId)
+    .select("id");
 
   if (error) return { error: toUserError(error, "We couldn't delete this announcement") };
+  if ((deleted ?? []).length === 0) return { error: "We couldn't find that announcement. Refresh the page." };
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/announcements");
@@ -997,7 +1002,7 @@ const OPTIONAL_UPDATE_COLUMNS = [
  * turns out not to have rather than losing the whole write.
  */
 async function updateAnnouncementRow(
-  supabase: ReturnType<typeof createClient>,
+  supabase: SupabaseClient,
   churchId: string,
   id: string,
   data: Record<string, unknown>,
@@ -1047,8 +1052,6 @@ export async function publishToMoreChannels(
 
   const featureError = await featureActionError("announcements", ctx.supabase);
   if (featureError) return { ok: false, errors: [featureError] };
-  const adminError = await announcementAdminError();
-  if (adminError) return { ok: false, errors: [adminError] };
 
   const announcementId = String(formData.get("announcement_id") ?? "").trim();
   const announcement = announcementId
@@ -1103,7 +1106,7 @@ export async function publishToMoreChannels(
     socialGraphicPath !== announcement.social_graphic_path &&
     (!inApp || !announcement.social_graphic_path)
   ) {
-    await updateAnnouncementRow(ctx.supabase, ctx.churchId, announcement.id, {
+    await updateAnnouncementRow(announcementWriter(), ctx.churchId, announcement.id, {
       social_graphic_path: socialGraphicPath,
       social_graphic_url: socialGraphicUrl,
       social_preview_generated_at: new Date().toISOString(),
@@ -1184,7 +1187,7 @@ export async function publishToMoreChannels(
   changes.last_publish_error = errors.length > 0 ? errors.join(" ") : null;
 
   const saveError = await updateAnnouncementRow(
-    ctx.supabase,
+    announcementWriter(),
     ctx.churchId,
     announcement.id,
     changes,

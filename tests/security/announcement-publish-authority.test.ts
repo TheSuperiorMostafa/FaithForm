@@ -3,11 +3,14 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 /**
- * Row level security lets only admins write announcements, but the actions
- * checked only the Announcements permission. For a teammate without admin the
- * write silently changed nothing while the app notification, the Facebook post
- * and the calendar change went out anyway — and the screen said it worked. An
- * update that touched no row also let a foreign id reach the push queue.
+ * Row level security lets only admins write announcements, but the
+ * Announcements permission is granted to teammates so they can publish. Their
+ * write through their own session silently changed nothing while the app,
+ * Facebook and the calendar changed anyway, so the saved row stopped saying
+ * what had gone out. After the permission check, the row is now written with a
+ * church-scoped service client; an update or delete that touched no row (an id
+ * from another church) is not reported as done, and cancelling queued
+ * notifications is scoped to the church.
  */
 const source = readFileSync("app/dashboard/announcements/actions.ts", "utf8");
 
@@ -17,22 +20,25 @@ function body(name: string): string {
   return source.slice(start, source.indexOf("\nexport async function ", start + 1));
 }
 
-test("publishing, sharing further and deleting are admin-only, checked first", () => {
-  for (const name of ["publishAnnouncement", "publishToMoreChannels", "deleteAnnouncement"]) {
-    const text = body(name);
-    const check = text.indexOf("announcementAdminError()");
-    assert.ok(check > 0, `${name} does not check admin`);
-    for (const effect of ["applyMobilePublication(", "postEventToFacebook(", "withdrawMobilePublication(", ".delete()"]) {
-      const at = text.indexOf(effect);
-      if (at >= 0) assert.ok(check < at, `${name}: ${effect} runs before the admin check`);
-    }
-  }
+test("granted teammates are not turned away by an admin-only gate", () => {
+  assert.doesNotMatch(source, /Only a church admin can change announcements/);
 });
 
-test("an update that changed no row is not a save", () => {
+test("rows are written after the permission check, through the church-scoped writer", () => {
+  for (const name of ["publishAnnouncement", "publishToMoreChannels", "deleteAnnouncement"]) {
+    const text = body(name);
+    const check = text.indexOf('featureActionError("announcements"');
+    assert.ok(check > 0, `${name} does not check the Announcements permission`);
+    assert.ok(text.indexOf("announcementWriter()") > check, `${name} writes before the check`);
+  }
+  assert.doesNotMatch(body("deleteAnnouncement"), /ctx\.supabase\s*\.from\("announcements"\)\s*\.delete/);
+});
+
+test("a write that changed no row is not a save or a delete", () => {
   const publish = body("publishAnnouncement");
   assert.match(publish, /\.eq\("church_id", ctx\.churchId\)\s*\.select\("id"\)/);
   assert.match(publish, /\(updated \?\? \[\]\)\.length === 0/);
+  assert.match(body("deleteAnnouncement"), /\(deleted \?\? \[\]\)\.length === 0/);
 });
 
 test("cancelling queued notifications is scoped to the church", () => {
