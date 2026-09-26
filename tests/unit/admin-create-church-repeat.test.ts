@@ -26,4 +26,8 @@ test("a repeat means same name, recent, no staff yet, and the same open invite",
   assert.match(body, /\.gte\("created_at", since\)/);
   assert.match(body, /church_users \?\? \[\]\)\.length > 0\) continue/);
   assert.match(body, /i\.email === adminEmail && !i\.accepted_at/);
+  assert.match(body, /\.eq\("timezone", timezone\)/);
+  // Without an invitee there is nothing to tell a repeat from a second church.
+  const create = source.slice(source.indexOf("export async function createChurch("));
+  assert.match(create, /const repeat = invitingAdmin\s*\?/);
 });

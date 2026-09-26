@@ -155,6 +155,26 @@ misc guards. 1,722 tests passing at end of session 1.
    invitations) or threw unhandled (fund publication). Now "Only church admins
    can…". Verified via actions.
 
+## Second adversarial pass (tonight's commits)
+
+Independent review: no P0/P1/P2. Verified the page gate covers exactly the 62
+async gated pages with the right feature keys, flag move, zero-row checks, slug
+change. P3 follow-ups applied: "Add Church" repeat check only with an invitee
+(+ timezone, 2-min window) so two different same-named churches aren't merged;
+updateCampus restores the previous primary if the save fails after clearing
+(verified live with a slug conflict); loadFaithFormGiving checks Giving.
+Accepted/documented: concurrent setDefaultFund can leave no main fund (giving
+page falls back to first fund); in-flight double "Add Church" race; possible
+set-password redirect loop if refreshSession fails (pre-existing, bounded by
+token expiry).
+
+## Clean-state rerun
+
+`supabase db reset` + all 111 migrations + buckets; setup both churches via
+browser (slug `iglesia-beta-nono` confirms accent fix); re-seeded; IDOR sweep
+(11 routes) clean; action battery: Church A fingerprint unchanged; Volunteer
+invite via Team UI + leak sweep (13 gated routes) clean.
+
 ## Remaining areas
 
 - [x] Local stack up, migrations applied, two churches seeded

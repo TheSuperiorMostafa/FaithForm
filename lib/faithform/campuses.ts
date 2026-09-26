@@ -173,7 +173,20 @@ export async function updateCampus(
   if (existingError) throw new VisitorError("unavailable", "Could not save that campus.");
   if (!existing) throw new VisitorError("invalid_input", "That campus could not be found. Refresh the page.");
 
-  if (parsed.data.isPrimary) await clearPrimary(churchId, campusId);
+  // Remembered so a save that fails after the old primary was cleared (a slug
+  // that is already taken, say) can put it back rather than leave none.
+  let previousPrimary: string | null = null;
+  if (parsed.data.isPrimary) {
+    const { data: current } = await admin
+      .from("church_campuses")
+      .select("id")
+      .eq("church_id", churchId)
+      .eq("is_primary", true)
+      .neq("id", campusId)
+      .maybeSingle();
+    previousPrimary = (current?.id as string | undefined) ?? null;
+    await clearPrimary(churchId, campusId);
+  }
 
   const { data, error } = await admin
     .from("church_campuses")
@@ -204,6 +217,13 @@ export async function updateCampus(
     .maybeSingle();
 
   if (error || !data) {
+    if (previousPrimary) {
+      await admin
+        .from("church_campuses")
+        .update({ is_primary: true, updated_at: new Date().toISOString() })
+        .eq("id", previousPrimary)
+        .eq("church_id", churchId);
+    }
     throw new VisitorError("conflict", "Could not save that campus.");
   }
 

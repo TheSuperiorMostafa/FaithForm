@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { getChurchAuth } from "@/lib/auth/church";
+import { featureActionError } from "@/lib/features/guard";
 import {
   listPublishableFunds,
   publishFundToFaithForm,
@@ -44,6 +45,8 @@ export async function loadFaithFormGiving(): Promise<{
 } | null> {
   const auth = await getChurchAuth();
   if (!auth) return null;
+  // The fund list and payment readiness are Giving's, like the page that asks.
+  if (await featureActionError("giving")) return null;
   return listPublishableFunds(auth.churchId).catch(() => null);
 }
 

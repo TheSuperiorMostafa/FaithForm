@@ -91,9 +91,13 @@ export async function createChurch(
   // is answered with the church it already made. Two "Grace Chapel" rows with
   // an open invite each was the result, and whichever link the pastor used,
   // the other church sat in the list for good.
-  const repeat = await findRecentlyCreatedChurch(admin, name, invitingAdmin ? adminEmail : null);
+  // Only with an invitee: two different churches may share a name and be set
+  // up minutes apart, but not with the same pastor, time zone and open invite.
+  const repeat = invitingAdmin
+    ? await findRecentlyCreatedChurch(admin, name, adminEmail, timezone)
+    : null;
   if (repeat) {
-    return { ok: true, churchId: repeat, email: invitingAdmin ? adminEmail : null };
+    return { ok: true, churchId: repeat, email: adminEmail };
   }
 
   const slug = generateChurchSlug(name);
@@ -155,7 +159,7 @@ export async function createChurch(
 }
 
 /** How long a second identical "Add church" counts as the same request. */
-const REPEAT_WINDOW_MS = 10 * 60 * 1000;
+const REPEAT_WINDOW_MS = 2 * 60 * 1000;
 
 /**
  * A church with this exact name made in the last few minutes that has no
@@ -165,13 +169,15 @@ const REPEAT_WINDOW_MS = 10 * 60 * 1000;
 async function findRecentlyCreatedChurch(
   admin: ReturnType<typeof createAdminClient>,
   name: string,
-  adminEmail: string | null,
+  adminEmail: string,
+  timezone: string,
 ): Promise<string | null> {
   const since = new Date(Date.now() - REPEAT_WINDOW_MS).toISOString();
   const { data: candidates } = await admin
     .from("churches")
     .select("id, church_invites(email, accepted_at), church_users(id)")
     .eq("name", name)
+    .eq("timezone", timezone)
     .gte("created_at", since)
     .order("created_at", { ascending: false })
     .limit(5);
@@ -182,8 +188,7 @@ async function findRecentlyCreatedChurch(
     church_users: { id: string }[] | null;
   }[]) {
     if ((row.church_users ?? []).length > 0) continue;
-    const invites = row.church_invites ?? [];
-    if (adminEmail === null ? invites.length === 0 : invites.some((i) => i.email === adminEmail && !i.accepted_at)) {
+    if ((row.church_invites ?? []).some((i) => i.email === adminEmail && !i.accepted_at)) {
       return row.id;
     }
   }
