@@ -14,6 +14,7 @@ export async function GET(request: Request) {
 
   let churchId: string;
   let userId: string;
+  let via: "admin" | "invite";
 
   if (inviteToken) {
     const inviteResult = await fetchInviteByToken(inviteToken);
@@ -37,6 +38,7 @@ export async function GET(request: Request) {
 
     churchId = inviteResult.invite.churchId;
     userId = user.id;
+    via = "invite";
   } else {
     const auth = await getChurchAuth();
     if (!auth?.isAdmin) {
@@ -52,6 +54,7 @@ export async function GET(request: Request) {
 
     churchId = auth.churchId;
     userId = auth.userId;
+    via = "admin";
   }
 
   try {
@@ -60,6 +63,7 @@ export async function GET(request: Request) {
       userId,
       provider: "facebook",
       returnTo,
+      via,
     });
     const url = getFacebookAuthUrl(state);
     return NextResponse.redirect(url);

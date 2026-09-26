@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { safeReturnTo } from "@/lib/integrations/oauth-state";
+
 function getAppOrigin(): string {
   const fromEnv = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "");
   if (fromEnv) return fromEnv;
@@ -23,9 +25,10 @@ export function redirectToSettings(
   params: Record<string, string>,
   returnTo?: string,
 ): NextResponse {
-  if (returnTo) {
+  const safe = safeReturnTo(returnTo);
+  if (safe) {
     const base = absoluteAppUrl("/");
-    const url = new URL(returnTo.startsWith("/") ? returnTo : `/${returnTo}`, base);
+    const url = new URL(safe, base);
     for (const [key, value] of Object.entries(params)) {
       url.searchParams.set(key, value);
     }

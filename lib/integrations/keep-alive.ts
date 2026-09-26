@@ -6,6 +6,7 @@ import { getGoogleAuthClient } from "@/lib/integrations/google-oauth";
 import { getIntegration, saveIntegration } from "@/lib/integrations/tokens";
 import type { FacebookIntegrationMetadata } from "@/lib/integrations/types";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getYouTubeAuthClient } from "@/lib/integrations/youtube-live";
 
 /**
  * Keeps connected integrations alive.
@@ -120,8 +121,14 @@ export async function refreshExpiringIntegrations(): Promise<KeepAliveResult> {
     try {
       if (provider === "facebook") {
         await renewFacebook(churchId, result);
+      } else if (provider === "youtube") {
+        // YouTube keeps its own grant and tokens (lib/integrations/youtube-live).
+        // It used to be sent to the Google renewal, which touched the Google
+        // row — or threw for a church with no Google — so a church that did
+        // not stream for months found YouTube dead on the day it went live.
+        await getYouTubeAuthClient(churchId);
+        result.refreshed += 1;
       } else {
-        // YouTube rides on the same Google grant.
         await renewGoogle(churchId, result);
       }
     } catch (err) {

@@ -28,7 +28,7 @@ export async function GET(request: Request) {
     return redirectToSettings({ integration_error: "invalid_state" }, returnTo);
   }
 
-  const sessionMismatch = await assertOAuthSessionUser(payload.userId, returnTo);
+  const sessionMismatch = await assertOAuthSessionUser(payload, returnTo);
   if (sessionMismatch) return sessionMismatch;
 
   try {

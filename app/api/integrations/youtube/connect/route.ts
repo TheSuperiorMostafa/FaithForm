@@ -26,6 +26,7 @@ export async function GET(request: Request) {
       userId: auth.userId,
       provider: "youtube",
       returnTo,
+      via: "admin",
     });
     const url = getYouTubeAuthUrl(state);
     return NextResponse.redirect(url);
