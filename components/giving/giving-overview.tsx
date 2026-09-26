@@ -270,7 +270,9 @@ export function GiftRow({
       leading={<InitialsAvatar name={name} />}
       title={name}
       subtitle={`${fund} · ${formatGiftDate(gift.createdAt)} · ${giftTypeLabel(gift.giftType)}`}
-      trailing={
+      // Before the arrow, not after it: a "Refunded" badge is wider than an
+      // amount, and the arrow has to stay in one place down the list.
+      status={
         <span className="flex flex-col items-end gap-1 text-right">
           <span className="font-heading text-lg font-bold text-foreground">{amount}</span>
           {badge}
