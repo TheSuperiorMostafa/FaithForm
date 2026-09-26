@@ -152,6 +152,31 @@ type PushRecipient = {
  */
 const AUDIENCE_CHUNK = 200;
 
+/**
+ * Every row up to `max`, a page at a time. The hosted API returns at most
+ * 1,000 rows per request whatever `.limit()` asks for, so a single read
+ * silently stopped at 1,000 followers — and at 1,000 devices already reached,
+ * after which a retry sent the rest the same push again.
+ */
+const PAGE_SIZE = 1000;
+
+async function pagedRows(
+  query: (
+    from: number,
+    to: number,
+  ) => PromiseLike<{ data: Record<string, unknown>[] | null; error: unknown }>,
+  max: number,
+): Promise<Record<string, unknown>[]> {
+  const rows: Record<string, unknown>[] = [];
+  for (let from = 0; from < max; from += PAGE_SIZE) {
+    const { data, error } = await query(from, Math.min(from + PAGE_SIZE, max) - 1);
+    if (error) throw new Error("push_audience_unavailable");
+    rows.push(...(data ?? []));
+    if ((data ?? []).length < PAGE_SIZE) break;
+  }
+  return rows;
+}
+
 async function inChunks(
   ids: string[],
   query: (
@@ -190,15 +215,18 @@ async function resolveRecipients(
         ? ["following", "joined"]
         : ["following", "joined"];
 
-  const { data: relationships, error: relationshipsError } = await admin
-    .from("visitor_church_relationships")
-    .select("account_id")
-    .eq("church_id", job.church_id)
-    .in("state", states)
-    .limit(5000);
-
-  if (relationshipsError) throw new Error("push_audience_unavailable");
-  const accountIds = (relationships ?? []).map((row) => row.account_id as string);
+  const relationships = await pagedRows(
+    (from, to) =>
+      admin
+        .from("visitor_church_relationships")
+        .select("account_id")
+        .eq("church_id", job.church_id)
+        .in("state", states)
+        .order("account_id")
+        .range(from, to),
+    5000,
+  );
+  const accountIds = relationships.map((row) => row.account_id as string);
   if (accountIds.length === 0) return [];
 
   // A preference row that says false removes the account. An absent row means
@@ -372,6 +400,29 @@ async function subjectIsStillCurrent(
   return true;
 }
 
+/** More than any one church's audience; the ceiling on what one job reads. */
+const MAX_DEVICES = 20_000;
+
+/**
+ * Hands a claimed job back for the next pass without spending the attempt its
+ * claim counted. Only the lease holder can, as with completion.
+ */
+async function releaseUnspent(admin: SupabaseClient, job: OutboxJob, leaseToken: string): Promise<void> {
+  const at = new Date().toISOString();
+  await admin
+    .from("notification_outbox")
+    .update({
+      status: "pending",
+      lease_token: null,
+      lease_expires_at: null,
+      attempts: Math.max(0, Number(job.attempts) - 1),
+      next_attempt_at: at,
+      updated_at: at,
+    })
+    .eq("id", job.id)
+    .eq("lease_token", leaseToken);
+}
+
 /** Leaves room inside the 60-second function for the last sends and the bookkeeping. */
 const SEND_BUDGET_MS = 40_000;
 const SEND_CONCURRENCY = 8;
@@ -420,15 +471,9 @@ export async function runNotificationWorker(options?: {
     result.claimed += 1;
 
     // Claimed but not reached in time: handed back now rather than left to
-    // sit out its lease.
+    // sit out its lease, and without spending one of its attempts.
     if (now() >= deadline) {
-      await admin.rpc("complete_notification_job", {
-        p_id: raw.id,
-        p_lease_token: leaseToken,
-        p_outcome: "retryable",
-        p_error_category: "time_budget",
-        p_backoff_seconds: 10,
-      });
+      await releaseUnspent(admin, raw, leaseToken);
       result.retried += 1;
       continue;
     }
@@ -447,15 +492,20 @@ export async function runNotificationWorker(options?: {
     // Who already has this notification. Without it every retry — one device's
     // 503, or the function killed mid-list — sent the whole audience the same
     // push again, up to five times, and the end of the list never got it.
-    const { data: reached, error: reachedError } = await admin
-      .from("notification_delivery_attempts")
-      .select("installation_id")
-      .eq("outbox_id", raw.id)
-      .in("outcome", ["sent", "permanent"]);
-
+    let reached: Record<string, unknown>[];
     let recipients: PushRecipient[];
     try {
-      if (reachedError) throw new Error("push_history_unavailable");
+      reached = await pagedRows(
+        (from, to) =>
+          admin
+            .from("notification_delivery_attempts")
+            .select("installation_id")
+            .eq("outbox_id", raw.id)
+            .in("outcome", ["sent", "permanent"])
+            .order("installation_id")
+            .range(from, to),
+        MAX_DEVICES,
+      );
       recipients = await resolveRecipients(admin, raw);
     } catch {
       await admin.rpc("complete_notification_job", {
@@ -467,7 +517,7 @@ export async function runNotificationWorker(options?: {
       result.retried += 1;
       continue;
     }
-    const done = new Set((reached ?? []).map((row) => row.installation_id as string | null));
+    const done = new Set(reached.map((row) => row.installation_id as string | null));
     const pending = recipients.filter((recipient) => !done.has(recipient.installationId));
 
     const message: PushMessage = {
@@ -514,15 +564,21 @@ export async function runNotificationWorker(options?: {
     // retry reaches only the devices this pass did not, so a permanent failure
     // against one device is never a reason to re-notify everyone else.
     const jobOutcome = anyRetryable || outOfTime ? "retryable" : "sent";
-    await admin.rpc("complete_notification_job", {
-      p_id: raw.id,
-      p_lease_token: leaseToken,
-      p_outcome: jobOutcome,
-      p_error_category: outOfTime ? "time_budget" : anyRetryable ? "provider_retryable" : null,
-      ...(outOfTime ? { p_backoff_seconds: 10 } : {}),
-    });
+    if (outOfTime && !anyRetryable) {
+      // Progress is kept in the attempt rows, so running out of time is not a
+      // failure and must not count toward the job's five attempts: a
+      // broadcast needing six passes would otherwise end `failed` part-sent.
+      await releaseUnspent(admin, raw, leaseToken);
+    } else {
+      await admin.rpc("complete_notification_job", {
+        p_id: raw.id,
+        p_lease_token: leaseToken,
+        p_outcome: jobOutcome,
+        p_error_category: anyRetryable ? "provider_retryable" : null,
+      });
+    }
 
-    if (anyRetryable) result.retried += 1;
+    if (jobOutcome === "retryable") result.retried += 1;
     else result.sent += 1;
   }
 

@@ -206,6 +206,11 @@ async function apnsSession(host: string) {
   if (existing && !existing.closed && !existing.destroyed) return existing;
 
   const http2 = await import("node:http2");
+  // Sends go out several at a time, and every one of the first batch waited on
+  // the import above. The first to resume opens the connection; the rest find
+  // it here instead of each dialing their own.
+  const raced = apnsSessions.get(host);
+  if (raced && !raced.closed && !raced.destroyed) return raced;
   const session = http2.connect(host);
   session.setTimeout(APNS_IDLE_MS, () => session.close());
   const forget = () => {

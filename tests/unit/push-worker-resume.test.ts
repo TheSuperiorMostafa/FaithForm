@@ -60,19 +60,32 @@ function fakeDb(deviceCount: number) {
 
   const from = (table: string) => {
     const filters: ((row: Row) => boolean)[] = [];
-    const run = () => ({ data: (tables[table] ?? []).filter((row) => filters.every((keep) => keep(row))), error: null });
+    let window: [number, number] | null = null;
+    let patch: Row | null = null;
+    const run = () => {
+      const matched = (tables[table] ?? []).filter((row) => filters.every((keep) => keep(row)));
+      if (patch) {
+        for (const row of matched) Object.assign(row, patch);
+        return { data: matched, error: null };
+      }
+      // Like the hosted API: never more than 1,000 rows in one response.
+      const [start, end] = window ?? [0, matched.length - 1];
+      return { data: matched.slice(start, Math.min(end + 1, start + 1000)), error: null };
+    };
     const builder = {
       select: () => builder,
       eq: (column: string, value: unknown) => (filters.push((row) => row[column] === value), builder),
       in: (column: string, values: unknown[]) => (filters.push((row) => values.includes(row[column])), builder),
       is: (column: string, value: unknown) => (filters.push((row) => (row[column] ?? null) === value), builder),
+      order: () => builder,
       limit: () => builder,
+      range: (start: number, end: number) => ((window = [start, end]), builder),
       maybeSingle: async () => ({ data: run().data[0] ?? null, error: null }),
       insert: async (row: Row) => {
         tables[table].push(row);
         return { error: null };
       },
-      update: () => builder,
+      update: (values: Row) => ((patch = values), builder),
       then: (resolve: (value: unknown) => unknown) => resolve(run()),
     };
     return builder;
@@ -81,14 +94,21 @@ function fakeDb(deviceCount: number) {
   const rpc = async (fn: string, params: Row) => {
     const job = tables.notification_outbox[0];
     if (fn === "claim_notification_jobs") {
-      if (job.status !== "pending") return { data: [], error: null };
+      if (job.status !== "pending" || Number(job.attempts) >= Number(job.max_attempts)) {
+        return { data: [], error: null };
+      }
       job.status = "claimed";
       job.lease_token = params.p_lease_token;
       job.attempts = Number(job.attempts) + 1;
       return { data: [{ ...job }], error: null };
     }
     if (fn === "complete_notification_job") {
-      job.status = params.p_outcome === "sent" ? "sent" : "pending";
+      job.status =
+        params.p_outcome === "sent"
+          ? "sent"
+          : Number(job.attempts) >= Number(job.max_attempts)
+            ? "failed"
+            : "pending";
       job.lease_token = null;
       return { data: true, error: null };
     }
@@ -145,4 +165,40 @@ test("a broadcast too big for one run resumes where it stopped, sending each dev
   assert.ok(runs > 1, "the budget split the work across runs");
   assert.equal(sends.size, 20);
   assert.ok([...sends.values()].every((count) => count === 1), "no device got the same push twice");
+});
+
+test("a broadcast needing more passes than the job's attempts still finishes", async () => {
+  // Each pass reaches 8 devices; 60 devices take 8 passes, more than the five
+  // attempts a job has. Running out of time is progress, not a failed attempt.
+  const { client, tables } = fakeDb(60);
+  let clock = 0;
+  const { apns, sends } = adapter(() => {
+    clock += 10_000;
+    return "sent";
+  });
+
+  let runs = 0;
+  while (!["sent", "failed"].includes(String(tables.notification_outbox[0].status)) && runs < 20) {
+    await runNotificationWorker({ client, adapters: { apns }, budgetMs: 40_000, now: () => clock });
+    runs += 1;
+  }
+
+  assert.equal(tables.notification_outbox[0].status, "sent");
+  assert.ok(runs > 5);
+  assert.equal(sends.size, 60);
+  assert.ok([...sends.values()].every((count) => count === 1));
+});
+
+test("more than 1,000 devices already reached are all remembered on a retry", async () => {
+  const { client, tables } = fakeDb(1200);
+  for (let index = 0; index < 1100; index += 1) {
+    tables.notification_delivery_attempts.push({
+      outbox_id: "job-1",
+      installation_id: `install-${index}`,
+      outcome: "sent",
+    });
+  }
+  const { apns, sends } = adapter(() => "sent");
+  await runNotificationWorker({ client, adapters: { apns } });
+  assert.equal(sends.size, 100, "only the 100 devices never reached are sent to");
 });
