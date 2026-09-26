@@ -7,7 +7,6 @@ export const revalidate = 0;
 
 import { AttendanceChartSection } from "@/components/dashboard/attendance-chart-section";
 import { HeroHoursSaved } from "@/components/dashboard/hero-hours-saved";
-import { NeedsYou } from "@/components/dashboard/needs-you";
 import {
   QuickActionsSection,
   hasQuickActions,
@@ -15,7 +14,6 @@ import {
 import {
   ChartSkeleton,
   HeroSkeleton,
-  NeedsYouSkeleton,
   StatRowSkeleton,
 } from "@/components/dashboard/skeletons";
 import { StatRow } from "@/components/dashboard/stat-row";
@@ -66,17 +64,6 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
       <LiveAttendanceRefresh />
-      <section aria-labelledby="needs-you" className="flex flex-col gap-3">
-        <h2
-          id="needs-you"
-          className="border-l-4 border-accent pl-3 font-heading text-[26px] font-bold text-foreground"
-        >
-          Waiting on you
-        </h2>
-        <Suspense fallback={<NeedsYouSkeleton />}>
-          <NeedsYou churchId={churchId} allowedFeatures={allowedFeatures} />
-        </Suspense>
-      </section>
       <Suspense fallback={<HeroSkeleton />}>
         <HeroHoursSaved churchId={churchId} range={range} />
       </Suspense>

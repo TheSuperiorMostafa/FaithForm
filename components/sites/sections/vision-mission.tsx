@@ -39,7 +39,7 @@ export const visionMissionSection = defineSection<VisionMissionContent>({
       type: "list",
       addLabel: "Add card",
       titleKey: "title",
-      help: "Left empty, these show the vision and mission from Website → Look & details.",
+      help: "Left empty, these show the vision and mission from Website → Look & Details.",
       itemFields: [
         { key: "badge", label: "Badge letter", type: "text" },
         { key: "title", label: "Title", type: "text" },

@@ -7,6 +7,7 @@ import { SettingsTabPanel } from "@/app/dashboard/settings/tab-panels";
 import { SettingsPageHeader, SettingsTabSkeleton } from "@/components/settings/settings-skeletons";
 import { SettingsTabNav } from "@/components/settings/settings-tab-nav";
 import {
+  REMOVED_SETTINGS_TABS,
   resolveSettingsTab,
   visibleSettingsTabs,
 } from "@/components/settings/settings-tabs-config";
@@ -33,7 +34,7 @@ function paramReader(query: Record<string, string | string[] | undefined>) {
 
 /**
  * Settings: the church's details, the team, connected accounts, the weekly
- * email and texts, and a few rare options. One section at a time, each one
+ * email and texts, and the app's colors. Light or dark sits at the top. One section at a time, each one
  * linkable with `?tab=`.
  */
 export default async function SettingsPage({ searchParams }: PageProps) {
@@ -72,6 +73,10 @@ export default async function SettingsPage({ searchParams }: PageProps) {
   // change still arrive here, so pass them along.
   if (params.get("stripe_return")) redirect("/dashboard/giving?stripe_return=1");
   if (params.get("stripe_refresh")) redirect("/dashboard/giving?stripe_refresh=1");
+  // A section that was removed sends old bookmarks to Settings home.
+  if (REMOVED_SETTINGS_TABS.includes(params.get("tab")?.trim().toLowerCase() ?? "")) {
+    redirect("/dashboard/settings");
+  }
 
   return (
     <div className="flex w-full flex-col gap-8">

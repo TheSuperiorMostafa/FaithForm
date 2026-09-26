@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2 } from "lucide-react";
 
@@ -22,6 +22,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 import { DAY_OF_WEEK_LABELS } from "@/types/church-profile";
 
 /**
@@ -59,6 +60,11 @@ export function DetailsForm({
   const [form, setForm] = useState<SiteDetailsInput>(initial);
   const [savedAt, setSavedAt] = useState(0);
   const router = useRouter();
+  const [view, setView] = useState<DetailsView>("details");
+  // Old /design links and bookmarks arrive as #look.
+  useEffect(() => {
+    if (window.location.hash === "#look") setView("look");
+  }, []);
 
   const set = <K extends keyof SiteDetailsInput>(
     key: K,
@@ -151,283 +157,288 @@ export function DetailsForm({
       <div className="flex min-w-0 flex-col gap-6">
         <LiveEditsNote isLive={isLive} />
 
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div className="space-y-1">
-            <h2 className="font-heading text-xl font-bold">Details</h2>
-            <p className="max-w-xl text-[15px] text-muted-foreground">
-              What your website says about your church. These details are
-              shared: changing a service time also updates the app, attendance,
-              and what your phone assistant tells callers.
-            </p>
-          </div>
-          {canEdit ? <SaveStatus status={status} /> : null}
-        </div>
+        {design ? <ViewSwitch view={view} onChange={setView} /> : null}
 
-        <Panel title="Your church" description={SHARED_NOTE}>
-          <Field label="Church name" required>
-            <Input
-              value={form.name}
-              onChange={(e) => set("name", e.target.value)}
-              disabled={!canEdit}
-            />
-          </Field>
-          <Field label="Denomination or sub-line" help="Shown under your name in the header.">
-            <Input
-              value={form.denomination}
-              onChange={(e) => set("denomination", e.target.value)}
-              disabled={!canEdit}
-            />
-          </Field>
-          <ImageUploadField
-            label="Logo"
-            help="Shown in the header and footer, and as your church's picture in the app. Also in Settings → Church info."
-            // One logo feeds the site and the apps, and the apps show it
-            // square, so it is framed here rather than centre-cropped there.
-            aspect="logo"
-            value={form.logoUrl}
-            disabled={!canEdit}
-            onChange={(url) => set("logoUrl", url)}
-          />
-          <ImageUploadField
-            label="Cover photo"
-            help="Your banner photo, and the top of your church's page in the app. Changing it here changes both. Also in Settings → Church info."
-            // Shared with the apps, so it is framed at their shape rather than
-            // as the hero strip — the same cover crop on every surface.
-            aspect="cover"
-            value={form.coverImageUrl}
-            disabled={!canEdit}
-            onChange={(url) => set("coverImageUrl", url)}
-          />
-        </Panel>
-
-        <Panel title="Where to find you" description={SHARED_NOTE}>
-          <Field label="Street address">
-            <Input
-              value={form.address}
-              onChange={(e) => set("address", e.target.value)}
-              disabled={!canEdit}
-            />
-          </Field>
-          <div className="grid gap-4 sm:grid-cols-3">
-            <Field label="City">
-              <Input value={form.city} onChange={(e) => set("city", e.target.value)} disabled={!canEdit} />
-            </Field>
-            <Field label="State">
-              <Input value={form.state} onChange={(e) => set("state", e.target.value)} disabled={!canEdit} />
-            </Field>
-            <Field label="ZIP">
-              <Input value={form.zip} onChange={(e) => set("zip", e.target.value)} disabled={!canEdit} />
-            </Field>
+        {/* Hidden rather than unmounted, so switching never loses an edit. */}
+        <div className={view === "details" ? "flex min-w-0 flex-col gap-6" : "hidden"}>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div className="space-y-1">
+              <h2 className="font-heading text-xl font-bold">Details</h2>
+              <p className="max-w-xl text-[15px] text-muted-foreground">
+                What your website says about your church. These details are
+                shared: changing a service time also updates the app, attendance,
+                and what your phone assistant tells callers.
+              </p>
+            </div>
+            {canEdit ? <SaveStatus status={status} /> : null}
           </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Field label="Phone">
-              <Input value={form.phone} onChange={(e) => set("phone", e.target.value)} disabled={!canEdit} />
-            </Field>
-            <Field label="Email" help="Where contact-form messages are sent.">
-              <Input value={form.email} onChange={(e) => set("email", e.target.value)} disabled={!canEdit} />
-            </Field>
-          </div>
-        </Panel>
 
-        <Panel
-          title="Service times"
-          description={SHARED_NOTE}
-          action={
-            canEdit ? (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() =>
-                  set("serviceTimes", [
-                    ...times,
-                    { clientId: newId(), label: "", dayOfWeek: 0, startTime: "10:00" },
-                  ])
-                }
-              >
-                <Plus className="mr-1 size-4" /> Add service
-              </Button>
-            ) : null
-          }
-        >
-          {times.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No services yet. Add one and the times strip appears on your site.
-            </p>
-          ) : (
-            times.map((row, i) => (
-              <div
-                key={row.clientId}
-                // Fixed tracks for the day and time so every row lines up,
-                // rather than each sizing to its own content.
-                className="grid items-center gap-3 rounded-lg border border-border bg-muted/30 p-3 sm:grid-cols-[minmax(0,1fr)_11rem_9rem_auto]"
-              >
-                <Input
-                  placeholder="Sunday Worship"
-                  value={row.label}
-                  disabled={!canEdit}
-                  onChange={(e) => {
-                    const next = [...times];
-                    next[i] = { ...row, label: e.target.value };
-                    set("serviceTimes", next);
-                  }}
-                />
-                <Select
-                  value={row.dayOfWeek}
-                  disabled={!canEdit}
-                  onChange={(e) => {
-                    const next = [...times];
-                    next[i] = { ...row, dayOfWeek: Number(e.target.value) };
-                    set("serviceTimes", next);
-                  }}
-                >
-                  {DAY_OF_WEEK_LABELS.map((day, index) => (
-                    <option key={day} value={index}>
-                      {day}
-                    </option>
-                  ))}
-                </Select>
-                <Input
-                  type="time"
-                  value={row.startTime}
-                  disabled={!canEdit}
-                  onChange={(e) => {
-                    const next = [...times];
-                    next[i] = { ...row, startTime: e.target.value };
-                    set("serviceTimes", next);
-                  }}
-                />
+          <Panel title="Your church" description={SHARED_NOTE}>
+            <Field label="Church name" required>
+              <Input
+                value={form.name}
+                onChange={(e) => set("name", e.target.value)}
+                disabled={!canEdit}
+              />
+            </Field>
+            <Field label="Denomination or sub-line" help="Shown under your name in the header.">
+              <Input
+                value={form.denomination}
+                onChange={(e) => set("denomination", e.target.value)}
+                disabled={!canEdit}
+              />
+            </Field>
+            <ImageUploadField
+              label="Logo"
+              help="Shown in the header and footer, and as your church's picture in the app. Also in Settings → Church info."
+              // One logo feeds the site and the apps, and the apps show it
+              // square, so it is framed here rather than centre-cropped there.
+              aspect="logo"
+              value={form.logoUrl}
+              disabled={!canEdit}
+              onChange={(url) => set("logoUrl", url)}
+            />
+            <ImageUploadField
+              label="Cover photo"
+              help="Your banner photo, and the top of your church's page in the app. Changing it here changes both. Also in Settings → Church info."
+              // Shared with the apps, so it is framed at their shape rather than
+              // as the hero strip — the same cover crop on every surface.
+              aspect="cover"
+              value={form.coverImageUrl}
+              disabled={!canEdit}
+              onChange={(url) => set("coverImageUrl", url)}
+            />
+          </Panel>
+
+          <Panel title="Where to find you" description={SHARED_NOTE}>
+            <Field label="Street address">
+              <Input
+                value={form.address}
+                onChange={(e) => set("address", e.target.value)}
+                disabled={!canEdit}
+              />
+            </Field>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Field label="City">
+                <Input value={form.city} onChange={(e) => set("city", e.target.value)} disabled={!canEdit} />
+              </Field>
+              <Field label="State">
+                <Input value={form.state} onChange={(e) => set("state", e.target.value)} disabled={!canEdit} />
+              </Field>
+              <Field label="ZIP">
+                <Input value={form.zip} onChange={(e) => set("zip", e.target.value)} disabled={!canEdit} />
+              </Field>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Field label="Phone">
+                <Input value={form.phone} onChange={(e) => set("phone", e.target.value)} disabled={!canEdit} />
+              </Field>
+              <Field label="Email" help="Where contact-form messages are sent.">
+                <Input value={form.email} onChange={(e) => set("email", e.target.value)} disabled={!canEdit} />
+              </Field>
+            </div>
+          </Panel>
+
+          <Panel
+            title="Service times"
+            description={SHARED_NOTE}
+            action={
+              canEdit ? (
                 <Button
                   type="button"
-                  variant="ghost"
-                  aria-label={`Remove ${row.label || `service ${i + 1}`}`}
-                  disabled={!canEdit}
-                  onClick={() => void removeService(i)}
+                  variant="outline"
+                  onClick={() =>
+                    set("serviceTimes", [
+                      ...times,
+                      { clientId: newId(), label: "", dayOfWeek: 0, startTime: "10:00" },
+                    ])
+                  }
                 >
-                  <Trash2 className="size-4" aria-hidden /> Remove
+                  <Plus className="mr-1 size-4" /> Add service
                 </Button>
-              </div>
-            ))
-          )}
-        </Panel>
-
-        <Panel
-          title="Your team"
-          action={
-            canEdit ? (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() =>
-                  set("staff", [
-                    ...staff,
-                    { clientId: newId(), fullName: "", title: "", bio: "", photoUrl: "", isPublic: true },
-                  ])
-                }
-              >
-                <Plus className="mr-1 size-4" /> Add person
-              </Button>
-            ) : null
-          }
-        >
-          {staff.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No one added yet. People marked public appear in your team section.
-            </p>
-          ) : (
-            staff.map((row, i) => {
-              const update = (patch: Partial<StaffRow>) => {
-                const next = [...staff];
-                next[i] = { ...row, ...patch };
-                set("staff", next);
-              };
-
-              return (
+              ) : null
+            }
+          >
+            {times.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No services yet. Add one and the times strip appears on your site.
+              </p>
+            ) : (
+              times.map((row, i) => (
                 <div
                   key={row.clientId}
-                  className="flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-3"
+                  // Fixed tracks for the day and time so every row lines up,
+                  // rather than each sizing to its own content.
+                  className="grid items-center gap-3 rounded-lg border border-border bg-muted/30 p-3 sm:grid-cols-[minmax(0,1fr)_11rem_9rem_auto]"
                 >
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <Input
-                      placeholder="Full name"
-                      value={row.fullName}
-                      disabled={!canEdit}
-                      onChange={(e) => update({ fullName: e.target.value })}
-                    />
-                    <Input
-                      placeholder="Role, e.g. Lead Pastor"
-                      value={row.title}
-                      disabled={!canEdit}
-                      onChange={(e) => update({ title: e.target.value })}
-                    />
-                  </div>
-                  <Textarea
-                    rows={2}
-                    placeholder="A sentence about them"
-                    value={row.bio}
+                  <Input
+                    placeholder="Sunday Worship"
+                    value={row.label}
                     disabled={!canEdit}
-                    onChange={(e) => update({ bio: e.target.value })}
+                    onChange={(e) => {
+                      const next = [...times];
+                      next[i] = { ...row, label: e.target.value };
+                      set("serviceTimes", next);
+                    }}
                   />
-                  <ImageUploadField
-                    label="Photo"
-                    aspect="portrait"
-                    value={row.photoUrl}
+                  <Select
+                    value={row.dayOfWeek}
                     disabled={!canEdit}
-                    onChange={(url) => update({ photoUrl: url })}
+                    onChange={(e) => {
+                      const next = [...times];
+                      next[i] = { ...row, dayOfWeek: Number(e.target.value) };
+                      set("serviceTimes", next);
+                    }}
+                  >
+                    {DAY_OF_WEEK_LABELS.map((day, index) => (
+                      <option key={day} value={index}>
+                        {day}
+                      </option>
+                    ))}
+                  </Select>
+                  <Input
+                    type="time"
+                    value={row.startTime}
+                    disabled={!canEdit}
+                    onChange={(e) => {
+                      const next = [...times];
+                      next[i] = { ...row, startTime: e.target.value };
+                      set("serviceTimes", next);
+                    }}
                   />
-                  <div className="flex items-center justify-between gap-4">
-                    <Label className="text-[15px] font-medium">Show on the website</Label>
-                    <div className="flex items-center gap-2">
-                      <Switch
-                        checked={row.isPublic}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    aria-label={`Remove ${row.label || `service ${i + 1}`}`}
+                    disabled={!canEdit}
+                    onClick={() => void removeService(i)}
+                  >
+                    <Trash2 className="size-4" aria-hidden /> Remove
+                  </Button>
+                </div>
+              ))
+            )}
+          </Panel>
+
+          <Panel
+            title="Your team"
+            action={
+              canEdit ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() =>
+                    set("staff", [
+                      ...staff,
+                      { clientId: newId(), fullName: "", title: "", bio: "", photoUrl: "", isPublic: true },
+                    ])
+                  }
+                >
+                  <Plus className="mr-1 size-4" /> Add person
+                </Button>
+              ) : null
+            }
+          >
+            {staff.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No one added yet. People marked public appear in your team section.
+              </p>
+            ) : (
+              staff.map((row, i) => {
+                const update = (patch: Partial<StaffRow>) => {
+                  const next = [...staff];
+                  next[i] = { ...row, ...patch };
+                  set("staff", next);
+                };
+
+                return (
+                  <div
+                    key={row.clientId}
+                    className="flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-3"
+                  >
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Input
+                        placeholder="Full name"
+                        value={row.fullName}
                         disabled={!canEdit}
-                        onCheckedChange={(checked) => update({ isPublic: checked })}
+                        onChange={(e) => update({ fullName: e.target.value })}
                       />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        aria-label={`Remove ${row.fullName || `person ${i + 1}`}`}
+                      <Input
+                        placeholder="Role, e.g. Lead Pastor"
+                        value={row.title}
                         disabled={!canEdit}
-                        onClick={() => void removePerson(i)}
-                      >
-                        <Trash2 className="size-4" aria-hidden /> Remove
-                      </Button>
+                        onChange={(e) => update({ title: e.target.value })}
+                      />
+                    </div>
+                    <Textarea
+                      rows={2}
+                      placeholder="A sentence about them"
+                      value={row.bio}
+                      disabled={!canEdit}
+                      onChange={(e) => update({ bio: e.target.value })}
+                    />
+                    <ImageUploadField
+                      label="Photo"
+                      aspect="portrait"
+                      value={row.photoUrl}
+                      disabled={!canEdit}
+                      onChange={(url) => update({ photoUrl: url })}
+                    />
+                    <div className="flex items-center justify-between gap-4">
+                      <Label className="text-[15px] font-medium">Show on the website</Label>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={row.isPublic}
+                          disabled={!canEdit}
+                          onCheckedChange={(checked) => update({ isPublic: checked })}
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          aria-label={`Remove ${row.fullName || `person ${i + 1}`}`}
+                          disabled={!canEdit}
+                          onClick={() => void removePerson(i)}
+                        >
+                          <Trash2 className="size-4" aria-hidden /> Remove
+                        </Button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })
+                );
+              })
+            )}
+          </Panel>
+
+          <Panel title="Vision and mission" description="The website shows a shortened version of these.">
+            <Field label="Vision statement">
+              <Textarea
+                rows={3}
+                value={form.visionStatement}
+                disabled={!canEdit}
+                onChange={(e) => set("visionStatement", e.target.value)}
+              />
+            </Field>
+            <Field label="Mission statement">
+              <Textarea
+                rows={3}
+                value={form.missionStatement}
+                disabled={!canEdit}
+                onChange={(e) => set("missionStatement", e.target.value)}
+              />
+            </Field>
+          </Panel>
+
+          {!canEdit ? (
+            <p className="text-sm text-muted-foreground">
+              Only church admins can change these.
+            </p>
+          ) : (
+            <SaveStatus status={status} />
           )}
-        </Panel>
-
-        <Panel title="Vision and mission" description="The website shows a shortened version of these.">
-          <Field label="Vision statement">
-            <Textarea
-              rows={3}
-              value={form.visionStatement}
-              disabled={!canEdit}
-              onChange={(e) => set("visionStatement", e.target.value)}
-            />
-          </Field>
-          <Field label="Mission statement">
-            <Textarea
-              rows={3}
-              value={form.missionStatement}
-              disabled={!canEdit}
-              onChange={(e) => set("missionStatement", e.target.value)}
-            />
-          </Field>
-        </Panel>
-
-        {!canEdit ? (
-          <p className="text-sm text-muted-foreground">
-            Only church admins can change these.
-          </p>
-        ) : (
-          <SaveStatus status={status} />
-        )}
+        </div>
 
         {design ? (
-          <div className="mt-4 border-t border-border pt-8">
+          <div className={view === "look" ? undefined : "hidden"}>
             <DesignForm
               {...design}
               canEdit={canEdit}
@@ -492,6 +503,42 @@ function Field({
        * field beside it in the same row. */}
       {children}
       {help ? <p className="text-sm text-muted-foreground">{help}</p> : null}
+    </div>
+  );
+}
+
+type DetailsView = "details" | "look";
+
+/** Details or Look, one at a time, so the look is one tap away instead of a long scroll. */
+function ViewSwitch({ view, onChange }: { view: DetailsView; onChange: (view: DetailsView) => void }) {
+  const options: { value: DetailsView; label: string }[] = [
+    { value: "details", label: "Details" },
+    { value: "look", label: "Look" },
+  ];
+  return (
+    <div
+      role="radiogroup"
+      aria-label="Show"
+      className="inline-flex w-fit gap-1 rounded-xl border border-border bg-card p-1 shadow-card dark:shadow-none"
+    >
+      {options.map((option) => {
+        const selected = view === option.value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            onClick={() => onChange(option.value)}
+            className={cn(
+              "min-h-11 rounded-lg px-6 text-[15px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+              selected ? "bg-primary text-primary-foreground" : "text-foreground/80 hover:bg-muted hover:text-foreground",
+            )}
+          >
+            {option.label}
+          </button>
+        );
+      })}
     </div>
   );
 }

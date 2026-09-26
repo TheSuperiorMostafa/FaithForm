@@ -54,7 +54,7 @@ export type DesignFormProps = {
 };
 
 /**
- * Theme and colours, shown as the "Look" part of Website → Look & details.
+ * Theme and colours, shown as the "Look" part of Website → Look & Details.
  *
  * Autosaves like the rest of the editor. Because a live site changes the
  * moment this saves, switching theme on a live site asks first and then offers

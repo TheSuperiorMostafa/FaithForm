@@ -11,7 +11,6 @@ import { ConnectedAccountsCard } from "@/components/settings/connected-accounts-
 import { FollowUpMessagesForm } from "@/components/settings/follow-up-messages-form";
 import type { ResolvedSettingsTab } from "@/components/settings/settings-tabs-config";
 import { TeamMembersCard } from "@/components/settings/team-members-card";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ErrorState } from "@/components/ui/error-state";
@@ -54,8 +53,8 @@ export async function SettingsTabPanel({
         return await AccountsPanel(context);
       case "messages":
         return await MessagesPanel(context);
-      case "advanced":
-        return await AdvancedPanel(context);
+      case "app":
+        return await MemberAppPanel(context);
       case "giving":
         return await GivingPanel();
     }
@@ -72,16 +71,7 @@ export async function SettingsTabPanel({
 }
 
 async function ChurchInfoPanel({ auth, allowedFeatures }: SettingsPanelContext) {
-  const [appInfo, colors] = await Promise.all([
-    getChurchAppInfo(auth.churchId),
-    auth.isAdmin
-      ? createClient()
-          .from("churches")
-          .select("giving_primary_color, giving_accent_color")
-          .eq("id", auth.churchId)
-          .maybeSingle()
-      : Promise.resolve({ data: null }),
-  ]);
+  const appInfo = await getChurchAppInfo(auth.churchId);
 
   if (!appInfo) {
     return (
@@ -94,28 +84,38 @@ async function ChurchInfoPanel({ auth, allowedFeatures }: SettingsPanelContext) 
   }
 
   const info = appInfo.info;
-  const colorRow = colors.data as { giving_primary_color: string | null; giving_accent_color: string | null } | null;
 
   return (
     <div className="flex flex-col gap-6">
-      <ChurchImagesCard
-        logoUrl={info.logoUrl || null}
-        coverUrl={info.coverImageUrl || null}
-        canEdit={auth.isAdmin}
-      />
       <ChurchDetailsForm
         initial={pickChurchBasics(info)}
         timezone={appInfo.context.timezone || auth.churchTimezone}
         canEdit={auth.isAdmin}
         appPageHref={allowedFeatures.includes("member_app") ? "/dashboard/app" : null}
       />
-      {auth.isAdmin && (
-        <BrandColorsCard
-          primaryColor={colorRow?.giving_primary_color ?? null}
-          accentColor={colorRow?.giving_accent_color ?? null}
-        />
-      )}
+      <ChurchImagesCard
+        logoUrl={info.logoUrl || null}
+        coverUrl={info.coverImageUrl || null}
+        canEdit={auth.isAdmin}
+      />
     </div>
+  );
+}
+
+/** The colors the church's app and giving page use. Admins only. */
+async function MemberAppPanel({ auth }: SettingsPanelContext) {
+  const { data } = await createClient()
+    .from("churches")
+    .select("giving_primary_color, giving_accent_color")
+    .eq("id", auth.churchId)
+    .maybeSingle();
+  const colorRow = data as { giving_primary_color: string | null; giving_accent_color: string | null } | null;
+
+  return (
+    <BrandColorsCard
+      primaryColor={colorRow?.giving_primary_color ?? null}
+      accentColor={colorRow?.giving_accent_color ?? null}
+    />
   );
 }
 
@@ -136,7 +136,39 @@ async function TeamPanel({ auth, flags }: SettingsPanelContext) {
 
 async function AccountsPanel({ auth, allowedFeatures }: SettingsPanelContext) {
   const status = await getIntegrationStatus(auth.churchId, createClient());
-  return <ConnectedAccountsCard status={status} allowedFeatures={allowedFeatures} />;
+  const showMail = allowedFeatures.includes("announcements");
+  const apple = status.apple;
+  const mailPossible = Boolean(apple.connected && !apple.readOnly);
+
+  return (
+    <div className="flex flex-col gap-6">
+      <ConnectedAccountsCard status={status} allowedFeatures={allowedFeatures} />
+
+      {showMail && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Mail className="size-5 text-accent" strokeWidth={1.75} aria-hidden />
+              Apple Mail drafts
+            </CardTitle>
+            <CardDescription className="text-[15px]">
+              Write the weekly announcement email as a draft in your iCloud Mail.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {mailPossible ? (
+              <AppleMailDraftsCard status={apple} />
+            ) : (
+              <p className="text-[15px] text-muted-foreground">
+                This needs iCloud Calendar connected with an Apple ID. Choose Connect next to
+                iCloud Calendar above, then &ldquo;Connect with an Apple ID&rdquo;.
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
 }
 
 async function MessagesPanel({ auth, allowedFeatures }: SettingsPanelContext) {
@@ -159,59 +191,6 @@ async function MessagesPanel({ auth, allowedFeatures }: SettingsPanelContext) {
         </>
       )}
       {followUps && <FollowUpMessagesForm isAdmin={auth.isAdmin} templates={followUps} />}
-    </div>
-  );
-}
-
-async function AdvancedPanel({ auth, allowedFeatures }: SettingsPanelContext) {
-  const showMail = auth.isAdmin && allowedFeatures.includes("announcements");
-  const status = showMail ? await getIntegrationStatus(auth.churchId, createClient()) : null;
-  const apple = status?.apple ?? null;
-  const mailPossible = Boolean(apple?.connected && !apple.readOnly);
-
-  return (
-    <div className="flex flex-col gap-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Light or dark</CardTitle>
-          <CardDescription className="text-[15px]">
-            How FaithForm looks on this computer. Only you see this.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ThemeToggle variant="cards" />
-        </CardContent>
-      </Card>
-
-      {showMail && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Mail className="size-5 text-accent" strokeWidth={1.75} aria-hidden />
-              Apple Mail drafts
-            </CardTitle>
-            <CardDescription className="text-[15px]">
-              Write the weekly announcement email as a draft in your iCloud Mail.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {apple && mailPossible ? (
-              <AppleMailDraftsCard status={apple} />
-            ) : (
-              <p className="text-[15px] text-muted-foreground">
-                This needs iCloud Calendar connected with an Apple ID. Go to{" "}
-                <Link
-                  href="/dashboard/settings?tab=accounts"
-                  className="font-semibold text-primary underline underline-offset-4 dark:text-accent"
-                >
-                  Connected accounts
-                </Link>
-                , choose Connect next to iCloud Calendar, then &ldquo;Connect with an Apple ID&rdquo;.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }

@@ -11,8 +11,8 @@ import { listStaffRecordings, type StaffRecording } from "@/lib/stream/recording
 import {
   filterRecordings,
   isStillChanging,
-  needsAction,
   parseRecordingFilter,
+  searchRecordings,
 } from "@/lib/stream/recording-status";
 import { loadRecordingStatuses } from "@/lib/stream/recording-status-server";
 
@@ -26,11 +26,13 @@ export const dynamic = "force-dynamic";
 export default async function RecordingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ show?: string | string[] }>;
+  searchParams: Promise<{ show?: string | string[]; q?: string | string[] }>;
 }) {
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");
-  const filter = parseRecordingFilter((await searchParams).show);
+  const query = await searchParams;
+  const filter = parseRecordingFilter(query.show);
+  const search = (Array.isArray(query.q) ? query.q[0] : query.q)?.trim() ?? "";
 
   if (filter === "series") {
     let library: Awaited<ReturnType<typeof loadLibraryBrowse>>;
@@ -71,7 +73,7 @@ export default async function RecordingsPage({
   } catch {
     return (
       <div className="flex w-full flex-col gap-6">
-        <RecordingFilters active={filter} />
+        <RecordingFilters active={filter} search={search} />
         <RecordingsLoadError />
       </div>
     );
@@ -79,17 +81,17 @@ export default async function RecordingsPage({
 
   const counts = {
     all: recordings.length,
-    "needs-action": recordings.filter((recording) => needsAction(recording.phase.phase)).length,
     published: recordings.filter((recording) => recording.phase.phase === "published").length,
   };
 
   return (
     <div className="flex w-full flex-col gap-6">
       <AutoRefresh active={recordings.some((recording) => isStillChanging(recording.phase.phase))} />
-      <RecordingFilters active={filter} counts={counts} />
+      <RecordingFilters active={filter} counts={counts} search={search} />
       <RecordingList
-        recordings={filterRecordings(recordings, filter)}
+        recordings={searchRecordings(filterRecordings(recordings, filter), search)}
         filter={filter}
+        search={search}
         timeZone={auth.churchTimezone ?? "America/New_York"}
         isAdmin={auth.isAdmin}
       />

@@ -69,10 +69,11 @@ const NEW_SERIES = "__new__";
  *
  * The default path is one click: the title and series are filled in from the
  * service, the church's usual audience is already chosen, and the one solid
- * button says exactly what it does — "Publish to the app". The website is a
- * plain checkbox. Everything else (audience, speaker, scripture, topics,
- * artwork, trimming, a website-only publish) is folded under "More options",
- * and deleting sits in a quiet section at the very bottom.
+ * button says exactly what it does — "Publish to the app". The website and
+ * the app are plain checkboxes, with the artwork right under them. Anything
+ * on the website is listed there. Everything else (audience, speaker,
+ * scripture, topics) is folded under "More options", and deleting sits in a
+ * quiet section at the very bottom.
  */
 export function RecordingReview({
   recording,
@@ -100,7 +101,6 @@ export function RecordingReview({
   const [newSeries, setNewSeries] = useState("");
   const [chapters, setChapters] = useState(recording.chapters.join(", "));
   const [topics, setTopics] = useState(recording.topics.join(", "));
-  const [listed, setListed] = useState(recording.website.listed);
 
   const [toApp, setToApp] = useState(recording.app.published || !recording.website.published);
   const [toWebsite, setToWebsite] = useState(recording.website.published || settings.publishToWebsite);
@@ -132,8 +132,7 @@ export function RecordingReview({
     description.trim() !== (recording.description ?? "") ||
     (seriesChoice === NEW_SERIES ? newSeries.trim().length > 0 : seriesChoice !== (recording.seriesId ?? "")) ||
     chapters !== recording.chapters.join(", ") ||
-    topics !== recording.topics.join(", ") ||
-    listed !== recording.website.listed;
+    topics !== recording.topics.join(", ");
   const dirty = detailsDirty || posterDirty;
   const publishingChange =
     (toApp && !recording.app.published) ||
@@ -150,7 +149,8 @@ export function RecordingReview({
         return false;
       }
     }
-    if (!detailsDirty) return true;
+    // Anything on the website is listed there; an older unlisted one is fixed on its next save.
+    if (!detailsDirty && recording.website.listed) return true;
     const result = await saveRecordingDetailsAction({
       recordingId: recording.id,
       title,
@@ -158,7 +158,7 @@ export function RecordingReview({
       speaker,
       seriesId: seriesChoice && seriesChoice !== NEW_SERIES ? seriesChoice : null,
       newSeriesName: seriesChoice === NEW_SERIES ? newSeries : undefined,
-      listedOnWebsite: listed,
+      listedOnWebsite: true,
       chapters: splitTags(chapters),
       topics: splitTags(topics),
     });
@@ -311,9 +311,12 @@ export function RecordingReview({
       </Link>
 
       <header className="flex flex-col gap-3">
-        <StatusBadge tone={recordingTone(phase)} size="lg" className="w-fit">
-          {recording.phase.label}
-        </StatusBadge>
+        {/* Not every recording gets published, so "Ready to publish" isn't a nag. */}
+        {phase !== "ready_to_publish" ? (
+          <StatusBadge tone={recordingTone(phase)} size="lg" className="w-fit">
+            {recording.phase.label}
+          </StatusBadge>
+        ) : null}
         <h2 className="font-heading text-3xl font-bold leading-tight">{recording.title}</h2>
         <p className="text-base text-muted-foreground">
           {recordedOn}
@@ -559,30 +562,32 @@ export function RecordingReview({
                 onChange={setToWebsite}
                 disabled={recording.website.published}
                 icon={<Globe className="size-5" aria-hidden />}
-                label="Also show it on your church website"
+                label="Show it on your church website"
                 hint={
                   recording.website.published
                     ? "It's on your website. To take it down, use Unpublish below."
                     : "Anyone can watch it on your church's watch page, without the app."
                 }
               />
+              <Check
+                checked={toApp}
+                onChange={setToApp}
+                disabled={recording.app.published}
+                icon={<Smartphone className="size-5" aria-hidden />}
+                label={`Show it in the ${MEMBER_APP}`}
+                hint={
+                  recording.app.published
+                    ? "It's in the app. To take it out, use Unpublish below."
+                    : "Untick to put it on your website only."
+                }
+              />
             </fieldset>
 
-            <AdvancedSection title="More options" description="Who can watch, speaker, scripture and artwork">
+            {artworkSlot}
+
+            <AdvancedSection title="More options" description="Who can watch, speaker and scripture">
               <fieldset disabled={!canEdit || pending} className="flex min-w-0 flex-col gap-5">
                 <legend className="sr-only">More options</legend>
-                <Check
-                  checked={toApp}
-                  onChange={setToApp}
-                  disabled={recording.app.published}
-                  icon={<Smartphone className="size-5" aria-hidden />}
-                  label={`Show it in the ${MEMBER_APP}`}
-                  hint={
-                    recording.app.published
-                      ? "It's in the app. To take it out, use Unpublish below."
-                      : "Untick to put it on your website only."
-                  }
-                />
                 <Field id="rec-audience" label="Who can watch it in the app">
                   <Select
                     id="rec-audience"
@@ -599,12 +604,6 @@ export function RecordingReview({
                   onChange={setNotify}
                   label="Let members know it's available"
                   hint="Sends one notification in the app when it's first published."
-                />
-                <Check
-                  checked={listed}
-                  onChange={setListed}
-                  label="List it on your website"
-                  hint="Off: only people with the link can find it."
                 />
                 <Field id="rec-speaker" label="Speaker" optional>
                   <Input
@@ -643,7 +642,6 @@ export function RecordingReview({
                   />
                 </Field>
               </fieldset>
-              {artworkSlot}
             </AdvancedSection>
 
             {isAdmin ? (

@@ -168,12 +168,20 @@ test("phone numbers are formatted the way people write them", () => {
   assert.equal(formatPhoneNumber("+44 20 7946 0958"), "+44 20 7946 0958");
 });
 
-test("the church's list item never carries the raw number while it is masked", () => {
+test("the church's list item never carries a raw, dialable number while it is masked", () => {
   const item = toCallListItem(call(), null, { isAdmin: true });
   assert.equal(item.dial, null);
   assert.doesNotMatch(JSON.stringify(item), /5025550123/);
   assert.equal(item.summary, "Asked for a hospital visit.");
   assert.equal(item.needsCallBack, true);
+});
+
+test("church admins see the caller's full number, formatted; nobody else gets it", () => {
+  assert.equal(toCallListItem(call(), null, { isAdmin: true }).callerNumber, "(502) 555-0123");
+  const member = toCallListItem(call(), null, { isAdmin: false });
+  assert.equal(member.callerNumber, null);
+  assert.doesNotMatch(JSON.stringify(member), /555.?0123/);
+  assert.equal(toCallListItem(call({ caller_number: null }), null, { isAdmin: true }).callerNumber, null);
 });
 
 test("call times read as today, yesterday, or a short date", () => {
@@ -219,7 +227,8 @@ test("the church's Phone Calls page hides the assistant's scores behind a staff-
   const page = readFileSync("app/dashboard/call-log/page.tsx", "utf8");
   assert.match(page, /title=\{CALL_LOG_TITLE\}/);
   assert.match(page, /isPlatformAdminUserId/);
-  assert.match(page, /\{isStaff && \(\s*<AdvancedSection\s+title="Assistant quality \(for FaithForm staff\)"/);
+  assert.match(page, /\{isStaff && \(\s*<AdvancedSection\s+title="Assistant quality"/);
+  assert.doesNotMatch(page, /for FaithForm staff/i);
   assert.match(page, /<RecentCallsBlock/);
 
   const list = readFileSync("components/voice-assistant/calls-list.tsx", "utf8");
@@ -229,6 +238,20 @@ test("the church's Phone Calls page hides the assistant's scores behind a staff-
     assert.doesNotMatch(visible, /Retell/, `${name} names the vendor`);
   }
   assert.doesNotMatch(list, /min-w-\[720px\]|<table/);
+  assert.doesNotMatch(detail, /for FaithForm staff/i);
+});
+
+test("the Phone Calls list is one compact list with no call-back section", () => {
+  const list = readFileSync("components/voice-assistant/calls-list.tsx", "utf8");
+  const loading = readFileSync("app/dashboard/call-log/loading.tsx", "utf8");
+  for (const source of [list, loading]) {
+    assert.doesNotMatch(source, /Needs a call back|TabsTrigger|min-h-\[80px\]/);
+  }
+  assert.doesNotMatch(list, /CallBackButton|MarkHandledButton|orange-/);
+  assert.match(list, /min-h-11/);
+  assert.match(loading, /min-h-11/);
+  // The full number sits right after the call time.
+  assert.match(list, /formatCallTime\(call\.calledAt\)\}\s*<\/span>\s*\{call\.callerNumber &&/);
 });
 
 test("old per-call links keep the call id", () => {

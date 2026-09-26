@@ -290,14 +290,14 @@ export const contactBandSection = defineSection<ContactBandContent>({
       key: "email",
       label: "Email",
       type: "group",
-      help: "The address itself comes from Website → Look & details.",
+      help: "The address itself comes from Website → Look & Details.",
       fields: [{ key: "label", label: "Heading", type: "text" }],
     },
     {
       key: "call",
       label: "Call",
       type: "group",
-      help: "The phone number and the social links under it come from Website → Look & details.",
+      help: "The phone number and the social links under it come from Website → Look & Details.",
       fields: [{ key: "label", label: "Heading", type: "text" }],
     },
     {

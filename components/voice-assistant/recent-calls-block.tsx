@@ -36,8 +36,8 @@ type RecentCallsBlockProps = {
 
 /**
  * FaithForm staff only: the assistant's scores, re-scoring and importing.
- * The Phone Calls page renders it inside "Assistant quality (for FaithForm
- * staff)" for platform admins; churches see `CallsList` instead.
+ * The Phone Calls page renders it inside "Assistant quality" for platform
+ * admins only; churches see `CallsList` instead.
  */
 
 /**

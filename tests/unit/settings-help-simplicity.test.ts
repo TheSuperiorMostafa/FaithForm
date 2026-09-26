@@ -16,6 +16,7 @@ import {
   readAccountNotice,
 } from "@/components/settings/connected-accounts-messages";
 import {
+  REMOVED_SETTINGS_TABS,
   resolveSettingsTab,
   visibleSettingsTabs,
   SETTINGS_TABS,
@@ -43,9 +44,69 @@ const ADMIN_TABS = visibleSettingsTabs({ isAdmin: true, allowedFeatures: ALL });
 test("settings has five plain sections, in the order a church thinks about them", () => {
   assert.deepEqual(
     SETTINGS_TABS.map((tab) => tab.label),
-    ["Church info", "Team", "Connected accounts", "Messages & email", "Advanced"],
+    ["Church info", "Your Team", "Connected accounts", "Messages & email", "Member App"],
   );
-  assert.deepEqual(ADMIN_TABS, ["church", "team", "accounts", "messages", "advanced"]);
+  assert.deepEqual(ADMIN_TABS, ["church", "team", "accounts", "messages", "app"]);
+});
+
+test("the Advanced section is gone and its old link goes to Settings home", () => {
+  assert.ok(!(ADMIN_TABS as readonly string[]).includes("advanced"));
+  assert.ok(REMOVED_SETTINGS_TABS.includes("advanced"));
+  assert.equal(resolveSettingsTab(params("tab=advanced"), ADMIN_TABS), "church");
+  const page = read("app/dashboard/settings/page.tsx");
+  assert.match(page, /REMOVED_SETTINGS_TABS\.includes/);
+  assert.match(page, /redirect\("\/dashboard\/settings"\)/);
+  const panels = read("app/dashboard/settings/tab-panels.tsx");
+  assert.doesNotMatch(panels, /AdvancedPanel|Light or dark/);
+  // Apple Mail drafts now live with the connected accounts.
+  const accounts = panels.slice(panels.indexOf("async function AccountsPanel"), panels.indexOf("async function MessagesPanel"));
+  assert.match(accounts, /Apple Mail drafts/);
+  assert.match(accounts, /<AppleMailDraftsCard/);
+});
+
+test("light or dark is three labelled icon buttons at the top of every section", () => {
+  const header = read("components/settings/settings-skeletons.tsx");
+  assert.match(header, /secondary=\{<ThemeToggle variant="icons" \/>\}/);
+  const toggle = read("components/theme-toggle.tsx");
+  const icons = toggle.slice(toggle.indexOf('variant === "icons"'));
+  assert.match(icons, /aria-label=\{label\}/);
+  assert.match(icons, /title=/);
+  assert.match(icons, /aria-checked=\{active\}/);
+  assert.match(icons, /size-11/);
+  assert.match(toggle, /label: "Match my computer"/);
+});
+
+test("app colors live in the Member App section, spelled the American way", () => {
+  const panels = read("app/dashboard/settings/tab-panels.tsx");
+  const church = panels.slice(panels.indexOf("async function ChurchInfoPanel"), panels.indexOf("async function MemberAppPanel"));
+  assert.doesNotMatch(church, /BrandColorsCard/);
+  assert.match(panels.slice(panels.indexOf("async function MemberAppPanel")), /<BrandColorsCard/);
+  const card = read("components/settings/brand-colors-card.tsx");
+  assert.match(card, /<CardTitle>App colors<\/CardTitle>/);
+  assert.doesNotMatch(card, /colour/i);
+  assert.ok(!visibleSettingsTabs({ isAdmin: false, allowedFeatures: ALL }).includes("app"));
+  assert.ok(!visibleSettingsTabs({ isAdmin: true, allowedFeatures: ["people"] }).includes("app"));
+});
+
+test("church info: service times come before the address, the small logo is last", () => {
+  const form = read("components/settings/church-info-card.tsx");
+  const details = form.slice(form.indexOf("export function ChurchDetailsForm"));
+  assert.ok(details.indexOf("Service times") < details.indexOf("Street address"), "service times first");
+  assert.match(form, /kind === "logo" \? "size-16"/);
+  const panels = read("app/dashboard/settings/tab-panels.tsx");
+  assert.ok(panels.indexOf("<ChurchDetailsForm") < panels.indexOf("<ChurchImagesCard"), "images last");
+  const skeleton = read("components/settings/settings-skeletons.tsx");
+  const church = skeleton.slice(skeleton.indexOf("function ChurchInfoSkeleton"), skeleton.indexOf("function MemberAppSkeleton"));
+  assert.ok(church.indexOf("Service times") < church.indexOf("Street address"));
+  assert.ok(church.indexOf("Street address") < church.indexOf("Logo and cover photo"));
+});
+
+test("each follow-up message adds [Name] from a small button in its header", () => {
+  const form = read("components/settings/follow-up-messages-form.tsx");
+  assert.doesNotMatch(form, /PlaceholderChips|Tap to add it:/);
+  assert.match(form, /insertPlaceholder\(id, NAME_TOKEN\)/);
+  assert.match(form, /aria-label=\{`Add their first name/);
+  assert.match(form, /\{!hasName && \(/);
 });
 
 test("old ?tab= links keep landing on the section that now holds them", () => {
@@ -76,7 +137,7 @@ test("an OAuth or Stripe round trip opens the section that shows its result", ()
 
 test("non-admins only see sections they can use", () => {
   const tabs = visibleSettingsTabs({ isAdmin: false, allowedFeatures: ALL });
-  assert.deepEqual(tabs, ["church", "team", "advanced"]);
+  assert.deepEqual(tabs, ["church", "team"]);
   assert.equal(resolveSettingsTab(params("tab=integrations"), tabs), "church");
   assert.equal(resolveSettingsTab(params("google_connected=1"), tabs), "church");
   // Messages needs Announcements or Attendance, even for an admin.
@@ -298,6 +359,18 @@ test("the Help page promises the same response time as the public support page",
   const page = read("app/dashboard/support/page.tsx");
   assert.doesNotMatch(page, /one business day/);
   assert.doesNotMatch(page, /tel:/, "no invented phone number");
+  assert.match(SUPPORT_RESPONSE_TIME, /same day/);
+  assert.doesNotMatch(read("app/support/page.tsx"), /business day/);
+});
+
+test("common questions sit at the bottom of the Help page and its skeleton", () => {
+  const page = read("app/dashboard/support/page.tsx");
+  assert.ok(page.indexOf('id="answers"') > page.indexOf('id="tickets-heading"'), "answers come after Your messages");
+  const loading = read("app/dashboard/support/loading.tsx");
+  assert.ok(
+    loading.indexOf('<SectionHeader title="Common questions"') > loading.indexOf('title="Your messages"'),
+    "skeleton mirrors the order",
+  );
 });
 
 test("common answers cover the top tasks and hide pages you can't open", () => {

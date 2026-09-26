@@ -2,8 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { VisitorError } from "@/lib/faithform/errors";
 import { getVisitorAccount } from "@/lib/faithform/account";
-import { getAuthUsersByIds } from "@/lib/auth/auth-users";
-import { upsertGivingDonor } from "@/lib/giving/donors";
+import { donorForAccount } from "@/lib/giving/v1/account-donor";
 import { resolvePublishedContentRelationshipState } from "@/lib/mobile/v1/discovery-service";
 import {
   ABSOLUTE_MAX_CENTS,
@@ -225,37 +224,27 @@ export async function startRecurringGift(
   // ---------------------------------------------------------------------
   // The donor this account gives as.
   // ---------------------------------------------------------------------
-  const email = await accountEmail(input.userId);
-  if (!email) return { ok: false, reason: "no_email" };
-
-  const { donorId, stripeCustomerId } = await upsertGivingDonor({
+  const donorResult = await donorForAccount({
+    userId: input.userId,
+    accountId: account.id,
+    displayName: account.displayName ?? null,
     churchId: resolved.church.churchId,
-    email,
-    name: account.displayName ?? email,
+    db,
   });
-
-  const { data: linkData } = await db.rpc("link_giving_donor", {
-    p_account_id: account.id,
-    p_church_id: resolved.church.churchId,
-    p_donor_id: donorId,
-  });
-  const link = ((linkData ?? []) as Record<string, unknown>[])[0];
-  if (!link?.ok) return { ok: false, reason: "unavailable" };
+  if (!donorResult.ok) return { ok: false, reason: donorResult.reason };
 
   // First-write-wins: an account that already gave here keeps the donor it had.
   // The gift is attached to *that* donor, so one person's giving at one church
   // stays one record however many addresses their account has worn.
-  const effectiveDonorId = (link.donor_id as string) ?? donorId;
-  const donor = await readDonor(effectiveDonorId, resolved.church.churchId, db);
-  if (!donor) return { ok: false, reason: "unavailable" };
+  const effectiveDonorId = donorResult.donor.donorId;
+  const donor = donorResult.donor;
 
   let customerId: string;
   let subscription;
   try {
     customerId = await provider.ensureCustomer({
       stripeAccountId: resolved.church.stripeAccountId,
-      existingCustomerId:
-        effectiveDonorId === donorId ? (stripeCustomerId ?? donor.stripeCustomerId) : donor.stripeCustomerId,
+      existingCustomerId: donor.customerId,
       email: donor.email,
       name: donor.name,
       metadata: {
@@ -302,7 +291,7 @@ export async function startRecurringGift(
   // Stripe's customer id belongs on the donor, so the donor portal and a later
   // gift both find it. Best effort: the subscription already exists, and
   // failing here would show an error for a gift that is about to work.
-  if (customerId !== donor.stripeCustomerId) {
+  if (customerId !== donor.customerId) {
     await db
       .from("giving_donors")
       .update({ stripe_customer_id: customerId, updated_at: new Date().toISOString() })
@@ -535,36 +524,4 @@ export async function stopAllRecurringGiftsForAccount(input: {
   }
 
   return { stopped, failed };
-}
-
-// ---------------------------------------------------------------------------
-// Reading what a client never sends
-// ---------------------------------------------------------------------------
-
-/** The signed-in account's own address, from Auth. Never a client value. */
-async function accountEmail(userId: string): Promise<string | null> {
-  const users = await getAuthUsersByIds([userId]);
-  const email = users.get(userId)?.email ?? null;
-  const trimmed = email?.trim().toLowerCase();
-  return trimmed ? trimmed : null;
-}
-
-async function readDonor(
-  donorId: string,
-  churchId: string,
-  db: SupabaseClient,
-): Promise<{ email: string; name: string | null; stripeCustomerId: string | null } | null> {
-  const { data } = await db
-    .from("giving_donors")
-    .select("email, name, stripe_customer_id")
-    .eq("id", donorId)
-    .eq("church_id", churchId)
-    .maybeSingle();
-
-  if (!data?.email) return null;
-  return {
-    email: data.email as string,
-    name: (data.name as string | null) ?? null,
-    stripeCustomerId: (data.stripe_customer_id as string | null) ?? null,
-  };
 }

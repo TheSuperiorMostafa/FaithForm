@@ -14,7 +14,7 @@ import { PageHeader } from "@/components/ui/page-header";
 const WEBSITE_TABS = [
   { label: "Overview", href: "/dashboard/website", match: "exact" as const, also: ["/dashboard/website/domain"] },
   { label: "Pages", href: "/dashboard/website/pages" },
-  { label: "Look & details", href: "/dashboard/website/details" },
+  { label: "Look & Details", href: "/dashboard/website/details" },
   { label: "Sermons", href: "/dashboard/website/sermons" },
   { label: "Inbox", href: "/dashboard/website/inbox" },
 ];

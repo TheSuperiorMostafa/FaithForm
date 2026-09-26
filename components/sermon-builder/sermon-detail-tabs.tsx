@@ -3,7 +3,6 @@
 import { CreateLessonPanel } from "@/components/sermon-builder/create-lesson-panel";
 import { SermonEditor } from "@/components/sermon-builder/sermon-editor";
 import { SermonSlides } from "@/components/sermon-builder/sermon-slides";
-import { SocialSnippetsPanel } from "@/components/sermon-builder/social-snippets";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { SermonDetailTab } from "@/lib/sermon-builder/sermon-display";
 import { LESSON_ANCHOR } from "@/lib/sermons/v1/share-rules";
@@ -11,24 +10,21 @@ import type {
   DiscussionQuestion,
   Sermon,
   SermonOutline,
-  SocialSnippets,
 } from "@/types/sermon";
 
 /**
- * The sermon's three jobs, one tab each: Slides (preview, Present,
- * Download), Lesson (outline, questions, PDF) and Social posts. Sermons made
+ * The sermon's two jobs, one tab each: Slides (preview, Present, Download)
+ * and Lesson (outline, questions, PDF). Sermons made
  * with the older full-manuscript builder get a Manuscript tab in place of
  * Lesson.
  */
 export function SermonDetailTabs({
   sermon,
   questions,
-  socialInitial,
   initialTab = "slides",
 }: {
   sermon: Sermon;
   questions: DiscussionQuestion[];
-  socialInitial?: SocialSnippets;
   initialTab?: SermonDetailTab;
 }) {
   const isSimple = (sermon.kind ?? "advanced") === "simple";
@@ -48,7 +44,6 @@ export function SermonDetailTabs({
         ) : (
           <TabsTrigger value="manuscript">Manuscript</TabsTrigger>
         )}
-        <TabsTrigger value="social">Social posts</TabsTrigger>
       </TabsList>
 
       <TabsContent value="slides" className="mt-6">
@@ -73,9 +68,6 @@ export function SermonDetailTabs({
         </TabsContent>
       )}
 
-      <TabsContent value="social" className="mt-6">
-        <SocialSnippetsPanel sermonId={sermon.id} initial={socialInitial} />
-      </TabsContent>
     </Tabs>
   );
 }

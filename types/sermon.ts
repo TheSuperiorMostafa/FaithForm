@@ -39,13 +39,6 @@ export type DiscussionQuestion = {
   question: string;
 };
 
-export type SocialSnippets = {
-  instagram?: string;
-  facebook?: string;
-  twitter?: string;
-  email?: string;
-};
-
 export type SeriesWeek = {
   week: number;
   title: string;

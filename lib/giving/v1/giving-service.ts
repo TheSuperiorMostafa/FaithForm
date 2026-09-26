@@ -5,6 +5,7 @@ import { getVisitorAccount } from "@/lib/faithform/account";
 import { isChurchFeatureEnabled } from "@/lib/features/access";
 import { resolvePublishedContentRelationshipState } from "@/lib/mobile/v1/discovery-service";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { donorForAccount } from "@/lib/giving/v1/account-donor";
 import { givingChannelsFor, type GivingChannels } from "@/lib/giving/v1/giving-channels";
 import {
   attemptStatusForIntent,
@@ -396,6 +397,18 @@ export async function startDonation(
     };
   }
 
+  // The donor this gift is from, so the giver can sign in to the donor portal
+  // with their address and see it — the same as a recurring gift or a gift on
+  // the web. Best effort: an account with no address can still give.
+  const donorResult = await donorForAccount({
+    userId: input.userId,
+    accountId: account.id,
+    displayName: account.displayName ?? null,
+    churchId: resolved.church.churchId,
+    db,
+  }).catch(() => null);
+  const donor = donorResult?.ok ? donorResult.donor : null;
+
   let intent;
   try {
     intent = await provider.createIntent({
@@ -403,9 +416,10 @@ export async function startDonation(
       amountCents,
       currency,
       idempotencyKey: claim.stripe_idempotency_key as string,
-      // Everything the webhook needs to reconcile this back to a church, a fund
-      // and an attempt — and nothing that identifies a person to Stripe beyond
-      // what the existing web flow already sends.
+      // Everything the webhook needs to reconcile this back to a church, a fund,
+      // an attempt and a donor — and nothing that identifies a person to Stripe
+      // beyond what the existing web flow already sends (its donor id, address
+      // and name ride in the same keys).
       metadata: {
         church_id: resolved.church.churchId,
         fund_id: input.fundId,
@@ -413,6 +427,9 @@ export async function startDonation(
         source: "faithform_mobile",
         faithform_attempt_id: attemptId,
         faithform_account_id: account.id,
+        ...(donor
+          ? { donor_id: donor.donorId, donor_email: donor.email, donor_name: donor.name ?? "" }
+          : {}),
       },
       receiptEmail: null,
     });

@@ -47,7 +47,7 @@ export const staffGridSection = defineSection<StaffGridContent>({
       type: "list",
       addLabel: "Add person",
       titleKey: "name",
-      help: "Left empty, this shows the people in Website → Look & details. Edit them there and they update everywhere.",
+      help: "Left empty, this shows the people in Website → Look & Details. Edit them there and they update everywhere.",
       itemFields: [
         { key: "name", label: "Name", type: "text" },
         { key: "role", label: "Role", type: "text" },

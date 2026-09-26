@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 
 /**
- * Theme and colours now live on "Look & details". Old links and bookmarks land
+ * Theme and colours now live on "Look & Details". Old links and bookmarks land
  * on that section.
  */
 export default function WebsiteDesignRedirect() {

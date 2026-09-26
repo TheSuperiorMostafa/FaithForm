@@ -133,7 +133,8 @@ test("a gift is only reported stopped when the provider accepted it", () => {
 });
 
 test("the donor's email comes from Auth, never from the request body", () => {
-  assert.match(service, /getAuthUsersByIds\(\[userId\]\)/);
+  assert.match(service, /donorForAccount\(/);
+  assert.match(readFileSync("lib/giving/v1/account-donor.ts", "utf8"), /getAuthUsersByIds\(\[userId\]\)/);
   // The contract's request carries a fund, an amount, a cadence and an attempt
   // id. An email among them would let somebody attach a gift to another
   // person's donor record.

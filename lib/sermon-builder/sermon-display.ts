@@ -67,9 +67,9 @@ export function formatSermonDate(
   );
 }
 
-export type SermonDetailTab = "slides" | "lesson" | "manuscript" | "social";
+export type SermonDetailTab = "slides" | "lesson" | "manuscript";
 
 /** Reads `?tab=` on the sermon page; anything else opens Slides. */
 export function parseSermonDetailTab(value: unknown): SermonDetailTab {
-  return value === "lesson" || value === "manuscript" || value === "social" ? value : "slides";
+  return value === "lesson" || value === "manuscript" ? value : "slides";
 }

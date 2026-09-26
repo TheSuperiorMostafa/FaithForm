@@ -30,7 +30,7 @@ const DRAFT_FAILED =
 
 /**
  * The full-manuscript editor for sermons made with the older outline-and-draft
- * builder. Publishing, slides, social posts and deleting live on the sermon
+ * builder. Publishing, slides and deleting live on the sermon
  * page around it; this is only the writing. (Its old "Mark published" button
  * is gone: "Publish to the app" is the one way to publish.)
  */

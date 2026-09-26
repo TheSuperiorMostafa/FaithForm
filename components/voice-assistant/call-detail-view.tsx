@@ -129,7 +129,7 @@ export function CallDetailView({
 
       {isStaff && (
         <AdvancedSection
-          title="Assistant quality (for FaithForm staff)"
+          title="Assistant quality"
           description="How the assistant handled this call. Churches don't see this section."
         >
           <StaffCallQuality call={call} isAdmin={isAdmin} score={score} />

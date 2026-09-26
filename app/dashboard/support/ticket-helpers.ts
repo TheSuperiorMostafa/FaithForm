@@ -9,7 +9,7 @@ export const SUPPORT_SUBJECT_MAX = 200;
 const DERIVED_SUBJECT_MAX = 80;
 
 /** How quickly we answer. Must match the public page at app/support/page.tsx. */
-export const SUPPORT_RESPONSE_TIME = "within two business days";
+export const SUPPORT_RESPONSE_TIME = "the same day";
 
 export const HELP_PAGE_TITLE = "Help";
 export const HELP_PAGE_DESCRIPTION = `Ask us anything. A real person at FaithForm answers ${SUPPORT_RESPONSE_TIME}.`;

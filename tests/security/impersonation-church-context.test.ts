@@ -49,7 +49,6 @@ test("server code resolves the current church through the impersonation-aware lo
     "app/dashboard/sermon-builder/new/page.tsx",
     "app/dashboard/sermon-builder/[id]/page.tsx",
     "app/dashboard/sermon-builder/[id]/edit/page.tsx",
-    "app/dashboard/sermon-builder/[id]/social/page.tsx",
     "app/dashboard/sermon-builder/[id]/discussion/page.tsx",
     "app/dashboard/sermon-builder/series/new/page.tsx",
     "app/dashboard/sermon-builder/series/[id]/page.tsx",

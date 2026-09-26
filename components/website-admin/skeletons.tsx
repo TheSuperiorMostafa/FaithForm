@@ -62,7 +62,7 @@ export function FieldSkeleton({ label, className }: { label: string; className?:
   );
 }
 
-/** Mirrors the rounded-2xl p-6 panels used on Look & details. */
+/** Mirrors the rounded-2xl p-6 panels used on Look & Details. */
 export function PanelSkeleton({
   title,
   description,

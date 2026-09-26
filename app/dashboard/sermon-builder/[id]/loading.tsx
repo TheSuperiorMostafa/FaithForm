@@ -5,7 +5,7 @@ import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
 
 /**
  * Mirrors `[id]/page.tsx`: back link, the sermon's title and date (data, so
- * they shimmer), the status row, the Slides / Lesson / Social posts tabs and
+ * they shimmer), the status row, the Slides / Lesson tabs and
  * the Slides tab's buttons and preview.
  */
 export default function SermonDetailLoading() {
@@ -33,9 +33,6 @@ export default function SermonDetailLoading() {
           </span>
           <span className="inline-flex min-h-11 items-center px-4 py-2 text-[15px] font-semibold">
             Lesson
-          </span>
-          <span className="inline-flex min-h-11 items-center px-4 py-2 text-[15px] font-semibold">
-            Social posts
           </span>
         </div>
 

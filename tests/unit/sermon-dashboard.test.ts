@@ -145,7 +145,7 @@ test("each sermon keeps its own draft, and a new sermon has one of its own", () 
 test("the sermon page opens on Slides and understands ?tab=", () => {
   assert.equal(parseSermonDetailTab(undefined), "slides");
   assert.equal(parseSermonDetailTab("lesson"), "lesson");
-  assert.equal(parseSermonDetailTab("social"), "social");
+  assert.equal(parseSermonDetailTab("social"), "slides", "the old Social posts tab opens Slides");
   assert.equal(parseSermonDetailTab("../etc"), "slides");
 });
 
@@ -235,7 +235,6 @@ test("every sermon route has a loading skeleton", () => {
     "app/dashboard/sermon-builder/[id]",
     "app/dashboard/sermon-builder/[id]/edit",
     "app/dashboard/sermon-builder/[id]/discussion",
-    "app/dashboard/sermon-builder/[id]/social",
     "app/dashboard/sermon-builder/series/new",
     "app/dashboard/sermon-builder/series/[id]",
     "app/dashboard/call-log",

@@ -38,7 +38,7 @@ async function isPlatformAdmin(): Promise<boolean> {
 }
 
 /**
- * Website → Look & details: the church facts the site shows (shared with the
+ * Website → Look & Details: the church facts the site shows (shared with the
  * app and the phone assistant), then the theme and colours. Formerly two tabs,
  * "Details" and "Design"; /design now redirects to the #look section here.
  */

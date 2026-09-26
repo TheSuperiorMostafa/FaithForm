@@ -7,7 +7,7 @@ import { ArrowRight, Film } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   readyToPublishHeadline,
-  recordingFilterHref,
+  RECORDINGS_HREF,
   recordingHref,
 } from "@/lib/stream/recording-status";
 import { cn } from "@/lib/utils";
@@ -63,7 +63,7 @@ export function ReadyToPublishCard({
   if (visible.length === 0) return null;
 
   const headline = readyToPublishHeadline(visible.length);
-  const href = visible.length === 1 ? recordingHref(visible[0].id) : recordingFilterHref("needs-action");
+  const href = visible.length === 1 ? recordingHref(visible[0].id) : RECORDINGS_HREF;
   const action = isAdmin ? "Review & publish" : "Review";
   const folded = visible.every((recording) => later.includes(recording.id));
 

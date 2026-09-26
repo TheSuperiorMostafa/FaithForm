@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
+import { Plus } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -9,7 +10,7 @@ import {
   type SettingsFormState,
 } from "@/app/dashboard/settings/actions";
 import { ConfirmResetButton } from "@/components/settings/confirm-reset-button";
-import { PlaceholderChips } from "@/components/settings/placeholder-chips";
+import { insertPlaceholder } from "@/components/settings/placeholder-chips";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -29,7 +30,7 @@ function SaveButton() {
   );
 }
 
-const NAME_CHIP = [{ token: "[Name]", meaning: "Their first name" }];
+const NAME_TOKEN = "[Name]";
 
 /** The words each absence sends, and a live example of how it will read. */
 export function FollowUpMessagesForm({
@@ -69,12 +70,27 @@ export function FollowUpMessagesForm({
           {Array.from({ length: FOLLOW_UP_TEMPLATE_COUNT }, (_, index) => {
             const id = `message_${index}`;
             const preview = pickFollowUpMessage("Alex", index + 1, drafts);
+            const hasName = (drafts[index] ?? "").includes(NAME_TOKEN);
 
             return (
               <div key={index} className="flex flex-col gap-3 rounded-2xl border border-border p-5">
-                <Label htmlFor={id} className="text-base font-semibold">
-                  {FOLLOW_UP_TEMPLATE_LABELS[index]}
-                </Label>
+                <div className="flex items-center justify-between gap-3">
+                  <Label htmlFor={id} className="text-base font-semibold">
+                    {FOLLOW_UP_TEMPLATE_LABELS[index]}
+                  </Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="px-3"
+                    aria-label={`Add their first name to the ${FOLLOW_UP_TEMPLATE_LABELS[index]} message`}
+                    title="Add their first name"
+                    onClick={() => insertPlaceholder(id, NAME_TOKEN)}
+                  >
+                    <Plus aria-hidden />
+                    Name
+                  </Button>
+                </div>
                 <Textarea
                   id={id}
                   name={id}
@@ -82,12 +98,18 @@ export function FollowUpMessagesForm({
                   rows={3}
                   maxLength={480}
                   required
+                  aria-invalid={!hasName || undefined}
+                  aria-describedby={hasName ? undefined : `${id}_error`}
                   onChange={(event) => {
                     const value = event.target.value;
                     setDrafts((current) => current.map((row, i) => (i === index ? value : row)));
                   }}
                 />
-                <PlaceholderChips chips={NAME_CHIP} targetId={id} label="Must include their name. Tap to add it:" />
+                {!hasName && (
+                  <p id={`${id}_error`} className="text-sm font-medium text-destructive" role="alert">
+                    Must include their name. Tap &ldquo;+ Name&rdquo; to add it.
+                  </p>
+                )}
                 <div className="rounded-xl bg-muted/50 px-4 py-3">
                   <p className="text-sm font-semibold text-muted-foreground">How it reads</p>
                   <p className="mt-1 text-[15px] text-foreground">{preview}</p>

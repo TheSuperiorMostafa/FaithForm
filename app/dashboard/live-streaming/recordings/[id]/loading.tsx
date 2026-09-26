@@ -46,6 +46,7 @@ export default function RecordingReviewLoading() {
               </div>
             ))}
             <Skeleton className="min-h-[88px] w-full rounded-xl" />
+            <Skeleton className="min-h-[88px] w-full rounded-xl" />
             <div className="flex min-h-12 items-center rounded-2xl border border-border bg-card/50 px-5 py-3">
               <span className="text-[15px] font-semibold">More options</span>
             </div>

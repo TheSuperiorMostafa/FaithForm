@@ -10,6 +10,27 @@ export type PlaceholderChip = {
 };
 
 /**
+ * Drops `token` into the input or textarea with `targetId` at the cursor and
+ * returns the field's new value (null when the field can't be edited).
+ */
+export function insertPlaceholder(targetId: string, token: string): string | null {
+  const field = document.getElementById(targetId) as HTMLInputElement | HTMLTextAreaElement | null;
+  if (!field || field.disabled) return null;
+  const start = field.selectionStart ?? field.value.length;
+  const end = field.selectionEnd ?? field.value.length;
+  const next = `${field.value.slice(0, start)}${token}${field.value.slice(end)}`;
+  // Uncontrolled fields: set the value the browser way so React and the
+  // form both see it.
+  const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(field), "value")?.set;
+  setter?.call(field, next);
+  field.dispatchEvent(new Event("input", { bubbles: true }));
+  field.focus();
+  const caret = start + token.length;
+  field.setSelectionRange(caret, caret);
+  return next;
+}
+
+/**
  * Placeholders shown as friendly chips instead of syntax to memorise. Each
  * chip says what it turns into, and tapping it drops it into the box at the
  * cursor. The text itself is unchanged, so saving works exactly as before.
@@ -28,20 +49,8 @@ export function PlaceholderChips({
   label?: string;
 }) {
   const insert = (token: string) => {
-    const field = document.getElementById(targetId) as HTMLInputElement | HTMLTextAreaElement | null;
-    if (!field || field.disabled) return;
-    const start = field.selectionStart ?? field.value.length;
-    const end = field.selectionEnd ?? field.value.length;
-    const next = `${field.value.slice(0, start)}${token}${field.value.slice(end)}`;
-    // Uncontrolled fields: set the value the browser way so React and the
-    // form both see it.
-    const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(field), "value")?.set;
-    setter?.call(field, next);
-    field.dispatchEvent(new Event("input", { bubbles: true }));
-    field.focus();
-    const caret = start + token.length;
-    field.setSelectionRange(caret, caret);
-    onInsert?.(next);
+    const next = insertPlaceholder(targetId, token);
+    if (next !== null) onInsert?.(next);
   };
 
   return (

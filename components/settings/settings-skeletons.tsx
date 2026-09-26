@@ -1,4 +1,4 @@
-import { Apple, Calendar, Clock, MapPin, Monitor, Moon, Play, Plus, Share2, Sun } from "lucide-react";
+import { Apple, Calendar, Clock, Mail, MapPin, Play, Plus, Share2 } from "lucide-react";
 
 import {
   SETTINGS_PAGE_DESCRIPTION,
@@ -9,6 +9,7 @@ import { MAX_ATTACHMENTS_PER_CHURCH, MAX_ATTACHMENT_BYTES } from "@/lib/announce
 import { FOLLOW_UP_TEMPLATE_LABELS } from "@/lib/sms/follow-up-messages";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader, SectionHeader } from "@/components/ui/page-header";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
 
 /*
@@ -31,35 +32,6 @@ function ChurchInfoSkeleton() {
     <div className="flex flex-col gap-6">
       <Card>
         <CardHeader>
-          <CardTitle>Logo and cover photo</CardTitle>
-          <CardDescription className="text-[15px]">
-            How your church looks in the app and on your website.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-8 sm:grid-cols-[auto_minmax(0,1fr)]">
-            <div className="flex flex-col gap-3">
-              <p className="text-[15px] font-semibold">Logo</p>
-              <Skeleton className="size-32 rounded-2xl" />
-              <p className="text-sm text-muted-foreground">
-                A square image. It shows on your app page and website.
-              </p>
-              <Skeleton className="h-11 w-40 rounded-[10px]" />
-            </div>
-            <div className="flex flex-col gap-3">
-              <p className="text-[15px] font-semibold">Cover photo</p>
-              <Skeleton className="aspect-video w-full max-w-md rounded-2xl" />
-              <p className="text-sm text-muted-foreground">
-                A wide photo of your building or people. It fills the top of your app page.
-              </p>
-              <Skeleton className="h-11 w-48 rounded-[10px]" />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
           <CardTitle>Church details</CardTitle>
           <CardDescription className="text-[15px]">
             Entered once and used everywhere: your app page, your website and the phone assistant.
@@ -70,34 +42,6 @@ function ChurchInfoSkeleton() {
           <div className="grid gap-5 sm:grid-cols-2">
             <InputSkeleton label="Phone" />
             <InputSkeleton label="Email" />
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <MapPin className="size-5 text-accent" strokeWidth={1.75} aria-hidden />
-            Address
-          </CardTitle>
-          <CardDescription className="text-[15px]">
-            Where people come on Sunday. It&apos;s shown with a map link in the app.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-5">
-          <InputSkeleton label="Street address" />
-          <div className="grid gap-5 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
-            <InputSkeleton label="City" />
-            <InputSkeleton label="State" />
-            <InputSkeleton label="ZIP code" />
-          </div>
-          <div className="rounded-2xl bg-muted/50 px-5 py-4">
-            <p className="text-[15px] font-semibold">Time zone</p>
-            <Skeleton className="my-1 h-5 w-64 max-w-full" />
-            <p className="mt-1 text-sm text-muted-foreground">
-              Service times and reminders use this. If it&apos;s wrong, send us a message and
-              we&apos;ll change it for you.
-            </p>
           </div>
         </CardContent>
       </Card>
@@ -135,28 +79,95 @@ function ChurchInfoSkeleton() {
 
       <Card>
         <CardHeader>
-          <CardTitle>App colours</CardTitle>
+          <CardTitle className="flex items-center gap-2">
+            <MapPin className="size-5 text-accent" strokeWidth={1.75} aria-hidden />
+            Address
+          </CardTitle>
           <CardDescription className="text-[15px]">
-            Used across your church&apos;s app and giving page. Tap a pair to use it.
+            Where people come on Sunday. It&apos;s shown with a map link in the app.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-5">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {Array.from({ length: 6 }).map((_, index) => (
-              <Skeleton key={index} className="h-16 w-full rounded-2xl" />
-            ))}
+          <InputSkeleton label="Street address" />
+          <div className="grid gap-5 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
+            <InputSkeleton label="City" />
+            <InputSkeleton label="State" />
+            <InputSkeleton label="ZIP code" />
           </div>
-          <div className="flex min-h-12 items-center rounded-2xl border border-border bg-card/50 px-5 py-3">
-            <span className="space-y-0.5">
-              <span className="block text-[15px] font-semibold">Custom colour</span>
-              <span className="block text-sm text-muted-foreground">
-                Match your church&apos;s own colours exactly.
-              </span>
-            </span>
+          <div className="rounded-2xl bg-muted/50 px-5 py-4">
+            <p className="text-[15px] font-semibold">Time zone</p>
+            <Skeleton className="my-1 h-5 w-64 max-w-full" />
+            <p className="mt-1 text-sm text-muted-foreground">
+              Service times and reminders use this. If it&apos;s wrong, send us a message and
+              we&apos;ll change it for you.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <p className="text-[15px] text-muted-foreground">
+        Your tagline, the &ldquo;About&rdquo; text and social links are on the{" "}
+        <span className="font-semibold text-primary underline underline-offset-4 dark:text-accent">App page</span>.
+      </p>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Logo and cover photo</CardTitle>
+          <CardDescription className="text-[15px]">
+            How your church looks in the app and on your website.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-8 sm:grid-cols-[auto_minmax(0,1fr)]">
+            <div className="flex flex-col gap-3">
+              <p className="text-[15px] font-semibold">Logo</p>
+              <Skeleton className="size-16 rounded-2xl" />
+              <p className="text-sm text-muted-foreground">
+                A square image. It shows on your app page and website.
+              </p>
+              <Skeleton className="h-11 w-40 rounded-[10px]" />
+            </div>
+            <div className="flex flex-col gap-3">
+              <p className="text-[15px] font-semibold">Cover photo</p>
+              <Skeleton className="aspect-video w-full max-w-md rounded-2xl" />
+              <p className="text-sm text-muted-foreground">
+                A wide photo of your building or people. It fills the top of your app page.
+              </p>
+              <Skeleton className="h-11 w-48 rounded-[10px]" />
+            </div>
           </div>
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+/** The Member App section: the app colors card. */
+function MemberAppSkeleton() {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>App colors</CardTitle>
+        <CardDescription className="text-[15px]">
+          Used across your church&apos;s app and giving page. Tap a pair to use it.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-5">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <Skeleton key={index} className="h-16 w-full rounded-2xl" />
+          ))}
+        </div>
+        <div className="flex min-h-12 items-center rounded-2xl border border-border bg-card/50 px-5 py-3">
+          <span className="space-y-0.5">
+            <span className="block text-[15px] font-semibold">Custom color</span>
+            <span className="block text-sm text-muted-foreground">
+              Match your church&apos;s own colors exactly.
+            </span>
+          </span>
+        </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -217,7 +228,7 @@ const ACCOUNT_ROWS = [
 
 function AccountsSkeleton() {
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-6">
       <ul className="divide-y divide-border rounded-3xl border border-border bg-card p-0 shadow-sm">
         {ACCOUNT_ROWS.map(({ icon: Icon, name, purpose }) => (
           <li key={name} className="flex flex-col gap-4 px-4 py-5 sm:px-5">
@@ -242,6 +253,22 @@ function AccountsSkeleton() {
           </li>
         ))}
       </ul>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Mail className="size-5 text-accent" strokeWidth={1.75} aria-hidden />
+            Apple Mail drafts
+          </CardTitle>
+          <CardDescription className="text-[15px]">
+            Write the weekly announcement email as a draft in your iCloud Mail.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Skeleton className="h-5 w-full max-w-lg" />
+          <Skeleton className="mt-2 h-5 w-64 max-w-full" />
+        </CardContent>
+      </Card>
     </div>
   );
 }
@@ -307,56 +334,20 @@ function MessagesSkeleton() {
         <CardContent className="flex flex-col gap-6">
           {FOLLOW_UP_TEMPLATE_LABELS.map((label) => (
             <div key={label} className="flex flex-col gap-3 rounded-2xl border border-border p-5">
-              <p className="text-base font-semibold leading-none">{label}</p>
-              <Skeleton className="h-[96px] w-full rounded-[10px]" />
-              <div className="flex flex-col gap-2">
-                <p className="text-sm text-muted-foreground">Must include their name. Tap to add it:</p>
-                <span className="inline-flex min-h-11 w-fit items-center gap-2 rounded-full border border-border px-4 text-sm">
-                  <Plus className="size-4 text-accent" aria-hidden />
-                  <span className="font-semibold">Their first name</span>
-                  <span className="font-mono text-muted-foreground">[Name]</span>
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-base font-semibold leading-none">{label}</p>
+                <span className="inline-flex min-h-11 items-center gap-1.5 rounded-[10px] border border-primary/45 px-3 text-sm font-semibold text-primary dark:border-accent/60 dark:text-accent">
+                  <Plus className="size-4" aria-hidden />
+                  Name
                 </span>
               </div>
+              <Skeleton className="h-[96px] w-full rounded-[10px]" />
               <div className="rounded-xl bg-muted/50 px-4 py-3">
                 <p className="text-sm font-semibold text-muted-foreground">How it reads</p>
                 <Skeleton className="mt-2 h-5 w-full" />
               </div>
             </div>
           ))}
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
-
-function AdvancedSkeleton() {
-  const themes = [
-    { icon: Sun, label: "Light", hint: "Dark text on a light page." },
-    { icon: Moon, label: "Dark", hint: "Light text on a dark page." },
-    { icon: Monitor, label: "Match my computer", hint: "Follows your computer or phone's own setting." },
-  ];
-  return (
-    <div className="flex flex-col gap-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Light or dark</CardTitle>
-          <CardDescription className="text-[15px]">
-            How FaithForm looks on this computer. Only you see this.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid gap-3 sm:grid-cols-3">
-            {themes.map(({ icon: Icon, label, hint }) => (
-              <div
-                key={label}
-                className="flex min-h-[104px] flex-col items-start gap-2 rounded-2xl border-2 border-border bg-background p-4"
-              >
-                <Icon className="size-6 text-primary dark:text-accent" strokeWidth={1.75} aria-hidden />
-                <span className="text-base font-semibold">{label}</span>
-                <span className="text-sm text-muted-foreground">{hint}</span>
-              </div>
-            ))}
-          </div>
         </CardContent>
       </Card>
     </div>
@@ -402,8 +393,8 @@ export function SettingsTabSkeleton({
         return <AccountsSkeleton />;
       case "messages":
         return <MessagesSkeleton />;
-      case "advanced":
-        return <AdvancedSkeleton />;
+      case "app":
+        return <MemberAppSkeleton />;
       case "giving":
         return <GivingSkeleton />;
     }
@@ -413,7 +404,17 @@ export function SettingsTabSkeleton({
   return <SkeletonContainer label="settings section">{body}</SkeletonContainer>;
 }
 
-/** Title and description, identical to the loaded page. */
+/**
+ * Title and description, identical to the loaded page, with the light/dark
+ * choice in the top-right corner of every section.
+ */
 export function SettingsPageHeader() {
-  return <PageHeader title={SETTINGS_PAGE_TITLE} description={SETTINGS_PAGE_DESCRIPTION} />;
+  return (
+    <PageHeader
+      title={SETTINGS_PAGE_TITLE}
+      description={SETTINGS_PAGE_DESCRIPTION}
+      className="sm:items-start"
+      secondary={<ThemeToggle variant="icons" />}
+    />
+  );
 }

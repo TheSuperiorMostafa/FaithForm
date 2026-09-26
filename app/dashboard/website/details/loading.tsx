@@ -8,7 +8,7 @@ import {
 
 const SHARED_NOTE = "Also shown in Settings → Church info.";
 
-/** Mirrors Website → Look & details: details panels, then Look, beside the preview. */
+/** Mirrors Website → Look & Details: the Details / Look switch and the details panels, beside the preview. */
 export default function WebsiteDetailsLoading() {
   return (
     <SkeletonContainer
@@ -17,6 +17,15 @@ export default function WebsiteDetailsLoading() {
     >
       <div className="flex min-w-0 flex-col gap-6">
         <LiveNoteSkeleton />
+
+        <div className="inline-flex w-fit gap-1 rounded-xl border border-border bg-card p-1 shadow-card dark:shadow-none">
+          <span className="inline-flex min-h-11 items-center rounded-lg bg-primary px-6 text-[15px] font-semibold text-primary-foreground">
+            Details
+          </span>
+          <span className="inline-flex min-h-11 items-center rounded-lg px-6 text-[15px] font-semibold text-foreground/80">
+            Look
+          </span>
+        </div>
 
         <div className="space-y-1">
           <h2 className="font-heading text-xl font-bold">Details</h2>

@@ -48,7 +48,7 @@ export const serviceTimesSection = defineSection<ServiceTimesContent>({
       type: "list",
       addLabel: "Add cell",
       titleKey: "label",
-      help: "Left empty, this shows the service times and address from Website → Look & details. Adding your own here stops that.",
+      help: "Left empty, this shows the service times and address from Website → Look & Details. Adding your own here stops that.",
       itemFields: [
         { key: "label", label: "Label", type: "text" },
         { key: "value", label: "Time", type: "text" },

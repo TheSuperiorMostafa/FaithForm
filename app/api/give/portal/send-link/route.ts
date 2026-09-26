@@ -8,6 +8,7 @@ import {
   getClientIp,
   rateLimitResponse,
 } from "@/lib/security/rate-limit";
+import { upsertGivingDonor } from "@/lib/giving/donors";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const bodySchema = z.object({
@@ -48,19 +49,15 @@ export async function POST(request: Request) {
   const admin = createAdminClient();
   const email = parsed.data.email.trim().toLowerCase();
 
-  const { data: existingDonor } = await admin
-    .from("giving_donors")
-    .select("id")
-    .eq("church_id", church.churchId)
-    .eq("email", email)
-    .maybeSingle();
-
-  if (!existingDonor?.id) return generic;
+  // Anyone who has ever given here with this address can sign in — one-time
+  // or recurring, web or app. The link only ever goes to the address itself.
+  const donorId = await donorIdForEmail(admin, church.churchId, email);
+  if (!donorId) return generic;
 
   try {
     const magicLink = await createPortalMagicLink({
       churchId: church.churchId,
-      donorId: existingDonor.id as string,
+      donorId,
       churchSlug: church.slug,
     });
 
@@ -78,4 +75,55 @@ export async function POST(request: Request) {
     console.error("[portal-link] delivery unavailable");
   }
   return generic;
+}
+
+/**
+ * The donor for this address at this church. A gift recorded with the address
+ * but no donor (older gifts) still counts: the donor is created and those gifts
+ * are attached to it, so the portal shows them.
+ */
+async function donorIdForEmail(
+  admin: ReturnType<typeof createAdminClient>,
+  churchId: string,
+  email: string,
+): Promise<string | null> {
+  // Case-insensitive, but exact: `_` and `%` are wildcards to ilike and are
+  // common in addresses, so they are escaped. A looser match could attach
+  // someone else's gifts to this address.
+  const exactEmail = email.replace(/[\\%_]/g, (c) => `\\${c}`);
+  const { data: existingDonor } = await admin
+    .from("giving_donors")
+    .select("id")
+    .eq("church_id", churchId)
+    .eq("email", email)
+    .maybeSingle();
+  if (existingDonor?.id) return existingDonor.id as string;
+
+  const { data: gift } = await admin
+    .from("giving_donations")
+    .select("donor_name")
+    .eq("church_id", churchId)
+    .ilike("donor_email", exactEmail)
+    .eq("status", "succeeded")
+    .limit(1)
+    .maybeSingle();
+  if (!gift) return null;
+
+  try {
+    const { donorId } = await upsertGivingDonor({
+      churchId,
+      email,
+      name: (gift.donor_name as string | null) ?? "",
+    });
+    await admin
+      .from("giving_donations")
+      .update({ donor_id: donorId })
+      .eq("church_id", churchId)
+      .ilike("donor_email", exactEmail)
+      .is("donor_id", null);
+    return donorId;
+  } catch {
+    console.error("[portal-link] donor setup unavailable");
+    return null;
+  }
 }

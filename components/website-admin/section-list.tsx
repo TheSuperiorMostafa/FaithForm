@@ -259,7 +259,9 @@ function SectionRow({
       )}
     >
       <div className="flex flex-wrap items-center gap-3 p-4 sm:p-5">
-        <div className="min-w-0 flex-1">
+        {/* Room for a heading to read on one line: when the card is narrow the
+         * buttons drop below it instead of squeezing it into a column. */}
+        <div className="min-w-0 flex-[1_1_16rem]">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             {/* The church's own heading leads, since that is what they are
              * looking for. The type name follows as the quieter subtitle. */}

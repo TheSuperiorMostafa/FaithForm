@@ -77,8 +77,14 @@ function FilterPills({ label, value, options, onChange }: FilterPillsProps) {
   );
 }
 
+/**
+ * The plain colour themes, always one tap away for a church that just wants
+ * a clean background instead of a picture. In this order.
+ */
+const FEATURED_THEME_IDS = ["midnight", "ivory", "sunrise", "cathedral", "royal", "black"];
+
 /** How many themes the "Suggested" row shows before "More themes". */
-const SUGGESTED_COUNT = 6;
+const SUGGESTED_COUNT = 4;
 
 export function ThemePicker({ selectedId, onSelect, onCoerce, context }: ThemePickerProps) {
   const [themes, setThemes] = useState<SlideTheme[]>([]);
@@ -189,14 +195,25 @@ export function ThemePicker({ selectedId, onSelect, onCoerce, context }: ThemePi
     onSelect(id);
   }
 
-  // Suggested: themes matched to the passage, then featured ones. The order
-  // never depends on which theme is chosen, so picking one doesn't shuffle
-  // the cards under the pastor's pointer. A theme chosen from "More themes"
-  // is added at the end, so it stays visible without moving the others.
+  const featuredRow = useMemo(
+    () =>
+      FEATURED_THEME_IDS.map((id) => themes.find((t) => t.id === id)).filter(
+        (t): t is SlideTheme => Boolean(t),
+      ),
+    [themes],
+  );
+
+  // Suggested: themes matched to the passage, then other picture themes —
+  // never the Featured ones, which already sit above. The order never
+  // depends on which theme is chosen, so picking one doesn't shuffle the
+  // cards under the pastor's pointer. A theme chosen from "More themes" is
+  // added at the end, so it stays visible without moving the others.
   const baseSuggestedRow = useMemo(() => {
     const row: SlideTheme[] = [];
     const add = (theme: SlideTheme | undefined) => {
-      if (theme && !row.some((t) => t.id === theme.id)) row.push(theme);
+      if (theme && !FEATURED_THEME_IDS.includes(theme.id) && !row.some((t) => t.id === theme.id)) {
+        row.push(theme);
+      }
     };
     suggestedThemes.forEach(add);
     themes.filter((t) => t.featured).forEach(add);
@@ -207,6 +224,7 @@ export function ThemePicker({ selectedId, onSelect, onCoerce, context }: ThemePi
   }, [themes, suggestedThemes]);
 
   const suggestedRow = useMemo(() => {
+    if (FEATURED_THEME_IDS.includes(selectedId)) return baseSuggestedRow;
     if (baseSuggestedRow.some((t) => t.id === selectedId)) return baseSuggestedRow;
     const chosen = themes.find((t) => t.id === selectedId);
     return chosen ? [...baseSuggestedRow, chosen] : baseSuggestedRow;
@@ -238,6 +256,25 @@ export function ThemePicker({ selectedId, onSelect, onCoerce, context }: ThemePi
 
   return (
     <div className="space-y-5">
+      {featuredRow.length > 0 && (
+        <div className="space-y-3">
+          <div>
+            <p className="text-base font-semibold text-foreground">Featured</p>
+            <p className="text-[15px] text-muted-foreground">Clean, plain backgrounds that suit any sermon.</p>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            {featuredRow.map((theme) => (
+              <ThemePreview
+                key={theme.id}
+                theme={theme}
+                selected={selectedId === theme.id}
+                onSelect={() => handleSelect(theme.id)}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="space-y-3">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
@@ -250,7 +287,7 @@ export function ThemePicker({ selectedId, onSelect, onCoerce, context }: ThemePi
                 ? `Matched to the imagery in ${context?.scripture || "your passage"}.`
                 : suggestLoading
                   ? "Reading your passage to suggest a theme…"
-                  : "Popular themes. Choose a passage and we'll suggest ones that fit it."}
+                  : "Picture themes. Choose a passage and we'll suggest ones that fit it."}
             </p>
           </div>
           {scriptureText && (
@@ -269,13 +306,14 @@ export function ThemePicker({ selectedId, onSelect, onCoerce, context }: ThemePi
             </Button>
           )}
         </div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {suggestedRow.map((theme) => (
             <ThemePreview
               key={theme.id}
               theme={theme}
               selected={selectedId === theme.id}
               onSelect={() => handleSelect(theme.id)}
+              compact
             />
           ))}
         </div>

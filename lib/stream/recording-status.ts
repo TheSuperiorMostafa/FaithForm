@@ -40,11 +40,6 @@ export function recordingTone(phase: RecordingPhase): StatusTone {
   }
 }
 
-/** Something the church has to do: publish it, or look at a problem. */
-export function needsAction(phase: RecordingPhase): boolean {
-  return phase === "ready_to_publish" || phase === "needs_attention";
-}
-
 /** Still changing on its own; the page refreshes itself while any exist. */
 export function isStillChanging(phase: RecordingPhase): boolean {
   return phase === "recording" || phase === "preparing";
@@ -91,11 +86,10 @@ export function publishedWhereSentence(where: { app: boolean; website: boolean }
 // Filters on the Recordings tab
 // ---------------------------------------------------------------------------
 
-export type RecordingFilter = "all" | "needs-action" | "published" | "series";
+export type RecordingFilter = "all" | "published" | "series";
 
 export const RECORDING_FILTERS: Array<{ key: RecordingFilter; label: string }> = [
   { key: "all", label: "All" },
-  { key: "needs-action", label: "Needs action" },
   { key: "published", label: "Published" },
   { key: "series", label: "Series" },
 ];
@@ -105,8 +99,25 @@ export function parseRecordingFilter(value: string | string[] | undefined): Reco
   return RECORDING_FILTERS.some((filter) => filter.key === raw) ? (raw as RecordingFilter) : "all";
 }
 
-export function recordingFilterHref(filter: RecordingFilter): string {
-  return filter === "all" ? RECORDINGS_HREF : `${RECORDINGS_HREF}?show=${filter}`;
+export function recordingFilterHref(filter: RecordingFilter, search = ""): string {
+  const params = new URLSearchParams();
+  if (filter !== "all") params.set("show", filter);
+  if (search.trim() && filter !== "series") params.set("q", search.trim());
+  const query = params.toString();
+  return query ? `${RECORDINGS_HREF}?${query}` : RECORDINGS_HREF;
+}
+
+/** Title, series or speaker containing every word typed, ignoring case. */
+export function searchRecordings<T extends { title: string; seriesName?: string | null; speaker?: string | null }>(
+  recordings: T[],
+  search: string,
+): T[] {
+  const words = search.toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return recordings;
+  return recordings.filter((recording) => {
+    const haystack = [recording.title, recording.seriesName, recording.speaker].filter(Boolean).join(" ").toLowerCase();
+    return words.every((word) => haystack.includes(word));
+  });
 }
 
 export function filterRecordings<T extends { phase: { phase: RecordingPhase } }>(
@@ -114,8 +125,6 @@ export function filterRecordings<T extends { phase: { phase: RecordingPhase } }>
   filter: RecordingFilter,
 ): T[] {
   switch (filter) {
-    case "needs-action":
-      return recordings.filter((recording) => needsAction(recording.phase.phase));
     case "published":
       return recordings.filter((recording) => recording.phase.phase === "published");
     default:

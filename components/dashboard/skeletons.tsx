@@ -64,23 +64,12 @@ export function QuickActionsSkeleton() {
   );
 }
 
-/** Mirrors NeedsYou: the calm "all caught up" line is the common case. */
-export function NeedsYouSkeleton() {
-  return <Skeleton className="h-[58px] w-full rounded-2xl" />;
-}
-
 export function DashboardPageSkeleton() {
   return (
     <SkeletonContainer
       className="mx-auto flex w-full max-w-5xl flex-col gap-5"
       label="dashboard"
     >
-      <section className="flex flex-col gap-3">
-        <h2 className="border-l-4 border-accent pl-3 font-heading text-[26px] font-bold text-foreground">
-          Waiting on you
-        </h2>
-        <NeedsYouSkeleton />
-      </section>
       <HeroSkeleton />
       <StatRowSkeleton />
       <QuickActionsSkeleton />

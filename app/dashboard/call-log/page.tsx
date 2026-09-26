@@ -72,12 +72,12 @@ export default async function CallLogPage() {
           description="When your phone assistant answers a call, it shows up here with a short summary of what the caller wanted."
         />
       ) : (
-        <CallsList calls={items} canMarkHandled={auth.isAdmin && handled.available} />
+        <CallsList calls={items} />
       )}
 
       {isStaff && (
         <AdvancedSection
-          title="Assistant quality (for FaithForm staff)"
+          title="Assistant quality"
           description="Scores, re-scoring and importing calls. Churches don't see this section."
         >
           <RecentCallsBlock

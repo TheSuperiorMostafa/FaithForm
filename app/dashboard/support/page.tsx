@@ -74,26 +74,6 @@ export default async function SupportPage({ searchParams }: PageProps) {
         )}
       </ActionGrid>
 
-      {answers.length > 0 && (
-        <section id="answers" aria-labelledby="answers-heading" className="flex scroll-mt-24 flex-col gap-4">
-          <SectionHeader id="answers-heading" title="Common questions" />
-          <div className="grid gap-4 md:grid-cols-2">
-            {answers.map((item) => (
-              <Card key={item.id}>
-                <CardContent className="flex h-full flex-col gap-3 p-6">
-                  <h3 className="font-heading text-lg font-bold text-foreground">{item.question}</h3>
-                  <p className="flex-1 text-[15px] leading-relaxed text-muted-foreground">{item.answer}</p>
-                  <Link href={item.href} className={buttonVariants({ variant: "outline", className: "self-start" })}>
-                    {item.linkLabel}
-                    <ArrowRight aria-hidden />
-                  </Link>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        </section>
-      )}
-
       <section id="message" aria-labelledby="message-heading" className="flex scroll-mt-24 flex-col gap-4">
         <SectionHeader
           id="message-heading"
@@ -123,6 +103,26 @@ export default async function SupportPage({ searchParams }: PageProps) {
           />
         )}
       </section>
+
+      {answers.length > 0 && (
+        <section id="answers" aria-labelledby="answers-heading" className="flex scroll-mt-24 flex-col gap-4">
+          <SectionHeader id="answers-heading" title="Common questions" />
+          <div className="grid gap-4 md:grid-cols-2">
+            {answers.map((item) => (
+              <Card key={item.id}>
+                <CardContent className="flex h-full flex-col gap-3 p-6">
+                  <h3 className="font-heading text-lg font-bold text-foreground">{item.question}</h3>
+                  <p className="flex-1 text-[15px] leading-relaxed text-muted-foreground">{item.answer}</p>
+                  <Link href={item.href} className={buttonVariants({ variant: "outline", className: "self-start" })}>
+                    {item.linkLabel}
+                    <ArrowRight aria-hidden />
+                  </Link>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 }

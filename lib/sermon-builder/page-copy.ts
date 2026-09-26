@@ -11,10 +11,6 @@ export const NEW_SERMON_DESCRIPTION =
 
 export const EDIT_SERMON_TITLE = "Edit sermon";
 
-export const SOCIAL_POSTS_TITLE = "Social posts";
-export const SOCIAL_POSTS_DESCRIPTION =
-  "Ready-to-post text about this sermon for Facebook, Instagram, X and email.";
-
 export const DISCUSSION_TITLE = "Discussion questions";
 export const DISCUSSION_DESCRIPTION =
   "Questions for small groups to talk through this week's sermon.";

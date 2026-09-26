@@ -6,10 +6,11 @@ import { cn } from "@/lib/utils";
 
 type ThemeToggleProps = {
   /**
-   * "cards" is the big, labelled choice used in Settings; "segmented" and
-   * "compact" are for tight spaces (admin sidebar, sign-in screen).
+   * "icons" is the three-button Sun / Moon / Computer control at the top of
+   * Settings; "segmented" and "compact" are for tight spaces (admin sidebar,
+   * sign-in screen).
    */
-  variant?: "cards" | "segmented" | "compact";
+  variant?: "icons" | "segmented" | "compact";
   className?: string;
 };
 
@@ -63,12 +64,12 @@ export function ThemeToggle({
     );
   }
 
-  if (variant === "cards") {
+  if (variant === "icons") {
     return (
       <div
         role="radiogroup"
-        aria-label="Colours"
-        className={cn("choice-grid choice-grid-3", className)}
+        aria-label="Light or dark"
+        className={cn("flex w-fit gap-1 rounded-2xl border border-border bg-card p-1 shadow-sm", className)}
       >
         {options.map(({ value, label, hint, icon: Icon }) => {
           const active = mode === value;
@@ -78,18 +79,18 @@ export function ThemeToggle({
               type="button"
               role="radio"
               aria-checked={active}
+              aria-label={label}
+              title={`${label}. ${hint}`}
               onClick={() => setMode(value)}
               className={cn(
-                "flex min-h-[104px] flex-col items-start gap-2 rounded-2xl border-2 p-4 text-left transition-colors motion-reduce:transition-none",
+                "flex size-11 items-center justify-center rounded-xl transition-colors motion-reduce:transition-none",
                 "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                 active
-                  ? "border-accent bg-accent/10"
-                  : "border-border bg-background hover:border-accent/50 hover:bg-accent/5",
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
             >
-              <Icon className="size-6 text-primary dark:text-accent" strokeWidth={1.75} aria-hidden />
-              <span className="text-base font-semibold text-foreground">{label}</span>
-              <span className="text-sm text-muted-foreground">{hint}</span>
+              <Icon className="size-5" strokeWidth={1.75} aria-hidden />
             </button>
           );
         })}

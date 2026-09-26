@@ -30,7 +30,7 @@ import {
   ONLY_ADMINS_CAN_SHARE,
   sermonAudienceLabel,
 } from "@/lib/sermons/v1/share-rules";
-import type { DiscussionQuestion, SocialSnippets } from "@/types/sermon";
+import type { DiscussionQuestion } from "@/types/sermon";
 
 export const dynamic = "force-dynamic";
 
@@ -56,14 +56,10 @@ export default async function SermonDetailPage({
 
   const isSimple = (sermon.kind ?? "advanced") === "simple";
 
-  const [questionsAsset, socialAsset] = await Promise.all([
-    isSimple ? getLatestAsset(sermon.id, "discussion_questions") : Promise.resolve(null),
-    getLatestAsset(sermon.id, "social_snippet"),
-  ]);
+  const questionsAsset = isSimple ? await getLatestAsset(sermon.id, "discussion_questions") : null;
   const questions =
     (questionsAsset?.payload as { questions?: DiscussionQuestion[] } | null)
       ?.questions ?? [];
-  const socialInitial = (socialAsset?.payload as SocialSnippets | null) ?? undefined;
 
   // Publishing puts a sermon in front of a congregation, so it is an admin's
   // decision (the server action enforces the same rule). Everyone else sees
@@ -143,7 +139,6 @@ export default async function SermonDetailPage({
       <SermonDetailTabs
         sermon={sermon}
         questions={questions}
-        socialInitial={socialInitial}
         initialTab={parseSermonDetailTab(query.tab)}
       />
 

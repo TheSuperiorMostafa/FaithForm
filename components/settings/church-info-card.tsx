@@ -120,7 +120,7 @@ function ChurchImageField({
       <div
         className={cn(
           "flex items-center justify-center overflow-hidden rounded-2xl border border-border bg-muted/40",
-          kind === "logo" ? "size-32" : "aspect-video w-full max-w-md",
+          kind === "logo" ? "size-16" : "aspect-video w-full max-w-md",
         )}
       >
         {url ? (
@@ -131,7 +131,7 @@ function ChurchImageField({
             className="size-full object-cover"
           />
         ) : (
-          <ImageIcon className="size-8 text-muted-foreground" strokeWidth={1.5} aria-hidden />
+          <ImageIcon className={cn("text-muted-foreground", kind === "logo" ? "size-6" : "size-8")} strokeWidth={1.5} aria-hidden />
         )}
       </div>
       <p className="text-sm text-muted-foreground">{copy.hint}</p>
@@ -387,73 +387,6 @@ export function ChurchDetailsForm({
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <MapPin className="size-5 text-accent" strokeWidth={1.75} aria-hidden />
-            Address
-          </CardTitle>
-          <CardDescription className="text-[15px]">
-            Where people come on Sunday. It&apos;s shown with a map link in the app.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col gap-5">
-          <Field id="church_address" label="Street address" error={errorFor("address")}>
-            <Input
-              id="church_address"
-              autoComplete="street-address"
-              value={form.address}
-              maxLength={200}
-              placeholder="123 Main Street"
-              onChange={(event) => set("address", event.target.value)}
-            />
-          </Field>
-          <div className="grid gap-5 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
-            <Field id="church_city" label="City" error={errorFor("city")}>
-              <Input
-                id="church_city"
-                autoComplete="address-level2"
-                value={form.city}
-                maxLength={120}
-                onChange={(event) => set("city", event.target.value)}
-              />
-            </Field>
-            <Field id="church_state" label="State" error={errorFor("state")}>
-              <Input
-                id="church_state"
-                autoComplete="address-level1"
-                value={form.state}
-                maxLength={60}
-                onChange={(event) => set("state", event.target.value)}
-              />
-            </Field>
-            <Field id="church_zip" label="ZIP code" error={errorFor("zip")}>
-              <Input
-                id="church_zip"
-                autoComplete="postal-code"
-                value={form.zip}
-                maxLength={20}
-                onChange={(event) => set("zip", event.target.value)}
-              />
-            </Field>
-          </div>
-          <div className="rounded-2xl bg-muted/50 px-5 py-4">
-            <p className="text-[15px] font-semibold text-foreground">Time zone</p>
-            <p className="text-[15px] text-foreground/80">{describeTimeZone(timezone)}</p>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Service times and reminders use this. If it&apos;s wrong,{" "}
-              <Link
-                href="/dashboard/support?from=/dashboard/settings"
-                className="font-semibold text-primary underline underline-offset-4 dark:text-accent"
-              >
-                send us a message
-              </Link>{" "}
-              and we&apos;ll change it for you.
-            </p>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
             <Clock className="size-5 text-accent" strokeWidth={1.75} aria-hidden />
             Service times
           </CardTitle>
@@ -539,6 +472,73 @@ export function ChurchDetailsForm({
         </CardContent>
       </Card>
 
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <MapPin className="size-5 text-accent" strokeWidth={1.75} aria-hidden />
+            Address
+          </CardTitle>
+          <CardDescription className="text-[15px]">
+            Where people come on Sunday. It&apos;s shown with a map link in the app.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-5">
+          <Field id="church_address" label="Street address" error={errorFor("address")}>
+            <Input
+              id="church_address"
+              autoComplete="street-address"
+              value={form.address}
+              maxLength={200}
+              placeholder="123 Main Street"
+              onChange={(event) => set("address", event.target.value)}
+            />
+          </Field>
+          <div className="grid gap-5 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
+            <Field id="church_city" label="City" error={errorFor("city")}>
+              <Input
+                id="church_city"
+                autoComplete="address-level2"
+                value={form.city}
+                maxLength={120}
+                onChange={(event) => set("city", event.target.value)}
+              />
+            </Field>
+            <Field id="church_state" label="State" error={errorFor("state")}>
+              <Input
+                id="church_state"
+                autoComplete="address-level1"
+                value={form.state}
+                maxLength={60}
+                onChange={(event) => set("state", event.target.value)}
+              />
+            </Field>
+            <Field id="church_zip" label="ZIP code" error={errorFor("zip")}>
+              <Input
+                id="church_zip"
+                autoComplete="postal-code"
+                value={form.zip}
+                maxLength={20}
+                onChange={(event) => set("zip", event.target.value)}
+              />
+            </Field>
+          </div>
+          <div className="rounded-2xl bg-muted/50 px-5 py-4">
+            <p className="text-[15px] font-semibold text-foreground">Time zone</p>
+            <p className="text-[15px] text-foreground/80">{describeTimeZone(timezone)}</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Service times and reminders use this. If it&apos;s wrong,{" "}
+              <Link
+                href="/dashboard/support?from=/dashboard/settings"
+                className="font-semibold text-primary underline underline-offset-4 dark:text-accent"
+              >
+                send us a message
+              </Link>{" "}
+              and we&apos;ll change it for you.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
       {appPageHref && (
         <p className="text-[15px] text-muted-foreground">
           Your tagline, the &ldquo;About&rdquo; text and social links are on the{" "}
@@ -592,9 +592,17 @@ function ChurchDetailsReadOnly({ basics, timezone }: { basics: ChurchBasics; tim
     { label: "Church name", value: basics.name },
     { label: "Phone", value: basics.phone },
     { label: "Email", value: basics.email },
+  ];
+  const placeRows: Array<{ label: string; value: string }> = [
     { label: "Address", value: address },
     { label: "Time zone", value: describeTimeZone(timezone) },
   ];
+  const renderRow = (row: { label: string; value: string }) => (
+    <div key={row.label} className="grid gap-1 py-3 sm:grid-cols-[180px_minmax(0,1fr)]">
+      <dt className="text-[15px] font-semibold text-foreground">{row.label}</dt>
+      <dd className="text-[15px] text-foreground/80">{row.value.trim() || "Not added yet"}</dd>
+    </div>
+  );
 
   return (
     <Card>
@@ -606,12 +614,7 @@ function ChurchDetailsReadOnly({ basics, timezone }: { basics: ChurchBasics; tim
       </CardHeader>
       <CardContent>
         <dl className="divide-y divide-border">
-          {rows.map((row) => (
-            <div key={row.label} className="grid gap-1 py-3 sm:grid-cols-[180px_minmax(0,1fr)]">
-              <dt className="text-[15px] font-semibold text-foreground">{row.label}</dt>
-              <dd className="text-[15px] text-foreground/80">{row.value.trim() || "Not added yet"}</dd>
-            </div>
-          ))}
+          {rows.map(renderRow)}
           <div className="grid gap-1 py-3 sm:grid-cols-[180px_minmax(0,1fr)]">
             <dt className="text-[15px] font-semibold text-foreground">Service times</dt>
             <dd className="text-[15px] text-foreground/80">
@@ -628,6 +631,7 @@ function ChurchDetailsReadOnly({ basics, timezone }: { basics: ChurchBasics; tim
               )}
             </dd>
           </div>
+          {placeRows.map(renderRow)}
         </dl>
       </CardContent>
     </Card>

@@ -129,7 +129,7 @@ test("Website has five tabs and the old routes still land", () => {
   const tabs = layout.match(/\{ label: "/g) ?? [];
   assert.ok(tabs.length <= 5, `expected at most 5 tabs, found ${tabs.length}`);
   assert.match(layout, /label: "Inbox"/);
-  assert.match(layout, /label: "Look & details"/);
+  assert.match(layout, /label: "Look & Details"/);
   assert.doesNotMatch(layout, /label: "Messages"/);
   assert.match(read("app/dashboard/website/messages/page.tsx"), /redirect\("\/dashboard\/website\/inbox"\)/);
   assert.match(read("app/dashboard/website/design/page.tsx"), /redirect\("\/dashboard\/website\/details#look"\)/);

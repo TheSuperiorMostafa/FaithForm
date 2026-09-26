@@ -18,9 +18,18 @@ test("billing portal requires the verified church/donor session", () => {
 
 test("unknown portal-link requests do not create or enumerate donors", () => {
   const route = read("app/api/give/portal/send-link/route.ts");
-  assert.doesNotMatch(route, /upsertGivingDonor/);
-  assert.match(route, /if \(!existingDonor\?\.id\) return generic/);
+  // A donor is only ever created for an address that already has a succeeded
+  // gift at this church, and every answer is the same generic message.
+  const lookup = route.slice(route.indexOf("async function donorIdForEmail"));
+  assert.ok(
+    lookup.indexOf('.eq("status", "succeeded")') < lookup.indexOf("upsertGivingDonor("),
+    "a donor is created before a real gift is found",
+  );
+  assert.match(lookup, /if \(!gift\) return null/);
+  assert.match(route, /if \(!donorId\) return generic/);
   assert.match(route, /If that donor account exists/);
+  // ilike wildcards in an address are escaped, so it matches exactly.
+  assert.match(route, /replace\(\/\[\\\\%_\]\/g/);
 });
 
 test("magic-link consumption is one atomic replay-safe mutation", () => {

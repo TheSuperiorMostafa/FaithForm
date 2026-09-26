@@ -173,7 +173,6 @@ test("rows of option cards use the flex choice-grid, never a stretched grid row"
     "components/live-streaming/setup/recording-settings-card.tsx",
     "components/live-streaming/setup/streaming-setup-guide.tsx",
     "components/checkin/checkout-console.tsx",
-    "components/theme-toggle.tsx",
     "components/ui/action-card.tsx",
   ]) {
     const source = read(path);

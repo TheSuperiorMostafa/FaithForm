@@ -9,11 +9,11 @@ import type { RecordingPhase } from "@/lib/stream/recording-model";
 import {
   filterRecordings,
   MEMBER_APP,
-  needsAction,
   parseRecordingFilter,
   publishedWhereSentence,
   readyToPublishHeadline,
   recordingFilterHref,
+  searchRecordings,
   recordingNextAction,
   recordingTone,
 } from "@/lib/stream/recording-status";
@@ -60,21 +60,30 @@ test("the next action is a verb a pastor understands, and points at the right pa
   assert.equal(action("preparing"), null, "nothing to do while it's processing");
 });
 
-test("filters: All · Needs action · Published · Series", () => {
+test("filters: All · Published · Series", () => {
   const list = PHASES.map((phase, index) => ({ id: String(index), phase: { phase } }));
   assert.equal(filterRecordings(list, "all").length, PHASES.length);
-  assert.deepEqual(
-    filterRecordings(list, "needs-action").map((item) => item.phase.phase),
-    ["ready_to_publish", "needs_attention"],
-  );
   assert.deepEqual(filterRecordings(list, "published").map((item) => item.phase.phase), ["published"]);
-  assert.ok(needsAction("ready_to_publish") && needsAction("needs_attention") && !needsAction("preparing"));
   assert.equal(parseRecordingFilter("series"), "series");
-  assert.equal(parseRecordingFilter(["needs-action"]), "needs-action");
+  assert.equal(parseRecordingFilter(["needs-action"]), "all", "the old Needs action link lands on All");
   assert.equal(parseRecordingFilter("drop table"), "all");
   assert.equal(parseRecordingFilter(undefined), "all");
   assert.equal(recordingFilterHref("all"), "/dashboard/live-streaming/recordings");
   assert.equal(recordingFilterHref("series"), "/dashboard/live-streaming/recordings?show=series");
+  assert.equal(recordingFilterHref("published", " easter "), "/dashboard/live-streaming/recordings?show=published&q=easter");
+  assert.equal(recordingFilterHref("series", "easter"), "/dashboard/live-streaming/recordings?show=series");
+});
+
+test("search matches title, series or speaker, every word", () => {
+  const list = [
+    { title: "Easter Sunday", seriesName: "Risen", speaker: "Pastor Ann" },
+    { title: "Good Friday", seriesName: null, speaker: "Pastor Ben" },
+  ];
+  assert.equal(searchRecordings(list, "").length, 2);
+  assert.deepEqual(searchRecordings(list, "EASTER").map((r) => r.title), ["Easter Sunday"]);
+  assert.deepEqual(searchRecordings(list, "risen ann").map((r) => r.title), ["Easter Sunday"]);
+  assert.deepEqual(searchRecordings(list, "ben").map((r) => r.title), ["Good Friday"]);
+  assert.equal(searchRecordings(list, "christmas").length, 0);
 });
 
 test("published always says where members find it", () => {
@@ -190,7 +199,8 @@ test("the ready-to-publish prompt is persistent: Later folds it for the session,
 test("the review page publishes to the app in one button, and deletes only from a labelled danger section", () => {
   const review = read("components/live-streaming/recordings/recording-review.tsx");
   assert.match(review, /"Publish to the app"/);
-  assert.match(review, /Also show it on your church website/);
+  assert.match(review, /"Show it on your church website"/);
+  assert.doesNotMatch(review, /List it on your website/, "anything on the website is listed");
   assert.match(review, /under Services/);
   assert.doesNotMatch(review, /DropdownMenu|MoreHorizontal/, "delete is no longer in an icon-only menu");
   assert.match(review, /confirmLabel: "Delete recording"/);

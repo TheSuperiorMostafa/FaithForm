@@ -74,22 +74,6 @@ export default function SupportLoading() {
       </div>
 
       <section className="flex flex-col gap-4">
-        <SectionHeader title="Common questions" />
-        <div className="grid gap-4 md:grid-cols-2">
-          {Array.from({ length: 4 }).map((_, index) => (
-            <Card key={index}>
-              <CardContent className="flex h-full flex-col gap-3 p-6">
-                <Skeleton className="h-6 w-56 max-w-full" />
-                <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-4 w-4/5" />
-                <Skeleton className="h-11 w-40 rounded-[10px]" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </section>
-
-      <section className="flex flex-col gap-4">
         <SectionHeader
           title="Send us a message"
           description={`Tell us what you need. We reply by email ${SUPPORT_RESPONSE_TIME}.`}
@@ -133,6 +117,22 @@ export default function SupportLoading() {
             </li>
           ))}
         </ul>
+      </section>
+
+      <section className="flex flex-col gap-4">
+        <SectionHeader title="Common questions" />
+        <div className="grid gap-4 md:grid-cols-2">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <Card key={index}>
+              <CardContent className="flex h-full flex-col gap-3 p-6">
+                <Skeleton className="h-6 w-56 max-w-full" />
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-4/5" />
+                <Skeleton className="h-11 w-40 rounded-[10px]" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
       </section>
     </SkeletonContainer>
   );

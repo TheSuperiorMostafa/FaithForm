@@ -32,7 +32,7 @@ export default function SupportPage() {
       <h2 id="contact">Contact us</h2>
       <p>
         Email <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>. We answer
-        within two business days. It helps to tell us the church you are
+        the same day. It helps to tell us the church you are
         connected with, the phone or device you are using, and what you saw.
       </p>
 

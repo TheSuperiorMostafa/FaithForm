@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { PlayCircle, Radio } from "lucide-react";
+import { PlayCircle, Radio, Search } from "lucide-react";
 
 import { buttonVariants } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -24,15 +24,17 @@ import { cn } from "@/lib/utils";
 export function RecordingList({
   recordings,
   filter,
+  search = "",
   timeZone,
   isAdmin,
 }: {
   recordings: StaffRecording[];
   filter: RecordingFilter;
+  search?: string;
   timeZone: string;
   isAdmin: boolean;
 }) {
-  if (recordings.length === 0) return <RecordingsEmpty filter={filter} />;
+  if (recordings.length === 0) return <RecordingsEmpty filter={filter} search={search} />;
 
   return (
     <ul
@@ -126,13 +128,13 @@ function RecordingRow({
   );
 }
 
-function RecordingsEmpty({ filter }: { filter: RecordingFilter }) {
-  if (filter === "needs-action") {
+function RecordingsEmpty({ filter, search }: { filter: RecordingFilter; search: string }) {
+  if (search) {
     return (
       <EmptyState
-        icon={PlayCircle}
-        title="Nothing needs you right now"
-        description="Every recording is published, or still being prepared. New recordings show up here when they're ready to publish."
+        icon={Search}
+        title="No recordings match"
+        description={`Nothing has “${search}” in its title, series or speaker. Try a shorter word.`}
       />
     );
   }

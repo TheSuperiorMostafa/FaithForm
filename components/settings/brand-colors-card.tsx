@@ -16,8 +16,8 @@ import { cn } from "@/lib/utils";
 export const DEFAULT_BRAND = { primary: "#002D5F", accent: "#C5A059" };
 
 /**
- * A handful of tried pairs, so choosing colours is a tap rather than a hex
- * code. The app adjusts either colour further if it needs more contrast.
+ * A handful of tried pairs, so choosing colors is a tap rather than a hex
+ * code. The app adjusts either color further if it needs more contrast.
  */
 export const BRAND_SWATCHES: ReadonlyArray<{ name: string; primary: string; accent: string }> = [
   { name: "Navy and gold", primary: DEFAULT_BRAND.primary, accent: DEFAULT_BRAND.accent },
@@ -63,15 +63,15 @@ export function BrandColorsCard({
             : { primaryColor: next.primary, accentColor: next.accent },
         );
         if (result.error) {
-          setError("We couldn't change your colours. Please try again.");
+          setError("We couldn't change your colors. Please try again.");
           return;
         }
         setCurrent(next);
         setCustom(next);
-        toast.success(`App colours changed to ${name}.`);
+        toast.success(`App colors changed to ${name}.`);
         router.refresh();
       } catch {
-        setError("We couldn't change your colours. Please try again.");
+        setError("We couldn't change your colors. Please try again.");
       }
     });
   };
@@ -79,13 +79,13 @@ export function BrandColorsCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>App colours</CardTitle>
+        <CardTitle>App colors</CardTitle>
         <CardDescription className="text-[15px]">
           Used across your church&apos;s app and giving page. Tap a pair to use it.
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-5">
-        <div role="radiogroup" aria-label="App colours" className="choice-grid choice-grid-3">
+        <div role="radiogroup" aria-label="App colors" className="choice-grid choice-grid-3">
           {BRAND_SWATCHES.map((swatch) => {
             const active = matching?.name === swatch.name;
             return (
@@ -114,10 +114,10 @@ export function BrandColorsCard({
         </div>
 
         {!matching && (
-          <p className="text-[15px] text-muted-foreground">You&apos;re using your own colours.</p>
+          <p className="text-[15px] text-muted-foreground">You&apos;re using your own colors.</p>
         )}
 
-        <AdvancedSection title="Custom colour" description="Match your church's own colours exactly.">
+        <AdvancedSection title="Custom color" description="Match your church's own colors exactly.">
           <div className="grid gap-5 sm:grid-cols-2">
             <div className="flex items-center gap-3">
               <input
@@ -128,7 +128,7 @@ export function BrandColorsCard({
                 className="h-12 w-16 cursor-pointer rounded-xl border border-border bg-background"
               />
               <Label htmlFor="brand-primary" className="text-[15px]">
-                Main colour
+                Main color
                 <span className="block text-sm font-normal text-muted-foreground">Headings and buttons</span>
               </Label>
             </div>
@@ -141,7 +141,7 @@ export function BrandColorsCard({
                 className="h-12 w-16 cursor-pointer rounded-xl border border-border bg-background"
               />
               <Label htmlFor="brand-accent" className="text-[15px]">
-                Highlight colour
+                Highlight color
                 <span className="block text-sm font-normal text-muted-foreground">Selected items and accents</span>
               </Label>
             </div>
@@ -162,9 +162,9 @@ export function BrandColorsCard({
             type="button"
             variant="outline"
             disabled={pending || (custom.primary === current.primary && custom.accent === current.accent)}
-            onClick={() => apply(custom, "your own colours")}
+            onClick={() => apply(custom, "your own colors")}
           >
-            {pending ? "Saving…" : "Use these colours"}
+            {pending ? "Saving…" : "Use these colors"}
           </Button>
         </AdvancedSection>
 

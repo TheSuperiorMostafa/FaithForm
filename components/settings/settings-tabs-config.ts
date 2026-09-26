@@ -7,10 +7,10 @@ import type { FeatureKey } from "@/lib/features/catalog";
  */
 export const SETTINGS_TABS = [
   { id: "church", label: "Church info" },
-  { id: "team", label: "Team" },
+  { id: "team", label: "Your Team" },
   { id: "accounts", label: "Connected accounts" },
   { id: "messages", label: "Messages & email" },
-  { id: "advanced", label: "Advanced" },
+  { id: "app", label: "Member App" },
 ] as const;
 
 export type SettingsTabId = (typeof SETTINGS_TABS)[number]["id"];
@@ -34,6 +34,13 @@ export const LEGACY_SETTINGS_TAB_ALIASES: Record<string, ResolvedSettingsTab> = 
   attendance: "messages",
   giving: "giving",
 };
+
+/**
+ * Sections that no longer exist. Their old links go to Settings home: the
+ * Advanced section's light/dark choice now sits at the top of every section,
+ * and Apple Mail drafts moved to Connected accounts.
+ */
+export const REMOVED_SETTINGS_TABS: readonly string[] = ["advanced"];
 
 /** Params the OAuth callbacks append when they come back to Settings. */
 export const ACCOUNT_RESULT_PARAMS = [
@@ -63,6 +70,8 @@ export function visibleSettingsTabs(viewer: SettingsViewer): SettingsTabId[] {
     if (id === "messages") {
       return viewer.isAdmin && (allowed.has("announcements") || allowed.has("attendance"));
     }
+    // App colors are used by the church's app and its giving page.
+    if (id === "app") return viewer.isAdmin && (allowed.has("member_app") || allowed.has("giving"));
     return true;
   });
 }
