@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { Download, Phone } from "lucide-react";
+import { Phone } from "lucide-react";
 import { getHandledState } from "@/app/dashboard/call-log/handled";
 import {
   CALL_LOG_DESCRIPTION,
@@ -10,7 +10,7 @@ import { CallsList } from "@/components/voice-assistant/calls-list";
 import { RecentCallsBlock } from "@/components/voice-assistant/recent-calls-block";
 import { ScoringExplainer } from "@/components/voice-assistant/scoring-explainer";
 import { AdvancedSection } from "@/components/ui/advanced-section";
-import { buttonVariants } from "@/components/ui/button";
+import { DownloadSpreadsheetButton } from "@/components/ui/download-spreadsheet-button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageHeader } from "@/components/ui/page-header";
 import { getChurchAuth } from "@/lib/auth/church";
@@ -20,7 +20,6 @@ import {
   getVoiceAgentSyncStatus,
 } from "@/lib/queries/voice-assistant";
 import { createClient } from "@/lib/supabase/server";
-import { cn } from "@/lib/utils";
 import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
@@ -57,13 +56,7 @@ export default async function CallLogPage() {
         icon={Phone}
         secondary={
           auth.isAdmin && calls.length > 0 ? (
-            <a
-              href="/api/dashboard/voice-assistant/calls/export"
-              className={cn(buttonVariants({ variant: "outline" }))}
-            >
-              <Download aria-hidden className="size-5" />
-              Download calls (CSV)
-            </a>
+            <DownloadSpreadsheetButton href="/api/dashboard/voice-assistant/calls/export" what="calls" />
           ) : null
         }
       />

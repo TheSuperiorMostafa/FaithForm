@@ -247,13 +247,22 @@ export function LocationsManager({
           }
         />
       ) : (
-        <div className="grid gap-6 md:grid-cols-2">
+        // Three to a row and short cards, so a church with ten rooms isn't
+        // scrolling a long page. Ordering and deleting live inside Edit room.
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {locations.map((location, index) => {
             const here = occupancy[location.id] ?? [];
             const full = location.capacity != null && here.length >= location.capacity;
 
             return (
-              <Card key={location.id} className="flex flex-col gap-5 p-6">
+              <Card
+                key={location.id}
+                className={
+                  editing === location.id
+                    ? "flex flex-col gap-4 p-5 sm:col-span-2 lg:col-span-3"
+                    : "flex flex-col gap-3 p-4"
+                }
+              >
                 {editing === location.id ? (
                   <form
                     className="flex flex-col gap-5"
@@ -275,16 +284,46 @@ export function LocationsManager({
                         Cancel
                       </Button>
                     </div>
+                    <div className="flex flex-wrap gap-2 border-t border-border pt-4">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        disabled={pending || index === 0}
+                        onClick={() => move(index, -1)}
+                      >
+                        <ArrowUp aria-hidden />
+                        Move up
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        disabled={pending || index === locations.length - 1}
+                        onClick={() => move(index, 1)}
+                      >
+                        <ArrowDown aria-hidden />
+                        Move down
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        disabled={pending}
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => void remove(location)}
+                      >
+                        <Trash2 aria-hidden />
+                        Delete room
+                      </Button>
+                    </div>
                   </form>
                 ) : (
                   <>
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="min-w-0 space-y-1">
-                        <h3 className="font-heading text-2xl font-bold text-foreground">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <h3 className="truncate font-heading text-lg font-bold text-foreground">
                           {location.name}
                         </h3>
                         {location.description && (
-                          <p className="text-[15px] text-muted-foreground">{location.description}</p>
+                          <p className="truncate text-sm text-muted-foreground">{location.description}</p>
                         )}
                       </div>
                       {location.isActive ? (
@@ -296,11 +335,11 @@ export function LocationsManager({
                       )}
                     </div>
 
-                    <div className="space-y-1">
-                      <p className="text-lg font-semibold text-foreground">
+                    <div>
+                      <p className="text-[15px] font-semibold text-foreground">
                         {occupancyLabel(here.length, location.capacity)}
                       </p>
-                      <p className="text-[15px] text-muted-foreground">
+                      <p className="line-clamp-1 text-sm text-muted-foreground">
                         {here.length > 0 ? joinNames(here) : "Nobody is in this room right now."}
                       </p>
                     </div>
@@ -308,7 +347,7 @@ export function LocationsManager({
                 )}
 
                 {isAdmin && editing !== location.id && (
-                  <div className="flex flex-wrap gap-2 border-t border-border pt-5">
+                  <div className="mt-auto flex flex-wrap gap-2 border-t border-border pt-3">
                     <Button type="button" variant="outline" onClick={() => setEditing(location.id)}>
                       <Pencil aria-hidden />
                       Edit room
@@ -321,34 +360,6 @@ export function LocationsManager({
                     >
                       {location.isActive ? <DoorClosed aria-hidden /> : <DoorOpen aria-hidden />}
                       {location.isActive ? "Close room" : "Open room"}
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      disabled={pending || index === 0}
-                      onClick={() => move(index, -1)}
-                    >
-                      <ArrowUp aria-hidden />
-                      Move up
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      disabled={pending || index === locations.length - 1}
-                      onClick={() => move(index, 1)}
-                    >
-                      <ArrowDown aria-hidden />
-                      Move down
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      disabled={pending}
-                      className="text-destructive hover:text-destructive"
-                      onClick={() => void remove(location)}
-                    >
-                      <Trash2 aria-hidden />
-                      Delete room
                     </Button>
                   </div>
                 )}

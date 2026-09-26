@@ -5,28 +5,30 @@ import { Download, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import type { SpreadsheetKind } from "@/lib/giving/spreadsheet";
-
-const WHAT: Record<SpreadsheetKind, string> = {
-  donors: "donors",
-  recurring: "recurring gifts",
-  deposits: "deposits",
-};
 
 /**
- * "Download spreadsheet": the whole list behind a Giving page as a CSV file
- * that Excel, Numbers and Google Sheets open. Fetched rather than linked so a
- * failure shows a plain-language message instead of a page of raw text.
+ * "Download spreadsheet": the one way the dashboard hands over a list, as a
+ * CSV file that Excel, Numbers and Google Sheets open. Same words and look on
+ * every page. Fetched rather than linked so a failure shows a plain-language
+ * message instead of a page of raw text.
  */
-export function DownloadSpreadsheetButton({ kind }: { kind: SpreadsheetKind }) {
+export function DownloadSpreadsheetButton({
+  href,
+  what,
+}: {
+  /** The route that returns the CSV. */
+  href: string;
+  /** What is in it, for messages: "donors", "calls". */
+  what: string;
+}) {
   const [busy, setBusy] = useState(false);
 
   async function download() {
     if (busy) return;
     setBusy(true);
-    const fallback = `We couldn't make the ${WHAT[kind]} spreadsheet. Please try again.`;
+    const fallback = `We couldn't make the ${what} spreadsheet. Please try again.`;
     try {
-      const res = await fetch(`/api/dashboard/giving/export/${kind}`, { cache: "no-store" });
+      const res = await fetch(href, { cache: "no-store" });
       if (!res.ok) {
         // The route only ever returns plain sentences, never raw errors.
         const body = (await res.json().catch(() => null)) as { error?: unknown } | null;
@@ -43,7 +45,7 @@ export function DownloadSpreadsheetButton({ kind }: { kind: SpreadsheetKind }) {
       }
       const blob = await res.blob();
       const filename =
-        /filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") ?? "")?.[1] ?? `${kind}.csv`;
+        /filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") ?? "")?.[1] ?? "spreadsheet.csv";
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;

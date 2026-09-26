@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { Landmark } from "lucide-react";
 
-import { DownloadSpreadsheetButton } from "@/components/giving/download-spreadsheet-button";
+import { DownloadSpreadsheetButton } from "@/components/ui/download-spreadsheet-button";
 import { formatGiftDate, GivingNotReady, GivingSubpageHeader } from "@/components/giving/giving-page-parts";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
@@ -48,7 +48,7 @@ export default async function DepositsPage() {
       <GivingSubpageHeader
         page="deposits"
         secondary={
-          auth.isAdmin && payouts && payouts.length > 0 ? <DownloadSpreadsheetButton kind="deposits" /> : null
+          auth.isAdmin && payouts && payouts.length > 0 ? <DownloadSpreadsheetButton href="/api/dashboard/giving/export/deposits" what="deposits" /> : null
         }
       />
 

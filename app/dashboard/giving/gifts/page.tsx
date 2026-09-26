@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { Download } from "lucide-react";
 
 import { GivingNotReady, GivingSubpageHeader, plural } from "@/components/giving/giving-page-parts";
 import { GiftsTable } from "@/components/giving/gifts-table";
 import { GiftsToolbar } from "@/components/giving/gifts-toolbar";
 import { buttonVariants } from "@/components/ui/button";
+import { DownloadSpreadsheetButton } from "@/components/ui/download-spreadsheet-button";
 import { Card } from "@/components/ui/card";
 import { ErrorState } from "@/components/ui/error-state";
 import { getChurchAuth } from "@/lib/auth/church";
@@ -147,10 +147,7 @@ function GiftsHeader({ exportHref }: { exportHref: string | null }) {
       page="gifts"
       secondary={
         exportHref ? (
-          <a href={exportHref} className={buttonVariants({ variant: "outline" })}>
-            <Download aria-hidden />
-            Download spreadsheet (CSV)
-          </a>
+          <DownloadSpreadsheetButton href={exportHref} what="gifts" />
         ) : null
       }
     />

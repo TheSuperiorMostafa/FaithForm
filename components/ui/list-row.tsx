@@ -19,6 +19,7 @@ export function ListRow({
   status,
   trailing,
   selected = false,
+  compact = false,
   className,
   "aria-label": ariaLabel,
 }: {
@@ -31,6 +32,8 @@ export function ListRow({
   /** Extra actions; rendered outside the main target so they stay separate. */
   trailing?: React.ReactNode;
   selected?: boolean;
+  /** Shorter rows for long logs, where each entry is read once and scanned past. */
+  compact?: boolean;
   className?: string;
   "aria-label"?: string;
 }) {
@@ -38,9 +41,23 @@ export function ListRow({
     <>
       {leading && <span className="shrink-0">{leading}</span>}
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-base font-semibold text-foreground">{title}</span>
+        <span
+          className={cn(
+            "block truncate font-semibold text-foreground",
+            compact ? "text-[15px]" : "text-base",
+          )}
+        >
+          {title}
+        </span>
         {subtitle && (
-          <span className="mt-0.5 block truncate text-[15px] text-muted-foreground">{subtitle}</span>
+          <span
+            className={cn(
+              "mt-0.5 block text-muted-foreground",
+              compact ? "text-sm" : "truncate text-[15px]",
+            )}
+          >
+            {subtitle}
+          </span>
         )}
       </span>
       {status && <span className="shrink-0">{status}</span>}
@@ -50,8 +67,10 @@ export function ListRow({
     </>
   );
 
-  const targetClass =
-    "flex min-h-[72px] min-w-0 flex-1 items-center gap-3 rounded-2xl px-3 py-3 sm:gap-4 sm:px-4 text-left transition-colors hover:bg-accent/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
+  const targetClass = cn(
+    "flex min-w-0 flex-1 items-center gap-3 rounded-2xl px-3 text-left transition-colors hover:bg-accent/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+    compact ? "min-h-[52px] py-2" : "min-h-[72px] py-3 sm:gap-4 sm:px-4",
+  );
 
   return (
     <li

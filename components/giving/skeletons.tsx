@@ -287,7 +287,7 @@ export function GiftsSkeleton() {
         secondary={
           <Button variant="outline" disabled>
             <Download aria-hidden />
-            Download spreadsheet (CSV)
+            Download spreadsheet
           </Button>
         }
       />

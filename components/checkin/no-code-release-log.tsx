@@ -61,37 +61,36 @@ export function NoCodeReleaseLog({
           description="If a child is ever released without the family's code, it's listed here with who released them and why."
         />
       ) : (
+        // Compact rows: a church can have many of these, so each one is two
+        // short lines rather than a tall card.
         <List label={NO_CODE_LOG_TITLE}>
           {releases.map((release) => (
             <ListRow
               key={release.sessionId}
-              leading={<InitialsAvatar name={release.childName} />}
+              compact
+              leading={<InitialsAvatar name={release.childName} className="size-9 text-sm" />}
               title={release.childName}
-              subtitle={
-                <>
-                  <span className="block whitespace-normal text-foreground/80">
-                    Released by{" "}
-                    <span className="font-semibold text-foreground">{release.releasedByLabel}</span>
-                    {" · "}
-                    <time dateTime={release.releasedAt}>
-                      {formatReleaseTime(release.releasedAt, timeZone)}
-                    </time>
-                  </span>
-                  {(release.roomName || release.releasedToName) && (
-                    <span className="block whitespace-normal">
-                      {[
-                        release.roomName && `From ${release.roomName}`,
-                        release.releasedToName && `Went home with ${release.releasedToName}`,
-                      ]
-                        .filter(Boolean)
-                        .join(" · ")}
-                    </span>
-                  )}
-                  {release.reason && (
-                    <span className="block whitespace-normal">Reason: “{release.reason}”</span>
-                  )}
-                </>
+              status={
+                <time dateTime={release.releasedAt} className="text-sm text-muted-foreground">
+                  {formatReleaseTime(release.releasedAt, timeZone)}
+                </time>
               }
+              subtitle={[
+                <>
+                  Released by{" "}
+                  <span className="font-semibold text-foreground/85">{release.releasedByLabel}</span>
+                </>,
+                release.roomName && `From ${release.roomName}`,
+                release.releasedToName && `Went home with ${release.releasedToName}`,
+                release.reason && `Reason: “${release.reason}”`,
+              ]
+                .filter(Boolean)
+                .map((part, index) => (
+                  <span key={index}>
+                    {index > 0 && " · "}
+                    {part}
+                  </span>
+                ))}
             />
           ))}
         </List>
