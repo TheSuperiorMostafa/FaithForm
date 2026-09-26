@@ -171,7 +171,9 @@ export default async function AnnouncementsPage() {
           </Suspense>
         )}
 
-        <div className={showWeeklyEmail ? "grid gap-8 xl:grid-cols-[minmax(0,1fr)_380px]" : "flex flex-col gap-8"}>
+        {/* Same columns as the calendar above: the lists line up with the
+            calendar, and Monday's email with the day panel beside it. */}
+        <div className={showWeeklyEmail ? "grid gap-x-6 gap-y-8 xl:grid-cols-[minmax(0,1.55fr)_minmax(340px,1fr)]" : "flex flex-col gap-8"}>
           <div className="flex min-w-0 flex-col gap-8">
             <Suspense fallback={<CalendarSuggestionsSkeleton calendarConnected={calendarConnected} />}>
               <SuggestionsSection

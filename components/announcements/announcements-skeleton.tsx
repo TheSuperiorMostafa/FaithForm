@@ -256,7 +256,7 @@ export function AnnouncementsPageSkeleton() {
     <SkeletonContainer className="flex w-full flex-col gap-8" label="announcements">
       <AnnouncementsHeaderSkeleton />
       <CalendarSectionSkeleton />
-      <div className="grid gap-8 xl:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="grid gap-x-6 gap-y-8 xl:grid-cols-[minmax(0,1.55fr)_minmax(340px,1fr)]">
         <div className="flex min-w-0 flex-col gap-8">
           <CalendarSuggestionsSkeleton />
           <PostedSectionSkeleton />
