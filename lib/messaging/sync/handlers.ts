@@ -391,11 +391,14 @@ async function syncGroupMembers(ctx: HandlerContext, job: SyncJob): Promise<Hand
     await syncGroupChannel(ctx, { ...job, kind: "group.channel" });
   }
 
-  const { data: memberships } = await ctx.admin
+  const { data: memberships, error: membershipsError } = await ctx.admin
     .from("group_memberships")
     .select("group_role, visitor_accounts!inner(user_id, status)")
     .eq("group_id", groupId)
     .eq("status", "active");
+  // A failed read is not an empty group. Reconciled against nothing, every
+  // member would be removed from the channel.
+  if (membershipsError) throw new Error("group_memberships_unavailable");
 
   type Row = {
     group_role: string;
@@ -415,6 +418,15 @@ async function syncGroupMembers(ctx: HandlerContext, job: SyncJob): Promise<Hand
   const channelId = groupChannelId(groupId);
   const actual = await ctx.provider.listMembers(GROUP_CHANNEL_TYPE, channelId);
   const actualById = new Map(actual.map((member) => [member.chatUserId, member]));
+
+  // Removals first, on their own. Everything after this can fail — identity
+  // lookup, provisioning, the add itself — and a failure there used to skip
+  // the removals too, leaving people who had left or been removed reading the
+  // group until someone retried the job.
+  const removals = actual
+    .filter((member) => member.chatUserId !== "ff_system" && !desiredRoles.has(member.chatUserId))
+    .map((member) => member.chatUserId);
+  if (removals.length) await ctx.provider.removeMembers(GROUP_CHANNEL_TYPE, channelId, removals);
 
   const missing = [...desiredRoles.entries()].filter(([chatId]) => !actualById.has(chatId));
   let toAdd = missing;
@@ -436,9 +448,6 @@ async function syncGroupMembers(ctx: HandlerContext, job: SyncJob): Promise<Hand
   }
 
   const additions = toAdd.map(([chatUserId, value]) => ({ chatUserId, channelRole: value.role }));
-  const removals = actual
-    .filter((member) => member.chatUserId !== "ff_system" && !desiredRoles.has(member.chatUserId))
-    .map((member) => member.chatUserId);
   const roleChanges = actual
     .filter((member) => {
       const desired = desiredRoles.get(member.chatUserId);
@@ -447,7 +456,6 @@ async function syncGroupMembers(ctx: HandlerContext, job: SyncJob): Promise<Hand
     .map((member) => ({ chatUserId: member.chatUserId, channelRole: desiredRoles.get(member.chatUserId)!.role }));
 
   if (additions.length) await ctx.provider.addMembers(GROUP_CHANNEL_TYPE, channelId, additions);
-  if (removals.length) await ctx.provider.removeMembers(GROUP_CHANNEL_TYPE, channelId, removals);
   if (roleChanges.length) await ctx.provider.setMemberRoles(GROUP_CHANNEL_TYPE, channelId, roleChanges);
 
   // New members get their notification choices and any suspension applied.
