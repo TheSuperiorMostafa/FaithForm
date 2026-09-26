@@ -130,6 +130,7 @@ export async function markPresentBulk(input: {
   }
 
   const admin = input.client ?? createAdminClient();
+  await assertOccurrenceInChurch(admin, input.churchId, input.occurrenceId);
 
   const { data, error } = await admin.rpc("record_attendance_batch", {
     p_occurrence_id: input.occurrenceId,
@@ -153,6 +154,26 @@ export async function markPresentBulk(input: {
   }));
 }
 
+/**
+ * The occurrence must be one of this church's. The attendance commands take
+ * the church from the occurrence itself, so without this a staff member of one
+ * church could count people at another church's service by naming its id.
+ */
+async function assertOccurrenceInChurch(
+  db: SupabaseClient,
+  churchId: string,
+  occurrenceId: string,
+): Promise<void> {
+  const { data, error } = await db
+    .from("service_occurrences")
+    .select("id")
+    .eq("id", occurrenceId)
+    .eq("church_id", churchId)
+    .maybeSingle();
+  if (error) throw new VisitorError("unavailable", "Could not find that service.");
+  if (!data) throw new VisitorError("forbidden", "That service was not found.");
+}
+
 /** A single manual add, through the same command. */
 export async function markPresent(input: {
   churchId: string;
@@ -162,6 +183,7 @@ export async function markPresent(input: {
   idempotencyKey?: string;
   client?: SupabaseClient;
 }): Promise<AttendanceResult> {
+  await assertOccurrenceInChurch(input.client ?? createAdminClient(), input.churchId, input.occurrenceId);
   return recordAttendance(
     {
       occurrenceId: input.occurrenceId,

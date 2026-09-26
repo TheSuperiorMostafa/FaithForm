@@ -29,9 +29,47 @@ function fakeClient(
       calls.push({ fn, params });
       return handler(fn, params);
     },
+    // The church check that runs before any write: only `occ-1` of
+    // `church-1` exists.
+    from: (table: string) => {
+      const filters: Record<string, unknown> = {};
+      const builder = {
+        select: () => builder,
+        eq: (column: string, value: unknown) => {
+          filters[column] = value;
+          return builder;
+        },
+        maybeSingle: async () => ({
+          data:
+            table === "service_occurrences" &&
+            filters.id === "occ-1" &&
+            filters.church_id === "church-1"
+              ? { id: "occ-1" }
+              : null,
+          error: null,
+        }),
+      };
+      return builder;
+    },
   };
   return { client: client as never, calls };
 }
+
+test("another church's service is refused before anything is written", async () => {
+  const { client, calls } = fakeClient(() => ({ data: [] }));
+  await assert.rejects(
+    markPresentBulk({
+      churchId: "church-2",
+      occurrenceId: "occ-1",
+      memberIds: ids(3),
+      actorUserId: "user-1",
+      batchKey: "batch-x",
+      client,
+    }),
+    /That service was not found/,
+  );
+  assert.equal(calls.length, 0, "no attendance command may run for a foreign service");
+});
 
 const ids = (n: number) =>
   Array.from({ length: n }, (_, i) =>

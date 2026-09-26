@@ -589,14 +589,31 @@ export async function submitAttendance(
   }
   const v = parsed.data;
 
+  // The command finds the gathering by church alone and then rewrites *that*
+  // gathering's attendance, marking absent everyone not listed. So the
+  // gathering must be proven to belong to the group the caller leads before
+  // anything is sent, or a leader of one group could wipe another's.
+  const { data: event, error: eventError } = await admin
+    .from("group_events")
+    .select("id")
+    .eq("id", input.eventId)
+    .eq("group_id", input.groupId)
+    .eq("church_id", input.churchId)
+    .maybeSingle();
+  if (eventError) throw new VisitorError("unavailable", "Could not save attendance right now.");
+  if (!event) throw new VisitorError("group_not_found", "That gathering was not found.");
+
   // Membership ids to People ids, through this group's own active roster only.
-  const { data: roster } = await admin
+  const { data: roster, error: rosterError } = await admin
     .from("group_memberships")
     .select("id, member_id")
     .eq("group_id", input.groupId)
     .eq("church_id", input.churchId)
     .eq("status", "active")
     .in("id", v.presentMembershipIds.length ? v.presentMembershipIds : ["00000000-0000-0000-0000-000000000000"]);
+  // A failed read must not become "nobody came": the command would reverse
+  // everyone already counted.
+  if (rosterError) throw new VisitorError("unavailable", "Could not save attendance right now.");
   const memberIds = ((roster ?? []) as { member_id: string | null }[])
     .map((row) => row.member_id)
     .filter((id): id is string => Boolean(id));
