@@ -549,7 +549,7 @@ YOUR CHURCH ONLINE
 - "Live Stream" → **Live**; "Sermon Builder" → **Sermons**; "Call Log" → **Phone Calls**; "Member App" → **App**; Households → **Families** (under People).
 - **Team** moves from a Settings tab to *Settings › Team*, *and* gets an "Invite someone" tile on Home for admins.
 - "Library" (PDF reports) becomes **Reports** under Attendance. The Live "Library" tab merges into **Recordings**.
-- Two light group headings ("Every week", "Your church online") give 11 peers some structure without extra depth.
+- Two light group headings ("Your weekly tools", "Your church online") give 11 peers some structure without extra depth.
 
 **Mobile bottom bar** (5 items, 48px+, 12px+ labels):
 - **Home**

@@ -19,12 +19,12 @@ import type { FeatureKey } from "@/lib/features/catalog";
 
 /**
  * Sidebar groups follow a church's week, not the database: the things done
- * every week first, then the church's presence online.
+ * every week first, then the church's people and presence online.
  */
 export type NavGroup = "home" | "weekly" | "online";
 
 export const NAV_GROUP_LABELS: Record<Exclude<NavGroup, "home">, string> = {
-  weekly: "Every week",
+  weekly: "Your weekly tools",
   online: "Your church online",
 };
 
@@ -98,30 +98,6 @@ export const navItems: NavItem[] = [
     group: "home",
   },
   {
-    label: "People",
-    shortLabel: "People",
-    href: "/dashboard/people",
-    icon: UserRound,
-    features: ["people"],
-    group: "weekly",
-  },
-  {
-    label: "Groups",
-    shortLabel: "Groups",
-    href: "/dashboard/groups",
-    icon: Users,
-    features: ["groups"],
-    group: "weekly",
-  },
-  {
-    label: "Announcements",
-    shortLabel: "News",
-    href: "/dashboard/announcements",
-    icon: Megaphone,
-    features: ["announcements"],
-    group: "weekly",
-  },
-  {
     // Who came: the Sunday count, services and follow-up.
     label: "Attendance",
     shortLabel: "Attend",
@@ -141,11 +117,11 @@ export const navItems: NavItem[] = [
     group: "weekly",
   },
   {
-    label: "Live",
-    shortLabel: "Live",
-    href: "/dashboard/live-streaming",
-    icon: Video,
-    features: ["live_stream"],
+    label: "Announcements",
+    shortLabel: "News",
+    href: "/dashboard/announcements",
+    icon: Megaphone,
+    features: ["announcements"],
     group: "weekly",
   },
   {
@@ -155,6 +131,40 @@ export const navItems: NavItem[] = [
     icon: BookOpen,
     features: ["sermon_builder"],
     group: "weekly",
+  },
+  {
+    // A pastor wants to read what the phone did, not tune what it is:
+    // assistant configuration lives in the FaithForm control center.
+    label: "Phone Calls",
+    shortLabel: "Calls",
+    href: "/dashboard/call-log",
+    icon: Phone,
+    features: ["voice_assistant"],
+    group: "weekly",
+  },
+  {
+    label: "People",
+    shortLabel: "People",
+    href: "/dashboard/people",
+    icon: UserRound,
+    features: ["people"],
+    group: "online",
+  },
+  {
+    label: "Groups",
+    shortLabel: "Groups",
+    href: "/dashboard/groups",
+    icon: Users,
+    features: ["groups"],
+    group: "online",
+  },
+  {
+    label: "Live",
+    shortLabel: "Live",
+    href: "/dashboard/live-streaming",
+    icon: Video,
+    features: ["live_stream"],
+    group: "online",
   },
   {
     label: "Giving",
@@ -178,16 +188,6 @@ export const navItems: NavItem[] = [
     href: "/dashboard/app",
     icon: Smartphone,
     features: ["member_app"],
-    group: "online",
-  },
-  {
-    // A pastor wants to read what the phone did, not tune what it is:
-    // assistant configuration lives in the FaithForm control center.
-    label: "Phone Calls",
-    shortLabel: "Calls",
-    href: "/dashboard/call-log",
-    icon: Phone,
-    features: ["voice_assistant"],
     group: "online",
   },
 ];
