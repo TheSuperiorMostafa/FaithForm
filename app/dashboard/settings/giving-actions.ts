@@ -40,6 +40,9 @@ async function revalidateGivingPaths(churchId: string) {
 
 function slugify(input: string): string {
   return input
+    // Accents come off the letter rather than taking it with them.
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9]+/g, "-")

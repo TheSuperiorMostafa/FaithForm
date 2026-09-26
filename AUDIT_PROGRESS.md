@@ -1,0 +1,131 @@
+# FaithForm production-hardening audit — progress log
+
+Living document. Updated after every verified batch so the work survives context
+compaction. Newest entries at the bottom of each section.
+
+## Ground rules
+
+- Production is never touched. The app under test runs from a git worktree with
+  **no `.env.local`** (the production keys live only in the main checkout), against
+  a local Supabase stack in Docker.
+- Every fix: reproduce → root cause → regression test → smallest fix → verify in
+  browser/API → targeted tests → full suite. Commit per verified batch.
+- Branches: `audit/production-hardening` (session 1, 15 commits, not pushed —
+  push was blocked by the permission check); `audit/overnight` (this pass,
+  worktree, built on top of it).
+
+## Setup learned (commands)
+
+- Worktree: `<scratch>/ff` on branch `audit/overnight`
+  (`git worktree add -b audit/overnight <scratch>/ff audit/production-hardening`).
+- Local Supabase: `<scratch>/sb` (`npx supabase@2.118.0 init`, config: project_id
+  `fflocal`, Postgres 15 like prod, studio/analytics/realtime/edge off,
+  redirect URLs for localhost + `faithful://`). Start: `cd <scratch>/sb && npx
+  supabase@2.118.0 start`. Its own migration runner is NOT used: the repo has
+  legacy duplicate prefixes (0003/0010/0011/0019). Migrations are applied in
+  filename order with psql, inserting the seed church before 0007 (see
+  `scripts/run-groups-database-tests.mjs`).
+- Scratch Postgres for DB tests (session 1): Postgres 17 at 127.0.0.1:55432,
+  needs `LC_ALL=en_US.UTF-8` and a short socket dir (`-k /tmp/ffpg`).
+- DB suites: `FAITHFORM_TEST_DATABASE_URL=postgres://postgres@127.0.0.1:55432/postgres
+  pnpm test:groups-database` (full chain, fresh DB per run);
+  `pnpm test:concurrency` needs an EMPTY database (it builds in place).
+- CI-like env for build: `NEXT_PUBLIC_SUPABASE_URL=https://ci-faithform.invalid
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_ci_only_not_a_real_key
+  SUPABASE_SECRET_KEY=ci-supabase-secret-000000000000001
+  NEXT_PUBLIC_SITE_URL=https://ci-faithform.invalid`.
+
+## Session 1 (code audit, already committed on audit/production-hardening)
+
+Fixed and regression-tested: storage path traversal (P0); team-invite account
+takeover (P0); fund church-id override (P0); manual attendance cross-church (P0);
+stream_recordings writable by any admin (P0, 0107); migration 0100 syntax (P1);
+Next.js RCE advisories; Stripe receipt forgery / partial refund / same-second
+overwrite (P1); OAuth state expiry + callback re-authorization + open redirect;
+second Go Live ending YouTube; push worker duplicates/timeouts; chat sync race
+(0109) + empty-channel on read error; kids checkout ticket; group attendance
+cross-group; stream keys in snapshot; reconciler starvation; 0108 slide-version
+church check + visitor_accounts writes; impersonation cookie ownership; mobile
+sign-out revoke; mobile giving rate limit; CSV injection; announcements writes;
+misc guards. 1,722 tests passing at end of session 1.
+
+## Areas browser-tested (this pass)
+
+- Setup (self-serve church creation) x2, incl. double-click (one church created),
+  Unicode/emoji church name, mixed-case email (normalized). Lands on dashboard.
+- Sign-out (cookie cleared, /dashboard redirects). Collapsed sidebar reveals
+  Sign out on hover/focus (by design).
+- Route sweep as church admin: all 60+ dashboard/admin/public routes render
+  (200 or correct redirect); `/admin` refuses a non-platform admin.
+- IDOR sweep as Church B admin against Church A ids: 21 detail pages and APIs
+  (households, groups, announcements edit, sermon pages/exports, call log,
+  donor, recordings, member files, giving statements/exports) — no Church A
+  marker in any response; exports contain only the caller's church.
+- Cross-church writes via REST (sermon PATCH/DELETE, refund, statements):
+  refused, DB unchanged.
+- Server-action battery (29 id-taking actions, called as Church B with Church A
+  ids): Church A data fingerprint unchanged before/after.
+
+## Bugs found / fixed (this pass)
+
+1. P3 — church slug dropped accented letters ("Iglesia Ñoño" -> "iglesia-o-o").
+   Fix: NFD + strip marks in `generateChurchSlug` and both giving slugify fns
+   (new slugs only; existing addresses untouched). Test: church-setup.test.ts.
+2. P2 — `saveMemberCareDetails` answered `{ok:true}` for another church's
+   member (nothing written) — false success. Same in check-in
+   `updateMemberCareDetails`, `moveSession`, recording `chooseThumbnail`.
+   Fix: `.select("id")` and report zero rows. Test: zero-row-writes.test.ts.
+3. P3 — check-in room ids (default room, move) were not checked to belong to the
+   church. Fix: `lib/checkin/owned-location.ts` used by all three actions.
+
+## Remaining areas
+
+- [x] Local stack up, migrations applied, two churches seeded
+      (Alpha Grace Church / alice@alpha.test; Iglesia Beta / bob@beta.test;
+      passwords LocalAudit-A1! / LocalAudit-B1! — local stack only; seed ids in
+      table `audit_seed`, seed script `<scratch>/seed.sql`)
+- [ ] Auth: login, logout, magic link, password reset, set-password, stale session
+- [ ] Onboarding / setup flow (new church)
+- [ ] Dashboard home, settings, team (roles, invite, reset)
+- [ ] People / members / households / files / care
+- [ ] Groups (create/edit/archive/members/requests/gatherings/attendance)
+- [ ] Messaging (dashboard side, degrade without Stream Chat)
+- [ ] Announcements (compose, publish, app visibility, delete)
+- [ ] Attendance / services / check-in / kiosk / checkout
+- [ ] Live streaming / recordings / media library / publishing
+- [ ] Giving (degrade without Stripe), donor portal
+- [ ] Website builder, church app settings
+- [ ] Sermons / sermon builder
+- [ ] Platform admin (/admin), impersonation
+- [ ] Mobile API (bearer auth) incl. cross-church ID manipulation
+- [ ] Cron / webhook endpoints (auth, idempotency)
+- [ ] Second adversarial pass + full suite from clean state
+
+## Tooling notes (this pass)
+
+- Local stack: `<scratch>/sb` Supabase on ports 563xx (API 56321, DB 56322,
+  mail 56324). ATLAS/athena/faithform-local containers belong to other
+  projects — never touch them. App: worktree `<scratch>/ff`, dev server on 3100
+  via temporary `.claude/launch.json` entry "faithform-audit-local" in the MAIN
+  checkout (remove at the end). Env: `<scratch>/ff/.env.development.local`
+  (fake secrets, no provider keys).
+- `next start` (production mode) refuses non-HTTPS Supabase/site URLs, so the
+  audit runs in dev mode; dev logs are flooded by a known sync-cookies warning —
+  search logs for `⨯` for real errors.
+- Helpers in `<scratch>`: `cookie.mjs` (session cookie for any local user),
+  `sweep.sh` (route status), `idor.sh` (Church A marker leak check),
+  `act.mjs` + `actions-map.mjs` (server actions by name; JSON args only —
+  form-based actions are tested through the browser UI), `fingerprint.sql`
+  (Church A data hash), `lq` (psql to local DB).
+- Supabase access tokens stay valid until expiry (1h) after sign-out (local
+  JWT verification) — known limitation, logged under risks.
+
+## Unresolved risks (carried from session 1)
+
+- Staff feature permissions not enforced in RLS (viewer can read giving, call
+  transcripts, children's medical notes through their own session).
+- 0106 made all unlisted recordings public, irreversibly.
+- No error tracking; backups/PITR unverified.
+- No CAPTCHA on public giving; donor magic link consumed by GET; kiosk idle lock;
+  weak never-expiring temp passwords; sermons cascade on auth-user delete;
+  geofence trusts device coordinates.

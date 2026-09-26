@@ -9,6 +9,10 @@
 export function generateChurchSlug(name: string): string {
   const tempId = crypto.randomUUID();
   const baseSlug = name
+    // "Iglesia Ñoño" is "iglesia-nono", not "iglesia-o-o": accents come off
+    // the letter instead of taking the letter with them.
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9]+/g, "-")

@@ -16,6 +16,7 @@ import type {
   HouseholdSummary,
   MemberFile,
 } from "@/types/checkin";
+import { isChurchLocation } from "@/lib/checkin/owned-location";
 
 /** The one household a person belongs to, if any. */
 export type MemberHouseholdLink = {
@@ -153,14 +154,22 @@ export async function saveMemberCareDetails(input: {
     return { ok: false, error: "Only church admins can edit people." };
   }
 
-  const { error } = await createAdminClient()
+  const admin = createAdminClient();
+  if (input.defaultLocationId && !(await isChurchLocation(admin, auth.churchId, input.defaultLocationId))) {
+    return { ok: false, error: "That room could not be found. Refresh the page and try again." };
+  }
+
+  // `.select` so a person who is not in this church (or no longer exists)
+  // is reported instead of answered with "saved".
+  const { data: saved, error } = await admin
     .from("members")
     .update({
       medical_notes: input.medicalNotes.trim() || null,
       default_location_id: input.defaultLocationId || null,
     })
     .eq("id", input.memberId)
-    .eq("church_id", auth.churchId);
+    .eq("church_id", auth.churchId)
+    .select("id");
 
   if (error) {
     return {
@@ -169,6 +178,9 @@ export async function saveMemberCareDetails(input: {
         ? "Kids check-in isn't turned on for your church yet. Contact FaithForm support to turn it on."
         : toUserError(error, "We couldn't save the care notes."),
     };
+  }
+  if ((saved ?? []).length === 0) {
+    return { ok: false, error: "That person could not be found. Refresh the page and try again." };
   }
 
   return { ok: true };

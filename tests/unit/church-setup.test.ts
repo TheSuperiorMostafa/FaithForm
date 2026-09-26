@@ -34,3 +34,8 @@ test("a very long name is truncated before the random suffix", () => {
   assert.ok(slug.length <= 69, `slug too long: ${slug.length}`);
   assert.match(slug, /-[0-9a-f]{8}$/);
 });
+
+test("accented letters keep their letter in the slug", () => {
+  const slug = generateChurchSlug("Iglesia Beta 🙏 Ñoño São João Église");
+  assert.match(slug, /^iglesia-beta-nono-sao-joao-eglise-[0-9a-f]{8}$/);
+});

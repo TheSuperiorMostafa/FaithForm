@@ -344,12 +344,16 @@ export async function chooseThumbnail(
       return { ok: false, error: "Choose one of the pictures shown." };
     }
   }
-  const { error } = await db
+  const { data: saved, error } = await db
     .from("stream_recordings")
     .update({ mobile_poster_url: input.url })
     .eq("id", input.recordingId)
-    .eq("church_id", input.churchId);
-  return error ? { ok: false, error: "Could not save the thumbnail." } : { ok: true };
+    .eq("church_id", input.churchId)
+    .select("id");
+  if (error) return { ok: false, error: "Could not save the thumbnail." };
+  // Nothing matched: not this church's recording, or it is gone. Not "saved".
+  if ((saved ?? []).length === 0) return { ok: false, error: "That recording is no longer available." };
+  return { ok: true };
 }
 
 // ---------------------------------------------------------------------------

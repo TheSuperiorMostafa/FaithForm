@@ -39,6 +39,7 @@ import type {
   HouseholdRelationship,
 } from "@/types/checkin";
 import { mintReleaseTicket, verifyReleaseTicket } from "@/lib/checkin/checkout-ticket";
+import { isChurchLocation } from "@/lib/checkin/owned-location";
 
 export type ActionResult<T = undefined> =
   | ({ ok: true } & (T extends undefined ? { data?: never } : { data: T }))
@@ -566,17 +567,22 @@ export async function updateMemberCareDetails(
   if (!memberId) return fail("Pick a person.");
 
   const defaultLocationId = text(formData, "defaultLocationId");
+  if (defaultLocationId && !(await isChurchLocation(context.admin, context.auth.churchId, defaultLocationId))) {
+    return fail("That room could not be found. Refresh the page and try again.");
+  }
 
-  const { error } = await context.admin
+  const { data: saved, error } = await context.admin
     .from("members")
     .update({
       medical_notes: text(formData, "medicalNotes") || null,
       default_location_id: defaultLocationId || null,
     })
     .eq("id", memberId)
-    .eq("church_id", context.auth.churchId);
+    .eq("church_id", context.auth.churchId)
+    .select("id");
 
   if (error) return fail(toUserError(error, "We couldn't save those details."));
+  if ((saved ?? []).length === 0) return fail("That person could not be found. Refresh the page and try again.");
 
   revalidateCheckin();
   return { ok: true };
@@ -1148,18 +1154,23 @@ export async function moveSession(formData: FormData): Promise<ActionResult> {
   const sessionId = text(formData, "sessionId");
   const locationId = text(formData, "locationId");
   if (!sessionId || !locationId) return fail("Pick a room.");
+  if (!(await isChurchLocation(context.admin, context.auth.churchId, locationId))) {
+    return fail("That room could not be found. Refresh the page and try again.");
+  }
 
-  const { error } = await context.admin
+  const { data: moved, error } = await context.admin
     .from("checkin_sessions")
     .update({ location_id: locationId })
     .eq("id", sessionId)
     .eq("church_id", context.auth.churchId)
-    .in("status", ["pre_checked_in", "checked_in"]);
+    .in("status", ["pre_checked_in", "checked_in"])
+    .select("id");
 
   if (error) {
     console.error("[checkin] move failed:", error.message);
     return fail(toUserError(error, "We couldn't move that child."));
   }
+  if ((moved ?? []).length === 0) return fail("That child has already gone home or was moved. Refresh the page.");
 
   revalidateCheckin();
   return { ok: true };
