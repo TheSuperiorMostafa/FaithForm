@@ -2,10 +2,13 @@ import { GroupList } from "@/components/groups/group-list";
 import { requireGroupsStaff } from "@/lib/groups/staff/context";
 import * as groups from "@/lib/groups/staff/groups";
 import * as insights from "@/lib/groups/staff/insights";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
 export default async function AllGroupsPage() {
+  if (await pageFeatureBlocked("groups")) return null;
+
   const ctx = await requireGroupsStaff();
   const [active, archived, summary, types, campuses] = await Promise.all([
     groups.listStaffGroups(ctx),

@@ -5,10 +5,13 @@ import { PageHeader } from "@/components/ui/page-header";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentChurchId } from "@/lib/auth/current-church";
 import { NEW_SERIES_DESCRIPTION, NEW_SERIES_TITLE } from "@/lib/sermon-builder/page-copy";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewSeriesPage() {
+  if (await pageFeatureBlocked("sermon_builder")) return null;
+
   const supabase = createClient();
   const {
     data: { user },

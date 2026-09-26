@@ -10,6 +10,7 @@ import {
 } from "@/lib/sites/domain-queries";
 import { dnsRecordsFor, getDomainProvider } from "@/lib/sites/domains";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,8 @@ export const dynamic = "force-dynamic";
  * do anything.
  */
 export default async function WebsiteDomainPage() {
+  if (await pageFeatureBlocked("website")) return null;
+
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");
 

@@ -18,6 +18,7 @@ import {
 import { formatCents } from "@/lib/utils/currency";
 import { cn } from "@/lib/utils";
 import type { DonationStatus, GiftType, GiftsSearchFilters } from "@/types/giving";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,8 @@ const FILTER_KEYS = ["search", "fundId", "giftType", "status", "dateFrom", "date
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export default async function GiftsPage({ searchParams }: PageProps) {
+  if (await pageFeatureBlocked("giving")) return null;
+
   const query = await searchParams;
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");

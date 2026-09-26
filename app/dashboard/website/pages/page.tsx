@@ -8,6 +8,7 @@ import { getCanonicalSiteUrl } from "@/lib/site-url";
 import { SECTION_REGISTRY } from "@/lib/sites/registry";
 import { getWebsiteForChurch } from "@/lib/sites/queries";
 import { resolvePage } from "@/lib/sites/resolve";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,8 @@ export default async function WebsitePagesPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
+  if (await pageFeatureBlocked("website")) return null;
+
   const params = await searchParams;
   const edit = Array.isArray(params.edit) ? params.edit[0] : params.edit;
 

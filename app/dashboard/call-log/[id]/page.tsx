@@ -10,6 +10,7 @@ import { isPlatformAdminUserId } from "@/lib/auth/superadmin";
 import { getPhoneCallById } from "@/lib/queries/voice-assistant";
 import { createClient } from "@/lib/supabase/server";
 import { formatCallDuration } from "@/lib/utils/voice-assistant";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -34,6 +35,8 @@ export default async function CallLogDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  if (await pageFeatureBlocked("voice_assistant")) return null;
+
   const { id } = await params;
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");

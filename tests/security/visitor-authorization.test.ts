@@ -53,7 +53,8 @@ test("staff actions resolve the church from the session, never from the caller",
 });
 
 test("every staff mutation requires an admin", () => {
-  assert.match(settingsActions, /if \(!auth\.isAdmin\) throw new Error\("forbidden"\)/);
+  // Thrown as a VisitorError so the refusal reaches the person as a sentence.
+  assert.match(settingsActions, /if \(!auth\.isAdmin\) throw new VisitorError\("forbidden"/);
   assert.match(claimActions, /if \(!auth\.isAdmin\) throw new Error\("forbidden"\)/);
 });
 

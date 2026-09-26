@@ -7,6 +7,7 @@ import { getChurchAuth } from "@/lib/auth/church";
 import { listStreamEvents } from "@/lib/stream/events";
 import { getLiveBroadcastStatus } from "@/lib/stream/go-live";
 import { createClient } from "@/lib/supabase/server";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,8 @@ export const dynamic = "force-dynamic";
  * sermon slides linked to each service.
  */
 export default async function UpcomingServicesPage() {
+  if (await pageFeatureBlocked("live_stream")) return null;
+
   const supabase = createClient();
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");

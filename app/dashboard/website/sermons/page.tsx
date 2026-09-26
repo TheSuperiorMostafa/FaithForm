@@ -4,10 +4,13 @@ import { EmptySite } from "@/components/website-admin/empty-site";
 import { MediaTable } from "@/components/website-admin/media-table";
 import { getChurchAuth } from "@/lib/auth/church";
 import { getSiteMediaForChurch, getWebsiteForChurch } from "@/lib/sites/queries";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
 export default async function WebsiteSermonsPage() {
+  if (await pageFeatureBlocked("website")) return null;
+
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");
 

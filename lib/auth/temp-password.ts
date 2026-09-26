@@ -29,7 +29,11 @@ const WORDS = [
   "Window",
 ] as const;
 
-/** Flag on `auth.users.user_metadata` that forces the set-password screen. */
+/**
+ * Flag that forces the set-password screen. Written to `app_metadata`, which
+ * only the service role can change, and mirrored to `user_metadata` for
+ * accounts made before the move.
+ */
 export const MUST_CHANGE_PASSWORD_KEY = "must_change_password";
 
 /**
@@ -81,7 +85,14 @@ export function validateNewPassword(
 }
 
 export function mustChangePassword(
-  metadata: Record<string, unknown> | null | undefined,
+  userMetadata: Record<string, unknown> | null | undefined,
+  appMetadata?: Record<string, unknown> | null,
 ): boolean {
-  return metadata?.[MUST_CHANGE_PASSWORD_KEY] === true;
+  // `user_metadata` is the person's own to edit: one call to the auth API
+  // cleared the flag and kept the temporary password their admin knows. Where
+  // the service-role copy exists it decides; only accounts invited before it
+  // existed still fall back to the old place.
+  const authoritative = appMetadata?.[MUST_CHANGE_PASSWORD_KEY];
+  if (typeof authoritative === "boolean") return authoritative;
+  return userMetadata?.[MUST_CHANGE_PASSWORD_KEY] === true;
 }

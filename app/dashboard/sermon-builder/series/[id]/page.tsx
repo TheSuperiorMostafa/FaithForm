@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/ui/page-header";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentChurchId } from "@/lib/auth/current-church";
 import { getSeries } from "@/lib/queries/sermons";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,8 @@ export default async function SeriesDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  if (await pageFeatureBlocked("sermon_builder")) return null;
+
   const { id } = await params;
   const supabase = createClient();
   const {

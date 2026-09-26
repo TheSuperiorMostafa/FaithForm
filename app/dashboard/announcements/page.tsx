@@ -60,6 +60,7 @@ import {
   getMondayWeekWindowInTimeZone,
   getMonthWindowForDate,
 } from "@/lib/utils/calendar";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -70,6 +71,8 @@ const DAY_MS = 86_400_000;
 type CalendarRead = { events: CalendarEventPreview[]; errors: string[] };
 
 export default async function AnnouncementsPage() {
+  if (await pageFeatureBlocked("announcements")) return null;
+
   const supabase = createClient();
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");

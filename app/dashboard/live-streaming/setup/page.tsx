@@ -13,6 +13,7 @@ import { getLiveBroadcastStatus } from "@/lib/stream/go-live";
 import { listMediaSeries } from "@/lib/stream/media-library";
 import { getRecordingSettings } from "@/lib/stream/recording-publication";
 import { createClient } from "@/lib/supabase/server";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,8 @@ export const dynamic = "force-dynamic";
  * "Technical details" (in step 1) or "Advanced" (below the steps).
  */
 export default async function StreamSetupPage() {
+  if (await pageFeatureBlocked("live_stream")) return null;
+
   const supabase = createClient();
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");

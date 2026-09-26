@@ -16,12 +16,15 @@ import { getRecentSundayRecords } from "@/lib/queries/attendance";
 import { createClient } from "@/lib/supabase/server";
 import { formatServiceDate, toYMD } from "@/lib/utils/dates";
 import { cn } from "@/lib/utils";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 type PageProps = {
   searchParams: Promise<{ weeks?: string | string[] }>;
 };
 
 export default async function AttendancePage({ searchParams }: PageProps) {
+  if (await pageFeatureBlocked("attendance")) return null;
+
   const query = await searchParams;
   const supabase = createClient();
   const auth = await getChurchAuth();

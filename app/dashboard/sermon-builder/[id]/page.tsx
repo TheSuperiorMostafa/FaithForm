@@ -31,6 +31,7 @@ import {
   sermonAudienceLabel,
 } from "@/lib/sermons/v1/share-rules";
 import type { DiscussionQuestion } from "@/types/sermon";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -41,6 +42,8 @@ export default async function SermonDetailPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ tab?: string }>;
 }) {
+  if (await pageFeatureBlocked("sermon_builder")) return null;
+
   const [{ id }, query] = await Promise.all([params, searchParams]);
   const supabase = createClient();
   const {

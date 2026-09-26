@@ -23,14 +23,20 @@ import {
  * the existing dashboard systems and are untouched by Prompt 11.
  */
 
-async function requireAdmin(): Promise<{ churchId: string }> {
+/**
+ * The church an admin may publish funds for, or null.
+ *
+ * Publishing a fund is a money-adjacent decision. Staff who can read a giving
+ * page are not automatically people who may put a Give button in an app. A
+ * refusal is an answer, not a thrown error: thrown, it reached the page as an
+ * unexplained failure instead of saying who can do this.
+ */
+async function adminChurchId(): Promise<string | null> {
   const auth = await getChurchAuth();
-  if (!auth) throw new Error("unauthenticated");
-  // Publishing a fund is a money-adjacent decision. Staff who can read a giving
-  // page are not automatically people who may put a Give button in an app.
-  if (!auth.isAdmin) throw new Error("forbidden");
-  return { churchId: auth.churchId };
+  return auth?.isAdmin ? auth.churchId : null;
 }
+
+const ADMIN_ONLY = "Only church admins can choose which funds show in the app.";
 
 export async function loadFaithFormGiving(): Promise<{
   readiness: StripeReadiness;
@@ -54,7 +60,8 @@ export type SaveFundPublicationInput = {
 export async function saveFundPublication(
   input: SaveFundPublicationInput,
 ): Promise<{ ok: boolean; error?: string }> {
-  const { churchId } = await requireAdmin();
+  const churchId = await adminChurchId();
+  if (!churchId) return { ok: false, error: ADMIN_ONLY };
 
   // Named fields only, church last: a server action accepts any JSON, and a
   // `churchId` in the payload spread over the session's church would publish or
@@ -112,7 +119,8 @@ const STARTER_SUGGESTED_CENTS = [2500, 5000, 10000];
 export async function showFundsInApp(
   fundIds: string[],
 ): Promise<{ ok: boolean; shown: number; error?: string }> {
-  const { churchId } = await requireAdmin();
+  const churchId = await adminChurchId();
+  if (!churchId) return { ok: false, shown: 0, error: ADMIN_ONLY };
   const unique = Array.from(new Set(fundIds)).slice(0, 50);
   if (unique.length === 0) return { ok: true, shown: 0 };
 

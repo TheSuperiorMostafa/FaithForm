@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { getChurchAuth } from "@/lib/auth/church";
-import { toVisitorResult, type VisitorResult } from "@/lib/faithform/errors";
+import { toVisitorResult, VisitorError, type VisitorResult } from "@/lib/faithform/errors";
 import {
   createCampus,
   deactivateCampus,
@@ -33,8 +33,10 @@ type AdminContext = { churchId: string; userId: string };
 
 async function requireChurchAdmin(): Promise<AdminContext> {
   const auth = await getChurchAuth();
-  if (!auth) throw new Error("unauthenticated");
-  if (!auth.isAdmin) throw new Error("forbidden");
+  // VisitorErrors, so the person is told why; a plain Error became
+  // "Something went wrong."
+  if (!auth) throw new VisitorError("unauthenticated", "Sign in again to continue.");
+  if (!auth.isAdmin) throw new VisitorError("forbidden", "Only church admins can change this.");
   return { churchId: auth.churchId, userId: auth.userId };
 }
 

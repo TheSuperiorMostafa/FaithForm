@@ -12,6 +12,7 @@ import {
   listThumbnailChoices,
 } from "@/lib/stream/recording-publication";
 import { isStillChanging } from "@/lib/stream/recording-status";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,8 @@ export default async function RecordingReviewPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  if (await pageFeatureBlocked("live_stream")) return null;
+
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/i.test(id)) notFound();
 

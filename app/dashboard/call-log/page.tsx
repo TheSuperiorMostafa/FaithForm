@@ -21,10 +21,13 @@ import {
 } from "@/lib/queries/voice-assistant";
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
 export default async function CallLogPage() {
+  if (await pageFeatureBlocked("voice_assistant")) return null;
+
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");
 

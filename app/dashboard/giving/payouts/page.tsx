@@ -12,11 +12,14 @@ import { getChurchGivingProfile } from "@/lib/queries/giving";
 import { isStripeConfigured } from "@/lib/stripe/client";
 import { listConnectedPayouts } from "@/lib/stripe/giving";
 import { formatCents } from "@/lib/utils/currency";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
 /** "Deposits": the payment partner's payouts to the church's bank account. */
 export default async function DepositsPage() {
+  if (await pageFeatureBlocked("giving")) return null;
+
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");
 

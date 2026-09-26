@@ -12,6 +12,7 @@ import { listRecordedServices } from "@/lib/queries/attendance";
 import { createClient } from "@/lib/supabase/server";
 import { formatServiceDate, isValidDateParam } from "@/lib/utils/dates";
 import { cn } from "@/lib/utils";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,8 @@ type PageProps = {
 
 /** Counted Sundays, newest first, laid out like Sunday count. Green once texts went out. */
 export default async function AttendanceFollowUpPage({ searchParams }: PageProps) {
+  if (await pageFeatureBlocked("attendance_follow_up")) return null;
+
   const query = await searchParams;
   // Older links pointed at ?date=; each Sunday has its own page now.
   if (query.date && isValidDateParam(query.date)) {

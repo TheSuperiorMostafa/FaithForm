@@ -5,6 +5,7 @@ import { getChurchAuth } from "@/lib/auth/church";
 import { serviceWeekStart } from "@/lib/checkin/service-week";
 import { getLocationStats } from "@/lib/queries/checkin";
 import { createClient } from "@/lib/supabase/server";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,8 @@ export default async function CheckinStatsPage({
 }: {
   searchParams: Promise<{ weeks?: string }>;
 }) {
+  if (await pageFeatureBlocked("checkin")) return null;
+
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");
 

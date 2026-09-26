@@ -17,6 +17,7 @@ import { getFeatureAccess } from "@/lib/features/access";
 import { getCurrentChurchId } from "@/lib/auth/current-church";
 import { createClient } from "@/lib/supabase/server";
 import { isSundayDate, isValidDateParam } from "@/lib/utils/dates";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 type PageProps = {
   params: Promise<{ date: string }>;
@@ -24,6 +25,8 @@ type PageProps = {
 };
 
 export default async function AttendanceDatePage({ params, searchParams }: PageProps) {
+  if (await pageFeatureBlocked("attendance")) return null;
+
   const [{ date }, query] = await Promise.all([params, searchParams]);
 
   if (!isValidDateParam(date)) {

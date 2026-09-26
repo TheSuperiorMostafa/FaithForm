@@ -11,6 +11,7 @@ import { getChurchAuth } from "@/lib/auth/church";
 import { listSermons, listSeries } from "@/lib/queries/sermons";
 import { SERMONS_DESCRIPTION, SERMONS_TITLE } from "@/lib/sermon-builder/page-copy";
 import { listSermonIdsWithSharedSlides } from "@/lib/sermons/v1/presentation";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,8 @@ type PageProps = {
 };
 
 export default async function SermonBuilderPage({ searchParams }: PageProps) {
+  if (await pageFeatureBlocked("sermon_builder")) return null;
+
   const [query, auth] = await Promise.all([searchParams, getChurchAuth()]);
   if (!auth) redirect("/login");
 

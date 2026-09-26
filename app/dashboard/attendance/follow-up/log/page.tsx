@@ -8,10 +8,13 @@ import { ATTENDANCE_COPY } from "@/lib/attendance/page-copy";
 import { getChurchAuth } from "@/lib/auth/church";
 import { getFollowUpLog } from "@/lib/queries/follow-up-log";
 import { createClient } from "@/lib/supabase/server";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
 export default async function FollowUpLogPage() {
+  if (await pageFeatureBlocked("attendance_follow_up")) return null;
+
   const supabase = createClient();
   const auth = await getChurchAuth(supabase);
   if (!auth) redirect("/login");

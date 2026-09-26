@@ -8,6 +8,7 @@ import { formatItemCount } from "@/lib/media/shelves";
 import { getMediaSeriesBySlug } from "@/lib/stream/media-library";
 import { loadRecordingStatuses } from "@/lib/stream/recording-status-server";
 import { createClient } from "@/lib/supabase/server";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,8 @@ export default async function RecordingSeriesDetailPage({
 }: {
   params: Promise<{ slug: string }>;
 }) {
+  if (await pageFeatureBlocked("live_stream")) return null;
+
   const { slug } = await params;
   const supabase = createClient();
   const auth = await getChurchAuth(supabase);

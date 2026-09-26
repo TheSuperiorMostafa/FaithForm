@@ -21,6 +21,7 @@ import {
   getDonorSubscriptions,
 } from "@/lib/queries/giving";
 import { formatCents } from "@/lib/utils/currency";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,8 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 const BACK = { href: "/dashboard/giving/donors", label: "Donors" };
 
 export default async function DonorDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  if (await pageFeatureBlocked("giving")) return null;
+
   const { id } = await params;
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");

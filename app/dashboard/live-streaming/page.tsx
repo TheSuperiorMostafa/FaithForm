@@ -7,6 +7,7 @@ import { listStreamEvents } from "@/lib/stream/events";
 import { getLiveBroadcastStatus } from "@/lib/stream/go-live";
 import { getRecordingSettings, listStaffRecordings } from "@/lib/stream/recording-publication";
 import { createClient } from "@/lib/supabase/server";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,8 @@ const NEXT_SERVICE_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
  * here competes with the Go live button on a Sunday morning.
  */
 export default async function LiveStreamingPage() {
+  if (await pageFeatureBlocked("live_stream")) return null;
+
   const supabase = createClient();
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");

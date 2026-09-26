@@ -5,6 +5,7 @@ import { getChurchAuth } from "@/lib/auth/church";
 import { getHousehold } from "@/lib/queries/checkin";
 import { getMembersForChurch } from "@/lib/queries/members";
 import { createClient } from "@/lib/supabase/server";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,8 @@ export default async function HouseholdDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  if (await pageFeatureBlocked("people")) return null;
+
   const { id } = await params;
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");

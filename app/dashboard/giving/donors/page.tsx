@@ -5,10 +5,13 @@ import { GivingNotReady, GivingSubpageHeader } from "@/components/giving/giving-
 import { ErrorState } from "@/components/ui/error-state";
 import { getChurchAuth } from "@/lib/auth/church";
 import { getChurchGivingProfile, getDonorsList } from "@/lib/queries/giving";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
 export default async function DonorsPage() {
+  if (await pageFeatureBlocked("giving")) return null;
+
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");
 

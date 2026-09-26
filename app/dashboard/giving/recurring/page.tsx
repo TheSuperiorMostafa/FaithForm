@@ -10,10 +10,13 @@ import { SectionHeader } from "@/components/ui/page-header";
 import { getChurchAuth } from "@/lib/auth/church";
 import { recurringState } from "@/lib/giving/labels";
 import { getChurchGivingProfile, getGivingSubscriptions } from "@/lib/queries/giving";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
 export default async function RecurringGivingPage() {
+  if (await pageFeatureBlocked("giving")) return null;
+
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");
 

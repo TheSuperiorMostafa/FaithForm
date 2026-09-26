@@ -14,6 +14,7 @@ import { getCanonicalSiteUrl } from "@/lib/site-url";
 import { getChurchDomains } from "@/lib/sites/domain-queries";
 import { getDomainProvider } from "@/lib/sites/domains";
 import { countNewSubmissions, getWebsiteForChurch } from "@/lib/sites/queries";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,8 @@ export const dynamic = "force-dynamic";
  * web address, and the site itself.
  */
 export default async function WebsiteOverviewPage() {
+  if (await pageFeatureBlocked("website")) return null;
+
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");
 

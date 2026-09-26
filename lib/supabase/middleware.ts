@@ -228,7 +228,10 @@ export async function updateSession(request: NextRequest) {
   if (
     userId &&
     isSignedInArea &&
-    mustChangePassword(userMetadata ?? null)
+    mustChangePassword(
+      userMetadata ?? null,
+      (claims?.app_metadata as Record<string, unknown> | null | undefined) ?? null,
+    )
   ) {
     const url = request.nextUrl.clone();
     url.pathname = "/set-password";

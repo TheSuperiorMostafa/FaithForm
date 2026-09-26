@@ -11,6 +11,7 @@ import { getChurchSmsStatus } from "@/lib/sms/church-sender";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { formatServiceDate, isValidDateParam } from "@/lib/utils/dates";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,8 @@ type PageProps = {
 };
 
 export default async function AttendanceFollowUpDatePage({ params }: PageProps) {
+  if (await pageFeatureBlocked("attendance_follow_up")) return null;
+
   const { date: selectedDate } = await params;
   // A bad or stale link lands on the list of Sundays, not a dead end.
   if (!isValidDateParam(selectedDate)) redirect("/dashboard/attendance/follow-up");

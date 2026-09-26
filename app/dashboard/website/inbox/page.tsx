@@ -4,6 +4,7 @@ import { SubmissionsInbox } from "@/components/website-admin/submissions-inbox";
 import { getChurchAuth } from "@/lib/auth/church";
 import { getContactSubmissions } from "@/lib/sites/queries";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,8 @@ export const dynamic = "force-dynamic";
  * exist from a site that was later unpublished, and they should stay readable.
  */
 export default async function WebsiteInboxPage() {
+  if (await pageFeatureBlocked("website")) return null;
+
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");
 

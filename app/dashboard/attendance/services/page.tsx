@@ -6,10 +6,13 @@ import { getServicesBoard } from "@/app/dashboard/attendance/services/actions";
 import { PageHeader } from "@/components/ui/page-header";
 import { ATTENDANCE_COPY } from "@/lib/attendance/page-copy";
 import { getChurchAuth } from "@/lib/auth/church";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
 export default async function ServicesPage() {
+  if (await pageFeatureBlocked("attendance")) return null;
+
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");
 

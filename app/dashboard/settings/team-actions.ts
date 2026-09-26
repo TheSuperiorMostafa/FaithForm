@@ -150,7 +150,7 @@ export async function inviteTeamMember(
       user_metadata: { [MUST_CHANGE_PASSWORD_KEY]: true },
       // Records that this church made the login, which is what later lets it
       // hand out a new temporary password. Only the service role can write it.
-      app_metadata: { [PROVISIONED_BY_CHURCH_KEY]: churchId },
+      app_metadata: { [PROVISIONED_BY_CHURCH_KEY]: churchId, [MUST_CHANGE_PASSWORD_KEY]: true },
     });
 
     if (error || !data.user) {
@@ -349,6 +349,10 @@ export async function resetTeamMemberPassword(
     member.user_id as string,
     {
       password: tempPassword,
+      app_metadata: {
+        ...(existing.user.app_metadata ?? {}),
+        [MUST_CHANGE_PASSWORD_KEY]: true,
+      },
       user_metadata: {
         ...(existing?.user?.user_metadata ?? {}),
         [MUST_CHANGE_PASSWORD_KEY]: true,

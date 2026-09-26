@@ -12,6 +12,7 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 import { formatMonthLabel, monthSlug } from "@/lib/utils/reports";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 const REPORTS_TITLE = "Reports";
 const REPORTS_DESCRIPTION = "Monthly attendance reports to download.";
@@ -56,6 +57,8 @@ function ReportRow({
 }
 
 export default async function ReportsPage() {
+  if (await pageFeatureBlocked("library")) return null;
+
   const supabase = createClient();
   const {
     data: { user },

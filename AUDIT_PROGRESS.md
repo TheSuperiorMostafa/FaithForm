@@ -65,6 +65,13 @@ misc guards. 1,722 tests passing at end of session 1.
   refused, DB unchanged.
 - Server-action battery (29 id-taking actions, called as Church B with Church A
   ids): Church A data fingerprint unchanged before/after.
+- People: add person with HTML/script payload + emoji — stored, rendered as
+  text, no injected element in DOM.
+- Team: invite Volunteer (temp password shown when email is off), Change
+  access -> Make new password (reset rules), sign-in with temp password ->
+  forced set-password -> dashboard.
+- Volunteer permissions: 28 gated routes (leaks found + fixed), 13 admin-only
+  settings actions refused, settings fingerprint unchanged.
 
 ## Bugs found / fixed (this pass)
 
@@ -77,6 +84,25 @@ misc guards. 1,722 tests passing at end of session 1.
    Fix: `.select("id")` and report zero rows. Test: zero-row-writes.test.ts.
 3. P3 — check-in room ids (default room, move) were not checked to belong to the
    church. Fix: `lib/checkin/owned-location.ts` used by all three actions.
+4. P1 — **gated pages sent their data behind the "No access" screen.** A
+   Volunteer (Attendance + Kids Check-in) received, in the page payload: the
+   whole People directory (phones, emails), families incl. a child's medical
+   notes, a call transcript, sermon text, a donor phone. Cause: `<FeatureGate>`
+   is in the layout; App Router renders page and layout in parallel, so the
+   page still ran. Fix: `lib/features/page-gate.ts` `pageFeatureBlocked()` as
+   the first statement of all 62 async pages under a gated layout (8 sync pages
+   are redirects). Test: feature-gated-pages.test.ts walks the tree, fails on
+   the old code. Verified: Volunteer sweep clean; admin still sees data.
+5. P2 — forced password change could be skipped: flag in user_metadata, which
+   the user can edit via the auth API (reproduced). Fix: flag authoritative in
+   app_metadata (set on invite/reset, cleared on set-password with session
+   refresh so no redirect loop); user_metadata honoured only when app flag
+   absent (older invites). Verified end to end in the browser: temp password ->
+   /set-password -> own password -> /dashboard; self-clear attempt stays at
+   /set-password. Also: raw auth error text no longer returned.
+6. P3 — Volunteer refusals said "Something went wrong" (settings discovery,
+   invitations) or threw unhandled (fund publication). Now "Only church admins
+   can…". Verified via actions.
 
 ## Remaining areas
 

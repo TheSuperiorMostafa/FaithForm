@@ -18,6 +18,7 @@ import { getChurchAuth } from "@/lib/auth/church";
 import { getFeatureAccess } from "@/lib/features/access";
 import { getChurchAppInfo } from "@/lib/queries/church-app-info";
 import { getChurchDiscoverySettings } from "@/lib/queries/faithform-settings";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +28,8 @@ export const dynamic = "force-dynamic";
  * your church.
  */
 export default async function MemberAppPage() {
+  if (await pageFeatureBlocked("member_app")) return null;
+
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");
 

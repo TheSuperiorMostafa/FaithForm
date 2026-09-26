@@ -17,6 +17,7 @@ import { getChurchAuth } from "@/lib/auth/church";
 import { feeExplanation } from "@/lib/giving/fee-copy";
 import { getChurchAddressLine, getChurchGivingProfile } from "@/lib/queries/giving";
 import { applicationFeeAmount } from "@/lib/stripe/config";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,8 @@ export const dynamic = "force-dynamic";
  * details, the giving page address, and where its look comes from.
  */
 export default async function GivingSettingsPage() {
+  if (await pageFeatureBlocked("giving")) return null;
+
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");
 

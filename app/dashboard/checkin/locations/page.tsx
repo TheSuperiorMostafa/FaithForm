@@ -5,10 +5,13 @@ import { getChurchAuth } from "@/lib/auth/church";
 import { localDateInTimeZone } from "@/lib/checkin/service-week";
 import { getRoster, listLocations } from "@/lib/queries/checkin";
 import { createClient } from "@/lib/supabase/server";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
 export default async function CheckinLocationsPage() {
+  if (await pageFeatureBlocked("checkin")) return null;
+
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");
 

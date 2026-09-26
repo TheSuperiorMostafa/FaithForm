@@ -40,7 +40,8 @@ export async function setOwnPassword(
         error: "Choose a password you haven't used here before.",
       };
     }
-    return { ok: false, error: error.message };
+    console.error("setOwnPassword:", error.message);
+    return { ok: false, error: "We couldn't save that password. Please try again." };
   }
 
   // Clearing the flag needs the service role — a user cannot edit their own
@@ -51,6 +52,10 @@ export async function setOwnPassword(
     const { error: metadataError } = await admin.auth.admin.updateUserById(
       user.id,
       {
+        app_metadata: {
+          ...(user.app_metadata ?? {}),
+          [MUST_CHANGE_PASSWORD_KEY]: false,
+        },
         user_metadata: {
           ...(user.user_metadata ?? {}),
           [MUST_CHANGE_PASSWORD_KEY]: false,
@@ -59,6 +64,11 @@ export async function setOwnPassword(
     );
     if (metadataError) {
       console.error("setOwnPassword metadata:", metadataError.message);
+    } else {
+      // The flag is read from the signed session token, which still carries
+      // the old value until it is reissued; without this the next page sent
+      // them straight back here.
+      await supabase.auth.refreshSession();
     }
   }
 

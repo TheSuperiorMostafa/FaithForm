@@ -1,10 +1,13 @@
 import { Insights } from "@/components/groups/insights";
 import { requireGroupsStaff } from "@/lib/groups/staff/context";
 import * as insights from "@/lib/groups/staff/insights";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
 export default async function GroupReportsPage() {
+  if (await pageFeatureBlocked("groups")) return null;
+
   const ctx = await requireGroupsStaff();
   const [summary, trend, health] = await Promise.all([
     insights.churchGroupSummary(ctx),

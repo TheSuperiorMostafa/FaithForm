@@ -4,10 +4,13 @@ import { MediaGrid, MediaPageHeader } from "@/components/media/media-grid";
 import { getChurchAuth } from "@/lib/auth/church";
 import { DASHBOARD_MEDIA_LINKS, loadLibraryBrowse } from "@/lib/media/browse";
 import { createClient } from "@/lib/supabase/server";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
 export default async function RecordingSeriesIndexPage() {
+  if (await pageFeatureBlocked("live_stream")) return null;
+
   const supabase = createClient();
   const auth = await getChurchAuth(supabase);
   if (!auth) redirect("/login");

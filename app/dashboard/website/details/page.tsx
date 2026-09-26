@@ -10,6 +10,7 @@ import { getCanonicalSiteUrl } from "@/lib/site-url";
 import { getSiteThemes, getWebsiteForChurch } from "@/lib/sites/queries";
 import { createAdminClient, createAdminClientOrNull } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +44,8 @@ async function isPlatformAdmin(): Promise<boolean> {
  * "Details" and "Design"; /design now redirects to the #look section here.
  */
 export default async function WebsiteDetailsPage() {
+  if (await pageFeatureBlocked("website")) return null;
+
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");
 

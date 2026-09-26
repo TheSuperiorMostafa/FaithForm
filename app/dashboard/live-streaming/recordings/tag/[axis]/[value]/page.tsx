@@ -5,6 +5,7 @@ import { getChurchAuth } from "@/lib/auth/church";
 import { DASHBOARD_MEDIA_LINKS, loadLibraryBrowse } from "@/lib/media/browse";
 import { loadRecordingStatuses } from "@/lib/stream/recording-status-server";
 import { createClient } from "@/lib/supabase/server";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,8 @@ export default async function RecordingTagPage({
 }: {
   params: Promise<{ axis: string; value: string }>;
 }) {
+  if (await pageFeatureBlocked("live_stream")) return null;
+
   const { axis, value } = await params;
   if (axis !== "topic" && axis !== "speaker") notFound();
 

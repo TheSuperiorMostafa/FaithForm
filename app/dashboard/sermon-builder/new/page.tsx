@@ -13,6 +13,7 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentChurchId } from "@/lib/auth/current-church";
 import { getChurchAISettings } from "@/lib/queries/sermons";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +49,8 @@ type Props = {
 };
 
 export default async function NewSermonPage({ searchParams }: Props) {
+  if (await pageFeatureBlocked("sermon_builder")) return null;
+
   const query = await searchParams;
   const supabase = createClient();
   const {

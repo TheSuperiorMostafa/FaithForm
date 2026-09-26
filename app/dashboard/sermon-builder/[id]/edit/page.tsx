@@ -8,6 +8,7 @@ import { parseScriptureRef } from "@/lib/sermon-builder/parse-ref";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentChurchId } from "@/lib/auth/current-church";
 import { getChurchAISettings, getSermon } from "@/lib/queries/sermons";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +17,8 @@ export default async function EditSimpleSermonPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  if (await pageFeatureBlocked("sermon_builder")) return null;
+
   const { id } = await params;
   const supabase = createClient();
   const {

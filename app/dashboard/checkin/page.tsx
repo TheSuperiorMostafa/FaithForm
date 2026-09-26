@@ -9,6 +9,7 @@ import {
   listLocations,
 } from "@/lib/queries/checkin";
 import { createClient } from "@/lib/supabase/server";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,8 @@ export const dynamic = "force-dynamic";
  * room while families are waiting.
  */
 export default async function CheckinTodayPage() {
+  if (await pageFeatureBlocked("checkin")) return null;
+
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");
 

@@ -90,7 +90,7 @@ test("the team actions apply the rule and never link a platform administrator", 
   );
   assert.match(reset, /from\("visitor_accounts"\)/);
   assert.match(reset, /if \(platformAdminError\)/, "a failed platform-admin lookup must refuse");
-  assert.match(actions, /app_metadata: \{ \[PROVISIONED_BY_CHURCH_KEY\]: churchId \}/);
+  assert.match(actions, /app_metadata: \{ \[PROVISIONED_BY_CHURCH_KEY\]: churchId, \[MUST_CHANGE_PASSWORD_KEY\]: true \}/);
 
   const invite = actions.slice(
     actions.indexOf("export async function inviteTeamMember"),
@@ -105,4 +105,23 @@ test("a fund publication cannot be pointed at another church", () => {
   assert.doesNotMatch(source, /\{\s*churchId,\s*\.\.\.input\s*\}/);
   const call = source.slice(source.indexOf("publishFundToFaithForm({"));
   assert.match(call.slice(0, call.indexOf("});")), /churchId,\s*$/m);
+});
+
+test("the forced password change cannot be cleared by the person it forces", async () => {
+  const { mustChangePassword } = await import("@/lib/auth/temp-password");
+  // Found on the local stack: the flag lived in user_metadata, which the auth
+  // API lets a person edit, so a temporary password their admin knows could be
+  // kept forever. The service-role copy now decides wherever it exists.
+  assert.equal(mustChangePassword({ must_change_password: false }, { must_change_password: true }), true);
+  assert.equal(mustChangePassword({ must_change_password: true }, { must_change_password: false }), false);
+  // Accounts invited before the move still honour the old flag.
+  assert.equal(mustChangePassword({ must_change_password: true }, {}), true);
+  assert.equal(mustChangePassword({}, null), false);
+
+  const setPassword = readFileSync("app/set-password/actions.ts", "utf8");
+  assert.match(setPassword, /app_metadata: \{\s*\.\.\.\(user\.app_metadata \?\? \{\}\),\s*\[MUST_CHANGE_PASSWORD_KEY\]: false/);
+  assert.match(setPassword, /refreshSession\(\)/);
+  assert.doesNotMatch(setPassword, /error: error\.message/);
+  const middleware = readFileSync("lib/supabase/middleware.ts", "utf8");
+  assert.match(middleware, /mustChangePassword\(\s*userMetadata \?\? null,\s*\(claims\?\.app_metadata/);
 });

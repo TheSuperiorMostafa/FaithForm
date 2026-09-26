@@ -4,10 +4,13 @@ import { HouseholdsDirectory } from "@/components/people/households-directory";
 import { getChurchAuth } from "@/lib/auth/church";
 import { listHouseholds } from "@/lib/queries/checkin";
 import { createClient } from "@/lib/supabase/server";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
 export default async function HouseholdsPage() {
+  if (await pageFeatureBlocked("people")) return null;
+
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");
 

@@ -19,6 +19,7 @@ import {
   searchRecordings,
 } from "@/lib/stream/recording-status";
 import { loadRecordingStatuses } from "@/lib/stream/recording-status-server";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,8 @@ export default async function RecordingsPage({
 }: {
   searchParams: Promise<{ show?: string | string[]; q?: string | string[] }>;
 }) {
+  if (await pageFeatureBlocked("live_stream")) return null;
+
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");
   const query = await searchParams;

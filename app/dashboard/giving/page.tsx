@@ -18,6 +18,7 @@ import { resolveSetupStep, type SetupStep } from "@/lib/giving/setup";
 import { getChurchAddressLine, getChurchGivingProfile } from "@/lib/queries/giving";
 import { applicationFeeAmount } from "@/lib/stripe/config";
 import type { ChurchGivingProfile } from "@/types/giving";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,8 @@ function first(value: string | string[] | undefined): string | undefined {
 }
 
 export default async function GivingPage({ searchParams }: PageProps) {
+  if (await pageFeatureBlocked("giving")) return null;
+
   const query = await searchParams;
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");

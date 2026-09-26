@@ -18,10 +18,13 @@ import { getFeatureAccess } from "@/lib/features/access";
 import { getMembersForChurch } from "@/lib/queries/members";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
 export default async function PeoplePage() {
+  if (await pageFeatureBlocked("people")) return null;
+
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");
 

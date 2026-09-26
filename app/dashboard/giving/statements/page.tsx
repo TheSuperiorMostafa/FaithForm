@@ -24,6 +24,7 @@ import {
   getStatementPreview,
 } from "@/lib/queries/giving";
 import { formatCents } from "@/lib/utils/currency";
+import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +33,8 @@ export default async function StatementsPage({
 }: {
   searchParams: Promise<{ year?: string }>;
 }) {
+  if (await pageFeatureBlocked("giving")) return null;
+
   const query = await searchParams;
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");

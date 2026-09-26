@@ -31,7 +31,7 @@ export default async function SetPasswordPage({
   // Reachable directly, so nothing stops someone opening it out of curiosity —
   // but there is nothing to do here once the flag is cleared. A recovery
   // arrival has no flag at all; the recovery link's session is its authority.
-  if (!isRecovery && !mustChangePassword(user.user_metadata)) {
+  if (!isRecovery && !mustChangePassword(user.user_metadata, user.app_metadata)) {
     redirect("/dashboard");
   }
 
