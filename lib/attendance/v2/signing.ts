@@ -59,6 +59,10 @@ export const CAPABILITY_TYPES = [
   // type, so a scanned attendance code can never be presented at a checkout
   // desk and vice versa: the two are signed under unrelated sub-keys.
   "household.pickup",
+  // Proof, from the server, that a checkout desk looked up a real pickup code
+  // or QR for one family. A release that claims a code was checked has to
+  // carry it.
+  "checkout.release",
 ] as const;
 
 export type CapabilityType = (typeof CAPABILITY_TYPES)[number];

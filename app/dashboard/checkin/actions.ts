@@ -38,6 +38,7 @@ import type {
   CheckoutMethod,
   HouseholdRelationship,
 } from "@/types/checkin";
+import { mintReleaseTicket, verifyReleaseTicket } from "@/lib/checkin/checkout-ticket";
 
 export type ActionResult<T = undefined> =
   | ({ ok: true } & (T extends undefined ? { data?: never } : { data: T }))
@@ -416,11 +417,23 @@ export async function updateHouseholdMember(
 
   const makePrimary = formData.get("isPrimaryContact") === "true";
 
+  // The household is read from this church's own membership row, never taken
+  // from the form: clearing "primary contact" by a form-supplied household id
+  // reached any church's family.
+  const { data: membership } = await context.admin
+    .from("household_members")
+    .select("household_id")
+    .eq("id", id)
+    .eq("church_id", context.auth.churchId)
+    .maybeSingle();
+  if (!membership) return fail("That person could not be found.");
+
   if (makePrimary) {
     await context.admin
       .from("household_members")
       .update({ is_primary_contact: false })
-      .eq("household_id", householdId)
+      .eq("household_id", membership.household_id as string)
+      .eq("church_id", context.auth.churchId)
       .eq("is_primary_contact", true);
   }
 
@@ -480,6 +493,15 @@ export async function addPickupAuthorization(
     .maybeSingle();
 
   if (!member) return fail("That person could not be found.");
+
+  const { data: household } = await context.admin
+    .from("households")
+    .select("id")
+    .eq("id", householdId)
+    .eq("church_id", context.auth.churchId)
+    .maybeSingle();
+
+  if (!household) return fail("That family could not be found.");
 
   const { error } = await context.admin
     .from("household_pickup_authorizations")
@@ -1161,6 +1183,8 @@ export type CheckoutLookup = {
   sessions: CheckinSessionRow[];
   guardians: PickupPerson[];
   authorizedPickups: PickupPerson[];
+  /** Present when a code or QR was checked; the release hands it back. */
+  ticket?: string | null;
 };
 
 /**
@@ -1251,12 +1275,21 @@ export async function lookupCheckoutCredential(input: {
 
   if (!household) return fail("We couldn't find that family.");
 
+  const ticket = mintReleaseTicket({
+    churchId: context.auth.churchId,
+    householdId,
+    method,
+    staffUserId: context.auth.userId,
+  });
+  if (!ticket) return fail("Pickup codes aren't working right now. Use “Release without a code” instead.");
+
   return {
     ok: true,
     data: {
       householdId,
       householdName: household.name,
       method,
+      ticket,
       sessions,
       guardians: household.members
         .filter((m) => m.relationship === "guardian")
@@ -1354,6 +1387,8 @@ export async function completeCheckout(input: {
   method: CheckoutMethod;
   releasedToMemberId?: string;
   overrideReason?: string;
+  /** From the code or QR lookup. Required for a release that says a code was checked. */
+  ticket?: string | null;
 }): Promise<ActionResult<{ released: number }>> {
   const context = await requireStation();
   if (!isContext(context)) return context;
@@ -1370,10 +1405,65 @@ export async function completeCheckout(input: {
   // Guardians and other adults are never released through kids checkout.
   const { data: openRows } = await context.admin
     .from("checkin_sessions")
-    .select("id, member_id")
+    .select("id, member_id, household_id")
     .in("id", input.sessionIds)
     .eq("church_id", context.auth.churchId)
     .in("status", ["pre_checked_in", "checked_in"]);
+
+  // Which family this release is for, proven rather than claimed. A release
+  // recorded as "code" or "QR" must carry the ticket the lookup of that code
+  // issued; otherwise it is an override and has its written reason above.
+  let householdId: string | null;
+  if (input.method === "override") {
+    const families = new Set((openRows ?? []).map((row) => row.household_id as string | null));
+    householdId = families.size === 1 ? [...families][0] : null;
+    if (!householdId && (openRows ?? []).length > 0) {
+      return fail("Release one family's children at a time.");
+    }
+  } else if (input.method === "code" || input.method === "qr") {
+    const ticket = verifyReleaseTicket(input.ticket, {
+      churchId: context.auth.churchId,
+      staffUserId: context.auth.userId,
+      method: input.method,
+    });
+    if (!ticket) return fail("Look the code up again, then release.");
+    householdId = ticket.householdId;
+    if ((openRows ?? []).some((row) => row.household_id !== householdId)) {
+      return fail("Only this family's children can be released with their code.");
+    }
+    // Someone the family did not list is an override, never a code release.
+    if (!input.releasedToMemberId) return fail("Tap who is picking up.");
+  } else {
+    return fail("Choose how this pickup was checked.");
+  }
+
+  // The adult named as taking the child must be one of the family's guardians
+  // or on its pickup list — the rule the desk shows, now kept by the server.
+  if (input.releasedToMemberId) {
+    if (!householdId) return fail("That person isn't on this family's pickup list.");
+    const [{ data: guardian }, { data: authorized }] = await Promise.all([
+      context.admin
+        .from("household_members")
+        .select("id")
+        .eq("church_id", context.auth.churchId)
+        .eq("household_id", householdId)
+        .eq("member_id", input.releasedToMemberId)
+        .eq("relationship", "guardian")
+        .maybeSingle(),
+      context.admin
+        .from("household_pickup_authorizations")
+        .select("id")
+        .eq("church_id", context.auth.churchId)
+        .eq("household_id", householdId)
+        .eq("member_id", input.releasedToMemberId)
+        .eq("is_active", true)
+        .is("revoked_at", null)
+        .maybeSingle(),
+    ]);
+    if (!guardian && !authorized) {
+      return fail("That person isn't on this family's pickup list.");
+    }
+  }
 
   const memberIds = Array.from(
     new Set((openRows ?? []).map((row) => row.member_id as string)),

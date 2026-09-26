@@ -171,6 +171,7 @@ export function CheckoutConsole() {
         method: overrideMode ? "override" : lookup.method,
         releasedToMemberId: releasedTo.kind === "person" ? releasedTo.memberId : undefined,
         overrideReason: overrideMode ? overrideReason : undefined,
+        ticket: overrideMode ? undefined : lookup.ticket,
       });
 
       if (!result.ok) {
