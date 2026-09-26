@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 
+import { DownloadSpreadsheetButton } from "@/components/giving/download-spreadsheet-button";
 import { DonorsList } from "@/components/giving/donors-list";
 import { GivingNotReady, GivingSubpageHeader } from "@/components/giving/giving-page-parts";
 import { ErrorState } from "@/components/ui/error-state";
@@ -43,7 +44,10 @@ export default async function DonorsPage() {
 
   return (
     <div className="flex w-full flex-col gap-8">
-      <GivingSubpageHeader page="donors" />
+      <GivingSubpageHeader
+        page="donors"
+        secondary={auth.isAdmin && donors.length > 0 ? <DownloadSpreadsheetButton kind="donors" /> : null}
+      />
       <DonorsList donors={donors} />
     </div>
   );

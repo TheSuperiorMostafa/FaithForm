@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { Repeat } from "lucide-react";
 
+import { DownloadSpreadsheetButton } from "@/components/giving/download-spreadsheet-button";
 import { GivingNotReady, GivingSubpageHeader, plural } from "@/components/giving/giving-page-parts";
 import { RecurringRow } from "@/components/giving/recurring-row";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -57,7 +58,12 @@ export default async function RecurringGivingPage() {
 
   return (
     <div className="flex w-full flex-col gap-8">
-      <GivingSubpageHeader page="recurring" />
+      <GivingSubpageHeader
+        page="recurring"
+        secondary={
+          auth.isAdmin && subscriptions.length > 0 ? <DownloadSpreadsheetButton kind="recurring" /> : null
+        }
+      />
 
       {subscriptions.length === 0 ? (
         <EmptyState

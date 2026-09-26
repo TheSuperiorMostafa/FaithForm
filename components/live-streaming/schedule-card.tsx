@@ -10,6 +10,7 @@ import {
   cancelScheduledStream,
   createScheduledStream,
 } from "@/app/dashboard/live-streaming/actions";
+import { RECENT_SERVICES_LIMIT } from "@/components/live-streaming/live-tabs";
 import { AdvancedSection } from "@/components/ui/advanced-section";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { confirmAction } from "@/components/ui/confirm-dialog";
@@ -29,9 +30,12 @@ type ScheduleCardProps = {
   youtubeConnected: boolean;
   facebookConnected: boolean;
   timeZone: string;
+  /** Show every past service instead of the last few (`?recent=all`). */
+  showAllRecent?: boolean;
 };
 
 const CONNECTED_ACCOUNTS_HREF = "/dashboard/settings?tab=accounts";
+const UPCOMING_HREF = "/dashboard/live-streaming/upcoming";
 
 const SERVICE_TONE: Record<string, StatusTone> = {
   scheduled: "working",
@@ -51,6 +55,7 @@ export function ScheduleCard({
   youtubeConnected,
   facebookConnected,
   timeZone,
+  showAllRecent = false,
 }: ScheduleCardProps) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -59,7 +64,11 @@ export function ScheduleCard({
   const upcoming = events
     .filter((event) => event.status === "scheduled" || event.status === "live")
     .sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt));
-  const past = events.filter((event) => event.status === "ended" || event.status === "cancelled");
+  const past = events
+    .filter((event) => event.status === "ended" || event.status === "cancelled")
+    .sort((a, b) => Date.parse(b.startsAt) - Date.parse(a.startsAt));
+  const hasMoreRecent = past.length > RECENT_SERVICES_LIMIT;
+  const recent = showAllRecent ? past : past.slice(0, RECENT_SERVICES_LIMIT);
 
   const handleCreate = (form: HTMLFormElement) => {
     const formData = new FormData(form);
@@ -218,7 +227,24 @@ export function ScheduleCard({
       {past.length > 0 ? (
         <div className="flex flex-col gap-3">
           <h3 className="font-heading text-lg font-bold">Recent</h3>
-          <ServiceList events={past} timeZone={timeZone} isAdmin={false} pending={pending} onCancel={handleCancel} />
+          <ServiceList events={recent} timeZone={timeZone} isAdmin={false} pending={pending} onCancel={handleCancel} />
+          {hasMoreRecent && showAllRecent ? (
+            <Link
+              href={UPCOMING_HREF}
+              scroll={false}
+              className={cn(buttonVariants({ variant: "outline" }), "w-fit")}
+            >
+              Show only the last {RECENT_SERVICES_LIMIT}
+            </Link>
+          ) : hasMoreRecent ? (
+            <Link
+              href={`${UPCOMING_HREF}?recent=all`}
+              scroll={false}
+              className={cn(buttonVariants({ variant: "outline" }), "w-fit")}
+            >
+              View all past services
+            </Link>
+          ) : null}
         </div>
       ) : null}
     </div>

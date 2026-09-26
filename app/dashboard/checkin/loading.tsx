@@ -6,7 +6,7 @@ import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
 
 /**
  * Mirrors the check-in desk before anyone types: the search box (static, so
- * real text), then "In the rooms now" with a card per room. The Kids Check-in
+ * real text), then "In the rooms now" with a compact card per room. The Kids Check-in
  * header and links above come from the layout and are already real.
  */
 export default function CheckinTodayLoading() {
@@ -28,27 +28,20 @@ export default function CheckinTodayLoading() {
             <Skeleton className="h-[22px] w-64 max-w-full" />
           </div>
         </div>
-        <div className="grid gap-6 lg:grid-cols-2">
-          {Array.from({ length: 2 }).map((_, room) => (
-            <Card key={room} className="flex flex-col gap-4 p-6">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <Skeleton className="h-7 w-36" />
-                <Skeleton className="h-8 w-44 rounded-full" />
+        {/* Closed room cards, as RosterBoard draws them: name and big count,
+            the occupancy badge, a line of names, then the "Show all" button. */}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+          {Array.from({ length: 6 }).map((_, room) => (
+            <Card key={room} className="flex flex-col gap-3 p-4">
+              <div className="flex items-start justify-between gap-3">
+                <Skeleton className="h-[25px] w-32" />
+                <Skeleton className="h-[30px] w-8" />
               </div>
-              <ul className="flex flex-col divide-y divide-border">
-                {Array.from({ length: 3 }).map((_, row) => (
-                  <li key={row} className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0">
-                    <div className="space-y-2">
-                      <Skeleton className="h-6 w-40" />
-                      <Skeleton className="h-5 w-28" />
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-[15px] font-medium text-foreground">Move to</span>
-                      <Skeleton className="h-11 w-48 rounded-[10px]" />
-                    </div>
-                  </li>
-                ))}
-              </ul>
+              <div className="flex flex-wrap items-center gap-2">
+                <Skeleton className="h-7 w-36 rounded-full" />
+              </div>
+              <Skeleton className="h-[22px] w-full" />
+              <Skeleton className="h-11 w-full rounded-[10px]" />
             </Card>
           ))}
         </div>

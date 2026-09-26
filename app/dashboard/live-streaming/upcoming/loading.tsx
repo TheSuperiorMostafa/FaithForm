@@ -1,8 +1,10 @@
+import { RECENT_SERVICES_LIMIT } from "@/components/live-streaming/live-tabs";
 import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
 
 /**
  * Mirrors the Upcoming tab: the section header (real text), the list of
- * services as 72px rows, and the folded slides section.
+ * services as 72px rows, the Recent list (last five past services, then the
+ * "View all" button), and the folded slides section.
  */
 export default function UpcomingServicesLoading() {
   return (
@@ -18,26 +20,13 @@ export default function UpcomingServicesLoading() {
           <Skeleton className="min-h-12 w-52 rounded-[10px]" />
         </div>
 
-        <ul className="divide-y divide-border rounded-3xl border border-border bg-card p-2 shadow-sm">
-          {Array.from({ length: 3 }).map((_, index) => (
-            <li
-              key={index}
-              className="flex min-h-[72px] flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-            >
-              <div className="flex min-w-0 items-center gap-4">
-                <Skeleton className="size-11 shrink-0 rounded-xl" />
-                <div className="flex flex-col gap-1.5">
-                  <Skeleton className="h-5 w-48" />
-                  <Skeleton className="h-4 w-64 max-w-full" />
-                </div>
-              </div>
-              <div className="flex shrink-0 items-center gap-3">
-                <Skeleton className="h-8 w-24 rounded-full" />
-                <Skeleton className="min-h-11 w-40 rounded-[10px]" />
-              </div>
-            </li>
-          ))}
-        </ul>
+        <ServiceRowsSkeleton rows={3} withAction />
+
+        <div className="flex flex-col gap-3">
+          <h3 className="font-heading text-lg font-bold">Recent</h3>
+          <ServiceRowsSkeleton rows={RECENT_SERVICES_LIMIT} />
+          <Skeleton className="min-h-11 w-52 rounded-[10px]" />
+        </div>
       </div>
 
       <div className="rounded-2xl border border-border bg-card/50">
@@ -52,5 +41,31 @@ export default function UpcomingServicesLoading() {
         </div>
       </div>
     </SkeletonContainer>
+  );
+}
+
+/** Service rows as the schedule card draws them: 72px, icon, name, time, badge. */
+function ServiceRowsSkeleton({ rows, withAction = false }: { rows: number; withAction?: boolean }) {
+  return (
+    <ul className="divide-y divide-border rounded-3xl border border-border bg-card p-2 shadow-sm">
+      {Array.from({ length: rows }).map((_, index) => (
+        <li
+          key={index}
+          className="flex min-h-[72px] flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div className="flex min-w-0 items-center gap-4">
+            <Skeleton className="size-11 shrink-0 rounded-xl" />
+            <div className="flex flex-col gap-1.5">
+              <Skeleton className="h-5 w-48" />
+              <Skeleton className="h-4 w-64 max-w-full" />
+            </div>
+          </div>
+          <div className="flex shrink-0 items-center gap-3">
+            <Skeleton className="h-8 w-24 rounded-full" />
+            {withAction ? <Skeleton className="min-h-11 w-40 rounded-[10px]" /> : null}
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }

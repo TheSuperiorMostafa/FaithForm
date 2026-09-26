@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { Landmark } from "lucide-react";
 
+import { DownloadSpreadsheetButton } from "@/components/giving/download-spreadsheet-button";
 import { formatGiftDate, GivingNotReady, GivingSubpageHeader } from "@/components/giving/giving-page-parts";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ErrorState } from "@/components/ui/error-state";
@@ -44,7 +45,12 @@ export default async function DepositsPage() {
 
   return (
     <div className="flex w-full flex-col gap-8">
-      <GivingSubpageHeader page="deposits" />
+      <GivingSubpageHeader
+        page="deposits"
+        secondary={
+          auth.isAdmin && payouts && payouts.length > 0 ? <DownloadSpreadsheetButton kind="deposits" /> : null
+        }
+      />
 
       {payouts === null ? (
         // A failed load is not "no deposits yet".

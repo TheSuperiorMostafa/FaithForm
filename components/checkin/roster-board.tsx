@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -14,8 +15,9 @@ import { Card } from "@/components/ui/card";
 import { confirmAction } from "@/components/ui/confirm-dialog";
 import { Select } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { occupancyLabel, UNDO_CHECKIN_WINDOW_MS } from "@/lib/checkin/desk";
+import { occupancyLabel, roomPreview, UNDO_CHECKIN_WINDOW_MS } from "@/lib/checkin/desk";
 import { undoToast } from "@/lib/ui/undo-toast";
+import { cn } from "@/lib/utils";
 import type { CheckinSessionRow, ChurchLocation } from "@/types/checkin";
 
 function formatTime(value: string | null): string {
@@ -45,6 +47,19 @@ export function RosterBoard({
 }) {
   const [pending, startTransition] = useTransition();
   const [now, setNow] = useState(() => Date.now());
+  // Rooms stay closed to a short summary so ten rooms fit on one screen. An
+  // opened room spreads across the full row to show every child and the
+  // Move / Mark arrived / Undo controls.
+  const [openRooms, setOpenRooms] = useState<Set<string>>(() => new Set());
+
+  function toggleRoom(id: string) {
+    setOpenRooms((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   // Undo buttons disappear on their own when their ten minutes are up.
   useEffect(() => {
@@ -134,38 +149,86 @@ export function RosterBoard({
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
       {locations.map((location) => {
         const roster = byLocation.get(location.id) ?? [];
         const here = roster.filter((row) => row.status === "checked_in").length;
         const full = location.capacity != null && here >= location.capacity;
+        const onTheWay = roster.filter((row) => row.status === "pre_checked_in").length;
+        const open = openRooms.has(location.id) && roster.length > 0;
+        const listId = `room-list-${location.id}`;
+        const preview = roomPreview(
+          roster.map((row) => `${row.firstName} ${row.lastName}`),
+        );
 
         return (
-          <Card key={location.id} className="flex flex-col gap-4 p-6">
-            <div className="flex flex-wrap items-start justify-between gap-3">
+          <Card
+            key={location.id}
+            className={cn("flex flex-col gap-3 p-4", open && "col-span-full")}
+          >
+            <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <h3 className="font-heading text-xl font-bold text-foreground">
+                <h3 className="font-heading text-lg font-bold leading-snug text-foreground [overflow-wrap:anywhere]">
                   {location.name}
                 </h3>
                 {location.description && (
-                  <p className="mt-1 text-[15px] text-muted-foreground">
+                  <p className="truncate text-[15px] text-muted-foreground">
                     {location.description}
                   </p>
                 )}
               </div>
+              {/* The count is the thing people look for, so it is big. */}
+              <p
+                className="shrink-0 font-heading text-3xl font-bold leading-none tabular-nums text-foreground"
+                aria-hidden
+              >
+                {here}
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
               <StatusBadge tone={full ? "attention" : here > 0 ? "ready" : "neutral"}>
                 {occupancyLabel(here, location.capacity)}
               </StatusBadge>
+              {onTheWay > 0 && (
+                <StatusBadge tone="working">{onTheWay} on the way</StatusBadge>
+              )}
             </div>
 
             {roster.length === 0 ? (
-              <p className="text-[15px] text-muted-foreground">
-                Nobody is checked in here yet.
-              </p>
+              <p className="text-[15px] text-muted-foreground">Nobody here yet.</p>
             ) : (
-              <ul className="flex flex-col divide-y divide-border">
+              <>
+                {!open && (
+                  <p className="line-clamp-2 text-[15px] text-muted-foreground">{preview}</p>
+                )}
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  aria-expanded={open}
+                  aria-controls={listId}
+                  onClick={() => toggleRoom(location.id)}
+                >
+                  {open ? (
+                    <>
+                      <ChevronUp aria-hidden />
+                      Hide the list
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown aria-hidden />
+                      {roster.length === 1 ? "Show 1 child" : `Show all ${roster.length} children`}
+                    </>
+                  )}
+                </Button>
+              </>
+            )}
+
+            {open && (
+              <ul id={listId} className="flex flex-col divide-y divide-border border-t border-border">
                 {roster.map((session) => (
-                  <li key={session.id} className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0">
+                  <li key={session.id} className="flex flex-col gap-3 py-4 last:pb-0">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div className="min-w-0">
                         <p className="text-base font-semibold text-foreground">

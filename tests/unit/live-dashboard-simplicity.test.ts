@@ -188,6 +188,18 @@ test("the Go live card has one big action per state and keeps the reassuring end
   assert.match(read("app/dashboard/live-streaming/upcoming/page.tsx"), /ScheduleCard/);
 });
 
+test("Upcoming's Recent list shows the last five past services, with a View all button", () => {
+  const schedule = read("components/live-streaming/schedule-card.tsx");
+  assert.match(read("components/live-streaming/live-tabs.ts"), /RECENT_SERVICES_LIMIT = 5;/);
+  assert.match(schedule, /past\.slice\(0, RECENT_SERVICES_LIMIT\)/);
+  assert.match(schedule, /View all past services/);
+  assert.match(schedule, /\?recent=all/);
+  const page = read("app/dashboard/live-streaming/upcoming/page.tsx");
+  assert.match(page, /showAllRecent=\{showAllRecent\}/);
+  const loading = read("app/dashboard/live-streaming/upcoming/loading.tsx");
+  assert.match(loading, /rows=\{RECENT_SERVICES_LIMIT\}/, "skeleton draws five Recent rows");
+});
+
 test("the ready-to-publish prompt is persistent: Later folds it for the session, never removes it", () => {
   const source = read("components/live-streaming/broadcast/ready-to-publish-card.tsx");
   assert.match(source, /sessionStorage/);

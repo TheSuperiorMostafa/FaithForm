@@ -359,7 +359,15 @@ export function GiftsSkeleton() {
 export function DonorsSkeleton() {
   return (
     <SkeletonContainer className="flex w-full flex-col gap-8" label="donors">
-      <GivingSubpageHeader page="donors" />
+      <GivingSubpageHeader
+        page="donors"
+        secondary={
+          <Button variant="outline" disabled>
+            <Download aria-hidden />
+            Download spreadsheet
+          </Button>
+        }
+      />
       <div className="flex flex-col gap-5">
         <SearchBoxSkeleton placeholder="Search by name or email" />
         <Skeleton className="h-5 w-24" />
@@ -410,7 +418,15 @@ export function DonorDetailSkeleton() {
 export function RecurringSkeleton() {
   return (
     <SkeletonContainer className="flex w-full flex-col gap-8" label="recurring gifts">
-      <GivingSubpageHeader page="recurring" />
+      <GivingSubpageHeader
+        page="recurring"
+        secondary={
+          <Button variant="outline" disabled>
+            <Download aria-hidden />
+            Download spreadsheet
+          </Button>
+        }
+      />
       <section className="flex flex-col gap-4">
         <SectionHeader title="Active and paused" description={<InlineSkeleton className="h-5 w-32" />} />
         <List>
@@ -439,7 +455,15 @@ export function RecurringSkeleton() {
 export function DepositsSkeleton() {
   return (
     <SkeletonContainer className="flex w-full flex-col gap-8" label="deposits">
-      <GivingSubpageHeader page="deposits" />
+      <GivingSubpageHeader
+        page="deposits"
+        secondary={
+          <Button variant="outline" disabled>
+            <Download aria-hidden />
+            Download spreadsheet
+          </Button>
+        }
+      />
       <RowsSkeleton count={8} trailing="badge" />
     </SkeletonContainer>
   );

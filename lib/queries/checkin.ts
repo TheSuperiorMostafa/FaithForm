@@ -1,6 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { getAuthUsersByIds } from "@/lib/auth/auth-users";
+import { createAdminClientOrNull } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { staffLabel, type NoCodeRelease } from "@/lib/checkin/release-log";
 import {
   householdNamePattern,
   memberNameFilter,
@@ -700,6 +703,119 @@ export async function getLocationStats(
       a.locationName.localeCompare(b.locationName),
     ),
   };
+}
+
+// ---------------------------------------------------------------------------
+// RELEASES WITHOUT A PICKUP CODE
+// ---------------------------------------------------------------------------
+
+/** The most the Reports log lists at once; the count above it is still exact. */
+export const NO_CODE_RELEASE_LIMIT = 200;
+
+type NoCodeReleaseJoin = {
+  id: string;
+  checked_out_at: string;
+  checked_out_by: string | null;
+  checkout_override_reason: string | null;
+  child: { first_name: string; last_name: string } | { first_name: string; last_name: string }[] | null;
+  released_to:
+    | { first_name: string; last_name: string }
+    | { first_name: string; last_name: string }[]
+    | null;
+  church_locations: { name: string } | { name: string }[] | null;
+};
+
+/**
+ * Names for the team members who released children, one lookup per person
+ * rather than per row, and never a page-through of every login (that is what
+ * rate-limited the auth API before). The name is the one they chose in the
+ * FaithForm app, if they use it; otherwise their email.
+ */
+async function staffLabelsFor(userIds: string[]): Promise<Map<string, string>> {
+  const unique = Array.from(new Set(userIds.filter(Boolean)));
+  if (unique.length === 0) return new Map();
+
+  const admin = createAdminClientOrNull();
+  const [authUsers, accounts] = await Promise.all([
+    getAuthUsersByIds(unique),
+    admin
+      ? admin.from("visitor_accounts").select("user_id, display_name").in("user_id", unique)
+      : Promise.resolve({ data: null }),
+  ]);
+
+  const names = new Map<string, string | null>(
+    ((accounts.data ?? []) as { user_id: string; display_name: string | null }[]).map((row) => [
+      row.user_id,
+      row.display_name,
+    ]),
+  );
+
+  return new Map(
+    unique.map((id) => [
+      id,
+      staffLabel({ displayName: names.get(id) ?? null, email: authUsers.get(id)?.email ?? null }),
+    ]),
+  );
+}
+
+/**
+ * Every child released without the family's pickup code since
+ * `sinceServiceDate` (the first week the Reports numbers cover), newest
+ * first: who, which room, who released them, when, and the reason written.
+ */
+export async function listNoCodeReleases(
+  churchId: string,
+  options: { sinceServiceDate: string; limit?: number; strict?: boolean },
+  supabase?: SupabaseClient,
+): Promise<{ releases: NoCodeRelease[]; total: number; failed: boolean }> {
+  const client = supabase ?? db();
+
+  const { data, error, count } = await client
+    .from("checkin_sessions")
+    .select(
+      `id, checked_out_at, checked_out_by, checkout_override_reason,
+       child:members!member_id(first_name, last_name),
+       released_to:members!checkout_released_to_member_id(first_name, last_name),
+       church_locations(name)`,
+      { count: "exact" },
+    )
+    .eq("church_id", churchId)
+    .eq("status", "checked_out")
+    .eq("checkout_method", "override")
+    .gte("local_service_date", options.sinceServiceDate)
+    .order("checked_out_at", { ascending: false })
+    .limit(options.limit ?? NO_CODE_RELEASE_LIMIT);
+
+  if (error) {
+    console.error("[checkin] no-code release read failed:", error.message);
+    if (options.strict) throw new Error("no-code release read failed");
+    // Said as a failure on the page, never as "none": an empty log would read
+    // as every child having gone home with a code.
+    return { releases: [], total: 0, failed: true };
+  }
+
+  const rows = (data ?? []) as unknown as NoCodeReleaseJoin[];
+  const labels = await staffLabelsFor(
+    rows.map((row) => row.checked_out_by).filter((id): id is string => Boolean(id)),
+  );
+
+  const fullName = (person: { first_name: string; last_name: string } | null) =>
+    person ? `${person.first_name} ${person.last_name}`.trim() : null;
+
+  const releases = rows.map((row) => ({
+    sessionId: row.id,
+    childName: fullName(unwrap(row.child)) || "A child no longer in People",
+    roomName: unwrap(row.church_locations)?.name ?? null,
+    releasedToName: fullName(unwrap(row.released_to)),
+    releasedAt: row.checked_out_at,
+    releasedByUserId: row.checked_out_by,
+    releasedByLabel: row.checked_out_by
+      ? (labels.get(row.checked_out_by) ?? staffLabel(null))
+      : staffLabel(null),
+    reason: row.checkout_override_reason?.trim() || null,
+  }));
+
+  return { releases, total: count ?? releases.length, failed: false };
 }
 
 // ---------------------------------------------------------------------------

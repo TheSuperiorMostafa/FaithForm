@@ -1,6 +1,9 @@
 import type { SectionLinkTab } from "@/components/dashboard/section-link-tabs";
 
 export const LIVE_PAGE_TITLE = "Live";
+/** How many past services the Upcoming tab's Recent list shows before "View all". */
+export const RECENT_SERVICES_LIMIT = 5;
+
 export const LIVE_PAGE_DESCRIPTION =
   "Stream your service, then share the recording in the FaithForm app.";
 

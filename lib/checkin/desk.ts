@@ -26,6 +26,20 @@ export function occupancyLabel(count: number, capacity: number | null): string {
     : `${count} checked in`;
 }
 
+/** How many names a closed room card lists before "and 5 more". */
+export const ROOM_PREVIEW_NAMES = 3;
+
+/**
+ * The short line on a closed room card: the first few children, then how many
+ * more. "Ava Smith, Ben Tran and 5 more". Empty when nobody is in the room.
+ */
+export function roomPreview(names: readonly string[], limit = ROOM_PREVIEW_NAMES): string {
+  const clean = names.map((name) => name.trim()).filter(Boolean);
+  if (clean.length === 0) return "";
+  if (clean.length <= limit) return joinNames(clean);
+  return `${clean.slice(0, limit).join(", ")} and ${clean.length - limit} more`;
+}
+
 /** "1 child", "2 children". */
 export function childCount(count: number): string {
   return `${count} ${count === 1 ? "child" : "children"}`;

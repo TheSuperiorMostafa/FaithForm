@@ -16,15 +16,23 @@ export const dynamic = "force-dynamic";
  * Upcoming services, off the Go live card: the schedule, and (secondary) the
  * sermon slides linked to each service.
  */
-export default async function UpcomingServicesPage() {
+export default async function UpcomingServicesPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ recent?: string | string[] }>;
+}) {
   if (await pageFeatureBlocked("live_stream")) return null;
 
   const supabase = createClient();
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");
+  const query = await searchParams;
+  // Recent shows the last five past services; "View all" (?recent=all) loads
+  // the full history.
+  const showAllRecent = (Array.isArray(query.recent) ? query.recent[0] : query.recent) === "all";
 
   const [events, status, access] = await Promise.all([
-    listStreamEvents(auth.churchId, { limit: 20, supabase }),
+    listStreamEvents(auth.churchId, { limit: showAllRecent ? 500 : 20, supabase }),
     getLiveBroadcastStatus(auth.churchId, supabase),
     getFeatureAccess(),
   ]);
@@ -41,6 +49,7 @@ export default async function UpcomingServicesPage() {
         youtubeConnected={status.platforms.youtube.connected}
         facebookConnected={status.platforms.facebook.connected}
         timeZone={auth.churchTimezone ?? "America/New_York"}
+        showAllRecent={showAllRecent}
       />
 
       {canLinkSlides ? (

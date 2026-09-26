@@ -18,5 +18,9 @@ export const REPORTS_TITLE = "Children in each room, week by week";
 export const REPORTS_DESCRIPTION =
   "Counts every child who was checked in to a room. Children marked \"On the way\" who never arrived are not counted.";
 
+export const NO_CODE_LOG_TITLE = "Released without a pickup code";
+export const NO_CODE_LOG_DESCRIPTION =
+  "Each child a team member handed over without the family's code, newest first.";
+
 /** Week ranges the Reports page offers. */
 export const REPORT_RANGES = [4, 8, 13, 26] as const;

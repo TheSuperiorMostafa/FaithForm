@@ -15,6 +15,7 @@ import {
   parseNewFamily,
   pickupPersonLabel,
   releaseButtonLabel,
+  roomPreview,
   searchFamilies,
   undoCheckinCutoff,
   undoCheckinRefusal,
@@ -378,4 +379,15 @@ test("user-facing check-in messages say family, not household", () => {
   for (const message of messages) {
     assert.doesNotMatch(message, /household/i, message);
   }
+});
+
+test("a closed room card names a few children, then how many more", () => {
+  assert.equal(roomPreview([]), "");
+  assert.equal(roomPreview(["Ava Smith"]), "Ava Smith");
+  assert.equal(roomPreview(["Ava Smith", "Ben Tran", "Cara Li"]), "Ava Smith, Ben Tran and Cara Li");
+  assert.equal(
+    roomPreview(["Ava Smith", "Ben Tran", "Cara Li", "Dan Oh", " ", "Eli Fox"]),
+    "Ava Smith, Ben Tran, Cara Li and 2 more",
+  );
+  assert.equal(roomPreview(["A", "B", "C"], 1), "A and 2 more");
 });

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { FollowUpBoard, type FollowUpCandidate } from "./follow-up-board";
 import { LogLink } from "../log-link";
 import { ServiceDayHeader } from "@/components/attendance/service-day-header";
+import { sortFollowUpCandidates } from "@/lib/attendance/follow-up-order";
 import { checkedInOtherwise, getPresenceOnDate } from "@/lib/attendance/presence";
 import { getChurchAuth } from "@/lib/auth/church";
 import { getPriorConsecutiveAbsences, getRecordByDate } from "@/lib/queries/attendance";
@@ -59,8 +60,10 @@ export default async function AttendanceFollowUpDatePage({ params }: PageProps) 
     absentEntries.map((entry) => entry.member!.id),
   );
 
-  const candidates: FollowUpCandidate[] = absentEntries
-    .map((entry) => ({
+  // Phone numbers first (those are the people a text can reach), then the
+  // longest streak, then name.
+  const candidates: FollowUpCandidate[] = sortFollowUpCandidates(
+    absentEntries.map((entry) => ({
       memberId: entry.member!.id,
       name: `${entry.member!.first_name} ${entry.member!.last_name}`.trim(),
       firstName: entry.member!.first_name?.trim() || "Friend",
@@ -73,13 +76,8 @@ export default async function AttendanceFollowUpDatePage({ params }: PageProps) 
       // Raw text from the texting service stays in the database.
       error: entry.follow_up_error,
       requested: entry.follow_up_requested,
-    }))
-    .sort((a, b) => {
-      if (b.consecutiveAbsent !== a.consecutiveAbsent) {
-        return b.consecutiveAbsent - a.consecutiveAbsent;
-      }
-      return a.name.localeCompare(b.name);
-    });
+    })),
+  );
 
   return (
     <div className="flex w-full flex-col gap-8">
