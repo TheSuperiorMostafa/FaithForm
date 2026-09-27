@@ -217,6 +217,13 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   reload; the standard wording was then restored and verified after reload.
   The five follow-up text templates displayed their default wording and live
   name previews. No email or text was sent.
+- Follow-up templates: changed the QA church's first-absence text to a clearly
+  labeled test sentence. The live name preview changed immediately, the save
+  succeeded, and the value survived a full browser reload. Restoring the
+  original sentence and reloading again returned both the field and preview
+  to their initial wording. No text was sent. The Monday announcement email
+  is a Gmail draft feature; this tenant's Google account remains disconnected,
+  so an actual scheduled draft was not tested.
 
 ## Issues found
 
