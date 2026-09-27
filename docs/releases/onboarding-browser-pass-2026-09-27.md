@@ -41,6 +41,17 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   succeeded. A wrong pickup code was rejected. The correct code found the
   household and required choosing a guardian; pickup completed and the weekly
   room report showed one check-in and no code-less release.
+- The Check-in desk's New family form rejected a blank parent name. After
+  entering a synthetic parent and two synthetic children, Save and check in
+  created the family in People, showed both children in QA Nursery, and issued
+  the family's weekly pickup code. The code is intentionally absent here.
+  Searching by family name in Pick up found both children. The no-code path
+  required choosing a pickup person and a written reason; releasing the two
+  synthetic children succeeded. Reports then showed three check-ins for the
+  week and two no-code releases, each with the QA admin, room, guardian, time,
+  and explicit synthetic-test reason. This tested the currently deployed
+  checkout path; Rooms returned to zero checked in after pickup. The local atomic two-child fix in migration 0116 still needs
+  a browser retest after rollout.
 - Attendance: the child’s check-in was pre-counted on the Sunday roll. Saving
   one present and one absent synthetic person required a confirmation and
   preserved the entered note. The follow-up page showed the absent member but
