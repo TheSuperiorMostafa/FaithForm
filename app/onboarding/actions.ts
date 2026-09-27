@@ -35,7 +35,7 @@ export type CreateAccountResult =
   | { ok: false; error: string };
 
 export type ResendInviteResult =
-  | { ok: true; email: string }
+  | { ok: true; email: string; delivery: "sent" | "unconfirmed" | "old_links_active" }
   | { ok: false; error: string };
 
 export type IntegrationStatusResult = {
@@ -334,6 +334,7 @@ export async function resendInvite(
 
   const email = existingInvite.email;
   const adminFirstName = existingInvite.adminFirstName;
+  let inviteId = existingInvite.id;
   let token = existingInvite.token;
   if (inviteNeedsRefresh(existingInvite.expiresAt)) {
     // Only an expired link needs replacing. Keep the old row until a new one
@@ -347,12 +348,13 @@ export async function resendInvite(
         admin_first_name: adminFirstName,
         admin_last_name: existingInvite.adminLastName,
       })
-      .select("token")
+      .select("id, token")
       .single();
 
     if (newError || !newInvite) {
       return { ok: false, error: newError?.message ?? "Could not create invite." };
     }
+    inviteId = newInvite.id;
     token = newInvite.token;
   }
 
@@ -364,14 +366,28 @@ export async function resendInvite(
       adminFirstName,
     });
   } catch (err) {
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : "Failed to send email.",
-    };
+    console.error("[onboarding] invitation resend delivery was not confirmed:", err instanceof Error ? err.name : "UnknownError");
+    revalidatePath("/admin/churches");
+    revalidatePath(`/admin/churches/${churchId}`);
+    return { ok: true, email, delivery: "unconfirmed" };
+  }
+
+  const { error: oldInviteError } = await admin
+    .from("church_invites")
+    .delete()
+    .eq("church_id", churchId)
+    .is("accepted_at", null)
+    .neq("id", inviteId);
+  if (oldInviteError) {
+    console.error("[onboarding] old invitations could not be disabled:", oldInviteError.message);
+    revalidatePath("/admin/churches");
+    revalidatePath(`/admin/churches/${churchId}`);
+    return { ok: true, email, delivery: "old_links_active" };
   }
 
   revalidatePath("/admin/churches");
-  return { ok: true, email };
+  revalidatePath(`/admin/churches/${churchId}`);
+  return { ok: true, email, delivery: "sent" };
 }
 
 export type { ValidInvite, InviteValidationResult };

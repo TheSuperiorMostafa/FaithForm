@@ -42,7 +42,12 @@ function isValidEmail(value: string): boolean {
 }
 
 export type CreateChurchResult =
-  | { ok: true; churchId: string; email: string | null }
+  | {
+      ok: true;
+      churchId: string;
+      email: string | null;
+      inviteDelivery: "sent" | "unconfirmed" | "existing" | "not_requested";
+    }
   | { ok: false; error: string };
 
 /**
@@ -97,7 +102,7 @@ export async function createChurch(
     ? await findRecentlyCreatedChurch(admin, name, adminEmail, timezone)
     : null;
   if (repeat) {
-    return { ok: true, churchId: repeat, email: adminEmail };
+    return { ok: true, churchId: repeat, email: adminEmail, inviteDelivery: "existing" };
   }
 
   const slug = generateChurchSlug(name);
@@ -115,7 +120,7 @@ export async function createChurch(
   if (!invitingAdmin) {
     revalidatePath("/admin");
     revalidatePath("/admin/churches");
-    return { ok: true, churchId: church.id, email: null };
+    return { ok: true, churchId: church.id, email: null, inviteDelivery: "not_requested" };
   }
 
   const { data: invite, error: inviteError } = await admin
@@ -145,17 +150,17 @@ export async function createChurch(
       adminFirstName,
     });
   } catch (err) {
-    await admin.from("church_invites").delete().eq("church_id", church.id);
-    await admin.from("churches").delete().eq("id", church.id);
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : "Failed to send invite email.",
-    };
+    // Delivery may have succeeded even when the provider response failed.
+    // Keep the church and valid invite so Admin can resend the same link.
+    console.error("[admin] first invitation delivery was not confirmed:", err instanceof Error ? err.name : "UnknownError");
+    revalidatePath("/admin");
+    revalidatePath("/admin/churches");
+    return { ok: true, churchId: church.id, email: adminEmail, inviteDelivery: "unconfirmed" };
   }
 
   revalidatePath("/admin");
   revalidatePath("/admin/churches");
-  return { ok: true, churchId: church.id, email: adminEmail };
+  return { ok: true, churchId: church.id, email: adminEmail, inviteDelivery: "sent" };
 }
 
 /** How long a second identical "Add church" counts as the same request. */
@@ -196,16 +201,15 @@ async function findRecentlyCreatedChurch(
 }
 
 export type InviteChurchAdminResult =
-  | { ok: true; email: string }
+  | { ok: true; email: string; delivery: "sent" | "unconfirmed" | "old_links_active" }
   | { ok: false; error: string };
 
 /**
  * Sends the first admin their invite, for a church that has been waiting
  * without one.
  *
- * Any invite still outstanding for this church is replaced rather than left
- * beside the new one: a corrected address should not leave the typo's link
- * live.
+ * A corrected address replaces older invites only after its email has been
+ * delivered. A failed send must not revoke the church's working link.
  */
 export async function inviteChurchAdmin(
   formData: FormData,
@@ -248,12 +252,6 @@ export async function inviteChurchAdmin(
     };
   }
 
-  await admin
-    .from("church_invites")
-    .delete()
-    .eq("church_id", churchId)
-    .is("accepted_at", null);
-
   const { data: invite, error: inviteError } = await admin
     .from("church_invites")
     .insert({
@@ -262,7 +260,7 @@ export async function inviteChurchAdmin(
       admin_first_name: adminFirstName,
       admin_last_name: adminLastName,
     })
-    .select("token")
+    .select("id, token")
     .single();
 
   if (inviteError || !invite) {
@@ -280,17 +278,31 @@ export async function inviteChurchAdmin(
       adminFirstName,
     });
   } catch (err) {
-    await admin.from("church_invites").delete().eq("church_id", churchId);
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : "Failed to send invite email.",
-    };
+    // A provider can deliver the message but fail to confirm it. Keep both
+    // links until a resend confirms delivery, rather than breaking either.
+    console.error("[admin] replacement invitation delivery was not confirmed:", err instanceof Error ? err.name : "UnknownError");
+    revalidatePath("/admin/churches");
+    revalidatePath(`/admin/churches/${churchId}`);
+    return { ok: true, email: adminEmail, delivery: "unconfirmed" };
+  }
+
+  const { error: oldInviteError } = await admin
+    .from("church_invites")
+    .delete()
+    .eq("church_id", churchId)
+    .is("accepted_at", null)
+    .neq("id", invite.id);
+  if (oldInviteError) {
+    console.error("[admin] old church invitations could not be disabled:", oldInviteError.message);
+    revalidatePath("/admin/churches");
+    revalidatePath(`/admin/churches/${churchId}`);
+    return { ok: true, email: adminEmail, delivery: "old_links_active" };
   }
 
   revalidatePath("/admin");
   revalidatePath("/admin/churches");
   revalidatePath(`/admin/churches/${churchId}`);
-  return { ok: true, email: adminEmail };
+  return { ok: true, email: adminEmail, delivery: "sent" };
 }
 
 export async function updateChurchUserRole(formData: FormData) {

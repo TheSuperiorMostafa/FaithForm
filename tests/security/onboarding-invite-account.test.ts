@@ -30,5 +30,6 @@ test("the final step uses one transactional command after signed-in invite valid
 
 test("resending does not revoke a working invitation before delivery succeeds", () => {
   assert.match(resend, /inviteNeedsRefresh\(existingInvite\.expiresAt\)/);
-  assert.doesNotMatch(resend, /\.delete\(\)/);
+  assert.ok(resend.indexOf("await sendInviteEmail(") < resend.indexOf('.from("church_invites")\n    .delete()'));
+  assert.match(resend, /\.neq\("id", inviteId\)/);
 });

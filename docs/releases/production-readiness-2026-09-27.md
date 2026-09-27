@@ -32,6 +32,11 @@ readiness.
   Ready; the public mobile health endpoint returned HTTP 200; the production
   error-log query found no 5xx entries in its last 24-hour window. These are
   point-in-time checks, not an uptime or alerting guarantee.
+- A later 24-hour production log check found zero 5xx entries and one
+  error-level middleware entry on an HTTP 200 request: Church App quick links
+  could not save because the live `churches.app_links` column is absent. This
+  confirms that HTTP status alone misses some failed feature saves; local
+  migration 0113 addresses the missing column but remains undeployed.
 - The current Vercel variable inventory lists Supabase, Stripe/webhook, APNs,
   relay, and donor-session keys. It does not list the `FCM_*` values required by
   this app's Android push adapter. Presence of a variable does not prove that
@@ -149,6 +154,16 @@ readiness.
   church. Profile saves require a still-incomplete church and confirm that a
   row changed; logo upload no longer reports success when the profile write
   failed. Focused invite and OAuth tests pass. These guards are local only.
+- The Admin first-invite path no longer removes a working invitation before
+  the replacement email succeeds. If delivery cannot be confirmed, both the
+  new and old links remain usable until a resend confirms the new one; the
+  screen says so instead of claiming delivery. A successful resend then
+  disables the older pending links; a failed or uncertain resend keeps the
+  current link available. New-church creation also keeps
+  its church and invite in that case, so Admin can resend the same link. Its
+  result distinguishes sent, unconfirmed, and already-created outcomes.
+  These changes are local; Resend delivery still needs a controlled failure
+  rehearsal.
 - Family-name pickup search now pages through all matching people, family
   names, membership links, and that day's open check-ins. It filters for
   families with children still present before limiting the displayed matches.

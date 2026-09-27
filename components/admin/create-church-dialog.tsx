@@ -67,14 +67,18 @@ export function CreateChurchDialog() {
         setError(result.error);
         return;
       }
-      toast.success(
-        result.email
-          ? `Invite sent to ${result.email}`
-          : "Church created — invite their admin whenever you have the address.",
-      );
+      if (result.inviteDelivery === "sent") {
+        toast.success(`Invite sent to ${result.email}`);
+      } else if (result.inviteDelivery === "unconfirmed") {
+        toast.warning("Church created, but invite delivery could not be confirmed. Open the church to resend it.");
+      } else if (result.inviteDelivery === "existing") {
+        toast.info("This church was already created. Check its invitation before sending another.");
+      } else {
+        toast.success("Church created — invite their admin whenever you have the address.");
+      }
       close();
       router.refresh();
-      if (!result.email) router.push(`/admin/churches/${result.churchId}`);
+      if (result.inviteDelivery !== "sent") router.push(`/admin/churches/${result.churchId}`);
     });
   }
 
