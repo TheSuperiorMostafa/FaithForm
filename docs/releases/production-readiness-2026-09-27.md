@@ -15,6 +15,12 @@ readiness.
   and view-access denial probes. The additive
   `0111_announcement_status_view_invoker.sql` migration resolves the live
   Security Advisor's SECURITY DEFINER view finding. It is local only.
+- A full custom-format PostgreSQL backup and restore rehearsal passed on a
+  disposable PostgreSQL 17 server with four synthetic churches. Restored record
+  fingerprints, RLS, view settings, and medical-note grants matched the source.
+  Run it with `pnpm test:backup-restore`, `FAITHFORM_DB_TARGET=disposable`, and
+  a loopback-only `FAITHFORM_TEST_DATABASE_URL`. This does not validate
+  Supabase's production physical backups or Storage object recovery.
 - Native: iOS Swift build and the Android unit suite across debug, staging, and
   release variants pass. Device/provider end-to-end tests remain separate.
 - Dependencies: no unresolved high or critical production advisories. Two high
@@ -37,6 +43,10 @@ readiness.
   the newest is September 27 at 09:14:41 UTC. Point-in-time recovery is off.
   Daily recovery can lose almost a day's changes, depending on failure time.
   The dashboard explicitly excludes Storage objects from database backups.
+- Production Storage currently lists 342 objects across nine nonempty buckets,
+  with about 484 MB in recorded object sizes. These include stream recordings,
+  church images, and an attachment. The database backup does not preserve
+  those object bytes.
 - A production-backup restore was **not tested**. The offered restore-to-new-
   project path would incur an estimated $10.18/month while it exists and copy
   church data; the owner declined creating that project. The current connection

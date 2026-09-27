@@ -16,6 +16,7 @@
     "test:database": "tsx --test tests/database/**/*.test.ts",
     "test:concurrency": "node scripts/run-attendance-concurrency.mjs",
     "test:groups-database": "node scripts/run-groups-database-tests.mjs",
+    "test:backup-restore": "node scripts/rehearse-backup-restore.mjs",
     "test:contract": "tsx --test tests/unit/mobile-contract.test.ts",
     "test:migrations": "node scripts/verify-migration-baseline.mjs",
     "pilot:readiness": "node scripts/pilot-readiness.mjs",
