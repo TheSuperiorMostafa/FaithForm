@@ -4,7 +4,7 @@ import { cache } from "react";
 
 import { PageRenderer } from "@/components/sites/PageRenderer";
 import { getChurchAuth } from "@/lib/auth/church";
-import { isChurchFeatureEnabled } from "@/lib/features/access";
+import { isPublicFeatureEnabled } from "@/lib/features/public-access";
 import { canPreviewDraftSite, isPublicSitePublication } from "@/lib/sites/preview-access";
 import { getSiteBundle } from "@/lib/sites/queries";
 import { SECTION_REGISTRY } from "@/lib/sites/registry";
@@ -35,7 +35,7 @@ const siteIsVisible = cache(async function siteIsVisible(
   bundle: NonNullable<Awaited<ReturnType<typeof getSiteBundle>>>,
   previewRequested: boolean,
 ): Promise<boolean> {
-  if (!(await isChurchFeatureEnabled(bundle.churchId, "website"))) return false;
+  if (!(await isPublicFeatureEnabled(bundle.churchId, "website"))) return false;
   if (isPublicSitePublication(bundle.page.status, bundle.settings?.isPublished)) return true;
   if (!previewRequested) return false;
   return canPreviewDraftSite(bundle.churchId, await getChurchAuth());

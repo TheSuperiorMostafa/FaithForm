@@ -398,6 +398,14 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   publication read fails. The editor's live indicators use the same rule. A
   focused test covers each disagreement. This needs
   a production browser retest after rollout.
+- A separate feature-flag read error previously defaulted Website to enabled
+  on public routes, even if a platform admin had turned it off. The local
+  website and contact-form routes now deny access when that read fails. A
+  focused test covers the error, explicit off, explicit on, and untouched
+  default cases. A compiled local build against synthetic data showed the
+  Website-off page as 404 and rejected a contact POST with 404 and no stored
+  submission. The synthetic rows were removed. A production failure-path
+  retest is still needed after rollout.
 - After the QA welcome desk paired, the dashboard still said “Waiting to be
   set up” until its station list refreshed. The local panel now checks briefly
   while the one-use pairing code is displayed and also offers Refresh station

@@ -425,16 +425,23 @@ on its own.
   visibility on each request. Both the page and contact form now require the
   page status and site setting to say published before allowing anonymous
   access; a stale or failed setting read cannot expose a page marked offline.
+  A failed Website feature-flag read also denies public access, preserving a
+  platform admin's opt-out; a focused failure-path test passes.
   The Website editor's live indicators use the same rule.
   The patched local app displayed a 404 page to an
   anonymous Safari visit for the same QA draft preview. This is a live privacy
-  blocker until the fix is deployed and an anonymous production retest returns
-  404. The resulting dynamic
-  public-site path needs hosted load evidence before a 100-church claim.
-  The optimized local build compiled, but a loopback production-server browser
-  probe stopped at the app's required environment validation because this
-  isolated checkout has no production credentials. The anonymous compiled-build
-  response was a 503, so it is not evidence that the route guard ran there.
+  blocker until the fix is deployed and an anonymous production retest hides
+  the draft. A compiled local production server, connected only to synthetic
+  data through a temporary loopback HTTPS proxy, displayed the published site
+  and displayed 404 for an anonymous draft preview, either inconsistent
+  publication state, and an explicitly disabled Website. The disabled site's
+  contact endpoint returned 404 and stored no submission. The synthetic rows
+  were removed afterward. The earlier 503 from a local run with an invalid
+  HTTP Supabase URL was resolved by this isolated setup. Next.js streamed the
+  404 page with an initial HTTP 200 in one unpublished-site probe; the route
+  prevented content disclosure, but this response-status behavior needs review
+  for crawlers and monitoring. The dynamic public-site path still needs hosted
+  load evidence before a 100-church claim.
 - The live group meeting editor still writes its event and attendance window
   separately. Local migration 0114 makes them one transaction and passed a
   forced-failure rollback test. Its rollout and browser retest are outstanding.
