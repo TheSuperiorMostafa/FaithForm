@@ -158,13 +158,19 @@ export async function updateChurchProfile(
     if (data.logoUrl) update.logo_url = data.logoUrl;
   }
 
-  const { error } = await admin
+  const { data: updated, error } = await admin
     .from("churches")
     .update(update)
-    .eq("id", churchId);
+    .eq("id", churchId)
+    .is("onboarding_completed_at", null)
+    .select("id")
+    .maybeSingle();
 
   if (error) {
     return { ok: false, error: toUserError(error, "We couldn't save your church's details.") };
+  }
+  if (!updated) {
+    return { ok: false, error: "This church has already completed setup. Sign in to change its details." };
   }
 
   return { ok: true };
@@ -212,10 +218,20 @@ export async function uploadChurchLogo(
   // The path is reused on every upload, so the URL carries a version: without
   // it a re-framed logo keeps showing the old crop from every browser cache.
   const logoUrl = `${publicUrl.publicUrl}?v=${Date.now()}`;
-  await admin
+  const { data: updated, error: profileError } = await admin
     .from("churches")
     .update({ logo_url: logoUrl })
-    .eq("id", churchId);
+    .eq("id", churchId)
+    .is("onboarding_completed_at", null)
+    .select("id")
+    .maybeSingle();
+
+  if (profileError) {
+    return { ok: false, error: toUserError(profileError, "We couldn't save your logo to the church profile.") };
+  }
+  if (!updated) {
+    return { ok: false, error: "This church has already completed setup. Sign in to change its logo." };
+  }
 
   return { ok: true, logoUrl };
 }

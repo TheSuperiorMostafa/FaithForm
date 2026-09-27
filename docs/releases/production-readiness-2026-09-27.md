@@ -7,7 +7,7 @@ readiness.
 
 ## Verified in an isolated checkout
 
-- Web: typecheck, lint (zero errors), production build, 1,788 application tests,
+- Web: typecheck, lint (zero errors), production build, 1,789 application tests,
   generated-contract/design/localization checks, migration baseline check,
   secret scan, and feature-guard scan pass.
 - Database: the earlier 113 migrations applied to disposable PostgreSQL 15 and
@@ -143,6 +143,12 @@ readiness.
   tamper rejection, and unreadable invite content. Vercel's production variable
   list contains the required `INTEGRATION_OAUTH_STATE_SECRET`; provider
   connection still needs a browser retest after rollout.
+- Invite validation now closes every outstanding setup link once its church
+  finishes onboarding, including a duplicate link from a concurrent send.
+  The Google and Facebook callback access check also refuses a completed
+  church. Profile saves require a still-incomplete church and confirm that a
+  row changed; logo upload no longer reports success when the profile write
+  failed. Focused invite and OAuth tests pass. These guards are local only.
 - Family-name pickup search now pages through all matching people, family
   names, membership links, and that day's open check-ins. It filters for
   families with children still present before limiting the displayed matches.
