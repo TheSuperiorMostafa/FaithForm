@@ -119,6 +119,10 @@ readiness.
   and all 45 database tests pass. The updated web action calls this function,
   so 0116 must be applied before that web build is deployed. Neither change is
   live yet.
+- Room deletion now requires all three exact usage counts to succeed. A failed
+  count returns a retry message, so a room with history cannot look unused
+  merely because its database read failed. Typecheck, targeted lint, and the
+  55 focused Check-in tests pass. This change is local only.
 
 ## Live production findings on 2026-09-27 (read-only)
 

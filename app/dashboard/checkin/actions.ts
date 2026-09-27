@@ -260,11 +260,13 @@ export async function checkLocationDeletion(
   const context = await requireAdmin();
   if (!isContext(context)) return context;
 
-  const usage = await locationUsage(
-    context.auth.churchId,
-    locationId,
-    createClient(),
-  );
+  let usage: Awaited<ReturnType<typeof locationUsage>>;
+  try {
+    usage = await locationUsage(context.auth.churchId, locationId, createClient());
+  } catch (error) {
+    console.error("[checkin] room usage check failed:", error);
+    return fail("We couldn't check this room's history. Please try again.");
+  }
 
   return {
     ok: true,
@@ -279,7 +281,13 @@ export async function deleteLocation(formData: FormData): Promise<ActionResult> 
   const id = text(formData, "locationId");
   if (!id) return fail("Pick a room.");
 
-  const usage = await locationUsage(context.auth.churchId, id, createClient());
+  let usage: Awaited<ReturnType<typeof locationUsage>>;
+  try {
+    usage = await locationUsage(context.auth.churchId, id, createClient());
+  } catch (error) {
+    console.error("[checkin] room usage check failed:", error);
+    return fail("We couldn't check this room's history. Please try again.");
+  }
 
   if (usage.sessions > 0 || usage.defaultFor > 0) {
     return fail(

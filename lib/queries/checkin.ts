@@ -118,10 +118,16 @@ export async function locationUsage(
       .in("status", ["pre_checked_in", "checked_in"]),
   ]);
 
+  if (sessions.error || defaultFor.error || openNow.error ||
+      !Number.isSafeInteger(sessions.count) || !Number.isSafeInteger(defaultFor.count) ||
+      !Number.isSafeInteger(openNow.count)) {
+    throw new Error("room usage read failed");
+  }
+
   return {
-    sessions: sessions.count ?? 0,
-    defaultFor: defaultFor.count ?? 0,
-    openNow: openNow.count ?? 0,
+    sessions: sessions.count as number,
+    defaultFor: defaultFor.count as number,
+    openNow: openNow.count as number,
   };
 }
 
