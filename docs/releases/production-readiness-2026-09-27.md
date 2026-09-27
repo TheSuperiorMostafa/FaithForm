@@ -66,6 +66,10 @@ readiness.
   Storage metadata rows. The restored local database and temporary logs were
   deleted. The local archive remains; it is on the same computer, not an
   independent offsite backup.
+- FileVault is enabled on the Mac holding these archives. Time Machine reports
+  no configured destination, so neither local archive currently has an
+  independent backup location. Copying them elsewhere requires an approved
+  destination that protects the church and member data.
 - Supabase's managed physical-backup restore remains **untested**. The offered
   restore-to-new-project path would incur an estimated $10.18/month while it
   exists and copy church data; the owner declined creating that project. The
