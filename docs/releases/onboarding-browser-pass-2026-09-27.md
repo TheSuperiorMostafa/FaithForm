@@ -125,20 +125,35 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   `announcements.facebook_scheduled_publish_time`. The takedown action's old
   fallback removed all three optional fields when only the Facebook column
   was missing. The QA row therefore became pending without a takedown
-  timestamp, so the recovery list omitted it. Local code now retries after
-  dropping only the particular missing column. The repair is not deployed;
-  any already affected pending rows need a separate, careful recovery plan.
+  timestamp, so the recovery list omitted it. A second fresh QA item, this
+  time with no event date, posted and edited successfully, then reproduced
+  the same missing recovery list after takedown and browser reload. Local code
+  now retries after dropping only the particular missing optional column,
+  requires the takedown timestamp, checks that a row actually changed, and
+  changes the canonical row before withdrawing its app projection. The repair
+  is not deployed; any already affected pending rows need a separate,
+  careful recovery plan. Do not backfill a timestamp for every pending draft:
+  some were never posted.
 - The two-email first-admin setup is a confirmed onboarding friction point:
   FaithForm's own invite already reaches the target mailbox, then ordinary
   Supabase sign-up sends a second confirmation. Local code now creates a
   confirmed Auth user through the trusted admin API only after validating the
   emailed church invite and exact address, then signs the user in. Public
   sign-up verification remains enabled. This change is not deployed and needs
-  a fresh one-email browser rehearsal. Supabase also offers a native
+  a fresh one-email browser rehearsal. The intended church setup is **one
+  emailed link**, followed by password creation and sign-in without another
+  email prompt. This does not change Google OAuth consent or Google's separate
+  verification of FaithForm's Google integration. Supabase documents a native
   [single-invite flow](https://supabase.com/docs/guides/auth/users#inviting-users)
-  that should be considered for a later simplification. OWASP recommends
-  [single-use, time-limited verification tokens](https://cheatsheetseries.owasp.org/cheatsheets/Email_Validation_and_Verification_Cheat_Sheet.html#email-ownership-verification);
-  the current custom church invite remains valid until onboarding completes.
+  as a possible later simplification; its invite link confirms the address and
+  opens account setup. OWASP recommends
+  [single-use, time-limited verification tokens](https://cheatsheetseries.owasp.org/cheatsheets/Email_Validation_and_Verification_Cheat_Sheet.html#email-ownership-verification).
+  FaithForm's custom token is random and expires after seven days, but stays
+  usable through all six setup steps and is only closed at completion. Before
+  broad onboarding, rehearse retries, expired links, forwarded links, and
+  concurrent account setup, then retire or exchange the token as soon as the
+  verified account has an authenticated session without stranding a partially
+  onboarded church.
 - The live Step 6 handler wrote the invite acceptance and church completion
   before the admin membership and ignored errors on those first two writes.
   A membership failure could leave a completed church with no admin and an
@@ -174,8 +189,8 @@ as deployed or measure hosted load at 100 churches.
 
 ## Local verification after these findings
 
-The edited files passed TypeScript checking and targeted ESLint. All 441
-security tests passed, including checks for the one-email invite path and
-retryable finalization. A fresh optimized production build completed. The
-build emitted existing lint warnings outside the edited files. No code was
-pushed or deployed.
+The local changes passed TypeScript checking, targeted ESLint, 17 focused
+announcement tests including older-schema fallback cases, all 441 security
+tests including the one-email invite and retryable finalization checks, and an
+optimized production build. The build emitted existing lint warnings outside
+the edited files. No code was pushed or deployed.

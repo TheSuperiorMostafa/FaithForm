@@ -244,6 +244,14 @@ on its own.
   tenant rehearsal after rollout. Step 6 also needs the local checked-write
   ordering fix before onboarding more churches; the current live order can
   close an invite before creating the church-admin membership.
+- Google showed an unverified-app warning before the QA church could connect
+  the owner's Gmail. The owner reports that Google verification has already
+  been requested; approval and a successful consent/connection test have not
+  been observed. Keep this separate from FaithForm's redundant onboarding
+  email. The requested Gmail compose scope can also send mail, so review the
+  scope disclosure and approval status before offering Google connections to
+  new churches. See Google's
+  [Gmail scope descriptions](https://developers.google.com/workspace/gmail/api/auth/scopes).
 - A successful Supabase physical-backup restore test, a provider-side Storage
   restore rehearsal, an independent encrypted location for the local database
   and Storage archives, and documented recovery time and data-loss targets.
