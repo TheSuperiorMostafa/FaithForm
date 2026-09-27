@@ -31,7 +31,9 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   correct active-tenant warning and name.
 - People: empty-state, required first-name validation, two member creations,
   optional email save, and care-note save succeeded. The dummy email is on an
-  `.invalid` domain. No phone was entered.
+  `.invalid` domain. No phone was entered. A later search for the QA child
+  returned only that member; combining it with “On the app” returned an empty
+  result, and “Show everyone” cleared both search and filter.
 - Family: created a synthetic household with a guardian, linked a second
   synthetic member as its child, and verified both role labels.
 - Kids Check-in: required room-name validation, room creation with capacity
@@ -108,6 +110,14 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   showed Google, iCloud, YouTube, and Facebook as disconnected. Switching the
   member-app palette to Forest and wheat persisted. The Phone Calls empty
   state loaded.
+- Group settings: changed the QA group's About text, saved, reloaded to verify
+  persistence, then restored and saved the original description. Both saves
+  showed “All changes saved” and the final value matched the original.
+- Connected accounts: the iCloud Calendar link form opened with iPhone, Mac,
+  and iCloud.com instructions. A deliberately invalid synthetic link was
+  rejected with a clear iCloud-specific message. The alternate Apple ID form
+  correctly explained the separate app-specific password; no credentials were
+  entered and no calendar connected.
 - Messages & email: the weekly subject rejected a value without `[Week]` with
   the expected validation error. A valid QA subject saved and persisted after
   reload; the standard wording was then restored and verified after reload.
@@ -228,3 +238,9 @@ optimized production build. The build emitted existing lint warnings outside
 the edited files. No code was pushed or deployed.
 The later Live picker refresh change passed TypeScript checking and targeted
 ESLint; it still needs a browser check after rollout.
+After the service-time and Groups dialog changes, the full local suite passed
+all 1,764 tests, including the localhost-only streaming auth test. The
+expired-switch middleware now uses the shared route gate, and its security
+check passed. TypeScript checking, targeted lint, and the optimized production
+build passed again; the build still reports existing lint warnings outside
+these edits. No code was pushed or deployed.

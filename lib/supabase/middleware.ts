@@ -206,6 +206,10 @@ export async function updateSession(request: NextRequest) {
     response = withSessionState(NextResponse.next({ request }));
   }
 
+  // Keep the route decision in one place, including the expired-switch guard
+  // below. A second path prefix check can drift from the actual sign-in gate.
+  const gate = routeGate(request.nextUrl.pathname);
+
   // A client-side route transition can retain the old church banner while a
   // newly rendered page or action resolves the admin's own church after this
   // note expires. Deny that first request before it can read or write there.
@@ -217,7 +221,7 @@ export async function updateSession(request: NextRequest) {
     !claimsError &&
     actingClaims.adminUserId === userId &&
     actingClaims.exp * 1000 <= Date.now() &&
-    (request.nextUrl.pathname.startsWith("/dashboard") || request.nextUrl.pathname.startsWith("/api/"))
+    (gate === "signed_in" || request.nextUrl.pathname.startsWith("/api/"))
   ) {
     const url = request.nextUrl.clone();
     url.pathname = "/admin";
@@ -233,8 +237,6 @@ export async function updateSession(request: NextRequest) {
   // What is gated lives in `routeGate`, where it can be tested without a
   // request. Anything it calls public — the legal pages, giving, watch, sign-in
   // — falls through every branch below untouched.
-  const gate = routeGate(request.nextUrl.pathname);
-
   if (gate === "onboarding") {
     return response;
   }

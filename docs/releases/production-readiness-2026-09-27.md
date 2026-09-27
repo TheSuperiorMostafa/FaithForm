@@ -7,7 +7,7 @@ readiness.
 
 ## Verified in an isolated checkout
 
-- Web: typecheck, lint (zero errors), production build, 1,757 application tests,
+- Web: typecheck, lint (zero errors), production build, 1,764 application tests,
   generated-contract/design/localization checks, migration baseline check,
   secret scan, and feature-guard scan pass.
 - Database: the earlier 113 migrations applied to disposable PostgreSQL 15 and

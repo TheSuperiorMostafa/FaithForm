@@ -37,8 +37,11 @@ test("expired church switches are denied before dashboard routes or actions run"
   const middleware = readFileSync("lib/supabase/middleware.ts", "utf8");
   const actions = readFileSync("app/admin/impersonation-actions.ts", "utf8");
   assert.match(middleware, /actingClaims\.exp \* 1000 <= Date\.now\(\)/);
-  assert.ok(middleware.indexOf("actingClaims.exp * 1000 <= Date.now()") < middleware.indexOf("routeGate(request.nextUrl.pathname)"));
-  assert.match(middleware, /request\.nextUrl\.pathname\.startsWith\("\/dashboard"\)/);
+  // The expiry check uses the shared route gate and precedes any gated
+  // response. It must not duplicate the dashboard prefix rule inline.
+  assert.ok(middleware.indexOf("routeGate(request.nextUrl.pathname)") < middleware.indexOf("actingClaims.exp * 1000 <= Date.now()"));
+  assert.ok(middleware.indexOf("actingClaims.exp * 1000 <= Date.now()") < middleware.indexOf('if (gate === "onboarding")'));
+  assert.match(middleware, /gate === "signed_in" \|\| request\.nextUrl\.pathname\.startsWith\("\/api\/"\)/);
   assert.match(middleware, /request\.nextUrl\.pathname\.startsWith\("\/api\/"\)/);
   assert.match(actions, /maxAge: 24 \* 60 \* 60/);
 });
