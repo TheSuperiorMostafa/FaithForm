@@ -135,6 +135,7 @@ export type ActiveImpersonation = {
   adminUserId: string;
   adminEmail: string | null;
   churchName: string | null;
+  expiresAt: number;
 };
 
 /**
@@ -178,6 +179,7 @@ async function resolveActiveImpersonation(): Promise<ActiveImpersonation | null>
   return {
     churchId: church.id as string,
     adminUserId: note.adminUserId,
+    expiresAt: note.exp * 1000,
     adminEmail:
       typeof claims?.claims?.email === "string" ? claims.claims.email : null,
     churchName: (church.name as string | null) ?? null,

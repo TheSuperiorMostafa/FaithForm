@@ -15,8 +15,17 @@ import { base, Empty, GroupAvatar, Notice } from "./shared";
 import { peopleCount, reachSentence } from "./labels";
 import "stream-chat-react/dist/css/index.css";
 
+class ChatAccessError extends Error {}
+
 async function session(): Promise<ChatSessionDto> {
   const response = await fetch("/api/dashboard/messaging/token", { method: "POST", credentials: "same-origin", cache: "no-store" });
+  if (response.status === 403) {
+    const body: unknown = await response.json().catch(() => null);
+    const message = body && typeof body === "object" && "error" in body && typeof body.error === "string"
+      ? body.error
+      : "Messages aren't available for this account here.";
+    throw new ChatAccessError(message);
+  }
   if (!response.ok) throw new Error("unavailable");
   return response.json();
 }
@@ -30,7 +39,7 @@ function Reach({ reach, readOnly }: { reach?: { onApp: number; total: number } |
 export function GroupChat({ cid, groupId, state, reach }: { cid: string | null; groupId: string; state: string; reach?: { onApp: number; total: number } | null }) {
   const { resolved } = useTheme();
   const [connected, setConnected] = useState<{ client: StreamChat; channel: StreamChannel; suspended: boolean } | null>(null);
-  const [error, setError] = useState<string | null>(null); const [retry, setRetry] = useState(0);
+  const [error, setError] = useState<{ message: string; retryable: boolean } | null>(null); const [retry, setRetry] = useState(0);
   useEffect(() => {
     if (!cid || state === "unavailable") return;
     let cancelled = false; let client: StreamChat | null = null;
@@ -45,14 +54,18 @@ export function GroupChat({ cid, groupId, state, reach }: { cid: string | null; 
         const channel = client.channel(cid.slice(0, separator), cid.slice(separator + 1));
         await channel.watch();
         if (!cancelled) { setConnected({ client, channel, suspended: auth.suspended }); void markRead(groupId); }
-      } catch { if (!cancelled) setError("We couldn’t open this chat. The group is fine, and nothing was lost."); }
+      } catch (cause) {
+        if (!cancelled) setError(cause instanceof ChatAccessError
+          ? { message: cause.message, retryable: false }
+          : { message: "We couldn’t open this chat. The group is fine, and nothing was lost.", retryable: true });
+      }
     };
     const task = connect();
     return () => { cancelled = true; void task.finally(async () => { await client?.disconnectUser().catch(() => undefined); }); };
   }, [cid, groupId, state, retry]);
 
   if (!cid || state === "unavailable") return <Empty icon="messages" compact title="Chat isn’t available for this group" description="Group chat is turned off for this group or for your church, or it’s still being set up. You can turn it on in Group settings." />;
-  if (error) return <div className="space-y-4"><Reach reach={reach} readOnly={state === "read_only"} /><Empty icon="messages" compact title="This chat didn’t open" description={error}><Button onClick={() => setRetry(r => r + 1)}><RotateCcw className="size-5" aria-hidden />Try again</Button></Empty></div>;
+  if (error) return <div className="space-y-4"><Reach reach={reach} readOnly={state === "read_only"} /><Empty icon="messages" compact title={error.retryable ? "This chat didn’t open" : "Chat isn't available from this account"} description={error.message}>{error.retryable && <Button onClick={() => setRetry(r => r + 1)}><RotateCcw className="size-5" aria-hidden />Try again</Button>}</Empty></div>;
   const readOnly = state === "read_only" || Boolean(connected?.suspended);
   return <div className="flex min-w-0 flex-col gap-4">
     <Reach reach={reach} readOnly={readOnly} />

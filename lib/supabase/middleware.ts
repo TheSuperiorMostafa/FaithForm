@@ -2,6 +2,7 @@ import { createServerClient, type CookieOptions } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import {
   IMPERSONATION_COOKIE,
+  impersonationNoteClaims,
   impersonationNoteOwner,
 } from "@/lib/auth/impersonation-note";
 import { routeGate } from "@/lib/auth/route-access";
@@ -203,6 +204,30 @@ export async function updateSession(request: NextRequest) {
       { name: IMPERSONATION_COOKIE, value: "", options: { path: "/", maxAge: 0 } },
     ];
     response = withSessionState(NextResponse.next({ request }));
+  }
+
+  // A client-side route transition can retain the old church banner while a
+  // newly rendered page or action resolves the admin's own church after this
+  // note expires. Deny that first request before it can read or write there.
+  // Parsing here can only remove access; the signed verification remains in
+  // the server-side church context.
+  const actingClaims = actingNote ? impersonationNoteClaims(actingNote) : null;
+  if (
+    actingClaims &&
+    !claimsError &&
+    actingClaims.adminUserId === userId &&
+    actingClaims.exp * 1000 <= Date.now() &&
+    (request.nextUrl.pathname.startsWith("/dashboard") || request.nextUrl.pathname.startsWith("/api/"))
+  ) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/admin";
+    url.search = "";
+    request.cookies.delete(IMPERSONATION_COOKIE);
+    pendingCookies = [
+      ...pendingCookies.filter((cookie) => cookie.name !== IMPERSONATION_COOKIE),
+      { name: IMPERSONATION_COOKIE, value: "", options: { path: "/", maxAge: 0 } },
+    ];
+    return withSessionState(NextResponse.redirect(url, 303));
   }
 
   // What is gated lives in `routeGate`, where it can be tested without a

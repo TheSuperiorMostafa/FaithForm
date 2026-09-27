@@ -36,7 +36,7 @@ export default async function DashboardLayout({
         allowedFeatures={featureAccess?.allowed ?? []}
         banner={
           auth.impersonation ? (
-            <ImpersonationBanner churchName={auth.churchName} />
+            <ImpersonationBanner churchName={auth.churchName} expiresAt={auth.impersonation.expiresAt} />
           ) : null
         }
       >

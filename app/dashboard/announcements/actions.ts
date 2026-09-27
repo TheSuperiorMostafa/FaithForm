@@ -925,8 +925,9 @@ export async function unsubmitAnnouncement(
     unsubmitted_by: ctx.user.id,
   };
 
-  // Drops whichever of the 0014/0041 columns this database is missing. The
-  // rewind itself — status, flags, the Facebook post id — always applies.
+  // Drop only the optional column that is actually missing. A database can
+  // have the 0041 takedown columns but lack the earlier Facebook schedule
+  // column; dropping all three hides the announcement from Post again.
   function rowWithout(
     data: typeof rewind,
     keys: Array<keyof typeof rewind>,
@@ -936,22 +937,23 @@ export async function unsubmitAnnouncement(
     return rest;
   }
 
+  const optionalColumns = ["facebook_scheduled_publish_time", "unsubmitted_at", "unsubmitted_by"] as const;
+  const omitted: Array<(typeof optionalColumns)[number]> = [];
   let { error } = await ctx.supabase
     .from("announcements")
     .update(rewind)
     .eq("id", id)
     .eq("church_id", ctx.churchId);
 
-  if (error && /unsubmitted_(at|by)|facebook_scheduled_publish_time/i.test(error.message)) {
+  while (error && omitted.length < optionalColumns.length) {
+    const missing = optionalColumns.find(
+      (column) => error?.message.includes(column) && !omitted.includes(column),
+    );
+    if (!missing) break;
+    omitted.push(missing);
     ({ error } = await ctx.supabase
       .from("announcements")
-      .update(
-        rowWithout(rewind, [
-          "unsubmitted_at",
-          "unsubmitted_by",
-          "facebook_scheduled_publish_time",
-        ]),
-      )
+      .update(rowWithout(rewind, omitted))
       .eq("id", id)
       .eq("church_id", ctx.churchId));
   }

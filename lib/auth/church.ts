@@ -34,6 +34,7 @@ export type ChurchAuth = {
   impersonation?: {
     adminUserId: string;
     adminEmail: string | null;
+    expiresAt: number;
   };
 };
 
@@ -181,6 +182,7 @@ async function getImpersonatedChurchAuth(): Promise<ChurchAuth | null> {
     impersonation: {
       adminUserId: acting.adminUserId,
       adminEmail: acting.adminEmail,
+      expiresAt: acting.expiresAt,
     },
   };
 }

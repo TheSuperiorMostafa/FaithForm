@@ -834,7 +834,10 @@ export function SimpleSermonBuilder({
                   setVerseEnd(
                     clampNumber(
                       e.target.value,
-                      Number(verseStart) || 1,
+                      // Allow a partial number while typing (for example, the
+                      // first "1" of "17" after verse 3). The draft remains
+                      // invalid until the completed end reaches the start.
+                      1,
                       maxVerses || undefined,
                     ),
                   );
