@@ -248,6 +248,13 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
 
 ## Issues found
 
+- The QA Phone Calls page correctly showed its empty state. Code review found
+  the same empty state would also appear after a failed `phone_calls` read,
+  potentially hiding calls that need attention. The local query now throws on
+  read failure, including a failed legacy-schema retry; only a confirmed
+  missing scoring column triggers that retry. Voice settings reads likewise
+  report an error instead of pretending no agent is configured. Focused
+  failure-path tests pass; a browser error-path retest needs the rollout.
 - Group chat shows a retryable “This chat didn’t open” error in the platform
   admin church-switch session. The server intentionally denies chat tokens to
   impersonating platform staff. The UI should explain this restriction instead

@@ -466,6 +466,12 @@ on its own.
   setting reads now report errors instead of presenting false “off” defaults.
   These changes need a browser retest after
   rollout. Both QA features were turned off again.
+- The QA Phone Calls page had no calls. Its query previously treated a failed
+  database read as an empty list, so a real outage could have displayed “No
+  calls yet.” The local query and voice-settings reader now fail visibly, and
+  the old-schema call fallback is limited to a confirmed missing column. All
+  56 focused phone-call and read-error tests pass with typecheck and lint. A
+  controlled browser failure-path retest remains after rollout.
 - The live website publish control writes page status and site settings in
   separate requests. Local migration 0121 saves both in one transaction. All
   50 database tests pass, including a forced second-write failure that leaves
