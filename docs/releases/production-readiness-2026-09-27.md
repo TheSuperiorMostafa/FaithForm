@@ -420,8 +420,14 @@ on its own.
   code review found that a failed recording-settings read could display false
   defaults, including the wrong automatic-publication choice. The local fix
   fails visibly on read errors and passed focused tests. It needs rollout and
-  a controlled failure-path browser check; actual video and recording are
-  still untested.
+  a controlled failure-path browser check. A short QA camera broadcast then
+  reached Live, recorded 48 seconds, ended, and produced a playable recording
+  that remains unpublished. The first browser-studio attempt failed because a
+  new church had no stream credentials until Go live; the local studio path now
+  provisions them through an authenticated same-origin request. End service
+  also left Safari capture active until navigation; the local success path now
+  stops the studio. Both fixes need browser retests after rollout. Recording
+  publication to the app and website remains untested.
 - Onboarding currently sends a redundant second confirmation email after the
   church invite. A local one-email account-creation change is ready for a new
   tenant rehearsal after rollout. Step 6 also needs the local checked-write

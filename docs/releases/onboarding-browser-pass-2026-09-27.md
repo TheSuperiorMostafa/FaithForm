@@ -121,8 +121,7 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   in desktop and phone previews; the phone menu opened.
 - Live: one-off service scheduling for September 28 succeeded, and cancellation
   removed it from Upcoming while preserving a Cancelled record. The empty
-  Recordings view and streaming setup instructions loaded. No actual video
-  stream was started.
+  Recordings view and streaming setup instructions loaded.
 - Live setup: clicked through OBS Studio, ATEM Mini, vMix, this computer, and
   the volunteer/company instructions. Device choice survived a reload. The
   recording audience changed to followers and back to Everyone, and both
@@ -132,8 +131,7 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   website publication on, no default series, and both notifications off.
   Recordings' Published and Series filters showed appropriate empty states.
   Upcoming showed the two cancelled QA services and disabled slide linking
-  while no service is scheduled. No camera, microphone, video relay, or
-  actual recording was tested.
+  while no service is scheduled. The later live cycle is described below.
 - A second one-off QA service for September 30 saved its name, time,
   countdown, and live-chat choices. The published QA sermon's slides linked to
   it, stayed linked after reload, and could be removed again. Cancelling the
@@ -146,6 +144,18 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   staff. The local fix now interprets it in the church's time zone and rejects
   nonexistent daylight-saving times; the server requires an explicit UTC time.
   This correction passed focused tests and type checking but is not deployed.
+- Live video and recording: with explicit owner approval, Safari was granted
+  camera and microphone access for the QA church. Starting the studio before
+  the first Go live failed with a streaming-service configuration error. After
+  choosing the OBS setup path and pressing Go live, a clearly titled QA
+  service entered Waiting for video. Starting the browser studio then connected
+  the same camera; Live showed recording in progress. End service saved a
+  48-second recording, which became reviewable and played a real camera frame
+  in Safari. The recording remains unpublished. The browser's capture indicator
+  remained active on the ended-service screen and cleared when navigating to
+  Recordings. The original computer source and manual-review publication
+  choice were restored and verified after reload; YouTube and Facebook were
+  never connected.
 - Settings: the new tenant's Team view was empty and showed admin, staff,
   volunteer, and custom permission choices. Connected accounts correctly
   showed Google, iCloud, YouTube, and Facebook as disconnected. Switching the
@@ -154,7 +164,10 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
 - Church details: the QA contact-email field rejected malformed text in the
   browser without saving it. A synthetic `.invalid` address saved and survived
   a full reload; clearing and saving it again restored the original empty
-  value, also verified after reload. No email was sent.
+  value, also verified after reload. A blank added service time was omitted on
+  save as the UI promised. A named Wednesday QA service time saved and survived
+  a reload, then was removed; another reload showed only the original Sunday
+  service. No email was sent.
 - Group settings: changed the QA group's About text, saved, reloaded to verify
   persistence, then restored and saved the original description. Both saves
   showed “All changes saved” and the final value matched the original.
@@ -305,14 +318,26 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   publication. The local read now fails visibly on database errors; an actual
   missing row still gets defaults. Both cases passed focused tests. This is
   not deployed or browser retested.
+- A new church could not start the browser studio before its first Go live:
+  the studio configuration endpoint only read stream credentials, while the
+  first Go live or stream-key reveal created them. The QA browser reproduced
+  the failure, then connected successfully after Go live provisioned the
+  credentials. The local studio request now provisions credentials for an
+  authenticated church admin through a same-origin POST before connecting;
+  integration read errors now fail rather than masquerading as a missing key.
+  This needs a first-use browser retest after rollout.
+- Ending a browser-camera service did not stop local capture. The QA recording
+  ended and became playable, but Safari still showed active media capture on
+  the ended-service screen until navigation unmounted the studio. The local
+  End service success path now stops the studio immediately. This needs a
+  browser retest after rollout.
 
 ## Still in progress
 
 - A fresh browser rehearsal of the one-email local fix and failure paths,
-  plus optional provider connections, actual live video, payment processing,
-  and mobile push.
-- Other media, group chat as church staff, actual live video and recording,
-  payment/bank onboarding, external integrations,
+  plus optional provider connections, payment processing, and mobile push.
+- Other media, recording publication in the app and website, group chat as
+  church staff, payment/bank onboarding, external integrations,
   first-admin permissions, other settings, and provider paths.
 - Repeat checks for regressions and cleanup decision for the QA tenant.
 
@@ -334,3 +359,8 @@ expired-switch middleware now uses the shared route gate, and its security
 check passed. TypeScript checking, targeted lint, and the optimized production
 build passed again; the build still reports existing lint warnings outside
 these edits. No code was pushed or deployed.
+The live first-use and capture-shutdown fixes passed TypeScript checking,
+targeted lint, 1,794 unit/security/policy tests, and an optimized production
+build. The loopback relay test needed permission to bind to 127.0.0.1 in the
+local sandbox; it passed when run with that permission. Existing lint warnings
+remain outside the changed streaming files. No code was pushed or deployed.
