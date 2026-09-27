@@ -98,6 +98,11 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   stayed disconnected; no video was uploaded or broadcast. In Safari's native
   date-time control, the date looked complete but submission returned
   “Invalid value” until month and year segments were explicitly entered.
+  Code review found that the scheduling form treated the entered start time as
+  the staff member's computer time, which could shift a service for remote
+  staff. The local fix now interprets it in the church's time zone and rejects
+  nonexistent daylight-saving times; the server requires an explicit UTC time.
+  This correction passed focused tests and type checking but is not deployed.
 - Settings: the new tenant's Team view was empty and showed admin, staff,
   volunteer, and custom permission choices. Connected accounts correctly
   showed Google, iCloud, YouTube, and Facebook as disconnected. Switching the
@@ -118,8 +123,9 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   test after the invite/password handoff.
 - After the group meeting saved and appeared in Coming up, a “Discard changes?”
   prompt surfaced. Choosing “Keep editing” left the saved meeting visible.
-  The save/close flow should be checked so users are not led to think a
-  successful save was lost.
+  The shared Groups dialog now ignores a native close notification that
+  arrives after a successful controlled close. This local fix still needs
+  browser verification after rollout.
 - The production Church App cannot save quick links because the active
   `churches` table lacks `app_links` (Postgres 42703). The UI says links are
   unavailable. Save & publish still saves other profile fields but leaves the

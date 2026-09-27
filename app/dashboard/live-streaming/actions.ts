@@ -343,8 +343,14 @@ export async function createScheduledStream(
     return { ok: false, error: "Give the service a name and a start time." };
   }
 
+  // The scheduling form converts church wall time to an explicit UTC instant.
+  // Refuse zone-less values so other callers cannot accidentally use the
+  // server's local clock for a church service.
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(startsAtRaw)) {
+    return { ok: false, error: "Choose a valid start date and time." };
+  }
   const startsAt = new Date(startsAtRaw);
-  if (Number.isNaN(startsAt.getTime())) {
+  if (Number.isNaN(startsAt.getTime()) || startsAt.toISOString() !== startsAtRaw) {
     return { ok: false, error: "Choose a start date and time." };
   }
 

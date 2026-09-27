@@ -71,7 +71,10 @@ export function Modal({ title, description, open, onClose, children, wide = fals
     const discard = await confirmAction({ title: "Discard changes?", description: "What you entered in this form will be lost.", confirmLabel: "Discard changes", cancelLabel: "Keep editing", destructive: true });
     if (discard) onClose();
   }
-  return <Dialog open={open} onOpenChange={value => { if (!value) void requestClose(); }}>
+  // A successful save closes the controlled dialog first. Its native `close`
+  // event can then request another close; only an open dialog should ask
+  // whether unsaved edits may be discarded.
+  return <Dialog open={open} onOpenChange={value => { if (!value && open) void requestClose(); }}>
     <DialogContent
       aria-labelledby={id}
       aria-describedby={description ? `${id}-description` : undefined}

@@ -21,6 +21,7 @@ import { SectionHeader } from "@/components/ui/page-header";
 import { StatusBadge, type StatusTone } from "@/components/ui/status-badge";
 import type { StreamEvent } from "@/lib/stream/events";
 import { formatServiceTime } from "@/lib/stream/format";
+import { churchServiceStartIso } from "@/lib/stream/schedule-time";
 import { serviceStatusLabel } from "@/lib/stream/user-errors";
 import { cn } from "@/lib/utils";
 
@@ -72,11 +73,15 @@ export function ScheduleCard({
 
   const handleCreate = (form: HTMLFormElement) => {
     const formData = new FormData(form);
-    // The browser knows which time zone "10:00" was typed in; the server
-    // doesn't. Send an exact moment instead of a wall-clock string.
+    // Services are church events. Interpret the entered wall-clock time in
+    // the church's zone, even when an admin's computer is somewhere else.
     const raw = formData.get("starts_at")?.toString() ?? "";
-    const parsed = raw ? new Date(raw) : null;
-    if (parsed && !Number.isNaN(parsed.getTime())) formData.set("starts_at", parsed.toISOString());
+    const startsAt = churchServiceStartIso(raw, timeZone);
+    if (!startsAt) {
+      toast.error("Choose a valid date and time on your church's clock.");
+      return;
+    }
+    formData.set("starts_at", startsAt);
     const title = formData.get("title")?.toString().trim() || "The service";
 
     startTransition(async () => {
@@ -147,6 +152,9 @@ export function ScheduleCard({
             <div className="flex flex-col gap-2">
               <Label htmlFor="event-starts">Date and start time</Label>
               <Input id="event-starts" name="starts_at" type="datetime-local" required />
+              <p className="text-sm text-muted-foreground">
+                Enter the start time in your church&apos;s time zone.
+              </p>
             </div>
           </div>
 
