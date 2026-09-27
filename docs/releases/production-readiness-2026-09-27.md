@@ -7,11 +7,13 @@ readiness.
 
 ## Verified in an isolated checkout
 
-- Web: typecheck, lint (zero errors), production build, 1,755 application tests,
+- Web: typecheck, lint (zero errors), production build, 1,757 application tests,
   generated-contract/design/localization checks, migration baseline check,
   secret scan, and feature-guard scan pass.
-- Database: all 113 migrations apply to disposable PostgreSQL 15 and 17
-  databases; all 42 database tests pass, including cross-church, per-feature,
+- Database: the earlier 113 migrations applied to disposable PostgreSQL 15 and
+  17; the current 115-migration chain also passed a fresh PostgreSQL 17
+  archive-and-restore rehearsal.
+  All 42 database tests pass, including cross-church, per-feature,
   and view-access denial probes. The additive
   `0111_announcement_status_view_invoker.sql` migration resolves the live
   Security Advisor's SECURITY DEFINER view finding. It is local only.
@@ -36,6 +38,36 @@ readiness.
 - The existing read-only dashboard benchmark against the matching Supabase
   project measured median query times of 121–285 ms for the newer query shapes
   in its sample. This is a small sample, not a concurrent-load result.
+- Platform admin totals, church list counts and last activity, and analytics
+  now use server-role-only PostgreSQL aggregates in migration 0112. This removes
+  the silent 1,000-row truncation from those reports. Admin user listing and
+  the temporary pre-migration fallback page through all rows. The updated web
+  build and all 1,757 application tests pass.
+
+## Local 100-church rehearsal
+
+- A disposable Docker PostgreSQL 17.6 database restored the approved production
+  archive, then accepted migration 0112. The test added 96 synthetic churches
+  to the four restored churches, with 12 staff memberships, 20 sermons, 20
+  successful gifts, 20 activity records, and 30 days of daily usage per new
+  church. This crossed 1,000 rows in the tables whose admin reports had been
+  truncated.
+- The server-role aggregates returned exact totals: 100 churches, 14,088
+  saved minutes, 1,970,604 cents in successful gifts, 20,999,872 dashboard
+  seconds, and 100 active churches. All 96 synthetic churches had the expected
+  12 users, 20 sermons, and a last-activity time. Analytics counted all 1,920
+  synthetic sermons and 1,920 synthetic activity records. `anon` and
+  `authenticated` cannot execute these aggregate functions.
+- A bounded, read-only 15-second database check with 20 concurrent clients
+  completed 11,107 transactions with zero failures, averaging 27 ms per
+  transaction. Each transaction called all three aggregate functions. This
+  checks the local database implementation; it does not measure Vercel,
+  hosted Supabase resources, API behavior, providers, or Sunday user traffic.
+- The local catch-up migration 0113 applied transactionally to the restored
+  production schema with all 100 churches intact. A rollback-only insert of a
+  group-chat notification and a church domain request succeeded; neither test
+  row remained afterward. Anonymous and authenticated roles cannot execute the
+  new church-app projection functions, while the server role can.
 
 ## Live production findings on 2026-09-27 (read-only)
 
@@ -92,11 +124,24 @@ readiness.
 - The production database is PostgreSQL 17.6. It has no
   `supabase_migrations.faithform_source_migrations` table, so the local versioned
   migration ledger cannot establish which source SQL files were applied there.
-  Do a deployed-schema and migration-history reconciliation before executing
-  either new migration. Do not replay the full local chain onto production.
-  Read-only checks did confirm that the feature-gate function and the member
-  and file columns referenced by 0110 exist; this is a prerequisite check,
-  not a complete schema diff.
+  A schema-object comparison between the restored production archive and a
+  fresh source-migration database found partially applied older migrations.
+  Production lacks three high-use indexes, follow-up and Facebook schedule
+  columns, church-app links and two projections, group notification targeting,
+  and the domain-request queue and provisioning fields. Migration 0113 adds
+  these active objects without replaying old data-changing migrations. The
+  source-only `attendance`, `church_metrics`, and `weekly_inputs` legacy tables
+  are still absent; only an unreferenced `saveWeeklyInputs` action uses the last
+  one. `pgcrypto` functions live in a different extension schema and are not an
+  application-table discrepancy. Do not replay the full local chain onto
+  production. Confirm the live schema against this reconciliation immediately
+  before rollout.
+- Supabase production currently uses Micro shared compute (1 GB). At the
+  point-in-time infrastructure check, CPU was 2%, RAM 44%, and connections
+  17/60; the seven-day compute chart showed CPU 4%, memory 46%, and disk I/O
+  1%. These baseline numbers do not predict 100-church concurrent load. Vercel
+  is on Pro, which supports the repository's minute cron schedules. Delivery
+  alert routing and provider quotas still need an operational check.
 - The live select policies on Giving, Calls, Members, and the household and
   check-in tables currently restrict by church membership, but not by the
   staff member's feature permissions. The `authenticated` role also currently
@@ -117,7 +162,7 @@ readiness.
   Health Advisor listed no errors or warnings. These counts are point-in-time
   advisor results.
 
-## Release sequence for migrations 0110 and 0111
+## Release sequence for migrations 0110 through 0113
 
 1. Capture the current deployment and database migration state. Reconcile the
    deployed schema and source migration history. Confirm a recoverable backup
@@ -125,23 +170,27 @@ readiness.
    critical records, including Storage objects through a separate process.
    Do not restore over live data.
 2. Deploy the application changes first. The new server code can read medical
-   notes and call aggregates after the database policy tightens. The old server
-   code cannot read some of those fields after 0110.
+   notes and call aggregates after the database policy tightens. The admin
+   aggregate calls paginate safely until 0112 arrives. The old server code
+   cannot read some fields after 0110.
 3. Smoke test sign-in and the existing workflows for each of the four churches:
    Home, People care details, Kids Check-in roster, Reports PDF, Giving, Calls,
    Church App editing, and any enabled provider integration. Check both admin
    and limited staff accounts, plus a disabled-feature account.
-4. Apply `0110_feature_scoped_sensitive_reads.sql` and
-   `0111_announcement_status_view_invoker.sql` once through the controlled
-   migration process. Verify their recorded checksums and inspect the resulting
-   policies, column grants, and view options. Do not edit an already applied
-   migration.
+4. Apply `0110_feature_scoped_sensitive_reads.sql`,
+   `0111_announcement_status_view_invoker.sql`, and
+   `0112_platform_admin_aggregates.sql`, and
+   `0113_active_schema_catchup.sql` once through the controlled migration
+   process. Verify their recorded checksums and inspect the resulting policies,
+   column grants, view options, and aggregate function privileges. Do not edit
+   an already applied migration.
 5. Repeat the same workflow checks. A staff session without Giving, Calls,
    People, or Check-in must be denied direct reads of those areas; an attendance
    session must not be able to select `members.medical_notes`. A staff session
    must not read a second church's records. Run
    `pnpm security:anonymous-announcements` with the production Supabase URL and
-   public key; both anonymous counts must be zero.
+   public key; both anonymous counts must be zero. Verify platform admin totals
+   and church/user lists against direct database aggregates.
 6. Watch request errors, latency, webhook failures, and queued jobs during a
    small rollout. Keep lead outreach phased until these checks have held under
    normal Sunday and weekday traffic.
@@ -151,6 +200,26 @@ the application to a version that selects `medical_notes` through the staff
 client will break that page. Re-granting direct medical access or permissive
 financial/call policies is not a safe rollback.
 
+## Admission plan for 100 churches
+
+The local 100-tenant data set validates database query correctness, not a
+100-tenant service-level commitment. Before lead outreach, record expected
+staff and member counts per church, peak simultaneous staff sessions, daily
+sermons, gifts, messages, uploads, and push sends. Use those numbers to run a
+hosted, nonproduction load test through sign-in, dashboard, People, Giving,
+announcements, and the mobile API. Include provider sandbox callbacks and
+background workers, then compare request latency, error rate, queue age,
+database connections, CPU, RAM, and Storage growth with the four-church
+baseline. Set alert thresholds and an owner before opening each wave.
+
+Enroll in waves, for example 4 existing churches, then 10, 25, 50, and 100.
+At each wave, verify the existing churches again, review failed webhooks and
+delivery queues, and hold the next wave if error rates, latency, recovery, or
+support response exceed the limits agreed with the owner. Increase database
+compute or provider quotas based on measured headroom before the next wave;
+the current Micro plan's point-in-time utilization cannot justify 100 churches
+on its own.
+
 ## Gates still requiring live evidence
 
 - A successful Supabase physical-backup restore test, a provider-side Storage
@@ -158,9 +227,10 @@ financial/call policies is not a safe rollback.
   and Storage archives, and documented recovery time and data-loss targets.
   The local logical archive and object reconstruction proved local recovery
   paths, not these remaining disaster-recovery steps.
-- Deployed migration-history reconciliation and a safe application of 0110/0111;
-  production metadata inspection confirmed the current access gap and the
-  absence of the local source-migration ledger.
+- Final live-schema comparison, a recorded migration baseline, and safe
+  application of 0110 through 0113. The local comparison exposed the active
+  missing objects, but live production still has the access gap and no source
+  migration ledger.
 - A representative controlled rollout with real accounts from all four
   churches, including payment/webhook, email/SMS, push, attendance, and media
   paths that those churches actively use.
@@ -170,7 +240,9 @@ financial/call policies is not a safe rollback.
   delivery failures, slow requests, and database/storage capacity. Repository
   code and Vercel's recent logs alone do not prove alert delivery.
 - Concurrent-load and recovery tests against a nonproduction copy containing
-  representative church data. The read-only live benchmark is not a load test.
+  representative church data and through the full hosted application path. The
+  local 100-church database check and read-only live benchmark do not establish
+  provider capacity, request latency, or delivery success at rollout scale.
 
 Release decision: **code hardening is reviewable; a production-ready declaration
 and broad lead onboarding remain gated on the live evidence above.**
