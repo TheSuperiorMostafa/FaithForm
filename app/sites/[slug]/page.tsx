@@ -5,7 +5,7 @@ import { cache } from "react";
 import { PageRenderer } from "@/components/sites/PageRenderer";
 import { getChurchAuth } from "@/lib/auth/church";
 import { isChurchFeatureEnabled } from "@/lib/features/access";
-import { canPreviewDraftSite } from "@/lib/sites/preview-access";
+import { canPreviewDraftSite, isPublicSitePublication } from "@/lib/sites/preview-access";
 import { getSiteBundle } from "@/lib/sites/queries";
 import { SECTION_REGISTRY } from "@/lib/sites/registry";
 import { resolvePage } from "@/lib/sites/resolve";
@@ -36,7 +36,7 @@ const siteIsVisible = cache(async function siteIsVisible(
   previewRequested: boolean,
 ): Promise<boolean> {
   if (!(await isChurchFeatureEnabled(bundle.churchId, "website"))) return false;
-  if (bundle.page.status === "published") return true;
+  if (isPublicSitePublication(bundle.page.status, bundle.settings?.isPublished)) return true;
   if (!previewRequested) return false;
   return canPreviewDraftSite(bundle.churchId, await getChurchAuth());
 });
@@ -70,7 +70,8 @@ export async function generateMetadata({ params, searchParams }: PageProps): Pro
         : undefined,
     },
     robots:
-      query.preview === "1" || !bundle.settings?.isPublished
+      query.preview === "1" ||
+      !isPublicSitePublication(bundle.page.status, bundle.settings?.isPublished)
         ? { index: false, follow: false }
         : undefined,
   };

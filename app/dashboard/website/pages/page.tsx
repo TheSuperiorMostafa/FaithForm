@@ -5,6 +5,7 @@ import { PagesWorkspace } from "@/components/website-admin/pages-workspace";
 import type { EditableSection } from "@/components/website-admin/section-list";
 import { getChurchAuth } from "@/lib/auth/church";
 import { getCanonicalSiteUrl } from "@/lib/site-url";
+import { isPublicSitePublication } from "@/lib/sites/preview-access";
 import { SECTION_REGISTRY } from "@/lib/sites/registry";
 import { getWebsiteForChurch } from "@/lib/sites/queries";
 import { resolvePage } from "@/lib/sites/resolve";
@@ -96,7 +97,7 @@ export default async function WebsitePagesPage({
     <PagesWorkspace
       sections={sections}
       canEdit={auth.isAdmin}
-      isLive={site.page.status === "published"}
+      isLive={isPublicSitePublication(site.page.status, site.settings?.isPublished)}
       initialOpenId={openId}
       linkTargets={linkTargets}
       previewUrl={`${getCanonicalSiteUrl()}/sites/${site.slug}?preview=1`}

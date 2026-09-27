@@ -83,7 +83,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  const target = await getContactTargetBySlug(slug);
+  let target: Awaited<ReturnType<typeof getContactTargetBySlug>>;
+  try {
+    target = await getContactTargetBySlug(slug);
+  } catch {
+    console.error("[sites] contact publication state unavailable");
+    return NextResponse.json(
+      { error: "We could not send that right now. Please try again shortly." },
+      { status: 503 },
+    );
+  }
   if (!target) return badRequest("Could not tell which church this is for.");
 
   // The site that hosts this form is gone when Website is off, so a POST

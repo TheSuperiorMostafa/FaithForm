@@ -383,6 +383,12 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   to test the form. This is a release blocker until rollout and private-browser
   verification. Dynamic public-site rendering needs a hosted load check before
   claiming 100-church capacity.
+- The page-status and site-setting values can disagree after a partial live
+  publish write. The local public page and contact form now require both to say
+  published before allowing anonymous access, and fail closed if either
+  publication read fails. The editor's live indicators use the same rule. A
+  focused test covers each disagreement. This needs
+  a production browser retest after rollout.
 - Code review found that the live Website publish switch writes page status
   before site settings. A failure on the second request could leave the page
   published while the control reports failure. Local migration 0121 and the

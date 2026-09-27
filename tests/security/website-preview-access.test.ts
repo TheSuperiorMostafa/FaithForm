@@ -2,9 +2,16 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { canPreviewDraftSite } from "../../lib/sites/preview-access";
+import { canPreviewDraftSite, isPublicSitePublication } from "../../lib/sites/preview-access";
 
 const churchId = "d1d65673-2d45-4825-9e6e-c2d85d4583fd";
+
+test("anonymous publication requires both page and settings to be published", () => {
+  assert.equal(isPublicSitePublication("published", true), true);
+  assert.equal(isPublicSitePublication("published", false), false);
+  assert.equal(isPublicSitePublication("published", null), false);
+  assert.equal(isPublicSitePublication("draft", true), false);
+});
 
 test("draft website previews require a viewer from the same church with website access", () => {
   assert.equal(canPreviewDraftSite(churchId, null), false);

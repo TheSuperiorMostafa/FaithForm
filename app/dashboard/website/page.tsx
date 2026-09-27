@@ -13,6 +13,7 @@ import { getChurchAuth } from "@/lib/auth/church";
 import { getCanonicalSiteUrl } from "@/lib/site-url";
 import { getChurchDomains } from "@/lib/sites/domain-queries";
 import { getDomainProvider } from "@/lib/sites/domains";
+import { isPublicSitePublication } from "@/lib/sites/preview-access";
 import { countNewSubmissions, getWebsiteForChurch } from "@/lib/sites/queries";
 import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
@@ -36,7 +37,7 @@ export default async function WebsiteOverviewPage() {
     countNewSubmissions(auth.churchId),
   ]);
 
-  const published = site.page.status === "published";
+  const published = isPublicSitePublication(site.page.status, site.settings?.isPublished);
   const previewUrl = `${getCanonicalSiteUrl()}/sites/${site.slug}?preview=1`;
 
   const rootHost = process.env.NEXT_PUBLIC_SITE_ROOT_HOST?.trim().toLowerCase();

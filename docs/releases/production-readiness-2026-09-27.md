@@ -422,7 +422,11 @@ on its own.
   predictable URL included `?preview=1`; without the query it returned 404.
   The local website and contact-form paths now require a same-church staff
   account with Website access for draft previews and submissions, and check
-  visibility on each request. The patched local app displayed a 404 page to an
+  visibility on each request. Both the page and contact form now require the
+  page status and site setting to say published before allowing anonymous
+  access; a stale or failed setting read cannot expose a page marked offline.
+  The Website editor's live indicators use the same rule.
+  The patched local app displayed a 404 page to an
   anonymous Safari visit for the same QA draft preview. This is a live privacy
   blocker until the fix is deployed and an anonymous production retest returns
   404. The resulting dynamic

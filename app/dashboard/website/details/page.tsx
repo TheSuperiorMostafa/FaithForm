@@ -7,6 +7,7 @@ import { getChurchAuth } from "@/lib/auth/church";
 import { isBootstrapSuperAdminEmail } from "@/lib/auth/superadmin-emails";
 import { getChurchProfile, profileToFormState } from "@/lib/queries/church-profile";
 import { getCanonicalSiteUrl } from "@/lib/site-url";
+import { isPublicSitePublication } from "@/lib/sites/preview-access";
 import { getSiteThemes, getWebsiteForChurch } from "@/lib/sites/queries";
 import { createAdminClient, createAdminClientOrNull } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -101,7 +102,7 @@ export default async function WebsiteDetailsPage() {
       initial={initial}
       canEdit={auth.isAdmin}
       previewUrl={`${getCanonicalSiteUrl()}/sites/${site.slug}?preview=1`}
-      isLive={site.page.status === "published"}
+      isLive={isPublicSitePublication(site.page.status, site.settings?.isPublished)}
       design={{
         themes,
         initialThemeKey: site.settings?.themeKey ?? site.theme.key,
