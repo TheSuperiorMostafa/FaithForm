@@ -17,6 +17,16 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
 - New-church form rejected an empty required name. Creating the QA church with
   Eastern time and the “set it up ourselves first” path succeeded. The church
   appeared with zero usage, no staff admin, and a first-admin invitation form.
+- The first-admin form rejected an empty required first name. After explicit
+  approval, an invite to the owner's dedicated Gmail alias showed as pending
+  in Admin with a seven-day expiry. The email arrived in Gmail, its setup
+  link opened the correct QA church, and Step 1 advanced to Step 2 of the
+  six-step wizard. The address and names were prefilled correctly. The owner
+  entered the password at Step 2. A second Supabase confirmation email then
+  arrived, and its link advanced to Step 3. The profile form saved a synthetic
+  address, state, ZIP, website, and reserved 555 phone number. Google and
+  Facebook were skipped. Step 6 completed and “Go to FaithForm” opened the
+  QA church dashboard under its own admin session, without impersonation.
 - Platform-admin handoff opened the new church dashboard and displayed the
   correct active-tenant warning and name.
 - People: empty-state, required first-name validation, two member creations,
@@ -53,6 +63,11 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   yet. Safety had no reports. Group settings showed messaging controls and the
   default group kinds. The messages overview listed the QA group; opening its
   chat showed the expected platform-admin restriction described below.
+- As the QA church's real admin, group chat opened. A clearly labeled QA
+  message sent successfully and remained visible after a full browser reload.
+- The real admin also reopened People (both synthetic members), Kids Check-in
+  (QA Nursery), Sermons (published QA sermon), and the draft Website. The
+  taken-down announcement still had no recovery list in the live app.
 - Reopening the planned meeting preserved its title, start/end times, place,
   URL, and notes. Saving the unchanged meeting again closed the editor and
   showed “QA Test Meeting updated.” The earlier discard prompt did not recur.
@@ -113,6 +128,23 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   timestamp, so the recovery list omitted it. Local code now retries after
   dropping only the particular missing column. The repair is not deployed;
   any already affected pending rows need a separate, careful recovery plan.
+- The two-email first-admin setup is a confirmed onboarding friction point:
+  FaithForm's own invite already reaches the target mailbox, then ordinary
+  Supabase sign-up sends a second confirmation. Local code now creates a
+  confirmed Auth user through the trusted admin API only after validating the
+  emailed church invite and exact address, then signs the user in. Public
+  sign-up verification remains enabled. This change is not deployed and needs
+  a fresh one-email browser rehearsal. Supabase also offers a native
+  [single-invite flow](https://supabase.com/docs/guides/auth/users#inviting-users)
+  that should be considered for a later simplification. OWASP recommends
+  [single-use, time-limited verification tokens](https://cheatsheetseries.owasp.org/cheatsheets/Email_Validation_and_Verification_Cheat_Sheet.html#email-ownership-verification);
+  the current custom church invite remains valid until onboarding completes.
+- The live Step 6 handler wrote the invite acceptance and church completion
+  before the admin membership and ignored errors on those first two writes.
+  A membership failure could leave a completed church with no admin and an
+  unusable invite. Local code now creates the membership first, checks each
+  write, and accepts the invite last so a failed setup can be retried. This
+  needs deployment and a fault-injection rehearsal.
 - After roughly 30 minutes, the platform-admin church-switch note expired
   during client-side navigation. The QA banner remained visible while a new
   Groups page loaded the admin's own `Faithform Church` and its existing
@@ -129,8 +161,9 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
 
 ## Still in progress
 
-- First-admin invitation, email delivery, new-account password setup, and
-  completion of the six-step onboarding wizard.
+- A fresh browser rehearsal of the one-email local fix and failure paths,
+  plus optional provider connections, actual live video, payment processing,
+  and mobile push.
 - Announcement edit/removal, other media, group chat as church staff, actual
   live video and recording, payment/bank onboarding, external integrations,
   first-admin permissions, other settings, and provider paths.
@@ -141,7 +174,8 @@ as deployed or measure hosted load at 100 churches.
 
 ## Local verification after these findings
 
-The edited files passed TypeScript checking and targeted ESLint. The
-impersonation security tests passed, and a fresh optimized production build
-completed. The build emitted existing lint warnings outside the edited files.
-No code was pushed or deployed.
+The edited files passed TypeScript checking and targeted ESLint. All 441
+security tests passed, including checks for the one-email invite path and
+retryable finalization. A fresh optimized production build completed. The
+build emitted existing lint warnings outside the edited files. No code was
+pushed or deployed.

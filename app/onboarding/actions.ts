@@ -18,7 +18,6 @@ import { requireOnboardingInvitee } from "@/lib/onboarding/require-invitee";
 import { prepareChurchLogo } from "@/lib/branding/church-logo";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { dashboardEmailRedirect } from "@/lib/auth/auth-redirects";
 import { toUserError } from "@/lib/errors/user-error";
 import {
   ALREADY_REGISTERED_MESSAGE,
@@ -31,7 +30,7 @@ export type ActionResult =
   | { ok: false; error: string };
 
 export type CreateAccountResult =
-  | { ok: true; needsEmailConfirmation: boolean }
+  | { ok: true }
   | { ok: false; error: string };
 
 export type ResendInviteResult =
@@ -78,26 +77,23 @@ export async function createOnboardingAccount(
   }
 
   const supabase = createClient();
-  // The confirmation link must resume after account creation. `next` is a
-  // relative path because the callback validates it with `safeRedirectPath`.
-  const emailRedirectTo = dashboardEmailRedirect(
-    `/onboarding?token=${encodeURIComponent(token)}&step=3`,
-  );
-
-  const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+  // The validated invite link was delivered to this exact mailbox. That
+  // first email proves address ownership, so create the confirmed account
+  // on the trusted server instead of sending a second confirmation email.
+  // Public sign-up confirmation remains enabled.
+  const admin = createAdminClient();
+  const { error: createError } = await admin.auth.admin.createUser({
     email: data.email,
     password: data.password,
-    options: {
-      data: {
-        first_name: data.firstName,
-        last_name: data.lastName,
-      },
-      emailRedirectTo,
+    email_confirm: true,
+    user_metadata: {
+      first_name: data.firstName,
+      last_name: data.lastName,
     },
   });
 
-  if (signUpError) {
-    if (isAlreadyRegistered(signUpError)) {
+  if (createError) {
+    if (isAlreadyRegistered(createError)) {
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: data.email,
         password: data.password,
@@ -105,13 +101,21 @@ export async function createOnboardingAccount(
       if (signInError) {
         return { ok: false, error: ALREADY_REGISTERED_MESSAGE };
       }
-      return { ok: true, needsEmailConfirmation: false };
+      return { ok: true };
     }
-    console.error("[onboarding] sign-up refused:", signUpError.message);
-    return { ok: false, error: signUpErrorMessage(signUpError, 8) };
+    console.error("[onboarding] account creation refused:", createError.name);
+    return { ok: false, error: signUpErrorMessage(createError, 8) };
   }
 
-  return { ok: true, needsEmailConfirmation: !signUpData.session };
+  const { error: signInError } = await supabase.auth.signInWithPassword({
+    email: data.email,
+    password: data.password,
+  });
+  if (signInError) {
+    return { ok: false, error: "Your account was created, but sign-in did not finish. Try continuing with the same password." };
+  }
+
+  return { ok: true };
 }
 
 export async function updateChurchProfile(
@@ -271,16 +275,9 @@ export async function completeOnboarding(token: string): Promise<ActionResult> {
   const admin = createAdminClient();
   const now = new Date().toISOString();
 
-  await admin
-    .from("church_invites")
-    .update({ accepted_at: now })
-    .eq("id", inviteResult.invite.id);
-
-  await admin
-    .from("churches")
-    .update({ onboarding_completed_at: now })
-    .eq("id", inviteResult.invite.churchId);
-
+  // The invite must be the last thing closed. If any earlier write fails,
+  // keeping it usable lets the same signed-in invitee retry Step 6 instead
+  // of leaving a church marked complete with no working administrator.
   const { error: linkError } = await admin.from("church_users").upsert(
     {
       church_id: inviteResult.invite.churchId,
@@ -293,6 +290,28 @@ export async function completeOnboarding(token: string): Promise<ActionResult> {
 
   if (linkError) {
     return { ok: false, error: toUserError(linkError, "We couldn't finish setting up your account.") };
+  }
+
+  const { data: completedChurch, error: churchError } = await admin
+    .from("churches")
+    .update({ onboarding_completed_at: now })
+    .eq("id", inviteResult.invite.churchId)
+    .select("id")
+    .maybeSingle();
+
+  if (churchError || !completedChurch) {
+    return { ok: false, error: toUserError(churchError, "We couldn't finish setting up your church. Please try again.") };
+  }
+
+  const { data: acceptedInvite, error: inviteError } = await admin
+    .from("church_invites")
+    .update({ accepted_at: now })
+    .eq("id", inviteResult.invite.id)
+    .select("id")
+    .maybeSingle();
+
+  if (inviteError || !acceptedInvite) {
+    return { ok: false, error: toUserError(inviteError, "We couldn't finish accepting the invite. Please try again.") };
   }
 
   return { ok: true };

@@ -222,6 +222,28 @@ on its own.
 
 ## Gates still requiring live evidence
 
+- The live browser onboarding pass created a fifth, clearly labeled QA church
+  with synthetic members and verified People, household, Check-in, Attendance,
+  Groups, Announcements, Sermons, Church App, Website, Live scheduling, and
+  settings. Details and limitations are in
+  `docs/releases/onboarding-browser-pass-2026-09-27.md`. The first-admin
+  invitation and Gmail delivery passed; the owner completed the password and
+  second email confirmation, Steps 3–6 saved a synthetic profile and finished,
+  and the resulting church-admin session sent and reloaded a group chat
+  message. Optional external provider connections were skipped.
+- The browser pass found a live expired-impersonation transition that can show
+  the old QA banner over the platform admin's own church page. A local guard
+  now redirects expired switches before dashboard requests or actions run;
+  this requires deployment and a timed browser retest. It also found the live
+  announcement takedown fallback losing its recovery timestamp when the
+  Facebook schedule column is absent; a local fix requires rollout and a
+  recovery decision for affected rows. The production Church App lacks the
+  `app_links` column until migration 0113 is applied.
+- Onboarding currently sends a redundant second confirmation email after the
+  church invite. A local one-email account-creation change is ready for a new
+  tenant rehearsal after rollout. Step 6 also needs the local checked-write
+  ordering fix before onboarding more churches; the current live order can
+  close an invite before creating the church-admin membership.
 - A successful Supabase physical-backup restore test, a provider-side Storage
   restore rehearsal, an independent encrypted location for the local database
   and Storage archives, and documented recovery time and data-loss targets.
