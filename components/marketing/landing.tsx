@@ -1,19 +1,10 @@
 import Image from "next/image";
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { ArrowUpRight, BookOpen, Check, ClipboardCheck, Mail, Megaphone, Smartphone } from "lucide-react";
-import { CurrentHero } from "./current-hero";
 import { MarketingContactForm } from "./contact-form";
-import { FutureVideoHero } from "./future-video-hero";
 import { MarketingNav } from "./marketing-nav";
 import { contactHref, marketingConfig } from "./config";
-
-function Hero({ loading = false }: { loading?: boolean }) {
-  const video = marketingConfig.walkthrough;
-  if (!loading && video.enabled && video.src) {
-    return <FutureVideoHero src={video.src} poster={video.poster} captions={video.captions} />;
-  }
-  return <CurrentHero loading={loading} />;
-}
 
 function ProductFlow() {
   return (
@@ -35,13 +26,13 @@ function ProductFlow() {
   );
 }
 
-export function MarketingLanding({ loading = false }: { loading?: boolean }) {
+export function MarketingLanding({ hero }: { hero: ReactNode }) {
   return (
     <div className="marketing">
       <a className="marketing-skip" href="#marketing-main">Skip to content</a>
       <MarketingNav />
       <main id="marketing-main">
-        <Hero loading={loading} />
+        {hero}
 
         <section id="the-problem" className="marketing-problem" aria-labelledby="marketing-problem-title">
           <div className="marketing-container marketing-problem-inner">

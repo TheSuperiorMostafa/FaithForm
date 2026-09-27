@@ -1,6 +1,10 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { MarketingLanding } from "@/components/marketing/landing";
+import { CurrentHero } from "@/components/marketing/current-hero";
+import { DashboardPreview } from "@/components/marketing/dashboard-preview";
+import { FutureVideoHero } from "@/components/marketing/future-video-hero";
+import { marketingConfig } from "@/components/marketing/config";
 import "./marketing.css";
 
 export const metadata: Metadata = {
@@ -28,5 +32,9 @@ export default async function Page({ searchParams }: PageProps) {
     redirect(`/auth/callback?${params.toString()}`);
   }
 
-  return <MarketingLanding />;
+  const video = marketingConfig.walkthrough;
+  const hero = video.enabled && video.src
+    ? <FutureVideoHero src={video.src} poster={video.poster} captions={video.captions} />
+    : <CurrentHero preview={<DashboardPreview />} />;
+  return <MarketingLanding hero={hero} />;
 }

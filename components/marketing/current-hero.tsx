@@ -1,8 +1,8 @@
 import { ArrowDown, ArrowUpRight } from "lucide-react";
-import { DashboardPreview } from "./dashboard-preview";
+import type { ReactNode } from "react";
 import { contactHref } from "./config";
 
-export function CurrentHero({ loading = false }: { loading?: boolean }) {
+export function CurrentHero({ preview }: { preview: ReactNode }) {
   return (
     <section className="marketing-hero" aria-labelledby="marketing-hero-title">
       <div className="marketing-hero-noise" aria-hidden="true" />
@@ -20,7 +20,7 @@ export function CurrentHero({ loading = false }: { loading?: boolean }) {
         <div className="marketing-hero-art" aria-label="FaithForm web dashboard for pastors">
           <div className="marketing-hero-orbit marketing-hero-orbit-one" aria-hidden="true" />
           <div className="marketing-hero-orbit marketing-hero-orbit-two" aria-hidden="true" />
-          <DashboardPreview loading={loading} />
+          {preview}
         </div>
       </div>
       <div className="marketing-scroll-cue" aria-hidden="true"><span>SCROLL TO FEEL THE DIFFERENCE</span><ArrowDown size={16} /></div>
