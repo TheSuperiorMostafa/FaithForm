@@ -7,7 +7,7 @@ readiness.
 
 ## Verified in an isolated checkout
 
-- Web: typecheck, lint (zero errors), production build, 1,785 application tests,
+- Web: typecheck, lint (zero errors), production build, 1,786 application tests,
   generated-contract/design/localization checks, migration baseline check,
   secret scan, and feature-guard scan pass.
 - Database: the earlier 113 migrations applied to disposable PostgreSQL 15 and
@@ -125,6 +125,16 @@ readiness.
   count returns a retry message, so a room with history cannot look unused
   merely because its database read failed. Typecheck, targeted lint, and the
   55 focused Check-in tests pass. This change is local only.
+- A live QA browser test closed and reopened the only room. The live Check-in
+  desk hid the closed room as intended, but called that state “No rooms yet.”
+  The local desk now distinguishes all-closed rooms from no rooms and directs
+  staff to reopen one. The QA room was reopened after the test.
+- The live QA church's two taken-down announcements were missing from the
+  recovery list. Read-only QA-row inspection found both are pending with a
+  prior publisher but no take-down timestamp from the deployed action. The
+  local list now includes those legacy rows and dates them by their last
+  update. A read-only run of the local reader returned both; three focused
+  take-down tests pass. This still needs a browser retest after rollout.
 - Family-name pickup search now pages through all matching people, family
   names, membership links, and that day's open check-ins. It filters for
   families with children still present before limiting the displayed matches.
@@ -253,8 +263,8 @@ readiness.
    critical records, including Storage objects through a separate process.
    Do not restore over live data.
 2. Apply `0114_group_gathering_atomic_update.sql`,
-   `0115_atomic_onboarding_completion.sql`, and
-   `0116_atomic_child_checkout.sql`, and
+   `0115_atomic_onboarding_completion.sql`,
+   `0116_atomic_child_checkout.sql`,
    `0117_atomic_checkin_family_creation.sql`, and
    `0118_atomic_checkin_undo.sql` before deploying the updated
    application: the new meeting, onboarding, child pickup, new-family, and Undo saves call these server-only
@@ -331,11 +341,9 @@ on its own.
   Facebook schedule column is absent; a local fix requires rollout and a
   recovery decision for affected rows. The production Church App lacks the
   `app_links` column until migration 0113 is applied.
-- Group meeting edits still write the event and its attendance window in two
-  database operations. Local code now detects failed attendance checks and
-  incomplete window updates, but an interrupted write can still leave those
-  records out of sync. Make that update transactional and rehearse a failure
-  before calling this path fully reliable.
+- The live group meeting editor still writes its event and attendance window
+  separately. Local migration 0114 makes them one transaction and passed a
+  forced-failure rollback test. Its rollout and browser retest are outstanding.
 - Onboarding currently sends a redundant second confirmation email after the
   church invite. A local one-email account-creation change is ready for a new
   tenant rehearsal after rollout. Step 6 also needs the local checked-write
@@ -355,7 +363,7 @@ on its own.
   The local logical archive and object reconstruction proved local recovery
   paths, not these remaining disaster-recovery steps.
 - Final live-schema comparison, a recorded migration baseline, and safe
-  application of 0110 through 0115 in the order above. The local comparison
+  application of 0110 through 0118 in the order above. The local comparison
   exposed the active missing objects, but live production still has the access
   gap and no source migration ledger.
 - A representative controlled rollout with real accounts from all four

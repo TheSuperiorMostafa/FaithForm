@@ -48,6 +48,8 @@ export async function listUndatedAnnouncementIds(
  * to come back from, so they can be posted again. Calendar events that were
  * taken down show up among the calendar's events instead.
  *
+ * Earlier take-downs did not record `unsubmitted_at`. A pending row with
+ * `published_by` was previously posted, so keep it recoverable too.
  * `unsubmitted_at` arrived in 0041 and the image columns in 0023; a database
  * missing either gets an empty list, never an error on the page.
  */
@@ -63,16 +65,16 @@ export async function listTakenDownAnnouncements(
       .eq("church_id", churchId)
       .neq("status", "published")
       .is("google_event_id", null)
-      .not("unsubmitted_at", "is", null)
-      .order("unsubmitted_at", { ascending: false })
+      .or("unsubmitted_at.not.is.null,published_by.not.is.null")
+      .order("updated_at", { ascending: false })
       .limit(limit);
 
   let { data, error } = await select(
-    "id, title, event_title, body, notes, start_at, end_at, all_day, event_location, event_date, social_graphic_url, social_graphic_path, unsubmitted_at",
+    "id, title, event_title, body, notes, start_at, end_at, all_day, event_location, event_date, social_graphic_url, social_graphic_path, unsubmitted_at, updated_at",
   );
   if (error && /all_day|social_graphic/i.test(error.message)) {
     ({ data, error } = await select(
-      "id, title, event_title, body, notes, start_at, end_at, event_location, event_date, unsubmitted_at",
+      "id, title, event_title, body, notes, start_at, end_at, event_location, event_date, unsubmitted_at, updated_at",
     ));
   }
   if (error) {
@@ -95,6 +97,6 @@ export async function listTakenDownAnnouncements(
       undated: !row.event_date,
       graphicUrl: (row.social_graphic_url as string | null) ?? null,
       graphicPath: (row.social_graphic_path as string | null) ?? null,
-      takenDownAt: row.unsubmitted_at as string,
+      takenDownAt: ((row.unsubmitted_at as string | null) ?? row.updated_at) as string,
     }));
 }

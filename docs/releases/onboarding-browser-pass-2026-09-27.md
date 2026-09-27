@@ -41,6 +41,11 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   succeeded. A wrong pickup code was rejected. The correct code found the
   household and required choosing a guardian; pickup completed and the weekly
   room report showed one check-in and no code-less release.
+- Closing QA Nursery marked it Closed and removed it from the Check-in desk;
+  reopening it restored the room and left its history intact. While all rooms
+  were closed, the live desk misleadingly said “No rooms yet” and offered “Add
+  rooms.” The local desk now says “All rooms are closed” and directs an admin
+  to manage and reopen one. The QA room was reopened before this pass ended.
 - The Check-in desk's New family form rejected a blank parent name. After
   entering a synthetic parent and two synthetic children, Save and check in
   created the family in People, showed both children in QA Nursery, and issued
@@ -67,7 +72,11 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   disabled because those integrations are not connected.
 - Editing that QA announcement updated it in the app. Taking it down removed
   it from Posted and scheduled. The page said it could be posted again, but
-  the Taken down list did not appear after a full browser reload.
+  the Taken down list did not appear after a full browser reload. A read-only
+  QA-row check found that the deployed version saved both previously posted
+  announcements as pending without a take-down timestamp. The local list now
+  also recognizes rows with a prior publisher and uses their last update time;
+  a read-only run of that local reader returned both QA announcements.
 - Groups: created a private class group with description, size, meeting place,
   dummy online link, one member, and one leader. The members page preserved the
   leader role. Planned a synthetic meeting for September 28 with title, start
@@ -210,9 +219,9 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   now retries after dropping only the particular missing optional column,
   requires the takedown timestamp, checks that a row actually changed, and
   changes the canonical row before withdrawing its app projection. The repair
-  is not deployed; any already affected pending rows need a separate,
-  careful recovery plan. Do not backfill a timestamp for every pending draft:
-  some were never posted.
+  is not deployed. The local recovery list also recognizes pending rows with
+  a prior publisher, and a read-only QA query returned both affected items.
+  This avoids backfilling every pending draft, since some were never posted.
 - The two-email first-admin setup is a confirmed onboarding friction point:
   FaithForm's own invite already reaches the target mailbox, then ordinary
   Supabase sign-up sends a second confirmation. Local code now creates a
