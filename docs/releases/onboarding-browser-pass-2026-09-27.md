@@ -169,6 +169,13 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   showed Google, iCloud, YouTube, and Facebook as disconnected. Switching the
   member-app palette to Forest and wheat persisted. The Phone Calls empty
   state loaded.
+- Team and app settings follow-up: the live team now lists the QA admin. The
+  invitation form rejected both a blank address and `not-an-email` before
+  submission. Volunteer was the default preset, and expanding custom tools
+  showed the expected individual permissions. The form was canceled; no
+  invitation was sent. In Member App settings, switching from Forest and wheat
+  to Navy and gold saved, then restoring Forest and wheat survived a full
+  reload. The custom-color controls opened without applying a new palette.
 - Church details: the QA contact-email field rejected malformed text in the
   browser without saving it. A synthetic `.invalid` address saved and survived
   a full reload; clearing and saving it again restored the original empty
