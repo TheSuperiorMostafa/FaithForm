@@ -117,6 +117,7 @@ function addMonthKey(keys: Set<string>, iso: string | null | undefined) {
 export async function getMonthlyReportMonths(
   supabase: SupabaseClient,
   churchId: string,
+  phoneClient: SupabaseClient = supabase,
 ): Promise<MonthlyReportMonth[]> {
   const monthKeys = new Set<string>();
 
@@ -126,7 +127,7 @@ export async function getMonthlyReportMonths(
         .from("activity_log")
         .select("executed_at")
         .eq("church_id", churchId),
-      supabase
+      phoneClient
         .from("phone_calls")
         .select("called_at")
         .eq("church_id", churchId),
@@ -194,7 +195,7 @@ export async function getMonthlyReportMonths(
   for (const { year, month } of months) {
     const start = new Date(year, month - 1, 1);
     const end = new Date(year, month, 1);
-    const stats = await computeHoursSaved(supabase, churchId, { start, end });
+    const stats = await computeHoursSaved(supabase, churchId, { start, end }, phoneClient);
     const calls = ((phoneRes.data ?? []) as { called_at: string | null }[]).filter(
       (r) => inHoursSavedWindow(r.called_at, start, end),
     ).length;

@@ -36,6 +36,7 @@
     <string name="privacy_policy">Privacy Policy</string>
     <string name="terms_of_service">Terms of Service</string>
     <string name="account_deletion_help">How account deletion works</string>
+    <string name="contact_support">Contact support</string>
     <string name="offline_cached">Showing what was saved on this device.</string>
     <string name="offline_title">You\'re offline</string>
     <string name="offline_body">FaithForm will load your account as soon as you\'re back on a network.</string>
@@ -55,6 +56,11 @@
          gains a key the other lacks. -->
     <string name="welcome_title">Join your church</string>
     <string name="welcome_body">Start with the link your church sent you. Searching is available when a church lists itself.</string>
+    <string name="welcome_home_kicker">WELCOME HOME</string>
+    <string name="find_church_community">Find your church community.</string>
+    <string name="welcome_home_detail">Connect with your congregation, follow announcements, join groups, and worship together wherever you are.</string>
+    <string name="nearby_churches_detail">Discover congregations active near you</string>
+    <string name="how_to_find_church">HOW TO FIND YOUR CHURCH</string>
     <string name="find_a_church">Find your church</string>
     <string name="have_invitation">I have a link</string>
     <string name="have_link_continue">Continue</string>
@@ -79,6 +85,10 @@
     <string name="add_church">Add church</string>
     <string name="make_my_church">Make this my church</string>
     <string name="your_church">Your church</string>
+    <string name="adding_church">Adding your church…</string>
+    <string name="joined_welcome_to">WELCOME TO</string>
+    <string name="church_home_ready">Your church home is ready.</string>
+    <string name="opening_home">Opening home…</string>
     <string name="switch_church_confirm_title">Switch to %1$s?</string>
     <string name="switch_church_confirm_body">%1$s will be replaced as your church. You can switch back anytime.</string>
     <string name="switch_church_confirm_action">Switch</string>
@@ -222,6 +232,10 @@
     <string name="auto_attendance_unavailable_body">Automatic check-in is not available on this device. You can still be checked in at the service.</string>
     <string name="auto_attendance_no_link_title">Your church needs to confirm who you are</string>
     <string name="auto_attendance_no_link_body">Once someone at your church confirms your details, you can turn on automatic check-in.</string>
+    <string name="auto_attendance_request_confirmation">Ask my church to confirm me</string>
+    <string name="auto_attendance_confirmation_requested">Request sent. Someone at your church can now confirm you from People.</string>
+    <string name="auto_attendance_confirmation_already_linked">Your church has already confirmed you. Try automatic check-in again.</string>
+    <string name="auto_attendance_confirmation_failed">We couldn\'t send that request. Check your connection and try again.</string>
     <string name="auto_attendance_church_disabled_title">Your church has not set this up</string>
     <string name="auto_attendance_church_disabled_body">Automatic check-in is not switched on for your church.</string>
     <string name="auto_attendance_no_campus_title">Your church has not added a location</string>

@@ -5,6 +5,7 @@ import { createElement, type ReactElement } from "react";
 import { MonthlyPdfDocument } from "@/components/library/pdf-monthly-report";
 import { getMonthlyReportData } from "@/lib/reports/monthly-data";
 import { requireChurchContext } from "@/lib/reports/auth";
+import { createAdminClientOrNull } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { parseMonthParam } from "@/lib/utils/reports";
 import { featureAccessDenied } from "@/lib/features/guard";
@@ -38,6 +39,7 @@ export async function GET(
       ctx.churchId,
       parsed.year,
       parsed.month,
+      createAdminClientOrNull() ?? supabase,
     );
 
     const buffer = await renderToBuffer(

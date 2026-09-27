@@ -33,17 +33,17 @@ public struct WelcomeView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("WELCOME HOME")
+                        Text(L.welcomeHomeKicker)
                             .font(.caption2.weight(.bold))
                             .tracking(2.5)
                             .foregroundStyle(theme.palette.brandAccent)
-                        Text("Find your church community.")
+                        Text(L.findChurchCommunity)
                             .font(.system(size: 28, weight: .bold, design: .rounded))
                             .foregroundStyle(theme.palette.contentPrimary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
 
-                    Text("Connect with your congregation, follow announcements, join groups, and worship together wherever you are.")
+                    Text(L.welcomeHomeDetail)
                         .font(theme.font(FaithFormTokens.Text.body))
                         .foregroundStyle(theme.palette.contentSecondary)
                         .lineSpacing(3)
@@ -320,7 +320,7 @@ public struct DiscoveryView: View {
                                 Text(L.churchesNearMe)
                                     .font(theme.font(FaithFormTokens.Text.titleMedium))
                                     .foregroundStyle(theme.palette.contentPrimary)
-                                Text("Discover congregations active near you")
+                                Text(L.nearbyChurchesDetail)
                                     .font(theme.font(FaithFormTokens.Text.bodySmall))
                                     .foregroundStyle(theme.palette.contentSecondary)
                             }
@@ -343,7 +343,7 @@ public struct DiscoveryView: View {
                     // Search Tips Card
                     FaithFormCard {
                         VStack(alignment: .leading, spacing: 14) {
-                            Text("HOW TO FIND YOUR CHURCH")
+                            Text(L.howToFindChurch)
                                 .font(.caption2.weight(.bold))
                                 .tracking(2)
                                 .foregroundStyle(theme.palette.brandAccent)

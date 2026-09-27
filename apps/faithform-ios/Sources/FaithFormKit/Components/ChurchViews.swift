@@ -135,7 +135,7 @@ public struct ChurchProfileView: View {
                         ProgressView()
                             .controlSize(.large)
                             .tint(theme.palette.brandAccent)
-                        Text("Adding your church…")
+                        Text(L.addingChurch)
                             .font(theme.font(FaithFormTokens.Text.titleMedium))
                             .foregroundStyle(.white)
                     }
@@ -1256,7 +1256,7 @@ public struct ChurchJoinedCelebrationOverlay: View {
                 }
 
                 VStack(spacing: FaithFormTokens.Spacing.xs) {
-                    Text("WELCOME TO")
+                    Text(L.joinedWelcomeTo)
                         .font(.system(size: 12, weight: .bold))
                         .tracking(2.5)
                         .foregroundStyle(theme.palette.brandAccent)
@@ -1267,7 +1267,7 @@ public struct ChurchJoinedCelebrationOverlay: View {
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, FaithFormTokens.Layout.screenPaddingHorizontal)
 
-                    Text("Your church home is ready.")
+                    Text(L.churchHomeReady)
                         .font(.subheadline)
                         .foregroundStyle(theme.palette.contentSecondary)
                 }
@@ -1277,7 +1277,7 @@ public struct ChurchJoinedCelebrationOverlay: View {
                 HStack(spacing: FaithFormTokens.Spacing.sm) {
                     ProgressView()
                         .tint(theme.palette.brandAccent)
-                    Text("Opening home…")
+                    Text(L.openingHome)
                         .font(.caption.weight(.medium))
                         .foregroundStyle(theme.palette.contentSecondary)
                 }

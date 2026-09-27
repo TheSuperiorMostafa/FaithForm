@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { createHash } from "node:crypto";
 
 const directory = join(process.cwd(), "supabase", "migrations");
 const files = readdirSync(directory)
@@ -92,8 +93,25 @@ else {
     ],
   ]);
 
+  // The baseline has already run in deployed databases. This reviewed,
+  // additive correction closes direct staff reads that its original policies
+  // left open. Pin the exact file so later edits cannot silently widen access.
+  const reviewedCorrections = new Map([
+    [
+      "0110_feature_scoped_sensitive_reads.sql",
+      "68f5877a17de0eab91025e57cf719c2cec645909213cf65f302d4328d8049863",
+    ],
+  ]);
+
   for (const later of files.filter((file) => file > securityFile)) {
     const laterSql = readFileSync(join(directory, later), "utf8");
+    if (reviewedCorrections.has(later)) {
+      const actual = createHash("sha256").update(laterSql).digest("hex");
+      if (actual !== reviewedCorrections.get(later)) {
+        failures.push(`${later} changed after its security review`);
+      }
+      continue;
+    }
 
     if (narrowingOnly.has(later)) {
       const code = laterSql.replace(/--[^\n]*/g, "");

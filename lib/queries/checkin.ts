@@ -220,6 +220,7 @@ export async function getHousehold(
   supabase?: SupabaseClient,
 ): Promise<HouseholdDetail | null> {
   const client = supabase ?? db();
+  const medicalClient = createAdminClientOrNull() ?? client;
 
   const { data: household } = await client
     .from("households")
@@ -231,9 +232,10 @@ export async function getHousehold(
   if (!household) return null;
 
   const [{ data: memberRows }, { data: pickupRows }] = await Promise.all([
-    client
+    medicalClient
       .from("household_members")
       .select(HOUSEHOLD_MEMBER_SELECT)
+      .eq("church_id", churchId)
       .eq("household_id", householdId),
     client
       .from("household_pickup_authorizations")
@@ -470,8 +472,9 @@ export async function getRoster(
   supabase?: SupabaseClient,
 ): Promise<CheckinSessionRow[]> {
   const client = supabase ?? db();
+  const medicalClient = createAdminClientOrNull() ?? client;
 
-  let query = client
+  let query = medicalClient
     .from("checkin_sessions")
     .select(SESSION_SELECT)
     .eq("church_id", churchId)
@@ -562,7 +565,8 @@ export async function listCheckinChildren(
   options: { strict?: boolean } = {},
 ): Promise<CheckinChild[]> {
   const client = supabase ?? db();
-  const { data, error } = await client
+  const medicalClient = createAdminClientOrNull() ?? client;
+  const { data, error } = await medicalClient
     .from("household_members")
     .select(
       "member_id, household_id, relationship, households(name), members(first_name, last_name, is_active, default_location_id, medical_notes)",
@@ -604,8 +608,9 @@ export async function getHouseholdOpenSessions(
   supabase?: SupabaseClient,
 ): Promise<CheckinSessionRow[]> {
   const client = supabase ?? db();
+  const medicalClient = createAdminClientOrNull() ?? client;
 
-  const { data, error } = await client
+  const { data, error } = await medicalClient
     .from("checkin_sessions")
     .select(SESSION_SELECT)
     .eq("church_id", churchId)

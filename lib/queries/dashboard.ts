@@ -188,6 +188,7 @@ export async function getHoursSavedBreakdown(
   supabase: SupabaseClient,
   churchId: string,
   range: DashboardRange,
+  phoneClient: SupabaseClient = supabase,
 ): Promise<HoursSavedResult> {
   const window = getDateWindow(range);
 
@@ -195,12 +196,12 @@ export async function getHoursSavedBreakdown(
     computeHoursSaved(supabase, churchId, {
       start: window.currentStart,
       end: window.currentEnd,
-    }),
+    }, phoneClient),
     window.priorStart && window.priorEnd
       ? computeHoursSaved(supabase, churchId, {
           start: window.priorStart,
           end: window.priorEnd,
-        })
+        }, phoneClient)
       : Promise.resolve({
           minutes: 0,
           tasks: 0,
@@ -281,18 +282,19 @@ export async function getStatRow(
   supabase: SupabaseClient,
   churchId: string,
   range: DashboardRange,
+  phoneClient: SupabaseClient = supabase,
 ): Promise<StatRowResult> {
   const window = getDateWindow(range);
   const earliest = window.priorStart ?? window.currentStart;
   const earliestIso = earliest?.toISOString();
 
   const phoneQuery = earliestIso
-    ? supabase
+    ? phoneClient
         .from("phone_calls")
         .select("called_at")
         .eq("church_id", churchId)
         .gte("called_at", earliestIso)
-    : supabase.from("phone_calls").select("called_at").eq("church_id", churchId);
+    : phoneClient.from("phone_calls").select("called_at").eq("church_id", churchId);
   const announcementsQuery = earliestIso
     ? supabase
         .from("announcements")

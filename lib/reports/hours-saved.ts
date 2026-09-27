@@ -147,6 +147,7 @@ export async function computeHoursSaved(
   supabase: SupabaseClient,
   churchId: string,
   window: HoursSavedWindow,
+  phoneClient: SupabaseClient = supabase,
 ): Promise<HoursSavedComputation> {
   const { start, end } = window;
   const automationMinutes = new Map<string, number>();
@@ -156,7 +157,7 @@ export async function computeHoursSaved(
   const startIso = start?.toISOString();
   const endIso = end.toISOString();
 
-  const phoneQuery = supabase
+  const phoneQuery = phoneClient
     .from("phone_calls")
     .select("called_at, duration_seconds, call_type")
     .eq("church_id", churchId)
