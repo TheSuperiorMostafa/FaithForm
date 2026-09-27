@@ -51,7 +51,9 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   week and two no-code releases, each with the QA admin, room, guardian, time,
   and explicit synthetic-test reason. This tested the currently deployed
   checkout path; Rooms returned to zero checked in after pickup. The local atomic two-child fix in migration 0116 still needs
-  a browser retest after rollout.
+  a browser retest after rollout. Local migration 0117 also makes the New family
+  People and family writes one transaction; this live test used the older flow,
+  so the transaction needs its own browser retest after rollout.
 - Attendance: the child’s check-in was pre-counted on the Sunday roll. Saving
   one present and one absent synthetic person required a confirmation and
   preserved the entered note. The follow-up page showed the absent member but

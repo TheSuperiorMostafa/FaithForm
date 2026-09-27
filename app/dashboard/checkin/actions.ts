@@ -929,11 +929,9 @@ export type NewFamilyResult = FamilyCheckinResult & {
  * not admins cannot create people or families anywhere in the dashboard, and
  * this does not change that; the desk only shows the button to admins.
  *
- * If any step of creating the family fails, what was already created is
- * removed again (nothing else can refer to rows made a moment ago in this
- * same request), so a half-made family is never left behind. Once the family
- * exists, a child who can't be checked in is reported by name and the family
- * is kept, since it is complete and correct.
+ * The People records and family links are made in one database transaction.
+ * Once that family exists, each physical check-in reports its own result and
+ * a child who could not be checked in can be retried from the desk.
  */
 export async function createFamilyAndCheckIn(
   input: NewFamilyInput,
@@ -991,128 +989,44 @@ export async function createFamilyAndCheckIn(
     }
   }
 
-  const createdMemberIds: string[] = [];
-  let householdId: string | null = null;
-  // Set once the family is fully made. After that nothing is ever removed:
-  // a check-in may already point at these people.
-  let familyComplete = false;
-
-  const station: Context = context;
-  async function cleanUp() {
-    // Children and parent were created in this request and nothing else points
-    // at them yet; the family's links go with the family (on delete cascade).
-    if (householdId) {
-      await station.admin
-        .from("households")
-        .delete()
-        .eq("id", householdId)
-        .eq("church_id", station.auth.churchId);
+  let householdId: string;
+  let createdChildren: NewFamilyResult["children"];
+  try {
+    const { data, error } = await context.admin.rpc("create_checkin_family", {
+      p_church_id: context.auth.churchId,
+      p_actor_user_id: context.auth.userId,
+      p_family_name: family.familyName,
+      p_guardian_first_name: guardian.data.firstName,
+      p_guardian_last_name: guardian.data.lastName,
+      p_guardian_phone: guardian.data.phone || null,
+      p_children: children,
+    });
+    if (error) {
+      console.error("[checkin] new family creation failed:", error.message);
+      return fail(error.code === "23505"
+        ? "This phone number is already in People. Search for their name instead."
+        : "We couldn't add this family. Search People before trying again.");
     }
-    if (createdMemberIds.length > 0) {
-      await station.admin
-        .from("members")
-        .delete()
-        .in("id", createdMemberIds)
-        .eq("church_id", station.auth.churchId);
+    const created = data as unknown as Partial<{
+      householdId: string;
+      children: NewFamilyResult["children"];
+    }> | null;
+    if (!created || typeof created.householdId !== "string" ||
+        !Array.isArray(created.children) || created.children.length !== children.length ||
+        created.children.some((child) => !child || typeof child.memberId !== "string" ||
+          typeof child.locationId !== "string" || typeof child.firstName !== "string" ||
+          typeof child.lastName !== "string")) {
+      console.error("[checkin] new family creation returned an incomplete result");
+      return fail("The family may have been added, but we couldn't confirm it. Search People before trying again.");
     }
+    householdId = created.householdId;
+    createdChildren = created.children;
+  } catch (error) {
+    console.error("[checkin] new family creation could not be confirmed:", error);
+    return fail("The family may have been added, but we couldn't confirm it. Search People before trying again.");
   }
 
-  const COULD_NOT_ADD =
-    "We couldn't add this family, so nothing was saved. Please try again.";
-
   try {
-    const { data: parentRow, error: parentError } = await context.admin
-      .from("members")
-      .insert({
-        church_id: context.auth.churchId,
-        first_name: guardian.data.firstName,
-        last_name: guardian.data.lastName,
-        phone: guardian.data.phone,
-        email: null,
-        is_active: true,
-      })
-      .select("id")
-      .single();
-    if (parentError || !parentRow) {
-      console.error("[checkin] new family: parent insert failed:", parentError?.message);
-      await cleanUp();
-      return fail(COULD_NOT_ADD);
-    }
-    const parentId = parentRow.id as string;
-    createdMemberIds.push(parentId);
-
-    const createdChildren: NewFamilyResult["children"] = [];
-    for (const child of children) {
-      const { data: childRow, error: childError } = await context.admin
-        .from("members")
-        .insert({
-          church_id: context.auth.churchId,
-          first_name: child.firstName,
-          last_name: child.lastName,
-          is_active: true,
-          medical_notes: child.medicalNotes,
-          // Next Sunday this room is already chosen on the family card.
-          default_location_id: child.locationId,
-        })
-        .select("id")
-        .single();
-      if (childError || !childRow) {
-        console.error("[checkin] new family: child insert failed:", childError?.message);
-        await cleanUp();
-        return fail(COULD_NOT_ADD);
-      }
-      createdMemberIds.push(childRow.id as string);
-      createdChildren.push({
-        memberId: childRow.id as string,
-        firstName: child.firstName,
-        lastName: child.lastName,
-        locationId: child.locationId,
-      });
-    }
-
-    const { data: householdRow, error: householdError } = await context.admin
-      .from("households")
-      .insert({
-        church_id: context.auth.churchId,
-        name: family.familyName,
-        created_by: context.auth.userId,
-      })
-      .select("id")
-      .single();
-    if (householdError || !householdRow) {
-      console.error("[checkin] new family: family insert failed:", householdError?.message);
-      await cleanUp();
-      return fail(COULD_NOT_ADD);
-    }
-    householdId = householdRow.id as string;
-
-    const { error: linkError } = await context.admin.from("household_members").insert([
-      {
-        church_id: context.auth.churchId,
-        household_id: householdId,
-        member_id: parentId,
-        relationship: "guardian",
-        is_primary_contact: true,
-        created_by: context.auth.userId,
-      },
-      ...createdChildren.map((child) => ({
-        church_id: context.auth.churchId,
-        household_id: householdId,
-        member_id: child.memberId,
-        relationship: "dependent",
-        is_primary_contact: false,
-        created_by: context.auth.userId,
-      })),
-    ]);
-    if (linkError) {
-      console.error("[checkin] new family: linking failed:", linkError.message);
-      await cleanUp();
-      return fail(COULD_NOT_ADD);
-    }
-
-    // The family now exists and is correct. From here a failure is about one
-    // child's check-in, reported by name, and the family is kept.
-    familyComplete = true;
     const results: ChildCheckinResult[] = [];
     for (const child of createdChildren) {
       try {
@@ -1148,14 +1062,9 @@ export async function createFamilyAndCheckIn(
       },
     };
   } catch (error) {
-    if (familyComplete) {
-      revalidateCheckin(householdId ?? undefined);
-      return fail(
-        toUserError(error, "The family was added, but we couldn't finish checking in. Search for them and try again."),
-      );
-    }
-    await cleanUp().catch(() => undefined);
-    return fail(toUserError(error, "We couldn't add this family, so nothing was saved."));
+    revalidateCheckin(householdId);
+    return fail(toUserError(error,
+      "The family was added, but we couldn't finish checking in. Search for them and try again."));
   }
 }
 
