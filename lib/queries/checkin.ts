@@ -360,86 +360,84 @@ export async function findHouseholdsByPersonName(
 
   const client = supabase ?? db();
   const openOn = options.withChildrenCheckedInOn;
-
-  const [members, named, open] = await Promise.all([
-    client
-      .from("members")
-      .select("id", { count: "exact" })
-      .eq("church_id", churchId)
-      .or(memberFilter)
-      .order("last_name", { ascending: true })
-      .order("first_name", { ascending: true })
-      .limit(100),
-    client
-      .from("households")
-      .select("id", { count: "exact" })
-      .eq("church_id", churchId)
-      .ilike("name", householdPattern)
-      .order("name", { ascending: true })
-      .limit(50),
-    openOn
-      ? client
-          .from("checkin_sessions")
-          .select("id, household_id", { count: "exact" })
-          .eq("church_id", churchId)
-          .eq("local_service_date", openOn)
-          .in("status", ["pre_checked_in", "checked_in"])
-          .limit(1000)
-      : null,
-  ]);
-
-  const readError = members.error ?? named.error ?? open?.error;
-  const incomplete =
-    members.count !== members.data?.length ||
-    named.count !== named.data?.length ||
-    (open !== null && open.count !== open.data?.length);
-  if (readError || incomplete) {
-    console.error("[checkin] household name search failed:", readError?.message ?? "incomplete result");
-    return { ok: false, error: NAME_SEARCH_FAILED };
-  }
-
-  const memberIds = (members.data ?? []).map((row) => row.id as string);
-  let linkedIds: string[] = [];
-  if (memberIds.length > 0) {
-    const { data: links, error, count } = await client
-      .from("household_members")
-      .select("id, household_id", { count: "exact" })
-      .eq("church_id", churchId)
-      .in("member_id", memberIds);
-
-    if (error || count !== links?.length) {
-      console.error("[checkin] household name search failed:", error?.message ?? "incomplete links");
-      return { ok: false, error: NAME_SEARCH_FAILED };
-    }
-    linkedIds = (links ?? []).map((row) => row.household_id as string);
-  }
-
-  const withChildrenIn = open
-    ? new Set((open.data ?? []).map((row) => row.household_id as string | null))
-    : null;
-
-  // A household named for what was typed first, then households found
-  // through one of their people.
-  const householdIds = Array.from(
-    new Set([...(named.data ?? []).map((row) => row.id as string), ...linkedIds]),
-  )
-    .filter((id) => !withChildrenIn || withChildrenIn.has(id))
-    .slice(0, options.limit ?? 20);
-
-  let households: (HouseholdDetail | null)[];
   try {
-    households = await Promise.all(
+    const [members, named, open] = await Promise.all([
+      readAllById(async (afterId, includeCount, pageSize) => {
+        let query = client
+          .from("members")
+          .select("id, first_name, last_name", includeCount ? { count: "exact" } : {})
+          .eq("church_id", churchId)
+          .or(memberFilter);
+        if (afterId) query = query.gt("id", afterId);
+        return query.order("id", { ascending: true }).limit(pageSize);
+      }, { label: "family name matches" }),
+      readAllById(async (afterId, includeCount, pageSize) => {
+        let query = client
+          .from("households")
+          .select("id, name", includeCount ? { count: "exact" } : {})
+          .eq("church_id", churchId)
+          .ilike("name", householdPattern);
+        if (afterId) query = query.gt("id", afterId);
+        return query.order("id", { ascending: true }).limit(pageSize);
+      }, { label: "family household matches" }),
+      openOn
+        ? readAllById(async (afterId, includeCount, pageSize) => {
+            let query = client
+              .from("checkin_sessions")
+              .select("id, household_id", includeCount ? { count: "exact" } : {})
+              .eq("church_id", churchId)
+              .eq("local_service_date", openOn)
+              .in("status", ["pre_checked_in", "checked_in"]);
+            if (afterId) query = query.gt("id", afterId);
+            return query.order("id", { ascending: true }).limit(pageSize);
+          }, { label: "open family check-ins" })
+        : Promise.resolve(null),
+    ]);
+
+    const memberIds = members
+      .sort((a, b) => a.last_name.localeCompare(b.last_name) ||
+        a.first_name.localeCompare(b.first_name))
+      .map((row) => row.id);
+    const linkedIds: string[] = [];
+    // Keep PostgREST's URL and query planner bounded even for a common name.
+    for (let index = 0; index < memberIds.length; index += 100) {
+      const batch = memberIds.slice(index, index + 100);
+      const links = await readAllById(async (afterId, includeCount, pageSize) => {
+        let query = client
+          .from("household_members")
+          .select("id, household_id", includeCount ? { count: "exact" } : {})
+          .eq("church_id", churchId)
+          .in("member_id", batch);
+        if (afterId) query = query.gt("id", afterId);
+        return query.order("id", { ascending: true }).limit(pageSize);
+      }, { label: "family membership links" });
+      linkedIds.push(...links.map((row) => row.household_id));
+    }
+
+    const withChildrenIn = open
+      ? new Set(open.map((row) => row.household_id))
+      : null;
+
+    // A household named for what was typed first, then households found
+    // through one of their people. Filter for today's children before limiting.
+    const householdIds = Array.from(new Set([
+      ...named.sort((a, b) => a.name.localeCompare(b.name)).map((row) => row.id),
+      ...linkedIds,
+    ]))
+      .filter((id) => !withChildrenIn || withChildrenIn.has(id))
+      .slice(0, Math.min(Math.max(options.limit ?? 20, 1), 50));
+
+    const households = await Promise.all(
       householdIds.map((id) => getHousehold(churchId, id, client)),
     );
+    return {
+      ok: true,
+      households: households.filter((row): row is HouseholdDetail => row !== null),
+    };
   } catch (error) {
     console.error("[checkin] household name search failed:", error);
     return { ok: false, error: NAME_SEARCH_FAILED };
   }
-
-  return {
-    ok: true,
-    households: households.filter((row): row is HouseholdDetail => row !== null),
-  };
 }
 
 // ---------------------------------------------------------------------------

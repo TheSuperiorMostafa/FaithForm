@@ -125,6 +125,13 @@ readiness.
   count returns a retry message, so a room with history cannot look unused
   merely because its database read failed. Typecheck, targeted lint, and the
   55 focused Check-in tests pass. This change is local only.
+- Family-name pickup search now pages through all matching people, family
+  names, membership links, and that day's open check-ins. It filters for
+  families with children still present before limiting the displayed matches.
+  A read that fails or exceeds the 10,000-row per-query guard returns a retry
+  message instead of "no family found." The 1,785 application tests, typecheck,
+  targeted lint, and a local production build pass. Hosted search latency for
+  a very large church remains unmeasured.
 
 ## Live production findings on 2026-09-27 (read-only)
 
