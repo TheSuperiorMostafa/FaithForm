@@ -416,6 +416,12 @@ on its own.
 - The live group meeting editor still writes its event and attendance window
   separately. Local migration 0114 makes them one transaction and passed a
   forced-failure rollback test. Its rollout and browser retest are outstanding.
+- Live-streaming setup choices saved and persisted in the QA church. A separate
+  code review found that a failed recording-settings read could display false
+  defaults, including the wrong automatic-publication choice. The local fix
+  fails visibly on read errors and passed focused tests. It needs rollout and
+  a controlled failure-path browser check; actual video and recording are
+  still untested.
 - Onboarding currently sends a redundant second confirmation email after the
   church invite. A local one-email account-creation change is ready for a new
   tenant rehearsal after rollout. Step 6 also needs the local checked-write

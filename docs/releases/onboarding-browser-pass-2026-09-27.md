@@ -123,6 +123,17 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   removed it from Upcoming while preserving a Cancelled record. The empty
   Recordings view and streaming setup instructions loaded. No actual video
   stream was started.
+- Live setup: clicked through OBS Studio, ATEM Mini, vMix, this computer, and
+  the volunteer/company instructions. Device choice survived a reload. The
+  recording audience changed to followers and back to Everyone, and both
+  saves survived a reload. Automatic publication toggled on and back to
+  "Let me review first"; the original review choice survived a reload. The
+  QA church ended with its original computer source, Everyone audience,
+  website publication on, no default series, and both notifications off.
+  Recordings' Published and Series filters showed appropriate empty states.
+  Upcoming showed the two cancelled QA services and disabled slide linking
+  while no service is scheduled. No camera, microphone, video relay, or
+  actual recording was tested.
 - A second one-off QA service for September 30 saved its name, time,
   countdown, and live-chat choices. The published QA sermon's slides linked to
   it, stayed linked after reload, and could be removed again. Cancelling the
@@ -284,6 +295,12 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   component. The local page now keys the linker to service IDs and statuses so
   a refreshed service list remounts it. This is not deployed or browser
   retested against the local build.
+- A recording-settings database read error was silently treated as a missing
+  settings row. In that case, the setup page could falsely show the defaults,
+  including "Let me review first", even if the saved church choice was automatic
+  publication. The local read now fails visibly on database errors; an actual
+  missing row still gets defaults. Both cases passed focused tests. This is
+  not deployed or browser retested.
 
 ## Still in progress
 
