@@ -78,6 +78,13 @@ readiness.
   Realtime platform objects that the local container cannot restore, accepted
   migration 0114; all four churches remained and `anon` lacked execute access.
   That restored copy was removed. This fix has not been deployed.
+- The local group attendance form now refuses to open if its roster, saved
+  counts, or People labels fail to load, or if the API returns fewer rows than
+  the database counted. This prevents a partial view from being saved as a
+  correction that marks unseen people absent. Groups with rosters larger than
+  the API response limit receive a clear support message; batched attendance
+  for such groups remains a capacity decision before selling to churches that
+  need it.
 
 ## Live production findings on 2026-09-27 (read-only)
 

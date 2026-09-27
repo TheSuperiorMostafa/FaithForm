@@ -124,8 +124,10 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   attendance window. Saved one synthetic member and one guest, then reopened
   the form to verify both counts and the note. Corrected the guest and
   first-time guest counts to zero; the meeting summary showed one attendee and
-  zero guests after a full browser reload. The live app displayed the same
-  stale “Discard changes?” prompt after each successful save.
+  zero guests after a full browser reload. Entering one first-time guest with
+  zero total guests was rejected with a clear validation message and the
+  invalid entry was discarded. The live app displayed the same stale
+  “Discard changes?” prompt after each successful save.
 - Connected accounts: the iCloud Calendar link form opened with iPhone, Mac,
   and iCloud.com instructions. A deliberately invalid synthetic link was
   rejected with a clear iCloud-specific message. The alternate Apple ID form

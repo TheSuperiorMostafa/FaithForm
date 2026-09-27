@@ -414,19 +414,20 @@ export async function getAttendanceSheet(
   input: { churchId: string; groupId: string; eventId: string; now?: Date },
 ): Promise<AttendanceSheet> {
   const now = input.now ?? new Date();
-  const { data: event } = await admin
+  const { data: event, error: eventError } = await admin
     .from("group_events")
     .select("id, title, starts_at, ends_at, timezone, status")
     .eq("id", input.eventId)
     .eq("church_id", input.churchId)
     .eq("group_id", input.groupId)
     .maybeSingle();
+  if (eventError) throw new VisitorError("unavailable", "Could not open attendance right now.");
   if (!event) throw new VisitorError("group_not_found", "That gathering was not found.");
 
-  const [{ data: memberships }, { data: occurrence }, { data: record }] = await Promise.all([
+  const [membershipResult, occurrenceResult, recordResult] = await Promise.all([
     admin
       .from("group_memberships")
-      .select("id, member_id, account_id, group_role")
+      .select("id, member_id, account_id, group_role", { count: "exact" })
       .eq("group_id", input.groupId)
       .eq("church_id", input.churchId)
       .eq("status", "active")
@@ -444,20 +445,35 @@ export async function getAttendanceSheet(
       .eq("church_id", input.churchId)
       .maybeSingle(),
   ]);
+  if (membershipResult.error || occurrenceResult.error || recordResult.error || membershipResult.count === null) {
+    throw new VisitorError("unavailable", "Could not load the complete attendance sheet. Please try again.");
+  }
+  if (membershipResult.count !== (membershipResult.data ?? []).length) {
+    throw new VisitorError("unavailable", "This group has more people than the attendance form can safely show. Contact support.");
+  }
+  const memberships = membershipResult.data;
+  const occurrence = occurrenceResult.data;
+  const record = recordResult.data;
 
   const rows = (memberships ?? []) as { id: string; member_id: string | null; account_id: string | null; group_role: string }[];
-  const labels = await labelMemberships(admin, rows);
+  const labels = await labelMemberships(admin, rows, { requireComplete: true });
 
   let presentMembers = new Set<string>();
   const guests: { memberId: string; name: string }[] = [];
   if (occurrence) {
-    const { data: facts } = await admin
+    const { data: facts, error: factsError, count: factsCount } = await admin
       .from("attendance_facts")
-      .select("member_id, members!inner(first_name, last_name)")
+      .select("member_id, members!inner(first_name, last_name)", { count: "exact" })
       .eq("service_occurrence_id", occurrence.id as string)
       .eq("church_id", input.churchId)
       .eq("status", "active")
       .limit(2000);
+    if (factsError || factsCount === null) {
+      throw new VisitorError("unavailable", "Could not load the complete attendance sheet. Please try again.");
+    }
+    if (factsCount !== (facts ?? []).length) {
+      throw new VisitorError("unavailable", "This meeting has more attendance records than the form can safely show. Contact support.");
+    }
     const factRows = (facts ?? []) as { member_id: string; members: { first_name: string; last_name: string } | { first_name: string; last_name: string }[] }[];
     presentMembers = new Set(factRows.map((f) => f.member_id));
     const roster = new Set(rows.map((r) => r.member_id).filter(Boolean));
