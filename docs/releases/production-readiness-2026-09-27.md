@@ -17,9 +17,16 @@ readiness.
   and view-access denial probes. The additive
   `0111_announcement_status_view_invoker.sql` migration resolves the live
   Security Advisor's SECURITY DEFINER view finding. It is local only.
-- A full custom-format PostgreSQL backup and restore rehearsal passed on a
-  disposable PostgreSQL 17 server with four synthetic churches. Restored record
-  fingerprints, RLS, view settings, and medical-note grants matched the source.
+- The exact planned rollout order was rehearsed against a fresh disposable
+  restore of the approved production archive: 0114–0120 first, then
+  0110–0113. Every migration applied, and the restore retained four churches,
+  109 members, and one pending invitation. The temporary database was removed.
+  This verifies schema/data compatibility of that order; it does not replace
+  the controlled live migration baseline and rollout checks.
+- A full custom-format PostgreSQL backup and restore rehearsal passed with all
+  122 migrations on a disposable PostgreSQL 17 server and four synthetic
+  churches. Restored record fingerprints, RLS, view settings, and medical-note
+  grants matched the source.
   Run it with `pnpm test:backup-restore`, `FAITHFORM_DB_TARGET=disposable`, and
   a loopback-only `FAITHFORM_TEST_DATABASE_URL`, with PostgreSQL 17 client tools
   first on `PATH`. This does not validate
@@ -28,6 +35,8 @@ readiness.
   release variants pass. Device/provider end-to-end tests remain separate.
 - Dependencies: no unresolved high or critical production advisories. Two high
   `image-size` advisories are covered by the repository's reviewed lockfile patch.
+  The current `pnpm audit:prod` check reports zero critical, two patched high,
+  two moderate, and one low advisory.
 - Live read-only signals: the latest Vercel production deployment was marked
   Ready; the public mobile health endpoint returned HTTP 200; the production
   error-log query found no 5xx entries in its last 24-hour window. These are
