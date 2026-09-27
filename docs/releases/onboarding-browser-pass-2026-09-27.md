@@ -156,6 +156,14 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   Recordings. The original computer source and manual-review publication
   choice were restored and verified after reload; YouTube and Facebook were
   never connected.
+- Recording review: searching for an unrelated title returned a helpful empty
+  state, while searching for `QA ONLY` found the unpublished recording. Its
+  review page played the saved video and showed title, series, audience,
+  website/app destinations, speaker, description, scripture, topics, artwork,
+  and trim controls. Saving a trim changed the displayed duration, and restoring
+  the full span returned it to 0:48. The Go live page offered a review reminder;
+  Prepare the next service exposed the next-service controls, and Later folded
+  the reminder into a smaller link. Neither action published the recording.
 - Settings: the new tenant's Team view was empty and showed admin, staff,
   volunteer, and custom permission choices. Connected accounts correctly
   showed Google, iCloud, YouTube, and Facebook as disconnected. Switching the
