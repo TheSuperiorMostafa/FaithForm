@@ -119,13 +119,20 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
 - Group chat shows a retryable “This chat didn’t open” error in the platform
   admin church-switch session. The server intentionally denies chat tokens to
   impersonating platform staff. The UI should explain this restriction instead
-  of implying a transient outage. Chat still needs a real church-admin account
-  test after the invite/password handoff.
+  of implying a transient outage. On a later QA browser visit, the same group
+  chat opened and displayed the earlier QA test message; this does not explain
+  the initial error or establish the active account's permissions. Chat still
+  needs a controlled real church-admin account test.
 - After the group meeting saved and appeared in Coming up, a “Discard changes?”
   prompt surfaced. Choosing “Keep editing” left the saved meeting visible.
   The shared Groups dialog now ignores a native close notification that
   arrives after a successful controlled close. This local fix still needs
   browser verification after rollout.
+- The QA meeting's attendance form loaded the QA member and accepted a local
+  selection and note, but saving before the meeting's one-day attendance
+  window returned “Attendance opens the day before the gathering.” Nothing
+  was saved; the unsaved-change prompt discarded the trial input correctly.
+  Attendance recording itself remains unverified.
 - The production Church App cannot save quick links because the active
   `churches` table lacks `app_links` (Postgres 42703). The UI says links are
   unavailable. Save & publish still saves other profile fields but leaves the
