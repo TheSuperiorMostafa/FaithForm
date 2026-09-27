@@ -18,66 +18,44 @@ const input = {
   },
 };
 
-function mockClient(options: {
-  count?: number | null;
-  countError?: boolean;
-  meetingRows?: number;
-  syncError?: boolean;
-  syncRows?: number;
-} = {}) {
-  const writes: string[] = [];
-  const chain = (result: Record<string, unknown>) => ({
-    eq() { return this; },
-    select() { return this; },
-    maybeSingle: async () => result,
-    then: (resolve: (value: Record<string, unknown>) => unknown) => Promise.resolve(result).then(resolve),
-  });
-  const client = {
-    from(table: string) {
-      if (table === "group_events") return {
-        select: () => chain({ data: { id: input.eventId, status: "scheduled" }, error: null }),
-        update: () => { writes.push("meeting"); return chain({ data: options.meetingRows === 0 ? [] : [{ id: input.eventId }], error: null }); },
-      };
-      if (table === "service_occurrences") return {
-        select: () => chain({ data: { id: "occurrence-qa" }, error: null }),
-        update: () => { writes.push("attendance window"); return chain({ data: options.syncRows === 0 ? [] : [{ id: "occurrence-qa" }], error: options.syncError ? new Error("database error") : null }); },
-      };
-      if (table === "attendance_facts") return {
-        select: () => chain({ count: options.count ?? 0, error: options.countError ? new Error("database error") : null }),
-      };
-      throw new Error(`Unexpected table: ${table}`);
+function mockClient(outcome: string | null = "updated", error: Error | null = null) {
+  const calls: { name: string; params: Record<string, unknown> }[] = [];
+  const admin = {
+    async rpc(name: string, params: Record<string, unknown>) {
+      calls.push({ name, params });
+      return { data: outcome, error };
     },
-    async rpc() { return { error: null }; },
-  };
-  return { admin: client as unknown as SupabaseClient, writes };
+  } as unknown as SupabaseClient;
+  return { admin, calls };
 }
 
-test("a failed attendance check cannot shift a meeting with unknown history", async () => {
-  const { admin, writes } = mockClient({ countError: true });
-  await assert.rejects(updateGathering(admin, input), /Could not check this meeting's attendance window/);
-  assert.deepEqual(writes, []);
-});
-
-test("a meeting with recorded attendance keeps its historical check-in window", async () => {
-  const { admin, writes } = mockClient({ count: 1 });
+test("a meeting save submits its church, event, and time in one database call", async () => {
+  const { admin, calls } = mockClient();
   await updateGathering(admin, input);
-  assert.deepEqual(writes, ["meeting"]);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].name, "update_group_gathering");
+  assert.equal(calls[0].params.p_church_id, input.churchId);
+  assert.equal(calls[0].params.p_event_id, input.eventId);
+  assert.equal(calls[0].params.p_starts_at, input.values.startsAt);
 });
 
-test("a failed attendance-window update is reported rather than silently accepted", async () => {
-  const { admin, writes } = mockClient({ syncError: true });
-  await assert.rejects(updateGathering(admin, input), /meeting saved, but its attendance time did not update/i);
-  assert.deepEqual(writes, ["meeting", "attendance window"]);
+test("a recorded attendance window rejects a time edit", async () => {
+  const { admin } = mockClient("attendance_locked");
+  await assert.rejects(updateGathering(admin, input), /Attendance has been recorded/);
 });
 
-test("a concurrent removal cannot report an untouched meeting as saved", async () => {
-  const { admin, writes } = mockClient({ meetingRows: 0 });
-  await assert.rejects(updateGathering(admin, input), /Could not save that gathering/);
-  assert.deepEqual(writes, ["meeting"]);
+test("missing and cancelled meetings give clear outcomes", async () => {
+  await assert.rejects(updateGathering(mockClient("not_found").admin, input), /not found/);
+  await assert.rejects(updateGathering(mockClient("cancelled").admin, input), /cancelled gathering/);
 });
 
-test("an attendance-window update affecting no row is reported", async () => {
-  const { admin, writes } = mockClient({ syncRows: 0 });
-  await assert.rejects(updateGathering(admin, input), /meeting saved, but its attendance time did not update/i);
-  assert.deepEqual(writes, ["meeting", "attendance window"]);
+test("a database failure never reports the meeting as saved", async () => {
+  await assert.rejects(updateGathering(mockClient(null, new Error("database error")).admin, input), /Could not save/);
+  await assert.rejects(updateGathering(mockClient(null).admin, input), /Could not save/);
+});
+
+test("invalid meeting input is rejected before a database call", async () => {
+  const { admin, calls } = mockClient();
+  await assert.rejects(updateGathering(admin, { ...input, values: { ...input.values, title: "" } }), /name/);
+  assert.equal(calls.length, 0);
 });

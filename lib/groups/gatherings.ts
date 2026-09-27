@@ -247,94 +247,29 @@ export async function updateGathering(
     throw new VisitorError("invalid_input", parsed.error.issues[0]?.message ?? "Check the gathering details.");
   }
   const v = parsed.data;
-  const { data: existing } = await admin
-    .from("group_events")
-    .select("id, status")
-    .eq("id", input.eventId)
-    .eq("church_id", input.churchId)
-    .eq("group_id", input.groupId)
-    .maybeSingle();
-  if (!existing) throw new VisitorError("group_not_found", "That gathering was not found.");
-  if (existing.status === "cancelled") throw new VisitorError("conflict", "A cancelled gathering can't be edited.");
-
-  // Learn whether attendance is already history before editing the event.
-  // A failed count must never be mistaken for zero and shift a counted
-  // occurrence's check-in window.
-  const { data: occurrence, error: occurrenceError } = await admin
-    .from("service_occurrences")
-    .select("id")
-    .eq("group_event_id", input.eventId)
-    .eq("church_id", input.churchId)
-    .maybeSingle();
-  if (occurrenceError) throw new VisitorError("unavailable", "Could not check this meeting's attendance window.");
-  let hasAttendance = false;
-  if (occurrence) {
-    const { count, error: countError } = await admin
-      .from("attendance_facts")
-      .select("id", { count: "exact", head: true })
-      .eq("service_occurrence_id", occurrence.id as string);
-    if (countError || count === null) {
-      throw new VisitorError("unavailable", "Could not check this meeting's attendance window.");
-    }
-    hasAttendance = count > 0;
-  }
-
   const timezone = v.timezone ?? input.churchTimezone;
-  const { data: updated, error } = await admin
-    .from("group_events")
-    .update({
-      title: v.title,
-      description: blankToNull(v.description),
-      starts_at: v.startsAt,
-      ends_at: v.endsAt,
-      timezone,
-      location_name: blankToNull(v.locationName),
-      location_address: blankToNull(v.locationAddress),
-      online_meeting_url: blankToNull(v.onlineMeetingUrl),
-      // A hand-edited generated gathering is left alone by regeneration.
-      is_modified: true,
-      updated_by: input.actor.userId,
-    })
-    .eq("id", input.eventId)
-    .eq("church_id", input.churchId)
-    .select("id");
-  if (error || !updated?.length) throw new VisitorError("unavailable", "Could not save that gathering.");
-
-  // Keep the attendance occurrence in step while nobody has been counted yet;
-  // once someone has, the occurrence is history and stays as it was.
-  if (occurrence && !hasAttendance) {
-    const startMs = Date.parse(v.startsAt);
-    const endMs = Date.parse(v.endsAt);
-    const { data: synced, error: syncError } = await admin
-      .from("service_occurrences")
-      .update({
-        label: v.title.slice(0, 200),
-        starts_at_utc: v.startsAt,
-        ends_at_utc: v.endsAt,
-        checkin_opens_at_utc: new Date(startMs - 86_400_000).toISOString(),
-        checkin_closes_at_utc: new Date(endMs + 30 * 86_400_000).toISOString(),
-        timezone,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", occurrence.id as string)
-      .eq("church_id", input.churchId)
-      .select("id");
-    if (syncError || !synced?.length) {
-      throw new VisitorError("unavailable", "The meeting saved, but its attendance time did not update. Please retry.");
-    }
-  }
-
-  await admin.rpc("log_group_event", {
+  const { data: outcome, error } = await admin.rpc("update_group_gathering", {
     p_church_id: input.churchId,
     p_group_id: input.groupId,
-    p_action: "event_updated",
+    p_event_id: input.eventId,
     p_actor_type: input.actor.type,
     p_actor_user_id: input.actor.userId,
-    p_membership_id: null,
-    p_account_id: null,
-    p_member_id: null,
-    p_detail: { eventId: input.eventId },
+    p_title: v.title,
+    p_description: blankToNull(v.description),
+    p_starts_at: v.startsAt,
+    p_ends_at: v.endsAt,
+    p_timezone: timezone,
+    p_location_name: blankToNull(v.locationName),
+    p_location_address: blankToNull(v.locationAddress),
+    p_online_meeting_url: blankToNull(v.onlineMeetingUrl),
   });
+  if (error) throw new VisitorError("unavailable", "Could not save that gathering.");
+  if (outcome === "not_found") throw new VisitorError("group_not_found", "That gathering was not found.");
+  if (outcome === "cancelled") throw new VisitorError("conflict", "A cancelled gathering can't be edited.");
+  if (outcome === "attendance_locked") {
+    throw new VisitorError("conflict", "Attendance has been recorded. This meeting's time can no longer change.");
+  }
+  if (outcome !== "updated") throw new VisitorError("unavailable", "Could not save that gathering.");
 }
 
 export async function cancelGathering(

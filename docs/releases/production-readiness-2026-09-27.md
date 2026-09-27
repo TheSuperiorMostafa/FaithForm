@@ -68,6 +68,16 @@ readiness.
   group-chat notification and a church domain request succeeded; neither test
   row remained afterward. Anonymous and authenticated roles cannot execute the
   new church-app projection functions, while the server role can.
+- Migration 0114 makes a group meeting edit, its existing attendance window,
+  and its audit event one transaction. All 116 migrations and 43 Groups and
+  security database tests passed in a fresh disposable local database. A
+  deliberately failed occurrence update rolled back the meeting edit; a saved
+  zero-attendee attendance record prevented the meeting time from changing.
+  Browser roles cannot call the new function. A separate disposable restore of
+  the approved production archive, excluding unrelated Supabase Vault and
+  Realtime platform objects that the local container cannot restore, accepted
+  migration 0114; all four churches remained and `anon` lacked execute access.
+  That restored copy was removed. This fix has not been deployed.
 
 ## Live production findings on 2026-09-27 (read-only)
 
@@ -162,17 +172,21 @@ readiness.
   Health Advisor listed no errors or warnings. These counts are point-in-time
   advisor results.
 
-## Release sequence for migrations 0110 through 0113
+## Release sequence for migrations 0110 through 0114
 
 1. Capture the current deployment and database migration state. Reconcile the
    deployed schema and source migration history. Confirm a recoverable backup
    by restoring it to a separate environment and checking tenant counts and
    critical records, including Storage objects through a separate process.
    Do not restore over live data.
-2. Deploy the application changes first. The new server code can read medical
-   notes and call aggregates after the database policy tightens. The admin
-   aggregate calls paginate safely until 0112 arrives. The old server code
-   cannot read some fields after 0110.
+2. Apply `0114_group_gathering_atomic_update.sql` before deploying the updated
+   application: the new meeting save calls this function and cannot work until
+   it exists. The function is server-only and the currently deployed meeting
+   editor does not call it. Then deploy the application changes before the
+   policy-tightening migrations. The new server code can read medical notes
+   and call aggregates after the database policy tightens. The admin aggregate
+   calls paginate safely until 0112 arrives. The old server code cannot read
+   some fields after 0110.
 3. Smoke test sign-in and the existing workflows for each of the four churches:
    Home, People care details, Kids Check-in roster, Reports PDF, Giving, Calls,
    Church App editing, and any enabled provider integration. Check both admin
@@ -182,8 +196,8 @@ readiness.
    `0112_platform_admin_aggregates.sql`, and
    `0113_active_schema_catchup.sql` once through the controlled migration
    process. Verify their recorded checksums and inspect the resulting policies,
-   column grants, view options, and aggregate function privileges. Do not edit
-   an already applied migration.
+   column grants, view options, and aggregate function privileges. Confirm
+   0114's server-only execute grant. Do not edit an already applied migration.
 5. Repeat the same workflow checks. A staff session without Giving, Calls,
    People, or Check-in must be denied direct reads of those areas; an attendance
    session must not be able to select `members.medical_notes`. A staff session
@@ -263,9 +277,9 @@ on its own.
   The local logical archive and object reconstruction proved local recovery
   paths, not these remaining disaster-recovery steps.
 - Final live-schema comparison, a recorded migration baseline, and safe
-  application of 0110 through 0113. The local comparison exposed the active
-  missing objects, but live production still has the access gap and no source
-  migration ledger.
+  application of 0110 through 0114 in the order above. The local comparison
+  exposed the active missing objects, but live production still has the access
+  gap and no source migration ledger.
 - A representative controlled rollout with real accounts from all four
   churches, including payment/webhook, email/SMS, push, attendance, and media
   paths that those churches actively use.
