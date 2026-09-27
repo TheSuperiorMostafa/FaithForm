@@ -165,6 +165,32 @@ test("a staff session reads only its granted financial, call, and family areas",
   }
 });
 
+test("the announcement status view enforces its caller's church policy", suiteOptions, async () => {
+  const client = await connect();
+  try {
+    await inTransaction(client, async () => {
+      const w = await seed(client);
+      // Make the legacy view callable inside this disposable transaction so
+      // the test proves the underlying row policy, not merely a missing grant.
+      await client.query("grant select on public.announcements_with_status to authenticated, anon");
+
+      await actAs(client, w.adminA);
+      const own = await client.query(
+        "select id from public.announcements_with_status order by id",
+      );
+      assert.deepEqual(own.rows.map((row) => row.id), [w.ids.announcementA]);
+
+      await actAs(client, null);
+      assert.ok(
+        await refused(client, "select id from public.announcements_with_status"),
+        "a signed-out visitor read announcements through the view",
+      );
+    });
+  } finally {
+    await client.end();
+  }
+});
+
 test("church A's admin cannot read, change, delete, or plant rows in church B", suiteOptions, async () => {
   const client = await connect();
   try {
