@@ -1,5 +1,17 @@
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { MarketingLanding } from "@/components/marketing/landing";
+import "./marketing.css";
+
+export const metadata: Metadata = {
+  title: "FaithForm | Give pastors their time back",
+  description: "Church software that gets out of the way. FaithForm helps pastors spend fewer hours on admin and more hours on ministry.",
+  openGraph: {
+    title: "FaithForm | Give pastors their time back",
+    description: "It's time to stop punching your computer. Fewer hours on admin, more hours on ministry.",
+    type: "website",
+  },
+};
 
 type PageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -7,11 +19,8 @@ type PageProps = {
 
 export default async function Page({ searchParams }: PageProps) {
   const query = await searchParams;
-  // Supabase sometimes sends auth links to Site URL root (?code=...) instead
-  // of /auth/callback — notably whenever a redirect isn't on its allow-list.
-  // Forward the whole query, not just the code: `next` and any flow hints
-  // must survive the hop or a reset link degrades into a plain sign-in.
-  if (typeof query.code === "string") {
+  // Keep the root fallback for auth links when Supabase strips redirect_to.
+  if (typeof query.code === "string" || typeof query.error_description === "string") {
     const params = new URLSearchParams();
     for (const [key, value] of Object.entries(query)) {
       if (typeof value === "string") params.set(key, value);
@@ -19,14 +28,5 @@ export default async function Page({ searchParams }: PageProps) {
     redirect(`/auth/callback?${params.toString()}`);
   }
 
-  const supabase = createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (user) {
-    redirect("/dashboard");
-  }
-
-  redirect("/login");
+  return <MarketingLanding />;
 }
