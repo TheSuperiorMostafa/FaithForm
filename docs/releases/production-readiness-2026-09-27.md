@@ -36,7 +36,12 @@ readiness.
 - Dependencies: no unresolved high or critical production advisories. Two high
   `image-size` advisories are covered by the repository's reviewed lockfile patch.
   The current `pnpm audit:prod` check reports zero critical, two patched high,
-  two moderate, and one low advisory.
+  zero moderate, and zero low advisories. Local lockfile overrides move the
+  Google API client's `qs` dependency to 6.16.0 and AI SDK provider utilities
+  to 4.0.33. The two reported `qs` denial-of-service cases now reject or
+  safely serialize their test inputs; Google and AI clients initialize, all
+  1,792 application tests pass, and the production build succeeds. Provider
+  calls still need a controlled external integration check after rollout.
 - Live read-only signals: the latest Vercel production deployment was marked
   Ready; the public mobile health endpoint returned HTTP 200; the production
   error-log query found no 5xx entries in its last 24-hour window. These are
