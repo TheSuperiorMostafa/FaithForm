@@ -570,19 +570,26 @@ export async function submitAttendance(
   if (!event) throw new VisitorError("group_not_found", "That gathering was not found.");
 
   // Membership ids to People ids, through this group's own active roster only.
-  const { data: roster, error: rosterError } = await admin
-    .from("group_memberships")
-    .select("id, member_id")
-    .eq("group_id", input.groupId)
-    .eq("church_id", input.churchId)
-    .eq("status", "active")
-    .in("id", v.presentMembershipIds.length ? v.presentMembershipIds : ["00000000-0000-0000-0000-000000000000"]);
-  // A failed read must not become "nobody came": the command would reverse
-  // everyone already counted.
-  if (rosterError) throw new VisitorError("unavailable", "Could not save attendance right now.");
-  const memberIds = ((roster ?? []) as { member_id: string | null }[])
-    .map((row) => row.member_id)
-    .filter((id): id is string => Boolean(id));
+  const selectedIds = [...new Set(v.presentMembershipIds)];
+  let roster: { id: string; member_id: string | null }[] = [];
+  if (selectedIds.length) {
+    const { data, error: rosterError } = await admin
+      .from("group_memberships")
+      .select("id, member_id")
+      .eq("group_id", input.groupId)
+      .eq("church_id", input.churchId)
+      .eq("status", "active")
+      .in("id", selectedIds);
+    // A failed or incomplete read must not become "nobody came": the command
+    // would reverse everyone already counted. A member can leave after the
+    // sheet opens, so all selected memberships must still be recordable.
+    if (rosterError) throw new VisitorError("unavailable", "Could not save attendance right now.");
+    roster = (data ?? []) as { id: string; member_id: string | null }[];
+    if (roster.length !== selectedIds.length || roster.some((row) => !row.member_id)) {
+      throw new VisitorError("conflict", "The group roster changed. Reopen attendance and try again.");
+    }
+  }
+  const memberIds = roster.map((row) => row.member_id as string);
 
   const guestMemberIds = input.actor.type === "staff" ? v.guestMemberIds ?? [] : [];
   const { data, error } = await admin.rpc("record_group_attendance", {

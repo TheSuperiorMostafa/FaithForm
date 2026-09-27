@@ -7,7 +7,7 @@ readiness.
 
 ## Verified in an isolated checkout
 
-- Web: typecheck, lint (zero errors), production build, 1,780 application tests,
+- Web: typecheck, lint (zero errors), production build, 1,781 application tests,
   generated-contract/design/localization checks, migration baseline check,
   secret scan, and feature-guard scan pass.
 - Database: the earlier 113 migrations applied to disposable PostgreSQL 15 and
@@ -95,7 +95,10 @@ readiness.
 - The local group attendance form now refuses to open if its roster, saved
   counts, or People labels fail to load, or if the API returns fewer rows than
   the database counted. This prevents a partial view from being saved as a
-  correction that marks unseen people absent. Groups with rosters larger than
+  correction that marks unseen people absent. Saving also stops if a selected
+  member has left the group since the form opened. A disposable restore of the
+  approved production archive had one group with one active member, so no
+  archived church hits the current row limit. Groups with rosters larger than
   the API response limit receive a clear support message; batched attendance
   for such groups remains a capacity decision before selling to churches that
   need it.

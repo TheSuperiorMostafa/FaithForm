@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { getAttendanceSheet } from "@/lib/groups/gatherings";
+import { getAttendanceSheet, submitAttendance } from "@/lib/groups/gatherings";
 
 const event = {
   id: "event-qa",
@@ -75,4 +75,31 @@ test("a complete empty roster is a valid attendance sheet", async () => {
   const sheet = await getAttendanceSheet(mockClient(), input);
   assert.equal(sheet.entries.length, 0);
   assert.equal(sheet.canRecord, true);
+});
+
+test("a membership that leaves before save cannot be silently marked absent", async () => {
+  const selectedId = "11111111-1111-4111-8111-111111111111";
+  let recorded = false;
+  const admin = {
+    from(table: string) {
+      const result = table === "group_events"
+        ? { data: { id: event.id }, error: null }
+        : { data: [], error: null };
+      return {
+        select() { return this; },
+        eq() { return this; },
+        in() { return this; },
+        maybeSingle: async () => result,
+        then: (resolve: (value: typeof result) => unknown) => Promise.resolve(result).then(resolve),
+      };
+    },
+    async rpc() { recorded = true; return { data: [{ outcome: "recorded", rejected_member_ids: [] }], error: null }; },
+  } as unknown as SupabaseClient;
+  await assert.rejects(submitAttendance(admin, {
+    ...input,
+    actor: { type: "staff", userId: "staff-qa" },
+    idempotencyKey: "qa-save",
+    values: { presentMembershipIds: [selectedId], guestCount: 0, firstTimeGuestCount: 0 },
+  }), /roster changed/);
+  assert.equal(recorded, false);
 });
