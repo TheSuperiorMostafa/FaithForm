@@ -57,7 +57,10 @@ export default async function UpcomingServicesPage({
           title="Show sermon slides during a service"
           description="Link a sermon's slides so people can open them while they watch."
         >
-          <ServicePresentationLinker bare />
+          <ServicePresentationLinker
+            key={events.map((event) => `${event.id}:${event.status}`).join("|")}
+            bare
+          />
         </AdvancedSection>
       ) : null}
     </div>

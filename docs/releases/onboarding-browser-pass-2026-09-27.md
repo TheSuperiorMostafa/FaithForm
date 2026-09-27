@@ -91,6 +91,13 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   removed it from Upcoming while preserving a Cancelled record. The empty
   Recordings view and streaming setup instructions loaded. No actual video
   stream was started.
+- A second one-off QA service for September 30 saved its name, time,
+  countdown, and live-chat choices. The published QA sermon's slides linked to
+  it, stayed linked after reload, and could be removed again. Cancelling the
+  service cleared Upcoming and kept a Cancelled record. YouTube and Facebook
+  stayed disconnected; no video was uploaded or broadcast. In Safari's native
+  date-time control, the date looked complete but submission returned
+  “Invalid value” until month and year segments were explicitly entered.
 - Settings: the new tenant's Team view was empty and showed admin, staff,
   volunteer, and custom permission choices. Connected accounts correctly
   showed Google, iCloud, YouTube, and Facebook as disconnected. Switching the
@@ -178,6 +185,13 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
 - Typing a two-digit ending verse after a later starting verse is fixed
   locally by allowing the temporary partial number while keeping the draft
   invalid until the range is complete. This is not deployed.
+- The Live service picker under “Show sermon slides during a service” kept its
+  old choices immediately after a service was scheduled or cancelled; a full
+  reload corrected it. The linker fetched its choices only on mount while
+  scheduling refreshed the server page without remounting that client
+  component. The local page now keys the linker to service IDs and statuses so
+  a refreshed service list remounts it. This is not deployed or browser
+  retested against the local build.
 
 ## Still in progress
 
@@ -199,3 +213,5 @@ announcement tests including older-schema fallback cases, all 441 security
 tests including the one-email invite and retryable finalization checks, and an
 optimized production build. The build emitted existing lint warnings outside
 the edited files. No code was pushed or deployed.
+The later Live picker refresh change passed TypeScript checking and targeted
+ESLint; it still needs a browser check after rollout.
