@@ -499,6 +499,15 @@ on its own.
   synthetic backup and restore also passed with 0121. Apply this migration
   before deploying its website action, then browser-test publish and unpublish
   against the QA church after rollout.
+- In an anonymous browser, the QA church's draft website content was absent
+  both at its direct URL and with `?preview=1`; a signed-in staff preview did
+  show the draft. The anonymous browser displayed FaithForm's marketing page
+  at the draft URL, so the public 404/redirect presentation still needs a
+  focused check after rollout.
+- The signed-in QA site preview's visit form required a name and a valid email
+  before submission. Optional phone and note fields accepted QA text. The
+  invalid draft was discarded without sending another enquiry; an earlier
+  valid QA enquiry had reached the owner's Gmail inbox.
 - Live-streaming setup choices saved and persisted in the QA church. A separate
   code review found that a failed recording-settings read could display false
   defaults, including the wrong automatic-publication choice. The local fix
