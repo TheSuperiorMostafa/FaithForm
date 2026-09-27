@@ -499,11 +499,13 @@ on its own.
   synthetic backup and restore also passed with 0121. Apply this migration
   before deploying its website action, then browser-test publish and unpublish
   against the QA church after rollout.
-- In an anonymous browser, the QA church's draft website content was absent
-  both at its direct URL and with `?preview=1`; a signed-in staff preview did
-  show the draft. The anonymous browser displayed FaithForm's marketing page
-  at the draft URL, so the public 404/redirect presentation still needs a
-  focused check after rollout.
+- A repeat in Safari Private Browsing confirmed the live privacy gap: an
+  anonymous visitor can read the QA church's unpublished site by adding
+  `?preview=1`, while the same private window showed 404 without that
+  parameter. A separate in-app browser showed FaithForm's marketing page at
+  that URL, but it did not reproduce Safari's result and cannot be treated as
+  proof of protection. The local preview guard remains a release blocker until
+  deployed and retested in Safari Private and another anonymous browser.
 - The signed-in QA site preview's visit form required a name and a valid email
   before submission. Optional phone and note fields accepted QA text. The
   invalid draft was discarded without sending another enquiry; an earlier
