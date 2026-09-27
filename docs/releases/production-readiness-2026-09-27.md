@@ -47,12 +47,30 @@ readiness.
   with about 484 MB in recorded object sizes. These include stream recordings,
   church images, and an attachment. The database backup does not preserve
   those object bytes.
-- A production-backup restore was **not tested**. The offered restore-to-new-
-  project path would incur an estimated $10.18/month while it exists and copy
-  church data; the owner declined creating that project. The current connection
-  string requires a database password that was not available locally, and the
-  dashboard has no backup download action for these physical backups. No live
-  restore was attempted.
+- All 342 production Storage objects were downloaded one at a time to the
+  private, Git-ignored local directory `.env.storage-backup-2026-09-27.local`.
+  The manifest records bucket, object path, length, and SHA-256 for each file.
+  An independent check verified all 484,402,097 bytes, and a disposable local
+  reconstruction recreated every bucket/path and matched every hash before
+  that reconstruction was removed. No file was uploaded to Supabase. This
+  proves the local copy is complete and readable, but not that a provider-side
+  Storage restore has been rehearsed.
+- A read-only logical dump of the production database was saved locally at
+  10:43 EDT as `.env.backup-2026-09-27.dump.local` (1,653,245 bytes, mode 0600,
+  Git-ignored). Its adjacent `.env.backup-2026-09-27.sha256.local` checksum file
+  verified. The approved restore into disposable PostgreSQL 17 succeeded after
+  excluding ten Supabase Vault archive entries because that extension is not
+  installed locally; production has zero Vault secret rows. Seven aggregate
+  counts matched the live database exactly at verification: 4 churches, 14
+  auth users, 109 members, 11 announcements, 6 donations, 50 calls, and 342
+  Storage metadata rows. The restored local database and temporary logs were
+  deleted. The local archive remains; it is on the same computer, not an
+  independent offsite backup.
+- Supabase's managed physical-backup restore remains **untested**. The offered
+  restore-to-new-project path would incur an estimated $10.18/month while it
+  exists and copy church data; the owner declined creating that project. The
+  dashboard has no download action for those physical backups. No live restore
+  was attempted.
 - The production database is PostgreSQL 17.6. It has no
   `supabase_migrations.faithform_source_migrations` table, so the local versioned
   migration ledger cannot establish which source SQL files were applied there.
@@ -117,8 +135,11 @@ financial/call policies is not a safe rollback.
 
 ## Gates still requiring live evidence
 
-- A successful production-backup restore test, separate Storage object backup
-  and restore coverage, and documented recovery time and data-loss targets.
+- A successful Supabase physical-backup restore test, a provider-side Storage
+  restore rehearsal, an independent encrypted location for the local database
+  and Storage archives, and documented recovery time and data-loss targets.
+  The local logical archive and object reconstruction proved local recovery
+  paths, not these remaining disaster-recovery steps.
 - Deployed migration-history reconciliation and a safe application of 0110/0111;
   production metadata inspection confirmed the current access gap and the
   absence of the local source-migration ledger.
