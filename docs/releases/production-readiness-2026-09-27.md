@@ -11,9 +11,9 @@ readiness.
   generated-contract/design/localization checks, migration baseline check,
   secret scan, and feature-guard scan pass.
 - Database: the earlier 113 migrations applied to disposable PostgreSQL 15 and
-  17; the 115-migration chain also passed a fresh PostgreSQL 17
-  archive-and-restore rehearsal. The current 117-migration chain and all 44
-  database tests pass, including cross-church, per-feature,
+  17; the current 117-migration chain passed a fresh PostgreSQL 17
+  archive-and-restore rehearsal. All 44 database tests pass, including
+  cross-church, per-feature,
   and view-access denial probes. The additive
   `0111_announcement_status_view_invoker.sql` migration resolves the live
   Security Advisor's SECURITY DEFINER view finding. It is local only.
@@ -21,7 +21,8 @@ readiness.
   disposable PostgreSQL 17 server with four synthetic churches. Restored record
   fingerprints, RLS, view settings, and medical-note grants matched the source.
   Run it with `pnpm test:backup-restore`, `FAITHFORM_DB_TARGET=disposable`, and
-  a loopback-only `FAITHFORM_TEST_DATABASE_URL`. This does not validate
+  a loopback-only `FAITHFORM_TEST_DATABASE_URL`, with PostgreSQL 17 client tools
+  first on `PATH`. This does not validate
   Supabase's production physical backups or Storage object recovery.
 - Native: iOS Swift build and the Android unit suite across debug, staging, and
   release variants pass. Device/provider end-to-end tests remain separate.
