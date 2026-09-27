@@ -1279,15 +1279,22 @@ export async function lookupCheckoutCredential(input: {
   }
 
   const supabase = createClient();
-  const [household, sessions] = await Promise.all([
-    getHousehold(context.auth.churchId, householdId, supabase),
-    getHouseholdOpenSessions(
-      context.auth.churchId,
-      householdId,
-      today,
-      supabase,
-    ),
-  ]);
+  let household: Awaited<ReturnType<typeof getHousehold>>;
+  let sessions: CheckinSessionRow[];
+  try {
+    [household, sessions] = await Promise.all([
+      getHousehold(context.auth.churchId, householdId, supabase),
+      getHouseholdOpenSessions(
+        context.auth.churchId,
+        householdId,
+        today,
+        supabase,
+      ),
+    ]);
+  } catch (error) {
+    console.error("[checkin] pickup lookup failed:", error);
+    return fail("We couldn't load this family's check-ins. Please try again.");
+  }
 
   if (!household) return fail("We couldn't find that family.");
 
@@ -1351,35 +1358,41 @@ export async function lookupHouseholdForOverride(
   );
   if (!searchResult.ok) return fail(searchResult.error);
 
-  const results = await Promise.all(
-    searchResult.households.map(async (household) => {
-      const sessions = await getHouseholdOpenSessions(
-        context.auth.churchId,
-        household.id,
-        today,
-        supabase,
-      );
+  let results: CheckoutLookup[];
+  try {
+    results = await Promise.all(
+      searchResult.households.map(async (household) => {
+        const sessions = await getHouseholdOpenSessions(
+          context.auth.churchId,
+          household.id,
+          today,
+          supabase,
+        );
 
-      return {
-        householdId: household.id,
-        householdName: household.name,
-        method: "override" as CheckoutMethod,
-        sessions,
-        guardians: household.members
-          .filter((m) => m.relationship === "guardian")
-          .map((m) => ({
-            memberId: m.memberId,
-            name: `${m.firstName} ${m.lastName}`,
-            label: m.relationshipLabel,
+        return {
+          householdId: household.id,
+          householdName: household.name,
+          method: "override" as CheckoutMethod,
+          sessions,
+          guardians: household.members
+            .filter((m) => m.relationship === "guardian")
+            .map((m) => ({
+              memberId: m.memberId,
+              name: `${m.firstName} ${m.lastName}`,
+              label: m.relationshipLabel,
+            })),
+          authorizedPickups: household.pickupAuthorizations.map((p) => ({
+            memberId: p.memberId,
+            name: `${p.firstName} ${p.lastName}`,
+            label: p.relationshipLabel,
           })),
-        authorizedPickups: household.pickupAuthorizations.map((p) => ({
-          memberId: p.memberId,
-          name: `${p.firstName} ${p.lastName}`,
-          label: p.relationshipLabel,
-        })),
-      } satisfies CheckoutLookup;
-    }),
-  );
+        } satisfies CheckoutLookup;
+      }),
+    );
+  } catch (error) {
+    console.error("[checkin] pickup search failed:", error);
+    return fail("We couldn't load the check-ins for these families. Please try again.");
+  }
 
   return { ok: true, data: results.filter((row) => row.sessions.length > 0) };
 }

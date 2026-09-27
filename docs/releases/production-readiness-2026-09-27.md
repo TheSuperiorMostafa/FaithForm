@@ -7,7 +7,7 @@ readiness.
 
 ## Verified in an isolated checkout
 
-- Web: typecheck, lint (zero errors), production build, 1,781 application tests,
+- Web: typecheck, lint (zero errors), production build, 1,785 application tests,
   generated-contract/design/localization checks, migration baseline check,
   secret scan, and feature-guard scan pass.
 - Database: the earlier 113 migrations applied to disposable PostgreSQL 15 and
@@ -102,6 +102,15 @@ readiness.
   the API response limit receive a clear support message; batched attendance
   for such groups remains a capacity decision before selling to churches that
   need it.
+- Kids Check-in roster, dependent list, family pickup records, household
+  directory, and room attendance reports now read in counted 500-row pages.
+  The service attendance roster uses the same complete-read guard. If a page
+  fails, repeats, or stops early, the check-in and pickup paths report failure
+  instead of treating the missing people as absent. The change passed 1,785
+  application tests, typecheck, targeted lint, and a local production build.
+  The helper caps an individual read at 10,000 rows and reports larger results
+  as an error; a server-side aggregate or narrower filter will be needed for
+  any church that reaches that limit. Hosted load at that size is untested.
 
 ## Live production findings on 2026-09-27 (read-only)
 
