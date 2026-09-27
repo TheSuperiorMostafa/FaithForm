@@ -427,6 +427,10 @@ on its own.
   blocker until the fix is deployed and an anonymous production retest returns
   404. The resulting dynamic
   public-site path needs hosted load evidence before a 100-church claim.
+  The optimized local build compiled, but a loopback production-server browser
+  probe stopped at the app's required environment validation because this
+  isolated checkout has no production credentials. The anonymous compiled-build
+  response was a 503, so it is not evidence that the route guard ran there.
 - The live group meeting editor still writes its event and attendance window
   separately. Local migration 0114 makes them one transaction and passed a
   forced-failure rollback test. Its rollout and browser retest are outstanding.

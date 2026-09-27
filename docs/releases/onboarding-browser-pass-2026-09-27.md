@@ -176,6 +176,11 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   invitation was sent. In Member App settings, switching from Forest and wheat
   to Navy and gold saved, then restoring Forest and wheat survived a full
   reload. The custom-color controls opened without applying a new palette.
+- Church App follow-up: switching the live preview between Your people and
+  Someone new changed the final action from Change/Remove church to Add church,
+  then returned to the member view. Search listing stayed off, no campus or
+  invitation link was created, and the Phone Calls page still showed its
+  expected empty state.
 - Church details: the QA contact-email field rejected malformed text in the
   browser without saving it. A synthetic `.invalid` address saved and survived
   a full reload; clearing and saving it again restored the original empty
