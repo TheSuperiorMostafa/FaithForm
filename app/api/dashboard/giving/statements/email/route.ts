@@ -85,11 +85,19 @@ export async function POST(request: Request) {
 
   const year = parseStatementYear(String(parsed.data.year));
   const admin = createAdminClient();
-  const { data: church } = await admin
+  const { data: church, error: churchError } = await admin
     .from("churches")
     .select("name, slug, ein, statement_address, logo_url, giving_primary_color, giving_accent_color")
     .eq("id", auth.churchId)
     .single();
+
+  if (churchError || !church) {
+    console.error("[giving] statement email church read failed", churchError);
+    return NextResponse.json(
+      { error: "We couldn't load church details. Nothing was sent. Please try again." },
+      { status: 503 },
+    );
+  }
 
   if (!church?.ein) {
     return NextResponse.json(

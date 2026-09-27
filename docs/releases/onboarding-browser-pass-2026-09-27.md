@@ -255,6 +255,14 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   missing scoring column triggers that retry. Voice settings reads likewise
   report an error instead of pretending no agent is configured. Focused
   failure-path tests pass; a browser error-path retest needs the rollout.
+- Giving statement and lookup review found that a failed gift read could
+  become an empty year-end statement, a failed donor read could produce an
+  incomplete ZIP, and a single unpaged read could omit gifts or donors beyond
+  1,000 rows. Local statement reads now page through all rows and reject failed
+  or incomplete reads before returning a file. Fund, recurring gift, church
+  profile, and address reads also distinguish an outage from an empty result.
+  Focused pagination and failure-path tests pass. PDF downloads and email
+  delivery still need a controlled post-rollout check.
 - Group chat shows a retryable “This chat didn’t open” error in the platform
   admin church-switch session. The server intentionally denies chat tokens to
   impersonating platform staff. The UI should explain this restriction instead

@@ -26,30 +26,40 @@ export async function GET(request: Request) {
   }
 
   const admin = createAdminClient();
-  const { data: church } = await admin
+  const { data: church, error: churchError } = await admin
     .from("churches")
     .select("name, ein, statement_address")
     .eq("id", session.churchId)
     .single();
 
-  const { data: donor } = await admin
+  const { data: donor, error: donorError } = await admin
     .from("giving_donors")
     .select("name, email")
     .eq("id", session.donorId)
     .eq("church_id", session.churchId)
     .single();
 
-  const gifts = await getDonorGiftsForYear(session.churchId, session.donorId, year);
+  if (churchError || donorError || !church || !donor) {
+    console.error("[giving] portal statement details unavailable", churchError, donorError);
+    return NextResponse.json({ error: "We couldn't load your statement details. Please try again." }, { status: 503 });
+  }
 
-  const buffer = await renderGivingStatementPdf({
-    churchName: (church?.name as string) ?? "Church",
-    ein: (church?.ein as string) ?? null,
-    statementAddress: (church?.statement_address as string) ?? null,
-    donorName: (donor?.name as string) ?? (donor?.email as string) ?? "Donor",
-    donorEmail: (donor?.email as string) ?? "",
-    year,
-    gifts,
-  });
+  let buffer: Buffer;
+  try {
+    const gifts = await getDonorGiftsForYear(session.churchId, session.donorId, year, admin);
+    buffer = await renderGivingStatementPdf({
+      churchName: church.name as string,
+      ein: (church.ein as string) ?? null,
+      statementAddress: (church.statement_address as string) ?? null,
+      donorName: (donor.name as string) ?? (donor.email as string),
+      donorEmail: donor.email as string,
+      year,
+      gifts,
+    });
+  } catch (error) {
+    console.error("[giving] portal statement generation failed", error);
+    return NextResponse.json({ error: "We couldn't make your statement. Please try again." }, { status: 503 });
+  }
 
   return new NextResponse(new Uint8Array(buffer), {
     headers: {

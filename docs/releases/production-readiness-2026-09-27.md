@@ -472,6 +472,15 @@ on its own.
   the old-schema call fallback is limited to a confirmed missing column. All
   56 focused phone-call and read-error tests pass with typecheck and lint. A
   controlled browser failure-path retest remains after rollout.
+- Giving reads previously returned empty funds, failed recurring gifts, or
+  false “not found” results on database errors. Year-end statement reads could
+  omit rows past Supabase's page limit or produce incomplete PDFs and ZIPs
+  after a partial failure. Local queries now page through gift and donor rows,
+  stop on read failure, and use old-schema fallback only for confirmed missing
+  color columns. Statement routes report an error before returning a file
+  when church, donor, or gift data is unavailable. Six focused integrity tests
+  and 77 Giving tests pass; live download/email and large-church rehearsals
+  remain after rollout.
 - The live website publish control writes page status and site settings in
   separate requests. Local migration 0121 saves both in one transaction. All
   50 database tests pass, including a forced second-write failure that leaves
