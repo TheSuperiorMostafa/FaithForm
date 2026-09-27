@@ -438,6 +438,14 @@ on its own.
 - The live group meeting editor still writes its event and attendance window
   separately. Local migration 0114 makes them one transaction and passed a
   forced-failure rollback test. Its rollout and browser retest are outstanding.
+- The QA check-in display and welcome desk paired in Safari. Revoking the
+  display removed its rotating code, and the kiosk rejected an early check-in
+  for a synthetic member. After kiosk pairing, the dashboard's station status
+  stayed stale until refreshed. A local bounded pairing-status refresh,
+  manual Refresh station status control, and checked station-list reads
+  address this. Selecting another service creates fresh panel state, and late
+  responses cannot overwrite a newer refresh. These changes need a browser retest after
+  rollout. Both QA features were turned off again.
 - The live website publish control writes page status and site settings in
   separate requests. Local migration 0121 saves both in one transaction. All
   50 database tests pass, including a forced second-write failure that leaves

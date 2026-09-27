@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { toast } from "sonner";
 
@@ -54,28 +54,57 @@ export function CheckinDisplayPanel({
   const [pairing, setPairing] = useState<{ code: string; expiresAt: string } | null>(null);
   const [kiosks, setKiosks] = useState<KioskSummary[]>([]);
   const [kioskCode, setKioskCode] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const refreshRequestId = useRef(0);
   const [pending, startTransition] = useTransition();
 
   const refresh = useCallback(() => {
+    const requestId = ++refreshRequestId.current;
     startTransition(async () => {
       const [display, desks] = await Promise.all([
         getCheckinDisplayState(occurrenceId),
         listKiosks(occurrenceId),
       ]);
+      if (requestId !== refreshRequestId.current) return;
       if (display.ok) setState(display.data);
       if (desks.ok) setKiosks(desks.data);
+      setLoadError(
+        [!display.ok ? display.message : null, !desks.ok ? desks.message : null]
+          .filter(Boolean)
+          .join(" ") || null,
+      );
     });
   }, [occurrenceId]);
 
   useEffect(() => {
     // A new service is selected: forget the previous one's codes rather than
     // leaving a live pairing code on screen under the wrong heading.
+    setState(null);
+    setKiosks([]);
+    setLoadError(null);
     setPairing(null);
     setKioskCode(null);
     refresh();
+    return () => {
+      refreshRequestId.current += 1;
+    };
   }, [occurrenceId, refresh]);
 
-  if (state && !state.signingConfigured) {
+  const awaitingKioskPairing = kiosks.some((kiosk) => kiosk.status === "pending");
+  useEffect(() => {
+    if (!kioskCode || !awaitingKioskPairing) return;
+
+    // The administrator is reading the one-use code to a tablet. Update the
+    // status when it connects, then stop polling after the setup window.
+    const interval = window.setInterval(refresh, 10_000);
+    const stop = window.setTimeout(() => window.clearInterval(interval), 120_000);
+    return () => {
+      window.clearInterval(interval);
+      window.clearTimeout(stop);
+    };
+  }, [awaitingKioskPairing, kioskCode, refresh]);
+
+  if (state && !state.signingConfigured && !loadError) {
     return (
       <div className="rounded-xl border border-dashed border-border p-4 text-[15px] text-muted-foreground">
         Check-in codes aren&rsquo;t available yet. Contact FaithForm support to
@@ -85,9 +114,21 @@ export function CheckinDisplayPanel({
   }
 
   const running = Boolean(state?.sessionId);
+  const controlsUnavailable = pending || !state || Boolean(loadError);
 
   return (
     <div className="flex flex-col gap-4">
+      {loadError ? (
+        <div
+          role="alert"
+          className="flex flex-wrap items-center gap-3 rounded-xl border border-destructive/40 bg-destructive/5 p-3 text-sm"
+        >
+          <span>{loadError}</span>
+          <Button variant="outline" onClick={refresh} disabled={pending}>
+            Try again
+          </Button>
+        </div>
+      ) : null}
       {/* The screen's code is scanned in the FaithForm app, so it goes with the app. */}
       {appEnabled ? (
         <>
@@ -100,7 +141,7 @@ export function CheckinDisplayPanel({
                 <Button
               
                   variant="outline"
-                  disabled={pending}
+                  disabled={controlsUnavailable}
                   onClick={() =>
                     startTransition(async () => {
                       const result = await refreshDisplayPairing({ occurrenceId });
@@ -118,7 +159,7 @@ export function CheckinDisplayPanel({
                 <Button
               
                   variant="outline"
-                  disabled={pending}
+                  disabled={controlsUnavailable}
                   onClick={() =>
                     startTransition(async () => {
                       const result = await stopCheckinDisplay({ sessionId: state!.sessionId! });
@@ -136,7 +177,7 @@ export function CheckinDisplayPanel({
             ) : (
               <Button
             
-                disabled={pending}
+                disabled={controlsUnavailable}
                 onClick={() =>
                   startTransition(async () => {
                     const result = await startCheckinDisplay({ occurrenceId });
@@ -193,7 +234,7 @@ export function CheckinDisplayPanel({
             <Button
               
               variant="outline"
-              disabled={pending}
+              disabled={controlsUnavailable}
               onClick={() =>
                 startTransition(async () => {
                   const result = await startKiosk({ occurrenceId, label: "Welcome desk" });
@@ -207,6 +248,17 @@ export function CheckinDisplayPanel({
               Set up a check-in station
             </Button>
           </div>
+
+          {kiosks.length > 0 ? (
+            <Button
+              variant="ghost"
+              className="self-start"
+              disabled={pending}
+              onClick={refresh}
+            >
+              Refresh station status
+            </Button>
+          ) : null}
 
           {state && !state.kioskEnabled ? (
             <p className="text-sm text-muted-foreground">
@@ -241,7 +293,7 @@ export function CheckinDisplayPanel({
                   <Button
                     
                     variant="outline"
-                    disabled={pending}
+                    disabled={controlsUnavailable}
                     onClick={async () => {
                       const ok = await confirmAction({
                         title: `Turn off ${kiosk.label}?`,

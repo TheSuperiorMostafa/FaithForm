@@ -573,7 +573,12 @@ export function ServiceOccurrencesBoard({
                     : "Set up a tablet at the door."
                 }
               >
-                <CheckinDisplayPanel occurrenceId={selected.id} isAdmin={isAdmin} appEnabled={appEnabled} />
+                <CheckinDisplayPanel
+                  key={selected.id}
+                  occurrenceId={selected.id}
+                  isAdmin={isAdmin}
+                  appEnabled={appEnabled}
+                />
               </AdvancedSection>
             )}
 

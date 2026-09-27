@@ -548,7 +548,7 @@ export async function listKiosks(
     const { churchId } = await requireAttendanceStaff();
     const admin = createAdminClient();
 
-    const { data } = await admin
+    const { data, error } = await admin
       .from("attendance_kiosk_sessions")
       // No hashes. A staff member never needs to see one, and a serialisation
       // mistake cannot leak a column that was not selected.
@@ -558,6 +558,8 @@ export async function listKiosks(
       .neq("status", "ended")
       .order("created_at", { ascending: false })
       .limit(20);
+
+    if (error) throw error;
 
     return {
       ok: true,

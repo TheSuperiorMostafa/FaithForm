@@ -64,6 +64,15 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   preserved the entered note. The follow-up page showed the absent member but
   correctly disabled texting because this tenant has no texting connection or
   phone number.
+- Attendance display and welcome desk: enabled Scan a code only for the QA
+  church, generated a one-use display pairing code, paired a separate Safari
+  tab, and saw its rotating check-in code. Turning the display off returned
+  that tab to pairing. The Scan a code setting was restored to off and stayed
+  off after reload. Then enabled the QA welcome desk, paired its kiosk tab,
+  searched for the synthetic QA member, and verified that trying to check in
+  before the service window returned “Check-in isn't open yet.” Lock returned
+  the kiosk to pairing. The station was revoked, and Welcome desk was restored
+  to off and verified after reload. No attendance record was added.
 - Announcements: event mode exposed day, time and place fields. The displayed
   date was initially a placeholder; picture generation correctly required
   entering a real date. After entering it, graphic generation completed.
@@ -389,6 +398,12 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   publication read fails. The editor's live indicators use the same rule. A
   focused test covers each disagreement. This needs
   a production browser retest after rollout.
+- After the QA welcome desk paired, the dashboard still said “Waiting to be
+  set up” until its station list refreshed. The local panel now checks briefly
+  while the one-use pairing code is displayed and also offers Refresh station
+  status. Its station-list query reports read failures instead of
+  turning them into an empty list, and the controls stay disabled until the
+  display and station state load. This needs a browser retest after rollout.
 - Code review found that the live Website publish switch writes page status
   before site settings. A failure on the second request could leave the page
   published while the control reports failure. Local migration 0121 and the
