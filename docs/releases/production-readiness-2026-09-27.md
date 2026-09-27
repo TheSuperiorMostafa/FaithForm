@@ -7,7 +7,7 @@ readiness.
 
 ## Verified in an isolated checkout
 
-- Web: typecheck, lint (zero errors), production build, 1,764 application tests,
+- Web: typecheck, lint (zero errors), production build, 1,772 application tests,
   generated-contract/design/localization checks, migration baseline check,
   secret scan, and feature-guard scan pass.
 - Database: the earlier 113 migrations applied to disposable PostgreSQL 15 and
@@ -239,6 +239,11 @@ on its own.
   Facebook schedule column is absent; a local fix requires rollout and a
   recovery decision for affected rows. The production Church App lacks the
   `app_links` column until migration 0113 is applied.
+- Group meeting edits still write the event and its attendance window in two
+  database operations. Local code now detects failed attendance checks and
+  incomplete window updates, but an interrupted write can still leave those
+  records out of sync. Make that update transactional and rehearse a failure
+  before calling this path fully reliable.
 - Onboarding currently sends a redundant second confirmation email after the
   church invite. A local one-email account-creation change is ready for a new
   tenant rehearsal after rollout. Step 6 also needs the local checked-write

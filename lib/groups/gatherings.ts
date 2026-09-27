@@ -257,8 +257,30 @@ export async function updateGathering(
   if (!existing) throw new VisitorError("group_not_found", "That gathering was not found.");
   if (existing.status === "cancelled") throw new VisitorError("conflict", "A cancelled gathering can't be edited.");
 
+  // Learn whether attendance is already history before editing the event.
+  // A failed count must never be mistaken for zero and shift a counted
+  // occurrence's check-in window.
+  const { data: occurrence, error: occurrenceError } = await admin
+    .from("service_occurrences")
+    .select("id")
+    .eq("group_event_id", input.eventId)
+    .eq("church_id", input.churchId)
+    .maybeSingle();
+  if (occurrenceError) throw new VisitorError("unavailable", "Could not check this meeting's attendance window.");
+  let hasAttendance = false;
+  if (occurrence) {
+    const { count, error: countError } = await admin
+      .from("attendance_facts")
+      .select("id", { count: "exact", head: true })
+      .eq("service_occurrence_id", occurrence.id as string);
+    if (countError || count === null) {
+      throw new VisitorError("unavailable", "Could not check this meeting's attendance window.");
+    }
+    hasAttendance = count > 0;
+  }
+
   const timezone = v.timezone ?? input.churchTimezone;
-  const { error } = await admin
+  const { data: updated, error } = await admin
     .from("group_events")
     .update({
       title: v.title,
@@ -274,38 +296,31 @@ export async function updateGathering(
       updated_by: input.actor.userId,
     })
     .eq("id", input.eventId)
-    .eq("church_id", input.churchId);
-  if (error) throw new VisitorError("unavailable", "Could not save that gathering.");
+    .eq("church_id", input.churchId)
+    .select("id");
+  if (error || !updated?.length) throw new VisitorError("unavailable", "Could not save that gathering.");
 
   // Keep the attendance occurrence in step while nobody has been counted yet;
   // once someone has, the occurrence is history and stays as it was.
-  const { data: occurrence } = await admin
-    .from("service_occurrences")
-    .select("id")
-    .eq("group_event_id", input.eventId)
-    .eq("church_id", input.churchId)
-    .maybeSingle();
-  if (occurrence) {
-    const { count } = await admin
-      .from("attendance_facts")
-      .select("id", { count: "exact", head: true })
-      .eq("service_occurrence_id", occurrence.id as string);
-    if (!count) {
-      const startMs = Date.parse(v.startsAt);
-      const endMs = Date.parse(v.endsAt);
-      await admin
-        .from("service_occurrences")
-        .update({
-          label: v.title.slice(0, 200),
-          starts_at_utc: v.startsAt,
-          ends_at_utc: v.endsAt,
-          checkin_opens_at_utc: new Date(startMs - 86_400_000).toISOString(),
-          checkin_closes_at_utc: new Date(endMs + 30 * 86_400_000).toISOString(),
-          timezone,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", occurrence.id as string)
-        .eq("church_id", input.churchId);
+  if (occurrence && !hasAttendance) {
+    const startMs = Date.parse(v.startsAt);
+    const endMs = Date.parse(v.endsAt);
+    const { data: synced, error: syncError } = await admin
+      .from("service_occurrences")
+      .update({
+        label: v.title.slice(0, 200),
+        starts_at_utc: v.startsAt,
+        ends_at_utc: v.endsAt,
+        checkin_opens_at_utc: new Date(startMs - 86_400_000).toISOString(),
+        checkin_closes_at_utc: new Date(endMs + 30 * 86_400_000).toISOString(),
+        timezone,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", occurrence.id as string)
+      .eq("church_id", input.churchId)
+      .select("id");
+    if (syncError || !synced?.length) {
+      throw new VisitorError("unavailable", "The meeting saved, but its attendance time did not update. Please retry.");
     }
   }
 

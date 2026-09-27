@@ -138,6 +138,16 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   The shared Groups dialog now ignores a native close notification that
   arrives after a successful controlled close. This local fix still needs
   browser verification after rollout.
+- Code review found that new group meetings used the staff member's computer
+  time zone even though they are church events, and an incomplete date could
+  throw while converting to UTC. The local form now uses church time for new
+  meetings, preserves an existing meeting's saved time zone when editing,
+  and rejects nonexistent or incomplete local times. A separate local guard
+  checks attendance history before changing its check-in window and reports
+  failed or zero-row updates instead of silently saying the meeting saved.
+  These fixes passed focused tests but still need a browser check after rollout.
+  Event and attendance-window writes remain separate database operations;
+  their atomicity needs a transaction before a full reliability claim.
 - The QA meeting's attendance form loaded the QA member and accepted a local
   selection and note, but saving before the meeting's one-day attendance
   window returned “Attendance opens the day before the gathering.” Nothing
@@ -238,8 +248,8 @@ optimized production build. The build emitted existing lint warnings outside
 the edited files. No code was pushed or deployed.
 The later Live picker refresh change passed TypeScript checking and targeted
 ESLint; it still needs a browser check after rollout.
-After the service-time and Groups dialog changes, the full local suite passed
-all 1,764 tests, including the localhost-only streaming auth test. The
+After the service-time, Groups dialog, and meeting-edit changes, the full local
+suite passed all 1,772 tests, including the localhost-only streaming auth test. The
 expired-switch middleware now uses the shared route gate, and its security
 check passed. TypeScript checking, targeted lint, and the optimized production
 build passed again; the build still reports existing lint warnings outside
