@@ -100,7 +100,9 @@ readiness.
 5. Repeat the same workflow checks. A staff session without Giving, Calls,
    People, or Check-in must be denied direct reads of those areas; an attendance
    session must not be able to select `members.medical_notes`. A staff session
-   must not read a second church's records.
+   must not read a second church's records. Run
+   `pnpm security:anonymous-announcements` with the production Supabase URL and
+   public key; both anonymous counts must be zero.
 6. Watch request errors, latency, webhook failures, and queued jobs during a
    small rollout. Keep lead outreach phased until these checks have held under
    normal Sunday and weekday traffic.
