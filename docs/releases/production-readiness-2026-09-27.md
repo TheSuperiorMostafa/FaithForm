@@ -58,6 +58,9 @@ readiness.
   migration ledger cannot establish which source SQL files were applied there.
   Do a deployed-schema and migration-history reconciliation before executing
   either new migration. Do not replay the full local chain onto production.
+  Read-only checks did confirm that the feature-gate function and the member
+  and file columns referenced by 0110 exist; this is a prerequisite check,
+  not a complete schema diff.
 - The live select policies on Giving, Calls, Members, and the household and
   check-in tables currently restrict by church membership, but not by the
   staff member's feature permissions. The `authenticated` role also currently
