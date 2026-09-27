@@ -66,6 +66,20 @@ readiness.
   Storage metadata rows. The restored local database and temporary logs were
   deleted. The local archive remains; it is on the same computer, not an
   independent offsite backup.
+- A second rehearsal restored the complete archive, including access grants and
+  the Supabase Vault extension, into a disposable Docker container running the
+  same PostgreSQL 17.6 version as production. A placeholder
+  `supabase_realtime_admin` role was needed for the archived grants in this
+  isolated image. Before the local migrations, the restored `anon` role saw
+  11 announcement rows through the status view and zero through its base table,
+  matching the live finding; `authenticated` could select medical notes.
+  Migrations 0110 and 0111 applied together without error. Afterward, both
+  anonymous announcement counts were zero, the medical-note grant was gone,
+  and the six core record counts above were unchanged. A rollback-only viewer
+  simulation with no feature permissions saw zero Giving and People rows. With
+  both permissions it saw five gifts and ten members in its own church, zero
+  from other churches, and no medical-note access. The disposable container
+  and its copy of the production data were removed after verification.
 - FileVault is enabled on the Mac holding these archives. Time Machine reports
   no configured destination, so neither local archive currently has an
   independent backup location. Copying them elsewhere requires an approved
