@@ -41,12 +41,19 @@ function isValidEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export type CreateChurchResult =
   | {
       ok: true;
       churchId: string;
       email: string | null;
-      inviteDelivery: "sent" | "unconfirmed" | "existing" | "not_requested";
+      inviteDelivery:
+        | "sent"
+        | "unconfirmed"
+        | "existing"
+        | "invite_failed"
+        | "not_requested";
     }
   | { ok: false; error: string };
 
@@ -70,6 +77,13 @@ export async function createChurch(
   const adminFirstName = readString(formData, "adminFirstName");
   const adminLastName = readString(formData, "adminLastName");
   const adminEmail = readString(formData, "adminEmail").toLowerCase();
+  const requestIdInput = readString(formData, "requestId");
+  // Older open browser tabs may not have a key yet. Their next submit still
+  // works; new tabs retain a key across retries, including concurrent ones.
+  if (requestIdInput && !UUID_RE.test(requestIdInput)) {
+    return { ok: false, error: "This request couldn't be verified. Refresh the page and try again." };
+  }
+  const requestId = requestIdInput || crypto.randomUUID();
 
   if (!name) {
     return { ok: false, error: "Church name is required." };
@@ -92,6 +106,19 @@ export async function createChurch(
 
   const admin = createAdminClient();
 
+  const existingForRequest = await findChurchByCreateRequest(admin, requestId);
+  if (existingForRequest.error) {
+    return { ok: false, error: "We couldn't check this church request. Please try again." };
+  }
+  if (existingForRequest.id) {
+    return {
+      ok: true,
+      churchId: existingForRequest.id,
+      email: adminEmail || null,
+      inviteDelivery: "existing",
+    };
+  }
+
   // The same request again — a double click, a retry after a slow response —
   // is answered with the church it already made. Two "Grace Chapel" rows with
   // an open invite each was the result, and whichever link the pastor used,
@@ -109,11 +136,22 @@ export async function createChurch(
 
   const { data: church, error: churchError } = await admin
     .from("churches")
-    .insert({ name, timezone, slug })
+    .insert({ name, timezone, slug, admin_create_request_id: requestId })
     .select("id, name")
     .single();
 
   if (churchError || !church) {
+    if (churchError?.code === "23505") {
+      const winner = await findChurchByCreateRequest(admin, requestId);
+      if (winner.id) {
+        return {
+          ok: true,
+          churchId: winner.id,
+          email: adminEmail || null,
+          inviteDelivery: "existing",
+        };
+      }
+    }
     return { ok: false, error: churchError?.message ?? "Could not create church." };
   }
 
@@ -135,11 +173,12 @@ export async function createChurch(
     .single();
 
   if (inviteError || !invite) {
-    await admin.from("churches").delete().eq("id", church.id);
-    return {
-      ok: false,
-      error: inviteError?.message ?? "Could not create invite.",
-    };
+    // Keep the workspace addressable. A concurrent retry may already have
+    // returned it, and Admin can send the first invite from its Users tab.
+    console.error("[admin] first invitation could not be prepared:", inviteError?.code ?? "UnknownError");
+    revalidatePath("/admin");
+    revalidatePath("/admin/churches");
+    return { ok: true, churchId: church.id, email: adminEmail, inviteDelivery: "invite_failed" };
   }
 
   try {
@@ -161,6 +200,18 @@ export async function createChurch(
   revalidatePath("/admin");
   revalidatePath("/admin/churches");
   return { ok: true, churchId: church.id, email: adminEmail, inviteDelivery: "sent" };
+}
+
+async function findChurchByCreateRequest(
+  admin: ReturnType<typeof createAdminClient>,
+  requestId: string,
+): Promise<{ id: string | null; error: boolean }> {
+  const { data, error } = await admin
+    .from("churches")
+    .select("id")
+    .eq("admin_create_request_id", requestId)
+    .maybeSingle();
+  return { id: data?.id ?? null, error: Boolean(error) };
 }
 
 /** How long a second identical "Add church" counts as the same request. */
