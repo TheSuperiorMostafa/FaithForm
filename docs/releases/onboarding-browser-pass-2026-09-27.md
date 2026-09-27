@@ -371,6 +371,12 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   to test the form. This is a release blocker until rollout and private-browser
   verification. Dynamic public-site rendering needs a hosted load check before
   claiming 100-church capacity.
+- Code review found that the live Website publish switch writes page status
+  before site settings. A failure on the second request could leave the page
+  published while the control reports failure. Local migration 0121 and the
+  website action now perform both writes in one database transaction. A forced
+  second-write failure rolled back publication in a disposable database. The
+  switch still needs a browser retest after migration and code rollout.
 
 ## Still in progress
 

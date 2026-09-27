@@ -11,8 +11,8 @@ readiness.
   generated-contract/design/localization checks, migration baseline check,
   secret scan, and feature-guard scan pass.
 - Database: the earlier 113 migrations applied to disposable PostgreSQL 15 and
-  17; the current 122-migration chain passed a fresh PostgreSQL 17
-  migration rehearsal. All 48 database tests pass, including
+  17; the current 123-migration chain passed a fresh PostgreSQL 17
+  migration rehearsal. All 50 database tests pass, including
   cross-church, per-feature,
   and view-access denial probes. The additive
   `0111_announcement_status_view_invoker.sql` migration resolves the live
@@ -24,7 +24,7 @@ readiness.
   This verifies schema/data compatibility of that order; it does not replace
   the controlled live migration baseline and rollout checks.
 - A full custom-format PostgreSQL backup and restore rehearsal passed with all
-  122 migrations on a disposable PostgreSQL 17 server and four synthetic
+  123 migrations on a disposable PostgreSQL 17 server and four synthetic
   churches. Restored record fingerprints, RLS, view settings, and medical-note
   grants matched the source.
   Run it with `pnpm test:backup-restore`, `FAITHFORM_DB_TARGET=disposable`, and
@@ -321,7 +321,7 @@ readiness.
   Health Advisor listed no errors or warnings. These counts are point-in-time
   advisor results.
 
-## Release sequence for migrations 0110 through 0120
+## Release sequence for migrations 0110 through 0121
 
 1. Capture the current deployment and database migration state. Reconcile the
    deployed schema and source migration history. Confirm a recoverable backup
@@ -334,12 +334,14 @@ readiness.
    `0117_atomic_checkin_family_creation.sql`,
    `0118_atomic_checkin_undo.sql`,
    `0119_sermon_series_week.sql`, and
-   `0120_admin_church_create_request.sql` before deploying the updated
-   application: the new meeting, onboarding, child pickup, new-family, and Undo saves call these server-only
-   functions and cannot work until they exist. The sermon-series page also reads
-   the new `series_week` column; Add church reads and writes the request-key
-   column. The currently deployed code does not call the new functions or read
-   those columns. Then deploy the application changes before the
+   `0120_admin_church_create_request.sql`, and
+   `0121_atomic_site_publication.sql` before deploying the updated
+   application. The updated meeting, onboarding, child pickup, new-family,
+   Undo, and website publication actions call these server-only functions and
+   cannot work until they exist. The sermon-series page also reads the new
+   `series_week` column; Add church reads and writes the request-key column.
+   The currently deployed code does not call the new functions or read those
+   columns. Then deploy the application changes before the
    policy-tightening migrations. The new server code can read medical notes
    and call aggregates after the database policy tightens. The admin aggregate
    calls paginate safely until 0112 arrives. The old server code cannot read
@@ -355,7 +357,7 @@ readiness.
    process. Verify their recorded checksums and inspect the resulting policies,
    column grants, view options, and aggregate function privileges. Confirm
    0114 through 0118's server-only execute grants, 0119's column and index,
-   and 0120's unique request-key index.
+   0120's unique request-key index, and 0121's server-only execute grant.
    Do not edit an already applied
    migration.
 5. Repeat the same workflow checks. A staff session without Giving, Calls,
@@ -428,6 +430,13 @@ on its own.
 - The live group meeting editor still writes its event and attendance window
   separately. Local migration 0114 makes them one transaction and passed a
   forced-failure rollback test. Its rollout and browser retest are outstanding.
+- The live website publish control writes page status and site settings in
+  separate requests. Local migration 0121 saves both in one transaction. All
+  50 database tests pass, including a forced second-write failure that leaves
+  the draft unpublished and direct-call denials for browser roles. A fresh
+  synthetic backup and restore also passed with 0121. Apply this migration
+  before deploying its website action, then browser-test publish and unpublish
+  against the QA church after rollout.
 - Live-streaming setup choices saved and persisted in the QA church. A separate
   code review found that a failed recording-settings read could display false
   defaults, including the wrong automatic-publication choice. The local fix
@@ -465,7 +474,7 @@ on its own.
   The local logical archive and object reconstruction proved local recovery
   paths, not these remaining disaster-recovery steps.
 - Final live-schema comparison, a recorded migration baseline, and safe
-  application of 0110 through 0120 in the order above. The local comparison
+  application of 0110 through 0121 in the order above. The local comparison
   exposed the active missing objects, but live production still has the access
   gap and no source migration ledger.
 - A representative controlled rollout with real accounts from all four
