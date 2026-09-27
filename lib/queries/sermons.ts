@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { ChurchProfile } from "@/types/church-profile";
 import { buildSermonProfileContext } from "@/lib/ai/prompts";
 import { pickSermonUpdatableColumns } from "@/lib/sermon-builder/sermon-patch";
+import { readAllById } from "@/lib/queries/paged-read";
 import type {
   AIProvider,
   ChurchSettings,
@@ -159,6 +160,7 @@ export async function createSermon(input: {
   duration_min: number;
   style_notes?: string | null;
   series_id?: string | null;
+  series_week?: number | null;
   kind?: SermonKind;
   theme_id?: string | null;
   translation?: string | null;
@@ -175,6 +177,7 @@ export async function createSermon(input: {
     duration_min: input.duration_min,
     style_notes: input.style_notes ?? null,
     series_id: input.series_id ?? null,
+    ...(input.series_week != null ? { series_week: input.series_week } : {}),
     kind: input.kind ?? "advanced",
     theme_id: input.theme_id ?? null,
     translation: input.translation ?? null,
@@ -389,6 +392,30 @@ export async function getSeries(id: string): Promise<SermonSeries | null> {
 
   if (error) throw error;
   return data as SermonSeries | null;
+}
+
+export type SeriesSermonItem = Pick<
+  Sermon,
+  "id" | "title" | "scripture_refs" | "created_at"
+> & { series_week: number | null };
+
+export async function listSeriesSermons(
+  churchId: string,
+  seriesId: string,
+): Promise<SeriesSermonItem[]> {
+  const supabase = db();
+  return readAllById<SeriesSermonItem>(async (afterId, includeCount, pageSize) => {
+    let query = supabase
+      .from("sermons")
+      .select("id, title, scripture_refs, created_at, series_week", includeCount ? { count: "exact" } : {})
+      .eq("church_id", churchId)
+      .eq("series_id", seriesId)
+      .order("id", { ascending: true })
+      .limit(pageSize);
+    if (afterId) query = query.gt("id", afterId);
+    const { data, error, count } = await query;
+    return { data: data as SeriesSermonItem[] | null, error, count };
+  }, { label: "series sermons" });
 }
 
 export async function createSeries(input: {

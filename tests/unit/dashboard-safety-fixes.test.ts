@@ -143,9 +143,10 @@ test("no developer commands are shown to churches", () => {
 test("starting a sermon from a series week keeps the series and passage", () => {
   const page = read("app/dashboard/sermon-builder/new/page.tsx");
   assert.match(page, /seriesId=\{query\.series\}/);
+  assert.match(page, /seriesWeek=\{query\.week/);
   assert.match(page, /parsePassage\(query\.scripture\)/);
   const route = read("app/api/sermon/simple/route.ts");
-  assert.match(route, /ownSeriesId\(auth\.churchId, body\.series_id\)/);
+  assert.match(route, /ownSeriesWeek\(auth\.churchId, body\.series_id, body\.series_week\)/);
 });
 
 // ---------------------------------------------------------------------------

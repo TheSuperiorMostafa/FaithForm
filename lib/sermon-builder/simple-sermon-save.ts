@@ -23,6 +23,7 @@ export type SimpleSermonSaveBody = {
   sermon_date?: string | null;
   /** The series this sermon belongs to (from a series plan's week). */
   series_id?: string | null;
+  series_week?: number | null;
   passages?: SimplePassageInput[];
   book?: string;
   chapter?: number;

@@ -99,6 +99,14 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   saved a draft, presented both slides, generated a lesson with discussion
   questions, downloaded the 9 KB PDF and 52 KB PowerPoint, and published the
   explicitly labeled synthetic sermon to this QA tenant's app.
+- Sermon series: the blank title was rejected. A clearly labeled two-week QA
+  series generated and persisted its week plans, themes, and passages. Starting
+  Week 1 prefilled its title and John 3:16–17; the new sermon saved as a draft.
+  A read-only QA database check confirmed the draft's series link. On reopening
+  the series, Week 1 still said “Start this week's sermon” and gave no link to
+  that saved draft. The local series view now shows linked sermons and opens
+  the saved draft; new sermons store their exact planned week. This needs a
+  browser retest after the local migration and application are rolled out.
 - Church App: edited tagline and About text, added a synthetic Sunday service,
   and used Save & publish. The profile and service persisted across a browser
   reload and appeared in the live phone preview. The search listing stayed off.

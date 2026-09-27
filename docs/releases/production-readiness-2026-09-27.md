@@ -7,11 +7,11 @@ readiness.
 
 ## Verified in an isolated checkout
 
-- Web: typecheck, lint (zero errors), production build, 1,789 application tests,
+- Web: typecheck, lint (zero errors), production build, 1,792 application tests,
   generated-contract/design/localization checks, migration baseline check,
   secret scan, and feature-guard scan pass.
 - Database: the earlier 113 migrations applied to disposable PostgreSQL 15 and
-  17; the current 120-migration chain passed a fresh PostgreSQL 17
+  17; the current 121-migration chain passed a fresh PostgreSQL 17
   migration rehearsal. All 47 database tests pass, including
   cross-church, per-feature,
   and view-access denial probes. The additive
@@ -164,6 +164,18 @@ readiness.
   result distinguishes sent, unconfirmed, and already-created outcomes.
   These changes are local; Resend delivery still needs a controlled failure
   rehearsal.
+- The QA browser created a two-week sermon series and a Week 1 draft. The
+  database linked the draft to the series, but the live series page still
+  offered “Start this week's sermon” with no saved-draft link. Local migration
+  0119 adds an exact week number to new sermons; the page now shows saved
+  sermons for each week and conservatively matches older linked sermons by a
+  unique title or passage. The 0119 column, index, and range check passed a
+  rollback-only PostgreSQL 17.6 rehearsal. All 121 migrations and 47 database
+  tests pass in a disposable database. The approved production archive also
+  restored to a separate local PostgreSQL 17.6 database and accepted 0119;
+  all four churches and six sermons remained, and the column, check, and index
+  were present. That restored database was removed. The local app and migration
+  need rollout together, followed by a browser retest.
 - Family-name pickup search now pages through all matching people, family
   names, membership links, and that day's open check-ins. It filters for
   families with children still present before limiting the displayed matches.
@@ -284,7 +296,7 @@ readiness.
   Health Advisor listed no errors or warnings. These counts are point-in-time
   advisor results.
 
-## Release sequence for migrations 0110 through 0118
+## Release sequence for migrations 0110 through 0119
 
 1. Capture the current deployment and database migration state. Reconcile the
    deployed schema and source migration history. Confirm a recoverable backup
@@ -295,10 +307,12 @@ readiness.
    `0115_atomic_onboarding_completion.sql`,
    `0116_atomic_child_checkout.sql`,
    `0117_atomic_checkin_family_creation.sql`, and
-   `0118_atomic_checkin_undo.sql` before deploying the updated
+   `0118_atomic_checkin_undo.sql`, and
+   `0119_sermon_series_week.sql` before deploying the updated
    application: the new meeting, onboarding, child pickup, new-family, and Undo saves call these server-only
-   functions and cannot work until they exist. The currently deployed code
-   does not call them. Then deploy the application changes before the
+   functions and cannot work until they exist. The sermon-series page also reads
+   the new `series_week` column. The currently deployed code does not call the
+   new functions or read that column. Then deploy the application changes before the
    policy-tightening migrations. The new server code can read medical notes
    and call aggregates after the database policy tightens. The admin aggregate
    calls paginate safely until 0112 arrives. The old server code cannot read
@@ -313,7 +327,8 @@ readiness.
    `0113_active_schema_catchup.sql` once through the controlled migration
    process. Verify their recorded checksums and inspect the resulting policies,
    column grants, view options, and aggregate function privileges. Confirm
-   0114 through 0118's server-only execute grants. Do not edit an already applied
+   0114 through 0118's server-only execute grants and 0119's column and index.
+   Do not edit an already applied
    migration.
 5. Repeat the same workflow checks. A staff session without Giving, Calls,
    People, or Check-in must be denied direct reads of those areas; an attendance
@@ -392,7 +407,7 @@ on its own.
   The local logical archive and object reconstruction proved local recovery
   paths, not these remaining disaster-recovery steps.
 - Final live-schema comparison, a recorded migration baseline, and safe
-  application of 0110 through 0118 in the order above. The local comparison
+  application of 0110 through 0119 in the order above. The local comparison
   exposed the active missing objects, but live production still has the access
   gap and no source migration ledger.
 - A representative controlled rollout with real accounts from all four

@@ -84,6 +84,7 @@ type SimpleSermonBuilderProps = {
   };
   /** Set when started from a week in a series plan. */
   seriesId?: string;
+  seriesWeek?: number;
 };
 
 /** Keeps a typed number inside [min, max]; "" while the field is empty. */
@@ -123,6 +124,7 @@ export function SimpleSermonBuilder({
   editSermon,
   initial,
   seriesId,
+  seriesWeek,
 }: SimpleSermonBuilderProps) {
   const router = useRouter();
   const isEditing = Boolean(editSermon);
@@ -131,7 +133,7 @@ export function SimpleSermonBuilder({
   const draftKey = localDraftKey(
     editSermon?.id ??
       (seriesId || initial?.title || initial?.book
-        ? `new:${seriesId ?? ""}:${initial?.title ?? ""}:${initial?.book ?? ""}:${initial?.chapter ?? ""}`
+        ? `new:${seriesId ?? ""}:${seriesWeek ?? ""}:${initial?.title ?? ""}:${initial?.book ?? ""}:${initial?.chapter ?? ""}`
         : null),
   );
 
@@ -598,6 +600,7 @@ export function SimpleSermonBuilder({
         theme_id: themeId,
         sermon_date: sermonDate,
         ...(seriesId && !isEditing ? { series_id: seriesId } : {}),
+        ...(seriesWeek != null && !isEditing ? { series_week: seriesWeek } : {}),
       };
 
       const url = isEditing

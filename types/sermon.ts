@@ -68,6 +68,7 @@ export type Sermon = {
   church_id: string;
   created_by: string;
   series_id: string | null;
+  series_week?: number | null;
   title: string;
   scripture_refs: string[];
   topic: string;
