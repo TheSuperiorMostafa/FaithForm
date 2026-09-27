@@ -416,6 +416,15 @@ on its own.
   Facebook schedule column is absent; a local fix requires rollout and a
   recovery decision for affected rows. The production Church App lacks the
   `app_links` column until migration 0113 is applied.
+- An unpublished QA website loaded in Safari Private Browsing when its
+  predictable URL included `?preview=1`; without the query it returned 404.
+  The local website and contact-form paths now require a same-church staff
+  account with Website access for draft previews and submissions, and check
+  visibility on each request. The patched local app displayed a 404 page to an
+  anonymous Safari visit for the same QA draft preview. This is a live privacy
+  blocker until the fix is deployed and an anonymous production retest returns
+  404. The resulting dynamic
+  public-site path needs hosted load evidence before a 100-church claim.
 - The live group meeting editor still writes its event and attendance window
   separately. Local migration 0114 makes them one transaction and passed a
   forced-failure rollback test. Its rollout and browser retest are outstanding.

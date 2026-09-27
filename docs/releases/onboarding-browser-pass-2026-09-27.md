@@ -360,6 +360,17 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   actual mail channel and says it is waiting for a connected mailbox, with a
   link to Connected accounts. It also explains when platform email is off.
   This wording needs a browser retest after rollout.
+- Unpublished Website preview is publicly reachable in the deployed app by
+  adding `?preview=1` to the predictable `/sites/<slug>` address. Safari Private
+  Browsing, with no staff session, rendered the QA draft; the same address
+  without the query returned 404. This exposes draft website content and its
+  visit form. The local route now requires same-church website access for a
+  draft preview, uses the same guard for page metadata, and avoids shared page
+  caching so unpublishing is checked on every request. The draft contact API
+  also rejects direct anonymous submissions while allowing authorized staff
+  to test the form. This is a release blocker until rollout and private-browser
+  verification. Dynamic public-site rendering needs a hosted load check before
+  claiming 100-church capacity.
 
 ## Still in progress
 
@@ -395,3 +406,10 @@ local sandbox; it passed when run with that permission. Existing lint warnings
 remain outside the changed streaming files. No code was pushed or deployed.
 The weekly-email readiness wording passed TypeScript checking, targeted lint,
 and all 28 settings/help checks. It has not been deployed or browser retested.
+The draft-preview access fix passed 446 security checks, focused contact-form
+checks, TypeScript checking, targeted lint, and an optimized production build.
+An anonymous Safari visit to the patched local app, reading the existing QA
+church, displayed a 404 page for the same `?preview=1` URL that leaked on the
+live deployment. The local server was stopped after this read-only check. The
+build reports the existing warnings outside these files. Its live
+private-browser retest remains pending until the local fix is deployed.

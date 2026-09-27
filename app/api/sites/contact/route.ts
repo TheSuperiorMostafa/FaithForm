@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 
 import { sendSiteContactEmail } from "@/lib/email/site-contact";
+import { getChurchAuth } from "@/lib/auth/church";
 import {
   isChurchFeatureEmailEnabled,
   isChurchFeatureEnabled,
@@ -12,6 +13,7 @@ import {
   rateLimitResponse,
 } from "@/lib/security/rate-limit";
 import { getContactTargetBySlug } from "@/lib/sites/queries";
+import { canPreviewDraftSite } from "@/lib/sites/preview-access";
 import { subdomainSlug } from "@/lib/sites/tenant";
 import { createAdminClientOrNull } from "@/lib/supabase/admin";
 
@@ -88,6 +90,15 @@ export async function POST(request: NextRequest) {
   // arriving here is a stale tab or a direct call. Either way there is no
   // inbox to deliver to — /dashboard/website/messages is unreachable too.
   if (!(await isChurchFeatureEnabled(target.churchId, "website"))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  // A direct POST must not turn an unpublished draft's private preview into a
+  // public contact endpoint. Staff can still test the form from their preview.
+  if (
+    !target.isPublished &&
+    !canPreviewDraftSite(target.churchId, await getChurchAuth())
+  ) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 

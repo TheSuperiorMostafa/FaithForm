@@ -545,6 +545,7 @@ export async function getContactTargetBySlug(slug: string): Promise<{
   churchId: string;
   churchName: string;
   recipient: string | null;
+  isPublished: boolean;
 } | null> {
   const supabase = createAdminClient();
 
@@ -556,17 +557,26 @@ export async function getContactTargetBySlug(slug: string): Promise<{
 
   if (error || !data) return null;
 
-  const { data: settings } = await supabase
-    .from("site_settings")
-    .select("contact_email")
-    .eq("church_id", data.id as string)
-    .maybeSingle();
+  const [settingsResult, pageResult] = await Promise.all([
+    supabase
+      .from("site_settings")
+      .select("contact_email")
+      .eq("church_id", data.id as string)
+      .maybeSingle(),
+    supabase
+      .from("site_pages")
+      .select("status")
+      .eq("church_id", data.id as string)
+      .eq("path", "/")
+      .maybeSingle(),
+  ]);
 
-  const configured = (settings?.contact_email as string | null) ?? null;
+  const configured = (settingsResult.data?.contact_email as string | null) ?? null;
 
   return {
     churchId: data.id as string,
     churchName: (data.name as string) ?? "",
     recipient: configured?.trim() || (data.email as string | null) || null,
+    isPublished: pageResult.data?.status === "published",
   };
 }
