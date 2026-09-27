@@ -1423,6 +1423,9 @@ export async function completeCheckout(input: {
   if (!isContext(context)) return context;
 
   if (input.sessionIds.length === 0) return fail("Tick who is being picked up.");
+  if (input.sessionIds.length > 100 || new Set(input.sessionIds).size !== input.sessionIds.length) {
+    return fail("Choose one family's children and try again.");
+  }
 
   const reason = input.overrideReason?.trim() ?? "";
   if (input.method === "override" && reason.length < 4) {
@@ -1431,24 +1434,12 @@ export async function completeCheckout(input: {
     );
   }
 
-  // Guardians and other adults are never released through kids checkout.
-  const { data: openRows } = await context.admin
-    .from("checkin_sessions")
-    .select("id, member_id, household_id")
-    .in("id", input.sessionIds)
-    .eq("church_id", context.auth.churchId)
-    .in("status", ["pre_checked_in", "checked_in"]);
-
-  // Which family this release is for, proven rather than claimed. A release
-  // recorded as "code" or "QR" must carry the ticket the lookup of that code
-  // issued; otherwise it is an override and has its written reason above.
-  let householdId: string | null;
+  // A code or QR must carry the ticket issued by the earlier lookup. The
+  // database then locks the selected sessions and verifies their family,
+  // dependent status, pickup person, and all-or-nothing release together.
+  let householdId: string | null = null;
   if (input.method === "override") {
-    const families = new Set((openRows ?? []).map((row) => row.household_id as string | null));
-    householdId = families.size === 1 ? [...families][0] : null;
-    if (!householdId && (openRows ?? []).length > 0) {
-      return fail("Release one family's children at a time.");
-    }
+    // A supervisor's written reason is checked above and again in SQL.
   } else if (input.method === "code" || input.method === "qr") {
     const ticket = verifyReleaseTicket(input.ticket, {
       churchId: context.auth.churchId,
@@ -1457,85 +1448,30 @@ export async function completeCheckout(input: {
     });
     if (!ticket) return fail("Look the code up again, then release.");
     householdId = ticket.householdId;
-    if ((openRows ?? []).some((row) => row.household_id !== householdId)) {
-      return fail("Only this family's children can be released with their code.");
-    }
     // Someone the family did not list is an override, never a code release.
     if (!input.releasedToMemberId) return fail("Tap who is picking up.");
   } else {
     return fail("Choose how this pickup was checked.");
   }
 
-  // The adult named as taking the child must be one of the family's guardians
-  // or on its pickup list — the rule the desk shows, now kept by the server.
-  if (input.releasedToMemberId) {
-    if (!householdId) return fail("That person isn't on this family's pickup list.");
-    const [{ data: guardian }, { data: authorized }] = await Promise.all([
-      context.admin
-        .from("household_members")
-        .select("id")
-        .eq("church_id", context.auth.churchId)
-        .eq("household_id", householdId)
-        .eq("member_id", input.releasedToMemberId)
-        .eq("relationship", "guardian")
-        .maybeSingle(),
-      context.admin
-        .from("household_pickup_authorizations")
-        .select("id")
-        .eq("church_id", context.auth.churchId)
-        .eq("household_id", householdId)
-        .eq("member_id", input.releasedToMemberId)
-        .eq("is_active", true)
-        .is("revoked_at", null)
-        .maybeSingle(),
-    ]);
-    if (!guardian && !authorized) {
-      return fail("That person isn't on this family's pickup list.");
-    }
-  }
-
-  const memberIds = Array.from(
-    new Set((openRows ?? []).map((row) => row.member_id as string)),
-  );
-  if (memberIds.length > 0) {
-    const { data: dependents } = await context.admin
-      .from("household_members")
-      .select("member_id")
-      .eq("church_id", context.auth.churchId)
-      .eq("relationship", "dependent")
-      .in("member_id", memberIds);
-    const dependentIds = new Set(
-      (dependents ?? []).map((row) => row.member_id as string),
-    );
-    if (memberIds.some((id) => !dependentIds.has(id))) {
-      return fail("Only children can be checked out.");
-    }
-  }
-
   const { data, error } = await context.admin
-    .from("checkin_sessions")
-    .update({
-      status: "checked_out",
-      checked_out_at: new Date().toISOString(),
-      checked_out_by: context.auth.userId,
-      checkout_method: input.method,
-      checkout_released_to_member_id: input.releasedToMemberId || null,
-      checkout_override_reason: input.method === "override" ? reason : null,
-    })
-    .in("id", input.sessionIds)
-    .eq("church_id", context.auth.churchId)
-    .in("status", ["pre_checked_in", "checked_in"])
-    .select("id");
+    .rpc("release_checkin_sessions", {
+      p_church_id: context.auth.churchId,
+      p_session_ids: input.sessionIds,
+      p_expected_household_id: householdId,
+      p_method: input.method,
+      p_released_to_member_id: input.releasedToMemberId || null,
+      p_override_reason: input.method === "override" ? reason : null,
+      p_actor_user_id: context.auth.userId,
+    });
 
-  if (error) return fail(toUserError(error, "We couldn't release those children."));
-
-  const released = (data ?? []).length;
-  if (released === 0) {
-    return fail("Those children have already been checked out.");
+  if (error || data !== input.sessionIds.length) {
+    console.error("[checkin] checkout failed:", error?.message ?? "count mismatch");
+    return fail("We couldn't release every selected child. Refresh the desk and try again.");
   }
 
   revalidateCheckin();
-  return { ok: true, data: { released } };
+  return { ok: true, data: { released: data } };
 }
 
 // ---------------------------------------------------------------------------

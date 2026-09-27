@@ -23,6 +23,10 @@ const migration = readFileSync(
   "supabase/migrations/0071_households_and_checkin.sql",
   "utf8",
 );
+const checkoutMigration = readFileSync(
+  "supabase/migrations/0116_atomic_child_checkout.sql",
+  "utf8",
+);
 const actions = readFileSync("app/dashboard/checkin/actions.ts", "utf8");
 const console_ = readFileSync(
   "components/checkin/checkout-console.tsx",
@@ -195,16 +199,14 @@ test("no church session may read the code table", () => {
 // ---------------------------------------------------------------------------
 
 test("a release only ever moves a session that is still open", () => {
-  assert.match(
-    actions,
-    /\.in\("status", \["pre_checked_in", "checked_in"\]\)\s*\n\s*\.select\("id"\)/,
-  );
-  assert.match(actions, /Those children have already been checked out/);
+  assert.match(actions, /\.rpc\("release_checkin_sessions"/);
+  assert.match(checkoutMigration, /status in \('pre_checked_in', 'checked_in'\)/);
+  assert.match(checkoutMigration, /v_updated <> cardinality\(p_session_ids\)/);
 });
 
 test("only household dependents can be checked in or checked out", () => {
   assert.match(actions, /Only children in a family can be checked in/);
-  assert.match(actions, /Only children can be checked out/);
+  assert.match(checkoutMigration, /hm\.relationship = 'dependent'/);
   assert.match(actions, /relationship !== "dependent"/);
   assert.match(
     readFileSync("app/dashboard/checkin/page.tsx", "utf8"),
@@ -217,9 +219,11 @@ test("only household dependents can be checked in or checked out", () => {
 });
 
 test("every release records who did it, when, and against which credential", () => {
-  assert.match(actions, /checked_out_by: context\.auth\.userId/);
-  assert.match(actions, /checkout_method: input\.method/);
-  assert.match(actions, /checked_out_at: new Date\(\)\.toISOString\(\)/);
+  assert.match(actions, /p_actor_user_id: context\.auth\.userId/);
+  assert.match(actions, /p_method: input\.method/);
+  assert.match(checkoutMigration, /checked_out_by = p_actor_user_id/);
+  assert.match(checkoutMigration, /checkout_method = p_method/);
+  assert.match(checkoutMigration, /checked_out_at = now\(\)/);
 });
 
 test("an override demands a written reason before it reaches the database", () => {

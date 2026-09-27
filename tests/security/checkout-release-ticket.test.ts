@@ -38,15 +38,16 @@ test("a ticket is good only for its church, staff member and method", (t) => {
 
 test("the release proves the method, the family and the adult on the server", () => {
   const source = readFileSync("app/dashboard/checkin/actions.ts", "utf8");
+  const sql = readFileSync("supabase/migrations/0116_atomic_child_checkout.sql", "utf8");
   const release = source.slice(source.indexOf("export async function completeCheckout"));
   const body = release.slice(0, release.indexOf("\n}\n"));
   assert.match(body, /verifyReleaseTicket\(input\.ticket/);
-  assert.match(body, /row\.household_id !== householdId/);
-  assert.match(body, /from\("household_pickup_authorizations"\)/);
-  assert.match(body, /\.eq\("relationship", "guardian"\)/);
-  // All of it before the update that releases anyone.
-  assert.ok(body.indexOf("verifyReleaseTicket") < body.indexOf('status: "checked_out"'));
-  assert.ok(body.indexOf('from("household_pickup_authorizations")') < body.indexOf('status: "checked_out"'));
+  assert.match(body, /p_expected_household_id: householdId/);
+  assert.match(sql, /v_household_id <> p_expected_household_id/);
+  assert.match(sql, /public\.household_pickup_authorizations pa/);
+  assert.match(sql, /hm\.relationship = 'guardian'/);
+  assert.match(sql, /pa\.revoked_at is null/);
+  assert.ok(body.indexOf("verifyReleaseTicket") < body.indexOf('rpc("release_checkin_sessions"'));
 
   const lookup = source.slice(source.indexOf("export async function lookupCheckoutCredential"));
   assert.match(lookup.slice(0, lookup.indexOf("\n}\n")), /mintReleaseTicket\(/);
