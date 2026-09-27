@@ -116,9 +116,11 @@ readiness.
   belongs to one family, verifies child and pickup-person eligibility, and
   requires all updates to succeed. A forced failure on the second child left
   both children checked in. The disposable PostgreSQL 17 full migration chain
-  and all 45 database tests pass. The updated web action calls this function,
-  so 0116 must be applied before that web build is deployed. Neither change is
-  live yet.
+  and all 45 database tests pass. The approved production archive also restored
+  into a disposable local PostgreSQL 17.6 database, accepted 0116, and showed
+  four churches, 18 check-in sessions, and the installed function. That copy
+  was removed. The updated web action calls this function, so 0116 must be
+  applied before that web build is deployed. Neither change is live yet.
 - Room deletion now requires all three exact usage counts to succeed. A failed
   count returns a retry message, so a room with history cannot look unused
   merely because its database read failed. Typecheck, targeted lint, and the
