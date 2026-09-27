@@ -17,7 +17,6 @@ import {
 } from "@/lib/checkin/service-week";
 import {
   parseNewFamily,
-  undoCheckinCutoff,
   undoCheckinRefusal,
   UNDO_CHECKIN_MESSAGES,
   type NewFamilyInput,
@@ -884,33 +883,26 @@ export async function undoCheckin(
     if (refusal) return fail(UNDO_CHECKIN_MESSAGES[refusal]);
   }
 
-  const { data, error } = await context.admin
-    .from("checkin_sessions")
-    .update({ status: "cancelled" })
-    .in("id", ids)
-    .eq("church_id", context.auth.churchId)
-    .eq("status", "checked_in")
-    .is("checked_out_at", null)
-    .eq("checked_in_by", context.auth.userId)
-    .gte("checked_in_at", undoCheckinCutoff(now))
-    .select("id");
+  const { data, error } = await context.admin.rpc("undo_checkin_sessions", {
+    p_church_id: context.auth.churchId,
+    p_session_ids: ids,
+    p_actor_user_id: context.auth.userId,
+  });
 
-  if (error) return fail(toUserError(error, "We couldn't undo that check-in."));
-
-  const undone = (data ?? []).length;
-  if (undone === 0) {
-    return fail("That check-in changed a moment ago, so it wasn't undone. Refresh the page.");
+  if (error || data !== ids.length) {
+    console.error("[checkin] undo failed:", error?.message ?? "count mismatch");
+    return fail("Those check-ins changed a moment ago. Refresh the page and try again.");
   }
 
   // No personal details in the log line: ids and counts only.
   console.info("[checkin] check-in undone", {
     churchId: context.auth.churchId,
     by: context.auth.userId,
-    sessions: (data ?? []).map((row) => row.id as string),
+    sessions: ids,
   });
 
   revalidateCheckin();
-  return { ok: true, data: { undone } };
+  return { ok: true, data: { undone: data } };
 }
 
 export type NewFamilyResult = FamilyCheckinResult & {

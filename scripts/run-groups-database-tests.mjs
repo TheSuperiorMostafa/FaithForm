@@ -85,6 +85,7 @@ try {
       "tests/database/onboarding-finalize-atomic.test.ts",
       "tests/database/child-checkout-atomic.test.ts",
       "tests/database/checkin-family-atomic.test.ts",
+      "tests/database/checkin-undo-atomic.test.ts",
       "tests/database/group-messaging.test.ts",
       "tests/database/tenant-isolation.test.ts",
       "tests/database/messaging-sync-claim.test.ts",

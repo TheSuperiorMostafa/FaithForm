@@ -11,8 +11,8 @@ readiness.
   generated-contract/design/localization checks, migration baseline check,
   secret scan, and feature-guard scan pass.
 - Database: the earlier 113 migrations applied to disposable PostgreSQL 15 and
-  17; the current 119-migration chain passed a fresh PostgreSQL 17
-  migration rehearsal. All 46 database tests pass, including
+  17; the current 120-migration chain passed a fresh PostgreSQL 17
+  migration rehearsal. All 47 database tests pass, including
   cross-church, per-feature,
   and view-access denial probes. The additive
   `0111_announcement_status_view_invoker.sql` migration resolves the live
@@ -142,6 +142,15 @@ readiness.
   sessions. Both functions were present afterward, and the copy was removed.
   The migration must precede the web build; the live New family flow still
   uses the older cleanup path until rollout.
+- Migration 0118 makes a multi-child Undo one transaction. It locks every
+  selected check-in, rechecks the same staff member and ten-minute window,
+  and refuses the entire request if one child was already released or changed.
+  A forced failure on the second update left both children checked in. All 47
+  database tests pass. The approved production archive accepted 0116–0118 in
+  a disposable local restore with its four churches, 109 members, and 18
+  historical check-in sessions unchanged; all three functions were present,
+  then the copy was removed. The updated web action requires 0118 before
+  deployment.
 
 ## Live production findings on 2026-09-27 (read-only)
 
@@ -236,7 +245,7 @@ readiness.
   Health Advisor listed no errors or warnings. These counts are point-in-time
   advisor results.
 
-## Release sequence for migrations 0110 through 0117
+## Release sequence for migrations 0110 through 0118
 
 1. Capture the current deployment and database migration state. Reconcile the
    deployed schema and source migration history. Confirm a recoverable backup
@@ -246,8 +255,9 @@ readiness.
 2. Apply `0114_group_gathering_atomic_update.sql`,
    `0115_atomic_onboarding_completion.sql`, and
    `0116_atomic_child_checkout.sql`, and
-   `0117_atomic_checkin_family_creation.sql` before deploying the updated
-   application: the new meeting, onboarding, child pickup, and new-family saves call these server-only
+   `0117_atomic_checkin_family_creation.sql`, and
+   `0118_atomic_checkin_undo.sql` before deploying the updated
+   application: the new meeting, onboarding, child pickup, new-family, and Undo saves call these server-only
    functions and cannot work until they exist. The currently deployed code
    does not call them. Then deploy the application changes before the
    policy-tightening migrations. The new server code can read medical notes
@@ -264,7 +274,7 @@ readiness.
    `0113_active_schema_catchup.sql` once through the controlled migration
    process. Verify their recorded checksums and inspect the resulting policies,
    column grants, view options, and aggregate function privileges. Confirm
-   0114 through 0117's server-only execute grants. Do not edit an already applied
+   0114 through 0118's server-only execute grants. Do not edit an already applied
    migration.
 5. Repeat the same workflow checks. A staff session without Giving, Calls,
    People, or Check-in must be denied direct reads of those areas; an attendance
