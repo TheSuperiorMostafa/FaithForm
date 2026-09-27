@@ -96,6 +96,11 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   showed Google, iCloud, YouTube, and Facebook as disconnected. Switching the
   member-app palette to Forest and wheat persisted. The Phone Calls empty
   state loaded.
+- Messages & email: the weekly subject rejected a value without `[Week]` with
+  the expected validation error. A valid QA subject saved and persisted after
+  reload; the standard wording was then restored and verified after reload.
+  The five follow-up text templates displayed their default wording and live
+  name previews. No email or text was sent.
 
 ## Issues found
 
@@ -179,8 +184,8 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
 - A fresh browser rehearsal of the one-email local fix and failure paths,
   plus optional provider connections, actual live video, payment processing,
   and mobile push.
-- Announcement edit/removal, other media, group chat as church staff, actual
-  live video and recording, payment/bank onboarding, external integrations,
+- Other media, group chat as church staff, actual live video and recording,
+  payment/bank onboarding, external integrations,
   first-admin permissions, other settings, and provider paths.
 - Repeat checks for regressions and cleanup decision for the QA tenant.
 
