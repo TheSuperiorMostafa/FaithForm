@@ -147,7 +147,10 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   of implying a transient outage. On a later QA browser visit, the same group
   chat opened and displayed the earlier QA test message; this does not explain
   the initial error or establish the active account's permissions. Chat still
-  needs a controlled real church-admin account test.
+  needs a controlled real church-admin account test. The local client now treats
+  an unauthorized token response as an account-access message without a futile
+  retry button; a provider outage still offers retry. The exact initial HTTP
+  response was not captured, so this needs browser verification after rollout.
 - After the group meeting saved and appeared in Coming up, a “Discard changes?”
   prompt surfaced. Choosing “Keep editing” left the saved meeting visible.
   The shared Groups dialog now ignores a native close notification that

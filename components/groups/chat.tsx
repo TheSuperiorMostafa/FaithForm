@@ -19,6 +19,9 @@ class ChatAccessError extends Error {}
 
 async function session(): Promise<ChatSessionDto> {
   const response = await fetch("/api/dashboard/messaging/token", { method: "POST", credentials: "same-origin", cache: "no-store" });
+  if (response.status === 401) {
+    throw new ChatAccessError("Sign in as a church admin or staff member to use group chat.");
+  }
   if (response.status === 403) {
     const body: unknown = await response.json().catch(() => null);
     const message = body && typeof body === "object" && "error" in body && typeof body.error === "string"
