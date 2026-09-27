@@ -12,6 +12,8 @@ import {
   getChurchGivingProfile,
   getGivingByFund,
   getGivingFunds,
+  getGivingStatements,
+  getStatementPreview,
   getStatementDonors,
   getSubscriptionById,
 } from "../../lib/queries/giving";
@@ -148,4 +150,42 @@ test("a church read retries only for absent color columns", async () => {
 
   const denied = { data: null, error: { code: "42501", message: "permission denied for giving_primary_color" } };
   await assert.rejects(getChurchBySlug("qa", clientWithReads(denied)), /church giving profile read failed/);
+});
+
+test("statement gifts and monthly totals use the church's calendar year", async () => {
+  const moments = [
+    "2026-01-01T01:00:00Z", // 2025 in New York
+    "2026-01-01T06:00:00Z", // 2026 in New York
+    "2027-01-01T03:00:00Z", // 2026 in New York
+    "2027-01-01T06:00:00Z", // 2027 in New York
+  ];
+  const gifts = moments.map((created_at, index) => ({
+    id: `boundary-${index}`,
+    donor_id: "donor-a",
+    donor_name: "QA Donor",
+    donor_email: "donor@example.invalid",
+    amount_cents: 100,
+    currency: "usd",
+    created_at,
+    giving_funds: null,
+  }));
+  const giftClient = clientWithPages({ data: gifts, error: null });
+  const statement = await getDonorGiftsForYear(
+    "church-a", "donor-a", 2026, giftClient.client, "America/New_York",
+  );
+  assert.deepEqual(statement.map((gift) => gift.id), ["boundary-1", "boundary-2"]);
+
+  const previewClient = clientWithPages(
+    { data: gifts, error: null },
+    { data: [{ id: "donor-a", name: "QA Donor", email: "donor@example.invalid" }], error: null },
+  );
+  const preview = await getStatementPreview("church-a", 2026, "America/New_York", previewClient.client);
+  assert.equal(preview.totalCents, 200);
+  assert.equal(preview.giftCount, 2);
+
+  const periodsClient = clientWithPages({ data: gifts, error: null });
+  const periods = await getGivingStatements("church-a", "America/New_York", periodsClient.client);
+  assert.deepEqual(periods.annual.map((period) => [period.year, period.totalCents]), [
+    [2027, 100], [2026, 200], [2025, 100],
+  ]);
 });

@@ -478,9 +478,20 @@ on its own.
   after a partial failure. Local queries now page through gift and donor rows,
   stop on read failure, and use old-schema fallback only for confirmed missing
   color columns. Statement routes report an error before returning a file
-  when church, donor, or gift data is unavailable. Six focused integrity tests
+  when church, donor, or gift data is unavailable. Seven focused integrity tests
   and 77 Giving tests pass; live download/email and large-church rehearsals
   remain after rollout.
+- Statement preview, gift selection, year picker, and printed gift dates now
+  use each church's calendar zone. A local 1,001-gift PDF rehearsal counted
+  every row and the $1,001 total across 43 letter pages. The first, middle,
+  and last pages were visually checked: headers and page numbers repeated,
+  and the total stayed with the final gift rows. The PDF is synthetic and
+  was not sent to a donor. A second 1,001-gift rehearsal with long wrapping
+  fund names used 126 pages; every page retained its heading and number, and
+  the middle and final pages were visually checked. The 22 focused date,
+  pagination, and read-integrity tests pass. The final local build, typecheck,
+  targeted lint, and all 1,812 application tests pass. Live statement download
+  and email still need a controlled retest.
 - The live website publish control writes page status and site settings in
   separate requests. Local migration 0121 saves both in one transaction. All
   50 database tests pass, including a forced second-write failure that leaves
@@ -494,12 +505,14 @@ on its own.
   fails visibly on read errors and passed focused tests. It needs rollout and
   a controlled failure-path browser check. A short QA camera broadcast then
   reached Live, recorded 48 seconds, ended, and produced a playable recording
-  that remains unpublished. The first browser-studio attempt failed because a
+  that remained unpublished. The first browser-studio attempt failed because a
   new church had no stream credentials until Go live; the local studio path now
   provisions them through an authenticated same-origin request. End service
   also left Safari capture active until navigation; the local success path now
   stops the studio. Both fixes need browser retests after rollout. Recording
-  publication to the app and website remains untested.
+  publication to the app and website remains untested. The QA recording played
+  back and a trim save succeeded; final deletion is awaiting the immediately
+  required confirmation at the product's irreversible delete step.
 - Onboarding currently sends a redundant second confirmation email after the
   church invite. A local one-email account-creation change is ready for a new
   tenant rehearsal after rollout. Step 6 also needs the local checked-write
@@ -524,6 +537,16 @@ on its own.
   and Storage archives, and documented recovery time and data-loss targets.
   The local logical archive and object reconstruction proved local recovery
   paths, not these remaining disaster-recovery steps.
+- Live Giving statements and email receipts assert that no goods or services
+  were provided, and the PDF also asserts every church is tax exempt. FaithForm
+  does not record the facts needed to verify those claims. The local build now
+  uses neutral giving-record wording in the PDF and both emails. Resolve a
+  church/gift verification workflow before relying on these as tax
+  acknowledgments. The IRS requires a written acknowledgment
+  to describe any goods or services provided (or intangible religious
+  benefits); church exemption depends on qualifying under section 501(c)(3).
+  See the IRS [written acknowledgment guidance](https://www.irs.gov/charities-non-profits/charitable-organizations/charitable-contributions-written-acknowledgments)
+  and [church exemption guidance](https://www.irs.gov/charities-non-profits/churches-integrated-auxiliaries-and-conventions-or-associations-of-churches).
 - Final live-schema comparison, a recorded migration baseline, and safe
   application of 0110 through 0121 in the order above. The local comparison
   exposed the active missing objects, but live production still has the access

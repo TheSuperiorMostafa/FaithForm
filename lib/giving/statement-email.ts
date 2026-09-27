@@ -79,7 +79,7 @@ export function statementEmailContent(input: StatementEmailInput) {
       },
       {
         kind: "muted",
-        text: "Please keep this statement for your tax records.",
+        text: `Please keep this statement for your records. Contact ${input.churchName} for questions about tax treatment or anything received in return.`,
       },
       ...(portalUrl
         ? [{ kind: "button" as const, label: "See your gifts", url: portalUrl }]

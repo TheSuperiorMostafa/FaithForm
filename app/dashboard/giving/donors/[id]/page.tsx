@@ -91,8 +91,8 @@ export default async function DonorDetailPage({ params }: { params: Promise<{ id
         action={
           <DonorStatementDownload
             donorId={donor.id}
-            years={statementYearOptions()}
-            defaultYear={defaultStatementYear()}
+            years={statementYearOptions(new Date(), 4, auth.churchTimezone)}
+            defaultYear={defaultStatementYear(new Date(), auth.churchTimezone)}
           />
         }
       />

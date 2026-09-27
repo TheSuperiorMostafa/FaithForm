@@ -30,12 +30,12 @@ export async function POST(request: Request) {
 
   const { searchParams } = new URL(request.url);
   // Defaults to last year until April, when year-end statements go out.
-  const year = parseStatementYear(searchParams.get("year"));
+  const year = parseStatementYear(searchParams.get("year"), new Date(), auth.churchTimezone);
 
   const admin = createAdminClient();
   const { data: church, error: churchError } = await admin
     .from("churches")
-    .select("name, ein, statement_address")
+    .select("name, ein, statement_address, timezone")
     .eq("id", auth.churchId)
     .single();
 
@@ -70,7 +70,8 @@ export async function POST(request: Request) {
 
   try {
     for (const donor of donors) {
-      const gifts = await getDonorGiftsForYear(auth.churchId, donor.id, year, admin);
+      const timeZone = (church.timezone as string | null) ?? "America/New_York";
+      const gifts = await getDonorGiftsForYear(auth.churchId, donor.id, year, admin, timeZone);
       if (gifts.length === 0) continue;
 
       const buffer = await renderGivingStatementPdf({
@@ -81,6 +82,7 @@ export async function POST(request: Request) {
         donorEmail: donor.email,
         year,
         gifts,
+        timeZone,
       });
 
       const safeName = (donor.name ?? donor.email)

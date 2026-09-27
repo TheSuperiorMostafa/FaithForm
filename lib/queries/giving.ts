@@ -1,6 +1,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { startOfWeek } from "@/lib/giving/periods";
+import { sheetDate } from "@/lib/giving/spreadsheet";
+import { statementYearReadWindow } from "@/lib/giving/statement-year";
 import { getGivePageUrl } from "@/lib/stripe/config";
 import type {
   ChurchGivingProfile,
@@ -741,9 +743,9 @@ export async function getDonorGiftsForYear(
   donorId: string,
   year: number,
   admin = createAdminClient(),
+  timeZone = "UTC",
 ): Promise<GivingDonationRow[]> {
-  const yearStart = new Date(year, 0, 1).toISOString();
-  const yearEnd = new Date(year + 1, 0, 1).toISOString();
+  const { start, end } = statementYearReadWindow(year);
 
   const data = await readAllRows<Record<string, unknown>>((from, to) =>
     admin
@@ -752,14 +754,16 @@ export async function getDonorGiftsForYear(
       .eq("church_id", churchId)
       .eq("donor_id", donorId)
       .eq("status", "succeeded")
-      .gte("created_at", yearStart)
-      .lt("created_at", yearEnd)
+      .gte("created_at", start)
+      .lt("created_at", end)
       .order("created_at", { ascending: true })
       .order("id", { ascending: true })
       .range(from, to),
   );
 
-  return data.map(mapDonation);
+  return data
+    .filter((row) => sheetDate(row.created_at as string, timeZone).startsWith(`${year}-`))
+    .map(mapDonation);
 }
 
 /** Every donor considered for a church-wide statement export. */
@@ -777,11 +781,14 @@ export async function getStatementDonors(
   );
 }
 
-export async function getGivingStatements(churchId: string): Promise<{
+export async function getGivingStatements(
+  churchId: string,
+  timeZone = "UTC",
+  supabase = createClient(),
+): Promise<{
   monthly: StatementPeriod[];
   annual: StatementPeriod[];
 }> {
-  const supabase = createClient();
   const data = await readAllRows<{ amount_cents: number; created_at: string }>((from, to) =>
     supabase
       .from("giving_donations")
@@ -796,9 +803,9 @@ export async function getGivingStatements(churchId: string): Promise<{
   const annualMap = new Map<string, { total: number; count: number; year: number }>();
 
   for (const row of data) {
-    const d = new Date(row.created_at);
-    const year = d.getFullYear();
-    const month = d.getMonth() + 1;
+    const [yearPart, monthPart] = sheetDate(row.created_at, timeZone).split("-");
+    const year = Number(yearPart);
+    const month = Number(monthPart);
     const mKey = `${year}-${month}`;
     const aKey = `${year}`;
 
@@ -958,10 +965,10 @@ export type StatementPreview = {
 export async function getStatementPreview(
   churchId: string,
   year: number,
+  timeZone = "UTC",
+  supabase = createClient(),
 ): Promise<StatementPreview> {
-  const supabase = createClient();
-  const yearStart = new Date(year, 0, 1).toISOString();
-  const yearEnd = new Date(year + 1, 0, 1).toISOString();
+  const { start, end } = statementYearReadWindow(year);
 
   const [gifts, donors] = await Promise.all([
     readAllRows<{
@@ -978,8 +985,8 @@ export async function getStatementPreview(
         .select("id, donor_id, donor_name, donor_email, amount_cents, currency, created_at")
         .eq("church_id", churchId)
         .eq("status", "succeeded")
-        .gte("created_at", yearStart)
-        .lt("created_at", yearEnd)
+        .gte("created_at", start)
+        .lt("created_at", end)
         .order("created_at", { ascending: true })
         .range(from, to),
     ),
@@ -995,8 +1002,9 @@ export async function getStatementPreview(
 
   const byDonor = new Map<string, { totalCents: number; giftCount: number }>();
   const giftsWithoutDonor: GiftWithoutStatement[] = [];
+  const yearGifts = gifts.filter((gift) => sheetDate(gift.created_at, timeZone).startsWith(`${year}-`));
   let totalCents = 0;
-  for (const g of gifts) {
+  for (const g of yearGifts) {
     totalCents += g.amount_cents ?? 0;
     if (!g.donor_id) {
       giftsWithoutDonor.push({
@@ -1032,7 +1040,7 @@ export async function getStatementPreview(
     year,
     donors: statementDonors,
     totalCents,
-    giftCount: gifts.length,
+    giftCount: yearGifts.length,
     giftsWithoutDonor,
   };
 }

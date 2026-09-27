@@ -50,14 +50,14 @@ export default async function StatementsPage({
   }
 
   // Last year until April, when year-end statements are sent; any year on request.
-  const year = parseStatementYear(query.year);
+  const year = parseStatementYear(query.year, new Date(), auth.churchTimezone);
   const hasEin = Boolean(profile.ein);
 
   let data;
   try {
     const [preview, periods, emailsEnabled] = await Promise.all([
-      getStatementPreview(auth.churchId, year),
-      getGivingStatements(auth.churchId),
+      getStatementPreview(auth.churchId, year, auth.churchTimezone),
+      getGivingStatements(auth.churchId, auth.churchTimezone),
       isChurchFeatureEmailEnabled(auth.churchId, "giving"),
     ]);
     data = { preview, periods, emailsEnabled };
@@ -105,8 +105,7 @@ export default async function StatementsPage({
           {donorCount > 0 && (
             <p className="text-base text-muted-foreground">
               {formatCents(preview.totalCents)} from {plural(preview.giftCount, "gift")}. Each donor
-              gets one statement listing their gifts, your church&apos;s tax ID and address, and a
-              note that nothing was given in return.
+              gets one statement listing their gifts, your church&apos;s tax ID and address.
             </p>
           )}
         </div>

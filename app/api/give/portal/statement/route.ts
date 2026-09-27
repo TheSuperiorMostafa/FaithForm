@@ -4,6 +4,7 @@ import { getDonorPortalSession } from "@/lib/giving/portal-session";
 import { renderGivingStatementPdf } from "@/lib/giving/statement-pdf";
 import { getDonorGiftsForYear } from "@/lib/queries/giving";
 import { parseStatementYear } from "@/lib/giving/statement-year";
+import { churchYear } from "@/lib/giving/spreadsheet";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,7 +15,6 @@ export async function GET(request: Request) {
   // An unreadable `year` was NaN, and NaN threw inside the date maths: a 500
   // for a donor who edited the address. Absent still means this year.
   const rawYear = searchParams.get("year");
-  const year = rawYear ? parseStatementYear(rawYear) : new Date().getFullYear();
 
   if (!slug) {
     return NextResponse.json({ error: "slug required" }, { status: 400 });
@@ -28,7 +28,7 @@ export async function GET(request: Request) {
   const admin = createAdminClient();
   const { data: church, error: churchError } = await admin
     .from("churches")
-    .select("name, ein, statement_address")
+    .select("name, ein, statement_address, timezone")
     .eq("id", session.churchId)
     .single();
 
@@ -44,9 +44,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "We couldn't load your statement details. Please try again." }, { status: 503 });
   }
 
+  const timeZone = (church.timezone as string | null) ?? "America/New_York";
+  const year = rawYear
+    ? parseStatementYear(rawYear, new Date(), timeZone)
+    : churchYear(new Date(), timeZone);
   let buffer: Buffer;
   try {
-    const gifts = await getDonorGiftsForYear(session.churchId, session.donorId, year, admin);
+    const gifts = await getDonorGiftsForYear(session.churchId, session.donorId, year, admin, timeZone);
     buffer = await renderGivingStatementPdf({
       churchName: church.name as string,
       ein: (church.ein as string) ?? null,
@@ -55,6 +59,7 @@ export async function GET(request: Request) {
       donorEmail: donor.email as string,
       year,
       gifts,
+      timeZone,
     });
   } catch (error) {
     console.error("[giving] portal statement generation failed", error);

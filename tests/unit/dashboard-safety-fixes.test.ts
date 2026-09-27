@@ -35,6 +35,18 @@ test("a requested year is honoured, a nonsense or future one is not", () => {
   assert.deepEqual(statementYearOptions(now, 3), [2027, 2026, 2025]);
 });
 
+test("statement year follows the church calendar across UTC New Year", () => {
+  const now = new Date("2027-01-01T01:00:00Z");
+  assert.equal(defaultStatementYear(now, "America/New_York"), 2026);
+  assert.equal(defaultStatementYear(now, "Pacific/Auckland"), 2026);
+  assert.equal(parseStatementYear("2027", now, "America/New_York"), 2026);
+  assert.equal(parseStatementYear("2027", now, "Pacific/Auckland"), 2027);
+  assert.deepEqual(statementYearOptions(now, 2, "America/New_York"), [2026, 2025]);
+  const spring = new Date("2027-04-01T01:00:00Z");
+  assert.equal(defaultStatementYear(spring, "America/New_York"), 2026);
+  assert.equal(defaultStatementYear(spring, "Pacific/Auckland"), 2027);
+});
+
 test("both statement routes and the page use the shared year rule", () => {
   for (const path of [
     "app/api/dashboard/giving/statements/generate/route.ts",

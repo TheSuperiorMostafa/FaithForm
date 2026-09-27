@@ -283,6 +283,8 @@ test("a statement email names the year and total, and makes no tax-deduction cla
   assert.equal(content.subject, "Your 2026 giving statement from Grace Church");
   assert.match(content.text, /\$1,250\.00/);
   assert.doesNotMatch(content.text.toLowerCase(), /deductible|501\(c\)/);
+  assert.doesNotMatch(content.text, /No goods or services were provided|tax-exempt organization/);
+  assert.match(content.text, /Contact Grace Church for questions about tax treatment/);
 });
 
 test("statement emails attach the PDF, dedupe retries, and report failures without throwing", async () => {
