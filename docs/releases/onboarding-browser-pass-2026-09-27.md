@@ -252,9 +252,10 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   admin church-switch session. The server intentionally denies chat tokens to
   impersonating platform staff. The UI should explain this restriction instead
   of implying a transient outage. On a later QA browser visit, the same group
-  chat opened and displayed the earlier QA test message; this does not explain
-  the initial error or establish the active account's permissions. Chat still
-  needs a controlled real church-admin account test. The local client now treats
+  chat opened and displayed the earlier QA test message. A subsequent check
+  confirmed the QA church-admin message still appeared. The original
+  platform-admin error remains unexplained because its HTTP response was not
+  captured. The local client now treats
   an unauthorized token response as an account-access message without a futile
   retry button; a provider outage still offers retry. The exact initial HTTP
   response was not captured, so this needs browser verification after rollout.
@@ -432,8 +433,8 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
 
 - A fresh browser rehearsal of the one-email local fix and failure paths,
   plus optional provider connections, payment processing, and mobile push.
-- Other media, recording publication in the app and website, group chat as
-  church staff, payment/bank onboarding, external integrations,
+- Other media, recording publication in the app and website,
+  payment/bank onboarding, external integrations,
   first-admin permissions, other settings, and provider paths.
 - Repeat checks for regressions and cleanup decision for the QA tenant.
 

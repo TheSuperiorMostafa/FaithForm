@@ -312,7 +312,9 @@ readiness.
   owned by `postgres`, and grants SELECT to both `anon` and `authenticated`.
   Its base table has RLS, but the view owner can bypass that policy. A read-only
   anonymous API HEAD request counted 11 rows through the view, while the same
-  request to the base `announcements` table counted zero. This confirms a
+  request to the base `announcements` table counted zero. A repeat on
+  2026-09-27 at 22:53 UTC counted 13 view rows and zero base-table rows.
+  This confirms a
   publicly reachable RLS bypass. This audit did not retrieve any announcement
   content or establish whether the path has been used. The local 0111 migration
   makes the view honor caller privileges and row policies. This matches
@@ -320,6 +322,14 @@ readiness.
   error. It also listed 32 warnings; Performance Advisor listed 14 warnings;
   Health Advisor listed no errors or warnings. These counts are point-in-time
   advisor results.
+- The same read-only anonymous count check covered 13 private tables/views.
+  Eleven returned zero rows, `church_integrations` denied the request, and
+  `announcements_with_status` returned 13 rows. The expanded local
+  `security:anonymous-private-data` gate correctly fails on that live result.
+  It requests counts only, never record content. The full 123-migration chain
+  and all 50 disposable database tests passed again, including the anonymous
+  view denial. Production remains exposed until the controlled migration and
+  a zero-row live retest.
 
 ## Release sequence for migrations 0110 through 0121
 
@@ -364,8 +374,9 @@ readiness.
    People, or Check-in must be denied direct reads of those areas; an attendance
    session must not be able to select `members.medical_notes`. A staff session
    must not read a second church's records. Run
-   `pnpm security:anonymous-announcements` with the production Supabase URL and
-   public key; both anonymous counts must be zero. Verify platform admin totals
+   `pnpm security:anonymous-private-data` with the production Supabase URL and
+   public key; every private table/view must return zero rows or deny anonymous
+   access. Verify platform admin totals
    and church/user lists against direct database aggregates.
 6. Watch request errors, latency, webhook failures, and queued jobs during a
    small rollout. Keep lead outreach phased until these checks have held under
