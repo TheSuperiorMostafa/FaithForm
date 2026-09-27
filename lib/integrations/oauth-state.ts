@@ -1,6 +1,22 @@
-import { createHmac, timingSafeEqual } from "crypto";
+import {
+  createCipheriv,
+  createDecipheriv,
+  createHash,
+  createHmac,
+  randomBytes,
+  timingSafeEqual,
+} from "crypto";
 
 const SEP = ".";
+const ENCRYPTED_VERSION = "v2";
+const MAX_STATE_LENGTH = 8192;
+
+function stateEncryptionKey(): Buffer {
+  return createHash("sha256")
+    .update("faithform-oauth-state-v2\0")
+    .update(getSecret())
+    .digest();
+}
 
 function getSecret() {
   const oauthSecret = process.env.INTEGRATION_OAUTH_STATE_SECRET?.trim();
@@ -56,29 +72,60 @@ export function signOAuthState(input: {
     returnTo: safeReturnTo(input.returnTo),
     exp: Math.floor(Date.now() / 1000) + OAUTH_STATE_TTL_SECONDS,
   };
-  const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
-  const sig = createHmac("sha256", getSecret()).update(body).digest("base64url");
-  return `${body}${SEP}${sig}`;
+  // OAuth providers receive state in the authorization URL. An onboarding
+  // return path can contain an invite token, so it must be opaque to them.
+  const iv = randomBytes(12);
+  const cipher = createCipheriv("aes-256-gcm", stateEncryptionKey(), iv);
+  const encrypted = Buffer.concat([
+    cipher.update(JSON.stringify(payload), "utf8"),
+    cipher.final(),
+  ]);
+  return [
+    ENCRYPTED_VERSION,
+    iv.toString("base64url"),
+    encrypted.toString("base64url"),
+    cipher.getAuthTag().toString("base64url"),
+  ].join(SEP);
 }
 
-export function verifyOAuthState(state: string): OAuthStatePayload | null {
-  const [body, sig] = state.split(SEP);
-  if (!body || !sig) return null;
-
-  const expected = createHmac("sha256", getSecret()).update(body).digest("base64url");
-
+function decodeEncryptedState(state: string): string | null {
+  const [version, ivText, encryptedText, tagText, extra] = state.split(SEP);
+  if (version !== ENCRYPTED_VERSION || !ivText || !encryptedText || !tagText || extra) return null;
   try {
-    const a = Buffer.from(sig);
-    const b = Buffer.from(expected);
-    if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+    const iv = Buffer.from(ivText, "base64url");
+    const tag = Buffer.from(tagText, "base64url");
+    if (iv.length !== 12 || tag.length !== 16) return null;
+    const decipher = createDecipheriv("aes-256-gcm", stateEncryptionKey(), iv);
+    decipher.setAuthTag(tag);
+    return Buffer.concat([
+      decipher.update(Buffer.from(encryptedText, "base64url")),
+      decipher.final(),
+    ]).toString("utf8");
   } catch {
     return null;
   }
+}
 
+function decodeLegacyState(state: string): string | null {
+  const [body, sig, extra] = state.split(SEP);
+  if (!body || !sig || extra) return null;
+  const expected = createHmac("sha256", getSecret()).update(body).digest("base64url");
+  const a = Buffer.from(sig);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+  return Buffer.from(body, "base64url").toString("utf8");
+}
+
+export function verifyOAuthState(state: string): OAuthStatePayload | null {
+  if (!state || state.length > MAX_STATE_LENGTH) return null;
   try {
-    const parsed = JSON.parse(
-      Buffer.from(body, "base64url").toString("utf8"),
-    ) as Partial<OAuthStatePayload>;
+    // Existing signed states can finish during a rolling deployment; they
+    // expire after 30 minutes. Every newly issued state uses encryption.
+    const decoded = state.startsWith(`${ENCRYPTED_VERSION}${SEP}`)
+      ? decodeEncryptedState(state)
+      : decodeLegacyState(state);
+    if (!decoded) return null;
+    const parsed = JSON.parse(decoded) as Partial<OAuthStatePayload>;
     if (!parsed.churchId || !parsed.userId || !parsed.provider) return null;
     // A state without an expiry was made before states expired; one copied
     // out of an old redirect must not bind a church's account years later.

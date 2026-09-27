@@ -7,7 +7,7 @@ readiness.
 
 ## Verified in an isolated checkout
 
-- Web: typecheck, lint (zero errors), production build, 1,786 application tests,
+- Web: typecheck, lint (zero errors), production build, 1,788 application tests,
   generated-contract/design/localization checks, migration baseline check,
   secret scan, and feature-guard scan pass.
 - Database: the earlier 113 migrations applied to disposable PostgreSQL 15 and
@@ -135,6 +135,14 @@ readiness.
   local list now includes those legacy rows and dates them by their last
   update. A read-only run of the local reader returned both; three focused
   take-down tests pass. This still needs a browser retest after rollout.
+- OAuth connection state previously carried the onboarding return path as
+  readable encoded text, including the invitation token. The local state is
+  now authenticated and encrypted with a fresh nonce before it goes to Google
+  or Facebook. The callback still accepts correctly signed states already in
+  flight until their 30-minute expiry. Focused tests verify round-trip,
+  tamper rejection, and unreadable invite content. Vercel's production variable
+  list contains the required `INTEGRATION_OAUTH_STATE_SECRET`; provider
+  connection still needs a browser retest after rollout.
 - Family-name pickup search now pages through all matching people, family
   names, membership links, and that day's open check-ins. It filters for
   families with children still present before limiting the displayed matches.
