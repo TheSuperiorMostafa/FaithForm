@@ -444,6 +444,10 @@ on its own.
   scope disclosure and approval status before offering Google connections to
   new churches. See Google's
   [Gmail scope descriptions](https://developers.google.com/workspace/gmail/api/auth/scopes).
+  The QA church's weekly email settings also claimed a Monday draft would
+  appear despite having no connected mailbox. A local UI fix now identifies
+  the missing connection; creating an actual scheduled draft still needs a
+  controlled test after Google approval or iCloud Mail connection.
   A local onboarding change also reports failed provider-status reads instead
   of presenting them as disconnected; that return path needs a browser retest.
 - A successful Supabase physical-backup restore test, a provider-side Storage

@@ -354,6 +354,12 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   the ended-service screen until navigation unmounted the studio. The local
   End service success path now stops the studio immediately. This needs a
   browser retest after rollout.
+- Messages & email showed “On. A new draft appears each Monday” for the QA
+  church despite having no connected Gmail or iCloud Mail, so the weekly job
+  has nowhere to create that draft. The local settings panel now checks the
+  actual mail channel and says it is waiting for a connected mailbox, with a
+  link to Connected accounts. It also explains when platform email is off.
+  This wording needs a browser retest after rollout.
 
 ## Still in progress
 
@@ -387,3 +393,5 @@ targeted lint, 1,794 unit/security/policy tests, and an optimized production
 build. The loopback relay test needed permission to bind to 127.0.0.1 in the
 local sandbox; it passed when run with that permission. Existing lint warnings
 remain outside the changed streaming files. No code was pushed or deployed.
+The weekly-email readiness wording passed TypeScript checking, targeted lint,
+and all 28 settings/help checks. It has not been deployed or browser retested.

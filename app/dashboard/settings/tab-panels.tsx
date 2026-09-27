@@ -15,6 +15,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ErrorState } from "@/components/ui/error-state";
 import { listCommunicationAttachments } from "@/lib/announcements/attachments";
+import { getWeeklyEmailAvailability } from "@/lib/announcements/email-delivery";
 import type { ChurchAuth } from "@/lib/auth/church";
 import { FEATURE_KEYS, type FeatureKey } from "@/lib/features/catalog";
 import type { FeatureFlags } from "@/lib/features/access";
@@ -179,17 +180,22 @@ async function MessagesPanel({ auth, allowedFeatures }: SettingsPanelContext) {
   const showEmail = allowedFeatures.includes("announcements");
   const showTexts = allowedFeatures.includes("attendance");
 
-  const [emailSettings, attachments, followUps] = await Promise.all([
+  const [emailSettings, emailAvailability, attachments, followUps] = await Promise.all([
     showEmail ? getAnnouncementEmailSettings(auth.churchId, supabase) : Promise.resolve(null),
+    showEmail ? getWeeklyEmailAvailability(auth.churchId, supabase) : Promise.resolve(null),
     showEmail ? listCommunicationAttachments(auth.churchId) : Promise.resolve([]),
     showTexts ? getFollowUpMessageTemplates(auth.churchId, supabase) : Promise.resolve(null),
   ]);
 
   return (
     <div className="flex flex-col gap-6">
-      {emailSettings && (
+      {emailSettings && emailAvailability && (
         <>
-          <AnnouncementEmailForm isAdmin={auth.isAdmin} template={emailSettings} />
+          <AnnouncementEmailForm
+            isAdmin={auth.isAdmin}
+            template={emailSettings}
+            availability={emailAvailability}
+          />
           <CommunicationAttachmentsForm isAdmin={auth.isAdmin} attachments={attachments} />
         </>
       )}
@@ -225,4 +231,3 @@ async function GivingPanel() {
     </Card>
   );
 }
-
