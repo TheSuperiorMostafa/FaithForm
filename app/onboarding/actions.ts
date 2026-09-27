@@ -11,6 +11,7 @@ import {
   assertInviteEmail,
   fetchInviteByChurchId,
   fetchInviteByToken,
+  inviteNeedsRefresh,
   type InviteValidationResult,
   type ValidInvite,
 } from "@/lib/onboarding/validate-invite";
@@ -273,48 +274,21 @@ export async function completeOnboarding(token: string): Promise<ActionResult> {
   }
 
   const admin = createAdminClient();
-  const now = new Date().toISOString();
-
-  // The invite must be the last thing closed. If any earlier write fails,
-  // keeping it usable lets the same signed-in invitee retry Step 6 instead
-  // of leaving a church marked complete with no working administrator.
-  const { error: linkError } = await admin.from("church_users").upsert(
-    {
-      church_id: inviteResult.invite.churchId,
-      user_id: user.id,
-      role: "admin",
-      onboarding_step: "completed",
-    },
-    { onConflict: "church_id,user_id" },
-  );
-
-  if (linkError) {
-    return { ok: false, error: toUserError(linkError, "We couldn't finish setting up your account.") };
+  // The function rechecks the invite under a row lock and commits the admin
+  // membership, church completion, and invite acceptance together.
+  const { data: outcome, error } = await admin.rpc("complete_church_onboarding", {
+    p_token: token.trim(),
+    p_user_id: user.id,
+    p_user_email: user.email ?? "",
+  });
+  if (error) return { ok: false, error: toUserError(error, "We couldn't finish setup. Please try again.") };
+  if (outcome === "completed") return { ok: true };
+  if (outcome === "expired") return { ok: false, error: "This invite has expired. Contact your administrator." };
+  if (outcome === "email_mismatch") return { ok: false, error: "Sign in with the email address that received this invite." };
+  if (outcome === "already_accepted" || outcome === "already_complete") {
+    return { ok: false, error: "Setup is already complete. Sign in to continue." };
   }
-
-  const { data: completedChurch, error: churchError } = await admin
-    .from("churches")
-    .update({ onboarding_completed_at: now })
-    .eq("id", inviteResult.invite.churchId)
-    .select("id")
-    .maybeSingle();
-
-  if (churchError || !completedChurch) {
-    return { ok: false, error: toUserError(churchError, "We couldn't finish setting up your church. Please try again.") };
-  }
-
-  const { data: acceptedInvite, error: inviteError } = await admin
-    .from("church_invites")
-    .update({ accepted_at: now })
-    .eq("id", inviteResult.invite.id)
-    .select("id")
-    .maybeSingle();
-
-  if (inviteError || !acceptedInvite) {
-    return { ok: false, error: toUserError(inviteError, "We couldn't finish accepting the invite. Please try again.") };
-  }
-
-  return { ok: true };
+  return { ok: false, error: "This invite link is invalid." };
 }
 
 export async function resendInvite(
@@ -338,30 +312,24 @@ export async function resendInvite(
   }
 
   const existingInvite = await fetchInviteByChurchId(churchId);
+  if (!existingInvite) {
+    return { ok: false, error: "No pending invite found. Create a new invite from Add Church." };
+  }
 
-  let email: string;
-  let adminFirstName: string;
-  let adminLastName: string;
-  let token: string;
-
-  if (existingInvite) {
-    email = existingInvite.email;
-    adminFirstName = existingInvite.adminFirstName;
-    adminLastName = existingInvite.adminLastName;
-
-    await admin
-      .from("church_invites")
-      .delete()
-      .eq("church_id", churchId)
-      .is("accepted_at", null);
-
+  const email = existingInvite.email;
+  const adminFirstName = existingInvite.adminFirstName;
+  let token = existingInvite.token;
+  if (inviteNeedsRefresh(existingInvite.expiresAt)) {
+    // Only an expired link needs replacing. Keep the old row until a new one
+    // exists, so a failed insert cannot strand the church. A failed email can
+    // then be retried using the newly created, still-valid link.
     const { data: newInvite, error: newError } = await admin
       .from("church_invites")
       .insert({
         church_id: churchId,
         email,
         admin_first_name: adminFirstName,
-        admin_last_name: adminLastName,
+        admin_last_name: existingInvite.adminLastName,
       })
       .select("token")
       .single();
@@ -370,11 +338,6 @@ export async function resendInvite(
       return { ok: false, error: newError?.message ?? "Could not create invite." };
     }
     token = newInvite.token;
-  } else {
-    return {
-      ok: false,
-      error: "No pending invite found. Create a new invite from Add Church.",
-    };
   }
 
   try {

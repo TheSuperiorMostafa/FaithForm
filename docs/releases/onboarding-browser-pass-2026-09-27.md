@@ -220,9 +220,12 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
 - The live Step 6 handler wrote the invite acceptance and church completion
   before the admin membership and ignored errors on those first two writes.
   A membership failure could leave a completed church with no admin and an
-  unusable invite. Local code now creates the membership first, checks each
-  write, and accepts the invite last so a failed setup can be retried. This
-  needs deployment and a fault-injection rehearsal.
+  unusable invite. The first local fix reordered and checked those writes.
+  Migration `0115_atomic_onboarding_completion.sql` now makes all three writes
+  one transaction and rechecks the invite under a row lock. A disposable
+  database test forced the final invite update to fail and verified that no
+  admin membership or church completion persisted. This still needs a fresh
+  browser rehearsal after release.
 - After roughly 30 minutes, the platform-admin church-switch note expired
   during client-side navigation. The QA banner remained visible while a new
   Groups page loaded the admin's own `Faithform Church` and its existing

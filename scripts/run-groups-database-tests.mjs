@@ -82,6 +82,7 @@ try {
       "--test-concurrency=1",
       "tests/database/groups.test.ts",
       "tests/database/group-gathering-atomic.test.ts",
+      "tests/database/onboarding-finalize-atomic.test.ts",
       "tests/database/group-messaging.test.ts",
       "tests/database/tenant-isolation.test.ts",
       "tests/database/messaging-sync-claim.test.ts",

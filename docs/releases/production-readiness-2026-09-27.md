@@ -7,13 +7,13 @@ readiness.
 
 ## Verified in an isolated checkout
 
-- Web: typecheck, lint (zero errors), production build, 1,772 application tests,
+- Web: typecheck, lint (zero errors), production build, 1,780 application tests,
   generated-contract/design/localization checks, migration baseline check,
   secret scan, and feature-guard scan pass.
 - Database: the earlier 113 migrations applied to disposable PostgreSQL 15 and
-  17; the current 115-migration chain also passed a fresh PostgreSQL 17
-  archive-and-restore rehearsal.
-  All 42 database tests pass, including cross-church, per-feature,
+  17; the 115-migration chain also passed a fresh PostgreSQL 17
+  archive-and-restore rehearsal. The current 117-migration chain and all 44
+  database tests pass, including cross-church, per-feature,
   and view-access denial probes. The additive
   `0111_announcement_status_view_invoker.sql` migration resolves the live
   Security Advisor's SECURITY DEFINER view finding. It is local only.
@@ -78,6 +78,19 @@ readiness.
   Realtime platform objects that the local container cannot restore, accepted
   migration 0114; all four churches remained and `anon` lacked execute access.
   That restored copy was removed. This fix has not been deployed.
+- Migration 0115 makes the final church onboarding step one transaction:
+  administrator membership, church completion, and invite acceptance either
+  all persist or all roll back. All 117 migrations and 44 database tests pass
+  in a fresh disposable database. A deliberately failed invite update left no
+  administrator or completed church. The service role can execute the function;
+  browser roles cannot. The approved production archive also accepted both
+  migrations in a disposable local restore with four churches intact. This
+  fix has not been deployed or browser rehearsed.
+- Invite resend no longer deletes the existing link before sending. An
+  unexpired invite is resent as-is; an expired invite gets a new row while the
+  expired one remains unusable. If the email provider fails, the current valid
+  link can be resent again. This change is local and still needs a provider
+  delivery rehearsal after release.
 - The local group attendance form now refuses to open if its roster, saved
   counts, or People labels fail to load, or if the API returns fewer rows than
   the database counted. This prevents a partial view from being saved as a
@@ -179,17 +192,18 @@ readiness.
   Health Advisor listed no errors or warnings. These counts are point-in-time
   advisor results.
 
-## Release sequence for migrations 0110 through 0114
+## Release sequence for migrations 0110 through 0115
 
 1. Capture the current deployment and database migration state. Reconcile the
    deployed schema and source migration history. Confirm a recoverable backup
    by restoring it to a separate environment and checking tenant counts and
    critical records, including Storage objects through a separate process.
    Do not restore over live data.
-2. Apply `0114_group_gathering_atomic_update.sql` before deploying the updated
-   application: the new meeting save calls this function and cannot work until
-   it exists. The function is server-only and the currently deployed meeting
-   editor does not call it. Then deploy the application changes before the
+2. Apply `0114_group_gathering_atomic_update.sql` and
+   `0115_atomic_onboarding_completion.sql` before deploying the updated
+   application: the new meeting and onboarding saves call these server-only
+   functions and cannot work until they exist. The currently deployed code
+   does not call them. Then deploy the application changes before the
    policy-tightening migrations. The new server code can read medical notes
    and call aggregates after the database policy tightens. The admin aggregate
    calls paginate safely until 0112 arrives. The old server code cannot read
@@ -204,7 +218,8 @@ readiness.
    `0113_active_schema_catchup.sql` once through the controlled migration
    process. Verify their recorded checksums and inspect the resulting policies,
    column grants, view options, and aggregate function privileges. Confirm
-   0114's server-only execute grant. Do not edit an already applied migration.
+   0114 and 0115's server-only execute grants. Do not edit an already applied
+   migration.
 5. Repeat the same workflow checks. A staff session without Giving, Calls,
    People, or Check-in must be denied direct reads of those areas; an attendance
    session must not be able to select `members.medical_notes`. A staff session
@@ -284,7 +299,7 @@ on its own.
   The local logical archive and object reconstruction proved local recovery
   paths, not these remaining disaster-recovery steps.
 - Final live-schema comparison, a recorded migration baseline, and safe
-  application of 0110 through 0114 in the order above. The local comparison
+  application of 0110 through 0115 in the order above. The local comparison
   exposed the active missing objects, but live production still has the access
   gap and no source migration ledger.
 - A representative controlled rollout with real accounts from all four

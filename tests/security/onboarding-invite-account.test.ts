@@ -11,6 +11,7 @@ const finish = actions.slice(
   actions.indexOf("export async function completeOnboarding"),
   actions.indexOf("export async function resendInvite"),
 );
+const resend = actions.slice(actions.indexOf("export async function resendInvite"));
 
 test("the emailed church invite verifies the address before trusted account creation", () => {
   assert.ok(account.indexOf("fetchInviteByToken(token)") < account.indexOf("admin.auth.admin.createUser"));
@@ -20,12 +21,14 @@ test("the emailed church invite verifies the address before trusted account crea
   assert.match(account, /auth\.signInWithPassword\(/);
 });
 
-test("the invite stays usable until an administrator and completed church exist", () => {
-  const link = finish.indexOf('.from("church_users").upsert(');
-  const church = finish.indexOf('.from("churches")');
-  const invite = finish.indexOf('.from("church_invites")');
-  assert.ok(link >= 0 && church > link && invite > church);
-  assert.match(finish, /if \(linkError\)/);
-  assert.match(finish, /if \(churchError \|\| !completedChurch\)/);
-  assert.match(finish, /if \(inviteError \|\| !acceptedInvite\)/);
+test("the final step uses one transactional command after signed-in invite validation", () => {
+  assert.ok(finish.indexOf("fetchInviteByToken(token)") < finish.indexOf("admin.rpc("));
+  assert.ok(finish.indexOf("assertInviteEmail") < finish.indexOf("admin.rpc("));
+  assert.match(finish, /admin\.rpc\("complete_church_onboarding"/);
+  assert.doesNotMatch(finish, /\.from\("church_users"\)|\.from\("churches"\)|\.from\("church_invites"\)/);
+});
+
+test("resending does not revoke a working invitation before delivery succeeds", () => {
+  assert.match(resend, /inviteNeedsRefresh\(existingInvite\.expiresAt\)/);
+  assert.doesNotMatch(resend, /\.delete\(\)/);
 });

@@ -35,6 +35,11 @@ export type InviteValidationResult =
   | { ok: true; invite: ValidInvite }
   | { ok: false; code: InviteErrorCode; message: string };
 
+export function inviteNeedsRefresh(expiresAt: string, now = Date.now()): boolean {
+  const expiry = Date.parse(expiresAt);
+  return !Number.isFinite(expiry) || expiry <= now;
+}
+
 type InviteRow = {
   id: string;
   church_id: string;
