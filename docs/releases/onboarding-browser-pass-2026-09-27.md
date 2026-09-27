@@ -113,6 +113,19 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
 - Group settings: changed the QA group's About text, saved, reloaded to verify
   persistence, then restored and saved the original description. Both saves
   showed “All changes saved” and the final value matched the original.
+- Recurring meetings: the required first-date field rejected an empty value.
+  A Tuesday 6:30 PM schedule bounded to October created four meetings on the
+  expected Tuesdays in the QA church. Stopping the schedule removed all four
+  generated upcoming meetings and showed a success message. After the save,
+  the live app also showed the stale “Discard changes?” prompt; choosing
+  “Keep editing” revealed that the schedule had saved correctly. The local
+  shared-dialog fix still needs a browser retest after rollout.
+- Group attendance: created a separate, clearly labeled QA meeting inside its
+  attendance window. Saved one synthetic member and one guest, then reopened
+  the form to verify both counts and the note. Corrected the guest and
+  first-time guest counts to zero; the meeting summary showed one attendee and
+  zero guests after a full browser reload. The live app displayed the same
+  stale “Discard changes?” prompt after each successful save.
 - Connected accounts: the iCloud Calendar link form opened with iPhone, Mac,
   and iCloud.com instructions. A deliberately invalid synthetic link was
   rejected with a clear iCloud-specific message. The alternate Apple ID form
@@ -146,13 +159,16 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   checks attendance history before changing its check-in window and reports
   failed or zero-row updates instead of silently saying the meeting saved.
   These fixes passed focused tests but still need a browser check after rollout.
-  Event and attendance-window writes remain separate database operations;
-  their atomicity needs a transaction before a full reliability claim.
+  Local migration `0114_group_gathering_atomic_update.sql` now saves the
+  meeting, attendance window, and audit event in one transaction. Rollback,
+  zero-attendee history, and role-access tests pass in disposable PostgreSQL.
 - The QA meeting's attendance form loaded the QA member and accepted a local
   selection and note, but saving before the meeting's one-day attendance
   window returned “Attendance opens the day before the gathering.” Nothing
   was saved; the unsaved-change prompt discarded the trial input correctly.
-  Attendance recording itself remains unverified.
+  The local form now explains the timing rule and disables editing until the
+  attendance window opens. A separate QA meeting subsequently verified actual
+  attendance recording and correction as described above.
 - The production Church App cannot save quick links because the active
   `churches` table lacks `app_links` (Postgres 42703). The UI says links are
   unavailable. Save & publish still saves other profile fields but leaves the

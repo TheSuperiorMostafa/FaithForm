@@ -82,9 +82,43 @@ function GatheringForm({ groupId, timezone, close, existing }: { groupId: string
   </form>;
 }
 function Attendance({ groupId, sheet, close }: { groupId: string; sheet: AttendanceSheet; close: () => void }) {
-  const [selected, setSelected] = useState(sheet.entries.filter(e => e.present).map(e => e.membershipId)); const [key] = useState(() => crypto.randomUUID());
+  const [selected, setSelected] = useState(sheet.entries.filter(e => e.present).map(e => e.membershipId));
+  const [key] = useState(() => crypto.randomUUID());
   const { pending, error, run } = useGroupAction();
-  return <form onSubmit={e => { e.preventDefault(); const f = new FormData(e.currentTarget); run(() => actions.recordAttendance(groupId, sheet.eventId, { presentMembershipIds: selected, guestCount: Number(f.get("guests")), firstTimeGuestCount: Number(f.get("first")), notes: String(f.get("notes")) }, key), `Attendance saved: ${selected.length} came.`, close); }}><div className="mb-3 flex flex-wrap items-center justify-between gap-3"><span className="text-base font-semibold">{selected.length} here</span><Button type="button" variant="outline" onClick={() => setSelected(selected.length ? [] : sheet.entries.filter(e => e.recordable).map(e => e.membershipId))}>{selected.length ? "Clear everyone" : "Mark everyone here"}</Button></div><div className="max-h-64 overflow-y-auto">{sheet.entries.map(entry => <label key={entry.membershipId} className="g-row cursor-pointer"><span className="text-base">{entry.name}{!entry.recordable && <small className="block text-sm text-muted-foreground">No longer in the group</small>}</span><input type="checkbox" disabled={!entry.recordable || pending} checked={selected.includes(entry.membershipId)} onChange={e => setSelected(s => e.target.checked ? [...s, entry.membershipId] : s.filter(id => id !== entry.membershipId))} className="size-5" /></label>)}</div><div className="g-form-grid mt-5"><Field label="Guests"><input type="number" name="guests" min={0} max={1000} defaultValue={sheet.guestCount} required /></Field><Field label="First-time guests"><input type="number" name="first" min={0} max={1000} defaultValue={sheet.firstTimeGuestCount} required /></Field></div><div className="mt-4"><Field label="Notes (optional)"><textarea name="notes" rows={2} maxLength={1000} defaultValue={sheet.notes ?? ""} /></Field></div>{error && <Notice>{error}</Notice>}<div className="g-form-actions"><Submit pending={pending}>Save attendance</Submit></div></form>;
+  const lockedMessage = sheet.lockedReason === "too_early"
+    ? "Attendance opens the day before this meeting. You can return then to mark who came."
+    : sheet.lockedReason === "too_late"
+      ? "Attendance closed 30 days after this meeting."
+      : sheet.lockedReason === "cancelled"
+        ? "Attendance is unavailable for a cancelled meeting."
+        : null;
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!sheet.canRecord) return;
+    const fields = new FormData(event.currentTarget);
+    run(() => actions.recordAttendance(groupId, sheet.eventId, {
+      presentMembershipIds: selected,
+      guestCount: Number(fields.get("guests")),
+      firstTimeGuestCount: Number(fields.get("first")),
+      notes: String(fields.get("notes")),
+    }, key), `Attendance saved: ${selected.length} came.`, close);
+  }
+
+  return <form onSubmit={submit}>
+    {lockedMessage && <Notice tone="info">{lockedMessage}</Notice>}
+    <fieldset disabled={!sheet.canRecord || pending} className="min-w-0 border-0 p-0">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <span className="text-base font-semibold">{selected.length} here</span>
+        <Button type="button" variant="outline" onClick={() => setSelected(selected.length ? [] : sheet.entries.filter(e => e.recordable).map(e => e.membershipId))}>{selected.length ? "Clear everyone" : "Mark everyone here"}</Button>
+      </div>
+      <div className="max-h-64 overflow-y-auto">{sheet.entries.map(entry => <label key={entry.membershipId} className="g-row cursor-pointer"><span className="text-base">{entry.name}{!entry.recordable && <small className="block text-sm text-muted-foreground">No longer in the group</small>}</span><input type="checkbox" disabled={!entry.recordable} checked={selected.includes(entry.membershipId)} onChange={e => setSelected(s => e.target.checked ? [...s, entry.membershipId] : s.filter(id => id !== entry.membershipId))} className="size-5" /></label>)}</div>
+      <div className="g-form-grid mt-5"><Field label="Guests"><input type="number" name="guests" min={0} max={1000} defaultValue={sheet.guestCount} required /></Field><Field label="First-time guests"><input type="number" name="first" min={0} max={1000} defaultValue={sheet.firstTimeGuestCount} required /></Field></div>
+      <div className="mt-4"><Field label="Notes (optional)"><textarea name="notes" rows={2} maxLength={1000} defaultValue={sheet.notes ?? ""} /></Field></div>
+      {error && <Notice>{error}</Notice>}
+      {sheet.canRecord && <div className="g-form-actions"><Submit pending={pending}>Save attendance</Submit></div>}
+    </fieldset>
+  </form>;
 }
 export function Schedules({ detail, timezone }: { detail: StaffGroupDetail; timezone: string }) {
   const [adding, setAdding] = useState(false); const { pending, error, run } = useGroupAction();
