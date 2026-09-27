@@ -444,7 +444,9 @@ on its own.
   stayed stale until refreshed. A local bounded pairing-status refresh,
   manual Refresh station status control, and checked station-list reads
   address this. Selecting another service creates fresh panel state, and late
-  responses cannot overwrite a newer refresh. These changes need a browser retest after
+  responses cannot overwrite a newer refresh. Active-display and service
+  setting reads now report errors instead of presenting false “off” defaults.
+  These changes need a browser retest after
   rollout. Both QA features were turned off again.
 - The live website publish control writes page status and site settings in
   separate requests. Local migration 0121 saves both in one transaction. All

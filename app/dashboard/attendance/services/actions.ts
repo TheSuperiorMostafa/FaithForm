@@ -361,7 +361,7 @@ export async function getCheckinDisplayState(
 ): Promise<VisitorResult<CheckinDisplayState>> {
   try {
     const { churchId } = await requireAttendanceStaff();
-    const [session, { data: occurrence }] = await Promise.all([
+    const [session, occurrenceResult] = await Promise.all([
       getActiveSession({ occurrenceId, churchId }),
       createAdminClient()
         .from("service_occurrences")
@@ -370,6 +370,10 @@ export async function getCheckinDisplayState(
         .eq("church_id", churchId)
         .maybeSingle(),
     ]);
+    if (occurrenceResult.error || !occurrenceResult.data) {
+      throw occurrenceResult.error ?? new Error("Service unavailable");
+    }
+    const occurrence = occurrenceResult.data;
     const signing = checkinSigningStatus();
     const sources =
       (occurrence?.policy_snapshot as { sources?: Record<string, boolean> } | null)?.sources ?? {};

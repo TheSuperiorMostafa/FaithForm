@@ -402,8 +402,11 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   set up” until its station list refreshed. The local panel now checks briefly
   while the one-use pairing code is displayed and also offers Refresh station
   status. Its station-list query reports read failures instead of
-  turning them into an empty list, and the controls stay disabled until the
-  display and station state load. This needs a browser retest after rollout.
+  turning them into an empty list. The active-display and service-setting
+  reads also fail visibly instead of treating a database error as “off”; a
+  focused failure-path test covers the active-display read. Controls stay
+  disabled until display and station state load. This needs a browser retest
+  after rollout.
 - Code review found that the live Website publish switch writes page status
   before site settings. A failure on the second request could leave the page
   published while the control reports failure. Local migration 0121 and the
