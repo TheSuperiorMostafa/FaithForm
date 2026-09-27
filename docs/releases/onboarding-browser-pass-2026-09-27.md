@@ -421,6 +421,12 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   website action now perform both writes in one database transaction. A forced
   second-write failure rolled back publication in a disposable database. The
   switch still needs a browser retest after migration and code rollout.
+- The QA camera recording remained in the Ready to publish list and absent
+  from Published. Its review page played back the 48-second clip, exposed
+  trim, cover, audience, metadata, and publication controls, and successfully
+  saved a trim. The trim was restored to the original 0:00–0:48 span and the
+  list showed the full duration again. Publication was not tested, so app and
+  public website playback after publication remain unverified.
 
 ## Still in progress
 
