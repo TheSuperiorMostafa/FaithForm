@@ -246,10 +246,14 @@ export async function getOnboardingIntegrationStatus(
   }
 
   const admin = createAdminClient();
-  const { data } = await admin
+  const { data, error } = await admin
     .from("church_integrations")
     .select("provider, access_token, metadata")
     .eq("church_id", churchId);
+
+  if (error) {
+    return { ok: false, error: "We couldn't check connected accounts. Please reload this step and try again." };
+  }
 
   const rows = data ?? [];
   const google = rows.find((r) => r.provider === "google");

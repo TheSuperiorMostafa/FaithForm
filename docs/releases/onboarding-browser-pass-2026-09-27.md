@@ -163,6 +163,11 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   rejected with a clear iCloud-specific message. The alternate Apple ID form
   correctly explained the separate app-specific password; no credentials were
   entered and no calendar connected.
+- Code review of the Google/Facebook onboarding return found that a failed
+  connection-status database read was displayed as “disconnected.” The local
+  flow now reports that the status could not be checked, so an admin can
+  reload the step before deciding whether to connect again. This failure path
+  still needs a controlled browser rehearsal after rollout.
 - Messages & email: the weekly subject rejected a value without `[Week]` with
   the expected validation error. A valid QA subject saved and persisted after
   reload; the standard wording was then restored and verified after reload.

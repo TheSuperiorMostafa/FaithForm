@@ -48,6 +48,7 @@ type OnboardingWizardProps = {
   initialStep: number;
   initialProfile: ProfileData;
   integrationStatus: IntegrationStatus;
+  integrationStatusError: string | null;
 };
 
 const STEP_LABELS = [...ONBOARDING_STEP_LABELS];
@@ -61,6 +62,9 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
   const [profile, setProfile] = useState<ProfileData>(props.initialProfile);
   const [integrations, setIntegrations] = useState<IntegrationStatus>(
     props.integrationStatus,
+  );
+  const [integrationStatusError, setIntegrationStatusError] = useState<string | null>(
+    props.integrationStatusError,
   );
   const [accountCreated, setAccountCreated] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
@@ -97,8 +101,11 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
           props.churchId,
           props.token,
         );
-        if (!("error" in result)) {
+        if ("error" in result) {
+          setIntegrationStatusError(result.error);
+        } else {
           setIntegrations(result);
+          setIntegrationStatusError(null);
         }
       });
     }
@@ -240,7 +247,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
               connected={integrations.google.connected}
               email={integrations.google.email}
               connectUrl={buildConnectUrl("google", 4)}
-              error={searchParams.get("integration_error")}
+              error={integrationStatusError ?? searchParams.get("integration_error")}
               onSkip={() => goToStep(5)}
               onContinue={() => goToStep(5)}
             />
@@ -250,7 +257,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
               connected={integrations.facebook.connected}
               pageName={integrations.facebook.pageName}
               connectUrl={buildConnectUrl("facebook", 5)}
-              error={searchParams.get("integration_error")}
+              error={integrationStatusError ?? searchParams.get("integration_error")}
               onSkip={() => goToStep(6)}
               onContinue={() => goToStep(6)}
             />

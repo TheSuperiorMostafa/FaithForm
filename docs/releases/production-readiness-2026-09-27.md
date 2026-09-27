@@ -415,6 +415,8 @@ on its own.
   scope disclosure and approval status before offering Google connections to
   new churches. See Google's
   [Gmail scope descriptions](https://developers.google.com/workspace/gmail/api/auth/scopes).
+  A local onboarding change also reports failed provider-status reads instead
+  of presenting them as disconnected; that return path needs a browser retest.
 - A successful Supabase physical-backup restore test, a provider-side Storage
   restore rehearsal, an independent encrypted location for the local database
   and Storage archives, and documented recovery time and data-loss targets.

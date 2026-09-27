@@ -61,6 +61,10 @@ export default async function OnboardingPage({ searchParams }: PageProps) {
           facebook: { connected: false, pageName: null as string | null },
         }
       : integrationResult;
+  const integrationStatusError =
+    initialStep >= 4 && "error" in integrationResult
+      ? integrationResult.error
+      : null;
 
   return (
     <Suspense fallback={<OnboardingLoading />}>
@@ -83,6 +87,7 @@ export default async function OnboardingPage({ searchParams }: PageProps) {
           logoUrl: invite.church.logoUrl ?? "",
         }}
         integrationStatus={integrationStatus}
+        integrationStatusError={integrationStatusError}
       />
     </Suspense>
   );
