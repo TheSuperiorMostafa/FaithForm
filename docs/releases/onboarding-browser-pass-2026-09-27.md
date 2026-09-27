@@ -176,6 +176,14 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   save as the UI promised. A named Wednesday QA service time saved and survived
   a reload, then was removed; another reload showed only the original Sunday
   service. No email was sent.
+- Website enquiry delivery: temporarily set the QA church contact address to
+  the owner's authorized Gmail alias, then submitted a clearly labeled
+  synthetic visitor enquiry through the draft website preview. The form showed
+  success, the message appeared under New in the church Website Inbox, and
+  Gmail received the matching FaithForm email with the visitor name, dummy
+  sender address, and message. The contact address was cleared again and a
+  full browser reload confirmed the original empty value. The synthetic
+  enquiry was archived and verified in the Archived list. No reply was sent.
 - Group settings: changed the QA group's About text, saved, reloaded to verify
   persistence, then restored and saved the original description. Both saves
   showed “All changes saved” and the final value matched the original.

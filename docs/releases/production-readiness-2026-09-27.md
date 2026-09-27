@@ -404,7 +404,10 @@ on its own.
   invitation and Gmail delivery passed; the owner completed the password and
   second email confirmation, Steps 3–6 saved a synthetic profile and finished,
   and the resulting church-admin session sent and reloaded a group chat
-  message. Optional external provider connections were skipped.
+  message. A synthetic website enquiry also reached the QA church Inbox and
+  the owner's authorized Gmail alias with matching content; its temporary
+  contact address was removed and verified after reload. Optional external
+  provider connections were skipped.
 - The browser pass found a live expired-impersonation transition that can show
   the old QA banner over the platform admin's own church page. A local guard
   now redirects expired switches before dashboard requests or actions run;
