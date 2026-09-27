@@ -151,6 +151,10 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   showed Google, iCloud, YouTube, and Facebook as disconnected. Switching the
   member-app palette to Forest and wheat persisted. The Phone Calls empty
   state loaded.
+- Church details: the QA contact-email field rejected malformed text in the
+  browser without saving it. A synthetic `.invalid` address saved and survived
+  a full reload; clearing and saving it again restored the original empty
+  value, also verified after reload. No email was sent.
 - Group settings: changed the QA group's About text, saved, reloaded to verify
   persistence, then restored and saved the original description. Both saves
   showed “All changes saved” and the final value matched the original.
