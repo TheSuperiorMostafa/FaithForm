@@ -183,7 +183,11 @@ public actor SystemAttendanceNotifier: AttendanceNotifying {
     }
 
     public func requestAuthorization() async -> NotificationAuthorization {
-        _ = try? await center.requestAuthorization(options: [.alert, .sound])
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            center.requestAuthorization(options: [.alert, .sound]) { _, _ in
+                continuation.resume()
+            }
+        }
         return await authorizationStatus()
     }
 
@@ -205,7 +209,9 @@ public actor SystemAttendanceNotifier: AttendanceNotifying {
         )
         // Replaces any earlier question for this church. A failure is not
         // reported: the in-app card asks the same question.
-        try? await center.add(request)
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            center.add(request) { _ in continuation.resume() }
+        }
     }
 
     public func cancelArrivalPrompt(churchSlug: String) async {
@@ -263,7 +269,9 @@ public actor SystemAttendanceNotifier: AttendanceNotifying {
             content: content,
             trigger: nil
         )
-        try? await center.add(request)
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            center.add(request) { _ in continuation.resume() }
+        }
     }
 
     nonisolated static func map(_ status: UNAuthorizationStatus) -> NotificationAuthorization {
