@@ -9,12 +9,13 @@ const projectRef = "wwiclymyfplsyezxyzva";
 const batches = {
   "pre-web": [...Array.from({ length: 13 }, (_, index) => 114 + index), 127],
   "post-web": [110, 111, 112, 113],
+  "reporting-hotfix": [128],
 };
 const batch = process.argv.find((arg) => arg.startsWith("--batch="))?.slice(8);
 const mode = process.argv.find((arg) => arg.startsWith("--mode="))?.slice(7);
 const target = process.env.FAITHFORM_DB_TARGET;
 if (!batches[batch] || !["plan", "apply"].includes(mode)) {
-  throw new Error("Use --batch=pre-web|post-web and --mode=plan|apply");
+  throw new Error("Use --batch=pre-web|post-web|reporting-hotfix and --mode=plan|apply");
 }
 if (!mode || !["production", "disposable"].includes(target)) {
   throw new Error("FAITHFORM_DB_TARGET must be production or disposable");
