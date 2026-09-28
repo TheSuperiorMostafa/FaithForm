@@ -351,11 +351,110 @@ function targetChildId(row: { id?: string; clientId: string }, existingIds: Set<
   return UUID_PATTERN.test(row.clientId) ? row.clientId : null;
 }
 
+function atomicChildId(row: { id?: string; clientId: string }): string {
+  if (row.id) {
+    if (!UUID_PATTERN.test(row.id)) throw new Error("Invalid saved profile row ID.");
+    return row.id;
+  }
+  return UUID_PATTERN.test(row.clientId) ? row.clientId : crypto.randomUUID();
+}
+
 export async function upsertChurchProfile(
   churchId: string,
   input: UpsertChurchProfileInput,
   supabase: SupabaseClient,
 ): Promise<ChurchProfile> {
+  const churchPatch = {
+    name: input.name.trim(),
+    tagline: cleanOptional(input.tagline),
+    mission_statement: cleanOptional(input.missionStatement),
+    vision_statement: cleanOptional(input.visionStatement),
+    description: cleanOptional(input.description),
+    logo_url: cleanOptional(input.logoUrl),
+    cover_image_url: cleanOptional(input.coverImageUrl),
+    giving_primary_color: cleanOptional(input.primaryColor),
+    giving_accent_color: cleanOptional(input.accentColor),
+    address: cleanOptional(input.address),
+    city: cleanOptional(input.city),
+    state: cleanOptional(input.state),
+    zip: cleanOptional(input.zip),
+    phone: cleanOptional(input.phone),
+    email: cleanOptional(input.email),
+    website: cleanOptional(input.website),
+    google_maps_url: cleanOptional(input.googleMapsUrl),
+    timezone: input.timezone.trim() || "America/New_York",
+    denomination: cleanOptional(input.denomination),
+    office_hours: input.officeHours,
+    holiday_schedule: cleanOptional(input.holidaySchedule),
+    facebook_url: cleanOptional(input.facebookUrl),
+    instagram_url: cleanOptional(input.instagramUrl),
+    youtube_url: cleanOptional(input.youtubeUrl),
+    tiktok_url: cleanOptional(input.tiktokUrl),
+    x_url: cleanOptional(input.xUrl),
+    podcast_url: cleanOptional(input.podcastUrl),
+    livestream_url: cleanOptional(input.livestreamUrl),
+    announcement_facebook_post_time: input.announcementFacebookPostTime,
+    ai_knowledge: input.aiKnowledge,
+  };
+  const services = input.serviceTimes.filter((row) => row.label.trim()).map((row, index) => ({
+    id: atomicChildId(row),
+    is_existing: Boolean(row.id),
+    label: row.label.trim(),
+    day_of_week: row.dayOfWeek,
+    start_time: row.startTime,
+    end_time: cleanOptional(row.endTime),
+    kind: row.kind,
+    notes: cleanOptional(row.notes),
+    sort_order: index,
+  }));
+  const staff = input.staff.filter((row) => row.fullName.trim()).map((row, index) => ({
+    id: atomicChildId(row),
+    is_existing: Boolean(row.id),
+    full_name: row.fullName.trim(),
+    title: cleanOptional(row.title),
+    email: cleanOptional(row.email),
+    phone: cleanOptional(row.phone),
+    photo_url: cleanOptional(row.photoUrl),
+    bio: cleanOptional(row.bio),
+    is_senior_pastor: row.isSeniorPastor,
+    is_executive_pastor: row.isExecutivePastor,
+    ai_contact_priority: row.aiContactPriority,
+    is_public: row.isPublic,
+    sort_order: index,
+  }));
+  const events = input.recurringEvents.filter((row) => row.name.trim()).map((row, index) => ({
+    id: atomicChildId(row),
+    is_existing: Boolean(row.id),
+    name: row.name.trim(),
+    aliases: row.aliases.split(",").map((alias) => alias.trim()).filter(Boolean),
+    cadence: cleanOptional(row.cadence),
+    description: cleanOptional(row.description),
+    audience: cleanOptional(row.audience),
+    tone: cleanOptional(row.tone),
+    caption_notes: cleanOptional(row.captionNotes),
+    visual_notes: cleanOptional(row.visualNotes),
+    is_active: row.isActive,
+    sort_order: index,
+  }));
+
+  const atomic = await supabase.rpc("save_church_profile", {
+    p_church_id: churchId,
+    p_church: churchPatch,
+    p_services: services,
+    p_staff: staff,
+    p_events: events,
+  });
+  if (!atomic.error) {
+    const profile = await getChurchProfile(churchId, supabase);
+    if (!profile) throw new Error("Failed to load church profile after save.");
+    return profile;
+  }
+  if (!/PGRST202|42883|could not find the function/i.test(atomic.error.message)) {
+    throw new Error(`Church profile save failed: ${atomic.error.message}`);
+  }
+
+  // Narrow deployment window before 0122 reaches the database. The legacy
+  // path remains guarded by counted preflight reads and checked writes.
   // These lists decide which old rows are removed. Confirm every list is
   // complete before changing the church or any child row.
   const [serviceIds, staffIds, recurringEventIds] = await Promise.all([
@@ -366,38 +465,7 @@ export async function upsertChurchProfile(
 
   const { data: updatedChurch, error: churchError } = await supabase
     .from("churches")
-    .update({
-      name: input.name.trim(),
-      tagline: cleanOptional(input.tagline),
-      mission_statement: cleanOptional(input.missionStatement),
-      vision_statement: cleanOptional(input.visionStatement),
-      description: cleanOptional(input.description),
-      logo_url: cleanOptional(input.logoUrl),
-      cover_image_url: cleanOptional(input.coverImageUrl),
-      giving_primary_color: cleanOptional(input.primaryColor),
-      giving_accent_color: cleanOptional(input.accentColor),
-      address: cleanOptional(input.address),
-      city: cleanOptional(input.city),
-      state: cleanOptional(input.state),
-      zip: cleanOptional(input.zip),
-      phone: cleanOptional(input.phone),
-      email: cleanOptional(input.email),
-      website: cleanOptional(input.website),
-      google_maps_url: cleanOptional(input.googleMapsUrl),
-      timezone: input.timezone.trim() || "America/New_York",
-      denomination: cleanOptional(input.denomination),
-      office_hours: input.officeHours,
-      holiday_schedule: cleanOptional(input.holidaySchedule),
-      facebook_url: cleanOptional(input.facebookUrl),
-      instagram_url: cleanOptional(input.instagramUrl),
-      youtube_url: cleanOptional(input.youtubeUrl),
-      tiktok_url: cleanOptional(input.tiktokUrl),
-      x_url: cleanOptional(input.xUrl),
-      podcast_url: cleanOptional(input.podcastUrl),
-      livestream_url: cleanOptional(input.livestreamUrl),
-      announcement_facebook_post_time: input.announcementFacebookPostTime,
-      ai_knowledge: input.aiKnowledge,
-    })
+    .update(churchPatch)
     .eq("id", churchId)
     .select("id")
     .maybeSingle();

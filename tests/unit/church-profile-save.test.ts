@@ -9,6 +9,9 @@ type Row = { id?: string; church_id?: string; [key: string]: unknown };
 
 function memoryClient(tables: Record<string, Row[]>): SupabaseClient {
   return {
+    rpc() {
+      return Promise.resolve({ error: { message: "PGRST202 function not found" } });
+    },
     from(table: string) {
       const filters: ((row: Row) => boolean)[] = [];
       let mode: "select" | "update" | "insert" | "upsert" = "select";

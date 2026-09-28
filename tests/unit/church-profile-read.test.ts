@@ -7,6 +7,7 @@ import {
   getChurchProfile,
   upsertChurchProfile,
 } from "@/lib/queries/church-profile";
+import { newServiceTimeRow } from "@/types/church-profile";
 
 type Row = { id: string; [key: string]: unknown };
 
@@ -14,8 +15,16 @@ function profileClient(
   records: Record<string, Row[]>,
   failTable?: string,
   onUpdate?: () => void,
+  onRpc?: (name: string, args: Record<string, unknown>) => void,
 ): SupabaseClient {
   return {
+    rpc(name: string, args: Record<string, unknown>) {
+      if (onRpc) {
+        onRpc(name, args);
+        return Promise.resolve({ error: null });
+      }
+      return Promise.resolve({ error: { message: "PGRST202 function not found" } });
+    },
     from(table: string) {
       const rows = records[table] ?? [];
       let afterId: string | null = null;
@@ -108,4 +117,20 @@ test("an incomplete staff preflight stops a profile save before any write", asyn
     /church_staff before profile save read failed/,
   );
   assert.equal(updates, 0);
+});
+
+test("atomic profile save sends stable child IDs without legacy writes", async () => {
+  let updates = 0;
+  const call: { name?: string; args?: Record<string, unknown> } = {};
+  const row = newServiceTimeRow();
+  await upsertChurchProfile(
+    "church-a",
+    { ...emptyChurchProfileForm("QA church"), serviceTimes: [row] },
+    profileClient(records, undefined, () => { updates += 1; },
+      (name, args) => { call.name = name; call.args = args; }),
+  );
+  assert.equal(updates, 0);
+  assert.equal(call.name, "save_church_profile");
+  assert.equal((call.args?.p_services as { id: string }[])[0]?.id, row.clientId);
+  assert.equal((call.args?.p_church as { name: string }).name, "QA church");
 });

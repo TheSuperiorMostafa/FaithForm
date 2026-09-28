@@ -7,12 +7,12 @@ readiness.
 
 ## Verified in an isolated checkout
 
-- Web: typecheck, lint (zero errors), production build, 1,792 application tests,
+- Web: typecheck, lint (zero errors), production build, 1,829 application tests,
   generated-contract/design/localization checks, migration baseline check,
   secret scan, and feature-guard scan pass.
 - Database: the earlier 113 migrations applied to disposable PostgreSQL 15 and
-  17; the current 123-migration chain passed a fresh PostgreSQL 17
-  migration rehearsal. All 50 database tests pass, including
+  17; the current 124-migration chain passed a fresh PostgreSQL 17
+  migration rehearsal. All 52 database tests pass, including
   cross-church, per-feature,
   and view-access denial probes. The additive
   `0111_announcement_status_view_invoker.sql` migration resolves the live
@@ -24,7 +24,7 @@ readiness.
   This verifies schema/data compatibility of that order; it does not replace
   the controlled live migration baseline and rollout checks.
 - A full custom-format PostgreSQL backup and restore rehearsal passed with all
-  123 migrations on a disposable PostgreSQL 17 server and four synthetic
+  124 migrations on a disposable PostgreSQL 17 server and four synthetic
   churches. Restored record fingerprints, RLS, view settings, and medical-note
   grants matched the source.
   Run it with `pnpm test:backup-restore`, `FAITHFORM_DB_TARGET=disposable`, and
@@ -331,7 +331,7 @@ readiness.
   view denial. Production remains exposed until the controlled migration and
   a zero-row live retest.
 
-## Release sequence for migrations 0110 through 0121
+## Release sequence for migrations 0110 through 0122
 
 1. Capture the current deployment and database migration state. Reconcile the
    deployed schema and source migration history. Confirm a recoverable backup
@@ -344,8 +344,9 @@ readiness.
    `0117_atomic_checkin_family_creation.sql`,
    `0118_atomic_checkin_undo.sql`,
    `0119_sermon_series_week.sql`, and
-   `0120_admin_church_create_request.sql`, and
-   `0121_atomic_site_publication.sql` before deploying the updated
+   `0120_admin_church_create_request.sql`,
+   `0121_atomic_site_publication.sql`, and
+   `0122_atomic_church_profile.sql` before deploying the updated
    application. The updated meeting, onboarding, child pickup, new-family,
    Undo, and website publication actions call these server-only functions and
    cannot work until they exist. The sermon-series page also reads the new
@@ -367,7 +368,8 @@ readiness.
    process. Verify their recorded checksums and inspect the resulting policies,
    column grants, view options, and aggregate function privileges. Confirm
    0114 through 0118's server-only execute grants, 0119's column and index,
-   0120's unique request-key index, and 0121's server-only execute grant.
+   0120's unique request-key index, and 0121 and 0122's server-only execute
+   grants.
    Do not edit an already applied
    migration.
 5. Repeat the same workflow checks. A staff session without Giving, Calls,
@@ -566,18 +568,29 @@ on its own.
   failure test confirms a failed staff preflight performs no church update.
   Typecheck, targeted lint, all 1,827 application tests, and the local
   production build pass.
-  The profile save still spans multiple database requests: a later write
-  failure can leave part of a profile saved. A transactional save is required
-  before claiming this path fully reliable at rollout scale.
+  This guarded path remains as a narrow compatibility fallback if the new
+  database function has not yet been installed. It still spans multiple
+  requests, so the migration must precede the application rollout.
 - New profile child rows now use their stable UUID client IDs when inserted,
   including new rows from Website Details. A retry after a partial save updates
   the same staff, service-time, or recurring-event row instead of duplicating
-  it. Existing rows removed by another editor now stop the save, and updates
+  it. Existing rows removed by another editor now stop the legacy save, and updates
   must confirm a row was changed. A focused in-memory retry test saved the
-  same new staff member twice and retained one row. This reduces retry damage
-  but does not replace the needed database transaction; forms opened before
+  same new staff member twice and retained one row. The atomic database save
+  now provides the needed transaction; forms opened before
   rollout may still carry older non-UUID temporary IDs. Typecheck, targeted
   lint, all 1,828 application tests, and the local production build pass.
+- Local migration 0122 saves church fields, legacy settings mirrors, service
+  times, staff, and recurring events in one transaction under a church row
+  lock. The server action uses it when available; the guarded older path is
+  only for the brief interval before migration. A disposable PostgreSQL 17
+  rehearsal applied all 124 migrations and passed 52 database tests. The new
+  tests verify stable retry IDs, rollback after a late child failure, rejection
+  of another church's or removed row's ID, and direct-call denial for browser
+  roles. All 1,829 application tests, typecheck, targeted lint, and the local
+  production build pass. A synthetic custom-format backup and restore passed
+  again with 0122 included. This is local only; a post-rollout browser save with
+  a valid admin session and an expired session is still required.
 - Church-team listings now load every ordered page and stop on a failed page
   or missing Auth account details. The prior read could show an empty team on
   a database error or show missing grants when Auth lookups failed. A 1,001
@@ -644,7 +657,7 @@ on its own.
   See the IRS [written acknowledgment guidance](https://www.irs.gov/charities-non-profits/charitable-organizations/charitable-contributions-written-acknowledgments)
   and [church exemption guidance](https://www.irs.gov/charities-non-profits/churches-integrated-auxiliaries-and-conventions-or-associations-of-churches).
 - Final live-schema comparison, a recorded migration baseline, and safe
-  application of 0110 through 0121 in the order above. The local comparison
+  application of 0110 through 0122 in the order above. The local comparison
   exposed the active missing objects, but live production still has the access
   gap and no source migration ledger.
 - A representative controlled rollout with real accounts from all four

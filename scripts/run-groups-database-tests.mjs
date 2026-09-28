@@ -84,6 +84,7 @@ try {
       "tests/database/admin-church-create-request.test.ts",
       "tests/database/group-gathering-atomic.test.ts",
       "tests/database/site-publication-atomic.test.ts",
+      "tests/database/church-profile-atomic.test.ts",
       "tests/database/onboarding-finalize-atomic.test.ts",
       "tests/database/child-checkout-atomic.test.ts",
       "tests/database/checkin-family-atomic.test.ts",
