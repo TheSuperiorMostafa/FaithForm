@@ -1,6 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { isChurchFeatureEmailEnabled } from "@/lib/features/access";
+import { requireChurchFeatureEmailEnabled } from "@/lib/features/access";
 import { createGmailDraft, GMAIL_DRAFTS_URL } from "@/lib/integrations/gmail";
 import {
   createICloudMailDraft,
@@ -86,7 +86,7 @@ export async function getWeeklyEmailAvailability(
 ): Promise<WeeklyEmailAvailability> {
   const [channel, emailOn] = await Promise.all([
     resolveWeeklyEmailChannel(churchId, supabase),
-    isChurchFeatureEmailEnabled(churchId, "announcements"),
+    requireChurchFeatureEmailEnabled(churchId, "announcements"),
   ]);
 
   return {

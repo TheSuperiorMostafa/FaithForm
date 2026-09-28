@@ -50,6 +50,14 @@ const GUARD_MARKERS = [
  */
 const EXEMPT = new Map([
   [
+    "app/api/dashboard/account/profile/route.ts",
+    "Returns only the signed-in account's own avatar; account settings must work independently of church features.",
+  ],
+  [
+    "app/auth/callback/route.ts",
+    "Finishes sign-in and chooses a landing page; blocking authentication on a feature would prevent access to the dashboard itself.",
+  ],
+  [
     "app/dashboard/support/actions.ts",
     "Support tickets. Contacting us must work when a feature is off — that is usually why they are writing.",
   ],

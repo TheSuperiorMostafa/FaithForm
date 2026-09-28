@@ -10,6 +10,7 @@ import {
   getMonthlyReportMonths,
 } from "@/lib/queries/library";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClientOrNull } from "@/lib/supabase/admin";
 import { cn } from "@/lib/utils";
 import { formatMonthLabel, monthSlug } from "@/lib/utils/reports";
 import { pageFeatureBlocked } from "@/lib/features/page-gate";
@@ -84,7 +85,7 @@ export default async function ReportsPage() {
 
   const [attendanceMonths, monthlyMonths] = await Promise.all([
     getAttendanceReportMonths(supabase, churchId),
-    getMonthlyReportMonths(supabase, churchId),
+    getMonthlyReportMonths(supabase, churchId, createAdminClientOrNull() ?? supabase),
   ]);
 
   return (

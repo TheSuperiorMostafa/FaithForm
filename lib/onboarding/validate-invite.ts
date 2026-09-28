@@ -35,6 +35,19 @@ export type InviteValidationResult =
   | { ok: true; invite: ValidInvite }
   | { ok: false; code: InviteErrorCode; message: string };
 
+export function inviteNeedsRefresh(expiresAt: string, now = Date.now()): boolean {
+  const expiry = Date.parse(expiresAt);
+  return !Number.isFinite(expiry) || expiry <= now;
+}
+
+export function inviteUnavailableCode(
+  invite: { acceptedAt: string | null; onboardingCompletedAt: string | null; expiresAt: string },
+  now = Date.now(),
+): "already_accepted" | "expired" | null {
+  if (invite.acceptedAt || invite.onboardingCompletedAt) return "already_accepted";
+  return inviteNeedsRefresh(invite.expiresAt, now) ? "expired" : null;
+}
+
 type InviteRow = {
   id: string;
   church_id: string;
@@ -137,7 +150,14 @@ export async function fetchInviteByToken(
 
   const row = data as unknown as InviteRow;
 
-  if (row.accepted_at) {
+  // A church may have more than one invite row after retries or a concurrent
+  // send. Finishing setup closes every remaining link to its setup actions.
+  const unavailable = inviteUnavailableCode({
+    acceptedAt: row.accepted_at,
+    onboardingCompletedAt: row.churches.onboarding_completed_at,
+    expiresAt: row.expires_at,
+  });
+  if (unavailable === "already_accepted") {
     return {
       ok: false,
       code: "already_accepted",
@@ -145,7 +165,7 @@ export async function fetchInviteByToken(
     };
   }
 
-  if (new Date(row.expires_at) < new Date()) {
+  if (unavailable === "expired") {
     return {
       ok: false,
       code: "expired",

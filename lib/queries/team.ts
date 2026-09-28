@@ -1,7 +1,9 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAuthUsersByIds } from "@/lib/auth/auth-users";
 import { readGrantsFromAppMetadata } from "@/lib/auth/feature-grants";
 import { parseFeatureKeys, type FeatureKey } from "@/lib/features/catalog";
 import { createAdminClientOrNull } from "@/lib/supabase/admin";
+import { loadAllAdminPages } from "@/lib/queries/admin-platform-totals";
 
 export type TeamRole = "admin" | "viewer";
 
@@ -43,37 +45,47 @@ export function toTeamRole(value: string | null | undefined): TeamRole {
  */
 export async function getChurchTeamMembers(
   churchId: string,
+  adminClient?: SupabaseClient,
+  authLookup: typeof getAuthUsersByIds = getAuthUsersByIds,
 ): Promise<TeamMember[]> {
-  const admin = createAdminClientOrNull();
+  const admin = adminClient ?? createAdminClientOrNull();
   if (!admin) {
-    console.error("getChurchTeamMembers: service role key is not configured");
-    return [];
+    throw new Error("getChurchTeamMembers: service role key is not configured");
   }
 
-  const load = (columns: string) =>
-    admin
-      .from("church_users")
-      .select(columns)
-      .eq("church_id", churchId)
-      .order("created_at", { ascending: true });
+  const load = (columns: string) => loadAllAdminPages<ChurchUserRow>(
+    "church team",
+    async (from, to) => {
+      const { data, error } = await admin
+        .from("church_users")
+        .select(columns)
+        .eq("church_id", churchId)
+        .order("id")
+        .range(from, to);
+      return { data: data as unknown as ChurchUserRow[] | null, error };
+    },
+  );
 
   let legacySchema = false;
-  let { data, error } = await load(MEMBER_COLUMNS);
+  let rows: ChurchUserRow[];
 
   // Tolerate a database that has not had migration 0041 applied yet — grants
   // are read from each member's app_metadata instead.
-  if (error && /feature_permissions|invited_at/i.test(error.message)) {
+  try {
+    rows = await load(MEMBER_COLUMNS);
+  } catch (error) {
+    if (!(error instanceof Error) || !/feature_permissions|invited_at/i.test(error.message)) {
+      throw error;
+    }
     legacySchema = true;
-    ({ data, error } = await load(MEMBER_COLUMNS_LEGACY));
+    rows = await load(MEMBER_COLUMNS_LEGACY);
   }
 
-  if (error) {
-    console.error("getChurchTeamMembers:", error.message);
-    return [];
+  rows.sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id));
+  const authUsers = await authLookup(rows.map((row) => row.user_id));
+  if (rows.some((row) => !authUsers.has(row.user_id))) {
+    throw new Error("church team account details unavailable");
   }
-
-  const rows = (data as unknown as ChurchUserRow[] | null) ?? [];
-  const authUsers = await getAuthUsersByIds(rows.map((row) => row.user_id));
 
   return rows.map((row) => {
     const authUser = authUsers.get(row.user_id);

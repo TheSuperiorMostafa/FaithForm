@@ -3,6 +3,12 @@ import UserNotifications
 import UIKit
 import FaithFormKit
 
+/// The framework gives us a non-Sendable completion closure. Its only use
+/// after crossing into a task is a single call on MainActor.
+private struct NotificationCompletion: @unchecked Sendable {
+    let call: () -> Void
+}
+
 /// Where a tap on an automatic check-in notification lands.
 ///
 /// Translates one response into one intent and hands it to the service —
@@ -52,7 +58,7 @@ final class AttendanceNotificationResponder: NSObject, UNUserNotificationCenterD
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse,
-        withCompletionHandler completionHandler: @escaping @Sendable () -> Void
+        withCompletionHandler completionHandler: @escaping () -> Void
     ) {
         let content = response.notification.request.content
         receive(
@@ -70,7 +76,7 @@ final class AttendanceNotificationResponder: NSObject, UNUserNotificationCenterD
         actionIdentifier: String,
         categoryIdentifier: String,
         userInfo: [AnyHashable: Any],
-        completionHandler: @escaping @Sendable () -> Void
+        completionHandler: @escaping () -> Void
     ) -> Task<Void, Never> {
         let action = AttendanceNotificationContent.action(
             actionIdentifier: actionIdentifier,
@@ -79,6 +85,7 @@ final class AttendanceNotificationResponder: NSObject, UNUserNotificationCenterD
         )
         let url = actionIdentifier == UNNotificationDefaultActionIdentifier
             ? Self.deepLink(in: userInfo) : nil
+        let completion = NotificationCompletion(call: completionHandler)
 
         return Task {
             if let action {
@@ -95,7 +102,7 @@ final class AttendanceNotificationResponder: NSObject, UNUserNotificationCenterD
             }
             // Every path, including malformed and dismissed notifications,
             // completes exactly once, on the executor UIKit requires.
-            await MainActor.run { completionHandler() }
+            await MainActor.run { completion.call() }
         }
     }
 

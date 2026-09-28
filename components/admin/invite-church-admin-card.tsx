@@ -50,7 +50,13 @@ export function InviteChurchAdminCard({
         setError(result.error);
         return;
       }
-      toast.success(`Invite sent to ${result.email}`);
+      if (result.delivery === "sent") {
+        toast.success(`Invite sent to ${result.email}`);
+      } else if (result.delivery === "unconfirmed") {
+        toast.warning("Invite delivery could not be confirmed. The new link is saved; use Resend invite to try it again.");
+      } else {
+        setError("The new invite was emailed, but older links could not be disabled. Contact support before continuing.");
+      }
       setEditing(false);
       router.refresh();
     });
@@ -64,7 +70,13 @@ export function InviteChurchAdminCard({
         setError(result.error);
         return;
       }
-      toast.success(`Invite sent again to ${result.email}`);
+      if (result.delivery === "sent") {
+        toast.success(`Invite sent again to ${result.email}`);
+      } else if (result.delivery === "unconfirmed") {
+        toast.warning("Invite delivery could not be confirmed. The link remains available; try Resend invite again.");
+      } else {
+        setError("The invite was emailed, but older links could not be disabled. Contact support before continuing.");
+      }
       router.refresh();
     });
   }

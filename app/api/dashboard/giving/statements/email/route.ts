@@ -83,13 +83,21 @@ export async function POST(request: Request) {
     );
   }
 
-  const year = parseStatementYear(String(parsed.data.year));
+  const year = parseStatementYear(String(parsed.data.year), new Date(), auth.churchTimezone);
   const admin = createAdminClient();
-  const { data: church } = await admin
+  const { data: church, error: churchError } = await admin
     .from("churches")
-    .select("name, slug, ein, statement_address, logo_url, giving_primary_color, giving_accent_color")
+    .select("name, slug, ein, statement_address, timezone, logo_url, giving_primary_color, giving_accent_color")
     .eq("id", auth.churchId)
     .single();
+
+  if (churchError || !church) {
+    console.error("[giving] statement email church read failed", churchError);
+    return NextResponse.json(
+      { error: "We couldn't load church details. Nothing was sent. Please try again." },
+      { status: 503 },
+    );
+  }
 
   if (!church?.ein) {
     return NextResponse.json(
@@ -123,7 +131,8 @@ export async function POST(request: Request) {
       continue;
     }
     try {
-      const gifts = await getDonorGiftsForYear(auth.churchId, donorId, year);
+      const timeZone = (church.timezone as string | null) ?? "America/New_York";
+      const gifts = await getDonorGiftsForYear(auth.churchId, donorId, year, admin, timeZone);
       if (gifts.length === 0) {
         results.push({ donorId, status: "skipped" });
         continue;
@@ -137,6 +146,7 @@ export async function POST(request: Request) {
         donorEmail: email,
         year,
         gifts,
+        timeZone,
       });
 
       if (sentAny) await sleep(SEND_SPACING_MS);

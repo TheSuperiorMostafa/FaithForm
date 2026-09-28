@@ -50,6 +50,12 @@ async function holdsOpenInvite(churchId: string, email: string | undefined): Pro
   if (!email) return false;
   const admin = createAdminClientOrNull();
   if (!admin) return false;
+  const { data: church, error: churchError } = await admin
+    .from("churches")
+    .select("onboarding_completed_at")
+    .eq("id", churchId)
+    .maybeSingle();
+  if (churchError || !church || church.onboarding_completed_at) return false;
   const { data, error } = await admin
     .from("church_invites")
     .select("id, email")

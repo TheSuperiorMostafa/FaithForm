@@ -43,6 +43,7 @@ function parsePassage(raw: string | undefined): {
 type Props = {
   searchParams: Promise<{
     series?: string;
+    week?: string;
     topic?: string;
     scripture?: string;
   }>;
@@ -82,6 +83,7 @@ export default async function NewSermonPage({ searchParams }: Props) {
           ...parsePassage(query.scripture),
         }}
         seriesId={query.series}
+        seriesWeek={query.week && /^\d+$/.test(query.week) ? Number(query.week) : undefined}
       />
     </div>
   );

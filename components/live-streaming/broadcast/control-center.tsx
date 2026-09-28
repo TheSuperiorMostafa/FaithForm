@@ -222,6 +222,7 @@ export function BroadcastControlCenter({
         await refresh();
         return;
       }
+      studio.stopStudio();
       toast.success(
         wasWaiting ? "Service cancelled. Nothing went out." : "Service ended. Your recording is being prepared.",
       );

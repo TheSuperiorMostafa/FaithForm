@@ -54,7 +54,10 @@ export async function startImpersonation(formData: FormData) {
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
-    maxAge: IMPERSONATION_TTL_SECONDS,
+    // Keep the expired note briefly so middleware can recognize an old church
+    // switch and stop a stale dashboard from acting on the admin's own church.
+    // The signed expiry still ends the elevated data access after 30 minutes.
+    maxAge: 24 * 60 * 60,
   });
 
   redirect(safeDashboardPath(formData.get("next")?.toString()));

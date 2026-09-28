@@ -27,8 +27,8 @@ export default async function CheckinTodayPage() {
   const supabase = createClient();
   const today = localDateInTimeZone(auth.churchTimezone);
 
-  const [locations, sessions, children] = await Promise.all([
-    listLocations(auth.churchId, { strict: true }, supabase),
+  const [allLocations, sessions, children] = await Promise.all([
+    listLocations(auth.churchId, { includeInactive: true, strict: true }, supabase),
     getRoster(auth.churchId, today, { strict: true }, supabase),
     listCheckinChildren(auth.churchId, supabase, { strict: true }),
   ]);
@@ -36,7 +36,8 @@ export default async function CheckinTodayPage() {
   return (
     <CheckinDesk
       sessions={sessions}
-      locations={locations}
+      locations={allLocations.filter((room) => room.isActive)}
+      hasClosedRooms={allLocations.some((room) => !room.isActive)}
       members={children}
       serviceDate={today}
       canAddFamily={auth.isAdmin}

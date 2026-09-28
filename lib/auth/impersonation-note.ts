@@ -6,6 +6,23 @@
 
 export const IMPERSONATION_COOKIE = "faithform:acting-as";
 
+export function impersonationNoteClaims(value: string): { adminUserId: string; exp: number } | null {
+  const [payload] = value.split(".");
+  if (!payload) return null;
+  try {
+    const padded = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const parsed = JSON.parse(atob(padded + "=".repeat((4 - (padded.length % 4)) % 4))) as {
+      adminUserId?: unknown;
+      exp?: unknown;
+    };
+    return typeof parsed.adminUserId === "string" && typeof parsed.exp === "number"
+      ? { adminUserId: parsed.adminUserId, exp: parsed.exp }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Whose note this claims to be, without checking the signature.
  *
@@ -15,15 +32,5 @@ export const IMPERSONATION_COOKIE = "faithform:acting-as";
  * data access.
  */
 export function impersonationNoteOwner(value: string): string | null {
-  const [payload] = value.split(".");
-  if (!payload) return null;
-  try {
-    const padded = payload.replace(/-/g, "+").replace(/_/g, "/");
-    const parsed = JSON.parse(atob(padded + "=".repeat((4 - (padded.length % 4)) % 4))) as {
-      adminUserId?: unknown;
-    };
-    return typeof parsed.adminUserId === "string" ? parsed.adminUserId : null;
-  } catch {
-    return null;
-  }
+  return impersonationNoteClaims(value)?.adminUserId ?? null;
 }

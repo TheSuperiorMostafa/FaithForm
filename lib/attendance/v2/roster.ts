@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { VisitorError } from "@/lib/faithform/errors";
 import { recordAttendance, newIdempotencyKey } from "@/lib/attendance/v2/check-in";
+import { readAllById } from "@/lib/queries/paged-read";
 
 /**
  * The largest roster a single bulk call may cover.
@@ -37,9 +38,8 @@ export type RosterEntry = {
 /**
  * The roster for one occurrence.
  *
- * Two bounded queries and a join in memory over *the church's own members* —
- * not over attendance history. A church with a thousand people is a thousand
- * rows; the alternative, a per-member attendance query, is the N+1 this avoids.
+ * Two complete paged queries and a join in memory over the church's members.
+ * The API caps individual responses, so neither list may quietly stop at 1000.
  */
 export async function getRoster(
   churchId: string,
@@ -48,30 +48,35 @@ export async function getRoster(
 ): Promise<RosterEntry[]> {
   const admin = client ?? createAdminClient();
 
-  const [{ data: members }, { data: facts }] = await Promise.all([
-    admin
-      .from("members")
-      .select("id, first_name, last_name")
-      .eq("church_id", churchId)
-      .eq("is_active", true)
-      .order("first_name", { ascending: true })
-      .limit(5000),
-    admin
-      .from("attendance_facts")
-      .select("member_id, id, status, source, counted_at")
-      .eq("service_occurrence_id", occurrenceId)
-      .eq("church_id", churchId)
-      .limit(5000),
+  const [members, facts] = await Promise.all([
+    readAllById(async (afterId, includeCount, pageSize) => {
+      let query = admin
+        .from("members")
+        .select("id, first_name, last_name", includeCount ? { count: "exact" } : {})
+        .eq("church_id", churchId)
+        .eq("is_active", true);
+      if (afterId) query = query.gt("id", afterId);
+      return query.order("id", { ascending: true }).limit(pageSize);
+    }, { label: "service roster members" }),
+    readAllById(async (afterId, includeCount, pageSize) => {
+      let query = admin
+        .from("attendance_facts")
+        .select("member_id, id, status, source, counted_at", includeCount ? { count: "exact" } : {})
+        .eq("service_occurrence_id", occurrenceId)
+        .eq("church_id", churchId);
+      if (afterId) query = query.gt("id", afterId);
+      return query.order("id", { ascending: true }).limit(pageSize);
+    }, { label: "service attendance facts" }),
   ]);
 
   const byMember = new Map(
-    ((facts ?? []) as Record<string, unknown>[]).map((row) => [
+    (facts as Record<string, unknown>[]).map((row) => [
       row.member_id as string,
       row,
     ]),
   );
 
-  return ((members ?? []) as Record<string, unknown>[]).map((member) => {
+  return (members as Record<string, unknown>[]).map((member) => {
     const fact = byMember.get(member.id as string);
     return {
       memberId: member.id as string,
@@ -82,7 +87,7 @@ export async function getRoster(
       source: (fact?.source as string | null) ?? null,
       countedAt: (fact?.counted_at as string | null) ?? null,
     };
-  });
+  }).sort((a, b) => a.firstName.localeCompare(b.firstName) || a.lastName.localeCompare(b.lastName));
 }
 
 export type BulkResult = {

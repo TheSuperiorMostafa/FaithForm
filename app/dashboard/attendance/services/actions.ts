@@ -361,7 +361,7 @@ export async function getCheckinDisplayState(
 ): Promise<VisitorResult<CheckinDisplayState>> {
   try {
     const { churchId } = await requireAttendanceStaff();
-    const [session, { data: occurrence }] = await Promise.all([
+    const [session, occurrenceResult] = await Promise.all([
       getActiveSession({ occurrenceId, churchId }),
       createAdminClient()
         .from("service_occurrences")
@@ -370,6 +370,10 @@ export async function getCheckinDisplayState(
         .eq("church_id", churchId)
         .maybeSingle(),
     ]);
+    if (occurrenceResult.error || !occurrenceResult.data) {
+      throw occurrenceResult.error ?? new Error("Service unavailable");
+    }
+    const occurrence = occurrenceResult.data;
     const signing = checkinSigningStatus();
     const sources =
       (occurrence?.policy_snapshot as { sources?: Record<string, boolean> } | null)?.sources ?? {};
@@ -548,7 +552,7 @@ export async function listKiosks(
     const { churchId } = await requireAttendanceStaff();
     const admin = createAdminClient();
 
-    const { data } = await admin
+    const { data, error } = await admin
       .from("attendance_kiosk_sessions")
       // No hashes. A staff member never needs to see one, and a serialisation
       // mistake cannot leak a column that was not selected.
@@ -558,6 +562,8 @@ export async function listKiosks(
       .neq("status", "ended")
       .order("created_at", { ascending: false })
       .limit(20);
+
+    if (error) throw error;
 
     return {
       ok: true,

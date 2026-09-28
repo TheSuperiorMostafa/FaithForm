@@ -7,9 +7,15 @@ import {
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getGivePageUrl } from "@/lib/stripe/config";
 import {
+  getAdminPlatformTotals,
+  isMissingAdminAggregate,
+  loadAllAdminPages,
+} from "@/lib/queries/admin-platform-totals";
+import {
   getChurchDashboardUsageSummary,
   getUserDashboardUsageByChurch,
 } from "@/lib/queries/dashboard-usage";
+import { readAllById } from "@/lib/queries/paged-read";
 
 export type AdminRole = "admin" | "viewer";
 export type SupportTicketStatus = "open" | "in_progress" | "resolved";
@@ -186,6 +192,8 @@ export type AdminTicketListRow = {
   churchName: string | null;
   priority: SupportTicketPriority;
   status: SupportTicketStatus;
+  notificationEmailStatus: "pending" | "sent" | "unconfirmed" | "reviewed" | null;
+  needsReplyEmailReview: boolean;
   submittedBy: string | null;
   submittedByEmail: string | null;
   createdAt: string;
@@ -268,6 +276,7 @@ type TicketRow = {
   subject: string;
   body?: string | null;
   status: SupportTicketStatus;
+  notification_email_status: AdminTicketListRow["notificationEmailStatus"];
   priority: SupportTicketPriority;
   admin_notes?: string | null;
   created_at: string;
@@ -374,8 +383,7 @@ const listAuthUsersMap = cache(async function listAuthUsersMap(): Promise<
   while (true) {
     const { data, error } = await admin.auth.admin.listUsers({ page, perPage });
     if (error) {
-      console.error("listAuthUsersMap:", error.message);
-      return users;
+      throw new Error(`listAuthUsersMap: ${error.message}`);
     }
 
     for (const user of data.users ?? []) {
@@ -413,6 +421,7 @@ async function listAuthUsersFor(
 function mapTicket(
   row: TicketRow,
   users: Map<string, AuthUserSummary>,
+  needsReplyEmailReview = false,
 ): AdminTicketListRow {
   return {
     id: row.id,
@@ -421,6 +430,8 @@ function mapTicket(
     churchName: getRelatedChurchName(row.churches),
     priority: row.priority,
     status: row.status,
+    notificationEmailStatus: row.notification_email_status,
+    needsReplyEmailReview,
     submittedBy: row.submitted_by,
     submittedByEmail: row.submitted_by
       ? (users.get(row.submitted_by)?.email ?? null)
@@ -433,60 +444,69 @@ async function getSupportTickets(
   query: "all" | "recent-open" | { churchId: string },
 ): Promise<AdminTicketListRow[]> {
   const admin = createAdminClient();
-  let builder = admin
+  const base = () => admin
     .from("support_tickets")
-    .select("id, church_id, submitted_by, subject, status, priority, created_at, churches(name)")
-    .order("created_at", { ascending: false });
-
+    .select("id, church_id, submitted_by, subject, status, notification_email_status, priority, created_at, churches(name)")
+    .order("created_at", { ascending: false }).order("id");
+  let rows: TicketRow[];
   if (query === "recent-open") {
-    builder = builder.neq("status", "resolved").limit(5);
-  } else if (typeof query === "object") {
-    builder = builder.eq("church_id", query.churchId);
+    const { data, error } = await base().neq("status", "resolved").limit(5);
+    if (error) throw new Error(`support_tickets: ${error.message}`);
+    rows = (data ?? []) as TicketRow[];
+  } else {
+    rows = await loadAllAdminPages<TicketRow>("support_tickets", (from, to) => {
+      const builder = base();
+      return (typeof query === "object" ? builder.eq("church_id", query.churchId) : builder)
+        .range(from, to);
+    });
   }
-
-  const { data, error } = await builder;
-  if (error) {
-    console.error("getSupportTickets:", error.message);
-    return [];
-  }
-
-  const rows = (data ?? []) as TicketRow[];
   const users = await listAuthUsersFor(rows.map((row) => row.submitted_by));
-  return rows.map((row) => mapTicket(row, users));
+  const needsReplyEmailReview = new Set<string>();
+  if (query === "all") {
+    const pendingComments = await loadAllAdminPages<{ ticket_id: string }>(
+      "support_ticket_comments needing email review",
+      (from, to) => admin.from("support_ticket_comments")
+        .select("ticket_id")
+        .in("notification_email_status", ["pending", "unconfirmed"])
+        .order("id")
+        .range(from, to),
+    );
+    for (const comment of pendingComments) needsReplyEmailReview.add(comment.ticket_id);
+  }
+  return rows.map((row) => mapTicket(row, users, needsReplyEmailReview.has(row.id)));
 }
 
 export async function getAdminOverview(): Promise<AdminOverview> {
   const admin = createAdminClient();
   const monthStart = getMonthStart().toISOString();
-
-  const [churchesRes, recentTickets] = await Promise.all([
-    admin.from("churches").select("id, name, created_at, exclude_from_platform_metrics"),
+  const [churches, platformTotals, recentTickets] = await Promise.all([
+    loadAllAdminPages<{ id: string; name: string; created_at: string; exclude_from_platform_metrics: boolean }>(
+      "churches", (from, to) => admin.from("churches")
+        .select("id, name, created_at, exclude_from_platform_metrics")
+        .order("id").range(from, to),
+    ),
+    getAdminPlatformTotals(),
     getSupportTickets("recent-open"),
   ]);
-
-  if (churchesRes.error) throw new Error(churchesRes.error.message);
-  const includedChurches = (churchesRes.data ?? []).filter(
-    (church) => church.exclude_from_platform_metrics === false,
-  );
+  const includedChurches = churches.filter((church) => !church.exclude_from_platform_metrics);
   const includedIds = new Set(includedChurches.map((church) => church.id));
   const ids = [...includedIds];
-  const [usersCount, sermonsCount, activityRes, integrationsRes] = ids.length
+  const [usersCount, sermonsCount, integrations] = ids.length
     ? await Promise.all([
         admin.from("church_users").select("id", { count: "exact", head: true }).in("church_id", ids),
         admin.from("sermons").select("id", { count: "exact", head: true }).in("church_id", ids),
-        admin.from("activity_log").select("time_saved_minutes").in("church_id", ids),
-        admin.from("church_integrations").select("church_id, provider, access_token").in("church_id", ids),
+        loadAllAdminPages<IntegrationRow>("church integrations", (from, to) =>
+          admin.from("church_integrations")
+            .select("church_id, provider, access_token").order("id").range(from, to),
+        ),
       ])
-    : [
-        { count: 0 },
-        { count: 0 },
-        { data: [] as { time_saved_minutes: number | null }[] },
-        { data: [] as IntegrationRow[] },
-      ];
-  const totalMinutes = ((activityRes.data ?? []) as { time_saved_minutes: number | null }[])
-    .reduce((sum, row) => sum + (row.time_saved_minutes ?? 0), 0);
+    : [{ count: 0, error: null }, { count: 0, error: null }, [] as IntegrationRow[]];
+  for (const [label, result] of [["member count", usersCount], ["sermon count", sermonsCount]] as const) {
+    if (result.error || !Number.isSafeInteger(result.count)) {
+      throw new Error(`admin overview ${label} unavailable`);
+    }
+  }
 
-  const integrations = (integrationsRes.data ?? []) as IntegrationRow[];
   const googleChurches = new Set<string>();
   const facebookChurches = new Set<string>();
   for (const row of integrations) {
@@ -499,9 +519,9 @@ export async function getAdminOverview(): Promise<AdminOverview> {
   return {
     stats: {
       totalChurches: includedChurches.length,
-      totalUsers: usersCount.count ?? 0,
-      totalSermons: sermonsCount.count ?? 0,
-      platformHoursSaved: toHours(totalMinutes),
+      totalUsers: usersCount.count as number,
+      totalSermons: sermonsCount.count as number,
+      platformHoursSaved: toHours(platformTotals.minutesSaved),
     },
     integrationHealth: {
       totalChurches: includedChurches.length,
@@ -522,7 +542,7 @@ export async function getAdminOverview(): Promise<AdminOverview> {
 
 export async function getAdminChurches(): Promise<AdminChurchListRow[]> {
   const admin = createAdminClient();
-  const [churchesRes, usersRes, sermonsRes, integrationsRes, activityRes, invitesRes] =
+  const [churchesRes, metricsRes, integrationsRes, invitesRes] =
     await Promise.all([
       admin
         .from("churches")
@@ -530,10 +550,8 @@ export async function getAdminChurches(): Promise<AdminChurchListRow[]> {
           "id, name, created_at, stripe_onboarding_status, stripe_charges_enabled, onboarding_completed_at",
         )
         .order("name"),
-      admin.from("church_users").select("church_id"),
-      admin.from("sermons").select("church_id"),
+      admin.rpc("admin_platform_church_metrics"),
       admin.from("church_integrations").select("church_id, provider, access_token"),
-      admin.from("activity_log").select("church_id, executed_at"),
       admin
         .from("church_invites")
         .select("church_id, email, accepted_at, created_at")
@@ -541,23 +559,56 @@ export async function getAdminChurches(): Promise<AdminChurchListRow[]> {
         .order("created_at", { ascending: false }),
     ]);
 
-  const usersByChurch = mapByCount((usersRes.data ?? []) as { church_id: string }[]);
-  const sermonsByChurch = mapByCount((sermonsRes.data ?? []) as { church_id: string }[]);
+  if (churchesRes.error) throw new Error(`admin churches: ${churchesRes.error.message}`);
+  if (integrationsRes.error) throw new Error(`admin church integrations: ${integrationsRes.error.message}`);
+  if (invitesRes.error) throw new Error(`admin church invites: ${invitesRes.error.message}`);
+
+  if (metricsRes.error && !isMissingAdminAggregate(metricsRes.error.message)) {
+    throw new Error(`admin_platform_church_metrics: ${metricsRes.error.message}`);
+  }
+  const usersByChurch = new Map<string, number>();
+  const sermonsByChurch = new Map<string, number>();
   const googleChurches = new Set<string>();
   const facebookChurches = new Set<string>();
   const lastActiveByChurch = new Map<string, string>();
+
+  if (metricsRes.error) {
+    const [users, sermons, activity] = await Promise.all([
+      loadAllAdminPages<{ church_id: string }>("church_users", (from, to) =>
+        admin.from("church_users").select("church_id").order("id").range(from, to),
+      ),
+      loadAllAdminPages<{ church_id: string }>("sermons", (from, to) =>
+        admin.from("sermons").select("church_id").order("id").range(from, to),
+      ),
+      loadAllAdminPages<{ church_id: string; executed_at: string }>("activity_log", (from, to) =>
+        admin.from("activity_log").select("church_id, executed_at").order("id").range(from, to),
+      ),
+    ]);
+    for (const [id, count] of mapByCount(users)) usersByChurch.set(id, count);
+    for (const [id, count] of mapByCount(sermons)) sermonsByChurch.set(id, count);
+    for (const row of activity) {
+      const current = lastActiveByChurch.get(row.church_id);
+      if (!current || row.executed_at > current) {
+        lastActiveByChurch.set(row.church_id, row.executed_at);
+      }
+    }
+  } else {
+    for (const row of (metricsRes.data ?? []) as {
+      church_id: string;
+      users_count: number;
+      sermons_count: number;
+      last_active_at: string | null;
+    }[]) {
+      usersByChurch.set(row.church_id, Number(row.users_count));
+      sermonsByChurch.set(row.church_id, Number(row.sermons_count));
+      if (row.last_active_at) lastActiveByChurch.set(row.church_id, row.last_active_at);
+    }
+  }
 
   for (const row of (integrationsRes.data ?? []) as IntegrationRow[]) {
     if (!row.access_token) continue;
     if (row.provider === "google") googleChurches.add(row.church_id);
     if (row.provider === "facebook") facebookChurches.add(row.church_id);
-  }
-
-  for (const row of (activityRes.data ?? []) as Pick<ActivityRow, "church_id" | "executed_at">[]) {
-    const current = lastActiveByChurch.get(row.church_id);
-    if (!current || new Date(row.executed_at) > new Date(current)) {
-      lastActiveByChurch.set(row.church_id, row.executed_at);
-    }
   }
 
   type ChurchListRow = ChurchRow & {
@@ -631,22 +682,19 @@ export async function getAdminChurchActivity(
     query = query.gte("executed_at", rangeStart);
   }
 
-  const [activityRes, optionsRes] = await Promise.all([
+  const [activityRes, optionRows] = await Promise.all([
     query.range(from, to),
-    admin
-      .from("activity_log")
-      .select("automation_type, category")
-      .eq("church_id", churchId),
+    loadAllAdminPages<{ automation_type: string | null; category: string | null }>(
+      "activity filter options",
+      (pageFrom, pageTo) => admin.from("activity_log")
+        .select("automation_type, category")
+        .eq("church_id", churchId).order("id").range(pageFrom, pageTo),
+    ),
   ]);
 
-  if (activityRes.error) {
-    console.error("getAdminChurchActivity:", activityRes.error.message);
+  if (activityRes.error || !Number.isSafeInteger(activityRes.count)) {
+    throw new Error("admin church activity unavailable");
   }
-
-  const optionRows = (optionsRes.data ?? []) as {
-    automation_type: string | null;
-    category: string | null;
-  }[];
 
   const types = Array.from(
     new Set(
@@ -664,7 +712,7 @@ export async function getAdminChurchActivity(
     ),
   ).sort();
 
-  const total = activityRes.count ?? 0;
+  const total = activityRes.count as number;
 
   return {
     rows: ((activityRes.data ?? []) as ActivityRow[]).map((row) => ({
@@ -690,7 +738,7 @@ export async function getAdminChurchDetail(
   const [
     churchRes,
     settingsRes,
-    usersRes,
+    churchUsers,
     integrationsRes,
     attendanceRes,
     inviteRes,
@@ -712,11 +760,16 @@ export async function getAdminChurchDetail(
       )
       .eq("church_id", churchId)
       .maybeSingle(),
-    admin
-      .from("church_users")
-      .select("id, user_id, role, created_at")
-      .eq("church_id", churchId)
-      .order("created_at", { ascending: false }),
+    readAllById<ChurchUserRow>(async (afterId, includeCount, pageSize) => {
+      let query = admin
+        .from("church_users")
+        .select("id, church_id, user_id, role, created_at", {
+          count: includeCount ? "exact" : undefined,
+        })
+        .eq("church_id", churchId);
+      if (afterId) query = query.gt("id", afterId);
+      return await query.order("id").limit(pageSize);
+    }, { label: "church members", maxRows: 10_000 }),
     admin
       .from("church_integrations")
       .select("church_id, provider, token_expires_at, metadata, updated_at")
@@ -747,9 +800,12 @@ export async function getAdminChurchDetail(
       .maybeSingle(),
   ]);
 
-  if (churchRes.error || !churchRes.data) {
-    return null;
-  }
+  if (churchRes.error) throw new Error(`church detail: ${churchRes.error.message}`);
+  if (!churchRes.data) return null;
+  if (settingsRes.error) throw new Error(`church settings: ${settingsRes.error.message}`);
+  if (integrationsRes.error) throw new Error(`church integrations: ${integrationsRes.error.message}`);
+  if (attendanceRes.error) throw new Error(`church attendance: ${attendanceRes.error.message}`);
+  if (inviteRes.error) throw new Error(`church invite: ${inviteRes.error.message}`);
 
   const church = churchRes.data as ChurchRow & {
     slug?: string;
@@ -761,7 +817,7 @@ export async function getAdminChurchDetail(
     giving_enabled_at?: string | null;
     exclude_from_platform_metrics?: boolean;
   };
-  const churchUsers = (usersRes.data ?? []) as ChurchUserRow[];
+  churchUsers.sort((a, b) => b.created_at.localeCompare(a.created_at) || a.id.localeCompare(b.id));
   const authUsers = await listAuthUsersFor(churchUsers.map((row) => row.user_id));
   const usageByUser = await getUserDashboardUsageByChurch(
     churchId,
@@ -875,29 +931,22 @@ export async function getAdminChurchDetail(
 
 export async function getAdminUsers(): Promise<AdminPlatformUserRow[]> {
   const admin = createAdminClient();
-  let { data, error } = await admin
-    .from("church_users")
-    .select(
-      "id, church_id, user_id, role, created_at, feature_permissions, churches(id, name)",
-    )
-    .order("created_at", { ascending: false });
-
-  // Pre-0041 databases keep grants in app_metadata and have no column to read.
-  if (error && /feature_permissions/i.test(error.message)) {
-    const legacy = await admin
-      .from("church_users")
-      .select("id, church_id, user_id, role, created_at, churches(id, name)")
-      .order("created_at", { ascending: false });
-    data = legacy.data as typeof data;
-    error = legacy.error;
+  let rows: ChurchUserRow[];
+  try {
+    rows = await loadAllAdminPages<ChurchUserRow>("church_users", (from, to) =>
+      admin.from("church_users")
+        .select("id, church_id, user_id, role, created_at, feature_permissions, churches(id, name)")
+        .order("created_at", { ascending: false }).order("id").range(from, to),
+    );
+  } catch (error) {
+    // Pre-0041 databases keep grants in app_metadata and have no column to read.
+    if (!(error instanceof Error) || !/feature_permissions/i.test(error.message)) throw error;
+    rows = await loadAllAdminPages<ChurchUserRow>("legacy church_users", (from, to) =>
+      admin.from("church_users")
+        .select("id, church_id, user_id, role, created_at, churches(id, name)")
+        .order("created_at", { ascending: false }).order("id").range(from, to),
+    );
   }
-
-  if (error) {
-    console.error("getAdminUsers:", error.message);
-    return [];
-  }
-
-  const rows = (data ?? []) as ChurchUserRow[];
   const authUsers = await listAuthUsersFor(rows.map((row) => row.user_id));
 
   return rows.map((row) => ({
@@ -924,7 +973,7 @@ export async function getAdminSupportTicket(
   const { data, error } = await admin
     .from("support_tickets")
     .select(
-      "id, church_id, submitted_by, subject, body, status, priority, admin_notes, created_at, updated_at, churches(name)",
+      "id, church_id, submitted_by, subject, body, status, notification_email_status, priority, admin_notes, created_at, updated_at, churches(name)",
     )
     .eq("id", ticketId)
     .maybeSingle();
@@ -938,7 +987,8 @@ export async function getAdminSupportTicket(
     listAuthUsersFor([row.submitted_by]),
     getTicketComments(admin, row.id),
   ]);
-  const mapped = mapTicket(row, users);
+  const mapped = mapTicket(row, users, comments.some((comment) =>
+    comment.notificationEmailStatus === "pending" || comment.notificationEmailStatus === "unconfirmed"));
 
   return {
     ...mapped,
@@ -974,82 +1024,75 @@ export async function getAdminAnalytics(): Promise<AdminAnalytics> {
   const firstMonth = `${monthBuckets[0]?.key}-01T00:00:00.000Z`;
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-  const churchesRes = await admin
-    .from("churches")
-    .select("id, created_at, exclude_from_platform_metrics");
-
-  if (churchesRes.error) throw new Error(churchesRes.error.message);
-  const includedChurches = (churchesRes.data ?? []).filter(
-    (church) => church.exclude_from_platform_metrics === false,
-  );
-  const includedIds = new Set(includedChurches.map((church) => church.id));
-  const ids = [...includedIds];
-  const [activityRes, sermonsRes, recentActivityRes] = ids.length
-    ? await Promise.all([
-        admin
-          .from("activity_log")
-          .select("church_id, executed_at, time_saved_minutes")
-          .gte("executed_at", firstMonth)
-          .in("church_id", ids),
-        admin
-          .from("sermons")
-          .select("church_id, model_used, created_at")
-          .gte("created_at", firstMonth)
-          .in("church_id", ids),
-        admin
-          .from("activity_log")
-          .select("church_id, automation_type, executed_at")
-          .gte("executed_at", thirtyDaysAgo.toISOString())
-          .in("church_id", ids),
-      ])
-    : [
-        {
-          data: [] as {
-            church_id: string;
-            executed_at: string;
-            time_saved_minutes: number | null;
-          }[],
-        },
-        { data: [] as SermonRow[] },
-        { data: [] as { church_id: string; automation_type: string | null }[] },
-      ];
-
+  const churches = await loadAllAdminPages<{
+    id: string;
+    created_at: string;
+    exclude_from_platform_metrics: boolean;
+  }>("churches", (from, to) => admin.from("churches")
+    .select("id, created_at, exclude_from_platform_metrics")
+    .order("id").range(from, to));
+  const includedIds = new Set(churches.filter((row) => !row.exclude_from_platform_metrics).map((row) => row.id));
   const churchesByMonth = new Map(monthBuckets.map((row) => [row.key, 0]));
-  for (const row of includedChurches) {
-    if (row.created_at < firstMonth) continue;
-    increment(churchesByMonth, formatMonthKey(new Date(row.created_at)));
-  }
-
   const hoursByMonth = new Map(monthBuckets.map((row) => [row.key, 0]));
-  for (const row of (activityRes.data ?? []) as {
-    church_id: string;
-    executed_at: string;
-    time_saved_minutes: number | null;
-  }[]) {
-    if (!includedIds.has(row.church_id)) continue;
-    increment(
-      hoursByMonth,
-      formatMonthKey(new Date(row.executed_at)),
-      row.time_saved_minutes ?? 0,
-    );
-  }
-
   const models = new Map<string, number>();
   const providers = new Map<string, number>();
-  for (const row of (sermonsRes.data ?? []) as SermonRow[]) {
-    if (!includedIds.has(row.church_id)) continue;
-    increment(models, row.model_used || "Unknown");
-    increment(providers, inferProvider(row.model_used));
-  }
-
   const activityTypes = new Map<string, number>();
-  for (const row of (recentActivityRes.data ?? []) as {
-    church_id: string;
-    automation_type: string | null;
-  }[]) {
-    if (!includedIds.has(row.church_id)) continue;
-    increment(activityTypes, row.automation_type || "Unknown");
+
+  const metricsRes = await admin.rpc("admin_platform_analytics", {
+    since_month: firstMonth,
+    since_recent: thirtyDaysAgo.toISOString(),
+  });
+  if (!metricsRes.error) {
+    for (const row of (metricsRes.data ?? []) as {
+      metric: string;
+      bucket: string;
+      total: number;
+    }[]) {
+      const count = Number(row.total);
+      if (row.metric === "churches_month") churchesByMonth.set(row.bucket, count);
+      else if (row.metric === "activity_minutes_month") hoursByMonth.set(row.bucket, count);
+      else if (row.metric === "sermon_model") {
+        increment(models, row.bucket, count);
+        increment(providers, inferProvider(row.bucket), count);
+      } else if (row.metric === "activity_type") increment(activityTypes, row.bucket, count);
+    }
+  } else {
+    if (!isMissingAdminAggregate(metricsRes.error.message)) {
+      throw new Error(`admin_platform_analytics: ${metricsRes.error.message}`);
+    }
+    const [activity, sermons, recentActivity] = await Promise.all([
+      loadAllAdminPages<{ church_id: string; executed_at: string; time_saved_minutes: number | null }>("activity_log", (from, to) =>
+        admin.from("activity_log").select("church_id, executed_at, time_saved_minutes")
+          .gte("executed_at", firstMonth).order("id").range(from, to),
+      ),
+      loadAllAdminPages<SermonRow>("sermons", (from, to) =>
+        admin.from("sermons").select("church_id, model_used, created_at")
+          .gte("created_at", firstMonth).order("id").range(from, to),
+      ),
+      loadAllAdminPages<{ church_id: string; automation_type: string | null }>("recent activity", (from, to) =>
+        admin.from("activity_log").select("church_id, automation_type")
+          .gte("executed_at", thirtyDaysAgo.toISOString()).order("id").range(from, to),
+      ),
+    ]);
+    for (const row of churches) {
+      if (includedIds.has(row.id) && row.created_at >= firstMonth) {
+        increment(churchesByMonth, formatMonthKey(new Date(row.created_at)));
+      }
+    }
+    for (const row of activity) {
+      if (includedIds.has(row.church_id)) {
+        increment(hoursByMonth, formatMonthKey(new Date(row.executed_at)), row.time_saved_minutes ?? 0);
+      }
+    }
+    for (const row of sermons) {
+      if (includedIds.has(row.church_id)) {
+        increment(models, row.model_used || "Unknown");
+        increment(providers, inferProvider(row.model_used));
+      }
+    }
+    for (const row of recentActivity) {
+      if (includedIds.has(row.church_id)) increment(activityTypes, row.automation_type || "Unknown");
+    }
   }
 
   return {

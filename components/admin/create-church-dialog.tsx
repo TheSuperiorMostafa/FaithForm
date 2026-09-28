@@ -46,12 +46,14 @@ export function CreateChurchDialog() {
   const [error, setError] = useState<string | null>(null);
   const [timezone, setTimezone] = useState("America/New_York");
   const [adminMode, setAdminMode] = useState<AdminMode>("invite");
+  const [requestId, setRequestId] = useState(() => crypto.randomUUID());
   const [pending, startTransition] = useTransition();
 
   function close() {
     setOpen(false);
     setTimezone("America/New_York");
     setAdminMode("invite");
+    setRequestId(crypto.randomUUID());
     setError(null);
   }
 
@@ -60,6 +62,7 @@ export function CreateChurchDialog() {
     setError(null);
     const formData = new FormData(e.currentTarget);
     formData.set("timezone", timezone);
+    formData.set("requestId", requestId);
 
     startTransition(async () => {
       const result = await createChurch(formData);
@@ -67,14 +70,20 @@ export function CreateChurchDialog() {
         setError(result.error);
         return;
       }
-      toast.success(
-        result.email
-          ? `Invite sent to ${result.email}`
-          : "Church created — invite their admin whenever you have the address.",
-      );
+      if (result.inviteDelivery === "sent") {
+        toast.success(`Invite sent to ${result.email}`);
+      } else if (result.inviteDelivery === "unconfirmed") {
+        toast.warning("Church created, but invite delivery could not be confirmed. Open the church to resend it.");
+      } else if (result.inviteDelivery === "existing") {
+        toast.info("This church was already created. Check its invitation before sending another.");
+      } else if (result.inviteDelivery === "invite_failed") {
+        toast.warning("Church created, but its invitation could not be prepared. Open the church to send it.");
+      } else {
+        toast.success("Church created — invite their admin whenever you have the address.");
+      }
       close();
       router.refresh();
-      if (!result.email) router.push(`/admin/churches/${result.churchId}`);
+      if (result.inviteDelivery !== "sent") router.push(`/admin/churches/${result.churchId}`);
     });
   }
 

@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, type FormEvent } from "react";
 import { CalendarDays, CalendarPlus, ClipboardCheck, MapPin, Pencil, Plus, Repeat, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { AttendanceSheet } from "@/lib/groups/gatherings";
@@ -7,6 +7,8 @@ import type { StaffGroupDetail } from "@/lib/groups/staff/groups";
 import type { listStaffGatherings, getStaffGathering } from "@/lib/groups/staff/gatherings";
 import * as actions from "@/app/dashboard/groups/actions";
 import { confirmAction } from "@/components/ui/confirm-dialog";
+import { formatTimezoneLabel } from "@/lib/timezones";
+import { isoToZonedInput, zonedInputToIso } from "@/lib/utils/zoned-datetime-input";
 import { dateTime, Empty, Field, Modal, Notice, Pill, Submit, useGroupAction } from "./shared";
 
 /* Shown to churches as "Meetings"; the code and URLs keep the older name, "gatherings". */
@@ -31,15 +33,92 @@ export function Gatherings({ detail, upcoming, past, timezone }: { detail: Staff
   </div>;
 }
 function GatheringForm({ groupId, timezone, close, existing }: { groupId: string; timezone: string; close: () => void; existing?: EventDetail }) {
-  const { pending, error, run } = useGroupAction();
-  const localZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const localTime = (value?: string) => { if (!value) return ""; const d = new Date(value); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
-  return <form className="space-y-4" onSubmit={e => { e.preventDefault(); const f = new FormData(e.currentTarget); run(() => actions.saveGathering(groupId, existing?.event.id ?? null, { title: String(f.get("title")), description: String(f.get("description")), startsAt: new Date(String(f.get("starts"))).toISOString(), endsAt: new Date(String(f.get("ends"))).toISOString(), timezone: localZone, locationName: String(f.get("location")), onlineMeetingUrl: String(f.get("url")) }), existing ? `${String(f.get("title")).trim()} updated.` : `${String(f.get("title")).trim()} planned. Members can see it in the app.`, close); }}><Field label="What’s the meeting called?"><input autoFocus name="title" defaultValue={existing?.event.title} required maxLength={120} placeholder="e.g. Dinner and Bible study" /></Field><div className="g-form-grid"><Field label="Starts"><input name="starts" type="datetime-local" defaultValue={localTime(existing?.event.startsAt)} required /></Field><Field label="Ends"><input name="ends" type="datetime-local" defaultValue={localTime(existing?.event.endsAt)} required /></Field></div><p className="text-sm text-muted-foreground">Times are in your computer’s time zone ({localZone}).{localZone !== timezone && ` Your church’s time zone is ${timezone}.`}</p><Field label="Where (optional)"><input name="location" defaultValue={existing?.event.locationName ?? ""} maxLength={200} placeholder="e.g. Fellowship hall" /></Field><Field label="Online meeting link (optional)"><input name="url" defaultValue={existing?.onlineMeetingUrl ?? ""} type="url" placeholder="https://" /></Field><Field label="Anything to know? (optional)"><textarea name="description" defaultValue={existing?.description ?? ""} rows={3} maxLength={4000} placeholder="What to bring, what to expect…" /></Field>{error && <Notice>{error}</Notice>}<div className="g-form-actions"><Submit pending={pending}>{existing ? "Save meeting" : "Plan meeting"}</Submit></div></form>;
+  const { pending, error, setError, run } = useGroupAction();
+  // Preserve the zone of an existing meeting. New meetings use church time,
+  // including when a staff member is scheduling from another time zone.
+  const formZone = existing?.event.timezone ?? timezone;
+  const starts = existing ? isoToZonedInput(existing.event.startsAt, formZone) ?? "" : "";
+  const ends = existing ? isoToZonedInput(existing.event.endsAt, formZone) ?? "" : "";
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const fields = new FormData(event.currentTarget);
+    const startsAt = zonedInputToIso(String(fields.get("starts") ?? ""), formZone);
+    const endsAt = zonedInputToIso(String(fields.get("ends") ?? ""), formZone);
+    if (!startsAt || !endsAt) {
+      setError(`Choose valid meeting times in ${existing ? "this meeting’s" : "your church’s"} time zone.`);
+      return;
+    }
+    const title = String(fields.get("title") ?? "").trim();
+    run(
+      () => actions.saveGathering(groupId, existing?.event.id ?? null, {
+        title,
+        description: String(fields.get("description") ?? ""),
+        startsAt,
+        endsAt,
+        timezone: formZone,
+        locationName: String(fields.get("location") ?? ""),
+        onlineMeetingUrl: String(fields.get("url") ?? ""),
+      }),
+      existing ? `${title} updated.` : `${title} planned. Members can see it in the app.`,
+      close,
+    );
+  }
+
+  return <form className="space-y-4" onSubmit={submit}>
+    <Field label="What’s the meeting called?"><input autoFocus name="title" defaultValue={existing?.event.title} required maxLength={120} placeholder="e.g. Dinner and Bible study" /></Field>
+    <div className="g-form-grid">
+      <Field label="Starts"><input name="starts" type="datetime-local" defaultValue={starts} required /></Field>
+      <Field label="Ends"><input name="ends" type="datetime-local" defaultValue={ends} required /></Field>
+    </div>
+    <p className="text-sm text-muted-foreground">
+      Times use {existing ? "this meeting’s" : "your church’s"} time zone ({formatTimezoneLabel(formZone)}).
+    </p>
+    <Field label="Where (optional)"><input name="location" defaultValue={existing?.event.locationName ?? ""} maxLength={200} placeholder="e.g. Fellowship hall" /></Field>
+    <Field label="Online meeting link (optional)"><input name="url" defaultValue={existing?.onlineMeetingUrl ?? ""} type="url" placeholder="https://" /></Field>
+    <Field label="Anything to know? (optional)"><textarea name="description" defaultValue={existing?.description ?? ""} rows={3} maxLength={4000} placeholder="What to bring, what to expect…" /></Field>
+    {error && <Notice>{error}</Notice>}
+    <div className="g-form-actions"><Submit pending={pending}>{existing ? "Save meeting" : "Plan meeting"}</Submit></div>
+  </form>;
 }
 function Attendance({ groupId, sheet, close }: { groupId: string; sheet: AttendanceSheet; close: () => void }) {
-  const [selected, setSelected] = useState(sheet.entries.filter(e => e.present).map(e => e.membershipId)); const [key] = useState(() => crypto.randomUUID());
+  const [selected, setSelected] = useState(sheet.entries.filter(e => e.present).map(e => e.membershipId));
+  const [key] = useState(() => crypto.randomUUID());
   const { pending, error, run } = useGroupAction();
-  return <form onSubmit={e => { e.preventDefault(); const f = new FormData(e.currentTarget); run(() => actions.recordAttendance(groupId, sheet.eventId, { presentMembershipIds: selected, guestCount: Number(f.get("guests")), firstTimeGuestCount: Number(f.get("first")), notes: String(f.get("notes")) }, key), `Attendance saved: ${selected.length} came.`, close); }}><div className="mb-3 flex flex-wrap items-center justify-between gap-3"><span className="text-base font-semibold">{selected.length} here</span><Button type="button" variant="outline" onClick={() => setSelected(selected.length ? [] : sheet.entries.filter(e => e.recordable).map(e => e.membershipId))}>{selected.length ? "Clear everyone" : "Mark everyone here"}</Button></div><div className="max-h-64 overflow-y-auto">{sheet.entries.map(entry => <label key={entry.membershipId} className="g-row cursor-pointer"><span className="text-base">{entry.name}{!entry.recordable && <small className="block text-sm text-muted-foreground">No longer in the group</small>}</span><input type="checkbox" disabled={!entry.recordable || pending} checked={selected.includes(entry.membershipId)} onChange={e => setSelected(s => e.target.checked ? [...s, entry.membershipId] : s.filter(id => id !== entry.membershipId))} className="size-5" /></label>)}</div><div className="g-form-grid mt-5"><Field label="Guests"><input type="number" name="guests" min={0} max={1000} defaultValue={sheet.guestCount} required /></Field><Field label="First-time guests"><input type="number" name="first" min={0} max={1000} defaultValue={sheet.firstTimeGuestCount} required /></Field></div><div className="mt-4"><Field label="Notes (optional)"><textarea name="notes" rows={2} maxLength={1000} defaultValue={sheet.notes ?? ""} /></Field></div>{error && <Notice>{error}</Notice>}<div className="g-form-actions"><Submit pending={pending}>Save attendance</Submit></div></form>;
+  const lockedMessage = sheet.lockedReason === "too_early"
+    ? "Attendance opens the day before this meeting. You can return then to mark who came."
+    : sheet.lockedReason === "too_late"
+      ? "Attendance closed 30 days after this meeting."
+      : sheet.lockedReason === "cancelled"
+        ? "Attendance is unavailable for a cancelled meeting."
+        : null;
+
+  function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!sheet.canRecord) return;
+    const fields = new FormData(event.currentTarget);
+    run(() => actions.recordAttendance(groupId, sheet.eventId, {
+      presentMembershipIds: selected,
+      guestCount: Number(fields.get("guests")),
+      firstTimeGuestCount: Number(fields.get("first")),
+      notes: String(fields.get("notes")),
+    }, key), `Attendance saved: ${selected.length} came.`, close);
+  }
+
+  return <form onSubmit={submit}>
+    {lockedMessage && <Notice tone="info">{lockedMessage}</Notice>}
+    <fieldset disabled={!sheet.canRecord || pending} className="min-w-0 border-0 p-0">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <span className="text-base font-semibold">{selected.length} here</span>
+        <Button type="button" variant="outline" onClick={() => setSelected(selected.length ? [] : sheet.entries.filter(e => e.recordable).map(e => e.membershipId))}>{selected.length ? "Clear everyone" : "Mark everyone here"}</Button>
+      </div>
+      <div className="max-h-64 overflow-y-auto">{sheet.entries.map(entry => <label key={entry.membershipId} className="g-row cursor-pointer"><span className="text-base">{entry.name}{!entry.recordable && <small className="block text-sm text-muted-foreground">No longer in the group</small>}</span><input type="checkbox" disabled={!entry.recordable} checked={selected.includes(entry.membershipId)} onChange={e => setSelected(s => e.target.checked ? [...s, entry.membershipId] : s.filter(id => id !== entry.membershipId))} className="size-5" /></label>)}</div>
+      <div className="g-form-grid mt-5"><Field label="Guests"><input type="number" name="guests" min={0} max={1000} defaultValue={sheet.guestCount} required /></Field><Field label="First-time guests"><input type="number" name="first" min={0} max={1000} defaultValue={sheet.firstTimeGuestCount} required /></Field></div>
+      <div className="mt-4"><Field label="Notes (optional)"><textarea name="notes" rows={2} maxLength={1000} defaultValue={sheet.notes ?? ""} /></Field></div>
+      {error && <Notice>{error}</Notice>}
+      {sheet.canRecord && <div className="g-form-actions"><Submit pending={pending}>Save attendance</Submit></div>}
+    </fieldset>
+  </form>;
 }
 export function Schedules({ detail, timezone }: { detail: StaffGroupDetail; timezone: string }) {
   const [adding, setAdding] = useState(false); const { pending, error, run } = useGroupAction();

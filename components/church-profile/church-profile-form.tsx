@@ -162,14 +162,18 @@ export function ChurchProfileForm({
     }
 
     startTransition(async () => {
-      const result = await saveChurchProfile(churchId, form);
-      if (!("ok" in result) || !result.ok) {
-        toast.error("error" in result ? result.error : "Could not save profile.");
-        return;
+      try {
+        const result = await saveChurchProfile(churchId, form);
+        if (!("ok" in result) || !result.ok) {
+          toast.error("error" in result ? result.error : "Could not save profile.");
+          return;
+        }
+        setBaseline(form);
+        setShowErrors(false);
+        toast.success("Church profile saved.");
+      } catch {
+        toast.error("The profile could not be saved. Sign in again if your session expired, then retry.");
       }
-      setBaseline(form);
-      setShowErrors(false);
-      toast.success("Church profile saved.");
     });
   };
 
@@ -266,7 +270,7 @@ export function ChurchProfileForm({
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
-              <Label>Logo</Label>
+              <Label htmlFor="church-logo-upload">Logo</Label>
               {form.logoUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -279,6 +283,7 @@ export function ChurchProfileForm({
               )}
               {!readOnly && (
                 <Input
+                  id="church-logo-upload"
                   type="file"
                   disabled={imageBusy}
                   accept="image/png,image/jpeg"
@@ -291,7 +296,7 @@ export function ChurchProfileForm({
               )}
             </div>
             <div className="space-y-2">
-              <Label>Cover image</Label>
+              <Label htmlFor="church-cover-upload">Cover image</Label>
               {form.coverImageUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -304,6 +309,7 @@ export function ChurchProfileForm({
               )}
               {!readOnly && (
                 <Input
+                  id="church-cover-upload"
                   type="file"
                   disabled={imageBusy}
                   accept="image/png,image/jpeg,image/webp"
@@ -494,6 +500,7 @@ export function ChurchProfileForm({
                   className="grid gap-3 rounded-[10px] border border-border p-3 sm:grid-cols-[1fr_120px_100px_100px_120px_auto]"
                 >
                   <Input
+                    aria-label={`Service ${index + 1} label`}
                     placeholder="Label"
                     value={row.label}
                     disabled={readOnly}
@@ -504,6 +511,7 @@ export function ChurchProfileForm({
                     }}
                   />
                   <Select
+                    aria-label={`Service ${index + 1} day`}
                     value={String(row.dayOfWeek)}
                     disabled={readOnly}
                     onChange={(e) => {
@@ -522,6 +530,7 @@ export function ChurchProfileForm({
                     ))}
                   </Select>
                   <Input
+                    aria-label={`Service ${index + 1} start time`}
                     type="time"
                     value={row.startTime}
                     disabled={readOnly}
@@ -532,6 +541,7 @@ export function ChurchProfileForm({
                     }}
                   />
                   <Input
+                    aria-label={`Service ${index + 1} end time`}
                     type="time"
                     value={row.endTime}
                     disabled={readOnly}
@@ -542,6 +552,7 @@ export function ChurchProfileForm({
                     }}
                   />
                   <Select
+                    aria-label={`Service ${index + 1} kind`}
                     value={row.kind}
                     disabled={readOnly}
                     onChange={(e) => {
@@ -563,6 +574,7 @@ export function ChurchProfileForm({
                     <Button
                       type="button"
                       variant="ghost"
+                      aria-label={`Remove service ${row.label || index + 1}`}
                       onClick={() =>
                         patch({
                           serviceTimes: form.serviceTimes.filter(
@@ -609,6 +621,7 @@ export function ChurchProfileForm({
                   >
                     <span className="text-sm font-medium">{DAY_LABELS[day]}</span>
                     <Switch
+                      aria-label={`${DAY_LABELS[day]} office hours`}
                       checked={row.enabled}
                       disabled={readOnly}
                       onCheckedChange={(enabled) =>
@@ -620,6 +633,7 @@ export function ChurchProfileForm({
                     {row.enabled ? (
                       <div className="flex flex-wrap items-center justify-end gap-2">
                         <input
+                          aria-label={`${DAY_LABELS[day]} opening time`}
                           type="time"
                           value={row.open}
                           disabled={readOnly}
@@ -634,6 +648,7 @@ export function ChurchProfileForm({
                         />
                         <span className="text-muted-foreground">to</span>
                         <input
+                          aria-label={`${DAY_LABELS[day]} closing time`}
                           type="time"
                           value={row.close}
                           disabled={readOnly}
@@ -687,8 +702,9 @@ export function ChurchProfileForm({
               className="grid gap-3 rounded-[10px] border border-border p-4 sm:grid-cols-2"
             >
               <div className="space-y-2 sm:col-span-2">
-                <Label>Name</Label>
+                <Label htmlFor={`staff-${member.clientId}-name`}>Name</Label>
                 <Input
+                  id={`staff-${member.clientId}-name`}
                   value={member.fullName}
                   disabled={readOnly}
                   onChange={(e) => {
@@ -699,8 +715,9 @@ export function ChurchProfileForm({
                 />
               </div>
               <div className="space-y-2">
-                <Label>Title</Label>
+                <Label htmlFor={`staff-${member.clientId}-title`}>Title</Label>
                 <Input
+                  id={`staff-${member.clientId}-title`}
                   value={member.title}
                   disabled={readOnly}
                   onChange={(e) => {
@@ -711,8 +728,9 @@ export function ChurchProfileForm({
                 />
               </div>
               <div className="space-y-2">
-                <Label>Phone</Label>
+                <Label htmlFor={`staff-${member.clientId}-phone`}>Phone</Label>
                 <Input
+                  id={`staff-${member.clientId}-phone`}
                   value={member.phone}
                   disabled={readOnly}
                   onChange={(e) => {
@@ -723,8 +741,9 @@ export function ChurchProfileForm({
                 />
               </div>
               <div className="space-y-2">
-                <Label>Email</Label>
+                <Label htmlFor={`staff-${member.clientId}-email`}>Email</Label>
                 <Input
+                  id={`staff-${member.clientId}-email`}
                   value={member.email}
                   disabled={readOnly}
                   onChange={(e) => {
@@ -735,8 +754,9 @@ export function ChurchProfileForm({
                 />
               </div>
               <div className="space-y-2">
-                <Label>AI priority</Label>
+                <Label htmlFor={`staff-${member.clientId}-priority`}>AI priority</Label>
                 <Input
+                  id={`staff-${member.clientId}-priority`}
                   type="number"
                   min={0}
                   max={100}
@@ -785,6 +805,7 @@ export function ChurchProfileForm({
                   <Button
                     type="button"
                     variant="ghost"
+                    aria-label={`Remove staff member ${member.fullName || index + 1}`}
                     onClick={() =>
                       patch({ staff: form.staff.filter((_, i) => i !== index) })
                     }
@@ -847,8 +868,9 @@ export function ChurchProfileForm({
             ] as const
           ).map(([key, label]) => (
             <div key={key} className="space-y-2">
-              <Label>{label}</Label>
+              <Label htmlFor={`social-${key}`}>{label}</Label>
               <Input
+                id={`social-${key}`}
                 value={form[key]}
                 disabled={readOnly}
                 placeholder="https://"
@@ -882,8 +904,9 @@ export function ChurchProfileForm({
                 className="grid gap-3 rounded-[10px] border border-border p-4 sm:grid-cols-2"
               >
                 <div className="space-y-2">
-                  <Label>Event name</Label>
+                  <Label htmlFor={`event-${event.clientId}-name`}>Event name</Label>
                   <Input
+                    id={`event-${event.clientId}-name`}
                     value={event.name}
                     disabled={readOnly}
                     placeholder="Men's Breakfast"
@@ -891,8 +914,9 @@ export function ChurchProfileForm({
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Other calendar names</Label>
+                  <Label htmlFor={`event-${event.clientId}-aliases`}>Other calendar names</Label>
                   <Input
+                    id={`event-${event.clientId}-aliases`}
                     value={event.aliases}
                     disabled={readOnly}
                     placeholder="Men's Prayer Breakfast, Brothers' Table"
@@ -901,8 +925,9 @@ export function ChurchProfileForm({
                   <p className="text-xs text-muted-foreground">Separate aliases with commas.</p>
                 </div>
                 <div className="space-y-2">
-                  <Label>How often</Label>
+                  <Label htmlFor={`event-${event.clientId}-cadence`}>How often</Label>
                   <Input
+                    id={`event-${event.clientId}-cadence`}
                     value={event.cadence}
                     disabled={readOnly}
                     placeholder="First Saturday of every month at 8 AM"
@@ -910,8 +935,9 @@ export function ChurchProfileForm({
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Who it is for</Label>
+                  <Label htmlFor={`event-${event.clientId}-audience`}>Who it is for</Label>
                   <Input
+                    id={`event-${event.clientId}-audience`}
                     value={event.audience}
                     disabled={readOnly}
                     placeholder="Men of every age; visitors are welcome"
@@ -919,8 +945,9 @@ export function ChurchProfileForm({
                   />
                 </div>
                 <div className="space-y-2 sm:col-span-2">
-                  <Label>Description</Label>
+                  <Label htmlFor={`event-${event.clientId}-description`}>Description</Label>
                   <Textarea
+                    id={`event-${event.clientId}-description`}
                     rows={3}
                     value={event.description}
                     disabled={readOnly}
@@ -929,8 +956,9 @@ export function ChurchProfileForm({
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Writing tone</Label>
+                  <Label htmlFor={`event-${event.clientId}-tone`}>Writing tone</Label>
                   <Textarea
+                    id={`event-${event.clientId}-tone`}
                     rows={2}
                     value={event.tone}
                     disabled={readOnly}
@@ -939,8 +967,9 @@ export function ChurchProfileForm({
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Caption notes</Label>
+                  <Label htmlFor={`event-${event.clientId}-caption`}>Caption notes</Label>
                   <Textarea
+                    id={`event-${event.clientId}-caption`}
                     rows={2}
                     value={event.captionNotes}
                     disabled={readOnly}
@@ -949,8 +978,9 @@ export function ChurchProfileForm({
                   />
                 </div>
                 <div className="space-y-2 sm:col-span-2">
-                  <Label>Image notes</Label>
+                  <Label htmlFor={`event-${event.clientId}-image`}>Image notes</Label>
                   <Textarea
+                    id={`event-${event.clientId}-image`}
                     rows={2}
                     value={event.visualNotes}
                     disabled={readOnly}
@@ -971,6 +1001,7 @@ export function ChurchProfileForm({
                     <Button
                       type="button"
                       variant="ghost"
+                      aria-label={`Remove recurring event ${event.name || index + 1}`}
                       onClick={() =>
                         patch({
                           recurringEvents: form.recurringEvents.filter((_, i) => i !== index),

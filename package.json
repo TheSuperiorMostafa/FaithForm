@@ -16,6 +16,10 @@
     "test:database": "tsx --test tests/database/**/*.test.ts",
     "test:concurrency": "node scripts/run-attendance-concurrency.mjs",
     "test:groups-database": "node scripts/run-groups-database-tests.mjs",
+    "test:backup-restore": "node scripts/rehearse-backup-restore.mjs",
+    "backup:storage": "node scripts/backup-supabase-storage.mjs",
+    "security:anonymous-announcements": "node scripts/verify-anonymous-announcements.mjs",
+    "security:anonymous-private-data": "node scripts/verify-anonymous-announcements.mjs",
     "test:contract": "tsx --test tests/unit/mobile-contract.test.ts",
     "test:migrations": "node scripts/verify-migration-baseline.mjs",
     "pilot:readiness": "node scripts/pilot-readiness.mjs",
@@ -75,6 +79,7 @@
     "ios:app:build": "./scripts/build-ios-app.sh",
     "ios:app:test": "./scripts/build-ios-app.sh --test",
     "android:staging": "cd apps/faithform-android && ./gradlew :app:assembleStaging",
+    "android:staging:compile": "cd apps/faithform-android && ./gradlew :app:compileStagingKotlin :app:compileStagingJavaWithJavac --no-daemon --console=plain",
     "android:release": "cd apps/faithform-android && ./gradlew :app:assembleRelease",
     "ios:test": "cd apps/faithform-ios && swift test",
     "android:test": "cd apps/faithform-android && ./gradlew test --no-daemon --console=plain",
@@ -137,8 +142,10 @@
   },
   "pnpm": {
     "overrides": {
+      "@ai-sdk/provider-utils": "4.0.33",
       "nanoid": "3.3.18",
       "postcss": "8.5.26",
+      "qs": "6.16.0",
       "sharp": "0.35.4"
     },
     "patchedDependencies": {

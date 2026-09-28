@@ -6,6 +6,7 @@ import {
 } from "@/lib/utils/office-hours";
 import { createClient } from "@/lib/supabase/server";
 import { formatAnnouncementFacebookPostTime } from "@/lib/integrations/facebook";
+import { readAllById } from "@/lib/queries/paged-read";
 import type {
   AiKnowledge,
   ChurchProfile,
@@ -289,36 +290,34 @@ export async function getChurchProfile(
 ): Promise<ChurchProfile | null> {
   const client = supabase ?? db();
 
+  const loadChildren = (table: "church_service_times" | "church_staff" | "church_recurring_events") =>
+    readAllById<{ id: string; sort_order?: number } & Record<string, unknown>>(
+      async (afterId, includeCount, pageSize) => {
+        let query = client
+          .from(table)
+          .select("*", { count: includeCount ? "exact" : undefined })
+          .eq("church_id", churchId);
+        if (afterId) query = query.gt("id", afterId);
+        return await query.order("id").limit(pageSize);
+      },
+      { label: table, maxRows: 10_000 },
+    ).then((rows) => rows.sort((a, b) =>
+      (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0) || a.id.localeCompare(b.id),
+    ));
+
   const [churchResult, serviceResult, staffResult, recurringEventsResult] = await Promise.all([
     client.from("churches").select(CHURCH_SELECT).eq("id", churchId).maybeSingle(),
-    client
-      .from("church_service_times")
-      .select("*")
-      .eq("church_id", churchId)
-      .order("sort_order", { ascending: true }),
-    client
-      .from("church_staff")
-      .select("*")
-      .eq("church_id", churchId)
-      .order("sort_order", { ascending: true }),
-    client
-      .from("church_recurring_events")
-      .select("*")
-      .eq("church_id", churchId)
-      .order("sort_order", { ascending: true }),
+    loadChildren("church_service_times"),
+    loadChildren("church_staff"),
+    loadChildren("church_recurring_events"),
   ]);
 
+  if (churchResult.error) throw new Error(`church profile: ${churchResult.error.message}`);
   if (!churchResult.data) return null;
 
-  const serviceTimes = (serviceResult.data ?? []).map((row) =>
-    mapServiceTime(row as Record<string, unknown>),
-  );
-  const staff = (staffResult.data ?? []).map((row) =>
-    mapStaff(row as Record<string, unknown>),
-  );
-  const recurringEvents = (recurringEventsResult.data ?? []).map((row) =>
-    mapRecurringEvent(row as Record<string, unknown>),
-  );
+  const serviceTimes = serviceResult.map(mapServiceTime);
+  const staff = staffResult.map(mapStaff);
+  const recurringEvents = recurringEventsResult.map(mapRecurringEvent);
 
   return mapChurchRow(
     churchResult.data as Record<string, unknown>,
@@ -342,51 +341,140 @@ function cleanOptional(value: string): string | null {
   return trimmed || null;
 }
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function targetChildId(row: { id?: string; clientId: string }, existingIds: Set<string>): string | null {
+  if (row.id) {
+    if (!existingIds.has(row.id)) throw new Error("A profile row changed since this form opened. Refresh and try again.");
+    return row.id;
+  }
+  return UUID_PATTERN.test(row.clientId) ? row.clientId : null;
+}
+
+function atomicChildId(row: { id?: string; clientId: string }): string {
+  if (row.id) {
+    if (!UUID_PATTERN.test(row.id)) throw new Error("Invalid saved profile row ID.");
+    return row.id;
+  }
+  return UUID_PATTERN.test(row.clientId) ? row.clientId : crypto.randomUUID();
+}
+
 export async function upsertChurchProfile(
   churchId: string,
   input: UpsertChurchProfileInput,
   supabase: SupabaseClient,
 ): Promise<ChurchProfile> {
-  const { error: churchError } = await supabase
+  const churchPatch = {
+    name: input.name.trim(),
+    tagline: cleanOptional(input.tagline),
+    mission_statement: cleanOptional(input.missionStatement),
+    vision_statement: cleanOptional(input.visionStatement),
+    description: cleanOptional(input.description),
+    logo_url: cleanOptional(input.logoUrl),
+    cover_image_url: cleanOptional(input.coverImageUrl),
+    giving_primary_color: cleanOptional(input.primaryColor),
+    giving_accent_color: cleanOptional(input.accentColor),
+    address: cleanOptional(input.address),
+    city: cleanOptional(input.city),
+    state: cleanOptional(input.state),
+    zip: cleanOptional(input.zip),
+    phone: cleanOptional(input.phone),
+    email: cleanOptional(input.email),
+    website: cleanOptional(input.website),
+    google_maps_url: cleanOptional(input.googleMapsUrl),
+    timezone: input.timezone.trim() || "America/New_York",
+    denomination: cleanOptional(input.denomination),
+    office_hours: input.officeHours,
+    holiday_schedule: cleanOptional(input.holidaySchedule),
+    facebook_url: cleanOptional(input.facebookUrl),
+    instagram_url: cleanOptional(input.instagramUrl),
+    youtube_url: cleanOptional(input.youtubeUrl),
+    tiktok_url: cleanOptional(input.tiktokUrl),
+    x_url: cleanOptional(input.xUrl),
+    podcast_url: cleanOptional(input.podcastUrl),
+    livestream_url: cleanOptional(input.livestreamUrl),
+    announcement_facebook_post_time: input.announcementFacebookPostTime,
+    ai_knowledge: input.aiKnowledge,
+  };
+  const services = input.serviceTimes.filter((row) => row.label.trim()).map((row, index) => ({
+    id: atomicChildId(row),
+    is_existing: Boolean(row.id),
+    label: row.label.trim(),
+    day_of_week: row.dayOfWeek,
+    start_time: row.startTime,
+    end_time: cleanOptional(row.endTime),
+    kind: row.kind,
+    notes: cleanOptional(row.notes),
+    sort_order: index,
+  }));
+  const staff = input.staff.filter((row) => row.fullName.trim()).map((row, index) => ({
+    id: atomicChildId(row),
+    is_existing: Boolean(row.id),
+    full_name: row.fullName.trim(),
+    title: cleanOptional(row.title),
+    email: cleanOptional(row.email),
+    phone: cleanOptional(row.phone),
+    photo_url: cleanOptional(row.photoUrl),
+    bio: cleanOptional(row.bio),
+    is_senior_pastor: row.isSeniorPastor,
+    is_executive_pastor: row.isExecutivePastor,
+    ai_contact_priority: row.aiContactPriority,
+    is_public: row.isPublic,
+    sort_order: index,
+  }));
+  const events = input.recurringEvents.filter((row) => row.name.trim()).map((row, index) => ({
+    id: atomicChildId(row),
+    is_existing: Boolean(row.id),
+    name: row.name.trim(),
+    aliases: row.aliases.split(",").map((alias) => alias.trim()).filter(Boolean),
+    cadence: cleanOptional(row.cadence),
+    description: cleanOptional(row.description),
+    audience: cleanOptional(row.audience),
+    tone: cleanOptional(row.tone),
+    caption_notes: cleanOptional(row.captionNotes),
+    visual_notes: cleanOptional(row.visualNotes),
+    is_active: row.isActive,
+    sort_order: index,
+  }));
+
+  const atomic = await supabase.rpc("save_church_profile", {
+    p_church_id: churchId,
+    p_church: churchPatch,
+    p_services: services,
+    p_staff: staff,
+    p_events: events,
+  });
+  if (!atomic.error) {
+    const profile = await getChurchProfile(churchId, supabase);
+    if (!profile) throw new Error("Failed to load church profile after save.");
+    return profile;
+  }
+  if (!/PGRST202|42883|could not find the function/i.test(atomic.error.message)) {
+    throw new Error(`Church profile save failed: ${atomic.error.message}`);
+  }
+
+  // Narrow deployment window before 0122 reaches the database. The legacy
+  // path remains guarded by counted preflight reads and checked writes.
+  // These lists decide which old rows are removed. Confirm every list is
+  // complete before changing the church or any child row.
+  const [serviceIds, staffIds, recurringEventIds] = await Promise.all([
+    readExistingChildIds("church_service_times", churchId, supabase),
+    readExistingChildIds("church_staff", churchId, supabase),
+    readExistingChildIds("church_recurring_events", churchId, supabase),
+  ]);
+
+  const { data: updatedChurch, error: churchError } = await supabase
     .from("churches")
-    .update({
-      name: input.name.trim(),
-      tagline: cleanOptional(input.tagline),
-      mission_statement: cleanOptional(input.missionStatement),
-      vision_statement: cleanOptional(input.visionStatement),
-      description: cleanOptional(input.description),
-      logo_url: cleanOptional(input.logoUrl),
-      cover_image_url: cleanOptional(input.coverImageUrl),
-      giving_primary_color: cleanOptional(input.primaryColor),
-      giving_accent_color: cleanOptional(input.accentColor),
-      address: cleanOptional(input.address),
-      city: cleanOptional(input.city),
-      state: cleanOptional(input.state),
-      zip: cleanOptional(input.zip),
-      phone: cleanOptional(input.phone),
-      email: cleanOptional(input.email),
-      website: cleanOptional(input.website),
-      google_maps_url: cleanOptional(input.googleMapsUrl),
-      timezone: input.timezone.trim() || "America/New_York",
-      denomination: cleanOptional(input.denomination),
-      office_hours: input.officeHours,
-      holiday_schedule: cleanOptional(input.holidaySchedule),
-      facebook_url: cleanOptional(input.facebookUrl),
-      instagram_url: cleanOptional(input.instagramUrl),
-      youtube_url: cleanOptional(input.youtubeUrl),
-      tiktok_url: cleanOptional(input.tiktokUrl),
-      x_url: cleanOptional(input.xUrl),
-      podcast_url: cleanOptional(input.podcastUrl),
-      livestream_url: cleanOptional(input.livestreamUrl),
-      announcement_facebook_post_time: input.announcementFacebookPostTime,
-      ai_knowledge: input.aiKnowledge,
-    })
-    .eq("id", churchId);
+    .update(churchPatch)
+    .eq("id", churchId)
+    .select("id")
+    .maybeSingle();
 
   if (churchError) throw churchError;
+  if (!updatedChurch) throw new Error("Church profile update changed no row.");
 
   // Mirror denomination to church_settings for backward compatibility
-  await supabase.from("church_settings").upsert(
+  const { error: settingsError } = await supabase.from("church_settings").upsert(
     {
       church_id: churchId,
       denomination: cleanOptional(input.denomination),
@@ -394,9 +482,10 @@ export async function upsertChurchProfile(
     },
     { onConflict: "church_id" },
   );
+  if (settingsError) throw settingsError;
 
   // Sync phone + office hours to voice_assistant_settings for legacy readers
-  await supabase.from("voice_assistant_settings").upsert(
+  const { error: voiceError } = await supabase.from("voice_assistant_settings").upsert(
     {
       church_id: churchId,
       church_phone: cleanOptional(input.phone),
@@ -406,33 +495,48 @@ export async function upsertChurchProfile(
     },
     { onConflict: "church_id", ignoreDuplicates: false },
   );
+  if (voiceError) throw voiceError;
 
-  await syncServiceTimes(churchId, input.serviceTimes, supabase);
-  await syncStaff(churchId, input.staff, supabase);
-  await syncRecurringEvents(churchId, input.recurringEvents, supabase);
+  await syncServiceTimes(churchId, input.serviceTimes, serviceIds, supabase);
+  await syncStaff(churchId, input.staff, staffIds, supabase);
+  await syncRecurringEvents(churchId, input.recurringEvents, recurringEventIds, supabase);
 
   const profile = await getChurchProfile(churchId, supabase);
   if (!profile) throw new Error("Failed to load church profile after save.");
   return profile;
 }
 
+async function readExistingChildIds(
+  table: "church_service_times" | "church_staff" | "church_recurring_events",
+  churchId: string,
+  supabase: SupabaseClient,
+): Promise<Set<string>> {
+  const rows = await readAllById<{ id: string }>(
+    async (afterId, includeCount, pageSize) => {
+      let query = supabase
+        .from(table)
+        .select("id", { count: includeCount ? "exact" : undefined })
+        .eq("church_id", churchId);
+      if (afterId) query = query.gt("id", afterId);
+      return await query.order("id").limit(pageSize);
+    },
+    { label: `${table} before profile save`, maxRows: 10_000 },
+  );
+  return new Set(rows.map((row) => row.id));
+}
+
 async function syncRecurringEvents(
   churchId: string,
   rows: RecurringEventFormRow[],
+  existingIds: Set<string>,
   supabase: SupabaseClient,
 ) {
-  const { data: existing, error: readError } = await supabase
-    .from("church_recurring_events")
-    .select("id")
-    .eq("church_id", churchId);
-  if (readError) throw readError;
-
-  const existingIds = new Set((existing ?? []).map((row) => row.id as string));
   const keptIds = new Set<string>();
 
   for (let i = 0; i < rows.length; i += 1) {
     const row = rows[i];
     if (!row.name.trim()) continue;
+    const targetId = targetChildId(row, existingIds);
     const payload = {
       church_id: churchId,
       name: row.name.trim(),
@@ -447,18 +551,21 @@ async function syncRecurringEvents(
       sort_order: i,
     };
 
-    if (row.id && existingIds.has(row.id)) {
-      keptIds.add(row.id);
-      const { error } = await supabase
+    if (targetId && existingIds.has(targetId)) {
+      keptIds.add(targetId);
+      const { data, error } = await supabase
         .from("church_recurring_events")
         .update(payload)
-        .eq("id", row.id)
-        .eq("church_id", churchId);
+        .eq("id", targetId)
+        .eq("church_id", churchId)
+        .select("id")
+        .maybeSingle();
       if (error) throw error;
+      if (!data) throw new Error("A recurring event changed while saving.");
     } else {
       const { data, error } = await supabase
         .from("church_recurring_events")
-        .insert(payload)
+        .insert({ ...payload, ...(targetId ? { id: targetId } : {}) })
         .select("id")
         .single();
       if (error) throw error;
@@ -508,19 +615,15 @@ export async function getChurchAnnouncementFacebookSchedule(
 async function syncServiceTimes(
   churchId: string,
   rows: ServiceTimeFormRow[],
+  existingIds: Set<string>,
   supabase: SupabaseClient,
 ) {
-  const { data: existing } = await supabase
-    .from("church_service_times")
-    .select("id")
-    .eq("church_id", churchId);
-
-  const existingIds = new Set((existing ?? []).map((r) => r.id as string));
   const keptIds = new Set<string>();
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     if (!row.label.trim()) continue;
+    const targetId = targetChildId(row, existingIds);
 
     const payload = {
       church_id: churchId,
@@ -534,18 +637,21 @@ async function syncServiceTimes(
       updated_at: new Date().toISOString(),
     };
 
-    if (row.id && existingIds.has(row.id)) {
-      keptIds.add(row.id);
-      const { error } = await supabase
+    if (targetId && existingIds.has(targetId)) {
+      keptIds.add(targetId);
+      const { data, error } = await supabase
         .from("church_service_times")
         .update(payload)
-        .eq("id", row.id)
-        .eq("church_id", churchId);
+        .eq("id", targetId)
+        .eq("church_id", churchId)
+        .select("id")
+        .maybeSingle();
       if (error) throw error;
+      if (!data) throw new Error("A service time changed while saving.");
     } else {
       const { data, error } = await supabase
         .from("church_service_times")
-        .insert(payload)
+        .insert({ ...payload, ...(targetId ? { id: targetId } : {}) })
         .select("id")
         .single();
       if (error) throw error;
@@ -567,19 +673,15 @@ async function syncServiceTimes(
 async function syncStaff(
   churchId: string,
   rows: StaffFormRow[],
+  existingIds: Set<string>,
   supabase: SupabaseClient,
 ) {
-  const { data: existing } = await supabase
-    .from("church_staff")
-    .select("id")
-    .eq("church_id", churchId);
-
-  const existingIds = new Set((existing ?? []).map((r) => r.id as string));
   const keptIds = new Set<string>();
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     if (!row.fullName.trim()) continue;
+    const targetId = targetChildId(row, existingIds);
 
     const payload = {
       church_id: churchId,
@@ -597,18 +699,21 @@ async function syncStaff(
       updated_at: new Date().toISOString(),
     };
 
-    if (row.id && existingIds.has(row.id)) {
-      keptIds.add(row.id);
-      const { error } = await supabase
+    if (targetId && existingIds.has(targetId)) {
+      keptIds.add(targetId);
+      const { data, error } = await supabase
         .from("church_staff")
         .update(payload)
-        .eq("id", row.id)
-        .eq("church_id", churchId);
+        .eq("id", targetId)
+        .eq("church_id", churchId)
+        .select("id")
+        .maybeSingle();
       if (error) throw error;
+      if (!data) throw new Error("A staff entry changed while saving.");
     } else {
       const { data, error } = await supabase
         .from("church_staff")
-        .insert(payload)
+        .insert({ ...payload, ...(targetId ? { id: targetId } : {}) })
         .select("id")
         .single();
       if (error) throw error;

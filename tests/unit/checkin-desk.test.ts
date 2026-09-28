@@ -224,13 +224,15 @@ test("undo never reaches another church or another volunteer's check-in", () => 
 
 test("the undo action keeps the station guard and repeats every rule in the update", () => {
   const body = actionBody("undoCheckin");
+  const sql = readFileSync("supabase/migrations/0118_atomic_checkin_undo.sql", "utf8");
   assert.match(body, /const context = await requireStation\(\);/);
   assert.match(body, /undoCheckinRefusal\(/);
-  assert.match(body, /\.update\(\{ status: "cancelled" \}\)/);
-  assert.match(body, /\.eq\("church_id", context\.auth\.churchId\)\s*\n\s*\.eq\("status", "checked_in"\)/);
-  assert.match(body, /\.is\("checked_out_at", null\)/);
-  assert.match(body, /\.eq\("checked_in_by", context\.auth\.userId\)/);
-  assert.match(body, /\.gte\("checked_in_at", undoCheckinCutoff\(now\)\)/);
+  assert.match(body, /\.rpc\("undo_checkin_sessions"/);
+  assert.match(sql, /status = 'cancelled'/);
+  assert.match(sql, /checked_out_at is null/);
+  assert.match(sql, /checked_in_by = p_actor_user_id/);
+  assert.match(sql, /checked_in_at >= v_cutoff/);
+  assert.match(sql, /v_updated <> cardinality\(p_session_ids\)/);
   // Marked cancelled, never deleted.
   assert.doesNotMatch(body, /\.delete\(\)/);
 });
@@ -302,16 +304,13 @@ test("only church admins can add a new family, exactly as in People", () => {
 
 test("a new family is never left half-made", () => {
   const body = actionBody("createFamilyAndCheckIn");
-  // Every failure while creating rows cleans up before returning.
-  const failures = body.match(/await cleanUp\(\);\s*\n\s*return fail\(COULD_NOT_ADD\);/g) ?? [];
-  assert.ok(failures.length >= 4, `expected cleanup on every create step, found ${failures.length}`);
-  // Clean-up is scoped to this church and only runs before the family is complete.
-  assert.match(body, /\.in\("id", createdMemberIds\)\s*\n\s*\.eq\("church_id", station\.auth\.churchId\)/);
-  assert.match(body, /familyComplete = true;/);
-  assert.match(body, /if \(familyComplete\) \{/);
-  // Parent is a parent or guardian, children are children.
-  assert.match(body, /relationship: "guardian"/);
-  assert.match(body, /relationship: "dependent"/);
+  const sql = readFileSync("supabase/migrations/0117_atomic_checkin_family_creation.sql", "utf8");
+  assert.match(body, /\.rpc\("create_checkin_family"/);
+  assert.doesNotMatch(body, /await cleanUp\(\)/);
+  assert.match(sql, /relationship, is_primary_contact, created_by/);
+  assert.match(sql, /'guardian'/);
+  assert.match(sql, /'dependent'/);
+  assert.match(sql, /grant execute on function public\.create_checkin_family[\s\S]*to service_role/);
   // Rooms and phone numbers are checked before anything is written.
   assert.match(body, /validateMemberInput\(/);
   assert.match(body, /One of those rooms is closed or was removed/);

@@ -82,6 +82,7 @@ export async function getMonthlyReportData(
   churchId: string,
   year: number,
   month: number,
+  phoneClient: SupabaseClient = supabase,
 ): Promise<MonthlyReportData> {
   const monthStart = new Date(year, month - 1, 1);
   const monthEnd = new Date(year, month, 1);
@@ -93,13 +94,13 @@ export async function getMonthlyReportData(
       computeHoursSaved(supabase, churchId, {
         start: monthStart,
         end: monthEnd,
-      }),
+      }, phoneClient),
       computeHoursSaved(supabase, churchId, {
         start: null,
         end: now,
-      }),
-      countPhoneCallsInWindow(supabase, churchId, monthStart, monthEnd),
-      countLifetimeRentals(supabase, churchId),
+      }, phoneClient),
+      countPhoneCallsInWindow(phoneClient, churchId, monthStart, monthEnd),
+      countLifetimeRentals(phoneClient, churchId),
     ]);
 
   const hoursSavedThisMonth = toHoursSaved(monthStats.minutes);

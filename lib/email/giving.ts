@@ -212,7 +212,7 @@ export async function sendDonationReceiptEmail(
   const content = renderEmail({
     brand: churchBrand(params),
     title: `Receipt for your gift to ${params.churchName}`,
-    preheader: `${formatMoney(params.amountCents)} on ${params.giftDate}: keep this for your tax records.`,
+    preheader: `${formatMoney(params.amountCents)} on ${params.giftDate}: your gift details.`,
     heading: "Thank you for your gift",
     blocks: [
       { kind: "paragraph", text: greeting },
@@ -233,7 +233,7 @@ export async function sendDonationReceiptEmail(
       },
       {
         kind: "muted",
-        text: "No goods or services were provided in exchange for this contribution. Please retain this receipt for your tax records.",
+        text: `This receipt records your gift. Contact ${params.churchName} for questions about tax treatment or anything received in return.`,
       },
       { kind: "button", label: "Manage your gifts", url: portalUrl },
     ],

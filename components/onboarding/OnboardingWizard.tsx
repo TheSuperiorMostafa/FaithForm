@@ -48,6 +48,7 @@ type OnboardingWizardProps = {
   initialStep: number;
   initialProfile: ProfileData;
   integrationStatus: IntegrationStatus;
+  integrationStatusError: string | null;
 };
 
 const STEP_LABELS = [...ONBOARDING_STEP_LABELS];
@@ -62,8 +63,10 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
   const [integrations, setIntegrations] = useState<IntegrationStatus>(
     props.integrationStatus,
   );
+  const [integrationStatusError, setIntegrationStatusError] = useState<string | null>(
+    props.integrationStatusError,
+  );
   const [accountCreated, setAccountCreated] = useState(false);
-  const [awaitingEmailConfirmation, setAwaitingEmailConfirmation] = useState(false);
   const [profileSaved, setProfileSaved] = useState(false);
   const [completionDone, setCompletionDone] = useState(false);
 
@@ -98,8 +101,11 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
           props.churchId,
           props.token,
         );
-        if (!("error" in result)) {
+        if ("error" in result) {
+          setIntegrationStatusError(result.error);
+        } else {
           setIntegrations(result);
+          setIntegrationStatusError(null);
         }
       });
     }
@@ -150,10 +156,6 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
         return;
       }
       setAccountCreated(true);
-      if (result.needsEmailConfirmation) {
-        setAwaitingEmailConfirmation(true);
-        return;
-      }
       goToStep(3);
     });
   }
@@ -220,23 +222,14 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
             />
           )}
           {step === 2 && (
-            awaitingEmailConfirmation ? (
-              <div role="status" className="space-y-3 text-center">
-                <h2 className="font-heading text-2xl font-semibold text-foreground">Check your email</h2>
-                <p className="text-base text-muted-foreground">
-                  We sent a confirmation link to {props.adminEmail}. Open it to continue setting up {props.churchName}.
-                </p>
-              </div>
-            ) : (
-              <StepAccount
-                adminEmail={props.adminEmail}
-                adminFirstName={props.adminFirstName}
-                adminLastName={props.adminLastName}
-                error={error}
-                pending={pending}
-                onNext={handleAccountNext}
-              />
-            )
+            <StepAccount
+              adminEmail={props.adminEmail}
+              adminFirstName={props.adminFirstName}
+              adminLastName={props.adminLastName}
+              error={error}
+              pending={pending}
+              onNext={handleAccountNext}
+            />
           )}
           {step === 3 && (
             <StepProfile
@@ -254,7 +247,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
               connected={integrations.google.connected}
               email={integrations.google.email}
               connectUrl={buildConnectUrl("google", 4)}
-              error={searchParams.get("integration_error")}
+              error={integrationStatusError ?? searchParams.get("integration_error")}
               onSkip={() => goToStep(5)}
               onContinue={() => goToStep(5)}
             />
@@ -264,7 +257,7 @@ export function OnboardingWizard(props: OnboardingWizardProps) {
               connected={integrations.facebook.connected}
               pageName={integrations.facebook.pageName}
               connectUrl={buildConnectUrl("facebook", 5)}
-              error={searchParams.get("integration_error")}
+              error={integrationStatusError ?? searchParams.get("integration_error")}
               onSkip={() => goToStep(6)}
               onContinue={() => goToStep(6)}
             />

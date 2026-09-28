@@ -8,7 +8,7 @@ import {
   listLocations,
   listMemberFiles,
 } from "@/lib/queries/checkin";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createAdminClient, createAdminClientOrNull } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import type {
   ChurchLocation,
@@ -68,7 +68,10 @@ export async function getMemberCareDetails(
 
   const supabase = createClient();
 
-  const { data: member, error } = await supabase
+  // `medical_notes` has no direct authenticated SELECT grant. The People gate
+  // above authorizes this narrow server read, while file visibility still
+  // comes from the user's own RLS-scoped client below.
+  const { data: member, error } = await (createAdminClientOrNull() ?? supabase)
     .from("members")
     .select("id, medical_notes, default_location_id")
     .eq("id", memberId)

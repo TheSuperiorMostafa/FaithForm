@@ -1,11 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useEffect, useState } from "react";
 import { useFormStatus } from "react-dom";
 import { toast } from "sonner";
 
 import { updateAnnouncementEmailSettings } from "@/app/dashboard/settings/actions";
 import type { SettingsFormState } from "@/app/dashboard/settings/actions";
+import type { WeeklyEmailAvailability } from "@/lib/announcements/email-delivery";
 import { ConfirmResetButton } from "@/components/settings/confirm-reset-button";
 import { PlaceholderChips } from "@/components/settings/placeholder-chips";
 import { AdvancedSection } from "@/components/ui/advanced-section";
@@ -45,9 +47,11 @@ const BODY_CHIPS = [
 export function AnnouncementEmailForm({
   template,
   isAdmin,
+  availability,
 }: {
   template: AnnouncementEmailTemplate;
   isAdmin: boolean;
+  availability: WeeklyEmailAvailability;
 }) {
   const [weeklyEmailEnabled, setWeeklyEmailEnabled] = useState(template.weeklyEmailEnabled);
   const [state, formAction] = useActionState<SettingsFormState, FormData>(
@@ -93,9 +97,13 @@ export function AnnouncementEmailForm({
                 Write a draft every Monday
               </Label>
               <p className="text-[15px] text-muted-foreground">
-                {weeklyEmailEnabled
-                  ? "On. A new draft appears each Monday."
-                  : "Off. No drafts are written."}
+                {!weeklyEmailEnabled
+                  ? "Off. No drafts are written."
+                  : availability.switchedOff
+                    ? "On here, but announcement email is switched off for your church."
+                    : availability.channel
+                      ? "On. A new draft appears each Monday."
+                      : "On, waiting for a connected mailbox."}
               </p>
             </div>
             <Switch
@@ -104,6 +112,20 @@ export function AnnouncementEmailForm({
               onCheckedChange={setWeeklyEmailEnabled}
             />
           </div>
+
+          {weeklyEmailEnabled && availability.switchedOff ? (
+            <p className="text-sm text-muted-foreground">
+              Contact FaithForm support to turn announcement email back on for your church.
+            </p>
+          ) : weeklyEmailEnabled && !availability.channel ? (
+            <p className="text-sm text-muted-foreground">
+              Connect Google or iCloud Mail in{" "}
+              <Link href="/dashboard/settings?tab=accounts" className="font-medium text-primary underline underline-offset-4">
+                Connected accounts
+              </Link>{" "}
+              before a Monday draft can be created.
+            </p>
+          ) : null}
 
           <div className="flex flex-col gap-2">
             <Label htmlFor="announcement_email_to" className="text-[15px]">

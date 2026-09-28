@@ -4,6 +4,7 @@ import {
   HELP_PAGE_DESCRIPTION,
   HELP_PAGE_TITLE,
   SUPPORT_RESPONSE_TIME,
+  SUPPORT_TICKET_BODY_MAX,
 } from "@/app/dashboard/support/ticket-helpers";
 import { Card, CardContent } from "@/components/ui/card";
 import { PageHeader, SectionHeader } from "@/components/ui/page-header";
@@ -83,6 +84,9 @@ export default function SupportLoading() {
             <div className="flex flex-col gap-2">
               <p className="text-base font-semibold leading-none">Message</p>
               <Skeleton className="h-[195px] w-full rounded-[10px]" />
+              <p className="text-xs text-muted-foreground">
+                Up to {SUPPORT_TICKET_BODY_MAX.toLocaleString()} characters.
+              </p>
             </div>
             <div className="flex min-h-12 items-center rounded-2xl border border-border bg-card/50 px-5 py-3">
               <span className="space-y-0.5">

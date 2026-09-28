@@ -1,0 +1,33 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
+import { listEmailQueue } from "@/lib/announcements/email-queue";
+import { listStandaloneEmailRows } from "@/lib/announcements/weekly-email";
+
+test("draft queue read rejects a database error instead of claiming it is empty", async () => {
+  const query = {
+    eq: () => query,
+    order: () => query,
+    limit: () => query,
+    then: (resolve: (value: unknown) => unknown) =>
+      Promise.resolve(resolve({ data: null, error: { message: "database unavailable" }, count: null })),
+  };
+  const client = { from: () => ({ select: () => query }) } as unknown as SupabaseClient;
+
+  await assert.rejects(listEmailQueue("church", "2026-09-21", client), /queue read failed/);
+});
+
+test("draft standalone read rejects a database error instead of omitting announcements", async () => {
+  const query = {
+    eq: () => query,
+    is: () => query,
+    order: () => query,
+    limit: () => query,
+    then: (resolve: (value: unknown) => unknown) =>
+      Promise.resolve(resolve({ data: null, error: { message: "database unavailable" }, count: null })),
+  };
+  const client = { from: () => ({ select: () => query }) } as unknown as SupabaseClient;
+
+  await assert.rejects(listStandaloneEmailRows("church", client), /announcements read failed/);
+});

@@ -1,8 +1,10 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   getCommentsForTickets,
   type SupportTicketComment,
 } from "@/lib/support/comments";
 import { createClient } from "@/lib/supabase/server";
+import { readAllById } from "@/lib/queries/paged-read";
 
 export type ChurchSupportTicketRow = {
   id: string;
@@ -21,20 +23,29 @@ export type ChurchSupportTicketRow = {
 
 export async function getChurchSupportTickets(
   churchId: string,
+  supabase: SupabaseClient = createClient(),
 ): Promise<ChurchSupportTicketRow[]> {
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .from("support_tickets")
-    .select("id, subject, body, status, priority, created_at")
-    .eq("church_id", churchId)
-    .order("created_at", { ascending: false });
-
-  if (error) {
-    console.error("getChurchSupportTickets:", error.message);
-    return [];
-  }
-
-  const rows = data ?? [];
+  const rows = await readAllById<{
+    id: string;
+    subject: string;
+    body: string | null;
+    status: ChurchSupportTicketRow["status"];
+    priority: string;
+    created_at: string;
+  }>(
+    async (afterId, includeCount, pageSize) => {
+      let query = supabase
+        .from("support_tickets")
+        .select("id, subject, body, status, priority, created_at", {
+          count: includeCount ? "exact" : undefined,
+        })
+        .eq("church_id", churchId);
+      if (afterId) query = query.gt("id", afterId);
+      return await query.order("id", { ascending: true }).limit(pageSize);
+    },
+    { label: "support tickets" },
+  );
+  rows.sort((a, b) => b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id));
   const comments = await getCommentsForTickets(
     supabase,
     rows.map((row) => row.id as string),

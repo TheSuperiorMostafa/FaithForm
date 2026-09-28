@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAuthUsersByIds } from "@/lib/auth/auth-users";
 import { createAdminClientOrNull } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { readAllById } from "@/lib/queries/paged-read";
 import { staffLabel, type NoCodeRelease } from "@/lib/checkin/release-log";
 import {
   householdNamePattern,
@@ -117,10 +118,16 @@ export async function locationUsage(
       .in("status", ["pre_checked_in", "checked_in"]),
   ]);
 
+  if (sessions.error || defaultFor.error || openNow.error ||
+      !Number.isSafeInteger(sessions.count) || !Number.isSafeInteger(defaultFor.count) ||
+      !Number.isSafeInteger(openNow.count)) {
+    throw new Error("room usage read failed");
+  }
+
   return {
-    sessions: sessions.count ?? 0,
-    defaultFor: defaultFor.count ?? 0,
-    openNow: openNow.count ?? 0,
+    sessions: sessions.count as number,
+    defaultFor: defaultFor.count as number,
+    openNow: openNow.count as number,
   };
 }
 
@@ -171,25 +178,31 @@ export async function listHouseholds(
 ): Promise<HouseholdSummary[]> {
   const client = supabase ?? db();
 
-  const { data: households } = await client
-    .from("households")
-    .select("id, name")
-    .eq("church_id", churchId)
-    .order("name", { ascending: true });
-
-  if (!households?.length) return [];
-
-  const { data: memberships } = await client
-    .from("household_members")
-    .select("household_id, relationship")
-    .eq("church_id", churchId);
+  const [households, memberships] = await Promise.all([
+    readAllById(async (afterId, includeCount, pageSize) => {
+      let query = client
+        .from("households")
+        .select("id, name", includeCount ? { count: "exact" } : {})
+        .eq("church_id", churchId);
+      if (afterId) query = query.gt("id", afterId);
+      return query.order("id", { ascending: true }).limit(pageSize);
+    }, { label: "households" }),
+    readAllById(async (afterId, includeCount, pageSize) => {
+      let query = client
+        .from("household_members")
+        .select("id, household_id, relationship", includeCount ? { count: "exact" } : {})
+        .eq("church_id", churchId);
+      if (afterId) query = query.gt("id", afterId);
+      return query.order("id", { ascending: true }).limit(pageSize);
+    }, { label: "household members" }),
+  ]);
 
   const counts = new Map<
     string,
     { total: number; guardians: number; dependents: number }
   >();
 
-  for (const row of memberships ?? []) {
+  for (const row of memberships) {
     const key = row.household_id as string;
     const entry = counts.get(key) ?? { total: 0, guardians: 0, dependents: 0 };
     entry.total += 1;
@@ -211,7 +224,7 @@ export async function listHouseholds(
       guardianCount: entry.guardians,
       dependentCount: entry.dependents,
     };
-  });
+  }).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export async function getHousehold(
@@ -220,34 +233,46 @@ export async function getHousehold(
   supabase?: SupabaseClient,
 ): Promise<HouseholdDetail | null> {
   const client = supabase ?? db();
+  const medicalClient = createAdminClientOrNull() ?? client;
 
-  const { data: household } = await client
+  const { data: household, error: householdError } = await client
     .from("households")
     .select("id, name, notes, code_rotation")
     .eq("church_id", churchId)
     .eq("id", householdId)
     .maybeSingle();
 
+  if (householdError) throw new Error("household read failed");
   if (!household) return null;
 
-  const [{ data: memberRows }, { data: pickupRows }] = await Promise.all([
-    client
-      .from("household_members")
-      .select(HOUSEHOLD_MEMBER_SELECT)
-      .eq("household_id", householdId),
-    client
-      .from("household_pickup_authorizations")
-      .select(
-        "id, member_id, relationship_label, members(id, first_name, last_name)",
-      )
-      .eq("household_id", householdId)
-      .eq("is_active", true),
+  const [memberRows, pickupRows] = await Promise.all([
+    readAllById<HouseholdMemberJoin>(async (afterId, includeCount, pageSize) => {
+      let query = medicalClient
+        .from("household_members")
+        .select(HOUSEHOLD_MEMBER_SELECT, includeCount ? { count: "exact" } : {})
+        .eq("church_id", churchId)
+        .eq("household_id", householdId);
+      if (afterId) query = query.gt("id", afterId);
+      const result = await query.order("id", { ascending: true }).limit(pageSize);
+      return { ...result, data: result.data as unknown as HouseholdMemberJoin[] | null };
+    }, { label: "family members" }),
+    readAllById(async (afterId, includeCount, pageSize) => {
+      let query = client
+        .from("household_pickup_authorizations")
+        .select(
+          "id, member_id, relationship_label, members(id, first_name, last_name)",
+          includeCount ? { count: "exact" } : {},
+        )
+        .eq("household_id", householdId)
+        .eq("is_active", true);
+      if (afterId) query = query.gt("id", afterId);
+      return query.order("id", { ascending: true }).limit(pageSize);
+    }, { label: "family pickup authorizations" }),
   ]);
 
-  const members = (
-    (memberRows ?? []) as unknown as HouseholdMemberJoin[]
-  )
-    .map(mapHouseholdMember)
+  const mappedMembers = memberRows.map(mapHouseholdMember);
+  if (mappedMembers.some((row) => row === null)) throw new Error("family members read incomplete");
+  const members = mappedMembers
     .filter((row): row is HouseholdMemberRow => row !== null)
     // Guardians first, then children, then everyone else: the order a person
     // reading a household card expects.
@@ -261,7 +286,7 @@ export async function getHousehold(
       );
     });
 
-  const pickupAuthorizations = ((pickupRows ?? []) as unknown as {
+  const mappedPickups = (pickupRows as unknown as {
     id: string;
     member_id: string;
     relationship_label: string | null;
@@ -277,8 +302,13 @@ export async function getHousehold(
         lastName: member.last_name,
         relationshipLabel: row.relationship_label,
       };
-    })
-    .filter((row): row is NonNullable<typeof row> => row !== null);
+    });
+  if (mappedPickups.some((row) => row === null)) {
+    throw new Error("family pickup authorizations read incomplete");
+  }
+  const pickupAuthorizations = mappedPickups.filter(
+    (row): row is NonNullable<typeof row> => row !== null,
+  );
 
   return {
     id: household.id as string,
@@ -330,75 +360,84 @@ export async function findHouseholdsByPersonName(
 
   const client = supabase ?? db();
   const openOn = options.withChildrenCheckedInOn;
-
-  const [members, named, open] = await Promise.all([
-    client
-      .from("members")
-      .select("id")
-      .eq("church_id", churchId)
-      .or(memberFilter)
-      .order("last_name", { ascending: true })
-      .order("first_name", { ascending: true })
-      .limit(100),
-    client
-      .from("households")
-      .select("id")
-      .eq("church_id", churchId)
-      .ilike("name", householdPattern)
-      .order("name", { ascending: true })
-      .limit(50),
-    openOn
-      ? client
-          .from("checkin_sessions")
-          .select("household_id")
+  try {
+    const [members, named, open] = await Promise.all([
+      readAllById(async (afterId, includeCount, pageSize) => {
+        let query = client
+          .from("members")
+          .select("id, first_name, last_name", includeCount ? { count: "exact" } : {})
           .eq("church_id", churchId)
-          .eq("local_service_date", openOn)
-          .in("status", ["pre_checked_in", "checked_in"])
-      : null,
-  ]);
+          .or(memberFilter);
+        if (afterId) query = query.gt("id", afterId);
+        return query.order("id", { ascending: true }).limit(pageSize);
+      }, { label: "family name matches" }),
+      readAllById(async (afterId, includeCount, pageSize) => {
+        let query = client
+          .from("households")
+          .select("id, name", includeCount ? { count: "exact" } : {})
+          .eq("church_id", churchId)
+          .ilike("name", householdPattern);
+        if (afterId) query = query.gt("id", afterId);
+        return query.order("id", { ascending: true }).limit(pageSize);
+      }, { label: "family household matches" }),
+      openOn
+        ? readAllById(async (afterId, includeCount, pageSize) => {
+            let query = client
+              .from("checkin_sessions")
+              .select("id, household_id", includeCount ? { count: "exact" } : {})
+              .eq("church_id", churchId)
+              .eq("local_service_date", openOn)
+              .in("status", ["pre_checked_in", "checked_in"]);
+            if (afterId) query = query.gt("id", afterId);
+            return query.order("id", { ascending: true }).limit(pageSize);
+          }, { label: "open family check-ins" })
+        : Promise.resolve(null),
+    ]);
 
-  const readError = members.error ?? named.error ?? open?.error;
-  if (readError) {
-    console.error("[checkin] household name search failed:", readError.message);
+    const memberIds = members
+      .sort((a, b) => a.last_name.localeCompare(b.last_name) ||
+        a.first_name.localeCompare(b.first_name))
+      .map((row) => row.id);
+    const linkedIds: string[] = [];
+    // Keep PostgREST's URL and query planner bounded even for a common name.
+    for (let index = 0; index < memberIds.length; index += 100) {
+      const batch = memberIds.slice(index, index + 100);
+      const links = await readAllById(async (afterId, includeCount, pageSize) => {
+        let query = client
+          .from("household_members")
+          .select("id, household_id", includeCount ? { count: "exact" } : {})
+          .eq("church_id", churchId)
+          .in("member_id", batch);
+        if (afterId) query = query.gt("id", afterId);
+        return query.order("id", { ascending: true }).limit(pageSize);
+      }, { label: "family membership links" });
+      linkedIds.push(...links.map((row) => row.household_id));
+    }
+
+    const withChildrenIn = open
+      ? new Set(open.map((row) => row.household_id))
+      : null;
+
+    // A household named for what was typed first, then households found
+    // through one of their people. Filter for today's children before limiting.
+    const householdIds = Array.from(new Set([
+      ...named.sort((a, b) => a.name.localeCompare(b.name)).map((row) => row.id),
+      ...linkedIds,
+    ]))
+      .filter((id) => !withChildrenIn || withChildrenIn.has(id))
+      .slice(0, Math.min(Math.max(options.limit ?? 20, 1), 50));
+
+    const households = await Promise.all(
+      householdIds.map((id) => getHousehold(churchId, id, client)),
+    );
+    return {
+      ok: true,
+      households: households.filter((row): row is HouseholdDetail => row !== null),
+    };
+  } catch (error) {
+    console.error("[checkin] household name search failed:", error);
     return { ok: false, error: NAME_SEARCH_FAILED };
   }
-
-  const memberIds = (members.data ?? []).map((row) => row.id as string);
-  let linkedIds: string[] = [];
-  if (memberIds.length > 0) {
-    const { data: links, error } = await client
-      .from("household_members")
-      .select("household_id")
-      .eq("church_id", churchId)
-      .in("member_id", memberIds);
-
-    if (error) {
-      console.error("[checkin] household name search failed:", error.message);
-      return { ok: false, error: NAME_SEARCH_FAILED };
-    }
-    linkedIds = (links ?? []).map((row) => row.household_id as string);
-  }
-
-  const withChildrenIn = open
-    ? new Set((open.data ?? []).map((row) => row.household_id as string | null))
-    : null;
-
-  // A household named for what was typed first, then households found
-  // through one of their people.
-  const householdIds = Array.from(
-    new Set([...(named.data ?? []).map((row) => row.id as string), ...linkedIds]),
-  )
-    .filter((id) => !withChildrenIn || withChildrenIn.has(id))
-    .slice(0, options.limit ?? 20);
-
-  const households = await Promise.all(
-    householdIds.map((id) => getHousehold(churchId, id, client)),
-  );
-
-  return {
-    ok: true,
-    households: households.filter((row): row is HouseholdDetail => row !== null),
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -420,6 +459,7 @@ const SESSION_SELECT = `
 `;
 
 type SessionJoin = Record<string, unknown> & {
+  id: string;
   members: { first_name: string; last_name: string; medical_notes: string | null }
     | { first_name: string; last_name: string; medical_notes: string | null }[]
     | null;
@@ -470,34 +510,39 @@ export async function getRoster(
   supabase?: SupabaseClient,
 ): Promise<CheckinSessionRow[]> {
   const client = supabase ?? db();
+  const medicalClient = createAdminClientOrNull() ?? client;
 
-  let query = client
-    .from("checkin_sessions")
-    .select(SESSION_SELECT)
-    .eq("church_id", churchId)
-    .eq("local_service_date", localServiceDate);
-
-  if (options.locationId) query = query.eq("location_id", options.locationId);
-  if (!options.includeClosed) {
-    query = query.in("status", ["pre_checked_in", "checked_in"]);
-  }
-
-  const { data, error } = await query.order("checked_in_at", {
-    ascending: true,
-  });
-  if (error) {
-    console.error("[checkin] roster read failed:", error.message);
+  let data: SessionJoin[];
+  try {
+    data = await readAllById<SessionJoin>(async (afterId, includeCount, pageSize) => {
+      let query = medicalClient
+        .from("checkin_sessions")
+        .select(SESSION_SELECT, includeCount ? { count: "exact" } : {})
+        .eq("church_id", churchId)
+        .eq("local_service_date", localServiceDate);
+      if (options.locationId) query = query.eq("location_id", options.locationId);
+      if (!options.includeClosed) query = query.in("status", ["pre_checked_in", "checked_in"]);
+      if (afterId) query = query.gt("id", afterId);
+      const result = await query.order("id", { ascending: true }).limit(pageSize);
+      return { ...result, data: result.data as unknown as SessionJoin[] | null };
+    }, { label: "check-in roster" });
+  } catch (error) {
+    console.error("[checkin] roster read failed:", error);
     if (options.strict) throw new Error("roster read failed");
+    return [];
   }
 
-  const rows = ((data ?? []) as unknown as SessionJoin[])
-    .map(mapSession)
-    .filter((row): row is CheckinSessionRow => row !== null);
+  const mapped = data.map(mapSession);
+  if (options.strict && mapped.some((row) => row === null)) {
+    throw new Error("roster read incomplete");
+  }
+  const rows = mapped.filter((row): row is CheckinSessionRow => row !== null);
 
   // Adults (guardians / other) are never part of kids check-in. If an old
   // session somehow exists for one, keep it off the board.
-  const dependentIds = await listDependentMemberIds(churchId, client);
-  return rows.filter((row) => dependentIds.has(row.memberId));
+  const dependentIds = await listDependentMemberIds(churchId, client, { strict: options.strict });
+  return rows.filter((row) => dependentIds.has(row.memberId))
+    .sort((a, b) => (a.checkedInAt ?? "").localeCompare(b.checkedInAt ?? ""));
 }
 
 /**
@@ -507,23 +552,29 @@ export async function getRoster(
 export async function listDependentMemberIds(
   churchId: string,
   supabase?: SupabaseClient,
+  options: { strict?: boolean } = {},
 ): Promise<Set<string>> {
   const client = supabase ?? db();
-  const { data, error } = await client
-    .from("household_members")
-    .select("member_id")
-    .eq("church_id", churchId)
-    .eq("relationship", "dependent");
-
-  if (error) {
-    console.error("[checkin] dependent members read failed:", error.message);
+  try {
+    const data = await readAllById(async (afterId, includeCount, pageSize) => {
+      let query = client
+        .from("household_members")
+        .select("id, member_id", includeCount ? { count: "exact" } : {})
+        .eq("church_id", churchId)
+        .eq("relationship", "dependent");
+      if (afterId) query = query.gt("id", afterId);
+      return query.order("id", { ascending: true }).limit(pageSize);
+    }, { label: "check-in dependents" });
+    return new Set(data.map((row) => row.member_id as string));
+  } catch (error) {
+    console.error("[checkin] dependent members read failed:", error);
+    if (options.strict) throw new Error("dependent members read failed");
     return new Set();
   }
-
-  return new Set((data ?? []).map((row) => row.member_id as string));
 }
 
 type ChildMembershipJoin = {
+  id: string;
   member_id: string;
   household_id: string;
   relationship: HouseholdRelationship;
@@ -562,24 +613,35 @@ export async function listCheckinChildren(
   options: { strict?: boolean } = {},
 ): Promise<CheckinChild[]> {
   const client = supabase ?? db();
-  const { data, error } = await client
-    .from("household_members")
-    .select(
-      "member_id, household_id, relationship, households(name), members(first_name, last_name, is_active, default_location_id, medical_notes)",
-    )
-    .eq("church_id", churchId)
-    .in("relationship", ["dependent", "guardian"]);
-
-  if (error) {
-    console.error("[checkin] children read failed:", error.message);
+  const medicalClient = createAdminClientOrNull() ?? client;
+  let data: ChildMembershipJoin[];
+  try {
+    data = await readAllById<ChildMembershipJoin>(async (afterId, includeCount, pageSize) => {
+      let query = medicalClient
+        .from("household_members")
+        .select(
+          "id, member_id, household_id, relationship, households(name), members(first_name, last_name, is_active, default_location_id, medical_notes)",
+          includeCount ? { count: "exact" } : {},
+        )
+        .eq("church_id", churchId)
+        .in("relationship", ["dependent", "guardian"]);
+      if (afterId) query = query.gt("id", afterId);
+      const result = await query.order("id", { ascending: true }).limit(pageSize);
+      return { ...result, data: result.data as unknown as ChildMembershipJoin[] | null };
+    }, { label: "check-in children" });
+  } catch (error) {
+    console.error("[checkin] children read failed:", error);
     if (options.strict) throw new Error("children read failed");
     return [];
   }
 
   const rows: HouseholdMembership[] = [];
-  for (const row of (data ?? []) as unknown as ChildMembershipJoin[]) {
+  for (const row of data) {
     const member = unwrap(row.members);
-    if (!member) continue;
+    if (!member) {
+      if (options.strict) throw new Error("children read incomplete");
+      continue;
+    }
     rows.push({
       memberId: row.member_id,
       householdId: row.household_id,
@@ -604,31 +666,41 @@ export async function getHouseholdOpenSessions(
   supabase?: SupabaseClient,
 ): Promise<CheckinSessionRow[]> {
   const client = supabase ?? db();
+  const medicalClient = createAdminClientOrNull() ?? client;
 
-  const { data, error } = await client
-    .from("checkin_sessions")
-    .select(SESSION_SELECT)
-    .eq("church_id", churchId)
-    .eq("household_id", householdId)
-    .eq("local_service_date", localServiceDate)
-    .in("status", ["pre_checked_in", "checked_in"]);
-  if (error) {
-    console.error("[checkin] household sessions read failed:", error.message);
-  }
+  const [sessions, dependents] = await Promise.all([
+    readAllById<SessionJoin>(async (afterId, includeCount, pageSize) => {
+      let query = medicalClient
+        .from("checkin_sessions")
+        .select(SESSION_SELECT, includeCount ? { count: "exact" } : {})
+        .eq("church_id", churchId)
+        .eq("household_id", householdId)
+        .eq("local_service_date", localServiceDate)
+        .in("status", ["pre_checked_in", "checked_in"]);
+      if (afterId) query = query.gt("id", afterId);
+      const result = await query.order("id", { ascending: true }).limit(pageSize);
+      return { ...result, data: result.data as unknown as SessionJoin[] | null };
+    }, { label: "household check-in sessions" }),
+    readAllById(async (afterId, includeCount, pageSize) => {
+      let query = client
+        .from("household_members")
+        .select("id, member_id", includeCount ? { count: "exact" } : {})
+        .eq("church_id", churchId)
+        .eq("household_id", householdId)
+        .eq("relationship", "dependent");
+      if (afterId) query = query.gt("id", afterId);
+      return query.order("id", { ascending: true }).limit(pageSize);
+    }, { label: "household dependents" }),
+  ]).catch((error: unknown) => {
+    console.error("[checkin] household sessions read failed:", error);
+    throw error;
+  });
 
-  const rows = ((data ?? []) as unknown as SessionJoin[])
-    .map(mapSession)
-    .filter((row): row is CheckinSessionRow => row !== null);
-
-  const { data: dependents } = await client
-    .from("household_members")
-    .select("member_id")
-    .eq("church_id", churchId)
-    .eq("household_id", householdId)
-    .eq("relationship", "dependent");
-
+  const mapped = sessions.map(mapSession);
+  if (mapped.some((row) => row === null)) throw new Error("household sessions read incomplete");
+  const rows = mapped.filter((row): row is CheckinSessionRow => row !== null);
   const dependentIds = new Set(
-    (dependents ?? []).map((row) => row.member_id as string),
+    dependents.map((row) => row.member_id as string),
   );
   return rows.filter((row) => dependentIds.has(row.memberId));
 }
@@ -658,27 +730,42 @@ export async function getLocationStats(
   const weeks = recentServiceWeeks(options.endWeekStart, options.weeks ?? 8);
   const earliest = weeks[0];
 
-  const [{ data, error }, dependentIds] = await Promise.all([
-    client
-      .from("checkin_sessions")
-      .select("member_id, location_id, local_service_date, church_locations(id, name)")
-      .eq("church_id", churchId)
-      .in("status", ["checked_in", "checked_out"])
-      .gte("local_service_date", earliest),
-    listDependentMemberIds(churchId, client),
-  ]);
-  if (error) {
-    console.error("[checkin] stats read failed:", error.message);
+  let data: SessionJoin[];
+  let dependentIds: Set<string>;
+  try {
+    [data, dependentIds] = await Promise.all([
+      readAllById<SessionJoin>(async (afterId, includeCount, pageSize) => {
+        let query = client
+          .from("checkin_sessions")
+          .select(
+            "id, member_id, location_id, local_service_date, church_locations(id, name)",
+            includeCount ? { count: "exact" } : {},
+          )
+          .eq("church_id", churchId)
+          .in("status", ["checked_in", "checked_out"])
+          .gte("local_service_date", earliest);
+        if (afterId) query = query.gt("id", afterId);
+        const result = await query.order("id", { ascending: true }).limit(pageSize);
+        return { ...result, data: result.data as unknown as SessionJoin[] | null };
+      }, { label: "check-in statistics" }),
+      listDependentMemberIds(churchId, client, { strict: true }),
+    ]);
+  } catch (error) {
+    console.error("[checkin] stats read failed:", error);
     if (options.strict) throw new Error("stats read failed");
+    return { weeks, rows: [] };
   }
 
   const byLocation = new Map<string, LocationHeadcount>();
 
-  for (const raw of (data ?? []) as unknown as SessionJoin[]) {
+  for (const raw of data) {
     if (!dependentIds.has(raw.member_id as string)) continue;
 
     const location = unwrap(raw.church_locations);
-    if (!location) continue;
+    if (!location) {
+      if (options.strict) throw new Error("stats read incomplete");
+      continue;
+    }
 
     const week = serviceWeekStartForDate(raw.local_service_date as string);
     if (!weeks.includes(week)) continue;

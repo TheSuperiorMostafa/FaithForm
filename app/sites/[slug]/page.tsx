@@ -1,8 +1,11 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { cache } from "react";
 
 import { PageRenderer } from "@/components/sites/PageRenderer";
-import { isChurchFeatureEnabled } from "@/lib/features/access";
+import { getChurchAuth } from "@/lib/auth/church";
+import { isPublicFeatureEnabled } from "@/lib/features/public-access";
+import { canPreviewDraftSite, isPublicSitePublication } from "@/lib/sites/preview-access";
 import { getSiteBundle } from "@/lib/sites/queries";
 import { SECTION_REGISTRY } from "@/lib/sites/registry";
 import { resolvePage } from "@/lib/sites/resolve";
@@ -17,18 +20,35 @@ type PageProps = {
  *
  * Reachable two ways: rewritten here by middleware from the church's own
  * hostname, and directly at /sites/<slug> on the app domain. The second is what
- * makes an unpublished site previewable before it has a domain pointed at it.
+ * gives church staff a preview before it has a domain pointed at it.
  */
-export const revalidate = 300;
+// Draft authorization and unpublishing must be checked on every request.
+// A shared five-minute page cache could serve one staff preview to the public
+// or keep a taken-down site visible after its church withdraws it.
+export const dynamic = "force-dynamic";
 
-export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const { slug } = await params;
-  const bundle = await getSiteBundle(slug);
+// Metadata and the page render in one request. Share the bundle and its access
+// decision so a public hit does not double every database read.
+const readSite = cache(getSiteBundle);
+
+const siteIsVisible = cache(async function siteIsVisible(
+  bundle: NonNullable<Awaited<ReturnType<typeof getSiteBundle>>>,
+  previewRequested: boolean,
+): Promise<boolean> {
+  if (!(await isPublicFeatureEnabled(bundle.churchId, "website"))) return false;
+  if (isPublicSitePublication(bundle.page.status, bundle.settings?.isPublished)) return true;
+  if (!previewRequested) return false;
+  return canPreviewDraftSite(bundle.churchId, await getChurchAuth());
+});
+
+export async function generateMetadata({ params, searchParams }: PageProps): Promise<Metadata> {
+  const [{ slug }, query] = await Promise.all([params, searchParams]);
+  const bundle = await readSite(slug);
   if (!bundle) return { title: "Not found" };
 
-  // Matches the page's own check, so a disabled site does not leak the church's
-  // name and description through the tab title of a 404.
-  if (!(await isChurchFeatureEnabled(bundle.churchId, "website"))) {
+  // Match the page guard so draft content cannot leak through titles, previews,
+  // or Open Graph metadata when a visitor adds ?preview=1.
+  if (!(await siteIsVisible(bundle, query.preview === "1"))) {
     return { title: "Not found", robots: { index: false, follow: false } };
   }
 
@@ -49,30 +69,20 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
         ? [bundle.profile.coverImageUrl]
         : undefined,
     },
-    // An unpublished site is still reachable at its preview URL, so it has to
-    // tell crawlers to stay away rather than relying on obscurity.
-    robots: bundle.settings?.isPublished ? undefined : { index: false, follow: false },
+    robots:
+      query.preview === "1" ||
+      !isPublicSitePublication(bundle.page.status, bundle.settings?.isPublished)
+        ? { index: false, follow: false }
+        : undefined,
   };
 }
 
 export default async function ChurchSitePage({ params, searchParams }: PageProps) {
   const [{ slug }, query] = await Promise.all([params, searchParams]);
-  const bundle = await getSiteBundle(slug);
+  const bundle = await readSite(slug);
   if (!bundle) notFound();
 
-  // Turning Website off in the control center takes the public site down, not
-  // just the church's editor. A feature that is "disabled" while still serving
-  // visitors on a custom domain is not disabled, and the control center says
-  // it is — so this is where that promise is kept. Preview does not bypass it:
-  // an off feature is off for everyone.
-  if (!(await isChurchFeatureEnabled(bundle.churchId, "website"))) {
-    notFound();
-  }
-
-  const isPreview = query.preview === "1";
-  if (bundle.page.status !== "published" && !isPreview) {
-    notFound();
-  }
+  if (!(await siteIsVisible(bundle, query.preview === "1"))) notFound();
 
   const page = resolvePage({
     page: bundle.page,

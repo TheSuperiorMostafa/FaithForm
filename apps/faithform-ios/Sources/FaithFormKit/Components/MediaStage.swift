@@ -453,7 +453,7 @@ public struct RecordingStage: View {
 
                 HStack(spacing: FaithFormTokens.Spacing.md) {
                     Text(PlayerClockFormat.clock(position))
-                    Text("/")
+                    Text(verbatim: "/")
                         .foregroundStyle(.white.opacity(0.5))
                     Text(PlayerClockFormat.clock(length))
                         .foregroundStyle(.white.opacity(0.75))

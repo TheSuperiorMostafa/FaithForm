@@ -37,6 +37,16 @@ public enum FaithFormFonts {
         "Nunito-SemiBold",
     ]
 
+    private static func resourceURL(for file: String) -> URL? {
+        Bundle.module.url(forResource: file, withExtension: "ttf")
+            ?? Bundle.module.url(forResource: file, withExtension: "ttf", subdirectory: "Fonts")
+            ?? Bundle.module.url(forResource: file, withExtension: "ttf", subdirectory: "Resources/Fonts")
+    }
+
+    /// Lets package tests verify the actual font files without relying on the
+    /// runner's process font registry. The iOS app test checks registration.
+    static var bundledFontURLs: [URL] { files.compactMap { resourceURL(for: $0) } }
+
     /// True once the faces are registered *and* actually resolve.
     ///
     /// A lazy `static let` rather than a flag and a function: Swift runs this
@@ -49,9 +59,7 @@ public enum FaithFormFonts {
     /// a face that is not there.
     public static let isAvailable: Bool = {
         for file in files {
-            guard let url = Bundle.module.url(forResource: file, withExtension: "ttf")
-                ?? Bundle.module.url(forResource: "Fonts/\(file)", withExtension: "ttf")
-            else { continue }
+            guard let url = resourceURL(for: file) else { continue }
 
             var error: Unmanaged<CFError>?
             // `.process` may already have registered these; "already registered"

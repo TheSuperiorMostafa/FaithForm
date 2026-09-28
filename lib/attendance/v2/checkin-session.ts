@@ -173,7 +173,7 @@ export async function getActiveSession(input: {
   client?: SupabaseClient;
 }): Promise<CheckinSession | null> {
   const admin = input.client ?? createAdminClient();
-  const { data } = await admin
+  const { data, error } = await admin
     .from("attendance_checkin_sessions")
     .select("id, church_id, service_occurrence_id, rotation_seconds, expires_at")
     .eq("service_occurrence_id", input.occurrenceId)
@@ -181,6 +181,7 @@ export async function getActiveSession(input: {
     .eq("status", "active")
     .maybeSingle();
 
+  if (error) throw error;
   if (!data) return null;
   if (new Date(data.expires_at as string) <= new Date()) return null;
 

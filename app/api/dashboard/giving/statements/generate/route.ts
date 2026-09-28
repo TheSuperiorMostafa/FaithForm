@@ -8,7 +8,7 @@ import {
 } from "@/lib/auth/require-church-admin";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { renderGivingStatementPdf } from "@/lib/giving/statement-pdf";
-import { getDonorGiftsForYear } from "@/lib/queries/giving";
+import { getDonorGiftsForYear, getStatementDonors } from "@/lib/queries/giving";
 import { featureAccessDenied } from "@/lib/features/guard";
 
 export const runtime = "nodejs";
@@ -30,14 +30,22 @@ export async function POST(request: Request) {
 
   const { searchParams } = new URL(request.url);
   // Defaults to last year until April, when year-end statements go out.
-  const year = parseStatementYear(searchParams.get("year"));
+  const year = parseStatementYear(searchParams.get("year"), new Date(), auth.churchTimezone);
 
   const admin = createAdminClient();
-  const { data: church } = await admin
+  const { data: church, error: churchError } = await admin
     .from("churches")
-    .select("name, ein, statement_address")
+    .select("name, ein, statement_address, timezone")
     .eq("id", auth.churchId)
     .single();
+
+  if (churchError) {
+    console.error("[giving] statement church read failed", churchError);
+    return NextResponse.json(
+      { error: "We couldn't load church details. Please try again." },
+      { status: 503 },
+    );
+  }
 
   if (!church?.ein) {
     return NextResponse.json(
@@ -46,38 +54,50 @@ export async function POST(request: Request) {
     );
   }
 
-  const { data: donors } = await admin
-    .from("giving_donors")
-    .select("id, name, email")
-    .eq("church_id", auth.churchId);
+  let donors: Awaited<ReturnType<typeof getStatementDonors>>;
+  try {
+    donors = await getStatementDonors(auth.churchId, admin);
+  } catch (error) {
+    console.error("[giving] statement donor read failed", error);
+    return NextResponse.json(
+      { error: "We couldn't load donors. No statements were made." },
+      { status: 503 },
+    );
+  }
 
   const zip = new JSZip();
   let statementCount = 0;
 
-  for (const donor of donors ?? []) {
-    const gifts = await getDonorGiftsForYear(
-      auth.churchId,
-      donor.id as string,
-      year,
+  try {
+    for (const donor of donors) {
+      const timeZone = (church.timezone as string | null) ?? "America/New_York";
+      const gifts = await getDonorGiftsForYear(auth.churchId, donor.id, year, admin, timeZone);
+      if (gifts.length === 0) continue;
+
+      const buffer = await renderGivingStatementPdf({
+        churchName: church.name as string,
+        ein: church.ein as string,
+        statementAddress: (church.statement_address as string) ?? null,
+        donorName: donor.name ?? donor.email,
+        donorEmail: donor.email,
+        year,
+        gifts,
+        timeZone,
+      });
+
+      const safeName = (donor.name ?? donor.email)
+        .replace(/[^a-z0-9]+/gi, "-")
+        .toLowerCase();
+
+      zip.file(`statement-${year}-${safeName}.pdf`, buffer);
+      statementCount += 1;
+    }
+  } catch (error) {
+    console.error("[giving] statement generation failed", error);
+    return NextResponse.json(
+      { error: "We couldn't complete the statements. No file was made." },
+      { status: 503 },
     );
-    if (gifts.length === 0) continue;
-
-    const buffer = await renderGivingStatementPdf({
-      churchName: church.name as string,
-      ein: church.ein as string,
-      statementAddress: (church.statement_address as string) ?? null,
-      donorName: (donor.name as string) ?? (donor.email as string),
-      donorEmail: donor.email as string,
-      year,
-      gifts,
-    });
-
-    const safeName = ((donor.name as string) ?? donor.email as string)
-      .replace(/[^a-z0-9]+/gi, "-")
-      .toLowerCase();
-
-    zip.file(`statement-${year}-${safeName}.pdf`, buffer);
-    statementCount += 1;
   }
 
   await logAdminAction({

@@ -6,6 +6,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { logActivity } from "@/lib/activity/log";
 import { calendarEditFor } from "@/lib/announcements/calendar-edit";
+import { omitMissingOptionalTakedownColumn } from "@/lib/announcements/takedown-fallback";
 import {
   checkFacebookScheduleTime,
   suggestFacebookSchedule,
@@ -905,11 +906,6 @@ export async function unsubmitAnnouncement(
     }
   }
 
-  // Taking it back from the web takes it out of the app as well, and cancels
-  // anything not yet delivered. Leaving it visible in FaithForm after an
-  // unsubmit would be the worst kind of stale.
-  await withdrawMobilePublication(ctx.churchId, id).catch(() => undefined);
-
   const rewind = {
     status: "pending" as const,
     is_ready: false,
@@ -925,40 +921,43 @@ export async function unsubmitAnnouncement(
     unsubmitted_by: ctx.user.id,
   };
 
-  // Drops whichever of the 0014/0041 columns this database is missing. The
-  // rewind itself — status, flags, the Facebook post id — always applies.
-  function rowWithout(
-    data: typeof rewind,
-    keys: Array<keyof typeof rewind>,
-  ): Partial<typeof rewind> {
-    const rest: Partial<typeof rewind> = { ...data };
-    for (const key of keys) delete rest[key];
-    return rest;
-  }
-
-  let { error } = await ctx.supabase
+  // Save the recoverable state before withdrawing the app publication. If a
+  // required column is missing, the app publication is left in place and the
+  // user gets an error.
+  // Only omit the specific optional column named by PostgREST; never omit the
+  // timestamp that makes Post again possible.
+  let patch: Partial<typeof rewind> = rewind;
+  let { data: updated, error } = await ctx.supabase
     .from("announcements")
-    .update(rewind)
+    .update(patch)
     .eq("id", id)
-    .eq("church_id", ctx.churchId);
+    .eq("church_id", ctx.churchId)
+    .select("id")
+    .maybeSingle();
 
-  if (error && /unsubmitted_(at|by)|facebook_scheduled_publish_time/i.test(error.message)) {
-    ({ error } = await ctx.supabase
+  while (error) {
+    const retry = omitMissingOptionalTakedownColumn(patch, error.message);
+    if (!retry) break;
+    patch = retry;
+    ({ data: updated, error } = await ctx.supabase
       .from("announcements")
-      .update(
-        rowWithout(rewind, [
-          "unsubmitted_at",
-          "unsubmitted_by",
-          "facebook_scheduled_publish_time",
-        ]),
-      )
+      .update(patch)
       .eq("id", id)
-      .eq("church_id", ctx.churchId));
+      .eq("church_id", ctx.churchId)
+      .select("id")
+      .maybeSingle());
   }
 
   if (error) {
     return { error: toUserError(error, "We couldn't take this announcement down") };
   }
+  if (!updated) {
+    return { error: "We couldn't find that announcement. Refresh the page." };
+  }
+
+  // The canonical row is now pending. Hide its app projection and cancel any
+  // notification still queued for delivery.
+  await withdrawMobilePublication(ctx.churchId, id).catch(() => undefined);
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/announcements");

@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { isPublicSitePublication } from "@/lib/sites/preview-access";
 import type {
   SiteOverrideRow,
   SitePageRow,
@@ -164,6 +165,11 @@ export async function getSiteBundle(
       .limit(12),
   ]);
 
+  // Publication is a two-record decision. If either read fails, never infer
+  // that an old published page should still be public.
+  if (settingsResult.error || pageResult.error) {
+    throw new Error("Website publication state unavailable");
+  }
   const page = pageResult.data;
   if (!page) return null;
 
@@ -545,6 +551,7 @@ export async function getContactTargetBySlug(slug: string): Promise<{
   churchId: string;
   churchName: string;
   recipient: string | null;
+  isPublished: boolean;
 } | null> {
   const supabase = createAdminClient();
 
@@ -556,17 +563,33 @@ export async function getContactTargetBySlug(slug: string): Promise<{
 
   if (error || !data) return null;
 
-  const { data: settings } = await supabase
-    .from("site_settings")
-    .select("contact_email")
-    .eq("church_id", data.id as string)
-    .maybeSingle();
+  const [settingsResult, pageResult] = await Promise.all([
+    supabase
+      .from("site_settings")
+      .select("contact_email, is_published")
+      .eq("church_id", data.id as string)
+      .maybeSingle(),
+    supabase
+      .from("site_pages")
+      .select("status")
+      .eq("church_id", data.id as string)
+      .eq("path", "/")
+      .maybeSingle(),
+  ]);
 
-  const configured = (settings?.contact_email as string | null) ?? null;
+  if (settingsResult.error || pageResult.error) {
+    throw new Error("Website contact publication state unavailable");
+  }
+  if (!pageResult.data) return null;
+  const configured = (settingsResult.data?.contact_email as string | null) ?? null;
 
   return {
     churchId: data.id as string,
     churchName: (data.name as string) ?? "",
     recipient: configured?.trim() || (data.email as string | null) || null,
+    isPublished: isPublicSitePublication(
+      pageResult.data.status,
+      settingsResult.data?.is_published as boolean | null | undefined,
+    ),
   };
 }

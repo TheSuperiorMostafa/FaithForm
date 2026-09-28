@@ -43,9 +43,30 @@ test("a fresh state verifies and carries how it was authorised", () => {
   assert.ok(verified!.exp - Date.now() / 1000 <= OAUTH_STATE_TTL_SECONDS);
 });
 
+test("new OAuth states conceal onboarding invite links and reject tampering", () => {
+  const token = "qa-invite-token-should-not-be-readable-by-providers";
+  const returnTo = `/onboarding?token=${token}&step=4`;
+  const state = signOAuthState({ ...base, provider: "google", via: "invite", returnTo });
+  assert.match(state, /^v2\./);
+  assert.equal(verifyOAuthState(state)?.returnTo, returnTo);
+  assert.notEqual(state, signOAuthState({ ...base, provider: "google", via: "invite", returnTo }));
+  for (const part of state.split(".")) {
+    assert.equal(Buffer.from(part, "base64url").toString("utf8").includes(token), false);
+  }
+  const parts = state.split(".");
+  parts[2] = `${parts[2] === "A" ? "B" : "A"}${parts[2].slice(1)}`;
+  assert.equal(verifyOAuthState(parts.join(".")), null);
+});
+
+test("signed states already in flight can finish before their 30-minute expiry", () => {
+  const state = forge({ ...base, exp: Math.floor(Date.now() / 1000) + 60 });
+  assert.equal(verifyOAuthState(state)?.provider, "youtube");
+});
+
 test("an expired state, or one from before states expired, is refused", () => {
   assert.equal(verifyOAuthState(forge({ ...base, exp: Math.floor(Date.now() / 1000) - 1 })), null);
-  const { via: _via, ...legacy } = base;
+  const legacy: Record<string, unknown> = { ...base };
+  delete legacy.via;
   assert.equal(verifyOAuthState(forge(legacy)), null, "no exp, no via");
   assert.equal(verifyOAuthState(forge({ ...base, via: "owner", exp: Date.now() / 1000 + 60 })), null);
 });

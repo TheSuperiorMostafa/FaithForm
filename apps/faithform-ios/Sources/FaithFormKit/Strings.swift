@@ -38,6 +38,17 @@ public enum L {
     public static var enterInvitationCode: String {
         t("enter_invitation_code", "Paste your invitation link")
     }
+    public static var welcomeHomeKicker: String { t("welcome_home_kicker", "WELCOME HOME") }
+    public static var findChurchCommunity: String {
+        t("find_church_community", "Find your church community.")
+    }
+    public static var welcomeHomeDetail: String {
+        t("welcome_home_detail", "Connect with your congregation, follow announcements, join groups, and worship together wherever you are.")
+    }
+    public static var nearbyChurchesDetail: String {
+        t("nearby_churches_detail", "Discover congregations active near you")
+    }
+    public static var howToFindChurch: String { t("how_to_find_church", "HOW TO FIND YOUR CHURCH") }
 
     // MARK: - Discovery
     public static var searchPlaceholder: String {
@@ -90,6 +101,12 @@ public enum L {
     public static var addChurch: String { t("add_church", "Add church") }
     public static var makeMyChurch: String { t("make_my_church", "Make this my church") }
     public static var yourChurch: String { t("your_church", "Your church") }
+    public static var addingChurch: String { t("adding_church", "Adding your church…") }
+    public static var joinedWelcomeTo: String { t("joined_welcome_to", "WELCOME TO") }
+    public static var churchHomeReady: String {
+        t("church_home_ready", "Your church home is ready.")
+    }
+    public static var openingHome: String { t("opening_home", "Opening home…") }
     /// "%@" is the church being added: "Switch to Grace Community?"
     public static var switchConfirmTitle: String {
         t("switch_church_confirm_title", "Switch to %@?")

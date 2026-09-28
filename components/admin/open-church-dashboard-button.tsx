@@ -1,4 +1,7 @@
-import type { ComponentProps } from "react";
+"use client";
+
+import Link from "next/link";
+import { useState, useTransition, type ComponentProps, type FormEvent } from "react";
 import { LogIn } from "lucide-react";
 
 import { startImpersonation } from "@/app/admin/impersonation-actions";
@@ -27,14 +30,38 @@ export function OpenChurchDashboardButton({
   variant?: ComponentProps<typeof Button>["variant"];
   size?: ComponentProps<typeof Button>["size"];
 }) {
+  const [error, setError] = useState(false);
+  const [pending, startTransition] = useTransition();
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    setError(false);
+    startTransition(async () => {
+      try {
+        await startImpersonation(formData);
+      } catch {
+        // An expired session is rejected by middleware before the action runs.
+        // Keep the control available and explain the next step in this page.
+        setError(true);
+      }
+    });
+  }
+
   return (
-    <form action={startImpersonation}>
+    <form action={startImpersonation} onSubmit={handleSubmit}>
       <input type="hidden" name="churchId" value={churchId} />
       {next && <input type="hidden" name="next" value={next} />}
-      <Button type="submit" className="gap-2" variant={variant} size={size}>
+      <Button type="submit" className="gap-2" variant={variant} size={size} disabled={pending}>
         <LogIn className="size-4" aria-hidden />
-        {label ?? `Open ${churchName}'s dashboard`}
+        {pending ? "Opening church…" : label ?? `Open ${churchName}'s dashboard`}
       </Button>
+      {error && (
+        <p role="alert" className="mt-2 text-sm text-destructive">
+          Couldn&apos;t open this church. Your admin session may have ended. {" "}
+          <Link href="/login" className="underline underline-offset-2">Sign in again</Link> and retry.
+        </p>
+      )}
     </form>
   );
 }

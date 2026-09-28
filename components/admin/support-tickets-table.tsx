@@ -8,6 +8,10 @@ import { Card } from "@/components/ui/card";
 import { Select } from "@/components/ui/select";
 import type { AdminTicketListRow } from "@/lib/queries/admin";
 
+function needsEmailReview(ticket: AdminTicketListRow): boolean {
+  return ticket.needsReplyEmailReview || ticket.notificationEmailStatus === "pending" || ticket.notificationEmailStatus === "unconfirmed";
+}
+
 export function SupportTicketsTable({
   tickets,
 }: {
@@ -15,15 +19,18 @@ export function SupportTicketsTable({
 }) {
   const [status, setStatus] = useState("all");
   const [priority, setPriority] = useState("all");
+  const [emailReview, setEmailReview] = useState("all");
+  const reviewCount = tickets.filter(needsEmailReview).length;
 
   const filtered = useMemo(
     () =>
       tickets.filter((ticket) => {
         if (status !== "all" && ticket.status !== status) return false;
         if (priority !== "all" && ticket.priority !== priority) return false;
+        if (emailReview === "needs-review" && !needsEmailReview(ticket)) return false;
         return true;
       }),
-    [priority, status, tickets],
+    [emailReview, priority, status, tickets],
   );
 
   return (
@@ -32,10 +39,10 @@ export function SupportTicketsTable({
         <div>
           <h2 className="font-semibold text-foreground">Tickets</h2>
           <p className="text-sm text-muted-foreground">
-            Filter platform support by status and priority.
+            Filter platform support by status, priority, and email alert.
           </p>
         </div>
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid gap-2 sm:grid-cols-3">
           <Select value={status} onChange={(event) => setStatus(event.target.value)}>
             <option value="all">All statuses</option>
             <option value="open">Open</option>
@@ -52,6 +59,10 @@ export function SupportTicketsTable({
             <option value="high">High</option>
             <option value="urgent">Urgent</option>
           </Select>
+          <Select aria-label="Email alert filter" value={emailReview} onChange={(event) => setEmailReview(event.target.value)}>
+            <option value="all">All email alerts</option>
+            <option value="needs-review">Needs email review ({reviewCount})</option>
+          </Select>
         </div>
       </div>
 
@@ -63,6 +74,7 @@ export function SupportTicketsTable({
               <th className="px-5 py-4 text-left">Church</th>
               <th className="px-5 py-4 text-left">Priority</th>
               <th className="px-5 py-4 text-left">Status</th>
+              <th className="px-5 py-4 text-left">Email alert</th>
               <th className="px-5 py-4 text-left">Submitted by</th>
               <th className="px-5 py-4 text-left">Created</th>
             </tr>
@@ -92,6 +104,11 @@ export function SupportTicketsTable({
                 </td>
                 <td className="px-5 py-4">
                   <StatusBadge status={ticket.status} />
+                </td>
+                <td className="px-5 py-4 text-muted-foreground">
+                  {needsEmailReview(ticket) ? (
+                    <span className="font-semibold text-amber-700 dark:text-amber-300">Needs review</span>
+                  ) : ticket.notificationEmailStatus === "reviewed" ? "Handled" : ticket.notificationEmailStatus === "sent" ? "No review needed" : "Not tracked"}
                 </td>
                 <td className="px-5 py-4 text-muted-foreground">
                   {ticket.submittedByEmail ?? "Unknown"}

@@ -6,6 +6,11 @@ import {
 } from "@/lib/email/announcement-template";
 import { loadAttachmentsForSend } from "@/lib/announcements/attachments";
 import {
+  claimWeeklyDraft,
+  completeWeeklyDraft,
+  markWeeklyDraftUncertain,
+} from "@/lib/announcements/draft-claim";
+import {
   createWeeklyEmailDraft,
   NO_WEEKLY_EMAIL_CHANNEL_MESSAGE,
   resolveWeeklyEmailChannel,
@@ -15,14 +20,14 @@ import {
 } from "@/lib/announcements/email-delivery";
 import { listEmailQueue } from "@/lib/announcements/email-queue";
 import {
-  churchIdsWithFeatureEmailOff,
-  isChurchFeatureEmailEnabled,
+  requireChurchFeatureEmailEnabled,
 } from "@/lib/features/access";
 import { listChurchCalendarEvents } from "@/lib/integrations/calendar";
 import { ICloudMailError } from "@/lib/integrations/icloud-mail";
 import type { CalendarEventPreview } from "@/lib/integrations/types";
 import { getAnnouncementEmailSettings } from "@/lib/queries/announcement-email-settings";
 import type { AnnouncementRow } from "@/lib/queries/announcements";
+import { readAllById } from "@/lib/queries/paged-read";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   getMondayWeekWindowInTimeZone,
@@ -175,6 +180,7 @@ export function standaloneToEmailEvents(
       startAt: row.start_at,
       endAt: row.end_at,
       allDay: row.all_day,
+      undated: row.undated,
       notes: row.body?.trim() || undefined,
     }));
 }
@@ -188,29 +194,45 @@ export async function listStandaloneEmailRows(
   churchId: string,
   supabase: SupabaseClient,
 ): Promise<StandaloneEmailRow[]> {
-  const select = (columns: string) =>
-    supabase
-      .from("announcements")
-      .select(columns)
-      .eq("church_id", churchId)
-      .eq("status", "published")
-      .eq("push_to_team", true)
-      .is("google_event_id", null);
-
-  let { data, error } = await select(
-    "title, event_title, body, notes, start_at, end_at, all_day, event_location, push_to_team, published_at, event_date",
-  );
-  if (error && /all_day/i.test(error.message)) {
-    ({ data, error } = await select(
-      "title, event_title, body, notes, start_at, end_at, event_location, push_to_team, published_at, event_date",
-    ));
+  let rows: (Record<string, unknown> & { id: string })[];
+  try {
+    rows = await readAllById<Record<string, unknown> & { id: string }>(
+      async (afterId, includeCount, pageSize) => {
+        const select = (columns: string) => {
+          let query = supabase
+            .from("announcements")
+            .select(columns, { count: includeCount ? "exact" : undefined })
+            .eq("church_id", churchId)
+            .eq("status", "published")
+            .eq("push_to_team", true)
+            .is("google_event_id", null)
+            .order("id")
+            .limit(pageSize);
+          if (afterId) query = query.gt("id", afterId);
+          return query;
+        };
+        let result = await select(
+          "id, title, event_title, body, notes, start_at, end_at, all_day, event_location, push_to_team, published_at, event_date",
+        );
+        if (result.error && /all_day/i.test(result.error.message)) {
+          result = await select(
+            "id, title, event_title, body, notes, start_at, end_at, event_location, push_to_team, published_at, event_date",
+          );
+        }
+        return {
+          data: result.data as (Record<string, unknown> & { id: string })[] | null,
+          error: result.error,
+          count: result.count,
+        };
+      },
+      { label: "weekly announcements" },
+    );
+  } catch (error) {
+    console.error("[weekly-email] standalone announcements read failed:", error);
+    throw new Error("Weekly announcements read failed");
   }
-  if (error) {
-    console.error("[weekly-email] standalone announcements:", error.message);
-    return [];
-  }
 
-  return ((data ?? []) as unknown as Record<string, unknown>[])
+  return rows
     .filter((row) => row.start_at)
     .map((row) => ({
       title: (row.title as string) || (row.event_title as string) || "",
@@ -253,9 +275,9 @@ function draftFailureMessage(channel: WeeklyEmailChannel, err: unknown): string 
   // The detail stays in the log. What Google said is not something a church
   // can act on, and it can carry technical text.
   if (channel === "icloud") {
-    return "iCloud Mail wouldn't save this week's email. Try again in a moment.";
+    return "iCloud Mail did not confirm this week's draft. Check iCloud Mail drafts before trying again, then contact FaithForm support.";
   }
-  return "Google email wouldn't save this week's draft. Try again in a moment. If it keeps happening, reconnect Google in Settings.";
+  return "Gmail did not confirm this week's draft. Check Gmail drafts before trying again, then contact FaithForm support.";
 }
 
 /**
@@ -278,7 +300,7 @@ export async function createWeeklyAnnouncementGmailDraft(
   // A platform admin can switch a church's announcement email off without
   // switching announcements off. That stops the email being made by hand as
   // well as by the Monday run.
-  if (!(await isChurchFeatureEmailEnabled(churchId, "announcements"))) {
+  if (!(await requireChurchFeatureEmailEnabled(churchId, "announcements"))) {
     return {
       ok: false,
       skipped: true,
@@ -335,26 +357,60 @@ export async function createWeeklyAnnouncementGmailDraft(
 
   // The draft lands in one mailbox, but the events in it come from every
   // calendar the church has linked.
-  const [calendar, queued, standalone] = await Promise.all([
-    listChurchCalendarEvents(churchId, week.weekStartISO, horizonEnd, supabase),
-    listEmailQueue(churchId, week.weekStartKey, supabase),
-    listStandaloneEmailRows(churchId, supabase),
-  ]);
+  let calendar: Awaited<ReturnType<typeof listChurchCalendarEvents>>;
+  let queued: Awaited<ReturnType<typeof listEmailQueue>>;
+  let standalone: StandaloneEmailRow[];
+  try {
+    [calendar, queued, standalone] = await Promise.all([
+      listChurchCalendarEvents(churchId, week.weekStartISO, horizonEnd, supabase),
+      listEmailQueue(churchId, week.weekStartKey, supabase),
+      listStandaloneEmailRows(churchId, supabase),
+    ]);
+  } catch {
+    return { ok: false, error: "We couldn't read all announcements. No email draft was created. Try again." };
+  }
+  if (calendar.errors.length > 0) {
+    return { ok: false, error: "We couldn't read the whole calendar. No email draft was created. Try again." };
+  }
   const events = calendar.events;
 
   const queuedEventIds = new Set(queued.map((item) => item.googleEventId));
 
-  const { data: publishedRows } = await supabase
-    .from("announcements")
-    .select(
-      "id, title, body, start_at, end_at, event_location, push_to_team, google_event_id, status",
-    )
-    .eq("church_id", churchId)
-    .eq("status", "published")
-    .not("google_event_id", "is", null);
+  let publishedRows: {
+    id: string;
+    title: string | null;
+    body: string | null;
+    start_at: string;
+    end_at: string | null;
+    event_location: string | null;
+    push_to_team: boolean;
+    google_event_id: string | null;
+  }[];
+  try {
+    publishedRows = await readAllById(
+      async (afterId, includeCount, pageSize) => {
+        let query = supabase
+          .from("announcements")
+          .select(
+            "id, title, body, start_at, end_at, event_location, push_to_team, google_event_id",
+            { count: includeCount ? "exact" : undefined },
+          )
+          .eq("church_id", churchId)
+          .eq("status", "published")
+          .not("google_event_id", "is", null)
+          .order("id")
+          .limit(pageSize);
+        if (afterId) query = query.gt("id", afterId);
+        return query;
+      },
+      { label: "weekly calendar announcements" },
+    );
+  } catch {
+    return { ok: false, error: "We couldn't read published announcements. No email draft was created. Try again." };
+  }
 
   const publishedByGoogleId: Record<string, AnnouncementRow> = {};
-  for (const row of publishedRows ?? []) {
+  for (const row of publishedRows) {
     const gid = row.google_event_id as string;
     if (!gid) continue;
     publishedByGoogleId[gid] = {
@@ -434,6 +490,27 @@ export async function createWeeklyAnnouncementGmailDraft(
 
   const attachments = await loadAttachmentsForSend(churchId, supabase);
 
+  let claim: Awaited<ReturnType<typeof claimWeeklyDraft>>;
+  try {
+    claim = await claimWeeklyDraft(churchId, week.weekStartKey, Boolean(options?.force));
+  } catch {
+    return { ok: false, error: "We couldn't reserve this week's email. No new draft was created. Try again." };
+  }
+  if (claim.status === "already_created") {
+    return {
+      ok: false,
+      skipped: true,
+      reason: "already_created",
+      error: "This week's email has already been created.",
+    };
+  }
+  if (claim.status === "needs_review") {
+    return {
+      ok: false,
+      error: "An earlier draft attempt may still be in your mailbox. Check drafts and contact FaithForm support before retrying.",
+    };
+  }
+
   let draft: { draftId: string; draftUrl: string };
   try {
     draft = await createWeeklyEmailDraft(
@@ -448,18 +525,20 @@ export async function createWeeklyAnnouncementGmailDraft(
       supabase,
     );
   } catch (err) {
+    await markWeeklyDraftUncertain(churchId, week.weekStartKey, claim.claimId).catch(
+      (markError) => console.error("[weekly-email] could not mark draft uncertain:", markError),
+    );
     return { ok: false, error: draftFailureMessage(channel, err) };
   }
 
-  const { markWeeklyAnnouncementDraftCreated } = await import(
-    "@/lib/queries/announcement-email-settings"
-  );
-  await markWeeklyAnnouncementDraftCreated(
-    churchId,
-    week.weekStartKey,
-    draft.draftId,
-    supabase,
-  );
+  try {
+    await completeWeeklyDraft(churchId, week.weekStartKey, claim.claimId, draft.draftId);
+  } catch {
+    return {
+      ok: false,
+      error: "A draft was saved in your mailbox, but FaithForm could not confirm its status. Check drafts and contact FaithForm support before trying again.",
+    };
+  }
 
   return {
     ok: true,
@@ -500,7 +579,8 @@ export async function runWeeklyAnnouncementDraftsForAllChurches(
     .select("church_id, provider, metadata")
     .in("provider", ["google", "apple"]);
 
-  if (error || !integrations?.length) {
+  if (error) throw new Error("Weekly draft integration list failed");
+  if (!integrations?.length) {
     return { processed: 0, created: 0, skipped: 0, errors: [] };
   }
 
@@ -516,10 +596,13 @@ export async function runWeeklyAnnouncementDraftsForAllChurches(
     return { processed: 0, created: 0, skipped: 0, errors: [] };
   }
 
-  const { data: churches } = await supabase
+  const { data: churches, error: churchesError } = await supabase
     .from("churches")
     .select("id, timezone")
     .in("id", churchIds);
+  if (churchesError || (churches?.length ?? 0) !== churchIds.length) {
+    throw new Error("Weekly draft church timezone list incomplete");
+  }
 
   const timezoneByChurch = new Map<string, string | null>(
     (churches ?? []).map((row) => [
@@ -537,19 +620,9 @@ export async function runWeeklyAnnouncementDraftsForAllChurches(
     .eq("feature_key", "announcements")
     .in("church_id", churchIds);
 
-  if (featureError) {
-    if (!/church_features/i.test(featureError.message)) {
-      console.error("weekly draft feature flags:", featureError.message);
-    }
-  } else {
-    for (const row of featureRows ?? []) {
-      if (!row.enabled) disabledChurchIds.add(row.church_id as string);
-    }
-  }
-
-  // And churches that keep announcements but have had its email switched off.
-  for (const churchId of await churchIdsWithFeatureEmailOff("announcements")) {
-    disabledChurchIds.add(churchId);
+  if (featureError) throw new Error("Weekly draft feature list failed");
+  for (const row of featureRows ?? []) {
+    if (!row.enabled) disabledChurchIds.add(row.church_id as string);
   }
 
   let created = 0;

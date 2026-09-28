@@ -132,7 +132,18 @@ publish = {"user": "", "password": "cap", "action": "publish", "protocol": "rtmp
 results = [ask(read), ask(read), ask(read), ask(wrong), ask(wrong), ask(publish), ask(publish)]
 print(json.dumps({"results": results, "calls": calls}))
 `;
-  const run = spawnSync("python3", ["-c", harness], { encoding: "utf8", timeout: 20_000 });
+  // A developer or CI host may set HTTP_PROXY. Loopback traffic in this test
+  // must still go to the two local servers rather than that external proxy.
+  const loopback = ["127.0.0.1", "localhost"];
+  const run = spawnSync("python3", ["-c", harness], {
+    encoding: "utf8",
+    timeout: 20_000,
+    env: {
+      ...process.env,
+      NO_PROXY: [process.env.NO_PROXY, ...loopback].filter(Boolean).join(","),
+      no_proxy: [process.env.no_proxy, ...loopback].filter(Boolean).join(","),
+    },
+  });
   assert.equal(run.status, 0, run.stderr);
   const { results, calls } = JSON.parse(run.stdout.trim()) as { results: number[]; calls: string[] };
 

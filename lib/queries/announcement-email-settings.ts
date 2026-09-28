@@ -51,7 +51,7 @@ export async function getAnnouncementEmailSettings(
 
   if (error) {
     console.error("getAnnouncementEmailSettings:", error.message);
-    return mapRow(null);
+    throw new Error("Weekly email settings read failed");
   }
 
   return mapRow((data as ChurchSettingsRow | null) ?? null);
@@ -85,25 +85,4 @@ export async function upsertAnnouncementEmailSettings(
 
   if (error) throw error;
   return mapRow(data as ChurchSettingsRow);
-}
-
-export async function markWeeklyAnnouncementDraftCreated(
-  churchId: string,
-  weekStartKey: string,
-  draftId: string,
-  supabase: SupabaseClient,
-) {
-  const { error } = await supabase
-    .from("church_settings")
-    .upsert(
-      {
-        church_id: churchId,
-        last_weekly_announcement_draft_week_start: weekStartKey,
-        last_weekly_announcement_draft_id: draftId,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "church_id" },
-    );
-
-  if (error) throw error;
 }

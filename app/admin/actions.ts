@@ -18,6 +18,7 @@ import {
   postTicketComment,
   supportStatusLabel,
 } from "@/lib/support/comments";
+import { recordSupportEmailStatus } from "@/lib/support/email-status";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateChurchSlug } from "@/lib/churches/slug";
 
@@ -41,8 +42,20 @@ function isValidEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export type CreateChurchResult =
-  | { ok: true; churchId: string; email: string | null }
+  | {
+      ok: true;
+      churchId: string;
+      email: string | null;
+      inviteDelivery:
+        | "sent"
+        | "unconfirmed"
+        | "existing"
+        | "invite_failed"
+        | "not_requested";
+    }
   | { ok: false; error: string };
 
 /**
@@ -65,6 +78,13 @@ export async function createChurch(
   const adminFirstName = readString(formData, "adminFirstName");
   const adminLastName = readString(formData, "adminLastName");
   const adminEmail = readString(formData, "adminEmail").toLowerCase();
+  const requestIdInput = readString(formData, "requestId");
+  // Older open browser tabs may not have a key yet. Their next submit still
+  // works; new tabs retain a key across retries, including concurrent ones.
+  if (requestIdInput && !UUID_RE.test(requestIdInput)) {
+    return { ok: false, error: "This request couldn't be verified. Refresh the page and try again." };
+  }
+  const requestId = requestIdInput || crypto.randomUUID();
 
   if (!name) {
     return { ok: false, error: "Church name is required." };
@@ -87,6 +107,19 @@ export async function createChurch(
 
   const admin = createAdminClient();
 
+  const existingForRequest = await findChurchByCreateRequest(admin, requestId);
+  if (existingForRequest.error) {
+    return { ok: false, error: "We couldn't check this church request. Please try again." };
+  }
+  if (existingForRequest.id) {
+    return {
+      ok: true,
+      churchId: existingForRequest.id,
+      email: adminEmail || null,
+      inviteDelivery: "existing",
+    };
+  }
+
   // The same request again — a double click, a retry after a slow response —
   // is answered with the church it already made. Two "Grace Chapel" rows with
   // an open invite each was the result, and whichever link the pastor used,
@@ -97,25 +130,36 @@ export async function createChurch(
     ? await findRecentlyCreatedChurch(admin, name, adminEmail, timezone)
     : null;
   if (repeat) {
-    return { ok: true, churchId: repeat, email: adminEmail };
+    return { ok: true, churchId: repeat, email: adminEmail, inviteDelivery: "existing" };
   }
 
   const slug = generateChurchSlug(name);
 
   const { data: church, error: churchError } = await admin
     .from("churches")
-    .insert({ name, timezone, slug })
+    .insert({ name, timezone, slug, admin_create_request_id: requestId })
     .select("id, name")
     .single();
 
   if (churchError || !church) {
+    if (churchError?.code === "23505") {
+      const winner = await findChurchByCreateRequest(admin, requestId);
+      if (winner.id) {
+        return {
+          ok: true,
+          churchId: winner.id,
+          email: adminEmail || null,
+          inviteDelivery: "existing",
+        };
+      }
+    }
     return { ok: false, error: churchError?.message ?? "Could not create church." };
   }
 
   if (!invitingAdmin) {
     revalidatePath("/admin");
     revalidatePath("/admin/churches");
-    return { ok: true, churchId: church.id, email: null };
+    return { ok: true, churchId: church.id, email: null, inviteDelivery: "not_requested" };
   }
 
   const { data: invite, error: inviteError } = await admin
@@ -130,11 +174,12 @@ export async function createChurch(
     .single();
 
   if (inviteError || !invite) {
-    await admin.from("churches").delete().eq("id", church.id);
-    return {
-      ok: false,
-      error: inviteError?.message ?? "Could not create invite.",
-    };
+    // Keep the workspace addressable. A concurrent retry may already have
+    // returned it, and Admin can send the first invite from its Users tab.
+    console.error("[admin] first invitation could not be prepared:", inviteError?.code ?? "UnknownError");
+    revalidatePath("/admin");
+    revalidatePath("/admin/churches");
+    return { ok: true, churchId: church.id, email: adminEmail, inviteDelivery: "invite_failed" };
   }
 
   try {
@@ -145,17 +190,29 @@ export async function createChurch(
       adminFirstName,
     });
   } catch (err) {
-    await admin.from("church_invites").delete().eq("church_id", church.id);
-    await admin.from("churches").delete().eq("id", church.id);
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : "Failed to send invite email.",
-    };
+    // Delivery may have succeeded even when the provider response failed.
+    // Keep the church and valid invite so Admin can resend the same link.
+    console.error("[admin] first invitation delivery was not confirmed:", err instanceof Error ? err.name : "UnknownError");
+    revalidatePath("/admin");
+    revalidatePath("/admin/churches");
+    return { ok: true, churchId: church.id, email: adminEmail, inviteDelivery: "unconfirmed" };
   }
 
   revalidatePath("/admin");
   revalidatePath("/admin/churches");
-  return { ok: true, churchId: church.id, email: adminEmail };
+  return { ok: true, churchId: church.id, email: adminEmail, inviteDelivery: "sent" };
+}
+
+async function findChurchByCreateRequest(
+  admin: ReturnType<typeof createAdminClient>,
+  requestId: string,
+): Promise<{ id: string | null; error: boolean }> {
+  const { data, error } = await admin
+    .from("churches")
+    .select("id")
+    .eq("admin_create_request_id", requestId)
+    .maybeSingle();
+  return { id: data?.id ?? null, error: Boolean(error) };
 }
 
 /** How long a second identical "Add church" counts as the same request. */
@@ -196,16 +253,15 @@ async function findRecentlyCreatedChurch(
 }
 
 export type InviteChurchAdminResult =
-  | { ok: true; email: string }
+  | { ok: true; email: string; delivery: "sent" | "unconfirmed" | "old_links_active" }
   | { ok: false; error: string };
 
 /**
  * Sends the first admin their invite, for a church that has been waiting
  * without one.
  *
- * Any invite still outstanding for this church is replaced rather than left
- * beside the new one: a corrected address should not leave the typo's link
- * live.
+ * A corrected address replaces older invites only after its email has been
+ * delivered. A failed send must not revoke the church's working link.
  */
 export async function inviteChurchAdmin(
   formData: FormData,
@@ -248,12 +304,6 @@ export async function inviteChurchAdmin(
     };
   }
 
-  await admin
-    .from("church_invites")
-    .delete()
-    .eq("church_id", churchId)
-    .is("accepted_at", null);
-
   const { data: invite, error: inviteError } = await admin
     .from("church_invites")
     .insert({
@@ -262,7 +312,7 @@ export async function inviteChurchAdmin(
       admin_first_name: adminFirstName,
       admin_last_name: adminLastName,
     })
-    .select("token")
+    .select("id, token")
     .single();
 
   if (inviteError || !invite) {
@@ -280,17 +330,31 @@ export async function inviteChurchAdmin(
       adminFirstName,
     });
   } catch (err) {
-    await admin.from("church_invites").delete().eq("church_id", churchId);
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : "Failed to send invite email.",
-    };
+    // A provider can deliver the message but fail to confirm it. Keep both
+    // links until a resend confirms delivery, rather than breaking either.
+    console.error("[admin] replacement invitation delivery was not confirmed:", err instanceof Error ? err.name : "UnknownError");
+    revalidatePath("/admin/churches");
+    revalidatePath(`/admin/churches/${churchId}`);
+    return { ok: true, email: adminEmail, delivery: "unconfirmed" };
+  }
+
+  const { error: oldInviteError } = await admin
+    .from("church_invites")
+    .delete()
+    .eq("church_id", churchId)
+    .is("accepted_at", null)
+    .neq("id", invite.id);
+  if (oldInviteError) {
+    console.error("[admin] old church invitations could not be disabled:", oldInviteError.message);
+    revalidatePath("/admin/churches");
+    revalidatePath(`/admin/churches/${churchId}`);
+    return { ok: true, email: adminEmail, delivery: "old_links_active" };
   }
 
   revalidatePath("/admin");
   revalidatePath("/admin/churches");
   revalidatePath(`/admin/churches/${churchId}`);
-  return { ok: true, email: adminEmail };
+  return { ok: true, email: adminEmail, delivery: "sent" };
 }
 
 export async function updateChurchUserRole(formData: FormData) {
@@ -382,6 +446,7 @@ export async function createSupportTicket(formData: FormData) {
   // A ticket raised here is still a ticket: the team is several people, and the
   // one who logs a call is rarely the one who works it. Same doorbell as the
   // church-side path, and just as silent when it fails — the ticket is saved.
+  let notificationConfirmed = false;
   try {
     let churchName = "FaithForm";
     if (data.church_id) {
@@ -393,7 +458,7 @@ export async function createSupportTicket(formData: FormData) {
       churchName = (churchRow?.name as string | undefined) ?? "A church";
     }
 
-    await sendSupportTicketNotification({
+    const notification = await sendSupportTicketNotification({
       churchName,
       subject,
       body,
@@ -401,9 +466,11 @@ export async function createSupportTicket(formData: FormData) {
       priority,
       reviewUrl: absoluteAppPath(`/admin/support/${data.id}`),
     });
+    notificationConfirmed = notification.emailed;
   } catch (notifyError) {
     console.error("createSupportTicket notify:", notifyError);
   }
+  await recordSupportEmailStatus(admin, "support_tickets", data.id as string, notificationConfirmed);
 
   revalidatePath("/admin");
   revalidatePath("/admin/support");
@@ -449,6 +516,36 @@ export async function updateSupportTicket(formData: FormData) {
   }
 }
 
+/** Record an attended follow-up without representing it as email delivery. */
+export async function markSupportEmailReviewed(formData: FormData) {
+  const user = await requireSuperAdmin();
+  const ticketId = readString(formData, "ticketId");
+  const commentId = readString(formData, "commentId");
+  const kind = readString(formData, "kind");
+  if (!UUID_RE.test(ticketId) || (kind !== "ticket" && kind !== "comment") ||
+      (kind === "comment" && !UUID_RE.test(commentId))) {
+    throw new Error("Invalid support email review.");
+  }
+
+  const admin = createAdminClient();
+  const table = kind === "ticket" ? "support_tickets" : "support_ticket_comments";
+  let query = admin.from(table)
+    .update({
+      notification_email_status: "reviewed",
+      notification_email_reviewed_at: new Date().toISOString(),
+      notification_email_reviewed_by: user.id,
+    })
+    .eq("id", kind === "ticket" ? ticketId : commentId)
+    .in("notification_email_status", ["pending", "unconfirmed"]);
+  if (kind === "comment") query = query.eq("ticket_id", ticketId);
+  const { data, error } = await query.select("id").maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("This alert was already handled or could not be found. Refresh the ticket.");
+
+  revalidatePath("/admin/support");
+  revalidatePath(`/admin/support/${ticketId}`);
+}
+
 /**
  * Our reply on a church's ticket.
  *
@@ -456,7 +553,7 @@ export async function updateSupportTicket(formData: FormData) {
  * — it was written on the understanding that nobody outside the control center
  * would read it, and quietly publishing years of it is not a thing to do by
  * accident. Anything meant for the church is posted here, where it lands on
- * their dashboard and in their inbox at the same time.
+ * their dashboard. Email delivery is attempted separately and tracked.
  */
 export async function postSupportTicketReply(formData: FormData) {
   const user = await requireSuperAdmin();
@@ -487,7 +584,7 @@ export async function postSupportTicketReply(formData: FormData) {
     body,
   });
 
-  if (posted.error) throw new Error(posted.error);
+  if (posted.error || !posted.id) throw new Error(posted.error ?? "Support reply was not confirmed.");
 
   await admin
     .from("support_tickets")
@@ -496,13 +593,25 @@ export async function postSupportTicketReply(formData: FormData) {
 
   // The reply is stored and already on their dashboard. Mail failing after
   // this point must not throw away the post.
+  let notificationConfirmed = false;
   try {
     const submittedBy = ticket.submitted_by as string | null;
-    if (submittedBy) {
+    // Platform-created tickets record the platform administrator as submitter.
+    // Do not email that administrator while presenting the result as a church
+    // alert. Only a submitter who belongs to this church is a safe recipient.
+    if (submittedBy && ticket.church_id) {
+      const { data: churchSubmitter, error: membershipError } = await admin
+        .from("church_users")
+        .select("id")
+        .eq("church_id", ticket.church_id as string)
+        .eq("user_id", submittedBy)
+        .maybeSingle();
+      if (membershipError) throw membershipError;
+      if (!churchSubmitter) throw new Error("No verified church recipient for support reply email");
       const { data } = await admin.auth.admin.getUserById(submittedBy);
       const to = data.user?.email;
       if (to) {
-        await sendSupportTicketReply({
+        notificationConfirmed = await sendSupportTicketReply({
           to,
           subject: ticket.subject as string,
           message: body.trim(),
@@ -513,6 +622,7 @@ export async function postSupportTicketReply(formData: FormData) {
   } catch (notifyError) {
     console.error("postSupportTicketReply notify:", notifyError);
   }
+  await recordSupportEmailStatus(admin, "support_ticket_comments", posted.id, notificationConfirmed);
 
   revalidatePath("/admin/support");
   revalidatePath(`/admin/support/${ticketId}`);

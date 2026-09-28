@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { google } from "googleapis";
 import { allDaySpan } from "@/lib/integrations/all-day";
 import { calendarDescriptionText } from "@/lib/integrations/calendar-description";
+import { collectCalendarPages } from "@/lib/integrations/calendar-pagination";
 import {
   getGoogleAuthClient,
   GoogleReconnectRequiredError,
@@ -23,16 +24,20 @@ export async function listCalendarEventsInRange(
   const calendar = google.calendar({ version: "v3", auth });
   const calendarId = await getChurchCalendarId(churchId, supabase);
 
-  let data;
+  let events;
   try {
-    ({ data } = await calendar.events.list({
-      calendarId,
-      timeMin: startISO,
-      timeMax: endISO,
-      singleEvents: true,
-      orderBy: "startTime",
-      maxResults: 250,
-    }));
+    events = await collectCalendarPages(async (pageToken) => {
+      const { data } = await calendar.events.list({
+        calendarId,
+        timeMin: startISO,
+        timeMax: endISO,
+        singleEvents: true,
+        orderBy: "startTime",
+        maxResults: 250,
+        pageToken,
+      });
+      return data;
+    });
   } catch (err) {
     if (isInvalidGrantError(err)) {
       await markIntegrationNeedsReconnect(
@@ -46,7 +51,7 @@ export async function listCalendarEventsInRange(
     throw err;
   }
 
-  return (data.items ?? [])
+  return events
     .filter((e) => e.id && e.status !== "cancelled")
     .map((event) => {
       const start = event.start?.dateTime ?? event.start?.date;

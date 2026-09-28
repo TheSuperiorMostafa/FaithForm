@@ -17,7 +17,6 @@ import {
 } from "@/lib/checkin/service-week";
 import {
   parseNewFamily,
-  undoCheckinCutoff,
   undoCheckinRefusal,
   UNDO_CHECKIN_MESSAGES,
   type NewFamilyInput,
@@ -260,11 +259,13 @@ export async function checkLocationDeletion(
   const context = await requireAdmin();
   if (!isContext(context)) return context;
 
-  const usage = await locationUsage(
-    context.auth.churchId,
-    locationId,
-    createClient(),
-  );
+  let usage: Awaited<ReturnType<typeof locationUsage>>;
+  try {
+    usage = await locationUsage(context.auth.churchId, locationId, createClient());
+  } catch (error) {
+    console.error("[checkin] room usage check failed:", error);
+    return fail("We couldn't check this room's history. Please try again.");
+  }
 
   return {
     ok: true,
@@ -279,7 +280,13 @@ export async function deleteLocation(formData: FormData): Promise<ActionResult> 
   const id = text(formData, "locationId");
   if (!id) return fail("Pick a room.");
 
-  const usage = await locationUsage(context.auth.churchId, id, createClient());
+  let usage: Awaited<ReturnType<typeof locationUsage>>;
+  try {
+    usage = await locationUsage(context.auth.churchId, id, createClient());
+  } catch (error) {
+    console.error("[checkin] room usage check failed:", error);
+    return fail("We couldn't check this room's history. Please try again.");
+  }
 
   if (usage.sessions > 0 || usage.defaultFor > 0) {
     return fail(
@@ -876,33 +883,26 @@ export async function undoCheckin(
     if (refusal) return fail(UNDO_CHECKIN_MESSAGES[refusal]);
   }
 
-  const { data, error } = await context.admin
-    .from("checkin_sessions")
-    .update({ status: "cancelled" })
-    .in("id", ids)
-    .eq("church_id", context.auth.churchId)
-    .eq("status", "checked_in")
-    .is("checked_out_at", null)
-    .eq("checked_in_by", context.auth.userId)
-    .gte("checked_in_at", undoCheckinCutoff(now))
-    .select("id");
+  const { data, error } = await context.admin.rpc("undo_checkin_sessions", {
+    p_church_id: context.auth.churchId,
+    p_session_ids: ids,
+    p_actor_user_id: context.auth.userId,
+  });
 
-  if (error) return fail(toUserError(error, "We couldn't undo that check-in."));
-
-  const undone = (data ?? []).length;
-  if (undone === 0) {
-    return fail("That check-in changed a moment ago, so it wasn't undone. Refresh the page.");
+  if (error || data !== ids.length) {
+    console.error("[checkin] undo failed:", error?.message ?? "count mismatch");
+    return fail("Those check-ins changed a moment ago. Refresh the page and try again.");
   }
 
   // No personal details in the log line: ids and counts only.
   console.info("[checkin] check-in undone", {
     churchId: context.auth.churchId,
     by: context.auth.userId,
-    sessions: (data ?? []).map((row) => row.id as string),
+    sessions: ids,
   });
 
   revalidateCheckin();
-  return { ok: true, data: { undone } };
+  return { ok: true, data: { undone: data } };
 }
 
 export type NewFamilyResult = FamilyCheckinResult & {
@@ -921,11 +921,9 @@ export type NewFamilyResult = FamilyCheckinResult & {
  * not admins cannot create people or families anywhere in the dashboard, and
  * this does not change that; the desk only shows the button to admins.
  *
- * If any step of creating the family fails, what was already created is
- * removed again (nothing else can refer to rows made a moment ago in this
- * same request), so a half-made family is never left behind. Once the family
- * exists, a child who can't be checked in is reported by name and the family
- * is kept, since it is complete and correct.
+ * The People records and family links are made in one database transaction.
+ * Once that family exists, each physical check-in reports its own result and
+ * a child who could not be checked in can be retried from the desk.
  */
 export async function createFamilyAndCheckIn(
   input: NewFamilyInput,
@@ -983,128 +981,44 @@ export async function createFamilyAndCheckIn(
     }
   }
 
-  const createdMemberIds: string[] = [];
-  let householdId: string | null = null;
-  // Set once the family is fully made. After that nothing is ever removed:
-  // a check-in may already point at these people.
-  let familyComplete = false;
-
-  const station: Context = context;
-  async function cleanUp() {
-    // Children and parent were created in this request and nothing else points
-    // at them yet; the family's links go with the family (on delete cascade).
-    if (householdId) {
-      await station.admin
-        .from("households")
-        .delete()
-        .eq("id", householdId)
-        .eq("church_id", station.auth.churchId);
+  let householdId: string;
+  let createdChildren: NewFamilyResult["children"];
+  try {
+    const { data, error } = await context.admin.rpc("create_checkin_family", {
+      p_church_id: context.auth.churchId,
+      p_actor_user_id: context.auth.userId,
+      p_family_name: family.familyName,
+      p_guardian_first_name: guardian.data.firstName,
+      p_guardian_last_name: guardian.data.lastName,
+      p_guardian_phone: guardian.data.phone || null,
+      p_children: children,
+    });
+    if (error) {
+      console.error("[checkin] new family creation failed:", error.message);
+      return fail(error.code === "23505"
+        ? "This phone number is already in People. Search for their name instead."
+        : "We couldn't add this family. Search People before trying again.");
     }
-    if (createdMemberIds.length > 0) {
-      await station.admin
-        .from("members")
-        .delete()
-        .in("id", createdMemberIds)
-        .eq("church_id", station.auth.churchId);
+    const created = data as unknown as Partial<{
+      householdId: string;
+      children: NewFamilyResult["children"];
+    }> | null;
+    if (!created || typeof created.householdId !== "string" ||
+        !Array.isArray(created.children) || created.children.length !== children.length ||
+        created.children.some((child) => !child || typeof child.memberId !== "string" ||
+          typeof child.locationId !== "string" || typeof child.firstName !== "string" ||
+          typeof child.lastName !== "string")) {
+      console.error("[checkin] new family creation returned an incomplete result");
+      return fail("The family may have been added, but we couldn't confirm it. Search People before trying again.");
     }
+    householdId = created.householdId;
+    createdChildren = created.children;
+  } catch (error) {
+    console.error("[checkin] new family creation could not be confirmed:", error);
+    return fail("The family may have been added, but we couldn't confirm it. Search People before trying again.");
   }
 
-  const COULD_NOT_ADD =
-    "We couldn't add this family, so nothing was saved. Please try again.";
-
   try {
-    const { data: parentRow, error: parentError } = await context.admin
-      .from("members")
-      .insert({
-        church_id: context.auth.churchId,
-        first_name: guardian.data.firstName,
-        last_name: guardian.data.lastName,
-        phone: guardian.data.phone,
-        email: null,
-        is_active: true,
-      })
-      .select("id")
-      .single();
-    if (parentError || !parentRow) {
-      console.error("[checkin] new family: parent insert failed:", parentError?.message);
-      await cleanUp();
-      return fail(COULD_NOT_ADD);
-    }
-    const parentId = parentRow.id as string;
-    createdMemberIds.push(parentId);
-
-    const createdChildren: NewFamilyResult["children"] = [];
-    for (const child of children) {
-      const { data: childRow, error: childError } = await context.admin
-        .from("members")
-        .insert({
-          church_id: context.auth.churchId,
-          first_name: child.firstName,
-          last_name: child.lastName,
-          is_active: true,
-          medical_notes: child.medicalNotes,
-          // Next Sunday this room is already chosen on the family card.
-          default_location_id: child.locationId,
-        })
-        .select("id")
-        .single();
-      if (childError || !childRow) {
-        console.error("[checkin] new family: child insert failed:", childError?.message);
-        await cleanUp();
-        return fail(COULD_NOT_ADD);
-      }
-      createdMemberIds.push(childRow.id as string);
-      createdChildren.push({
-        memberId: childRow.id as string,
-        firstName: child.firstName,
-        lastName: child.lastName,
-        locationId: child.locationId,
-      });
-    }
-
-    const { data: householdRow, error: householdError } = await context.admin
-      .from("households")
-      .insert({
-        church_id: context.auth.churchId,
-        name: family.familyName,
-        created_by: context.auth.userId,
-      })
-      .select("id")
-      .single();
-    if (householdError || !householdRow) {
-      console.error("[checkin] new family: family insert failed:", householdError?.message);
-      await cleanUp();
-      return fail(COULD_NOT_ADD);
-    }
-    householdId = householdRow.id as string;
-
-    const { error: linkError } = await context.admin.from("household_members").insert([
-      {
-        church_id: context.auth.churchId,
-        household_id: householdId,
-        member_id: parentId,
-        relationship: "guardian",
-        is_primary_contact: true,
-        created_by: context.auth.userId,
-      },
-      ...createdChildren.map((child) => ({
-        church_id: context.auth.churchId,
-        household_id: householdId,
-        member_id: child.memberId,
-        relationship: "dependent",
-        is_primary_contact: false,
-        created_by: context.auth.userId,
-      })),
-    ]);
-    if (linkError) {
-      console.error("[checkin] new family: linking failed:", linkError.message);
-      await cleanUp();
-      return fail(COULD_NOT_ADD);
-    }
-
-    // The family now exists and is correct. From here a failure is about one
-    // child's check-in, reported by name, and the family is kept.
-    familyComplete = true;
     const results: ChildCheckinResult[] = [];
     for (const child of createdChildren) {
       try {
@@ -1140,14 +1054,9 @@ export async function createFamilyAndCheckIn(
       },
     };
   } catch (error) {
-    if (familyComplete) {
-      revalidateCheckin(householdId ?? undefined);
-      return fail(
-        toUserError(error, "The family was added, but we couldn't finish checking in. Search for them and try again."),
-      );
-    }
-    await cleanUp().catch(() => undefined);
-    return fail(toUserError(error, "We couldn't add this family, so nothing was saved."));
+    revalidateCheckin(householdId);
+    return fail(toUserError(error,
+      "The family was added, but we couldn't finish checking in. Search for them and try again."));
   }
 }
 
@@ -1279,15 +1188,22 @@ export async function lookupCheckoutCredential(input: {
   }
 
   const supabase = createClient();
-  const [household, sessions] = await Promise.all([
-    getHousehold(context.auth.churchId, householdId, supabase),
-    getHouseholdOpenSessions(
-      context.auth.churchId,
-      householdId,
-      today,
-      supabase,
-    ),
-  ]);
+  let household: Awaited<ReturnType<typeof getHousehold>>;
+  let sessions: CheckinSessionRow[];
+  try {
+    [household, sessions] = await Promise.all([
+      getHousehold(context.auth.churchId, householdId, supabase),
+      getHouseholdOpenSessions(
+        context.auth.churchId,
+        householdId,
+        today,
+        supabase,
+      ),
+    ]);
+  } catch (error) {
+    console.error("[checkin] pickup lookup failed:", error);
+    return fail("We couldn't load this family's check-ins. Please try again.");
+  }
 
   if (!household) return fail("We couldn't find that family.");
 
@@ -1351,35 +1267,41 @@ export async function lookupHouseholdForOverride(
   );
   if (!searchResult.ok) return fail(searchResult.error);
 
-  const results = await Promise.all(
-    searchResult.households.map(async (household) => {
-      const sessions = await getHouseholdOpenSessions(
-        context.auth.churchId,
-        household.id,
-        today,
-        supabase,
-      );
+  let results: CheckoutLookup[];
+  try {
+    results = await Promise.all(
+      searchResult.households.map(async (household) => {
+        const sessions = await getHouseholdOpenSessions(
+          context.auth.churchId,
+          household.id,
+          today,
+          supabase,
+        );
 
-      return {
-        householdId: household.id,
-        householdName: household.name,
-        method: "override" as CheckoutMethod,
-        sessions,
-        guardians: household.members
-          .filter((m) => m.relationship === "guardian")
-          .map((m) => ({
-            memberId: m.memberId,
-            name: `${m.firstName} ${m.lastName}`,
-            label: m.relationshipLabel,
+        return {
+          householdId: household.id,
+          householdName: household.name,
+          method: "override" as CheckoutMethod,
+          sessions,
+          guardians: household.members
+            .filter((m) => m.relationship === "guardian")
+            .map((m) => ({
+              memberId: m.memberId,
+              name: `${m.firstName} ${m.lastName}`,
+              label: m.relationshipLabel,
+            })),
+          authorizedPickups: household.pickupAuthorizations.map((p) => ({
+            memberId: p.memberId,
+            name: `${p.firstName} ${p.lastName}`,
+            label: p.relationshipLabel,
           })),
-        authorizedPickups: household.pickupAuthorizations.map((p) => ({
-          memberId: p.memberId,
-          name: `${p.firstName} ${p.lastName}`,
-          label: p.relationshipLabel,
-        })),
-      } satisfies CheckoutLookup;
-    }),
-  );
+        } satisfies CheckoutLookup;
+      }),
+    );
+  } catch (error) {
+    console.error("[checkin] pickup search failed:", error);
+    return fail("We couldn't load the check-ins for these families. Please try again.");
+  }
 
   return { ok: true, data: results.filter((row) => row.sessions.length > 0) };
 }
@@ -1410,6 +1332,9 @@ export async function completeCheckout(input: {
   if (!isContext(context)) return context;
 
   if (input.sessionIds.length === 0) return fail("Tick who is being picked up.");
+  if (input.sessionIds.length > 100 || new Set(input.sessionIds).size !== input.sessionIds.length) {
+    return fail("Choose one family's children and try again.");
+  }
 
   const reason = input.overrideReason?.trim() ?? "";
   if (input.method === "override" && reason.length < 4) {
@@ -1418,24 +1343,12 @@ export async function completeCheckout(input: {
     );
   }
 
-  // Guardians and other adults are never released through kids checkout.
-  const { data: openRows } = await context.admin
-    .from("checkin_sessions")
-    .select("id, member_id, household_id")
-    .in("id", input.sessionIds)
-    .eq("church_id", context.auth.churchId)
-    .in("status", ["pre_checked_in", "checked_in"]);
-
-  // Which family this release is for, proven rather than claimed. A release
-  // recorded as "code" or "QR" must carry the ticket the lookup of that code
-  // issued; otherwise it is an override and has its written reason above.
-  let householdId: string | null;
+  // A code or QR must carry the ticket issued by the earlier lookup. The
+  // database then locks the selected sessions and verifies their family,
+  // dependent status, pickup person, and all-or-nothing release together.
+  let householdId: string | null = null;
   if (input.method === "override") {
-    const families = new Set((openRows ?? []).map((row) => row.household_id as string | null));
-    householdId = families.size === 1 ? [...families][0] : null;
-    if (!householdId && (openRows ?? []).length > 0) {
-      return fail("Release one family's children at a time.");
-    }
+    // A supervisor's written reason is checked above and again in SQL.
   } else if (input.method === "code" || input.method === "qr") {
     const ticket = verifyReleaseTicket(input.ticket, {
       churchId: context.auth.churchId,
@@ -1444,85 +1357,30 @@ export async function completeCheckout(input: {
     });
     if (!ticket) return fail("Look the code up again, then release.");
     householdId = ticket.householdId;
-    if ((openRows ?? []).some((row) => row.household_id !== householdId)) {
-      return fail("Only this family's children can be released with their code.");
-    }
     // Someone the family did not list is an override, never a code release.
     if (!input.releasedToMemberId) return fail("Tap who is picking up.");
   } else {
     return fail("Choose how this pickup was checked.");
   }
 
-  // The adult named as taking the child must be one of the family's guardians
-  // or on its pickup list — the rule the desk shows, now kept by the server.
-  if (input.releasedToMemberId) {
-    if (!householdId) return fail("That person isn't on this family's pickup list.");
-    const [{ data: guardian }, { data: authorized }] = await Promise.all([
-      context.admin
-        .from("household_members")
-        .select("id")
-        .eq("church_id", context.auth.churchId)
-        .eq("household_id", householdId)
-        .eq("member_id", input.releasedToMemberId)
-        .eq("relationship", "guardian")
-        .maybeSingle(),
-      context.admin
-        .from("household_pickup_authorizations")
-        .select("id")
-        .eq("church_id", context.auth.churchId)
-        .eq("household_id", householdId)
-        .eq("member_id", input.releasedToMemberId)
-        .eq("is_active", true)
-        .is("revoked_at", null)
-        .maybeSingle(),
-    ]);
-    if (!guardian && !authorized) {
-      return fail("That person isn't on this family's pickup list.");
-    }
-  }
-
-  const memberIds = Array.from(
-    new Set((openRows ?? []).map((row) => row.member_id as string)),
-  );
-  if (memberIds.length > 0) {
-    const { data: dependents } = await context.admin
-      .from("household_members")
-      .select("member_id")
-      .eq("church_id", context.auth.churchId)
-      .eq("relationship", "dependent")
-      .in("member_id", memberIds);
-    const dependentIds = new Set(
-      (dependents ?? []).map((row) => row.member_id as string),
-    );
-    if (memberIds.some((id) => !dependentIds.has(id))) {
-      return fail("Only children can be checked out.");
-    }
-  }
-
   const { data, error } = await context.admin
-    .from("checkin_sessions")
-    .update({
-      status: "checked_out",
-      checked_out_at: new Date().toISOString(),
-      checked_out_by: context.auth.userId,
-      checkout_method: input.method,
-      checkout_released_to_member_id: input.releasedToMemberId || null,
-      checkout_override_reason: input.method === "override" ? reason : null,
-    })
-    .in("id", input.sessionIds)
-    .eq("church_id", context.auth.churchId)
-    .in("status", ["pre_checked_in", "checked_in"])
-    .select("id");
+    .rpc("release_checkin_sessions", {
+      p_church_id: context.auth.churchId,
+      p_session_ids: input.sessionIds,
+      p_expected_household_id: householdId,
+      p_method: input.method,
+      p_released_to_member_id: input.releasedToMemberId || null,
+      p_override_reason: input.method === "override" ? reason : null,
+      p_actor_user_id: context.auth.userId,
+    });
 
-  if (error) return fail(toUserError(error, "We couldn't release those children."));
-
-  const released = (data ?? []).length;
-  if (released === 0) {
-    return fail("Those children have already been checked out.");
+  if (error || data !== input.sessionIds.length) {
+    console.error("[checkin] checkout failed:", error?.message ?? "count mismatch");
+    return fail("We couldn't release every selected child. Refresh the desk and try again.");
   }
 
   revalidateCheckin();
-  return { ok: true, data: { released } };
+  return { ok: true, data: { released: data } };
 }
 
 // ---------------------------------------------------------------------------

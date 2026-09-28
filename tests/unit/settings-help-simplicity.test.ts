@@ -5,6 +5,7 @@ import test from "node:test";
 import {
   deriveTicketSubject,
   sanitizeFromPath,
+  supportDeliveryWarning,
   supportTicketStatus,
   withFromPath,
   SUPPORT_RESPONSE_TIME,
@@ -354,6 +355,14 @@ test("ticket statuses read We're on it, Answered or Closed", () => {
   assert.equal(supportTicketStatus({ status: "resolved", comments: [{ authorRole: "platform" }] }).label, "Closed");
   const list = read("components/support/support-tickets-list.tsx");
   assert.doesNotMatch(list, /components\/admin\/badges/);
+});
+
+test("saved support messages disclose unconfirmed email delivery", () => {
+  assert.equal(supportDeliveryWarning("ticket", true, true), null);
+  assert.match(supportDeliveryWarning("ticket", false) ?? "", /message was saved.*notification email/i);
+  assert.match(supportDeliveryWarning("ticket", true, false) ?? "", /confirmation email could not be confirmed/i);
+  assert.match(supportDeliveryWarning("reply", false) ?? "", /reply was saved.*notification email/i);
+  assert.equal(supportDeliveryWarning("reply", true), null);
 });
 
 test("the Help page promises the same response time as the public support page", () => {

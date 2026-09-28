@@ -11,6 +11,7 @@ import {
   assertInviteEmail,
   fetchInviteByChurchId,
   fetchInviteByToken,
+  inviteNeedsRefresh,
   type InviteValidationResult,
   type ValidInvite,
 } from "@/lib/onboarding/validate-invite";
@@ -18,7 +19,6 @@ import { requireOnboardingInvitee } from "@/lib/onboarding/require-invitee";
 import { prepareChurchLogo } from "@/lib/branding/church-logo";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { dashboardEmailRedirect } from "@/lib/auth/auth-redirects";
 import { toUserError } from "@/lib/errors/user-error";
 import {
   ALREADY_REGISTERED_MESSAGE,
@@ -31,11 +31,11 @@ export type ActionResult =
   | { ok: false; error: string };
 
 export type CreateAccountResult =
-  | { ok: true; needsEmailConfirmation: boolean }
+  | { ok: true }
   | { ok: false; error: string };
 
 export type ResendInviteResult =
-  | { ok: true; email: string }
+  | { ok: true; email: string; delivery: "sent" | "unconfirmed" | "old_links_active" }
   | { ok: false; error: string };
 
 export type IntegrationStatusResult = {
@@ -78,26 +78,23 @@ export async function createOnboardingAccount(
   }
 
   const supabase = createClient();
-  // The confirmation link must resume after account creation. `next` is a
-  // relative path because the callback validates it with `safeRedirectPath`.
-  const emailRedirectTo = dashboardEmailRedirect(
-    `/onboarding?token=${encodeURIComponent(token)}&step=3`,
-  );
-
-  const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+  // The validated invite link was delivered to this exact mailbox. That
+  // first email proves address ownership, so create the confirmed account
+  // on the trusted server instead of sending a second confirmation email.
+  // Public sign-up confirmation remains enabled.
+  const admin = createAdminClient();
+  const { error: createError } = await admin.auth.admin.createUser({
     email: data.email,
     password: data.password,
-    options: {
-      data: {
-        first_name: data.firstName,
-        last_name: data.lastName,
-      },
-      emailRedirectTo,
+    email_confirm: true,
+    user_metadata: {
+      first_name: data.firstName,
+      last_name: data.lastName,
     },
   });
 
-  if (signUpError) {
-    if (isAlreadyRegistered(signUpError)) {
+  if (createError) {
+    if (isAlreadyRegistered(createError)) {
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: data.email,
         password: data.password,
@@ -105,13 +102,21 @@ export async function createOnboardingAccount(
       if (signInError) {
         return { ok: false, error: ALREADY_REGISTERED_MESSAGE };
       }
-      return { ok: true, needsEmailConfirmation: false };
+      return { ok: true };
     }
-    console.error("[onboarding] sign-up refused:", signUpError.message);
-    return { ok: false, error: signUpErrorMessage(signUpError, 8) };
+    console.error("[onboarding] account creation refused:", createError.name);
+    return { ok: false, error: signUpErrorMessage(createError, 8) };
   }
 
-  return { ok: true, needsEmailConfirmation: !signUpData.session };
+  const { error: signInError } = await supabase.auth.signInWithPassword({
+    email: data.email,
+    password: data.password,
+  });
+  if (signInError) {
+    return { ok: false, error: "Your account was created, but sign-in did not finish. Try continuing with the same password." };
+  }
+
+  return { ok: true };
 }
 
 export async function updateChurchProfile(
@@ -153,13 +158,19 @@ export async function updateChurchProfile(
     if (data.logoUrl) update.logo_url = data.logoUrl;
   }
 
-  const { error } = await admin
+  const { data: updated, error } = await admin
     .from("churches")
     .update(update)
-    .eq("id", churchId);
+    .eq("id", churchId)
+    .is("onboarding_completed_at", null)
+    .select("id")
+    .maybeSingle();
 
   if (error) {
     return { ok: false, error: toUserError(error, "We couldn't save your church's details.") };
+  }
+  if (!updated) {
+    return { ok: false, error: "This church has already completed setup. Sign in to change its details." };
   }
 
   return { ok: true };
@@ -207,10 +218,20 @@ export async function uploadChurchLogo(
   // The path is reused on every upload, so the URL carries a version: without
   // it a re-framed logo keeps showing the old crop from every browser cache.
   const logoUrl = `${publicUrl.publicUrl}?v=${Date.now()}`;
-  await admin
+  const { data: updated, error: profileError } = await admin
     .from("churches")
     .update({ logo_url: logoUrl })
-    .eq("id", churchId);
+    .eq("id", churchId)
+    .is("onboarding_completed_at", null)
+    .select("id")
+    .maybeSingle();
+
+  if (profileError) {
+    return { ok: false, error: toUserError(profileError, "We couldn't save your logo to the church profile.") };
+  }
+  if (!updated) {
+    return { ok: false, error: "This church has already completed setup. Sign in to change its logo." };
+  }
 
   return { ok: true, logoUrl };
 }
@@ -225,10 +246,14 @@ export async function getOnboardingIntegrationStatus(
   }
 
   const admin = createAdminClient();
-  const { data } = await admin
+  const { data, error } = await admin
     .from("church_integrations")
     .select("provider, access_token, metadata")
     .eq("church_id", churchId);
+
+  if (error) {
+    return { ok: false, error: "We couldn't check connected accounts. Please reload this step and try again." };
+  }
 
   const rows = data ?? [];
   const google = rows.find((r) => r.provider === "google");
@@ -269,33 +294,21 @@ export async function completeOnboarding(token: string): Promise<ActionResult> {
   }
 
   const admin = createAdminClient();
-  const now = new Date().toISOString();
-
-  await admin
-    .from("church_invites")
-    .update({ accepted_at: now })
-    .eq("id", inviteResult.invite.id);
-
-  await admin
-    .from("churches")
-    .update({ onboarding_completed_at: now })
-    .eq("id", inviteResult.invite.churchId);
-
-  const { error: linkError } = await admin.from("church_users").upsert(
-    {
-      church_id: inviteResult.invite.churchId,
-      user_id: user.id,
-      role: "admin",
-      onboarding_step: "completed",
-    },
-    { onConflict: "church_id,user_id" },
-  );
-
-  if (linkError) {
-    return { ok: false, error: toUserError(linkError, "We couldn't finish setting up your account.") };
+  // The function rechecks the invite under a row lock and commits the admin
+  // membership, church completion, and invite acceptance together.
+  const { data: outcome, error } = await admin.rpc("complete_church_onboarding", {
+    p_token: token.trim(),
+    p_user_id: user.id,
+    p_user_email: user.email ?? "",
+  });
+  if (error) return { ok: false, error: toUserError(error, "We couldn't finish setup. Please try again.") };
+  if (outcome === "completed") return { ok: true };
+  if (outcome === "expired") return { ok: false, error: "This invite has expired. Contact your administrator." };
+  if (outcome === "email_mismatch") return { ok: false, error: "Sign in with the email address that received this invite." };
+  if (outcome === "already_accepted" || outcome === "already_complete") {
+    return { ok: false, error: "Setup is already complete. Sign in to continue." };
   }
-
-  return { ok: true };
+  return { ok: false, error: "This invite link is invalid." };
 }
 
 export async function resendInvite(
@@ -319,43 +332,34 @@ export async function resendInvite(
   }
 
   const existingInvite = await fetchInviteByChurchId(churchId);
+  if (!existingInvite) {
+    return { ok: false, error: "No pending invite found. Create a new invite from Add Church." };
+  }
 
-  let email: string;
-  let adminFirstName: string;
-  let adminLastName: string;
-  let token: string;
-
-  if (existingInvite) {
-    email = existingInvite.email;
-    adminFirstName = existingInvite.adminFirstName;
-    adminLastName = existingInvite.adminLastName;
-
-    await admin
-      .from("church_invites")
-      .delete()
-      .eq("church_id", churchId)
-      .is("accepted_at", null);
-
+  const email = existingInvite.email;
+  const adminFirstName = existingInvite.adminFirstName;
+  let inviteId = existingInvite.id;
+  let token = existingInvite.token;
+  if (inviteNeedsRefresh(existingInvite.expiresAt)) {
+    // Only an expired link needs replacing. Keep the old row until a new one
+    // exists, so a failed insert cannot strand the church. A failed email can
+    // then be retried using the newly created, still-valid link.
     const { data: newInvite, error: newError } = await admin
       .from("church_invites")
       .insert({
         church_id: churchId,
         email,
         admin_first_name: adminFirstName,
-        admin_last_name: adminLastName,
+        admin_last_name: existingInvite.adminLastName,
       })
-      .select("token")
+      .select("id, token")
       .single();
 
     if (newError || !newInvite) {
       return { ok: false, error: newError?.message ?? "Could not create invite." };
     }
+    inviteId = newInvite.id;
     token = newInvite.token;
-  } else {
-    return {
-      ok: false,
-      error: "No pending invite found. Create a new invite from Add Church.",
-    };
   }
 
   try {
@@ -366,14 +370,28 @@ export async function resendInvite(
       adminFirstName,
     });
   } catch (err) {
-    return {
-      ok: false,
-      error: err instanceof Error ? err.message : "Failed to send email.",
-    };
+    console.error("[onboarding] invitation resend delivery was not confirmed:", err instanceof Error ? err.name : "UnknownError");
+    revalidatePath("/admin/churches");
+    revalidatePath(`/admin/churches/${churchId}`);
+    return { ok: true, email, delivery: "unconfirmed" };
+  }
+
+  const { error: oldInviteError } = await admin
+    .from("church_invites")
+    .delete()
+    .eq("church_id", churchId)
+    .is("accepted_at", null)
+    .neq("id", inviteId);
+  if (oldInviteError) {
+    console.error("[onboarding] old invitations could not be disabled:", oldInviteError.message);
+    revalidatePath("/admin/churches");
+    revalidatePath(`/admin/churches/${churchId}`);
+    return { ok: true, email, delivery: "old_links_active" };
   }
 
   revalidatePath("/admin/churches");
-  return { ok: true, email };
+  revalidatePath(`/admin/churches/${churchId}`);
+  return { ok: true, email, delivery: "sent" };
 }
 
 export type { ValidInvite, InviteValidationResult };

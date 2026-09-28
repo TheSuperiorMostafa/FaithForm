@@ -23,7 +23,7 @@ const GROUPS = [
     required: true,
     checks: [
       ["NEXT_PUBLIC_SUPABASE_URL", /^https:\/\/[a-z0-9-]+\.supabase\.(co|in)$/i, "a Supabase project URL"],
-      ["SUPABASE_SERVICE_ROLE_KEY", /^.{40,}$/, "the service-role key"],
+      ["SUPABASE_SECRET_KEY", /^.{40,}$/, "the server secret key", "SUPABASE_SERVICE_ROLE_KEY"],
       ["NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", /^.{20,}$/, "the publishable key", "NEXT_PUBLIC_SUPABASE_ANON_KEY"],
     ],
   },

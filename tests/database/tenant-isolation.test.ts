@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
 
-import { actAs, connect, refused, suiteOptions, type Client } from "./groups-fixtures";
+import { actAs, connect, refused, staffUser, suiteOptions, type Client } from "./groups-fixtures";
 
 /**
  * Two churches, built on the migration chain that ships, attacked through the
@@ -81,6 +81,115 @@ async function inTransaction(client: Client, body: () => Promise<void>) {
     await client.query("rollback");
   }
 }
+
+test("a staff session reads only its granted financial, call, and family areas", suiteOptions, async () => {
+  const client = await connect();
+  try {
+    await inTransaction(client, async () => {
+      const w = await seed(client);
+      const fileId = randomUUID();
+      await client.query(
+        `insert into public.member_files
+           (id, church_id, member_id, storage_path, label, file_name, mime_type, size_bytes, visibility)
+         values ($1, $2, $3, $4, 'Consent', 'consent.pdf', 'application/pdf', 12, 'staff')`,
+        [fileId, w.a, w.ids.memberA, `${w.a}/${w.ids.memberA}/${fileId}.pdf`],
+      );
+      const noGrants = await staffUser(client, w.a, { role: "viewer" });
+      const giving = await staffUser(client, w.a, { role: "viewer", features: ["giving"] });
+      const calls = await staffUser(client, w.a, { role: "viewer", features: ["voice_assistant"] });
+      const people = await staffUser(client, w.a, { role: "viewer", features: ["people"] });
+      const attendance = await staffUser(client, w.a, { role: "viewer", features: ["attendance"] });
+
+      const read = async (userId: string, table: string): Promise<string[]> => {
+        await client.query("savepoint staff_read");
+        try {
+          await actAs(client, userId);
+          const result = await client.query(`select id from public.${table} order by id`);
+          return result.rows.map((row) => row.id as string);
+        } finally {
+          await client.query("rollback to savepoint staff_read");
+          await client.query("release savepoint staff_read");
+        }
+      };
+
+      for (const table of ["members", "member_files", "giving_donors", "giving_donations", "phone_calls", "households"]) {
+        assert.deepEqual(await read(noGrants, table), [], `${table}: ungranted staff read a row`);
+      }
+      assert.deepEqual(await read(giving, "giving_donations"), [w.ids.donationA]);
+      assert.deepEqual(await read(giving, "giving_donors"), [w.ids.donorA]);
+      assert.deepEqual(await read(giving, "phone_calls"), []);
+      assert.deepEqual(await read(calls, "phone_calls"), [w.ids.callA]);
+      assert.deepEqual(await read(calls, "giving_donations"), []);
+      assert.deepEqual(await read(people, "members"), [w.ids.memberA]);
+      assert.deepEqual(await read(people, "member_files"), [fileId]);
+      assert.deepEqual(await read(people, "households"), [w.ids.householdA]);
+      assert.deepEqual(await read(attendance, "members"), [w.ids.memberA]);
+      assert.deepEqual(await read(attendance, "households"), []);
+
+      // Column grants keep the roster available without giving any browser
+      // session the medical note. Authorized pages read it on the server.
+      for (const userId of [attendance, people]) {
+        await client.query("savepoint medical_read");
+        try {
+          await actAs(client, userId);
+          assert.ok(
+            await refused(client, "select medical_notes from public.members where id = $1", [w.ids.memberA]),
+            "staff fetched a medical note directly",
+          );
+        } finally {
+          await client.query("rollback to savepoint medical_read");
+          await client.query("release savepoint medical_read");
+        }
+      }
+
+      await client.query("savepoint server_medical_read");
+      try {
+        await client.query("set local role service_role");
+        const medical = await client.query("select medical_notes from public.members where id = $1", [w.ids.memberA]);
+        assert.equal(medical.rows[0]?.medical_notes, "peanut allergy");
+      } finally {
+        await client.query("rollback to savepoint server_medical_read");
+        await client.query("release savepoint server_medical_read");
+      }
+
+      // A church switch must also cut off an otherwise valid feature grant.
+      await client.query(
+        `insert into public.church_features (church_id, feature_key, enabled)
+         values ($1, 'giving', false)`,
+        [w.a],
+      );
+      assert.deepEqual(await read(giving, "giving_donations"), []);
+    });
+  } finally {
+    await client.end();
+  }
+});
+
+test("the announcement status view enforces its caller's church policy", suiteOptions, async () => {
+  const client = await connect();
+  try {
+    await inTransaction(client, async () => {
+      const w = await seed(client);
+      // Make the legacy view callable inside this disposable transaction so
+      // the test proves the underlying row policy, not merely a missing grant.
+      await client.query("grant select on public.announcements_with_status to authenticated, anon");
+
+      await actAs(client, w.adminA);
+      const own = await client.query(
+        "select id from public.announcements_with_status order by id",
+      );
+      assert.deepEqual(own.rows.map((row) => row.id), [w.ids.announcementA]);
+
+      await actAs(client, null);
+      assert.ok(
+        await refused(client, "select id from public.announcements_with_status"),
+        "a signed-out visitor read announcements through the view",
+      );
+    });
+  } finally {
+    await client.end();
+  }
+});
 
 test("church A's admin cannot read, change, delete, or plant rows in church B", suiteOptions, async () => {
   const client = await connect();

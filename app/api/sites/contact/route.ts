@@ -2,16 +2,18 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 
 import { sendSiteContactEmail } from "@/lib/email/site-contact";
+import { getChurchAuth } from "@/lib/auth/church";
 import {
   isChurchFeatureEmailEnabled,
-  isChurchFeatureEnabled,
 } from "@/lib/features/access";
+import { isPublicFeatureEnabled } from "@/lib/features/public-access";
 import {
   assertRateLimit,
   getClientIp,
   rateLimitResponse,
 } from "@/lib/security/rate-limit";
 import { getContactTargetBySlug } from "@/lib/sites/queries";
+import { canPreviewDraftSite } from "@/lib/sites/preview-access";
 import { subdomainSlug } from "@/lib/sites/tenant";
 import { createAdminClientOrNull } from "@/lib/supabase/admin";
 
@@ -81,13 +83,31 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  const target = await getContactTargetBySlug(slug);
+  let target: Awaited<ReturnType<typeof getContactTargetBySlug>>;
+  try {
+    target = await getContactTargetBySlug(slug);
+  } catch {
+    console.error("[sites] contact publication state unavailable");
+    return NextResponse.json(
+      { error: "We could not send that right now. Please try again shortly." },
+      { status: 503 },
+    );
+  }
   if (!target) return badRequest("Could not tell which church this is for.");
 
   // The site that hosts this form is gone when Website is off, so a POST
   // arriving here is a stale tab or a direct call. Either way there is no
   // inbox to deliver to — /dashboard/website/messages is unreachable too.
-  if (!(await isChurchFeatureEnabled(target.churchId, "website"))) {
+  if (!(await isPublicFeatureEnabled(target.churchId, "website"))) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  // A direct POST must not turn an unpublished draft's private preview into a
+  // public contact endpoint. Staff can still test the form from their preview.
+  if (
+    !target.isPublished &&
+    !canPreviewDraftSite(target.churchId, await getChurchAuth())
+  ) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 

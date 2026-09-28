@@ -247,79 +247,29 @@ export async function updateGathering(
     throw new VisitorError("invalid_input", parsed.error.issues[0]?.message ?? "Check the gathering details.");
   }
   const v = parsed.data;
-  const { data: existing } = await admin
-    .from("group_events")
-    .select("id, status")
-    .eq("id", input.eventId)
-    .eq("church_id", input.churchId)
-    .eq("group_id", input.groupId)
-    .maybeSingle();
-  if (!existing) throw new VisitorError("group_not_found", "That gathering was not found.");
-  if (existing.status === "cancelled") throw new VisitorError("conflict", "A cancelled gathering can't be edited.");
-
   const timezone = v.timezone ?? input.churchTimezone;
-  const { error } = await admin
-    .from("group_events")
-    .update({
-      title: v.title,
-      description: blankToNull(v.description),
-      starts_at: v.startsAt,
-      ends_at: v.endsAt,
-      timezone,
-      location_name: blankToNull(v.locationName),
-      location_address: blankToNull(v.locationAddress),
-      online_meeting_url: blankToNull(v.onlineMeetingUrl),
-      // A hand-edited generated gathering is left alone by regeneration.
-      is_modified: true,
-      updated_by: input.actor.userId,
-    })
-    .eq("id", input.eventId)
-    .eq("church_id", input.churchId);
-  if (error) throw new VisitorError("unavailable", "Could not save that gathering.");
-
-  // Keep the attendance occurrence in step while nobody has been counted yet;
-  // once someone has, the occurrence is history and stays as it was.
-  const { data: occurrence } = await admin
-    .from("service_occurrences")
-    .select("id")
-    .eq("group_event_id", input.eventId)
-    .eq("church_id", input.churchId)
-    .maybeSingle();
-  if (occurrence) {
-    const { count } = await admin
-      .from("attendance_facts")
-      .select("id", { count: "exact", head: true })
-      .eq("service_occurrence_id", occurrence.id as string);
-    if (!count) {
-      const startMs = Date.parse(v.startsAt);
-      const endMs = Date.parse(v.endsAt);
-      await admin
-        .from("service_occurrences")
-        .update({
-          label: v.title.slice(0, 200),
-          starts_at_utc: v.startsAt,
-          ends_at_utc: v.endsAt,
-          checkin_opens_at_utc: new Date(startMs - 86_400_000).toISOString(),
-          checkin_closes_at_utc: new Date(endMs + 30 * 86_400_000).toISOString(),
-          timezone,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", occurrence.id as string)
-        .eq("church_id", input.churchId);
-    }
-  }
-
-  await admin.rpc("log_group_event", {
+  const { data: outcome, error } = await admin.rpc("update_group_gathering", {
     p_church_id: input.churchId,
     p_group_id: input.groupId,
-    p_action: "event_updated",
+    p_event_id: input.eventId,
     p_actor_type: input.actor.type,
     p_actor_user_id: input.actor.userId,
-    p_membership_id: null,
-    p_account_id: null,
-    p_member_id: null,
-    p_detail: { eventId: input.eventId },
+    p_title: v.title,
+    p_description: blankToNull(v.description),
+    p_starts_at: v.startsAt,
+    p_ends_at: v.endsAt,
+    p_timezone: timezone,
+    p_location_name: blankToNull(v.locationName),
+    p_location_address: blankToNull(v.locationAddress),
+    p_online_meeting_url: blankToNull(v.onlineMeetingUrl),
   });
+  if (error) throw new VisitorError("unavailable", "Could not save that gathering.");
+  if (outcome === "not_found") throw new VisitorError("group_not_found", "That gathering was not found.");
+  if (outcome === "cancelled") throw new VisitorError("conflict", "A cancelled gathering can't be edited.");
+  if (outcome === "attendance_locked") {
+    throw new VisitorError("conflict", "Attendance has been recorded. This meeting's time can no longer change.");
+  }
+  if (outcome !== "updated") throw new VisitorError("unavailable", "Could not save that gathering.");
 }
 
 export async function cancelGathering(
@@ -464,19 +414,20 @@ export async function getAttendanceSheet(
   input: { churchId: string; groupId: string; eventId: string; now?: Date },
 ): Promise<AttendanceSheet> {
   const now = input.now ?? new Date();
-  const { data: event } = await admin
+  const { data: event, error: eventError } = await admin
     .from("group_events")
     .select("id, title, starts_at, ends_at, timezone, status")
     .eq("id", input.eventId)
     .eq("church_id", input.churchId)
     .eq("group_id", input.groupId)
     .maybeSingle();
+  if (eventError) throw new VisitorError("unavailable", "Could not open attendance right now.");
   if (!event) throw new VisitorError("group_not_found", "That gathering was not found.");
 
-  const [{ data: memberships }, { data: occurrence }, { data: record }] = await Promise.all([
+  const [membershipResult, occurrenceResult, recordResult] = await Promise.all([
     admin
       .from("group_memberships")
-      .select("id, member_id, account_id, group_role")
+      .select("id, member_id, account_id, group_role", { count: "exact" })
       .eq("group_id", input.groupId)
       .eq("church_id", input.churchId)
       .eq("status", "active")
@@ -494,20 +445,35 @@ export async function getAttendanceSheet(
       .eq("church_id", input.churchId)
       .maybeSingle(),
   ]);
+  if (membershipResult.error || occurrenceResult.error || recordResult.error || membershipResult.count === null) {
+    throw new VisitorError("unavailable", "Could not load the complete attendance sheet. Please try again.");
+  }
+  if (membershipResult.count !== (membershipResult.data ?? []).length) {
+    throw new VisitorError("unavailable", "This group has more people than the attendance form can safely show. Contact support.");
+  }
+  const memberships = membershipResult.data;
+  const occurrence = occurrenceResult.data;
+  const record = recordResult.data;
 
   const rows = (memberships ?? []) as { id: string; member_id: string | null; account_id: string | null; group_role: string }[];
-  const labels = await labelMemberships(admin, rows);
+  const labels = await labelMemberships(admin, rows, { requireComplete: true });
 
   let presentMembers = new Set<string>();
   const guests: { memberId: string; name: string }[] = [];
   if (occurrence) {
-    const { data: facts } = await admin
+    const { data: facts, error: factsError, count: factsCount } = await admin
       .from("attendance_facts")
-      .select("member_id, members!inner(first_name, last_name)")
+      .select("member_id, members!inner(first_name, last_name)", { count: "exact" })
       .eq("service_occurrence_id", occurrence.id as string)
       .eq("church_id", input.churchId)
       .eq("status", "active")
       .limit(2000);
+    if (factsError || factsCount === null) {
+      throw new VisitorError("unavailable", "Could not load the complete attendance sheet. Please try again.");
+    }
+    if (factsCount !== (facts ?? []).length) {
+      throw new VisitorError("unavailable", "This meeting has more attendance records than the form can safely show. Contact support.");
+    }
     const factRows = (facts ?? []) as { member_id: string; members: { first_name: string; last_name: string } | { first_name: string; last_name: string }[] }[];
     presentMembers = new Set(factRows.map((f) => f.member_id));
     const roster = new Set(rows.map((r) => r.member_id).filter(Boolean));
@@ -604,19 +570,26 @@ export async function submitAttendance(
   if (!event) throw new VisitorError("group_not_found", "That gathering was not found.");
 
   // Membership ids to People ids, through this group's own active roster only.
-  const { data: roster, error: rosterError } = await admin
-    .from("group_memberships")
-    .select("id, member_id")
-    .eq("group_id", input.groupId)
-    .eq("church_id", input.churchId)
-    .eq("status", "active")
-    .in("id", v.presentMembershipIds.length ? v.presentMembershipIds : ["00000000-0000-0000-0000-000000000000"]);
-  // A failed read must not become "nobody came": the command would reverse
-  // everyone already counted.
-  if (rosterError) throw new VisitorError("unavailable", "Could not save attendance right now.");
-  const memberIds = ((roster ?? []) as { member_id: string | null }[])
-    .map((row) => row.member_id)
-    .filter((id): id is string => Boolean(id));
+  const selectedIds = [...new Set(v.presentMembershipIds)];
+  let roster: { id: string; member_id: string | null }[] = [];
+  if (selectedIds.length) {
+    const { data, error: rosterError } = await admin
+      .from("group_memberships")
+      .select("id, member_id")
+      .eq("group_id", input.groupId)
+      .eq("church_id", input.churchId)
+      .eq("status", "active")
+      .in("id", selectedIds);
+    // A failed or incomplete read must not become "nobody came": the command
+    // would reverse everyone already counted. A member can leave after the
+    // sheet opens, so all selected memberships must still be recordable.
+    if (rosterError) throw new VisitorError("unavailable", "Could not save attendance right now.");
+    roster = (data ?? []) as { id: string; member_id: string | null }[];
+    if (roster.length !== selectedIds.length || roster.some((row) => !row.member_id)) {
+      throw new VisitorError("conflict", "The group roster changed. Reopen attendance and try again.");
+    }
+  }
+  const memberIds = roster.map((row) => row.member_id as string);
 
   const guestMemberIds = input.actor.type === "staff" ? v.guestMemberIds ?? [] : [];
   const { data, error } = await admin.rpc("record_group_attendance", {

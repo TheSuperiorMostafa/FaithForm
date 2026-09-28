@@ -5,7 +5,7 @@ import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
 /** Mirrors `series/[id]/page.tsx`: title and theme (data), then the weeks. */
 export default function SeriesDetailLoading() {
   return (
-    <SkeletonContainer className="flex w-full flex-col gap-8" label="series">
+    <SkeletonContainer className="flex w-full flex-col gap-8" label="Sermon series">
       <SermonBackLinkStatic label="Back to Sermons" />
       <header className="flex flex-col gap-4">
         <div className="space-y-2.5">
@@ -26,7 +26,10 @@ export default function SeriesDetailLoading() {
                 <Skeleton className="h-4 w-4/5" />
                 <Skeleton className="h-4 w-3/5" />
               </div>
-              <Skeleton className="h-11 w-56 rounded-[10px]" />
+              <div className="flex min-h-[88px] flex-col gap-2">
+                <Skeleton className="h-4 w-44" />
+                <Skeleton className="h-11 w-56 rounded-[10px]" />
+              </div>
             </CardContent>
           </Card>
         ))}

@@ -162,6 +162,13 @@ export function WeeklyEmailCard({
               This week&apos;s draft is made
             </StatusBadge>
           )}
+          {draftCreatedThisWeek && (
+            <p role={entries.length === 0 ? "alert" : "status"} className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-[15px] text-amber-950 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100">
+              {entries.length === 0
+                ? `This week's email is now empty, but the earlier draft may still contain announcements. Open ${mailbox} and delete or edit that draft before sending.`
+                : `The ${mailbox} draft is a snapshot. If you changed these announcements after making it, check the existing draft before sending or make a new one and remove the old one.`}
+            </p>
+          )}
           <p className="text-[15px] text-muted-foreground">
             Every Monday FaithForm puts these into one email draft in {mailbox} for you
             to check and send.

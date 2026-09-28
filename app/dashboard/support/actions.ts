@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { requireChurchAuth } from "@/lib/auth/church";
 import {
@@ -7,14 +8,17 @@ import {
   sendSupportTicketNotification,
 } from "@/lib/email/support-ticket";
 import { absoluteAppPath } from "@/lib/site-url";
-import { postTicketComment } from "@/lib/support/comments";
+import { SUPPORT_COMMENT_MAX_LENGTH } from "@/lib/support/comments";
+import { recordSupportEmailStatus } from "@/lib/support/email-status";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { toUserError } from "@/lib/errors/user-error";
 import {
   SUPPORT_SUBJECT_MAX,
+  SUPPORT_TICKET_BODY_MAX,
   deriveTicketSubject,
   sanitizeFromPath,
+  supportDeliveryWarning,
   withFromPath,
 } from "@/app/dashboard/support/ticket-helpers";
 
@@ -24,12 +28,15 @@ export async function submitSupportTicket(params: {
   body: string;
   /** The dashboard page they came from, if known (`?from=`). */
   fromPath?: string | null;
-}): Promise<{ error?: string }> {
+}): Promise<{ error?: string; warning?: string }> {
   const auth = await requireChurchAuth();
 
   const message = String(params.body ?? "").trim();
   if (!message) {
     return { error: "Write a message so we know how to help." };
+  }
+  if (message.length > SUPPORT_TICKET_BODY_MAX) {
+    return { error: `Keep the message to ${SUPPORT_TICKET_BODY_MAX.toLocaleString()} characters or fewer.` };
   }
   const subject = deriveTicketSubject(String(params.subject ?? ""), message);
   if (subject.length > SUPPORT_SUBJECT_MAX) {
@@ -51,13 +58,15 @@ export async function submitSupportTicket(params: {
     .select("id")
     .single();
 
-  if (error) {
-    return { error: toUserError(error, "We couldn't send your message.") };
+  if (error || !ticket) {
+    return { error: error ? toUserError(error, "We couldn't send your message.") : "We couldn't confirm your message was saved." };
   }
 
   // The ticket is saved; from here nothing may fail loudly. A church that has
   // asked for help should never be told their request errored because our
   // doorbell did.
+  let notificationConfirmed = false;
+  let acknowledgmentConfirmed = true;
   try {
     const [{ data: churchRow }, { data: userData }] = await Promise.all([
       admin
@@ -73,14 +82,14 @@ export async function submitSupportTicket(params: {
 
     // Both notes go out together: ours so somebody looks, theirs so the
     // request does not disappear into silence.
-    await Promise.all([
+    const [notification, acknowledgment] = await Promise.all([
       sendSupportTicketNotification({
         churchName,
         subject,
         body: body || null,
         submittedByEmail: submitterEmail,
         priority: "normal",
-        reviewUrl: absoluteAppPath(`/admin/support/${ticket?.id ?? ""}`),
+        reviewUrl: absoluteAppPath(`/admin/support/${ticket.id}`),
       }),
       submitterEmail
         ? sendSupportTicketAck({
@@ -91,16 +100,21 @@ export async function submitSupportTicket(params: {
           })
         : Promise.resolve(false),
     ]);
+    notificationConfirmed = notification.emailed;
+    acknowledgmentConfirmed = !submitterEmail || acknowledgment;
   } catch (notifyError) {
     console.error("submitSupportTicket notify:", notifyError);
   }
+  await recordSupportEmailStatus(admin, "support_tickets", ticket.id as string, notificationConfirmed);
 
   revalidatePath("/dashboard/support");
   revalidatePath("/admin/support");
   revalidatePath("/admin");
   revalidatePath(`/admin/churches/${auth.churchId}`);
 
-  return {};
+  return {
+    warning: supportDeliveryWarning("ticket", notificationConfirmed, acknowledgmentConfirmed) ?? undefined,
+  };
 }
 
 /**
@@ -113,49 +127,31 @@ export async function submitSupportTicket(params: {
 export async function replyToSupportTicket(params: {
   ticketId: string;
   body: string;
-}): Promise<{ error?: string }> {
+}): Promise<{ error?: string; warning?: string }> {
   const auth = await requireChurchAuth();
   const admin = createAdminClient();
-
-  const { data: ticket, error } = await admin
-    .from("support_tickets")
-    .select("id, church_id, subject, status")
-    .eq("id", params.ticketId)
-    .maybeSingle();
-
-  if (error) return { error: toUserError(error, "We couldn't send your reply.") };
-  if (!ticket || ticket.church_id !== auth.churchId) {
-    return { error: "That ticket could not be found." };
+  const message = String(params.body ?? "").trim();
+  if (!message) return { error: "Write a message before posting." };
+  if (message.length > SUPPORT_COMMENT_MAX_LENGTH) {
+    return { error: `Keep it under ${SUPPORT_COMMENT_MAX_LENGTH.toLocaleString()} characters.` };
   }
 
-  const posted = await postTicketComment(admin, {
-    ticketId: ticket.id as string,
-    churchId: auth.churchId,
-    authorRole: "church",
-    authorUserId: auth.userId,
-    authorName: auth.userEmail ?? null,
-    body: params.body,
+  // The database locks this ticket, verifies its church, posts the reply, and
+  // reopens a resolved ticket together. A failed update cannot strand a reply
+  // in a closed conversation.
+  const commentId = randomUUID();
+  const { data: subject, error } = await admin.rpc("reply_to_support_ticket", {
+    p_ticket_id: params.ticketId,
+    p_church_id: auth.churchId,
+    p_author_user_id: auth.userId,
+    p_author_name: auth.userEmail ?? null,
+    p_body: message,
+    p_comment_id: commentId,
   });
+  if (error?.code === "P0002") return { error: "That ticket could not be found." };
+  if (error) return { error: toUserError(error, "We couldn't send your reply.") };
 
-  if (posted.error) {
-    // Length and empty-message checks are written for people; anything else
-    // (a database failure) is not.
-    return {
-      error: /^(Write a message|Keep it under)/.test(posted.error)
-        ? posted.error
-        : toUserError(posted.error, "We couldn't send your reply."),
-    };
-  }
-
-  // A church replying to a ticket we had closed is reopening it. Leaving it
-  // resolved is how a reply goes unread.
-  if (ticket.status === "resolved") {
-    await admin
-      .from("support_tickets")
-      .update({ status: "open", updated_at: new Date().toISOString() })
-      .eq("id", ticket.id);
-  }
-
+  let notificationConfirmed = false;
   try {
     const { data: churchRow } = await admin
       .from("churches")
@@ -163,21 +159,23 @@ export async function replyToSupportTicket(params: {
       .eq("id", auth.churchId)
       .maybeSingle();
 
-    await sendSupportTicketNotification({
+    const notification = await sendSupportTicketNotification({
       churchName: (churchRow?.name as string | undefined) ?? "A church",
-      subject: `Reply — ${ticket.subject as string}`,
-      body: params.body.trim(),
+      subject: `Reply — ${subject as string}`,
+      body: message,
       submittedByEmail: auth.userEmail ?? null,
       priority: "normal",
-      reviewUrl: absoluteAppPath(`/admin/support/${ticket.id as string}`),
+      reviewUrl: absoluteAppPath(`/admin/support/${params.ticketId}`),
     });
+    notificationConfirmed = notification.emailed;
   } catch (notifyError) {
     console.error("replyToSupportTicket notify:", notifyError);
   }
+  await recordSupportEmailStatus(admin, "support_ticket_comments", commentId, notificationConfirmed);
 
   revalidatePath("/dashboard/support");
   revalidatePath("/admin/support");
   revalidatePath(`/admin/support/${params.ticketId}`);
 
-  return {};
+  return { warning: supportDeliveryWarning("reply", notificationConfirmed) ?? undefined };
 }

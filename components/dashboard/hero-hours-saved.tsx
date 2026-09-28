@@ -3,6 +3,7 @@ import { Clock, TrendingDown, TrendingUp } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { RangePicker } from "@/components/dashboard/range-picker";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClientOrNull } from "@/lib/supabase/admin";
 import {
   getHoursSavedBreakdown,
   type DashboardRange,
@@ -33,7 +34,14 @@ function formatDelta(delta: number | null, range: DashboardRange) {
 
 export async function HeroHoursSaved({ churchId, range }: HeroHoursSavedProps) {
   const supabase = createClient();
-  const data = await getHoursSavedBreakdown(supabase, churchId, range);
+  // Only aggregate call fields are read here; the signed-in page supplies its
+  // church id. The direct staff policy keeps full transcripts behind Calls.
+  const data = await getHoursSavedBreakdown(
+    supabase,
+    churchId,
+    range,
+    createAdminClientOrNull() ?? supabase,
+  );
   const delta = formatDelta(data.deltaPercent, range);
 
   const activeCategories = categoryLabels.filter(

@@ -77,6 +77,7 @@ type View =
 export function CheckinDesk({
   sessions,
   locations,
+  hasClosedRooms,
   members,
   serviceDate,
   canAddFamily,
@@ -84,6 +85,7 @@ export function CheckinDesk({
 }: {
   sessions: CheckinSessionRow[];
   locations: ChurchLocation[];
+  hasClosedRooms: boolean;
   members: DeskChildInput[];
   serviceDate: string;
   /** Church admins only: they are the people who may add people and families. */
@@ -248,18 +250,21 @@ export function CheckinDesk({
   }
 
   if (locations.length === 0) {
+    const description = hasClosedRooms
+      ? canAddFamily
+        ? "Reopen a room before checking children in. Its earlier check-ins are still saved."
+        : "Ask a church admin to reopen a room before checking children in."
+      : canAddFamily
+        ? "Add the rooms children go to, like Nursery or Preschool. Then you can check children in."
+        : "A church admin needs to add the rooms children go to before anyone can be checked in.";
     return (
       <EmptyState
-        title="No rooms yet"
-        description={
-          canAddFamily
-            ? "Add the rooms children go to, like Nursery or Preschool. Then you can check children in."
-            : "A church admin needs to add the rooms children go to before anyone can be checked in."
-        }
+        title={hasClosedRooms ? "All rooms are closed" : "No rooms yet"}
+        description={description}
         action={
           canAddFamily ? (
             <Link href="/dashboard/checkin/locations" className={buttonVariants({ size: "lg" })}>
-              Add rooms
+              {hasClosedRooms ? "Manage rooms" : "Add rooms"}
             </Link>
           ) : undefined
         }

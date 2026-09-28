@@ -133,6 +133,7 @@ export function useStudioBroadcast(branding: StudioBranding) {
     output: { width: number; height: number; fps: number },
   ) => {
     const configRes = await fetch("/api/stream/browser-publish", {
+      method: "POST",
       cache: "no-store",
     });
     if (!configRes.ok) {
@@ -326,7 +327,7 @@ export function describeCaptureError(error: unknown): string {
     return "Your camera is being used by another app, like Zoom. Close that app, then try again.";
   }
   if (message === "ingest-config") {
-    return "We couldn't connect to FaithForm's streaming service. Check your internet connection and try again.";
+    return "FaithForm's streaming service couldn't prepare this church's stream. Try again, or contact support if it keeps happening.";
   }
   return "We couldn't start this computer's camera. Please try again.";
 }

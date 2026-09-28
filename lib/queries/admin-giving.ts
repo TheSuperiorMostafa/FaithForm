@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getAdminPlatformTotals } from "@/lib/queries/admin-platform-totals";
 import type { StripeOnboardingStatus } from "@/types/giving";
 
 export type AdminGivingOverview = {
@@ -39,7 +40,6 @@ export async function getAdminGivingOverview(): Promise<AdminGivingOverview> {
 
   if (churchesError) throw new Error(churchesError.message);
   const rows = (churches ?? []).filter((church) => church.exclude_from_platform_metrics === false);
-  const includedIds = new Set(rows.map((church) => church.id));
   const counts = {
     notStarted: 0,
     pending: 0,
@@ -76,18 +76,7 @@ export async function getAdminGivingOverview(): Promise<AdminGivingOverview> {
     }
   }
 
-  const { data: volumeRows } = includedIds.size
-    ? await admin
-        .from("giving_donations")
-        .select("amount_cents")
-        .eq("status", "succeeded")
-        .in("church_id", [...includedIds])
-    : { data: [] as { amount_cents: number }[] };
-
-  const platformVolumeCents = (volumeRows ?? []).reduce(
-    (acc, r) => acc + (r.amount_cents as number),
-    0,
-  );
+  const platformVolumeCents = (await getAdminPlatformTotals()).givingCents;
 
   return {
     ...counts,

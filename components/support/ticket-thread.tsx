@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import type { SupportTicketComment } from "@/lib/support/comments";
 
 /**
@@ -12,10 +13,14 @@ export function TicketThread({
   comments,
   viewer,
   emptyLabel,
+  ticketId,
+  reviewAction,
 }: {
   comments: SupportTicketComment[];
   viewer: "platform" | "church";
   emptyLabel?: string;
+  ticketId?: string;
+  reviewAction?: (formData: FormData) => Promise<void>;
 }) {
   if (comments.length === 0) {
     return (
@@ -60,6 +65,24 @@ export function TicketThread({
             <p className="mt-2 whitespace-pre-wrap text-[15px] text-foreground">
               {comment.body}
             </p>
+            {viewer === "platform" && (comment.notificationEmailStatus === "pending" || comment.notificationEmailStatus === "unconfirmed") && (
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-border pt-3">
+                <p className="text-sm font-semibold text-amber-700 dark:text-amber-300">
+                  {comment.authorRole === "church" ? "Support inbox" : "Church email"} needs review. Check the recipient inbox and follow up if needed.
+                </p>
+                {reviewAction && ticketId && (
+                  <form action={reviewAction}>
+                    <input type="hidden" name="kind" value="comment" />
+                    <input type="hidden" name="ticketId" value={ticketId} />
+                    <input type="hidden" name="commentId" value={comment.id} />
+                    <Button type="submit" variant="outline" size="sm">Mark handled</Button>
+                  </form>
+                )}
+              </div>
+            )}
+            {viewer === "platform" && comment.notificationEmailStatus === "reviewed" && (
+              <p className="mt-2 text-xs text-muted-foreground">Email alert manually handled; original delivery remains unknown.</p>
+            )}
           </li>
         );
       })}

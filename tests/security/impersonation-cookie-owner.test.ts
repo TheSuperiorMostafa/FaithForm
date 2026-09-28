@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { encodeImpersonationNote } from "@/lib/auth/impersonation";
-import { IMPERSONATION_COOKIE, impersonationNoteOwner } from "@/lib/auth/impersonation-note";
+import { IMPERSONATION_COOKIE, impersonationNoteClaims, impersonationNoteOwner } from "@/lib/auth/impersonation-note";
 
 /**
  * `createClient()` reads through the service role whenever a validly signed
@@ -27,8 +27,23 @@ test("the edge reader names the note's owner, and nothing for junk", () => {
   });
   assert.ok(note);
   assert.equal(impersonationNoteOwner(note!), ADMIN);
+  assert.equal(impersonationNoteClaims(note!)?.exp, Math.floor(Date.now() / 1000) + 600);
+  assert.equal(impersonationNoteClaims("not-a-note"), null);
   assert.equal(impersonationNoteOwner("not-a-note"), null);
   assert.equal(impersonationNoteOwner(""), null);
+});
+
+test("expired church switches are denied before dashboard routes or actions run", () => {
+  const middleware = readFileSync("lib/supabase/middleware.ts", "utf8");
+  const actions = readFileSync("app/admin/impersonation-actions.ts", "utf8");
+  assert.match(middleware, /actingClaims\.exp \* 1000 <= Date\.now\(\)/);
+  // The expiry check uses the shared route gate and precedes any gated
+  // response. It must not duplicate the dashboard prefix rule inline.
+  assert.ok(middleware.indexOf("routeGate(request.nextUrl.pathname)") < middleware.indexOf("actingClaims.exp * 1000 <= Date.now()"));
+  assert.ok(middleware.indexOf("actingClaims.exp * 1000 <= Date.now()") < middleware.indexOf('if (gate === "onboarding")'));
+  assert.match(middleware, /gate === "signed_in" \|\| request\.nextUrl\.pathname\.startsWith\("\/api\/"\)/);
+  assert.match(middleware, /request\.nextUrl\.pathname\.startsWith\("\/api\/"\)/);
+  assert.match(actions, /maxAge: 24 \* 60 \* 60/);
 });
 
 test("the middleware drops a note that is not the signed-in person's", () => {

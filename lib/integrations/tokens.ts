@@ -261,7 +261,10 @@ export async function getIntegration(
     .eq("provider", provider)
     .maybeSingle();
 
-  if (error || !data) return null;
+  // A failed read is not an absent integration. Callers that provision a new
+  // credential must never replace an existing key after a transient DB error.
+  if (error) throw new Error("Could not load integration.");
+  if (!data) return null;
 
   return {
     id: data.id,

@@ -9,6 +9,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { StatSparkline } from "@/components/dashboard/stat-sparkline";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClientOrNull } from "@/lib/supabase/admin";
 import {
   getStatRow,
   type DashboardRange,
@@ -97,7 +98,12 @@ function StatCard({
 
 export async function StatRow({ churchId, range }: StatRowProps) {
   const supabase = createClient();
-  const stats = await getStatRow(supabase, churchId, range);
+  const stats = await getStatRow(
+    supabase,
+    churchId,
+    range,
+    createAdminClientOrNull() ?? supabase,
+  );
 
   return (
     <div className="grid gap-4 sm:grid-cols-3">

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { VisitorError } from "@/lib/faithform/errors";
 import { isMessagingConfigured } from "@/lib/messaging/config";
 import { chatUserIdFor, cidOf, GROUP_CHANNEL_TYPE, groupChannelId } from "@/lib/messaging/ids";
 import { joinActionFor } from "@/lib/groups/permissions";
@@ -353,6 +354,7 @@ export type PersonLabel = {
 export async function labelMemberships(
   admin: SupabaseClient,
   rows: { id: string; member_id: string | null; account_id: string | null }[],
+  options: { requireComplete?: boolean } = {},
 ): Promise<Map<string, PersonLabel>> {
   const memberIds = [...new Set(rows.map((r) => r.member_id).filter((id): id is string => Boolean(id)))];
   const accountIds = [...new Set(rows.map((r) => r.account_id).filter((id): id is string => Boolean(id)))];
@@ -364,6 +366,13 @@ export async function labelMemberships(
       ? admin.from("visitor_accounts").select("id, user_id, display_name, avatar_url").in("id", accountIds)
       : Promise.resolve({ data: [] }),
   ]);
+  if (options.requireComplete && (
+    ("error" in members && members.error) || ("error" in accounts && accounts.error) ||
+    (members.data ?? []).length !== memberIds.length ||
+    (accounts.data ?? []).length !== accountIds.length
+  )) {
+    throw new VisitorError("unavailable", "Could not load the complete attendance sheet. Please try again.");
+  }
   const memberById = new Map(
     ((members.data ?? []) as { id: string; first_name: string; last_name: string; photo_url: string | null }[]).map(
       (m) => [m.id, m],

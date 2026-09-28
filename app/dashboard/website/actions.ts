@@ -474,27 +474,24 @@ export async function setPublished(published: boolean): Promise<ActionResult> {
 
   const supabase = createAdminClient();
 
-  const { error: pageError } = await supabase
-    .from("site_pages")
-    .update({ status: published ? "published" : "draft" })
-    .eq("church_id", auth.churchId);
+  const { data: outcome, error } = await supabase.rpc("set_site_publication", {
+    p_church_id: auth.churchId,
+    p_published: published,
+  });
 
-  // is_published drives the noindex tag; page status drives whether the page
-  // renders at all. They move together so "published" means one thing.
-  const { error: settingsError } = await supabase.from("site_settings").upsert(
-    { church_id: auth.churchId, is_published: published },
-    { onConflict: "church_id" },
-  );
-
-  if (pageError || settingsError) {
+  if (error) {
     return fail(
       toUserError(
-        pageError ?? settingsError,
+        error,
         published
           ? "We couldn't put your website online."
           : "We couldn't take your website offline.",
       ),
     );
+  }
+  if (outcome === "no_page") return fail("Your website could not be loaded. Refresh the page and try again.");
+  if (outcome !== (published ? "published" : "unpublished")) {
+    return fail("We couldn't confirm the website's status. Refresh the page and try again.");
   }
 
   refresh();

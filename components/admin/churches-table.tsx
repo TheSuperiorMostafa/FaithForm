@@ -66,7 +66,13 @@ export function ChurchesTable({ churches }: { churches: AdminChurchListRow[] }) 
         toast.error(result.error);
         return;
       }
-      toast.success(`Invite sent to ${result.email}`);
+      if (result.delivery === "sent") {
+        toast.success(`Invite sent to ${result.email}`);
+      } else if (result.delivery === "unconfirmed") {
+        toast.warning("Invite delivery could not be confirmed. The link remains available; try Resend invite again.");
+      } else {
+        toast.error("The invite was emailed, but older links could not be disabled. Contact support before continuing.");
+      }
       router.refresh();
     });
   }

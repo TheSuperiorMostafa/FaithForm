@@ -1,6 +1,7 @@
 import { toUserError } from "@/lib/errors/user-error";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { readAllById } from "@/lib/queries/paged-read";
 
 export type QueuedEmailEvent = {
   googleEventId: string;
@@ -28,25 +29,39 @@ export async function listEmailQueue(
   weekStartKey: string,
   supabase?: SupabaseClient,
 ): Promise<QueuedEmailEvent[]> {
-  const { data, error } = await client(supabase)
-    .from("announcement_email_queue")
-    .select("google_event_id, calendar_id, added_at")
-    .eq("church_id", churchId)
-    .eq("week_start", weekStartKey)
-    .order("added_at", { ascending: true });
-
-  if (error) {
-    if (!isMissingQueueTable(error.message)) {
-      console.error("listEmailQueue:", error.message);
-    }
-    return [];
+  let rows: {
+    id: string;
+    google_event_id: string;
+    calendar_id: string | null;
+    added_at: string;
+  }[];
+  try {
+    rows = await readAllById(
+      async (afterId, includeCount, pageSize) => {
+        let query = client(supabase)
+          .from("announcement_email_queue")
+          .select("id, google_event_id, calendar_id, added_at", {
+            count: includeCount ? "exact" : undefined,
+          })
+          .eq("church_id", churchId)
+          .eq("week_start", weekStartKey)
+          .order("id")
+          .limit(pageSize);
+        if (afterId) query = query.gt("id", afterId);
+        return query;
+      },
+      { label: "weekly email queue" },
+    );
+  } catch (error) {
+    console.error("listEmailQueue:", error);
+    throw new Error("Weekly email queue read failed");
   }
 
-  return (data ?? []).map((row) => ({
+  return rows.map((row) => ({
     googleEventId: row.google_event_id as string,
     calendarId: (row.calendar_id as string | null) ?? null,
     addedAt: row.added_at as string,
-  }));
+  })).sort((a, b) => a.addedAt.localeCompare(b.addedAt));
 }
 
 export async function addToEmailQueue(

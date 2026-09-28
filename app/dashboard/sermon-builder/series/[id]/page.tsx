@@ -1,11 +1,12 @@
 import { redirect, notFound } from "next/navigation";
+import { Suspense } from "react";
 import { DeleteSeriesButton } from "@/components/sermon-builder/delete-series-button";
 import { SermonBackLink } from "@/components/sermon-builder/sermon-back-link";
 import { SeriesTimeline } from "@/components/sermon-builder/series-timeline";
 import { PageHeader } from "@/components/ui/page-header";
 import { createClient } from "@/lib/supabase/server";
 import { getCurrentChurchId } from "@/lib/auth/current-church";
-import { getSeries } from "@/lib/queries/sermons";
+import { getSeries, listSeriesSermons } from "@/lib/queries/sermons";
 import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +30,7 @@ export default async function SeriesDetailPage({
 
   const series = await getSeries(id);
   if (!series || series.church_id !== churchId) notFound();
+  const sermonsPromise = listSeriesSermons(churchId, id);
 
   return (
     <div className="flex w-full flex-col gap-8">
@@ -44,10 +46,23 @@ export default async function SeriesDetailPage({
           </>
         }
       />
-      <SeriesTimeline series={series} />
+      <Suspense fallback={<SeriesTimeline series={series} sermons={null} />}>
+        <LoadedSeriesTimeline series={series} sermonsPromise={sermonsPromise} />
+      </Suspense>
       <div className="border-t border-border pt-8">
         <DeleteSeriesButton seriesId={series.id} seriesTitle={series.title} />
       </div>
     </div>
   );
+}
+
+async function LoadedSeriesTimeline({
+  series,
+  sermonsPromise,
+}: {
+  series: NonNullable<Awaited<ReturnType<typeof getSeries>>>;
+  sermonsPromise: ReturnType<typeof listSeriesSermons>;
+}) {
+  const sermons = await sermonsPromise;
+  return <SeriesTimeline series={series} sermons={sermons} />;
 }

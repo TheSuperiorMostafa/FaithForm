@@ -490,11 +490,12 @@ export function createSupabaseRecordingRepo(client?: SupabaseClient): RecordingR
     },
 
     async getSettings(churchId) {
-      const { data } = await db
+      const { data, error } = await db
         .from("stream_recording_settings")
         .select("*")
         .eq("church_id", churchId)
         .maybeSingle();
+      if (error) throw new Error("Could not load recording settings.");
       if (!data) return { ...DEFAULT_RECORDING_SETTINGS };
       return {
         autoPublish: Boolean(data.auto_publish),

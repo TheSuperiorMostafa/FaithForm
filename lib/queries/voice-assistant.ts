@@ -13,7 +13,6 @@ import {
 import { createClient } from "@/lib/supabase/server";
 import type {
   AgentMode,
-  DayKey,
   OfficeHours,
   PhoneCallRow,
   SpeakingPace,
@@ -91,12 +90,13 @@ export async function getVoiceAssistantSettings(
   supabase?: SupabaseClient,
 ): Promise<VoiceAssistantSettings | null> {
   const client = supabase ?? db();
-  const { data } = await client
+  const { data, error } = await client
     .from("voice_assistant_settings")
     .select("*")
     .eq("church_id", churchId)
     .maybeSingle();
 
+  if (error) throwReadError("settings", error);
   if (!data) return null;
   return mapSettings(data);
 }
@@ -175,8 +175,6 @@ export async function upsertVoiceAssistantSettings(
 ): Promise<VoiceAssistantSettings> {
   const client = supabase ?? db();
   const assistantName = patch.assistantName.trim();
-  const profile = await getChurchProfileForVoice(churchId, client);
-  const churchName = profile?.name?.trim() || "your church";
   const previous = await getVoiceAssistantSettings(churchId, client);
   const previousName = previous?.assistant_name?.trim() || null;
 
@@ -351,9 +349,19 @@ const PHONE_CALL_SELECT_LEGACY =
 
 const PHONE_CALL_SELECT = `${PHONE_CALL_SELECT_LEGACY}, call_classification, notify_pastor, urgency`;
 
-/** True when the database has not had migration 0070 applied yet. */
-function isMissingScoringColumns(message: string): boolean {
-  return /call_classification|notify_pastor|urgency/i.test(message);
+type ReadError = { code?: string | null; message: string };
+
+function throwReadError(table: string, error: ReadError): never {
+  console.error(`[voice-assistant] ${table} read failed`, error.code, error.message);
+  throw new Error(`Could not load ${table}. Please try again.`);
+}
+
+/** True only when the database has not had migration 0070 applied yet. */
+function isMissingScoringColumns(error: ReadError): boolean {
+  return (
+    (error.code === "42703" || error.code === "PGRST204") &&
+    /call_classification|notify_pastor|urgency/i.test(error.message)
+  );
 }
 
 /**
@@ -394,11 +402,13 @@ export async function getRecentPhoneCalls(
 
   const { data, error } = await query(PHONE_CALL_SELECT);
 
-  if (error && isMissingScoringColumns(error.message)) {
+  if (error && isMissingScoringColumns(error)) {
     const legacy = await query(PHONE_CALL_SELECT_LEGACY);
+    if (legacy.error) throwReadError("phone calls", legacy.error);
     return withScoringDefaults(legacy.data ?? []);
   }
 
+  if (error) throwReadError("phone calls", error);
   return withScoringDefaults(data ?? []);
 }
 
@@ -418,11 +428,13 @@ export async function getPhoneCallById(
 
   const { data, error } = await query(PHONE_CALL_SELECT);
 
-  if (error && isMissingScoringColumns(error.message)) {
+  if (error && isMissingScoringColumns(error)) {
     const legacy = await query(PHONE_CALL_SELECT_LEGACY);
+    if (legacy.error) throwReadError("phone call", legacy.error);
     return legacy.data ? withScoringDefaults([legacy.data])[0] : null;
   }
 
+  if (error) throwReadError("phone call", error);
   return data ? withScoringDefaults([data])[0] : null;
 }
 

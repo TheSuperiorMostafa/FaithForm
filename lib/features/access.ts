@@ -199,6 +199,26 @@ export async function isChurchFeatureEmailEnabled(
   return data ? data.emails_enabled !== false : true;
 }
 
+/** Delivery work must not assume an email switch is on when its read fails. */
+export async function requireChurchFeatureEmailEnabled(
+  churchId: string,
+  key: FeatureKey,
+  supabase?: SupabaseClient,
+): Promise<boolean> {
+  const admin = supabase ?? createAdminClientOrNull();
+  if (!admin) throw new Error("Email permission check unavailable");
+
+  const { data, error } = await admin
+    .from("church_features")
+    .select("emails_enabled")
+    .eq("church_id", churchId)
+    .eq("feature_key", key)
+    .maybeSingle();
+
+  if (error) throw new Error("Email permission check failed");
+  return data ? data.emails_enabled !== false : true;
+}
+
 /**
  * The churches that have had `key`'s email switched off, for batch senders
  * like the weekly announcement cron. Errors return an empty set: every church

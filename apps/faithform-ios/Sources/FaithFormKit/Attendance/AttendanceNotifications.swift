@@ -172,11 +172,22 @@ public actor SystemAttendanceNotifier: AttendanceNotifying {
     }
 
     public func authorizationStatus() async -> NotificationAuthorization {
-        Self.map(await center.notificationSettings().authorizationStatus)
+        // The async framework overload returns a non-Sendable settings object
+        // across this actor boundary on Xcode 16. Read its value in the
+        // callback and pass only our Sendable enum through the continuation.
+        await withCheckedContinuation { continuation in
+            center.getNotificationSettings { settings in
+                continuation.resume(returning: Self.map(settings.authorizationStatus))
+            }
+        }
     }
 
     public func requestAuthorization() async -> NotificationAuthorization {
-        _ = try? await center.requestAuthorization(options: [.alert, .sound])
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            center.requestAuthorization(options: [.alert, .sound]) { _, _ in
+                continuation.resume()
+            }
+        }
         return await authorizationStatus()
     }
 
@@ -198,7 +209,9 @@ public actor SystemAttendanceNotifier: AttendanceNotifying {
         )
         // Replaces any earlier question for this church. A failure is not
         // reported: the in-app card asks the same question.
-        try? await center.add(request)
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            center.add(request) { _ in continuation.resume() }
+        }
     }
 
     public func cancelArrivalPrompt(churchSlug: String) async {
@@ -208,12 +221,20 @@ public actor SystemAttendanceNotifier: AttendanceNotifying {
     }
 
     public func cancelAll() async {
-        let pending = await center.pendingNotificationRequests()
-            .map(\.identifier)
-            .filter(AttendanceNotificationContent.isAttendanceIdentifier)
-        let delivered = await center.deliveredNotifications()
-            .map(\.request.identifier)
-            .filter(AttendanceNotificationContent.isAttendanceIdentifier)
+        // Keep UserNotifications' non-Sendable objects inside their callbacks.
+        // Only identifier strings cross back to this actor.
+        let pending: [String] = await withCheckedContinuation { continuation in
+            center.getPendingNotificationRequests { requests in
+                continuation.resume(returning: requests.map(\.identifier)
+                    .filter(AttendanceNotificationContent.isAttendanceIdentifier))
+            }
+        }
+        let delivered: [String] = await withCheckedContinuation { continuation in
+            center.getDeliveredNotifications { notifications in
+                continuation.resume(returning: notifications.map(\.request.identifier)
+                    .filter(AttendanceNotificationContent.isAttendanceIdentifier))
+            }
+        }
         center.removePendingNotificationRequests(withIdentifiers: pending)
         center.removeDeliveredNotifications(withIdentifiers: delivered)
     }
@@ -248,10 +269,12 @@ public actor SystemAttendanceNotifier: AttendanceNotifying {
             content: content,
             trigger: nil
         )
-        try? await center.add(request)
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            center.add(request) { _ in continuation.resume() }
+        }
     }
 
-    static func map(_ status: UNAuthorizationStatus) -> NotificationAuthorization {
+    nonisolated static func map(_ status: UNAuthorizationStatus) -> NotificationAuthorization {
         switch status {
         case .notDetermined: return .notDetermined
         case .denied: return .denied

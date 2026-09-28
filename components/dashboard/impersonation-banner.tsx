@@ -1,3 +1,6 @@
+"use client";
+
+import { useEffect } from "react";
 import { ShieldAlert } from "lucide-react";
 
 import { stopImpersonation } from "@/app/admin/impersonation-actions";
@@ -12,9 +15,18 @@ import { stopImpersonation } from "@/app/admin/impersonation-actions";
  */
 export function ImpersonationBanner({
   churchName,
+  expiresAt,
 }: {
   churchName: string | null;
+  expiresAt: number;
 }) {
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      window.location.replace("/admin");
+    }, Math.max(0, expiresAt - Date.now() - 1000));
+    return () => window.clearTimeout(timeout);
+  }, [expiresAt]);
+
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-amber-500/40 bg-amber-500/15 px-4 py-2.5 text-sm md:px-8">
       <p className="flex items-center gap-2 font-medium text-foreground">

@@ -33,11 +33,10 @@ import { DAY_OF_WEEK_LABELS } from "@/types/church-profile";
  * rather than left to be discovered.
  */
 
-type ServiceRow = SiteDetailsInput["serviceTimes"][number];
 type StaffRow = SiteDetailsInput["staff"][number];
 
 function newId() {
-  return Math.random().toString(36).slice(2);
+  return crypto.randomUUID();
 }
 
 /** Where the same church details are also edited, so it reads as one set. */

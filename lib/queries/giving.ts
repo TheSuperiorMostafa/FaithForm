@@ -1,6 +1,8 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { startOfWeek } from "@/lib/giving/periods";
+import { sheetDate } from "@/lib/giving/spreadsheet";
+import { statementYearReadWindow } from "@/lib/giving/statement-year";
 import { getGivePageUrl } from "@/lib/stripe/config";
 import type {
   ChurchGivingProfile,
@@ -181,23 +183,25 @@ async function fetchChurchGivingRow(
   return supabase.from("churches").select(select).eq("id", churchId).maybeSingle();
 }
 
+function missingGivingColors(error: { code?: string | null; message: string }): boolean {
+  return (
+    (error.code === "42703" || error.code === "PGRST204") &&
+    /giving_primary_color|giving_accent_color/i.test(error.message)
+  );
+}
+
 export async function getChurchGivingProfile(
   churchId: string,
+  supabase = createClient(),
 ): Promise<ChurchGivingProfile | null> {
-  const supabase = createClient();
   const { data, error } = await fetchChurchGivingRow(
     supabase,
     churchId,
     CHURCH_GIVING_SELECT,
   );
 
-  if (!error && data) {
-    return mapChurchProfile(data as unknown as ChurchStripeRow);
-  }
-
-  if (error) {
-    console.error("getChurchGivingProfile:", error.message);
-  }
+  if (!error) return data ? mapChurchProfile(data as unknown as ChurchStripeRow) : null;
+  if (!missingGivingColors(error)) throw new Error(`church giving profile read failed: ${error.message}`);
 
   const fallback = await fetchChurchGivingRow(
     supabase,
@@ -205,30 +209,24 @@ export async function getChurchGivingProfile(
     CHURCH_GIVING_SELECT_BASE,
   );
 
-  if (fallback.error) {
-    console.error("getChurchGivingProfile fallback:", fallback.error.message);
-    return null;
-  }
+  if (fallback.error) throw new Error(`church giving profile fallback failed: ${fallback.error.message}`);
 
   if (!fallback.data) return null;
   return mapChurchProfile(fallback.data as unknown as ChurchStripeRow);
 }
 
-export async function getChurchBySlug(slug: string): Promise<ChurchGivingProfile | null> {
-  const supabase = createAdminClient();
+export async function getChurchBySlug(
+  slug: string,
+  supabase = createAdminClient(),
+): Promise<ChurchGivingProfile | null> {
   const { data, error } = await supabase
     .from("churches")
     .select(CHURCH_GIVING_SELECT)
     .eq("slug", slug)
     .maybeSingle();
 
-  if (!error && data) {
-    return mapChurchProfile(data as unknown as ChurchStripeRow);
-  }
-
-  if (error) {
-    console.error("getChurchBySlug:", error.message);
-  }
+  if (!error) return data ? mapChurchProfile(data as unknown as ChurchStripeRow) : null;
+  if (!missingGivingColors(error)) throw new Error(`church giving profile read failed: ${error.message}`);
 
   const fallback = await supabase
     .from("churches")
@@ -236,18 +234,22 @@ export async function getChurchBySlug(slug: string): Promise<ChurchGivingProfile
     .eq("slug", slug)
     .maybeSingle();
 
-  if (fallback.error || !fallback.data) return null;
+  if (fallback.error) throw new Error(`church giving profile fallback failed: ${fallback.error.message}`);
+  if (!fallback.data) return null;
   return mapChurchProfile(fallback.data as unknown as ChurchStripeRow);
 }
 
-export async function getGivingFunds(churchId: string): Promise<GivingFundRow[]> {
-  const supabase = createClient();
-  const { data } = await supabase
+export async function getGivingFunds(
+  churchId: string,
+  supabase = createClient(),
+): Promise<GivingFundRow[]> {
+  const { data, error } = await supabase
     .from("giving_funds")
     .select("id, church_id, name, slug, sort_order, is_default, is_active")
     .eq("church_id", churchId)
     .order("sort_order", { ascending: true });
 
+  if (error) throw new Error(`giving funds read failed: ${error.message}`);
   return (data ?? []).map((r) => ({
     id: r.id as string,
     churchId: r.church_id as string,
@@ -277,6 +279,7 @@ async function readAllRows<T>(
     const chunk = data ?? [];
     rows.push(...chunk);
     if (chunk.length < PAGE_ROWS) break;
+    if (i === MAX_PAGES - 1) throw new Error("giving read exceeded the safe page limit");
   }
   return rows;
 }
@@ -427,22 +430,30 @@ export async function getGivingByFundPeriods(churchId: string): Promise<{
 export async function getGivingByFund(
   churchId: string,
   period: "month" | "ytd",
+  supabase = createClient(),
 ): Promise<FundGivingBreakdown[]> {
-  const supabase = createClient();
   const now = new Date();
   const since =
     period === "month" ? startOfMonthIso(now) : startOfYearIso(now);
 
-  const { data } = await supabase
-    .from("giving_donations")
-    .select("amount_cents, fund_id, giving_funds ( id, name )")
-    .eq("church_id", churchId)
-    .eq("status", "succeeded")
-    .gte("created_at", since);
+  const data = await readAllRows<{
+    amount_cents: number;
+    fund_id: string | null;
+    giving_funds: { id: string; name: string } | { id: string; name: string }[] | null;
+  }>((from, to) =>
+    supabase
+      .from("giving_donations")
+      .select("amount_cents, fund_id, giving_funds ( id, name )")
+      .eq("church_id", churchId)
+      .eq("status", "succeeded")
+      .gte("created_at", since)
+      .order("id", { ascending: true })
+      .range(from, to),
+  );
 
   const map = new Map<string, FundGivingBreakdown>();
 
-  for (const row of data ?? []) {
+  for (const row of data) {
     const fundRaw = row.giving_funds as
       | { id: string; name: string }
       | { id: string; name: string }[]
@@ -635,21 +646,23 @@ export async function searchAllGifts(
 export async function getDonationById(
   churchId: string,
   donationId: string,
+  admin = createAdminClient(),
 ): Promise<(GivingDonationRow & { stripeAccountId: string | null }) | null> {
-  const admin = createAdminClient();
-  const { data: church } = await admin
+  const { data: church, error: churchError } = await admin
     .from("churches")
     .select("stripe_account_id")
     .eq("id", churchId)
     .maybeSingle();
+  if (churchError) throw new Error(`gift church read failed: ${churchError.message}`);
 
-  const { data } = await admin
+  const { data, error } = await admin
     .from("giving_donations")
     .select(DONATION_SELECT)
     .eq("church_id", churchId)
     .eq("id", donationId)
     .maybeSingle();
 
+  if (error) throw new Error(`gift read failed: ${error.message}`);
   if (!data) return null;
   return {
     ...mapDonation(data as Record<string, unknown>),
@@ -677,9 +690,9 @@ export async function getGivingSubscriptions(
 
 export async function getFailedSubscriptions(
   churchId: string,
+  supabase = createClient(),
 ): Promise<GivingSubscriptionRow[]> {
-  const supabase = createClient();
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("giving_subscriptions")
     .select(
       `id, stripe_subscription_id, stripe_customer_id, amount_cents, currency, interval, status,
@@ -690,21 +703,23 @@ export async function getFailedSubscriptions(
     .in("status", ["past_due", "unpaid"])
     .order("updated_at", { ascending: false });
 
+  if (error) throw new Error(`failed recurring gifts read failed: ${error.message}`);
   return (data ?? []).map((r) => mapSubscription(r as Record<string, unknown>));
 }
 
 export async function getSubscriptionById(
   churchId: string,
   subscriptionId: string,
+  admin = createAdminClient(),
 ): Promise<(GivingSubscriptionRow & { stripeAccountId: string | null }) | null> {
-  const admin = createAdminClient();
-  const { data: church } = await admin
+  const { data: church, error: churchError } = await admin
     .from("churches")
     .select("stripe_account_id")
     .eq("id", churchId)
     .maybeSingle();
+  if (churchError) throw new Error(`recurring gift church read failed: ${churchError.message}`);
 
-  const { data } = await admin
+  const { data, error } = await admin
     .from("giving_subscriptions")
     .select(
       `id, stripe_subscription_id, stripe_customer_id, amount_cents, currency, interval, status,
@@ -715,6 +730,7 @@ export async function getSubscriptionById(
     .eq("id", subscriptionId)
     .maybeSingle();
 
+  if (error) throw new Error(`recurring gift read failed: ${error.message}`);
   if (!data) return null;
   return {
     ...mapSubscription(data as Record<string, unknown>),
@@ -726,29 +742,53 @@ export async function getDonorGiftsForYear(
   churchId: string,
   donorId: string,
   year: number,
+  admin = createAdminClient(),
+  timeZone = "UTC",
 ): Promise<GivingDonationRow[]> {
-  const admin = createAdminClient();
-  const yearStart = new Date(year, 0, 1).toISOString();
-  const yearEnd = new Date(year + 1, 0, 1).toISOString();
+  const { start, end } = statementYearReadWindow(year);
 
-  const { data } = await admin
-    .from("giving_donations")
-    .select(DONATION_SELECT)
-    .eq("church_id", churchId)
-    .eq("donor_id", donorId)
-    .eq("status", "succeeded")
-    .gte("created_at", yearStart)
-    .lt("created_at", yearEnd)
-    .order("created_at", { ascending: true });
+  const data = await readAllRows<Record<string, unknown>>((from, to) =>
+    admin
+      .from("giving_donations")
+      .select(DONATION_SELECT)
+      .eq("church_id", churchId)
+      .eq("donor_id", donorId)
+      .eq("status", "succeeded")
+      .gte("created_at", start)
+      .lt("created_at", end)
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, to),
+  );
 
-  return (data ?? []).map((r) => mapDonation(r as Record<string, unknown>));
+  return data
+    .filter((row) => sheetDate(row.created_at as string, timeZone).startsWith(`${year}-`))
+    .map(mapDonation);
 }
 
-export async function getGivingStatements(churchId: string): Promise<{
+/** Every donor considered for a church-wide statement export. */
+export async function getStatementDonors(
+  churchId: string,
+  admin = createAdminClient(),
+): Promise<Array<{ id: string; name: string | null; email: string }>> {
+  return readAllRows<{ id: string; name: string | null; email: string }>((from, to) =>
+    admin
+      .from("giving_donors")
+      .select("id, name, email")
+      .eq("church_id", churchId)
+      .order("id", { ascending: true })
+      .range(from, to),
+  );
+}
+
+export async function getGivingStatements(
+  churchId: string,
+  timeZone = "UTC",
+  supabase = createClient(),
+): Promise<{
   monthly: StatementPeriod[];
   annual: StatementPeriod[];
 }> {
-  const supabase = createClient();
   const data = await readAllRows<{ amount_cents: number; created_at: string }>((from, to) =>
     supabase
       .from("giving_donations")
@@ -763,9 +803,9 @@ export async function getGivingStatements(churchId: string): Promise<{
   const annualMap = new Map<string, { total: number; count: number; year: number }>();
 
   for (const row of data) {
-    const d = new Date(row.created_at);
-    const year = d.getFullYear();
-    const month = d.getMonth() + 1;
+    const [yearPart, monthPart] = sheetDate(row.created_at, timeZone).split("-");
+    const year = Number(yearPart);
+    const month = Number(monthPart);
     const mKey = `${year}-${month}`;
     const aKey = `${year}`;
 
@@ -925,10 +965,10 @@ export type StatementPreview = {
 export async function getStatementPreview(
   churchId: string,
   year: number,
+  timeZone = "UTC",
+  supabase = createClient(),
 ): Promise<StatementPreview> {
-  const supabase = createClient();
-  const yearStart = new Date(year, 0, 1).toISOString();
-  const yearEnd = new Date(year + 1, 0, 1).toISOString();
+  const { start, end } = statementYearReadWindow(year);
 
   const [gifts, donors] = await Promise.all([
     readAllRows<{
@@ -945,8 +985,8 @@ export async function getStatementPreview(
         .select("id, donor_id, donor_name, donor_email, amount_cents, currency, created_at")
         .eq("church_id", churchId)
         .eq("status", "succeeded")
-        .gte("created_at", yearStart)
-        .lt("created_at", yearEnd)
+        .gte("created_at", start)
+        .lt("created_at", end)
         .order("created_at", { ascending: true })
         .range(from, to),
     ),
@@ -962,8 +1002,9 @@ export async function getStatementPreview(
 
   const byDonor = new Map<string, { totalCents: number; giftCount: number }>();
   const giftsWithoutDonor: GiftWithoutStatement[] = [];
+  const yearGifts = gifts.filter((gift) => sheetDate(gift.created_at, timeZone).startsWith(`${year}-`));
   let totalCents = 0;
-  for (const g of gifts) {
+  for (const g of yearGifts) {
     totalCents += g.amount_cents ?? 0;
     if (!g.donor_id) {
       giftsWithoutDonor.push({
@@ -999,7 +1040,7 @@ export async function getStatementPreview(
     year,
     donors: statementDonors,
     totalCents,
-    giftCount: gifts.length,
+    giftCount: yearGifts.length,
     giftsWithoutDonor,
   };
 }
@@ -1008,14 +1049,17 @@ export async function getStatementPreview(
  * The church's own address from Church info, written as one line, to
  * pre-fill the statement address when none has been saved yet.
  */
-export async function getChurchAddressLine(churchId: string): Promise<string> {
-  const supabase = createClient();
+export async function getChurchAddressLine(
+  churchId: string,
+  supabase = createClient(),
+): Promise<string> {
   const { data, error } = await supabase
     .from("churches")
     .select("address, city, state, zip")
     .eq("id", churchId)
     .maybeSingle();
-  if (error || !data) return "";
+  if (error) throw new Error(`church address read failed: ${error.message}`);
+  if (!data) return "";
   return formatAddressLine({
     address: data.address as string | null,
     city: data.city as string | null,

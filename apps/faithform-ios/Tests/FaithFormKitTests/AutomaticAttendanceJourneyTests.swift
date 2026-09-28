@@ -1940,6 +1940,7 @@ struct ArrivalPolicyTests {
     }
 
     @Test("the countdown reads as a clock and rounds up so it never shows 0:00 early")
+    @MainActor
     func countdownClock() {
         #expect(CountdownRing.clock(120) == "2:00")
         #expect(CountdownRing.clock(107) == "1:47")

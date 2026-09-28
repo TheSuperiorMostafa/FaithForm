@@ -9,6 +9,7 @@ import { syncChurchOccurrencesAfterChange } from "@/lib/attendance/v2/occurrence
 import { normalizeSiteImage } from "@/lib/security/validate-image";
 import { getAspect, type ImageAspectKey } from "@/lib/sites/image-aspects";
 import { getChurchAuth } from "@/lib/auth/church";
+import { featureActionError } from "@/lib/features/guard";
 import { toUserError } from "@/lib/errors/user-error";
 import {
   MAX_QUICK_LINKS,
@@ -74,6 +75,8 @@ export async function uploadChurchAppImage(formData: FormData): Promise<UploadRe
   const auth = await getChurchAuth();
   if (!auth?.churchId) return { ok: false, error: "You are not signed in." };
   if (!auth.isAdmin) return { ok: false, error: "Only church admins can change images." };
+  const featureError = await featureActionError("member_app");
+  if (featureError) return { ok: false, error: featureError };
 
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
@@ -139,6 +142,8 @@ export async function saveChurchAppInfo(input: ChurchAppInfo): Promise<SaveChurc
   const auth = await getChurchAuth();
   if (!auth?.churchId) return fail("Sign in to your church to make changes.");
   if (!auth.isAdmin) return fail("Only church admins can change the church page.");
+  const featureError = await featureActionError("member_app");
+  if (featureError) return fail(featureError);
 
   const parsed = schema.safeParse(input);
   if (!parsed.success) {

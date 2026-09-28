@@ -3,7 +3,7 @@ import { getChurchAuth } from "@/lib/auth/church";
 import { featureAccessDenied } from "@/lib/features/guard";
 import { getBrowserIceServers } from "@/lib/stream/ice-servers";
 import { signIngestToken } from "@/lib/stream/ingest-token";
-import { getStreamRelaySettings } from "@/lib/stream/relay";
+import { ensureStreamRelayCredentials, type StreamRelaySettings } from "@/lib/stream/relay";
 import { createClient } from "@/lib/supabase/server";
 
 function getWsIngestBaseUrl(): string | null {
@@ -13,7 +13,13 @@ function getWsIngestBaseUrl(): string | null {
   return raw.replace(/^http/i, "ws").replace(/\/$/, "");
 }
 
-export async function GET() {
+/** Starting the studio provisions a new church before it asks the relay to ingest. */
+export async function POST(request: Request) {
+  const origin = request.headers.get("origin");
+  if (!origin || origin !== new URL(request.url).origin) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const supabase = createClient();
   const auth = await getChurchAuth(supabase);
   if (!auth?.isAdmin) {
@@ -23,7 +29,15 @@ export async function GET() {
   const denied = await featureAccessDenied("live_stream", supabase);
   if (denied) return denied;
 
-  const settings = await getStreamRelaySettings(auth.churchId, { supabase });
+  let settings: StreamRelaySettings;
+  try {
+    settings = await ensureStreamRelayCredentials(auth.churchId, auth.userId, supabase);
+  } catch {
+    return NextResponse.json(
+      { error: "Stream credentials could not be prepared." },
+      { status: 503 },
+    );
+  }
 
   if (!settings.connected) {
     return NextResponse.json(

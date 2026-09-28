@@ -71,7 +71,10 @@ print(best or "")')
     DEST="platform=iOS Simulator,id=$UDID"
   fi
   echo "Testing on $DEST"
-  xcodebuild "${COMMON[@]}" -destination "$DEST" test 2>&1 | tee "$LOG" >/dev/null
+  if ! xcodebuild "${COMMON[@]}" -destination "$DEST" test 2>&1 | tee "$LOG" >/dev/null; then
+    tail -n 160 "$LOG" >&2
+    exit 1
+  fi
 else
   xcodebuild "${COMMON[@]}" -destination 'generic/platform=iOS' -quiet build 2>&1 | tee "$LOG"
 fi
@@ -97,9 +100,11 @@ fi
 if [ "${1:-}" = "--test" ]; then
   # Reported rather than assumed: a test run that executed nothing exits 0 too,
   # and "the gate passed" would be a lie about zero tests.
-  SUMMARY=$(grep -oE "Test run with [0-9]+ tests? in [0-9]+ suites? (passed|failed)" "$LOG" | tail -1)
+  SUMMARY=$(grep -oE "Test run with [0-9]+ tests?( in [0-9]+ suites?)? (passed|failed)" "$LOG" | tail -1 || true)
   if [ -z "$SUMMARY" ]; then
-    echo "The app test run reported no summary — it may have executed nothing." >&2
+    echo "The app test run reported no Swift Testing summary — it may have executed nothing." >&2
+    echo "Last 160 lines of the Xcode test log:" >&2
+    tail -n 160 "$LOG" >&2
     exit 1
   fi
   echo "iOS app tests: $SUMMARY"
