@@ -5,6 +5,7 @@ import {
   computeAnnouncementStatus,
   type AnnouncementStatus,
 } from "@/lib/queries/dashboard";
+import { readAllById } from "@/lib/queries/paged-read";
 
 export type AnnouncementRow = {
   id: string;
@@ -74,6 +75,7 @@ export function isMissingFacebookScheduleColumn(message: string): boolean {
 type AnnouncementSelect = {
   data: unknown;
   error: { message: string } | null;
+  count?: number | null;
 };
 
 function withoutColumn(columns: string, column: string): string {
@@ -166,17 +168,25 @@ export async function getPublishedAnnouncementsByGoogleId(
   supabase: SupabaseClient,
   churchId: string,
 ): Promise<Record<string, string>> {
-  const { data } = await supabase
-    .from("announcements")
-    .select("id, google_event_id")
-    .eq("church_id", churchId)
-    .eq("status", "published")
-    .not("google_event_id", "is", null);
+  const rows = await readAllById<{ id: string; google_event_id: string | null }>(
+    async (afterId, includeCount, pageSize) => {
+      let query = supabase
+        .from("announcements")
+        .select("id, google_event_id", { count: includeCount ? "exact" : undefined })
+        .eq("church_id", churchId)
+        .eq("status", "published")
+        .not("google_event_id", "is", null)
+        .order("id")
+        .limit(pageSize);
+      if (afterId) query = query.gt("id", afterId);
+      return query;
+    },
+    { label: "published calendar announcements" },
+  );
 
   const map: Record<string, string> = {};
-  for (const row of data ?? []) {
-    const gid = row.google_event_id as string;
-    if (gid) map[gid] = row.id as string;
+  for (const row of rows) {
+    if (row.google_event_id) map[row.google_event_id] = row.id;
   }
   return map;
 }
@@ -185,20 +195,27 @@ export async function getPublishedAnnouncements(
   supabase: SupabaseClient,
   churchId: string,
 ): Promise<AnnouncementRow[]> {
-  const { data, error } = await selectAnnouncements((columns) =>
-    supabase
-      .from("announcements")
-      .select(columns)
-      .eq("church_id", churchId)
-      .eq("status", "published")
-      .order("published_at", { ascending: false }),
+  const rows = await readAllById<Record<string, unknown> & { id: string }>(
+    async (afterId, includeCount, pageSize) => {
+      const { data, error, count } = await selectAnnouncements((columns) => {
+        let query = supabase
+          .from("announcements")
+          .select(columns, { count: includeCount ? "exact" : undefined })
+          .eq("church_id", churchId)
+          .eq("status", "published")
+          .order("id")
+          .limit(pageSize);
+        if (afterId) query = query.gt("id", afterId);
+        return query;
+      });
+      return { data: data as (Record<string, unknown> & { id: string })[] | null, error, count };
+    },
+    { label: "published announcements" },
   );
 
-  if (error || !data) return [];
-
-  return (data as Record<string, unknown>[]).map((row) =>
-    mapAnnouncementRow(row),
-  );
+  return rows
+    .map(mapAnnouncementRow)
+    .sort((a, b) => (b.published_at ?? "").localeCompare(a.published_at ?? ""));
 }
 
 export function buildCalendarQueue(

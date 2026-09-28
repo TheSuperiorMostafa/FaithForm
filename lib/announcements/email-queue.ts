@@ -27,7 +27,6 @@ export async function listEmailQueue(
   churchId: string,
   weekStartKey: string,
   supabase?: SupabaseClient,
-  strict = false,
 ): Promise<QueuedEmailEvent[]> {
   const { data, error } = await client(supabase)
     .from("announcement_email_queue")
@@ -37,11 +36,8 @@ export async function listEmailQueue(
     .order("added_at", { ascending: true });
 
   if (error) {
-    if (strict) throw new Error("Weekly email queue read failed");
-    if (!isMissingQueueTable(error.message)) {
-      console.error("listEmailQueue:", error.message);
-    }
-    return [];
+    console.error("listEmailQueue:", error.message);
+    throw new Error("Weekly email queue read failed");
   }
 
   return (data ?? []).map((row) => ({

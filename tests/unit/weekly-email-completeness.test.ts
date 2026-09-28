@@ -12,15 +12,19 @@ test("draft queue read rejects a database error instead of claiming it is empty"
   };
   const client = { from: () => ({ select: () => query }) } as unknown as SupabaseClient;
 
-  await assert.rejects(listEmailQueue("church", "2026-09-21", client, true), /queue read failed/);
+  await assert.rejects(listEmailQueue("church", "2026-09-21", client), /queue read failed/);
 });
 
 test("draft standalone read rejects a database error instead of omitting announcements", async () => {
   const query = {
     eq: () => query,
-    is: async () => ({ data: null, error: { message: "database unavailable" } }),
+    is: () => query,
+    order: () => query,
+    limit: () => query,
+    then: (resolve: (value: unknown) => unknown) =>
+      Promise.resolve(resolve({ data: null, error: { message: "database unavailable" }, count: null })),
   };
   const client = { from: () => ({ select: () => query }) } as unknown as SupabaseClient;
 
-  await assert.rejects(listStandaloneEmailRows("church", client, true), /announcements read failed/);
+  await assert.rejects(listStandaloneEmailRows("church", client), /announcements read failed/);
 });

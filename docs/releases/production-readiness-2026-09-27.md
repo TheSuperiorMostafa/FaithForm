@@ -670,6 +670,18 @@ on its own.
   all result pages instead of silently stopping after 250 events. These fixes
   passed 32 focused tests, typecheck, and targeted lint; they need rollout and
   browser retests.
+- A follow-up audit found another first-page limit in published announcement
+  lists, calendar-to-announcement links, and the weekly draft's own database
+  inputs. The local readers now request counted, ordered pages through row
+  1,001 and reject a failed later page instead of showing a partial or empty
+  result. An older schema without `all_day` still reads the complete weekly
+  list. Calendar and announcement read failures now stop the dashboard's
+  weekly card and draft creation visibly rather than producing a misleading
+  zero count. Focused 1,001-row and failure-path tests, TypeScript checking,
+  targeted lint, all 1,838 application tests, and the local production build
+  pass. An individual read above 10,000 rows now raises a visible error and
+  needs a narrower server query. This remains local and needs a browser retest
+  after rollout.
   A local onboarding change also reports failed provider-status reads instead
   of presenting them as disconnected; that return path needs a browser retest.
 - A successful Supabase physical-backup restore test, a provider-side Storage

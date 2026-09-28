@@ -23,6 +23,7 @@ import { ICloudMailError } from "@/lib/integrations/icloud-mail";
 import type { CalendarEventPreview } from "@/lib/integrations/types";
 import { getAnnouncementEmailSettings } from "@/lib/queries/announcement-email-settings";
 import type { AnnouncementRow } from "@/lib/queries/announcements";
+import { readAllById } from "@/lib/queries/paged-read";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   getMondayWeekWindowInTimeZone,
@@ -188,32 +189,46 @@ export function standaloneToEmailEvents(
 export async function listStandaloneEmailRows(
   churchId: string,
   supabase: SupabaseClient,
-  strict = false,
 ): Promise<StandaloneEmailRow[]> {
-  const select = (columns: string) =>
-    supabase
-      .from("announcements")
-      .select(columns)
-      .eq("church_id", churchId)
-      .eq("status", "published")
-      .eq("push_to_team", true)
-      .is("google_event_id", null);
-
-  let { data, error } = await select(
-    "title, event_title, body, notes, start_at, end_at, all_day, event_location, push_to_team, published_at, event_date",
-  );
-  if (error && /all_day/i.test(error.message)) {
-    ({ data, error } = await select(
-      "title, event_title, body, notes, start_at, end_at, event_location, push_to_team, published_at, event_date",
-    ));
+  let rows: (Record<string, unknown> & { id: string })[];
+  try {
+    rows = await readAllById<Record<string, unknown> & { id: string }>(
+      async (afterId, includeCount, pageSize) => {
+        const select = (columns: string) => {
+          let query = supabase
+            .from("announcements")
+            .select(columns, { count: includeCount ? "exact" : undefined })
+            .eq("church_id", churchId)
+            .eq("status", "published")
+            .eq("push_to_team", true)
+            .is("google_event_id", null)
+            .order("id")
+            .limit(pageSize);
+          if (afterId) query = query.gt("id", afterId);
+          return query;
+        };
+        let result = await select(
+          "id, title, event_title, body, notes, start_at, end_at, all_day, event_location, push_to_team, published_at, event_date",
+        );
+        if (result.error && /all_day/i.test(result.error.message)) {
+          result = await select(
+            "id, title, event_title, body, notes, start_at, end_at, event_location, push_to_team, published_at, event_date",
+          );
+        }
+        return {
+          data: result.data as (Record<string, unknown> & { id: string })[] | null,
+          error: result.error,
+          count: result.count,
+        };
+      },
+      { label: "weekly announcements" },
+    );
+  } catch (error) {
+    console.error("[weekly-email] standalone announcements read failed:", error);
+    throw new Error("Weekly announcements read failed");
   }
-  if (error) {
-    if (strict) throw new Error("Weekly announcements read failed");
-    console.error("[weekly-email] standalone announcements:", error.message);
-    return [];
-  }
 
-  return ((data ?? []) as unknown as Record<string, unknown>[])
+  return rows
     .filter((row) => row.start_at)
     .map((row) => ({
       title: (row.title as string) || (row.event_title as string) || "",
@@ -344,8 +359,8 @@ export async function createWeeklyAnnouncementGmailDraft(
   try {
     [calendar, queued, standalone] = await Promise.all([
       listChurchCalendarEvents(churchId, week.weekStartISO, horizonEnd, supabase),
-      listEmailQueue(churchId, week.weekStartKey, supabase, true),
-      listStandaloneEmailRows(churchId, supabase, true),
+      listEmailQueue(churchId, week.weekStartKey, supabase),
+      listStandaloneEmailRows(churchId, supabase),
     ]);
   } catch {
     return { ok: false, error: "We couldn't read all announcements. No email draft was created. Try again." };
@@ -357,20 +372,41 @@ export async function createWeeklyAnnouncementGmailDraft(
 
   const queuedEventIds = new Set(queued.map((item) => item.googleEventId));
 
-  const { data: publishedRows, error: publishedError } = await supabase
-    .from("announcements")
-    .select(
-      "id, title, body, start_at, end_at, event_location, push_to_team, google_event_id, status",
-    )
-    .eq("church_id", churchId)
-    .eq("status", "published")
-    .not("google_event_id", "is", null);
-  if (publishedError) {
+  let publishedRows: {
+    id: string;
+    title: string | null;
+    body: string | null;
+    start_at: string;
+    end_at: string | null;
+    event_location: string | null;
+    push_to_team: boolean;
+    google_event_id: string | null;
+  }[];
+  try {
+    publishedRows = await readAllById(
+      async (afterId, includeCount, pageSize) => {
+        let query = supabase
+          .from("announcements")
+          .select(
+            "id, title, body, start_at, end_at, event_location, push_to_team, google_event_id",
+            { count: includeCount ? "exact" : undefined },
+          )
+          .eq("church_id", churchId)
+          .eq("status", "published")
+          .not("google_event_id", "is", null)
+          .order("id")
+          .limit(pageSize);
+        if (afterId) query = query.gt("id", afterId);
+        return query;
+      },
+      { label: "weekly calendar announcements" },
+    );
+  } catch {
     return { ok: false, error: "We couldn't read published announcements. No email draft was created. Try again." };
   }
 
   const publishedByGoogleId: Record<string, AnnouncementRow> = {};
-  for (const row of publishedRows ?? []) {
+  for (const row of publishedRows) {
     const gid = row.google_event_id as string;
     if (!gid) continue;
     publishedByGoogleId[gid] = {
