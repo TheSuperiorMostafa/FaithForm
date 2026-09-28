@@ -60,6 +60,11 @@ export function TicketThread({
             <p className="mt-2 whitespace-pre-wrap text-[15px] text-foreground">
               {comment.body}
             </p>
+            {viewer === "platform" && (comment.notificationEmailStatus === "pending" || comment.notificationEmailStatus === "unconfirmed") && (
+              <p className="mt-2 text-sm font-semibold text-amber-700 dark:text-amber-300">
+                {comment.authorRole === "church" ? "Support inbox" : "Church email"} needs review. The reply is saved here; email receipt is unconfirmed.
+              </p>
+            )}
           </li>
         );
       })}

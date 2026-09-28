@@ -334,7 +334,7 @@ readiness.
   view denial. Production remains exposed until the controlled migration and
   a zero-row live retest.
 
-## Release sequence for migrations 0110 through 0124
+## Release sequence for migrations 0110 through 0125
 
 1. Capture the current deployment and database migration state. Reconcile the
    deployed schema and source migration history. Confirm a recoverable backup
@@ -351,10 +351,13 @@ readiness.
    `0121_atomic_site_publication.sql`,
    `0122_atomic_church_profile.sql`,
    `0123_weekly_draft_claim.sql`, and
-   `0124_atomic_support_reply.sql` before deploying the updated
+   `0124_atomic_support_reply.sql`, and
+   `0125_support_email_visibility.sql` before deploying the updated
    application. The updated meeting, onboarding, child pickup, new-family,
    Undo, website publication, profile-save, weekly-draft, and support-reply
    actions call these server-only functions and cannot work until they exist.
+   The support pages also read 0125's email-status columns, so the new web
+   build must not be deployed before that migration.
    The sermon-series page also reads the new `series_week` column; Add church
    reads and writes the request-key column.
    The currently deployed code does not call the new functions or read those
@@ -374,7 +377,7 @@ readiness.
    process. Verify their recorded checksums and inspect the resulting policies,
    column grants, view options, and aggregate function privileges. Confirm
    0114 through 0118's server-only execute grants, 0119's column and index,
-   0120's unique request-key index, and 0121 through 0124's server-only execute
+   0120's unique request-key index, and 0121 through 0125's server-only execute
    grants. Do not edit an already applied migration.
 5. Repeat the same workflow checks. A staff session without Giving, Calls,
    People, or Check-in must be denied direct reads of those areas; an attendance
@@ -734,6 +737,20 @@ on its own.
   of those cases. All 1,845 application tests, TypeScript checking, targeted
   lint, and the local production build pass. Durable retry and alert delivery
   for failed support notifications remain unverified.
+- Local migration 0125 starts new support tickets and replies in an email-alert
+  `pending` state. Once Resend accepts a notification, the server records
+  `sent`; a failed or uncertain attempt becomes `unconfirmed`. Admin's Support
+  list and ticket thread flag both pending and unconfirmed messages for human
+  review. Older rows remain untracked. An Admin-created ticket's reply no
+  longer emails its platform-admin submitter while claiming the church was
+  alerted; without a verified church recipient, it remains flagged for review.
+  The six-argument church-reply function preserves the previous five-argument
+  version during the migration-first rollout. All 127 migrations, 56 database
+  tests, 1,845 application tests, TypeScript checking, focused lint, and a
+  local production build passed. A synthetic backup and restore rehearsal also
+  passed with 127 migrations and four churches. These are local checks; no
+  production email was sent and Admin monitoring has not been staffed or
+  rehearsed. A provider acceptance is not proof of inbox delivery.
 - A successful Supabase physical-backup restore test, a provider-side Storage
   restore rehearsal, an independent encrypted location for the local database
   and Storage archives, and documented recovery time and data-loss targets.
@@ -750,7 +767,7 @@ on its own.
   See the IRS [written acknowledgment guidance](https://www.irs.gov/charities-non-profits/charitable-organizations/charitable-contributions-written-acknowledgments)
   and [church exemption guidance](https://www.irs.gov/charities-non-profits/churches-integrated-auxiliaries-and-conventions-or-associations-of-churches).
 - Final live-schema comparison, a recorded migration baseline, and safe
-  application of 0110 through 0124 in the order above. The local comparison
+  application of 0110 through 0125 in the order above. The local comparison
   exposed the active missing objects, but live production still has the access
   gap and no source migration ledger.
 - A representative controlled rollout with real accounts from all four
@@ -761,10 +778,9 @@ on its own.
 - Monitoring with an accountable recipient for application errors, provider
   delivery failures, slow requests, and database/storage capacity. Repository
   code and Vercel's recent logs alone do not prove alert delivery.
-- A durable retry or attended recovery path for support notification email
-  failures. A saved ticket stays visible in Admin and the church now sees an
-  unconfirmed-email warning, but there is no verified automatic retry or
-  operator alert for a failed notification.
+- Staff and rehearse the Admin support email review queue. The local build now
+  persists uncertain outcomes and surfaces them, but no operator alert,
+  automatic retry, or live response-time check has been verified.
 - Verify the new per-church/week draft claim in a controlled hosted test with
   simultaneous manual and scheduled attempts, provider timeout, and recovery.
   The local database test proves the reservation and reconciliation rules but

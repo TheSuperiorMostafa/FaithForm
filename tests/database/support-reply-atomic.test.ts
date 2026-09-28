@@ -91,3 +91,46 @@ test("failed reopening leaves no church reply behind", suiteOptions, async () =>
     }
   });
 });
+
+test("tracked church replies start pending and remain atomic across churches", suiteOptions, async () => {
+  await withChurch(async (client, church) => {
+    const userId = await staffUser(client, church.id);
+    const ticket = await one<{ id: string; notification_email_status: string }>(client,
+      `insert into public.support_tickets (church_id, submitted_by, subject, status)
+       values ($1, $2, 'QA tracked ticket', 'resolved')
+       returning id, notification_email_status`, [church.id, userId]);
+    assert.equal(ticket.notification_email_status, "pending");
+
+    const commentId = randomUUID();
+    const trackedReply = () => one<{ subject: string }>(client,
+      `select public.reply_to_support_ticket($1, $2, $3, 'QA Admin', '  QA tracked reply  ', $4) as subject`,
+      [ticket.id, church.id, userId, commentId]);
+    assert.deepEqual(await asServiceRole(client, trackedReply), { subject: "QA tracked ticket" });
+
+    const saved = await one<{ status: string; body: string; notification_email_status: string }>(client,
+      `select t.status, c.body, c.notification_email_status
+       from public.support_tickets t join public.support_ticket_comments c on c.ticket_id = t.id
+       where c.id = $1`, [commentId]);
+    assert.deepEqual(saved, { status: "open", body: "QA tracked reply", notification_email_status: "pending" });
+
+    await assert.rejects(asServiceRole(client, trackedReply), /duplicate key/);
+    await assert.rejects(
+      asServiceRole(client, () => one(client,
+        `select public.reply_to_support_ticket($1, $2, $3, 'QA Admin', 'cross church', $4)`,
+        [ticket.id, randomUUID(), userId, randomUUID()])),
+      /Support ticket not found/,
+    );
+    const count = await one<{ count: number }>(client,
+      "select count(*)::int as count from public.support_ticket_comments where ticket_id = $1", [ticket.id]);
+    assert.equal(count.count, 1);
+
+    const privileges = await one<{ anon: boolean; authenticated: boolean; service_role: boolean }>(client,
+      `select has_function_privilege('anon',
+         'public.reply_to_support_ticket(uuid,uuid,uuid,text,text,uuid)', 'execute') as anon,
+       has_function_privilege('authenticated',
+         'public.reply_to_support_ticket(uuid,uuid,uuid,text,text,uuid)', 'execute') as authenticated,
+       has_function_privilege('service_role',
+         'public.reply_to_support_ticket(uuid,uuid,uuid,text,text,uuid)', 'execute') as service_role`);
+    assert.deepEqual(privileges, { anon: false, authenticated: false, service_role: true });
+  });
+});

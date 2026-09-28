@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { requireChurchAuth } from "@/lib/auth/church";
 import {
@@ -8,6 +9,7 @@ import {
 } from "@/lib/email/support-ticket";
 import { absoluteAppPath } from "@/lib/site-url";
 import { SUPPORT_COMMENT_MAX_LENGTH } from "@/lib/support/comments";
+import { recordSupportEmailStatus } from "@/lib/support/email-status";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { toUserError } from "@/lib/errors/user-error";
@@ -56,8 +58,8 @@ export async function submitSupportTicket(params: {
     .select("id")
     .single();
 
-  if (error) {
-    return { error: toUserError(error, "We couldn't send your message.") };
+  if (error || !ticket) {
+    return { error: error ? toUserError(error, "We couldn't send your message.") : "We couldn't confirm your message was saved." };
   }
 
   // The ticket is saved; from here nothing may fail loudly. A church that has
@@ -87,7 +89,7 @@ export async function submitSupportTicket(params: {
         body: body || null,
         submittedByEmail: submitterEmail,
         priority: "normal",
-        reviewUrl: absoluteAppPath(`/admin/support/${ticket?.id ?? ""}`),
+        reviewUrl: absoluteAppPath(`/admin/support/${ticket.id}`),
       }),
       submitterEmail
         ? sendSupportTicketAck({
@@ -103,6 +105,7 @@ export async function submitSupportTicket(params: {
   } catch (notifyError) {
     console.error("submitSupportTicket notify:", notifyError);
   }
+  await recordSupportEmailStatus(admin, "support_tickets", ticket.id as string, notificationConfirmed);
 
   revalidatePath("/dashboard/support");
   revalidatePath("/admin/support");
@@ -136,12 +139,14 @@ export async function replyToSupportTicket(params: {
   // The database locks this ticket, verifies its church, posts the reply, and
   // reopens a resolved ticket together. A failed update cannot strand a reply
   // in a closed conversation.
+  const commentId = randomUUID();
   const { data: subject, error } = await admin.rpc("reply_to_support_ticket", {
     p_ticket_id: params.ticketId,
     p_church_id: auth.churchId,
     p_author_user_id: auth.userId,
     p_author_name: auth.userEmail ?? null,
     p_body: message,
+    p_comment_id: commentId,
   });
   if (error?.code === "P0002") return { error: "That ticket could not be found." };
   if (error) return { error: toUserError(error, "We couldn't send your reply.") };
@@ -166,6 +171,7 @@ export async function replyToSupportTicket(params: {
   } catch (notifyError) {
     console.error("replyToSupportTicket notify:", notifyError);
   }
+  await recordSupportEmailStatus(admin, "support_ticket_comments", commentId, notificationConfirmed);
 
   revalidatePath("/dashboard/support");
   revalidatePath("/admin/support");

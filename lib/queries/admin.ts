@@ -197,6 +197,8 @@ export type AdminTicketListRow = {
   churchName: string | null;
   priority: SupportTicketPriority;
   status: SupportTicketStatus;
+  notificationEmailStatus: "pending" | "sent" | "unconfirmed" | null;
+  needsReplyEmailReview: boolean;
   submittedBy: string | null;
   submittedByEmail: string | null;
   createdAt: string;
@@ -279,6 +281,7 @@ type TicketRow = {
   subject: string;
   body?: string | null;
   status: SupportTicketStatus;
+  notification_email_status: AdminTicketListRow["notificationEmailStatus"];
   priority: SupportTicketPriority;
   admin_notes?: string | null;
   created_at: string;
@@ -423,6 +426,7 @@ async function listAuthUsersFor(
 function mapTicket(
   row: TicketRow,
   users: Map<string, AuthUserSummary>,
+  needsReplyEmailReview = false,
 ): AdminTicketListRow {
   return {
     id: row.id,
@@ -431,6 +435,8 @@ function mapTicket(
     churchName: getRelatedChurchName(row.churches),
     priority: row.priority,
     status: row.status,
+    notificationEmailStatus: row.notification_email_status,
+    needsReplyEmailReview,
     submittedBy: row.submitted_by,
     submittedByEmail: row.submitted_by
       ? (users.get(row.submitted_by)?.email ?? null)
@@ -445,7 +451,7 @@ async function getSupportTickets(
   const admin = createAdminClient();
   const base = () => admin
     .from("support_tickets")
-    .select("id, church_id, submitted_by, subject, status, priority, created_at, churches(name)")
+    .select("id, church_id, submitted_by, subject, status, notification_email_status, priority, created_at, churches(name)")
     .order("created_at", { ascending: false }).order("id");
   let rows: TicketRow[];
   if (query === "recent-open") {
@@ -460,7 +466,19 @@ async function getSupportTickets(
     });
   }
   const users = await listAuthUsersFor(rows.map((row) => row.submitted_by));
-  return rows.map((row) => mapTicket(row, users));
+  const needsReplyEmailReview = new Set<string>();
+  if (query === "all") {
+    const pendingComments = await loadAllAdminPages<{ ticket_id: string }>(
+      "support_ticket_comments needing email review",
+      (from, to) => admin.from("support_ticket_comments")
+        .select("ticket_id")
+        .in("notification_email_status", ["pending", "unconfirmed"])
+        .order("id")
+        .range(from, to),
+    );
+    for (const comment of pendingComments) needsReplyEmailReview.add(comment.ticket_id);
+  }
+  return rows.map((row) => mapTicket(row, users, needsReplyEmailReview.has(row.id)));
 }
 
 export async function getAdminOverview(): Promise<AdminOverview> {
@@ -968,7 +986,7 @@ export async function getAdminSupportTicket(
   const { data, error } = await admin
     .from("support_tickets")
     .select(
-      "id, church_id, submitted_by, subject, body, status, priority, admin_notes, created_at, updated_at, churches(name)",
+      "id, church_id, submitted_by, subject, body, status, notification_email_status, priority, admin_notes, created_at, updated_at, churches(name)",
     )
     .eq("id", ticketId)
     .maybeSingle();
@@ -982,7 +1000,8 @@ export async function getAdminSupportTicket(
     listAuthUsersFor([row.submitted_by]),
     getTicketComments(admin, row.id),
   ]);
-  const mapped = mapTicket(row, users);
+  const mapped = mapTicket(row, users, comments.some((comment) =>
+    comment.notificationEmailStatus === "pending" || comment.notificationEmailStatus === "unconfirmed"));
 
   return {
     ...mapped,

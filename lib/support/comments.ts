@@ -18,6 +18,7 @@ export type SupportTicketComment = {
   authorName: string | null;
   body: string;
   createdAt: string;
+  notificationEmailStatus: "pending" | "sent" | "unconfirmed" | null;
 };
 
 /** Long enough for a real answer, short enough that nobody pastes a log dump. */
@@ -29,6 +30,7 @@ type CommentRow = {
   author_name: string | null;
   body: string;
   created_at: string;
+  notification_email_status: SupportTicketComment["notificationEmailStatus"];
 };
 
 function isMissingCommentsTable(message: string): boolean {
@@ -42,6 +44,7 @@ function mapComment(row: CommentRow): SupportTicketComment {
     authorName: row.author_name,
     body: row.body,
     createdAt: row.created_at,
+    notificationEmailStatus: row.notification_email_status,
   };
 }
 
@@ -53,7 +56,7 @@ async function loadComments(
     async (afterId, includeCount, pageSize) => {
       let query = client
         .from("support_ticket_comments")
-        .select("id, ticket_id, author_role, author_name, body, created_at", {
+        .select("id, ticket_id, author_role, author_name, body, created_at, notification_email_status", {
           count: includeCount ? "exact" : undefined,
         })
         .in("ticket_id", ticketIds);
@@ -114,7 +117,7 @@ export type PostCommentInput = {
 export async function postTicketComment(
   admin: SupabaseClient,
   input: PostCommentInput,
-): Promise<{ error?: string }> {
+): Promise<{ id?: string; error?: string }> {
   const body = input.body.trim();
 
   if (!body) return { error: "Write a message before posting." };
@@ -124,14 +127,17 @@ export async function postTicketComment(
     };
   }
 
-  const { error } = await admin.from("support_ticket_comments").insert({
-    ticket_id: input.ticketId,
-    church_id: input.churchId,
-    author_role: input.authorRole,
-    author_user_id: input.authorUserId,
-    author_name: input.authorName,
-    body,
-  });
+  const { data, error } = await admin.from("support_ticket_comments")
+    .insert({
+      ticket_id: input.ticketId,
+      church_id: input.churchId,
+      author_role: input.authorRole,
+      author_user_id: input.authorUserId,
+      author_name: input.authorName,
+      body,
+    })
+    .select("id")
+    .single();
 
   if (error) {
     if (isMissingCommentsTable(error.message)) {
@@ -143,7 +149,7 @@ export async function postTicketComment(
     return { error: error.message };
   }
 
-  return {};
+  return data?.id ? { id: data.id as string } : { error: "Support reply was not confirmed." };
 }
 
 const STATUS_LABELS: Record<string, string> = {

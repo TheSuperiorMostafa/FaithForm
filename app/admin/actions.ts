@@ -18,6 +18,7 @@ import {
   postTicketComment,
   supportStatusLabel,
 } from "@/lib/support/comments";
+import { recordSupportEmailStatus } from "@/lib/support/email-status";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateChurchSlug } from "@/lib/churches/slug";
 
@@ -415,6 +416,7 @@ export async function createSupportTicket(formData: FormData) {
   // A ticket raised here is still a ticket: the team is several people, and the
   // one who logs a call is rarely the one who works it. Same doorbell as the
   // church-side path, and just as silent when it fails — the ticket is saved.
+  let notificationConfirmed = false;
   try {
     let churchName = "FaithForm";
     if (data.church_id) {
@@ -426,7 +428,7 @@ export async function createSupportTicket(formData: FormData) {
       churchName = (churchRow?.name as string | undefined) ?? "A church";
     }
 
-    await sendSupportTicketNotification({
+    const notification = await sendSupportTicketNotification({
       churchName,
       subject,
       body,
@@ -434,9 +436,11 @@ export async function createSupportTicket(formData: FormData) {
       priority,
       reviewUrl: absoluteAppPath(`/admin/support/${data.id}`),
     });
+    notificationConfirmed = notification.emailed;
   } catch (notifyError) {
     console.error("createSupportTicket notify:", notifyError);
   }
+  await recordSupportEmailStatus(admin, "support_tickets", data.id as string, notificationConfirmed);
 
   revalidatePath("/admin");
   revalidatePath("/admin/support");
@@ -489,7 +493,7 @@ export async function updateSupportTicket(formData: FormData) {
  * — it was written on the understanding that nobody outside the control center
  * would read it, and quietly publishing years of it is not a thing to do by
  * accident. Anything meant for the church is posted here, where it lands on
- * their dashboard and in their inbox at the same time.
+ * their dashboard. Email delivery is attempted separately and tracked.
  */
 export async function postSupportTicketReply(formData: FormData) {
   const user = await requireSuperAdmin();
@@ -520,7 +524,7 @@ export async function postSupportTicketReply(formData: FormData) {
     body,
   });
 
-  if (posted.error) throw new Error(posted.error);
+  if (posted.error || !posted.id) throw new Error(posted.error ?? "Support reply was not confirmed.");
 
   await admin
     .from("support_tickets")
@@ -529,13 +533,25 @@ export async function postSupportTicketReply(formData: FormData) {
 
   // The reply is stored and already on their dashboard. Mail failing after
   // this point must not throw away the post.
+  let notificationConfirmed = false;
   try {
     const submittedBy = ticket.submitted_by as string | null;
-    if (submittedBy) {
+    // Platform-created tickets record the platform administrator as submitter.
+    // Do not email that administrator while presenting the result as a church
+    // alert. Only a submitter who belongs to this church is a safe recipient.
+    if (submittedBy && ticket.church_id) {
+      const { data: churchSubmitter, error: membershipError } = await admin
+        .from("church_users")
+        .select("id")
+        .eq("church_id", ticket.church_id as string)
+        .eq("user_id", submittedBy)
+        .maybeSingle();
+      if (membershipError) throw membershipError;
+      if (!churchSubmitter) throw new Error("No verified church recipient for support reply email");
       const { data } = await admin.auth.admin.getUserById(submittedBy);
       const to = data.user?.email;
       if (to) {
-        await sendSupportTicketReply({
+        notificationConfirmed = await sendSupportTicketReply({
           to,
           subject: ticket.subject as string,
           message: body.trim(),
@@ -546,6 +562,7 @@ export async function postSupportTicketReply(formData: FormData) {
   } catch (notifyError) {
     console.error("postSupportTicketReply notify:", notifyError);
   }
+  await recordSupportEmailStatus(admin, "support_ticket_comments", posted.id, notificationConfirmed);
 
   revalidatePath("/admin/support");
   revalidatePath(`/admin/support/${ticketId}`);

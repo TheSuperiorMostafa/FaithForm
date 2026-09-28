@@ -35,6 +35,13 @@ export default async function AdminSupportTicketPage({ params }: PageProps) {
         description="Review the ticket, reply to the church, and set its status."
       />
 
+      {(ticket.notificationEmailStatus === "pending" || ticket.notificationEmailStatus === "unconfirmed") && (
+        <div role="status" className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-foreground">
+          <p className="font-semibold">Support inbox email needs review</p>
+          <p className="mt-1">The ticket is saved, but the email provider has not confirmed the alert. Check the support inbox and contact the church if needed.</p>
+        </div>
+      )}
+
       <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
         <Card>
           <CardHeader>
@@ -89,8 +96,8 @@ export default async function AdminSupportTicketPage({ params }: PageProps) {
         <CardHeader>
           <CardTitle>Conversation</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Everything here is visible to the church on their dashboard, and
-            every reply you post is emailed to whoever raised the ticket.
+            Replies here are visible to the church on their dashboard. Email
+            alerts are attempted separately, and any unconfirmed result appears here for review.
           </p>
         </CardHeader>
         <CardContent className="space-y-5">
@@ -113,7 +120,7 @@ export default async function AdminSupportTicketPage({ params }: PageProps) {
                 placeholder="What should they hear back?"
               />
             </div>
-            <Button type="submit">Post reply &amp; email them</Button>
+            <Button type="submit">Post reply and send email alert</Button>
           </form>
         </CardContent>
       </Card>
