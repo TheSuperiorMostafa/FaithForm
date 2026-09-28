@@ -7,7 +7,7 @@ import {
   sendSupportTicketNotification,
 } from "@/lib/email/support-ticket";
 import { absoluteAppPath } from "@/lib/site-url";
-import { postTicketComment } from "@/lib/support/comments";
+import { SUPPORT_COMMENT_MAX_LENGTH } from "@/lib/support/comments";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { toUserError } from "@/lib/errors/user-error";
@@ -116,45 +116,24 @@ export async function replyToSupportTicket(params: {
 }): Promise<{ error?: string }> {
   const auth = await requireChurchAuth();
   const admin = createAdminClient();
-
-  const { data: ticket, error } = await admin
-    .from("support_tickets")
-    .select("id, church_id, subject, status")
-    .eq("id", params.ticketId)
-    .maybeSingle();
-
-  if (error) return { error: toUserError(error, "We couldn't send your reply.") };
-  if (!ticket || ticket.church_id !== auth.churchId) {
-    return { error: "That ticket could not be found." };
+  const message = String(params.body ?? "").trim();
+  if (!message) return { error: "Write a message before posting." };
+  if (message.length > SUPPORT_COMMENT_MAX_LENGTH) {
+    return { error: `Keep it under ${SUPPORT_COMMENT_MAX_LENGTH.toLocaleString()} characters.` };
   }
 
-  const posted = await postTicketComment(admin, {
-    ticketId: ticket.id as string,
-    churchId: auth.churchId,
-    authorRole: "church",
-    authorUserId: auth.userId,
-    authorName: auth.userEmail ?? null,
-    body: params.body,
+  // The database locks this ticket, verifies its church, posts the reply, and
+  // reopens a resolved ticket together. A failed update cannot strand a reply
+  // in a closed conversation.
+  const { data: subject, error } = await admin.rpc("reply_to_support_ticket", {
+    p_ticket_id: params.ticketId,
+    p_church_id: auth.churchId,
+    p_author_user_id: auth.userId,
+    p_author_name: auth.userEmail ?? null,
+    p_body: message,
   });
-
-  if (posted.error) {
-    // Length and empty-message checks are written for people; anything else
-    // (a database failure) is not.
-    return {
-      error: /^(Write a message|Keep it under)/.test(posted.error)
-        ? posted.error
-        : toUserError(posted.error, "We couldn't send your reply."),
-    };
-  }
-
-  // A church replying to a ticket we had closed is reopening it. Leaving it
-  // resolved is how a reply goes unread.
-  if (ticket.status === "resolved") {
-    await admin
-      .from("support_tickets")
-      .update({ status: "open", updated_at: new Date().toISOString() })
-      .eq("id", ticket.id);
-  }
+  if (error?.code === "P0002") return { error: "That ticket could not be found." };
+  if (error) return { error: toUserError(error, "We couldn't send your reply.") };
 
   try {
     const { data: churchRow } = await admin
@@ -165,11 +144,11 @@ export async function replyToSupportTicket(params: {
 
     await sendSupportTicketNotification({
       churchName: (churchRow?.name as string | undefined) ?? "A church",
-      subject: `Reply — ${ticket.subject as string}`,
-      body: params.body.trim(),
+      subject: `Reply — ${subject as string}`,
+      body: message,
       submittedByEmail: auth.userEmail ?? null,
       priority: "normal",
-      reviewUrl: absoluteAppPath(`/admin/support/${ticket.id as string}`),
+      reviewUrl: absoluteAppPath(`/admin/support/${params.ticketId}`),
     });
   } catch (notifyError) {
     console.error("replyToSupportTicket notify:", notifyError);

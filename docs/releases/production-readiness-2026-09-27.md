@@ -11,25 +11,23 @@ readiness.
   generated-contract/design/localization checks, migration baseline check,
   secret scan, and feature-guard scan pass.
 - Database: the earlier 113 migrations applied to disposable PostgreSQL 15 and
-  17; the current 125-migration chain passed a fresh PostgreSQL 15
-  migration rehearsal. All 53 database tests pass, including
-  cross-church, per-feature,
-  and view-access denial probes. The additive
+  17; the current 126-migration chain passed a fresh PostgreSQL 15
+  migration rehearsal. All 55 database tests pass, including cross-church,
+  per-feature, and view-access denial probes. The additive
   `0111_announcement_status_view_invoker.sql` migration resolves the live
   Security Advisor's SECURITY DEFINER view finding. It is local only.
 - A disposable restore of the approved production archive accepted the exact
-  planned SQL order: 0114–0123, then 0110–0113. The live sequence places the
+  planned SQL order: 0114–0124, then 0110–0113. The live sequence places the
   matching web build and smoke test between those batches. The database
   retained four churches, 109 members, one invitation, and 342 Storage
   metadata rows; the new claim table was empty. The service role could execute
   the draft claim while anonymous and authenticated roles could not. The
   anonymous announcement view denied access, and authenticated users could not
-  select `members.medical_notes`.
-  The temporary database was removed. This verifies schema/data compatibility
-  of that order; it does not replace the controlled live migration baseline,
-  application smoke test, or rollout checks.
+  select `members.medical_notes`. The temporary database was removed. This
+  verifies schema/data compatibility of that order; it does not replace the
+  controlled live migration baseline, application smoke test, or rollout checks.
 - A full custom-format PostgreSQL backup and restore rehearsal passed with all
-  125 migrations on a disposable PostgreSQL 15 server and four synthetic
+  126 migrations on a disposable PostgreSQL 15 server and four synthetic
   churches. Restored record fingerprints, RLS, view settings, and medical-note
   grants matched the source.
   Run it with `pnpm test:backup-restore`, `FAITHFORM_DB_TARGET=disposable`, and
@@ -336,7 +334,7 @@ readiness.
   view denial. Production remains exposed until the controlled migration and
   a zero-row live retest.
 
-## Release sequence for migrations 0110 through 0123
+## Release sequence for migrations 0110 through 0124
 
 1. Capture the current deployment and database migration state. Reconcile the
    deployed schema and source migration history. Confirm a recoverable backup
@@ -351,13 +349,14 @@ readiness.
    `0119_sermon_series_week.sql`,
    `0120_admin_church_create_request.sql`,
    `0121_atomic_site_publication.sql`,
-   `0122_atomic_church_profile.sql`, and
-   `0123_weekly_draft_claim.sql` before deploying the updated
+   `0122_atomic_church_profile.sql`,
+   `0123_weekly_draft_claim.sql`, and
+   `0124_atomic_support_reply.sql` before deploying the updated
    application. The updated meeting, onboarding, child pickup, new-family,
-   Undo, website publication, profile-save, and weekly-draft actions call these
-   server-only functions and cannot work until they exist. The sermon-series
-   page also reads the new `series_week` column; Add church reads and writes
-   the request-key column.
+   Undo, website publication, profile-save, weekly-draft, and support-reply
+   actions call these server-only functions and cannot work until they exist.
+   The sermon-series page also reads the new `series_week` column; Add church
+   reads and writes the request-key column.
    The currently deployed code does not call the new functions or read those
    columns. Then deploy the application changes before the
    policy-tightening migrations. The new server code can read medical notes
@@ -375,10 +374,8 @@ readiness.
    process. Verify their recorded checksums and inspect the resulting policies,
    column grants, view options, and aggregate function privileges. Confirm
    0114 through 0118's server-only execute grants, 0119's column and index,
-   0120's unique request-key index, and 0121 through 0123's server-only execute
-   grants.
-   Do not edit an already applied
-   migration.
+   0120's unique request-key index, and 0121 through 0124's server-only execute
+   grants. Do not edit an already applied migration.
 5. Repeat the same workflow checks. A staff session without Giving, Calls,
    People, or Check-in must be denied direct reads of those areas; an attendance
    session must not be able to select `members.medical_notes`. A staff session
@@ -708,7 +705,7 @@ on its own.
   database transaction. All 125 migrations, 53 database tests, 1,844
   application tests, typecheck, targeted lint, and a local production build
   pass. The approved production archive restored into disposable PostgreSQL
-  17, accepted the exact planned 0114–0123 then 0110–0113 order,
+  17, accepted 0114–0123 then 0110–0113 in that rehearsal,
   retained four churches and 109 members, and denied claim execution to
   browser roles. A rollback-only service-role claim succeeded and left zero
   test claims. Both disposable containers were removed. The operator recovery
@@ -716,6 +713,19 @@ on its own.
   precede the matching web build; provider and browser retests are pending.
   A local onboarding change also reports failed provider-status reads instead
   of presenting them as disconnected; that return path needs a browser retest.
+- The QA Help page loaded its message form, thread empty state, and common
+  questions. A blank message was blocked by required-field validation; no
+  support message was sent. Code review found that a reply to a resolved
+  ticket could be inserted even if reopening the ticket failed. Migration
+  0124 locks the ticket and saves the comment and status in one transaction.
+  A forced reopening failure left the comment count at zero. All 126
+  migrations, 55 database tests, 1,844 application tests, typecheck, lint
+  (zero errors), and production build pass locally. The approved production
+  archive also restored into disposable PostgreSQL 17 and accepted the final
+  0114–0124 then 0110–0113 order, retaining four churches, 109 members, one
+  invite, and 342 Storage metadata rows. Browser roles cannot execute the
+  support reply function. The disposable copy was removed. This needs a
+  browser reply test after 0124 and the web change are deployed.
 - A successful Supabase physical-backup restore test, a provider-side Storage
   restore rehearsal, an independent encrypted location for the local database
   and Storage archives, and documented recovery time and data-loss targets.
@@ -732,7 +742,7 @@ on its own.
   See the IRS [written acknowledgment guidance](https://www.irs.gov/charities-non-profits/charitable-organizations/charitable-contributions-written-acknowledgments)
   and [church exemption guidance](https://www.irs.gov/charities-non-profits/churches-integrated-auxiliaries-and-conventions-or-associations-of-churches).
 - Final live-schema comparison, a recorded migration baseline, and safe
-  application of 0110 through 0123 in the order above. The local comparison
+  application of 0110 through 0124 in the order above. The local comparison
   exposed the active missing objects, but live production still has the access
   gap and no source migration ledger.
 - A representative controlled rollout with real accounts from all four

@@ -187,6 +187,11 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   showed Google, iCloud, YouTube, and Facebook as disconnected. Switching the
   member-app palette to Forest and wheat persisted. The Phone Calls empty
   state loaded.
+- Help: the QA church loaded its message form, empty thread list, and common
+  questions. Submitting an empty message showed the browser's required-field
+  validation. No support ticket or email was sent. A code review then found
+  that a reply to a resolved ticket could be saved even if reopening the
+  ticket failed; local migration 0124 now makes those writes one transaction.
 - Team and app settings follow-up: the live team now lists the QA admin. The
   invitation form rejected both a blank address and `not-an-email` before
   submission. Volunteer was the default preset, and expanding custom tools
