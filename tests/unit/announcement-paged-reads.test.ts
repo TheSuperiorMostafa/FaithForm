@@ -3,6 +3,7 @@ import test from "node:test";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { listStandaloneEmailRows } from "@/lib/announcements/weekly-email";
+import { listEmailQueue } from "@/lib/announcements/email-queue";
 import {
   getPublishedAnnouncements,
   getPublishedAnnouncementsByGoogleId,
@@ -131,5 +132,26 @@ test("weekly standalone announcements read every page with older schema fallback
       fakeAnnouncements(standaloneRows, { failAfterId: id(499), oldSchema: true }),
     ),
     /Weekly announcements read failed/,
+  );
+});
+
+test("weekly email queue includes row 1001 and rejects a failed later page", async () => {
+  const queueRows = calendarRows.map((row, i) => ({
+    ...row,
+    week_start: "2026-09-21",
+    calendar_id: "primary",
+    added_at: new Date(Date.UTC(2026, 8, 21, 0, 0, i)).toISOString(),
+  }));
+  const rows = await listEmailQueue("church", "2026-09-21", fakeAnnouncements(queueRows));
+  assert.equal(rows.length, 1001);
+  assert.equal(rows.at(-1)?.googleEventId, "google-1000");
+
+  await assert.rejects(
+    listEmailQueue(
+      "church",
+      "2026-09-21",
+      fakeAnnouncements(queueRows, { failAfterId: id(499) }),
+    ),
+    /Weekly email queue read failed/,
   );
 });
