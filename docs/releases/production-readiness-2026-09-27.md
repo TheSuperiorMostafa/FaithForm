@@ -722,6 +722,12 @@ on its own.
 - Monitoring with an accountable recipient for application errors, provider
   delivery failures, slow requests, and database/storage capacity. Repository
   code and Vercel's recent logs alone do not prove alert delivery.
+- The Monday draft uses a read of last week's draft marker before creating a
+  provider draft and writes the new marker afterward. Concurrent invocations,
+  or a database failure after the provider saves a draft, can leave duplicate
+  drafts on retry. Before broad onboarding, add a durable per-church/week claim
+  and an explicit recovery path for an uncertain provider result; then test
+  simultaneous manual and scheduled runs without sending mail.
 - Concurrent-load and recovery tests against a nonproduction copy containing
   representative church data and through the full hosted application path. The
   local 100-church database check and read-only live benchmark do not establish
