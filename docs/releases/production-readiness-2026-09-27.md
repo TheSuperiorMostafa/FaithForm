@@ -546,6 +546,12 @@ on its own.
   now reject instead of returning partial or missing profiles. Typecheck,
   targeted lint, all 1,823 application tests, and the local production build
   pass. This is local only and needs a controlled save retest after rollout.
+- Church-team listings now load every ordered page and stop on a failed page
+  or missing Auth account details. The prior read could show an empty team on
+  a database error or show missing grants when Auth lookups failed. A 1,001
+  member test reached the final member and rejected both failure cases. This
+  is local only; the live Team and platform Users views need a post-rollout
+  check with authorized QA accounts.
 - A repeat in Safari Private Browsing confirmed the live privacy gap: an
   anonymous visitor can read the QA church's unpublished site by adding
   `?preview=1`, while the same private window showed 404 without that

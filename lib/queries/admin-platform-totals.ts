@@ -4,7 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 type Page<T> = { data: T[] | null; error: { message: string } | null };
 
-/** Only used while an additive aggregate migration is reaching production. */
+/** Read all ordered pages when an aggregate or church roster is not available. */
 export async function loadAllAdminPages<T>(
   label: string,
   fetchPage: (from: number, to: number) => PromiseLike<Page<T>>,
