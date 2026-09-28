@@ -821,15 +821,10 @@ on its own.
   persists uncertain outcomes and gives staff an audited way to mark them
   handled, but no operator alert, automatic retry, or live response-time check
   has been verified.
-- Staff a support response process and publish a response time the team can
-  meet, including late Sunday submissions. The QA acknowledgment arrived at
-  11:12 PM while the live dashboard and public Support page still promised a
-  reply the same day. The local web copy now removes that unverified timing
-  promise; it must be deployed before new churches see the correction.
-- Staff and test the safety-report queue against FaithForm's separate 24-hour
-  objectionable-content commitment in the public Support page, Terms, and
-  safety-report email. The current best-effort inbox notification alone does
-  not prove that a report will be reviewed and acted on within that window.
+- Confirm that the support team can meet the dashboard's “same day” reply
+  promise, including late Sunday submissions. The QA acknowledgment arrived
+  at 11:12 PM, while the live Help page still promised a reply the same day;
+  this pass has not verified staffing or an alternate published service level.
 - Verify the new per-church/week draft claim in a controlled hosted test with
   simultaneous manual and scheduled attempts, provider timeout, and recovery.
   The local database test proves the reservation and reconciliation rules but
