@@ -787,6 +787,10 @@ on its own.
 - Staff and rehearse the Admin support email review queue. The local build now
   persists uncertain outcomes and surfaces them, but no operator alert,
   automatic retry, or live response-time check has been verified.
+- Confirm that the support team can meet the dashboard's “same day” reply
+  promise, including late Sunday submissions. The QA acknowledgment arrived
+  at 11:12 PM, while the live Help page still promised a reply the same day;
+  this pass has not verified staffing or an alternate published service level.
 - Verify the new per-church/week draft claim in a controlled hosted test with
   simultaneous manual and scheduled attempts, provider timeout, and recovery.
   The local database test proves the reservation and reconciliation rules but
