@@ -684,6 +684,15 @@ on its own.
   after that build. An individual read above 10,000 rows now raises a visible error and
   needs a narrower server query. This remains local and needs a browser retest
   after rollout.
+- Weekly draft creation and its availability view now require a successful
+  read of the platform email switch. A failed church email-settings read no
+  longer substitutes enabled defaults. The automatic draft job now reports a
+  failed integration, church-timezone, or feature-list read instead of treating
+  it as zero churches or proceeding with unknown switches. Focused tests prove
+  that a disabled switch and failed switch/settings reads cannot authorize a
+  draft. All 1,842 application tests, typecheck, targeted lint, and the local
+  production build pass. This is local and needs a controlled failure-path
+  retest after rollout.
   A local onboarding change also reports failed provider-status reads instead
   of presenting them as disconnected; that return path needs a browser retest.
 - A successful Supabase physical-backup restore test, a provider-side Storage

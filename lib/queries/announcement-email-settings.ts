@@ -51,7 +51,7 @@ export async function getAnnouncementEmailSettings(
 
   if (error) {
     console.error("getAnnouncementEmailSettings:", error.message);
-    return mapRow(null);
+    throw new Error("Weekly email settings read failed");
   }
 
   return mapRow((data as ChurchSettingsRow | null) ?? null);

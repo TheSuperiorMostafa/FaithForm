@@ -15,8 +15,7 @@ import {
 } from "@/lib/announcements/email-delivery";
 import { listEmailQueue } from "@/lib/announcements/email-queue";
 import {
-  churchIdsWithFeatureEmailOff,
-  isChurchFeatureEmailEnabled,
+  requireChurchFeatureEmailEnabled,
 } from "@/lib/features/access";
 import { listChurchCalendarEvents } from "@/lib/integrations/calendar";
 import { ICloudMailError } from "@/lib/integrations/icloud-mail";
@@ -296,7 +295,7 @@ export async function createWeeklyAnnouncementGmailDraft(
   // A platform admin can switch a church's announcement email off without
   // switching announcements off. That stops the email being made by hand as
   // well as by the Monday run.
-  if (!(await isChurchFeatureEmailEnabled(churchId, "announcements"))) {
+  if (!(await requireChurchFeatureEmailEnabled(churchId, "announcements"))) {
     return {
       ok: false,
       skipped: true,
@@ -552,7 +551,8 @@ export async function runWeeklyAnnouncementDraftsForAllChurches(
     .select("church_id, provider, metadata")
     .in("provider", ["google", "apple"]);
 
-  if (error || !integrations?.length) {
+  if (error) throw new Error("Weekly draft integration list failed");
+  if (!integrations?.length) {
     return { processed: 0, created: 0, skipped: 0, errors: [] };
   }
 
@@ -568,10 +568,13 @@ export async function runWeeklyAnnouncementDraftsForAllChurches(
     return { processed: 0, created: 0, skipped: 0, errors: [] };
   }
 
-  const { data: churches } = await supabase
+  const { data: churches, error: churchesError } = await supabase
     .from("churches")
     .select("id, timezone")
     .in("id", churchIds);
+  if (churchesError || (churches?.length ?? 0) !== churchIds.length) {
+    throw new Error("Weekly draft church timezone list incomplete");
+  }
 
   const timezoneByChurch = new Map<string, string | null>(
     (churches ?? []).map((row) => [
@@ -589,19 +592,9 @@ export async function runWeeklyAnnouncementDraftsForAllChurches(
     .eq("feature_key", "announcements")
     .in("church_id", churchIds);
 
-  if (featureError) {
-    if (!/church_features/i.test(featureError.message)) {
-      console.error("weekly draft feature flags:", featureError.message);
-    }
-  } else {
-    for (const row of featureRows ?? []) {
-      if (!row.enabled) disabledChurchIds.add(row.church_id as string);
-    }
-  }
-
-  // And churches that keep announcements but have had its email switched off.
-  for (const churchId of await churchIdsWithFeatureEmailOff("announcements")) {
-    disabledChurchIds.add(churchId);
+  if (featureError) throw new Error("Weekly draft feature list failed");
+  for (const row of featureRows ?? []) {
+    if (!row.enabled) disabledChurchIds.add(row.church_id as string);
   }
 
   let created = 0;
