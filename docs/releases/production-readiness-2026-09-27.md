@@ -7,29 +7,31 @@ readiness.
 
 ## Verified in an isolated checkout
 
-- Web: typecheck, lint (zero errors), production build, 1,829 application tests,
+- Web: typecheck, lint (zero errors), production build, 1,844 application tests,
   generated-contract/design/localization checks, migration baseline check,
   secret scan, and feature-guard scan pass.
 - Database: the earlier 113 migrations applied to disposable PostgreSQL 15 and
-  17; the current 124-migration chain passed a fresh PostgreSQL 17
-  migration rehearsal. All 52 database tests pass, including
+  17; the current 125-migration chain passed a fresh PostgreSQL 15
+  migration rehearsal. All 53 database tests pass, including
   cross-church, per-feature,
   and view-access denial probes. The additive
   `0111_announcement_status_view_invoker.sql` migration resolves the live
   Security Advisor's SECURITY DEFINER view finding. It is local only.
-- The exact planned rollout order was rehearsed against a fresh disposable
-  restore of the approved production archive: 0114–0120 first, then
-  0110–0113. Every migration applied, and the restore retained four churches,
-  109 members, and one pending invitation. The temporary database was removed.
+- A disposable restore of the approved production archive accepted
+  0114–0120, 0110–0113, and 0121–0123 in that order. The planned live sequence
+  applies 0114–0123 before the matching web build, then tightens access with
+  0110–0113 after the web smoke test; that exact sequence still needs a final
+  controlled rehearsal. The restore retained four churches, 109 members, and
+  one pending invitation. The temporary database was removed.
   This verifies schema/data compatibility of that order; it does not replace
   the controlled live migration baseline and rollout checks.
 - A full custom-format PostgreSQL backup and restore rehearsal passed with all
-  124 migrations on a disposable PostgreSQL 17 server and four synthetic
+  125 migrations on a disposable PostgreSQL 15 server and four synthetic
   churches. Restored record fingerprints, RLS, view settings, and medical-note
   grants matched the source.
   Run it with `pnpm test:backup-restore`, `FAITHFORM_DB_TARGET=disposable`, and
-  a loopback-only `FAITHFORM_TEST_DATABASE_URL`, with PostgreSQL 17 client tools
-  first on `PATH`. This does not validate
+  a loopback-only `FAITHFORM_TEST_DATABASE_URL`, with client tools matching the
+  disposable PostgreSQL server version first on `PATH`. This does not validate
   Supabase's production physical backups or Storage object recovery.
 - Native: iOS Swift build and the Android unit suite across debug, staging, and
   release variants pass. Device/provider end-to-end tests remain separate.
@@ -331,7 +333,7 @@ readiness.
   view denial. Production remains exposed until the controlled migration and
   a zero-row live retest.
 
-## Release sequence for migrations 0110 through 0122
+## Release sequence for migrations 0110 through 0123
 
 1. Capture the current deployment and database migration state. Reconcile the
    deployed schema and source migration history. Confirm a recoverable backup
@@ -343,14 +345,16 @@ readiness.
    `0116_atomic_child_checkout.sql`,
    `0117_atomic_checkin_family_creation.sql`,
    `0118_atomic_checkin_undo.sql`,
-   `0119_sermon_series_week.sql`, and
+   `0119_sermon_series_week.sql`,
    `0120_admin_church_create_request.sql`,
-   `0121_atomic_site_publication.sql`, and
-   `0122_atomic_church_profile.sql` before deploying the updated
+   `0121_atomic_site_publication.sql`,
+   `0122_atomic_church_profile.sql`, and
+   `0123_weekly_draft_claim.sql` before deploying the updated
    application. The updated meeting, onboarding, child pickup, new-family,
-   Undo, and website publication actions call these server-only functions and
-   cannot work until they exist. The sermon-series page also reads the new
-   `series_week` column; Add church reads and writes the request-key column.
+   Undo, website publication, profile-save, and weekly-draft actions call these
+   server-only functions and cannot work until they exist. The sermon-series
+   page also reads the new `series_week` column; Add church reads and writes
+   the request-key column.
    The currently deployed code does not call the new functions or read those
    columns. Then deploy the application changes before the
    policy-tightening migrations. The new server code can read medical notes
@@ -368,7 +372,7 @@ readiness.
    process. Verify their recorded checksums and inspect the resulting policies,
    column grants, view options, and aggregate function privileges. Confirm
    0114 through 0118's server-only execute grants, 0119's column and index,
-   0120's unique request-key index, and 0121 and 0122's server-only execute
+   0120's unique request-key index, and 0121 through 0123's server-only execute
    grants.
    Do not edit an already applied
    migration.
@@ -693,6 +697,20 @@ on its own.
   draft. All 1,842 application tests, typecheck, targeted lint, and the local
   production build pass. This is local and needs a controlled failure-path
   retest after rollout.
+- Migration 0123 reserves a church/week before a Gmail or iCloud draft is
+  created. Simultaneous scheduled and manual attempts now have one winner.
+  If a provider result is uncertain, an automatic retry is blocked until the
+  mailbox is checked; a found draft can be reconciled without creating
+  another. Completing the claim and updating the church's draft marker is one
+  database transaction. All 125 migrations, 53 database tests, 1,844
+  application tests, typecheck, targeted lint, and a local production build
+  pass. The approved production archive restored into disposable PostgreSQL
+  17, accepted 0114–0120, 0110–0113, and 0121–0123 in that test order,
+  retained four churches and 109 members, and denied claim execution to
+  browser roles. A rollback-only service-role claim succeeded and left zero
+  test claims. Both disposable containers were removed. The operator recovery
+  steps are in `docs/operations/weekly-draft-recovery.md`. Migration 0123 must
+  precede the matching web build; provider and browser retests are pending.
   A local onboarding change also reports failed provider-status reads instead
   of presenting them as disconnected; that return path needs a browser retest.
 - A successful Supabase physical-backup restore test, a provider-side Storage
@@ -711,7 +729,7 @@ on its own.
   See the IRS [written acknowledgment guidance](https://www.irs.gov/charities-non-profits/charitable-organizations/charitable-contributions-written-acknowledgments)
   and [church exemption guidance](https://www.irs.gov/charities-non-profits/churches-integrated-auxiliaries-and-conventions-or-associations-of-churches).
 - Final live-schema comparison, a recorded migration baseline, and safe
-  application of 0110 through 0122 in the order above. The local comparison
+  application of 0110 through 0123 in the order above. The local comparison
   exposed the active missing objects, but live production still has the access
   gap and no source migration ledger.
 - A representative controlled rollout with real accounts from all four
@@ -722,12 +740,10 @@ on its own.
 - Monitoring with an accountable recipient for application errors, provider
   delivery failures, slow requests, and database/storage capacity. Repository
   code and Vercel's recent logs alone do not prove alert delivery.
-- The Monday draft uses a read of last week's draft marker before creating a
-  provider draft and writes the new marker afterward. Concurrent invocations,
-  or a database failure after the provider saves a draft, can leave duplicate
-  drafts on retry. Before broad onboarding, add a durable per-church/week claim
-  and an explicit recovery path for an uncertain provider result; then test
-  simultaneous manual and scheduled runs without sending mail.
+- Verify the new per-church/week draft claim in a controlled hosted test with
+  simultaneous manual and scheduled attempts, provider timeout, and recovery.
+  The local database test proves the reservation and reconciliation rules but
+  does not prove Gmail or iCloud behavior during a live network failure.
 - Concurrent-load and recovery tests against a nonproduction copy containing
   representative church data and through the full hosted application path. The
   local 100-church database check and read-only live benchmark do not establish

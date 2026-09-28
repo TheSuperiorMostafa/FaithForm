@@ -6,6 +6,11 @@ import {
 } from "@/lib/email/announcement-template";
 import { loadAttachmentsForSend } from "@/lib/announcements/attachments";
 import {
+  claimWeeklyDraft,
+  completeWeeklyDraft,
+  markWeeklyDraftUncertain,
+} from "@/lib/announcements/draft-claim";
+import {
   createWeeklyEmailDraft,
   NO_WEEKLY_EMAIL_CHANNEL_MESSAGE,
   resolveWeeklyEmailChannel,
@@ -270,9 +275,9 @@ function draftFailureMessage(channel: WeeklyEmailChannel, err: unknown): string 
   // The detail stays in the log. What Google said is not something a church
   // can act on, and it can carry technical text.
   if (channel === "icloud") {
-    return "iCloud Mail wouldn't save this week's email. Try again in a moment.";
+    return "iCloud Mail did not confirm this week's draft. Check iCloud Mail drafts before trying again, then contact FaithForm support.";
   }
-  return "Google email wouldn't save this week's draft. Try again in a moment. If it keeps happening, reconnect Google in Settings.";
+  return "Gmail did not confirm this week's draft. Check Gmail drafts before trying again, then contact FaithForm support.";
 }
 
 /**
@@ -485,6 +490,27 @@ export async function createWeeklyAnnouncementGmailDraft(
 
   const attachments = await loadAttachmentsForSend(churchId, supabase);
 
+  let claim: Awaited<ReturnType<typeof claimWeeklyDraft>>;
+  try {
+    claim = await claimWeeklyDraft(churchId, week.weekStartKey, Boolean(options?.force));
+  } catch {
+    return { ok: false, error: "We couldn't reserve this week's email. No new draft was created. Try again." };
+  }
+  if (claim.status === "already_created") {
+    return {
+      ok: false,
+      skipped: true,
+      reason: "already_created",
+      error: "This week's email has already been created.",
+    };
+  }
+  if (claim.status === "needs_review") {
+    return {
+      ok: false,
+      error: "An earlier draft attempt may still be in your mailbox. Check drafts and contact FaithForm support before retrying.",
+    };
+  }
+
   let draft: { draftId: string; draftUrl: string };
   try {
     draft = await createWeeklyEmailDraft(
@@ -499,18 +525,20 @@ export async function createWeeklyAnnouncementGmailDraft(
       supabase,
     );
   } catch (err) {
+    await markWeeklyDraftUncertain(churchId, week.weekStartKey, claim.claimId).catch(
+      (markError) => console.error("[weekly-email] could not mark draft uncertain:", markError),
+    );
     return { ok: false, error: draftFailureMessage(channel, err) };
   }
 
-  const { markWeeklyAnnouncementDraftCreated } = await import(
-    "@/lib/queries/announcement-email-settings"
-  );
-  await markWeeklyAnnouncementDraftCreated(
-    churchId,
-    week.weekStartKey,
-    draft.draftId,
-    supabase,
-  );
+  try {
+    await completeWeeklyDraft(churchId, week.weekStartKey, claim.claimId, draft.draftId);
+  } catch {
+    return {
+      ok: false,
+      error: "A draft was saved in your mailbox, but FaithForm could not confirm its status. Check drafts and contact FaithForm support before trying again.",
+    };
+  }
 
   return {
     ok: true,
