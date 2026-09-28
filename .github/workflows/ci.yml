@@ -15,7 +15,7 @@ jobs:
           version: 8.15.9
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm ci:verify
@@ -53,13 +53,15 @@ jobs:
           version: 8.15.9
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: pnpm
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
+      - uses: android-actions/setup-android@v4
+        with:
+          packages: platform-tools
 
       - run: pnpm install --frozen-lockfile
 
@@ -145,7 +147,7 @@ jobs:
           version: 8.15.9
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
 
