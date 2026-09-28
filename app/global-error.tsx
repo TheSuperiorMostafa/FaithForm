@@ -32,8 +32,8 @@ export default function GlobalError({
         <div style={{ maxWidth: 440 }}>
           <h1 style={{ fontSize: 28, marginBottom: 12 }}>Something went wrong</h1>
           <p style={{ fontSize: 17, lineHeight: 1.5, marginBottom: 24 }}>
-            Nothing you saved was lost. Try again, and if it keeps happening,
-            contact FaithForm support.
+            Your latest edits may not have been saved. Try again, and if it
+            keeps happening, contact FaithForm support.
           </p>
           <button
             onClick={reset}

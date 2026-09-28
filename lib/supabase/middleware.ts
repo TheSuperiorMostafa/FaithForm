@@ -270,8 +270,27 @@ export async function updateSession(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
 
+    const denyAdmin = (reason: "session" | "service" | "membership") => {
+      if (request.method === "POST") {
+        console.warn("[auth] platform admin POST denied", { reason });
+      }
+      // Server Actions expect an action response. A 307 repeats their POST at
+      // /login and leaves the editor at the global error screen. Reject the
+      // action instead; the form can keep its unsaved values and explain why.
+      if (request.method === "POST" && request.headers.has("next-action")) {
+        return withSessionState(NextResponse.json(
+          { error: "Sign in again before saving." },
+          { status: 401, headers: { "Cache-Control": "no-store" } },
+        ));
+      }
+      return withSessionState(NextResponse.redirect(
+        url,
+        request.method === "GET" ? 307 : 303,
+      ));
+    };
+
     if (!userId) {
-      return withSessionState(NextResponse.redirect(url));
+      return denyAdmin("session");
     }
 
     if (isBootstrapSuperAdminEmail(userEmail)) {
@@ -280,7 +299,7 @@ export async function updateSession(request: NextRequest) {
 
     const admin = createAdminClientOrNull();
     if (!admin) {
-      return withSessionState(NextResponse.redirect(url));
+      return denyAdmin("service");
     }
 
     const { data, error } = await admin
@@ -290,7 +309,7 @@ export async function updateSession(request: NextRequest) {
       .maybeSingle();
 
     if (error || !data?.user_id) {
-      return withSessionState(NextResponse.redirect(url));
+      return denyAdmin("membership");
     }
   }
 

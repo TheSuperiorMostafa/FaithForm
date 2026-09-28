@@ -162,14 +162,18 @@ export function ChurchProfileForm({
     }
 
     startTransition(async () => {
-      const result = await saveChurchProfile(churchId, form);
-      if (!("ok" in result) || !result.ok) {
-        toast.error("error" in result ? result.error : "Could not save profile.");
-        return;
+      try {
+        const result = await saveChurchProfile(churchId, form);
+        if (!("ok" in result) || !result.ok) {
+          toast.error("error" in result ? result.error : "Could not save profile.");
+          return;
+        }
+        setBaseline(form);
+        setShowErrors(false);
+        toast.success("Church profile saved.");
+      } catch {
+        toast.error("The profile could not be saved. Sign in again if your session expired, then retry.");
       }
-      setBaseline(form);
-      setShowErrors(false);
-      toast.success("Church profile saved.");
     });
   };
 

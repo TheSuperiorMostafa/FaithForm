@@ -538,6 +538,19 @@ on its own.
   controls. The QA-only draft rows used to inspect this were discarded, with
   no profile save. Typecheck and targeted lint pass; keyboard and screen-reader
   retests still need the updated build.
+- A later live QA profile save reached the admin route as a POST and the
+  production edge auth gate returned HTTP 307 twice, before the save action
+  ran. Safari then displayed the global error page. Reloading confirmed that
+  the synthetic mission, vision, phone, email, and denomination edits had not
+  persisted. The local admin gate now rejects unauthenticated Server Action
+  POSTs with 401 and converts other denied POST redirects to GET; the profile
+  form catches an action failure so its edits remain available. The global
+  error page no longer claims unsaved work was preserved. This failure path
+  needs a controlled browser retest after rollout, including an expired
+  session. The log showed a redirect, but did not reveal why the admin session
+  was denied; the local gate records a non-sensitive denial reason for that.
+  Typecheck, targeted lint, all 1,826 application tests, and the local
+  production build pass.
 - The shared church-profile read now requires complete, counted service-time,
   staff, and recurring-event rows. Website and church-app save paths merge from
   this profile; a failed or truncated child read could previously become an
