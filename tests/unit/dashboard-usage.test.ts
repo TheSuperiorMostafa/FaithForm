@@ -74,7 +74,7 @@ const usage = Array.from({ length: 1205 }, (_, index) => ({
   user_id: index < 1200 ? "user-a" : "user-b",
   usage_date: today,
   active_seconds: 60,
-  last_seen_at: "2026-09-27T12:00:00Z",
+  last_seen_at: index === 1199 ? "2026-09-28T12:00:00Z" : "2026-09-27T12:00:00Z",
 }));
 const activity = Array.from({ length: 1205 }, (_, index) => ({
   id: String(index).padStart(5, "0"),
@@ -84,14 +84,12 @@ const activity = Array.from({ length: 1205 }, (_, index) => ({
   time_saved_minutes: 2,
 }));
 
-test("church usage totals include every page of usage and activity", async () => {
+test("church activity totals include every page", async () => {
   const summary = await getChurchDashboardUsageSummary(
     "church-a",
     database(usage, activity),
   );
   assert.deepEqual(summary, {
-    pastorSeconds7d: 1205 * 60,
-    pastorSeconds30d: 1205 * 60,
     hoursSavedMinutes30d: 1205 * 2,
     phoneCalls30d: 40,
   });
@@ -105,9 +103,7 @@ test("church member usage includes every page and only requested members", async
   );
   assert.equal(users.size, 1);
   assert.deepEqual(users.get("user-a"), {
-    seconds7d: 1200 * 60,
-    seconds30d: 1200 * 60,
-    lastSeenAt: "2026-09-27T12:00:00Z",
+    lastSeenAt: "2026-09-28T12:00:00Z",
   });
 });
 
