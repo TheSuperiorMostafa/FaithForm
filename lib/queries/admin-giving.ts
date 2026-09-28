@@ -31,13 +31,15 @@ export type AdminChurchGivingStatus = {
 export async function getAdminGivingOverview(): Promise<AdminGivingOverview> {
   const admin = createAdminClient();
 
-  const { data: churches } = await admin
+  const { data: churches, error: churchesError } = await admin
     .from("churches")
     .select(
-      "id, name, slug, stripe_onboarding_status, stripe_requirements_due, stripe_charges_enabled, stripe_details_submitted",
+      "id, name, slug, stripe_onboarding_status, stripe_requirements_due, stripe_charges_enabled, stripe_details_submitted, exclude_from_platform_metrics",
     );
 
-  const rows = churches ?? [];
+  if (churchesError) throw new Error(churchesError.message);
+  const rows = (churches ?? []).filter((church) => church.exclude_from_platform_metrics === false);
+  const includedIds = new Set(rows.map((church) => church.id));
   const counts = {
     notStarted: 0,
     pending: 0,
@@ -74,10 +76,13 @@ export async function getAdminGivingOverview(): Promise<AdminGivingOverview> {
     }
   }
 
-  const { data: volumeRows } = await admin
-    .from("giving_donations")
-    .select("amount_cents")
-    .eq("status", "succeeded");
+  const { data: volumeRows } = includedIds.size
+    ? await admin
+        .from("giving_donations")
+        .select("amount_cents")
+        .eq("status", "succeeded")
+        .in("church_id", [...includedIds])
+    : { data: [] as { amount_cents: number }[] };
 
   const platformVolumeCents = (volumeRows ?? []).reduce(
     (acc, r) => acc + (r.amount_cents as number),

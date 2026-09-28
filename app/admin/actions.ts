@@ -319,6 +319,36 @@ export async function updateChurchUserRole(formData: FormData) {
   revalidatePath("/admin/users");
 }
 
+export async function updateChurchPlatformReporting(formData: FormData) {
+  await requireSuperAdmin();
+
+  const churchId = readString(formData, "churchId");
+  const excluded = readString(formData, "excluded");
+  if (
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(churchId) ||
+    !["true", "false"].includes(excluded)
+  ) {
+    throw new Error("Invalid platform reporting update.");
+  }
+
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("churches")
+    .update({ exclude_from_platform_metrics: excluded === "true" })
+    .eq("id", churchId)
+    .select("id")
+    .single();
+
+  if (error || !data) {
+    throw new Error(error?.message ?? "Church not found.");
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/analytics");
+  revalidatePath("/admin/churches");
+  revalidatePath(`/admin/churches/${churchId}`);
+}
+
 export async function createSupportTicket(formData: FormData) {
   const user = await requireSuperAdmin();
 
