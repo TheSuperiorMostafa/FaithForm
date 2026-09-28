@@ -267,7 +267,7 @@ public struct AutomaticAttendanceStatusView: View {
     private let onSetUp: @MainActor () -> Void
     private let onResumeSetup: @MainActor () -> Void
     private let onConfirm: @MainActor () -> Void
-    private let onRequestConfirmation: (@MainActor () async -> Void)?
+    private let onRequestConfirmation: (@MainActor @Sendable () async -> Void)?
     private let onDecline: @MainActor () -> Void
     private let onDisable: @MainActor () -> Void
     private let onOpenSettings: @MainActor () -> Void
@@ -277,7 +277,7 @@ public struct AutomaticAttendanceStatusView: View {
         onSetUp: @escaping @MainActor () -> Void,
         onResumeSetup: @escaping @MainActor () -> Void,
         onConfirm: @escaping @MainActor () -> Void,
-        onRequestConfirmation: (@MainActor () async -> Void)? = nil,
+        onRequestConfirmation: (@MainActor @Sendable () async -> Void)? = nil,
         onDecline: @escaping @MainActor () -> Void = {},
         onDisable: @escaping @MainActor () -> Void,
         onOpenSettings: @escaping @MainActor () -> Void
@@ -632,14 +632,14 @@ public struct AutomaticAttendanceFlowView: View {
     @Environment(\.faithformTheme) private var theme
     private let model: AutomaticAttendanceModel
     private let onOpenSettings: @MainActor () -> Void
-    private let onRequestConfirmation: (@MainActor () async -> String?)?
+    private let onRequestConfirmation: (@MainActor @Sendable () async -> String?)?
     private let onClose: @MainActor () -> Void
     @State private var confirmationMessage: String?
 
     public init(
         model: AutomaticAttendanceModel,
         onOpenSettings: @escaping @MainActor () -> Void,
-        onRequestConfirmation: (@MainActor () async -> String?)? = nil,
+        onRequestConfirmation: (@MainActor @Sendable () async -> String?)? = nil,
         onClose: @escaping @MainActor () -> Void
     ) {
         self.model = model
@@ -728,9 +728,7 @@ public struct AutomaticAttendanceFlowView: View {
                     onSetUp: { model.begin() },
                     onResumeSetup: { Task { await model.resumeSetup() } },
                     onConfirm: { Task { await model.confirmCheckIn() } },
-                    onRequestConfirmation: onRequestConfirmation.map { request in
-                        { Task { confirmationMessage = await request() } }
-                    },
+                    onRequestConfirmation: requestConfirmationAction,
                     onDisable: { Task { await model.disable() } },
                     onOpenSettings: onOpenSettings
                 )
@@ -744,5 +742,10 @@ public struct AutomaticAttendanceFlowView: View {
         var status = model.status
         status.confirmationMessage = confirmationMessage
         return status
+    }
+
+    private var requestConfirmationAction: (@MainActor @Sendable () async -> Void)? {
+        guard let request = onRequestConfirmation else { return nil }
+        return { confirmationMessage = await request() }
     }
 }
