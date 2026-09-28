@@ -748,9 +748,15 @@ on its own.
   version during the migration-first rollout. All 127 migrations, 56 database
   tests, 1,845 application tests, TypeScript checking, focused lint, and a
   local production build passed. A synthetic backup and restore rehearsal also
-  passed with 127 migrations and four churches. These are local checks; no
-  production email was sent and Admin monitoring has not been staffed or
+  passed with 127 migrations and four churches. Those local checks sent no
+  email. Admin monitoring has not been staffed or
   rehearsed. A provider acceptance is not proof of inbox delivery.
+- A live QA church submitted one clearly labeled support ticket after owner
+  approval. It remained visible after reload, and its acknowledgment reached
+  the owner's QA Gmail alias with the correct contents and dashboard link.
+  Delivery of the separate internal notification to the support inbox has not
+  been observed. The local 0125 status and Admin review queue were not part of
+  this live test because they have not been deployed.
 - A successful Supabase physical-backup restore test, a provider-side Storage
   restore rehearsal, an independent encrypted location for the local database
   and Storage archives, and documented recovery time and data-loss targets.

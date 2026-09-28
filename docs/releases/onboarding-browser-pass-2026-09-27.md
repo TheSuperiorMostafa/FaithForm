@@ -192,6 +192,18 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   validation. No support ticket or email was sent. A code review then found
   that a reply to a resolved ticket could be saved even if reopening the
   ticket failed; local migration 0124 now makes those writes one transaction.
+- With the owner's explicit approval, the QA church sent one synthetic ticket
+  titled `QA ONLY — support delivery test`. The Help page showed “Message sent”
+  and listed the ticket under “Your messages.” After a full reload, the ticket
+  remained and expanded to show the exact submitted message, a “No reply yet”
+  state, and a disabled empty reply button. An acknowledgment from
+  `support@faithform.io` reached the owner's QA Gmail alias at 11:12 PM with
+  the correct church, subject, message, and dashboard link. The separate
+  internal notification's arrival at the FaithForm support inbox has not been
+  observed; the owner's Gmail search contained only the acknowledgment. A
+  direct Admin Support visit under the QA church admin session returned to
+  the church dashboard, as expected for a non-platform account. No reply was
+  sent, and the ticket remains as labeled QA data.
 - Team and app settings follow-up: the live team now lists the QA admin. The
   invitation form rejected both a blank address and `not-an-email` before
   submission. Volunteer was the default preset, and expanding custom tools
