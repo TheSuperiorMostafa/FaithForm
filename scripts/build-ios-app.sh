@@ -71,7 +71,10 @@ print(best or "")')
     DEST="platform=iOS Simulator,id=$UDID"
   fi
   echo "Testing on $DEST"
-  xcodebuild "${COMMON[@]}" -destination "$DEST" test 2>&1 | tee "$LOG" >/dev/null
+  if ! xcodebuild "${COMMON[@]}" -destination "$DEST" test 2>&1 | tee "$LOG" >/dev/null; then
+    tail -n 160 "$LOG" >&2
+    exit 1
+  fi
 else
   xcodebuild "${COMMON[@]}" -destination 'generic/platform=iOS' -quiet build 2>&1 | tee "$LOG"
 fi
