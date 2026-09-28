@@ -472,6 +472,28 @@ on its own.
   the old-schema call fallback is limited to a confirmed missing column. All
   56 focused phone-call and read-error tests pass with typecheck and lint. A
   controlled browser failure-path retest remains after rollout.
+- The Attendance follow-up message log previously stopped after 1,000 texts,
+  which could hide later recipients from a busy Sunday, and showed "No texts
+  sent yet" when its database or service-role read failed. The local reader now
+  pages until the selected Sundays are complete, checks order and repeated
+  rows, and shows a retry state on read failure. A 1,001-text Sunday and a
+  failed second page passed focused tests. This needs a browser retest after
+  rollout; no live messages were sent for this check.
+  The QA church's deployed log loaded an ordinary "No texts sent yet" state;
+  no live failure was induced on Sunday, so that screen alone cannot verify
+  the local failure path.
+- A failed Help ticket or reply read previously appeared as an empty list or
+  conversation, and replies beyond Supabase's first page could be omitted.
+  The local Help reader now checks complete, counted pages for tickets and
+  replies, batches ticket IDs, and raises read failures so the existing Help
+  error state appears. The platform ticket detail also stops before showing an
+  incomplete thread. A 1,001-reply thread, 1,001-ticket list, and read-failure
+  tests pass. The local production build, typecheck, targeted lint, and all
+  1,817 application tests pass. Live Help and platform Support still need
+  browser retests after rollout. In the
+  deployed QA Help page, "Your messages" showed empty and a blank submission
+  prompted for the required message. The optional subject field expanded; no
+  support message was sent for this check.
 - Giving reads previously returned empty funds, failed recurring gifts, or
   false “not found” results on database errors. Year-end statement reads could
   omit rows past Supabase's page limit or produce incomplete PDFs and ZIPs

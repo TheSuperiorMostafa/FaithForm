@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { readAllById } from "@/lib/queries/paged-read";
 
 /**
  * The shared half of a support ticket thread — the shape both sides read and
@@ -30,6 +31,10 @@ type CommentRow = {
   created_at: string;
 };
 
+function isMissingCommentsTable(message: string): boolean {
+  return /support_ticket_comments/i.test(message);
+}
+
 function mapComment(row: CommentRow): SupportTicketComment {
   return {
     id: row.id,
@@ -40,32 +45,33 @@ function mapComment(row: CommentRow): SupportTicketComment {
   };
 }
 
-/**
- * Pre-0069 databases have tickets but no thread. Reading one there should show
- * an empty conversation, not an error page over a ticket that loaded fine.
- */
-function isMissingCommentsTable(message: string): boolean {
-  return /support_ticket_comments/i.test(message);
+async function loadComments(
+  client: SupabaseClient,
+  ticketIds: string[],
+): Promise<Array<CommentRow & { ticket_id: string }>> {
+  return readAllById<CommentRow & { ticket_id: string }>(
+    async (afterId, includeCount, pageSize) => {
+      let query = client
+        .from("support_ticket_comments")
+        .select("id, ticket_id, author_role, author_name, body, created_at", {
+          count: includeCount ? "exact" : undefined,
+        })
+        .in("ticket_id", ticketIds);
+      if (afterId) query = query.gt("id", afterId);
+      return await query.order("id", { ascending: true }).limit(pageSize);
+    },
+    { label: "support comments" },
+  );
 }
 
 export async function getTicketComments(
   client: SupabaseClient,
   ticketId: string,
 ): Promise<SupportTicketComment[]> {
-  const { data, error } = await client
-    .from("support_ticket_comments")
-    .select("id, author_role, author_name, body, created_at")
-    .eq("ticket_id", ticketId)
-    .order("created_at", { ascending: true });
-
-  if (error) {
-    if (!isMissingCommentsTable(error.message)) {
-      console.error("getTicketComments:", error.message);
-    }
-    return [];
-  }
-
-  return ((data ?? []) as CommentRow[]).map(mapComment);
+  const rows = await loadComments(client, [ticketId]);
+  return rows
+    .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))
+    .map(mapComment);
 }
 
 /** Every thread for a set of tickets, keyed by ticket id. One round trip. */
@@ -76,23 +82,16 @@ export async function getCommentsForTickets(
   const byTicket = new Map<string, SupportTicketComment[]>();
   if (ticketIds.length === 0) return byTicket;
 
-  const { data, error } = await client
-    .from("support_ticket_comments")
-    .select("id, ticket_id, author_role, author_name, body, created_at")
-    .in("ticket_id", ticketIds)
-    .order("created_at", { ascending: true });
-
-  if (error) {
-    if (!isMissingCommentsTable(error.message)) {
-      console.error("getCommentsForTickets:", error.message);
+  for (let from = 0; from < ticketIds.length; from += 100) {
+    const rows = await loadComments(client, ticketIds.slice(from, from + 100));
+    for (const row of rows) {
+      const existing = byTicket.get(row.ticket_id) ?? [];
+      existing.push(mapComment(row));
+      byTicket.set(row.ticket_id, existing);
     }
-    return byTicket;
   }
-
-  for (const row of (data ?? []) as (CommentRow & { ticket_id: string })[]) {
-    const existing = byTicket.get(row.ticket_id) ?? [];
-    existing.push(mapComment(row));
-    byTicket.set(row.ticket_id, existing);
+  for (const comments of byTicket.values()) {
+    comments.sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
   }
 
   return byTicket;

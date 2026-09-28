@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 
 import { FollowUpLog } from "./follow-up-log";
 import { PageHeader } from "@/components/ui/page-header";
+import { ErrorState } from "@/components/ui/error-state";
 import { ATTENDANCE_COPY } from "@/lib/attendance/page-copy";
 import { getChurchAuth } from "@/lib/auth/church";
 import { getFollowUpLog } from "@/lib/queries/follow-up-log";
@@ -19,7 +20,12 @@ export default async function FollowUpLogPage() {
   const auth = await getChurchAuth(supabase);
   if (!auth) redirect("/login");
 
-  const sundays = await getFollowUpLog(auth.churchId);
+  let sundays: Awaited<ReturnType<typeof getFollowUpLog>> | null = null;
+  try {
+    sundays = await getFollowUpLog(auth.churchId);
+  } catch (error) {
+    console.error("[attendance] follow-up log failed to load", error);
+  }
 
   return (
     <div className="flex w-full flex-col gap-8">
@@ -37,7 +43,14 @@ export default async function FollowUpLogPage() {
         />
       </div>
 
-      <FollowUpLog sundays={sundays} />
+      {sundays ? (
+        <FollowUpLog sundays={sundays} />
+      ) : (
+        <ErrorState
+          title="Message log didn't load"
+          description="Refresh the page to try again. No messages were changed."
+        />
+      )}
     </div>
   );
 }
