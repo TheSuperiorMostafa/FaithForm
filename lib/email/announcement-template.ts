@@ -12,7 +12,7 @@ export const DEFAULT_ANNOUNCEMENT_EMAIL_SUBJECT =
 
 export const DEFAULT_ANNOUNCEMENT_EMAIL_BODY = `Hi team,
 
-Here are this week's events:
+Here are this week's announcements:
 
 [Events]
 
