@@ -1,4 +1,5 @@
 import Foundation
+import CoreText
 import SwiftUI
 import Testing
 @testable import FaithFormKit
@@ -190,13 +191,13 @@ struct ThemeTests {
         #expect(FaithFormTheme(colorScheme: .light).palette.background != FaithFormTheme(colorScheme: .dark).palette.background)
     }
 
-    @Test("the web's type actually ships, rather than falling back to San Francisco")
+    @Test("the web's font files ship in the Swift package")
     func bundledFontsResolve() {
-        // The whole point of bundling is defeated silently: an unregistered
-        // face makes `Font.custom` fall back to the system font and the app
-        // still renders, looking subtly unlike the website. So assert the
-        // registration worked rather than trusting that it did.
-        #expect(FaithFormFonts.isAvailable)
+        let urls = FaithFormFonts.bundledFontURLs
+        #expect(urls.count == 4)
+        for url in urls {
+            #expect(CTFontManagerCreateFontDescriptorsFromURL(url as CFURL) != nil)
+        }
     }
 
     @Test("display roles take Montserrat and text roles take Nunito")
