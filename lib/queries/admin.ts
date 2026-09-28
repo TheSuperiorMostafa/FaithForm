@@ -15,6 +15,7 @@ import {
   getChurchDashboardUsageSummary,
   getUserDashboardUsageByChurch,
 } from "@/lib/queries/dashboard-usage";
+import { readAllById } from "@/lib/queries/paged-read";
 
 export type AdminRole = "admin" | "viewer";
 export type SupportTicketStatus = "open" | "in_progress" | "resolved";
@@ -384,8 +385,7 @@ const listAuthUsersMap = cache(async function listAuthUsersMap(): Promise<
   while (true) {
     const { data, error } = await admin.auth.admin.listUsers({ page, perPage });
     if (error) {
-      console.error("listAuthUsersMap:", error.message);
-      return users;
+      throw new Error(`listAuthUsersMap: ${error.message}`);
     }
 
     for (const user of data.users ?? []) {
@@ -489,6 +489,18 @@ export async function getAdminOverview(): Promise<AdminOverview> {
     getSupportTickets("recent-open"),
   ]);
 
+  for (const [label, result] of [
+    ["church count", churchesCount],
+    ["member count", usersCount],
+    ["sermon count", sermonsCount],
+  ] as const) {
+    if (result.error || !Number.isSafeInteger(result.count)) {
+      throw new Error(`admin overview ${label} unavailable`);
+    }
+  }
+  if (integrationsRes.error) throw new Error(`admin overview integrations: ${integrationsRes.error.message}`);
+  if (newChurchesRes.error) throw new Error(`admin overview new churches: ${newChurchesRes.error.message}`);
+
   const integrations = (integrationsRes.data ?? []) as IntegrationRow[];
   const googleChurches = new Set<string>();
   const facebookChurches = new Set<string>();
@@ -500,15 +512,15 @@ export async function getAdminOverview(): Promise<AdminOverview> {
 
   return {
     stats: {
-      totalChurches: churchesCount.count ?? 0,
-      totalUsers: usersCount.count ?? 0,
-      totalSermons: sermonsCount.count ?? 0,
+      totalChurches: churchesCount.count as number,
+      totalUsers: usersCount.count as number,
+      totalSermons: sermonsCount.count as number,
       platformHoursSaved: toHours(platformTotals.minutesSaved),
       pastorMinutes30d: Math.round(platformTotals.pastorSeconds30d / 60),
       activeChurches30d: platformTotals.activeChurches30d,
     },
     integrationHealth: {
-      totalChurches: churchesCount.count ?? 0,
+      totalChurches: churchesCount.count as number,
       googleConnected: googleChurches.size,
       facebookConnected: facebookChurches.size,
     },
@@ -541,6 +553,10 @@ export async function getAdminChurches(): Promise<AdminChurchListRow[]> {
         .is("accepted_at", null)
         .order("created_at", { ascending: false }),
     ]);
+
+  if (churchesRes.error) throw new Error(`admin churches: ${churchesRes.error.message}`);
+  if (integrationsRes.error) throw new Error(`admin church integrations: ${integrationsRes.error.message}`);
+  if (invitesRes.error) throw new Error(`admin church invites: ${invitesRes.error.message}`);
 
   if (metricsRes.error && !isMissingAdminAggregate(metricsRes.error.message)) {
     throw new Error(`admin_platform_church_metrics: ${metricsRes.error.message}`);
@@ -671,8 +687,8 @@ export async function getAdminChurchActivity(
     ),
   ]);
 
-  if (activityRes.error) {
-    console.error("getAdminChurchActivity:", activityRes.error.message);
+  if (activityRes.error || !Number.isSafeInteger(activityRes.count)) {
+    throw new Error("admin church activity unavailable");
   }
 
   const types = Array.from(
@@ -691,7 +707,7 @@ export async function getAdminChurchActivity(
     ),
   ).sort();
 
-  const total = activityRes.count ?? 0;
+  const total = activityRes.count as number;
 
   return {
     rows: ((activityRes.data ?? []) as ActivityRow[]).map((row) => ({
@@ -717,7 +733,7 @@ export async function getAdminChurchDetail(
   const [
     churchRes,
     settingsRes,
-    usersRes,
+    churchUsers,
     integrationsRes,
     attendanceRes,
     inviteRes,
@@ -739,11 +755,16 @@ export async function getAdminChurchDetail(
       )
       .eq("church_id", churchId)
       .maybeSingle(),
-    admin
-      .from("church_users")
-      .select("id, user_id, role, created_at")
-      .eq("church_id", churchId)
-      .order("created_at", { ascending: false }),
+    readAllById<ChurchUserRow>(async (afterId, includeCount, pageSize) => {
+      let query = admin
+        .from("church_users")
+        .select("id, church_id, user_id, role, created_at", {
+          count: includeCount ? "exact" : undefined,
+        })
+        .eq("church_id", churchId);
+      if (afterId) query = query.gt("id", afterId);
+      return await query.order("id").limit(pageSize);
+    }, { label: "church members", maxRows: 10_000 }),
     admin
       .from("church_integrations")
       .select("church_id, provider, token_expires_at, metadata, updated_at")
@@ -774,9 +795,12 @@ export async function getAdminChurchDetail(
       .maybeSingle(),
   ]);
 
-  if (churchRes.error || !churchRes.data) {
-    return null;
-  }
+  if (churchRes.error) throw new Error(`church detail: ${churchRes.error.message}`);
+  if (!churchRes.data) return null;
+  if (settingsRes.error) throw new Error(`church settings: ${settingsRes.error.message}`);
+  if (integrationsRes.error) throw new Error(`church integrations: ${integrationsRes.error.message}`);
+  if (attendanceRes.error) throw new Error(`church attendance: ${attendanceRes.error.message}`);
+  if (inviteRes.error) throw new Error(`church invite: ${inviteRes.error.message}`);
 
   const church = churchRes.data as ChurchRow & {
     slug?: string;
@@ -787,7 +811,7 @@ export async function getAdminChurchDetail(
     stripe_requirements_due?: string[] | null;
     giving_enabled_at?: string | null;
   };
-  const churchUsers = (usersRes.data ?? []) as ChurchUserRow[];
+  churchUsers.sort((a, b) => b.created_at.localeCompare(a.created_at) || a.id.localeCompare(b.id));
   const authUsers = await listAuthUsersFor(churchUsers.map((row) => row.user_id));
   const usageByUser = await getUserDashboardUsageByChurch(
     churchId,

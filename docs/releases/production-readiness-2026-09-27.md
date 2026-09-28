@@ -521,6 +521,16 @@ on its own.
   synthetic backup and restore also passed with 0121. Apply this migration
   before deploying its website action, then browser-test publish and unpublish
   against the QA church after rollout.
+- Platform church-detail usage and saved-minute totals now page through
+  counted results, and the phone-call count must succeed before it is shown.
+  A 1,205-row rehearsal included every usage and activity row; a 1,200-row
+  member rehearsal included every row for the requested member. Failed reads
+  and missing counts now stop the page instead of displaying false zeros.
+  Church-detail membership also pages through counted results, while the
+  overview, church list, activity, and Auth directory now surface read
+  failures. The 1,820 application tests, typecheck, targeted lint, and local
+  production build pass. These changes have not been deployed or retested in
+  the live admin interface.
 - A repeat in Safari Private Browsing confirmed the live privacy gap: an
   anonymous visitor can read the QA church's unpublished site by adding
   `?preview=1`, while the same private window showed 404 without that
