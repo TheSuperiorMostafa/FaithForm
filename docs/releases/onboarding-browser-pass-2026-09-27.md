@@ -30,11 +30,11 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
 - Platform-admin handoff opened the new church dashboard and displayed the
   correct active-tenant warning and name.
 - A later click on the platform admin's “Open FaithForm Onboarding QA's
-  dashboard” control instead reached the live generic error page. This is a
-  Server Action POST from the church detail page, the same request class as
-  the independently observed profile-save failure. The browser result alone
-  does not establish its server-side cause. The local admin POST handling fix
-  still needs a controlled live handoff retest after rollout.
+  dashboard” control instead reached the live generic error page. Vercel's
+  request detail showed the Server Action POST returned HTTP 307 from
+  middleware to `/login`, followed by a POST to that page. The log does not
+  explain why the session was denied. The local admin POST handling fix still
+  needs a controlled live handoff retest after rollout.
 - People: empty-state, required first-name validation, two member creations,
   optional email save, and care-note save succeeded. The dummy email is on an
   `.invalid` domain. No phone was entered. A later search for the QA child
