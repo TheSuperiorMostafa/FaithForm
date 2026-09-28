@@ -25,6 +25,8 @@ export type WeeklyEmailEvent = {
   endAt: string | null;
   /** A date-only calendar entry: printed as a date, with no time. */
   allDay?: boolean;
+  /** An announcement that has no event date or time. */
+  undated?: boolean;
   notes?: string;
 };
 
@@ -91,13 +93,10 @@ export function formatWeeklyEmailEventBlock(
   event: WeeklyEmailEvent,
   timeZone?: string | null,
 ): string {
-  const when = formatEventWhen(
-    event.startAt,
-    event.endAt,
-    timeZone,
-    event.allDay,
-  );
-  const lines = [event.title, when];
+  const lines = [event.title];
+  if (!event.undated) {
+    lines.push(formatEventWhen(event.startAt, event.endAt, timeZone, event.allDay));
+  }
   if (event.location.trim()) lines.push(event.location.trim());
   if (event.notes?.trim()) lines.push(event.notes.trim());
   return lines.join("\n");
@@ -113,14 +112,11 @@ export function formatEventsHtml(
 
   return events
     .map((event) => {
-      const when = formatEventWhen(
-        event.startAt,
-        event.endAt,
-        timeZone,
-        event.allDay,
-      );
       const parts = [`<p><strong>${escapeHtml(event.title)}</strong></p>`];
-      parts.push(`<p><strong>When:</strong> ${escapeHtml(when)}</p>`);
+      if (!event.undated) {
+        const when = formatEventWhen(event.startAt, event.endAt, timeZone, event.allDay);
+        parts.push(`<p><strong>When:</strong> ${escapeHtml(when)}</p>`);
+      }
       if (event.location.trim()) {
         parts.push(
           `<p><strong>Where:</strong> ${escapeHtml(event.location.trim())}</p>`,

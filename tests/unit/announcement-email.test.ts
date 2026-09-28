@@ -116,6 +116,25 @@ test("the weekly email shows an all-day event as a date", () => {
   assert.equal(plain.includes(":00"), false);
 });
 
+test("the weekly email does not invent a date for a non-event announcement", () => {
+  const announcement = {
+    title: "Office closed",
+    location: "",
+    startAt: "2026-09-27T00:00:00.000Z",
+    endAt: null,
+    allDay: true,
+    undated: true,
+    notes: "Please call the office on Monday.",
+  };
+
+  const plain = formatWeeklyEmailEventBlock(announcement, "America/New_York");
+  const html = formatEventsHtml([announcement], "America/New_York");
+  assert.equal(plain, "Office closed\nPlease call the office on Monday.");
+  assert.equal(html.includes("When:"), false);
+  assert.equal(html.includes("September 27th"), false);
+  assert.equal(html.includes("Please call the office on Monday."), true);
+});
+
 test("the caption prompt states the weekday rather than leaving it to be guessed", () => {
   // A model handed "Aug 4" with no weekday and no year works one out from
   // whatever calendar its training left it with — and August 4th is a Tuesday

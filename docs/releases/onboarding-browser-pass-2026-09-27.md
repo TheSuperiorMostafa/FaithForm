@@ -452,6 +452,20 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   saved a trim. The trim was restored to the original 0:00–0:48 span and the
   list showed the full duration again. Publication was not tested, so app and
   public website playback after publication remain unverified.
+- The owner completed Google's unverified-app consent screen. FaithForm showed
+  the QA church connected to the owner's Calendar and Gmail. A synthetic
+  September 29 event created in FaithForm appeared in Google Calendar with the
+  intended time and QA location. After the owner confirmed deletion, FaithForm
+  showed no event on that day. A synthetic email-only announcement created a
+  Gmail draft with its expected title and body; no email was sent. The QA
+  announcement was then taken down. Gmail draft cleanup awaits the owner's
+  immediate confirmation because draft deletion is permanent.
+- The live Gmail draft described this non-event announcement as an all-day
+  event. The local formatter now omits the invented date. The live weekly card
+  still described an earlier draft as ready after take-down reduced the weekly
+  list to zero; the local card now warns that a draft is a snapshot and needs
+  review or removal after changes. Calendar pagination and fail-closed draft
+  reads were also fixed locally. These need browser retests after rollout.
 
 ## Still in progress
 

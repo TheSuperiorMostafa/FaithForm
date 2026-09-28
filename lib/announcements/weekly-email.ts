@@ -175,6 +175,7 @@ export function standaloneToEmailEvents(
       startAt: row.start_at,
       endAt: row.end_at,
       allDay: row.all_day,
+      undated: row.undated,
       notes: row.body?.trim() || undefined,
     }));
 }
@@ -187,6 +188,7 @@ export function standaloneToEmailEvents(
 export async function listStandaloneEmailRows(
   churchId: string,
   supabase: SupabaseClient,
+  strict = false,
 ): Promise<StandaloneEmailRow[]> {
   const select = (columns: string) =>
     supabase
@@ -206,6 +208,7 @@ export async function listStandaloneEmailRows(
     ));
   }
   if (error) {
+    if (strict) throw new Error("Weekly announcements read failed");
     console.error("[weekly-email] standalone announcements:", error.message);
     return [];
   }
@@ -335,16 +338,26 @@ export async function createWeeklyAnnouncementGmailDraft(
 
   // The draft lands in one mailbox, but the events in it come from every
   // calendar the church has linked.
-  const [calendar, queued, standalone] = await Promise.all([
-    listChurchCalendarEvents(churchId, week.weekStartISO, horizonEnd, supabase),
-    listEmailQueue(churchId, week.weekStartKey, supabase),
-    listStandaloneEmailRows(churchId, supabase),
-  ]);
+  let calendar: Awaited<ReturnType<typeof listChurchCalendarEvents>>;
+  let queued: Awaited<ReturnType<typeof listEmailQueue>>;
+  let standalone: StandaloneEmailRow[];
+  try {
+    [calendar, queued, standalone] = await Promise.all([
+      listChurchCalendarEvents(churchId, week.weekStartISO, horizonEnd, supabase),
+      listEmailQueue(churchId, week.weekStartKey, supabase, true),
+      listStandaloneEmailRows(churchId, supabase, true),
+    ]);
+  } catch {
+    return { ok: false, error: "We couldn't read all announcements. No email draft was created. Try again." };
+  }
+  if (calendar.errors.length > 0) {
+    return { ok: false, error: "We couldn't read the whole calendar. No email draft was created. Try again." };
+  }
   const events = calendar.events;
 
   const queuedEventIds = new Set(queued.map((item) => item.googleEventId));
 
-  const { data: publishedRows } = await supabase
+  const { data: publishedRows, error: publishedError } = await supabase
     .from("announcements")
     .select(
       "id, title, body, start_at, end_at, event_location, push_to_team, google_event_id, status",
@@ -352,6 +365,9 @@ export async function createWeeklyAnnouncementGmailDraft(
     .eq("church_id", churchId)
     .eq("status", "published")
     .not("google_event_id", "is", null);
+  if (publishedError) {
+    return { ok: false, error: "We couldn't read published announcements. No email draft was created. Try again." };
+  }
 
   const publishedByGoogleId: Record<string, AnnouncementRow> = {};
   for (const row of publishedRows ?? []) {

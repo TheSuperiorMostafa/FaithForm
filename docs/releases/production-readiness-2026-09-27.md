@@ -645,16 +645,31 @@ on its own.
   close an invite before creating the church-admin membership.
 - Google showed an unverified-app warning before the QA church could connect
   the owner's Gmail. The owner reports that Google verification has already
-  been requested; approval and a successful consent/connection test have not
-  been observed. Keep this separate from FaithForm's redundant onboarding
+  been requested; approval has not been observed. The owner completed Google
+  consent and FaithForm then showed Calendar and Gmail connected. A synthetic
+  event created in FaithForm appeared in the owner's Google Calendar, persisted
+  after a FaithForm reload, and was deleted from FaithForm after the owner
+  confirmed the irreversible action. FaithForm then showed no event on that
+  date. A synthetic email-only QA announcement produced a draft in the owner's
+  Gmail account with the expected subject and content. It was taken down from
+  FaithForm after verification; deleting the Gmail draft awaits the owner's
+  separate confirmation. Keep Google verification separate from FaithForm's redundant onboarding
   email. The requested Gmail compose scope can also send mail, so review the
   scope disclosure and approval status before offering Google connections to
   new churches. See Google's
   [Gmail scope descriptions](https://developers.google.com/workspace/gmail/api/auth/scopes).
   The QA church's weekly email settings also claimed a Monday draft would
   appear despite having no connected mailbox. A local UI fix now identifies
-  the missing connection; creating an actual scheduled draft still needs a
-  controlled test after Google approval or iCloud Mail connection.
+  the missing connection. Manual Gmail draft creation passed; the scheduled
+  Monday run and iCloud Mail remain untested. The live draft incorrectly gave
+  a non-event announcement an all-day date, and a draft made before take-down
+  remained in Gmail after the weekly list became empty. Local rendering now
+  omits the invented date, and the card warns that an older draft needs review
+  or removal before sending. Local draft creation now fails on incomplete
+  calendar, queue, or announcement reads. Google Calendar listing now reads
+  all result pages instead of silently stopping after 250 events. These fixes
+  passed 32 focused tests, typecheck, and targeted lint; they need rollout and
+  browser retests.
   A local onboarding change also reports failed provider-status reads instead
   of presenting them as disconnected; that return path needs a browser retest.
 - A successful Supabase physical-backup restore test, a provider-side Storage
