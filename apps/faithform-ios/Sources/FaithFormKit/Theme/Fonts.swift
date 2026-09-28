@@ -50,7 +50,8 @@ public enum FaithFormFonts {
     public static let isAvailable: Bool = {
         for file in files {
             guard let url = Bundle.module.url(forResource: file, withExtension: "ttf")
-                ?? Bundle.module.url(forResource: "Fonts/\(file)", withExtension: "ttf")
+                ?? Bundle.module.url(forResource: file, withExtension: "ttf", subdirectory: "Fonts")
+                ?? Bundle.module.url(forResource: file, withExtension: "ttf", subdirectory: "Resources/Fonts")
             else { continue }
 
             var error: Unmanaged<CFError>?
