@@ -538,6 +538,14 @@ on its own.
   controls. The QA-only draft rows used to inspect this were discarded, with
   no profile save. Typecheck and targeted lint pass; keyboard and screen-reader
   retests still need the updated build.
+- The shared church-profile read now requires complete, counted service-time,
+  staff, and recurring-event rows. Website and church-app save paths merge from
+  this profile; a failed or truncated child read could previously become an
+  empty list and be written back as missing profile data. A 1,001-service
+  rehearsal kept every row in display order; failed staff and church reads
+  now reject instead of returning partial or missing profiles. Typecheck,
+  targeted lint, all 1,823 application tests, and the local production build
+  pass. This is local only and needs a controlled save retest after rollout.
 - A repeat in Safari Private Browsing confirmed the live privacy gap: an
   anonymous visitor can read the QA church's unpublished site by adding
   `?preview=1`, while the same private window showed 404 without that

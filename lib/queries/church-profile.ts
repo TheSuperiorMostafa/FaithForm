@@ -6,6 +6,7 @@ import {
 } from "@/lib/utils/office-hours";
 import { createClient } from "@/lib/supabase/server";
 import { formatAnnouncementFacebookPostTime } from "@/lib/integrations/facebook";
+import { readAllById } from "@/lib/queries/paged-read";
 import type {
   AiKnowledge,
   ChurchProfile,
@@ -289,36 +290,34 @@ export async function getChurchProfile(
 ): Promise<ChurchProfile | null> {
   const client = supabase ?? db();
 
+  const loadChildren = (table: "church_service_times" | "church_staff" | "church_recurring_events") =>
+    readAllById<{ id: string; sort_order?: number } & Record<string, unknown>>(
+      async (afterId, includeCount, pageSize) => {
+        let query = client
+          .from(table)
+          .select("*", { count: includeCount ? "exact" : undefined })
+          .eq("church_id", churchId);
+        if (afterId) query = query.gt("id", afterId);
+        return await query.order("id").limit(pageSize);
+      },
+      { label: table, maxRows: 10_000 },
+    ).then((rows) => rows.sort((a, b) =>
+      (Number(a.sort_order) || 0) - (Number(b.sort_order) || 0) || a.id.localeCompare(b.id),
+    ));
+
   const [churchResult, serviceResult, staffResult, recurringEventsResult] = await Promise.all([
     client.from("churches").select(CHURCH_SELECT).eq("id", churchId).maybeSingle(),
-    client
-      .from("church_service_times")
-      .select("*")
-      .eq("church_id", churchId)
-      .order("sort_order", { ascending: true }),
-    client
-      .from("church_staff")
-      .select("*")
-      .eq("church_id", churchId)
-      .order("sort_order", { ascending: true }),
-    client
-      .from("church_recurring_events")
-      .select("*")
-      .eq("church_id", churchId)
-      .order("sort_order", { ascending: true }),
+    loadChildren("church_service_times"),
+    loadChildren("church_staff"),
+    loadChildren("church_recurring_events"),
   ]);
 
+  if (churchResult.error) throw new Error(`church profile: ${churchResult.error.message}`);
   if (!churchResult.data) return null;
 
-  const serviceTimes = (serviceResult.data ?? []).map((row) =>
-    mapServiceTime(row as Record<string, unknown>),
-  );
-  const staff = (staffResult.data ?? []).map((row) =>
-    mapStaff(row as Record<string, unknown>),
-  );
-  const recurringEvents = (recurringEventsResult.data ?? []).map((row) =>
-    mapRecurringEvent(row as Record<string, unknown>),
-  );
+  const serviceTimes = serviceResult.map(mapServiceTime);
+  const staff = staffResult.map(mapStaff);
+  const recurringEvents = recurringEventsResult.map(mapRecurringEvent);
 
   return mapChurchRow(
     churchResult.data as Record<string, unknown>,
