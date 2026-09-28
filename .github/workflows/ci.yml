@@ -82,9 +82,10 @@ jobs:
       - name: Android debug build
         run: pnpm android:build
 
-      # The pilot artefact. Unsigned, and it must still assemble.
-      - name: Android staging build
-        run: pnpm android:staging
+      # Compile staging sources without producing an installable APK. A real
+      # staging artifact requires its own HTTPS origin and Supabase project.
+      - name: Android staging compile
+        run: pnpm android:staging:compile
 
       - name: iOS build
         run: pnpm ios:build

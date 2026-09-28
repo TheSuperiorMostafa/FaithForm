@@ -79,6 +79,7 @@
     "ios:app:build": "./scripts/build-ios-app.sh",
     "ios:app:test": "./scripts/build-ios-app.sh --test",
     "android:staging": "cd apps/faithform-android && ./gradlew :app:assembleStaging",
+    "android:staging:compile": "cd apps/faithform-android && ./gradlew :app:compileStagingKotlin :app:compileStagingJavaWithJavac --no-daemon --console=plain",
     "android:release": "cd apps/faithform-android && ./gradlew :app:assembleRelease",
     "ios:test": "cd apps/faithform-ios && swift test",
     "android:test": "cd apps/faithform-android && ./gradlew test --no-daemon --console=plain",
