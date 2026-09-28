@@ -600,7 +600,12 @@ on its own.
   of another church's or removed row's ID, and direct-call denial for browser
   roles. All 1,829 application tests, typecheck, targeted lint, and the local
   production build pass. A synthetic custom-format backup and restore passed
-  again with 0122 included. This is local only; a post-rollout browser save with
+  again with 0122 included. The approved production archive also restored into
+  a disposable PostgreSQL 17 database after excluding 69 unrelated Supabase
+  Vault and Realtime objects unavailable in the local image. Migration 0122
+  applied there, kept the four church rows, and granted execution to
+  `service_role` but not `authenticated`; the disposable copy was removed.
+  This is local only; a post-rollout browser save with
   a valid admin session and an expired session is still required.
 - Church-team listings now load every ordered page and stop on a failed page
   or missing Auth account details. The prior read could show an empty team on
