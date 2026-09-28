@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { updateChurchUserRole } from "@/app/admin/actions";
+import { updateChurchPlatformReporting, updateChurchUserRole } from "@/app/admin/actions";
 import {
   ConnectedBadge,
   PriorityBadge,
@@ -9,7 +9,7 @@ import {
   StatusBadge,
 } from "@/components/admin/badges";
 import { ChurchAttendanceBarChart } from "@/components/admin/charts";
-import { formatDate, formatDateTime, formatDuration, formatHours } from "@/components/admin/format";
+import { formatDate, formatDateTime, formatHours } from "@/components/admin/format";
 import { SupportTicketDialog } from "@/components/admin/support-ticket-dialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -155,18 +155,13 @@ export function ChurchDetailTabs({
       <TabsContent value="overview" className="grid gap-4 xl:grid-cols-2">
         <Card className="xl:col-span-2">
           <CardHeader>
-            <CardTitle>Simplicity check (last 30 days)</CardTitle>
+            <CardTitle>Automation activity (last 30 days)</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="mb-4 text-sm text-muted-foreground">
-              Pastors should spend minimal time on FaithForm while automation handles
-              calls and admin work. Compare pastor screen time to hours saved.
+              Time saved by automation and AI calls for this church.
             </p>
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-              <UsageStat
-                label="Pastor time on FaithForm"
-                value={formatDuration(detail.usageSummary.pastorSeconds30d)}
-              />
+            <div className="grid gap-4 sm:grid-cols-2">
               <UsageStat
                 label="Hours saved (automation)"
                 value={`${formatHours(detail.usageSummary.hoursSavedMinutes30d / 60)} hr`}
@@ -174,10 +169,6 @@ export function ChurchDetailTabs({
               <UsageStat
                 label="AI phone calls logged"
                 value={detail.usageSummary.phoneCalls30d.toLocaleString("en-US")}
-              />
-              <UsageStat
-                label="Pastor time (7 days)"
-                value={formatDuration(detail.usageSummary.pastorSeconds7d)}
               />
             </div>
           </CardContent>
@@ -219,6 +210,27 @@ export function ChurchDetailTabs({
               label="Preaching style"
               value={detail.settings?.preachingStyle || "Not set"}
             />
+            <div className="space-y-2 border-t border-border pt-4">
+              <p className="text-sm font-medium">Platform reporting</p>
+              <p className="text-sm text-muted-foreground">
+                {detail.church.excludeFromPlatformMetrics
+                  ? "Excluded from platform totals and analytics. This church’s own data stays available."
+                  : "Included in platform totals and analytics."}
+              </p>
+              <form action={updateChurchPlatformReporting}>
+                <input type="hidden" name="churchId" value={detail.church.id} />
+                <input
+                  type="hidden"
+                  name="excluded"
+                  value={detail.church.excludeFromPlatformMetrics ? "false" : "true"}
+                />
+                <Button type="submit" variant="outline" size="sm">
+                  {detail.church.excludeFromPlatformMetrics
+                    ? "Include in platform totals"
+                    : "Exclude from platform totals"}
+                </Button>
+              </form>
+            </div>
           </CardContent>
         </Card>
 
@@ -305,14 +317,12 @@ export function ChurchDetailTabs({
         )}
         <Card className="overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[960px] text-sm">
+            <table className="w-full min-w-[760px] text-sm">
               <thead className="bg-primary font-heading text-[13px] uppercase tracking-wide text-primary-foreground dark:bg-secondary dark:text-secondary-foreground">
                 <tr>
                   <th className="px-4 py-3 text-left">Email</th>
                   <th className="px-4 py-3 text-left">Role</th>
                   <th className="px-4 py-3 text-left">Feature access</th>
-                  <th className="px-4 py-3 text-left">Time on FaithForm (7d)</th>
-                  <th className="px-4 py-3 text-left">Time on FaithForm (30d)</th>
                   <th className="px-4 py-3 text-left">Last seen</th>
                   <th className="px-4 py-3 text-left">Joined</th>
                   <th className="px-4 py-3 text-left">Change role</th>
@@ -332,12 +342,6 @@ export function ChurchDetailTabs({
                         role={user.role}
                         grants={featurePermissionsByMemberId[user.id]}
                       />
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {formatDuration(user.dashboardSeconds7d)}
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {formatDuration(user.dashboardSeconds30d)}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {formatDateTime(user.lastSeenAt)}
