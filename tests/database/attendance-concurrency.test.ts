@@ -801,8 +801,9 @@ test("native attendance never touches the legacy tables", options, async () => {
   try {
     const before = await client.query(
       `select
-         (select count(*)::int from public.attendance_records) as records,
-         (select count(*)::int from public.attendance_entries) as entries`,
+         (select count(*)::int from public.attendance_records where church_id = $1) as records,
+         (select count(*)::int from public.attendance_entries where church_id = $1) as entries`,
+      [fixture.churchId],
     );
 
     await nativeGeofenceAttempt(client, {
@@ -816,8 +817,9 @@ test("native attendance never touches the legacy tables", options, async () => {
 
     const after = await client.query(
       `select
-         (select count(*)::int from public.attendance_records) as records,
-         (select count(*)::int from public.attendance_entries) as entries`,
+         (select count(*)::int from public.attendance_records where church_id = $1) as records,
+         (select count(*)::int from public.attendance_entries where church_id = $1) as entries`,
+      [fixture.churchId],
     );
 
     assert.equal(after.rows[0].records, before.rows[0].records, "legacy records changed");
