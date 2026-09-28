@@ -202,8 +202,13 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   internal notification's arrival at the FaithForm support inbox has not been
   observed; the owner's Gmail search contained only the acknowledgment. A
   direct Admin Support visit under the QA church admin session returned to
-  the church dashboard, as expected for a non-platform account. No reply was
-  sent, and the ticket remains as labeled QA data.
+  the church dashboard, as expected for a non-platform account. Later, a
+  clearly labeled synthetic follow-up was sent from this same open ticket.
+  The Help page showed one reply with the exact text, and a full Safari reload
+  kept it in the same thread. Internal support-inbox email delivery remains
+  unverified. This did not exercise reopening a resolved ticket, so the local
+  atomic-reply migration still needs a post-rollout browser test. The ticket
+  remains as labeled QA data.
 - Team and app settings follow-up: the live team now lists the QA admin. The
   invitation form rejected both a blank address and `not-an-email` before
   submission. Volunteer was the default preset, and expanding custom tools

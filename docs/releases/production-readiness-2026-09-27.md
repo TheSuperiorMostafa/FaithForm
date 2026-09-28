@@ -759,7 +759,9 @@ on its own.
   the owner's QA Gmail alias with the correct contents and dashboard link.
   Delivery of the separate internal notification to the support inbox has not
   been observed. The local 0125 status and Admin review queue were not part of
-  this live test because they have not been deployed.
+  this live test because they have not been deployed. A later synthetic
+  follow-up on the open QA ticket appeared in the same thread and survived a
+  Safari reload; support-inbox delivery of that reply is also unverified.
 - Local migration 0126 lets a platform admin mark an uncertain support alert
   manually handled after checking the recipient inbox and following up as
   needed. It records the reviewer and time on the ticket or reply, preserving
