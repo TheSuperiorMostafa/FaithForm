@@ -569,6 +569,15 @@ on its own.
   The profile save still spans multiple database requests: a later write
   failure can leave part of a profile saved. A transactional save is required
   before claiming this path fully reliable at rollout scale.
+- New profile child rows now use their stable UUID client IDs when inserted,
+  including new rows from Website Details. A retry after a partial save updates
+  the same staff, service-time, or recurring-event row instead of duplicating
+  it. Existing rows removed by another editor now stop the save, and updates
+  must confirm a row was changed. A focused in-memory retry test saved the
+  same new staff member twice and retained one row. This reduces retry damage
+  but does not replace the needed database transaction; forms opened before
+  rollout may still carry older non-UUID temporary IDs. Typecheck, targeted
+  lint, all 1,828 application tests, and the local production build pass.
 - Church-team listings now load every ordered page and stop on a failed page
   or missing Auth account details. The prior read could show an empty team on
   a database error or show missing grants when Auth lookups failed. A 1,001

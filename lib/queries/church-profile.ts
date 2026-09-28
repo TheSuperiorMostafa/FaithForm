@@ -341,6 +341,16 @@ function cleanOptional(value: string): string | null {
   return trimmed || null;
 }
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function targetChildId(row: { id?: string; clientId: string }, existingIds: Set<string>): string | null {
+  if (row.id) {
+    if (!existingIds.has(row.id)) throw new Error("A profile row changed since this form opened. Refresh and try again.");
+    return row.id;
+  }
+  return UUID_PATTERN.test(row.clientId) ? row.clientId : null;
+}
+
 export async function upsertChurchProfile(
   churchId: string,
   input: UpsertChurchProfileInput,
@@ -458,6 +468,7 @@ async function syncRecurringEvents(
   for (let i = 0; i < rows.length; i += 1) {
     const row = rows[i];
     if (!row.name.trim()) continue;
+    const targetId = targetChildId(row, existingIds);
     const payload = {
       church_id: churchId,
       name: row.name.trim(),
@@ -472,18 +483,21 @@ async function syncRecurringEvents(
       sort_order: i,
     };
 
-    if (row.id && existingIds.has(row.id)) {
-      keptIds.add(row.id);
-      const { error } = await supabase
+    if (targetId && existingIds.has(targetId)) {
+      keptIds.add(targetId);
+      const { data, error } = await supabase
         .from("church_recurring_events")
         .update(payload)
-        .eq("id", row.id)
-        .eq("church_id", churchId);
+        .eq("id", targetId)
+        .eq("church_id", churchId)
+        .select("id")
+        .maybeSingle();
       if (error) throw error;
+      if (!data) throw new Error("A recurring event changed while saving.");
     } else {
       const { data, error } = await supabase
         .from("church_recurring_events")
-        .insert(payload)
+        .insert({ ...payload, ...(targetId ? { id: targetId } : {}) })
         .select("id")
         .single();
       if (error) throw error;
@@ -541,6 +555,7 @@ async function syncServiceTimes(
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     if (!row.label.trim()) continue;
+    const targetId = targetChildId(row, existingIds);
 
     const payload = {
       church_id: churchId,
@@ -554,18 +569,21 @@ async function syncServiceTimes(
       updated_at: new Date().toISOString(),
     };
 
-    if (row.id && existingIds.has(row.id)) {
-      keptIds.add(row.id);
-      const { error } = await supabase
+    if (targetId && existingIds.has(targetId)) {
+      keptIds.add(targetId);
+      const { data, error } = await supabase
         .from("church_service_times")
         .update(payload)
-        .eq("id", row.id)
-        .eq("church_id", churchId);
+        .eq("id", targetId)
+        .eq("church_id", churchId)
+        .select("id")
+        .maybeSingle();
       if (error) throw error;
+      if (!data) throw new Error("A service time changed while saving.");
     } else {
       const { data, error } = await supabase
         .from("church_service_times")
-        .insert(payload)
+        .insert({ ...payload, ...(targetId ? { id: targetId } : {}) })
         .select("id")
         .single();
       if (error) throw error;
@@ -595,6 +613,7 @@ async function syncStaff(
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
     if (!row.fullName.trim()) continue;
+    const targetId = targetChildId(row, existingIds);
 
     const payload = {
       church_id: churchId,
@@ -612,18 +631,21 @@ async function syncStaff(
       updated_at: new Date().toISOString(),
     };
 
-    if (row.id && existingIds.has(row.id)) {
-      keptIds.add(row.id);
-      const { error } = await supabase
+    if (targetId && existingIds.has(targetId)) {
+      keptIds.add(targetId);
+      const { data, error } = await supabase
         .from("church_staff")
         .update(payload)
-        .eq("id", row.id)
-        .eq("church_id", churchId);
+        .eq("id", targetId)
+        .eq("church_id", churchId)
+        .select("id")
+        .maybeSingle();
       if (error) throw error;
+      if (!data) throw new Error("A staff entry changed while saving.");
     } else {
       const { data, error } = await supabase
         .from("church_staff")
-        .insert(payload)
+        .insert({ ...payload, ...(targetId ? { id: targetId } : {}) })
         .select("id")
         .single();
       if (error) throw error;
