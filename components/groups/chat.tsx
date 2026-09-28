@@ -70,11 +70,13 @@ export function GroupChat({ cid, groupId, state, reach }: { cid: string | null; 
   if (!cid || state === "unavailable") return <Empty icon="messages" compact title="Chat isn’t available for this group" description="Group chat is turned off for this group or for your church, or it’s still being set up. You can turn it on in Group settings." />;
   if (error) return <div className="space-y-4"><Reach reach={reach} readOnly={state === "read_only"} /><Empty icon="messages" compact title={error.retryable ? "This chat didn’t open" : "Chat isn't available from this account"} description={error.message}>{error.retryable && <Button onClick={() => setRetry(r => r + 1)}><RotateCcw className="size-5" aria-hidden />Try again</Button>}</Empty></div>;
   const readOnly = state === "read_only" || Boolean(connected?.suspended);
+  // Stream clears composers asynchronously on unmount. Navigation disconnects
+  // the client first, so a late clear otherwise touches a disconnected channel.
   return <div className="flex min-w-0 flex-col gap-4">
     <Reach reach={reach} readOnly={readOnly} />
     {!connected
       ? <div className="g-chat g-chat-loading" role="status" aria-label="Opening the chat"><Skeleton className="h-14 w-full rounded-none" /><div className="flex-1 space-y-4 p-6"><Skeleton className="h-12 w-2/3 rounded-2xl" /><Skeleton className="ml-auto h-12 w-1/2 rounded-2xl" /><Skeleton className="h-12 w-3/5 rounded-2xl" /></div><Skeleton className="h-16 w-full rounded-none" /><span className="sr-only">Opening the chat…</span></div>
-      : <div className="g-chat"><Chat client={connected.client} theme={`str-chat__theme-${resolved}`}><Channel channel={connected.channel}><Window><ChannelHeader /><MessageList messageActions={["edit", "delete", "react", "reply", "quote", "flag", "pin"]} />{readOnly ? <p className="bg-muted px-5 py-4 text-center text-[15px] text-muted-foreground">This chat is read-only. You can still read its history.</p> : <MessageComposer />}</Window><Thread /></Channel></Chat></div>}
+      : <div className="g-chat"><Chat client={connected.client} theme={`str-chat__theme-${resolved}`}><Channel channel={connected.channel}><Window><ChannelHeader /><MessageList messageActions={["edit", "delete", "react", "reply", "quote", "flag", "pin"]} />{readOnly ? <p className="bg-muted px-5 py-4 text-center text-[15px] text-muted-foreground">This chat is read-only. You can still read its history.</p> : <MessageComposer preventClearingOnUnmount />}</Window><Thread additionalMessageComposerProps={{ preventClearingOnUnmount: true }} /></Channel></Chat></div>}
   </div>;
 }
 
