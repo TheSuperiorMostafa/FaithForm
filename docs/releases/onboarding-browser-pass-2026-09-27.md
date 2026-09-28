@@ -29,6 +29,12 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   QA church dashboard under its own admin session, without impersonation.
 - Platform-admin handoff opened the new church dashboard and displayed the
   correct active-tenant warning and name.
+- A later click on the platform admin's “Open FaithForm Onboarding QA's
+  dashboard” control instead reached the live generic error page. This is a
+  Server Action POST from the church detail page, the same request class as
+  the independently observed profile-save failure. The browser result alone
+  does not establish its server-side cause. The local admin POST handling fix
+  still needs a controlled live handoff retest after rollout.
 - People: empty-state, required first-name validation, two member creations,
   optional email save, and care-note save succeeded. The dummy email is on an
   `.invalid` domain. No phone was entered. A later search for the QA child
@@ -173,6 +179,9 @@ Pre-existing `Faithform Church` was inspected read-only as a reference.
   the full span returned it to 0:48. The Go live page offered a review reminder;
   Prepare the next service exposed the next-service controls, and Later folded
   the reminder into a smaller link. Neither action published the recording.
+  The irreversible delete dialog correctly described permanent removal and
+  offered a “Keep it” path; QA kept the unpublished recording while final
+  action-time confirmation is pending.
 - Settings: the new tenant's Team view was empty and showed admin, staff,
   volunteer, and custom permission choices. Connected accounts correctly
   showed Google, iCloud, YouTube, and Facebook as disconnected. Switching the

@@ -553,6 +553,11 @@ on its own.
   was denied; the local gate records a non-sensitive denial reason for that.
   Typecheck, targeted lint, all 1,826 application tests, and the local
   production build pass.
+- A later click on “Open FaithForm Onboarding QA's dashboard” from the live
+  platform admin church page also reached the generic error screen. It is a
+  Server Action POST, but the browser result does not prove the same cause as
+  the profile failure. Retest admin-to-church handoff after the local POST
+  handling change is deployed; the QA recording tab remained accessible.
 - The shared church-profile read now requires complete, counted service-time,
   staff, and recurring-event rows. Website and church-app save paths merge from
   this profile; a failed or truncated child read could previously become an
