@@ -346,7 +346,15 @@ export async function upsertChurchProfile(
   input: UpsertChurchProfileInput,
   supabase: SupabaseClient,
 ): Promise<ChurchProfile> {
-  const { error: churchError } = await supabase
+  // These lists decide which old rows are removed. Confirm every list is
+  // complete before changing the church or any child row.
+  const [serviceIds, staffIds, recurringEventIds] = await Promise.all([
+    readExistingChildIds("church_service_times", churchId, supabase),
+    readExistingChildIds("church_staff", churchId, supabase),
+    readExistingChildIds("church_recurring_events", churchId, supabase),
+  ]);
+
+  const { data: updatedChurch, error: churchError } = await supabase
     .from("churches")
     .update({
       name: input.name.trim(),
@@ -380,12 +388,15 @@ export async function upsertChurchProfile(
       announcement_facebook_post_time: input.announcementFacebookPostTime,
       ai_knowledge: input.aiKnowledge,
     })
-    .eq("id", churchId);
+    .eq("id", churchId)
+    .select("id")
+    .maybeSingle();
 
   if (churchError) throw churchError;
+  if (!updatedChurch) throw new Error("Church profile update changed no row.");
 
   // Mirror denomination to church_settings for backward compatibility
-  await supabase.from("church_settings").upsert(
+  const { error: settingsError } = await supabase.from("church_settings").upsert(
     {
       church_id: churchId,
       denomination: cleanOptional(input.denomination),
@@ -393,9 +404,10 @@ export async function upsertChurchProfile(
     },
     { onConflict: "church_id" },
   );
+  if (settingsError) throw settingsError;
 
   // Sync phone + office hours to voice_assistant_settings for legacy readers
-  await supabase.from("voice_assistant_settings").upsert(
+  const { error: voiceError } = await supabase.from("voice_assistant_settings").upsert(
     {
       church_id: churchId,
       church_phone: cleanOptional(input.phone),
@@ -405,28 +417,42 @@ export async function upsertChurchProfile(
     },
     { onConflict: "church_id", ignoreDuplicates: false },
   );
+  if (voiceError) throw voiceError;
 
-  await syncServiceTimes(churchId, input.serviceTimes, supabase);
-  await syncStaff(churchId, input.staff, supabase);
-  await syncRecurringEvents(churchId, input.recurringEvents, supabase);
+  await syncServiceTimes(churchId, input.serviceTimes, serviceIds, supabase);
+  await syncStaff(churchId, input.staff, staffIds, supabase);
+  await syncRecurringEvents(churchId, input.recurringEvents, recurringEventIds, supabase);
 
   const profile = await getChurchProfile(churchId, supabase);
   if (!profile) throw new Error("Failed to load church profile after save.");
   return profile;
 }
 
+async function readExistingChildIds(
+  table: "church_service_times" | "church_staff" | "church_recurring_events",
+  churchId: string,
+  supabase: SupabaseClient,
+): Promise<Set<string>> {
+  const rows = await readAllById<{ id: string }>(
+    async (afterId, includeCount, pageSize) => {
+      let query = supabase
+        .from(table)
+        .select("id", { count: includeCount ? "exact" : undefined })
+        .eq("church_id", churchId);
+      if (afterId) query = query.gt("id", afterId);
+      return await query.order("id").limit(pageSize);
+    },
+    { label: `${table} before profile save`, maxRows: 10_000 },
+  );
+  return new Set(rows.map((row) => row.id));
+}
+
 async function syncRecurringEvents(
   churchId: string,
   rows: RecurringEventFormRow[],
+  existingIds: Set<string>,
   supabase: SupabaseClient,
 ) {
-  const { data: existing, error: readError } = await supabase
-    .from("church_recurring_events")
-    .select("id")
-    .eq("church_id", churchId);
-  if (readError) throw readError;
-
-  const existingIds = new Set((existing ?? []).map((row) => row.id as string));
   const keptIds = new Set<string>();
 
   for (let i = 0; i < rows.length; i += 1) {
@@ -507,14 +533,9 @@ export async function getChurchAnnouncementFacebookSchedule(
 async function syncServiceTimes(
   churchId: string,
   rows: ServiceTimeFormRow[],
+  existingIds: Set<string>,
   supabase: SupabaseClient,
 ) {
-  const { data: existing } = await supabase
-    .from("church_service_times")
-    .select("id")
-    .eq("church_id", churchId);
-
-  const existingIds = new Set((existing ?? []).map((r) => r.id as string));
   const keptIds = new Set<string>();
 
   for (let i = 0; i < rows.length; i++) {
@@ -566,14 +587,9 @@ async function syncServiceTimes(
 async function syncStaff(
   churchId: string,
   rows: StaffFormRow[],
+  existingIds: Set<string>,
   supabase: SupabaseClient,
 ) {
-  const { data: existing } = await supabase
-    .from("church_staff")
-    .select("id")
-    .eq("church_id", churchId);
-
-  const existingIds = new Set((existing ?? []).map((r) => r.id as string));
   const keptIds = new Set<string>();
 
   for (let i = 0; i < rows.length; i++) {

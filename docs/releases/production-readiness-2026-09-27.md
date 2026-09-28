@@ -559,6 +559,16 @@ on its own.
   now reject instead of returning partial or missing profiles. Typecheck,
   targeted lint, all 1,823 application tests, and the local production build
   pass. This is local only and needs a controlled save retest after rollout.
+- Profile saves now read complete, counted IDs for all three child tables before
+  writing any profile field. Previously a failed service-time or staff ID read
+  could be treated as an empty list during synchronization. The church update
+  must affect one row, and the two legacy mirror writes must succeed. A focused
+  failure test confirms a failed staff preflight performs no church update.
+  Typecheck, targeted lint, all 1,827 application tests, and the local
+  production build pass.
+  The profile save still spans multiple database requests: a later write
+  failure can leave part of a profile saved. A transactional save is required
+  before claiming this path fully reliable at rollout scale.
 - Church-team listings now load every ordered page and stop on a failed page
   or missing Auth account details. The prior read could show an empty team on
   a database error or show missing grants when Auth lookups failed. A 1,001

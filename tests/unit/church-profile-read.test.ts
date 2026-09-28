@@ -2,13 +2,18 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getChurchProfile } from "@/lib/queries/church-profile";
+import {
+  emptyChurchProfileForm,
+  getChurchProfile,
+  upsertChurchProfile,
+} from "@/lib/queries/church-profile";
 
 type Row = { id: string; [key: string]: unknown };
 
 function profileClient(
   records: Record<string, Row[]>,
   failTable?: string,
+  onUpdate?: () => void,
 ): SupabaseClient {
   return {
     from(table: string) {
@@ -25,6 +30,7 @@ function profileClient(
         gt(_column: string, id: string) { afterId = id; return builder; },
         order() { return builder; },
         limit(size: number) { limit = size; return builder; },
+        update() { onUpdate?.(); return builder; },
         maybeSingle() {
           return Promise.resolve({
             data: rows[0] ?? null,
@@ -89,4 +95,17 @@ test("failed church read cannot look like a nonexistent church", async () => {
     getChurchProfile("church-a", profileClient(records, "churches")),
     /church profile: read failed/,
   );
+});
+
+test("an incomplete staff preflight stops a profile save before any write", async () => {
+  let updates = 0;
+  await assert.rejects(
+    upsertChurchProfile(
+      "church-a",
+      emptyChurchProfileForm("QA church"),
+      profileClient(records, "church_staff", () => { updates += 1; }),
+    ),
+    /church_staff before profile save read failed/,
+  );
+  assert.equal(updates, 0);
 });
