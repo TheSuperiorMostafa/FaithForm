@@ -63,6 +63,9 @@ jobs:
         with:
           packages: platform-tools
 
+      - name: Install iOS project generator
+        run: brew install xcodegen
+
       - run: pnpm install --frozen-lockfile
 
       # Generated output must already be committed and current. A contract or
