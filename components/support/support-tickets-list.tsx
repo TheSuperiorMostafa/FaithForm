@@ -104,11 +104,13 @@ function ReplyBox({ ticketId }: { ticketId: string }) {
   const [pending, startTransition] = useTransition();
   const [body, setBody] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
     startTransition(async () => {
       setError(null);
+      setWarning(null);
       try {
         const result = await replyToSupportTicket({ ticketId, body });
         if (result.error) {
@@ -116,7 +118,8 @@ function ReplyBox({ ticketId }: { ticketId: string }) {
           return;
         }
         setBody("");
-        toast.success("Reply sent to FaithForm.");
+        setWarning(result.warning ?? null);
+        toast.success(result.warning ? "Reply saved." : "Reply sent to FaithForm.");
       } catch {
         setError("We couldn't send your reply. Check your connection and try again.");
       }
@@ -131,7 +134,10 @@ function ReplyBox({ ticketId }: { ticketId: string }) {
       <Textarea
         id={`reply-${ticketId}`}
         value={body}
-        onChange={(event) => setBody(event.target.value)}
+        onChange={(event) => {
+          setBody(event.target.value);
+          if (warning) setWarning(null);
+        }}
         rows={3}
         maxLength={SUPPORT_COMMENT_MAX_LENGTH}
         placeholder="Anything else we should know?"
@@ -139,6 +145,11 @@ function ReplyBox({ ticketId }: { ticketId: string }) {
       {error && (
         <p className="text-sm text-destructive" role="alert">
           {error}
+        </p>
+      )}
+      {warning && (
+        <p className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100" role="status">
+          {warning}
         </p>
       )}
       <div>

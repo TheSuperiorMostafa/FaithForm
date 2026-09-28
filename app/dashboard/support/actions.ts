@@ -13,8 +13,10 @@ import { createClient } from "@/lib/supabase/server";
 import { toUserError } from "@/lib/errors/user-error";
 import {
   SUPPORT_SUBJECT_MAX,
+  SUPPORT_TICKET_BODY_MAX,
   deriveTicketSubject,
   sanitizeFromPath,
+  supportDeliveryWarning,
   withFromPath,
 } from "@/app/dashboard/support/ticket-helpers";
 
@@ -24,12 +26,15 @@ export async function submitSupportTicket(params: {
   body: string;
   /** The dashboard page they came from, if known (`?from=`). */
   fromPath?: string | null;
-}): Promise<{ error?: string }> {
+}): Promise<{ error?: string; warning?: string }> {
   const auth = await requireChurchAuth();
 
   const message = String(params.body ?? "").trim();
   if (!message) {
     return { error: "Write a message so we know how to help." };
+  }
+  if (message.length > SUPPORT_TICKET_BODY_MAX) {
+    return { error: `Keep the message to ${SUPPORT_TICKET_BODY_MAX.toLocaleString()} characters or fewer.` };
   }
   const subject = deriveTicketSubject(String(params.subject ?? ""), message);
   if (subject.length > SUPPORT_SUBJECT_MAX) {
@@ -58,6 +63,8 @@ export async function submitSupportTicket(params: {
   // The ticket is saved; from here nothing may fail loudly. A church that has
   // asked for help should never be told their request errored because our
   // doorbell did.
+  let notificationConfirmed = false;
+  let acknowledgmentConfirmed = true;
   try {
     const [{ data: churchRow }, { data: userData }] = await Promise.all([
       admin
@@ -73,7 +80,7 @@ export async function submitSupportTicket(params: {
 
     // Both notes go out together: ours so somebody looks, theirs so the
     // request does not disappear into silence.
-    await Promise.all([
+    const [notification, acknowledgment] = await Promise.all([
       sendSupportTicketNotification({
         churchName,
         subject,
@@ -91,6 +98,8 @@ export async function submitSupportTicket(params: {
           })
         : Promise.resolve(false),
     ]);
+    notificationConfirmed = notification.emailed;
+    acknowledgmentConfirmed = !submitterEmail || acknowledgment;
   } catch (notifyError) {
     console.error("submitSupportTicket notify:", notifyError);
   }
@@ -100,7 +109,9 @@ export async function submitSupportTicket(params: {
   revalidatePath("/admin");
   revalidatePath(`/admin/churches/${auth.churchId}`);
 
-  return {};
+  return {
+    warning: supportDeliveryWarning("ticket", notificationConfirmed, acknowledgmentConfirmed) ?? undefined,
+  };
 }
 
 /**
@@ -113,7 +124,7 @@ export async function submitSupportTicket(params: {
 export async function replyToSupportTicket(params: {
   ticketId: string;
   body: string;
-}): Promise<{ error?: string }> {
+}): Promise<{ error?: string; warning?: string }> {
   const auth = await requireChurchAuth();
   const admin = createAdminClient();
   const message = String(params.body ?? "").trim();
@@ -135,6 +146,7 @@ export async function replyToSupportTicket(params: {
   if (error?.code === "P0002") return { error: "That ticket could not be found." };
   if (error) return { error: toUserError(error, "We couldn't send your reply.") };
 
+  let notificationConfirmed = false;
   try {
     const { data: churchRow } = await admin
       .from("churches")
@@ -142,7 +154,7 @@ export async function replyToSupportTicket(params: {
       .eq("id", auth.churchId)
       .maybeSingle();
 
-    await sendSupportTicketNotification({
+    const notification = await sendSupportTicketNotification({
       churchName: (churchRow?.name as string | undefined) ?? "A church",
       subject: `Reply — ${subject as string}`,
       body: message,
@@ -150,6 +162,7 @@ export async function replyToSupportTicket(params: {
       priority: "normal",
       reviewUrl: absoluteAppPath(`/admin/support/${params.ticketId}`),
     });
+    notificationConfirmed = notification.emailed;
   } catch (notifyError) {
     console.error("replyToSupportTicket notify:", notifyError);
   }
@@ -158,5 +171,5 @@ export async function replyToSupportTicket(params: {
   revalidatePath("/admin/support");
   revalidatePath(`/admin/support/${params.ticketId}`);
 
-  return {};
+  return { warning: supportDeliveryWarning("reply", notificationConfirmed) ?? undefined };
 }

@@ -8,6 +8,7 @@ import { submitSupportTicket } from "@/app/dashboard/support/actions";
 import {
   SUPPORT_RESPONSE_TIME,
   SUPPORT_SUBJECT_MAX,
+  SUPPORT_TICKET_BODY_MAX,
   sanitizeFromPath,
 } from "@/app/dashboard/support/ticket-helpers";
 import { AdvancedSection } from "@/components/ui/advanced-section";
@@ -34,6 +35,7 @@ export function SupportTicketForm({ fromPath }: { fromPath?: string | null }) {
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
   const [from, setFrom] = useState<string | null>(fromPath ?? null);
 
@@ -57,8 +59,9 @@ export function SupportTicketForm({ fromPath }: { fromPath?: string | null }) {
         }
         setSubject("");
         setBody("");
+        setWarning(result.warning ?? null);
         setSent(true);
-        toast.success("Message sent to FaithForm.");
+        toast.success(result.warning ? "Message saved." : "Message sent to FaithForm.");
       } catch {
         setError("We couldn't send your message. Check your connection and try again.");
       }
@@ -68,8 +71,8 @@ export function SupportTicketForm({ fromPath }: { fromPath?: string | null }) {
   if (sent) {
     return (
       <SuccessState
-        title="Message sent"
-        description={`A person on the FaithForm team will reply by email ${SUPPORT_RESPONSE_TIME}. You can also follow it below under "Your messages".`}
+        title={warning ? "Message saved" : "Message sent"}
+        description={warning ?? `A person on the FaithForm team will reply by email ${SUPPORT_RESPONSE_TIME}. You can also follow it below under "Your messages".`}
         actions={
           <Button type="button" variant="outline" onClick={() => setSent(false)}>
             Send another message
@@ -94,9 +97,13 @@ export function SupportTicketForm({ fromPath }: { fromPath?: string | null }) {
           }}
           placeholder="Tell us what you were trying to do and what happened. For example: I can't find where to add a new family."
           rows={7}
+          maxLength={SUPPORT_TICKET_BODY_MAX}
           required
           className="text-base"
         />
+        <p className="text-xs text-muted-foreground">
+          Up to {SUPPORT_TICKET_BODY_MAX.toLocaleString()} characters.
+        </p>
         {from && (
           <p className="text-sm text-muted-foreground">
             We&apos;ll include the page you were on, so we can see what you saw.

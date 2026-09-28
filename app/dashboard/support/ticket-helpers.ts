@@ -1,4 +1,5 @@
 import type { StatusTone } from "@/components/ui/status-badge";
+import { SUPPORT_EMAIL } from "@/lib/legal/policy-versions";
 
 /**
  * Small, pure rules for the Help page, kept apart from the server action so
@@ -6,6 +7,7 @@ import type { StatusTone } from "@/components/ui/status-badge";
  */
 
 export const SUPPORT_SUBJECT_MAX = 200;
+export const SUPPORT_TICKET_BODY_MAX = 10000;
 const DERIVED_SUBJECT_MAX = 80;
 
 /** How quickly we answer. Must match the public page at app/support/page.tsx. */
@@ -13,6 +15,21 @@ export const SUPPORT_RESPONSE_TIME = "the same day";
 
 export const HELP_PAGE_TITLE = "Help";
 export const HELP_PAGE_DESCRIPTION = `Ask us anything. A real person at FaithForm answers ${SUPPORT_RESPONSE_TIME}.`;
+
+/** The ticket is saved even when its separate notification email fails. */
+export function supportDeliveryWarning(
+  kind: "ticket" | "reply",
+  notificationConfirmed: boolean,
+  acknowledgmentConfirmed = true,
+): string | null {
+  if (!notificationConfirmed) {
+    return `Your ${kind === "ticket" ? "message" : "reply"} was saved, but FaithForm could not confirm its notification email. ${kind === "ticket" ? "It is listed below" : "It is visible in this conversation"}. For urgent help, email ${SUPPORT_EMAIL}.`;
+  }
+  if (kind === "ticket" && !acknowledgmentConfirmed) {
+    return "Your message was saved, but its confirmation email could not be confirmed. You can follow it below under Your messages.";
+  }
+  return null;
+}
 
 /**
  * The subject is optional: when it is left empty, the first line of the

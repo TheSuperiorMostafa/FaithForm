@@ -7,7 +7,7 @@ readiness.
 
 ## Verified in an isolated checkout
 
-- Web: typecheck, lint (zero errors), production build, 1,844 application tests,
+- Web: typecheck, lint (zero errors), production build, 1,845 application tests,
   generated-contract/design/localization checks, migration baseline check,
   secret scan, and feature-guard scan pass.
 - Database: the earlier 113 migrations applied to disposable PostgreSQL 15 and
@@ -726,6 +726,14 @@ on its own.
   invite, and 342 Storage metadata rows. Browser roles cannot execute the
   support reply function. The disposable copy was removed. This needs a
   browser reply test after 0124 and the web change are deployed.
+- Support tickets now limit the message length on both the form and server.
+  When the ticket or reply is saved but FaithForm cannot confirm its internal
+  notification email, the church sees that saved-but-unconfirmed outcome and
+  the support address for urgent help. An unconfirmed acknowledgment email is
+  also reported. The previous success screen said the message was sent in all
+  of those cases. All 1,845 application tests, TypeScript checking, targeted
+  lint, and the local production build pass. Durable retry and alert delivery
+  for failed support notifications remain unverified.
 - A successful Supabase physical-backup restore test, a provider-side Storage
   restore rehearsal, an independent encrypted location for the local database
   and Storage archives, and documented recovery time and data-loss targets.
@@ -753,6 +761,10 @@ on its own.
 - Monitoring with an accountable recipient for application errors, provider
   delivery failures, slow requests, and database/storage capacity. Repository
   code and Vercel's recent logs alone do not prove alert delivery.
+- A durable retry or attended recovery path for support notification email
+  failures. A saved ticket stays visible in Admin and the church now sees an
+  unconfirmed-email warning, but there is no verified automatic retry or
+  operator alert for a failed notification.
 - Verify the new per-church/week draft claim in a controlled hosted test with
   simultaneous manual and scheduled attempts, provider timeout, and recovery.
   The local database test proves the reservation and reconciliation rules but
