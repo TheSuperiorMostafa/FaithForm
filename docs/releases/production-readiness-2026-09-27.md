@@ -559,7 +559,11 @@ on its own.
   from middleware to `/login`, followed by a POST to that page. The reason
   the session was denied remains unknown. Retest admin-to-church handoff after
   the local POST handling change is deployed; the QA recording tab remained
-  accessible.
+  accessible. The local handoff button now catches a rejected action and
+  offers sign-in again on the same page instead of leaving the admin on a
+  global error screen. The session-denial reason still needs diagnosis from
+  the new post-rollout log field. Typecheck, targeted lint, and the local
+  production build pass; the browser behavior needs retesting after rollout.
 - The shared church-profile read now requires complete, counted service-time,
   staff, and recurring-event rows. Website and church-app save paths merge from
   this profile; a failed or truncated child read could previously become an
