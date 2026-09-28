@@ -326,24 +326,43 @@ struct ProfilePhotoCropper: View {
 
     private var canvas: some View {
         GeometryReader { geometry in
-            ZStack {
-                Image(uiImage: image)
-                    .resizable()
-                    .interpolation(.high)
-                    .frame(width: crop.imageSize.width, height: crop.imageSize.height)
-                    .scaleEffect(crop.scale)
-                    .offset(crop.offset)
-                CropMaskOverlay(maskSize: crop.maskSize, circular: circular, showsGuides: interacting)
-            }
-            .frame(width: geometry.size.width, height: geometry.size.height)
-            .clipped()
+            accessibleCanvas(in: geometry.size)
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(!working)
+    }
+
+    private var photo: some View {
+        Image(uiImage: image)
+            .resizable()
+            .interpolation(.high)
+            .frame(width: crop.imageSize.width, height: crop.imageSize.height)
+            .scaleEffect(crop.scale)
+            .offset(crop.offset)
+    }
+
+    private func cropSurface(in size: CGSize) -> some View {
+        ZStack {
+            photo
+            CropMaskOverlay(maskSize: crop.maskSize, circular: circular, showsGuides: interacting)
+        }
+        .frame(width: size.width, height: size.height)
+        .clipped()
+    }
+
+    private func interactiveCanvas(in size: CGSize) -> some View {
+        cropSurface(in: size)
             .contentShape(Rectangle())
             .gesture(drag)
             .simultaneousGesture(magnify)
             .onTapGesture(count: 2) { toggleZoom() }
-            .onAppear { layout(in: geometry.size) }
-            .onChange(of: geometry.size) { _, size in layout(in: size) }
-            .onChange(of: image) { _, _ in layout(in: geometry.size) }
+            .onAppear { layout(in: size) }
+            .onChange(of: size) { _, updated in layout(in: updated) }
+            .onChange(of: image) { _, _ in layout(in: size) }
+    }
+
+    private func accessibleCanvas(in size: CGSize) -> some View {
+        interactiveCanvas(in: size)
             .accessibilityElement()
             .accessibilityLabel("\(title) crop")
             .accessibilityValue("Zoom \(Int(crop.zoomFraction * 100)) percent")
@@ -356,9 +375,6 @@ struct ProfilePhotoCropper: View {
             .accessibilityAction(named: "Move photo up") { nudge(y: -40) }
             .accessibilityAction(named: "Move photo down") { nudge(y: 40) }
             .accessibilityAction(named: "Reset crop") { reset() }
-        }
-        .ignoresSafeArea()
-        .allowsHitTesting(!working)
     }
 
     // MARK: Floating controls
