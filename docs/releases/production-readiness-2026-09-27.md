@@ -17,14 +17,17 @@ readiness.
   and view-access denial probes. The additive
   `0111_announcement_status_view_invoker.sql` migration resolves the live
   Security Advisor's SECURITY DEFINER view finding. It is local only.
-- A disposable restore of the approved production archive accepted
-  0114–0120, 0110–0113, and 0121–0123 in that order. The planned live sequence
-  applies 0114–0123 before the matching web build, then tightens access with
-  0110–0113 after the web smoke test; that exact sequence still needs a final
-  controlled rehearsal. The restore retained four churches, 109 members, and
-  one pending invitation. The temporary database was removed.
-  This verifies schema/data compatibility of that order; it does not replace
-  the controlled live migration baseline and rollout checks.
+- A disposable restore of the approved production archive accepted the exact
+  planned SQL order: 0114–0123, then 0110–0113. The live sequence places the
+  matching web build and smoke test between those batches. The database
+  retained four churches, 109 members, one invitation, and 342 Storage
+  metadata rows; the new claim table was empty. The service role could execute
+  the draft claim while anonymous and authenticated roles could not. The
+  anonymous announcement view denied access, and authenticated users could not
+  select `members.medical_notes`.
+  The temporary database was removed. This verifies schema/data compatibility
+  of that order; it does not replace the controlled live migration baseline,
+  application smoke test, or rollout checks.
 - A full custom-format PostgreSQL backup and restore rehearsal passed with all
   125 migrations on a disposable PostgreSQL 15 server and four synthetic
   churches. Restored record fingerprints, RLS, view settings, and medical-note
@@ -705,7 +708,7 @@ on its own.
   database transaction. All 125 migrations, 53 database tests, 1,844
   application tests, typecheck, targeted lint, and a local production build
   pass. The approved production archive restored into disposable PostgreSQL
-  17, accepted 0114–0120, 0110–0113, and 0121–0123 in that test order,
+  17, accepted the exact planned 0114–0123 then 0110–0113 order,
   retained four churches and 109 members, and denied claim execution to
   browser roles. A rollback-only service-role claim succeeded and left zero
   test claims. Both disposable containers were removed. The operator recovery
