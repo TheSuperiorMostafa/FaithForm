@@ -116,6 +116,7 @@ export async function getSiteBundle(
   const [
     settingsResult,
     pageResult,
+    overridesResult,
     serviceTimesResult,
     staffResult,
     eventsResult,
@@ -123,15 +124,19 @@ export async function getSiteBundle(
   ] = await Promise.all([
     supabase
       .from("site_settings")
-      .select("theme_key, brand_tokens, custom_css, contact_email, is_published")
+      .select("theme_key, brand_tokens, custom_css, contact_email, is_published, site_themes(key, name, tokens, section_defaults)")
       .eq("church_id", churchId)
       .maybeSingle(),
     supabase
       .from("site_pages")
-      .select("id, path, title, meta_description, status")
+      .select("id, path, title, meta_description, status, site_sections(id, type, sort_order, is_visible, props)")
       .eq("church_id", churchId)
       .eq("path", path)
       .maybeSingle(),
+    supabase
+      .from("site_overrides")
+      .select("scope, page_id, section_id, patch")
+      .eq("church_id", churchId),
     supabase
       .from("church_service_times")
       .select("label, day_of_week, start_time, end_time, kind, notes")
@@ -185,20 +190,12 @@ export async function getSiteBundle(
       }
     : null;
 
-  const theme = await getTheme(settings?.themeKey ?? FALLBACK_THEME_KEY);
+  const joinedTheme = settingsRow?.site_themes;
+  const themeRow = Array.isArray(joinedTheme) ? joinedTheme[0] : joinedTheme;
+  const theme = themeRow
+    ? mapTheme(themeRow)
+    : await getTheme(settings?.themeKey ?? FALLBACK_THEME_KEY);
   if (!theme) return null;
-
-  const [sectionsResult, overridesResult] = await Promise.all([
-    supabase
-      .from("site_sections")
-      .select("id, type, sort_order, is_visible, props")
-      .eq("page_id", page.id)
-      .order("sort_order", { ascending: true }),
-    supabase
-      .from("site_overrides")
-      .select("scope, page_id, section_id, patch")
-      .eq("church_id", churchId),
-  ]);
 
   const profile = mapProfile(church, {
     serviceTimes: serviceTimesResult.data,
@@ -219,13 +216,15 @@ export async function getSiteBundle(
       metaDescription: (page.meta_description as string | null) ?? null,
       status: (page.status as "draft" | "published") ?? "draft",
     },
-    sections: (sectionsResult.data ?? []).map((row) => ({
-      id: row.id as string,
-      type: row.type as string,
-      sortOrder: (row.sort_order as number) ?? 0,
-      isVisible: row.is_visible !== false,
-      props: (row.props as Record<string, unknown> | null) ?? {},
-    })),
+    sections: (page.site_sections ?? [])
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map((row) => ({
+        id: row.id as string,
+        type: row.type as string,
+        sortOrder: (row.sort_order as number) ?? 0,
+        isVisible: row.is_visible !== false,
+        props: (row.props as Record<string, unknown> | null) ?? {},
+      })),
     overrides: (overridesResult.data ?? []).map((row) => ({
       scope: row.scope as SiteOverrideRow["scope"],
       pageId: (row.page_id as string | null) ?? null,
@@ -369,6 +368,15 @@ async function getTheme(key: string): Promise<SiteThemeRow | null> {
 
   if (error || !data) return null;
 
+  return mapTheme(data);
+}
+
+function mapTheme(data: {
+  key: string;
+  name: string;
+  tokens: unknown;
+  section_defaults: unknown;
+}): SiteThemeRow {
   return {
     key: data.key as string,
     name: data.name as string,
