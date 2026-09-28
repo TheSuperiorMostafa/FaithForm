@@ -531,6 +531,13 @@ on its own.
   failures. The 1,820 application tests, typecheck, targeted lint, and local
   production build pass. These changes have not been deployed or retested in
   the live admin interface.
+- The live QA admin profile showed visible labels beside staff and recurring
+  event inputs, but Safari exposed those inputs without accessible names.
+  The local form now associates labels with the staff, recurring-event,
+  social-link, and file-upload fields and names service-time and office-hour
+  controls. The QA-only draft rows used to inspect this were discarded, with
+  no profile save. Typecheck and targeted lint pass; keyboard and screen-reader
+  retests still need the updated build.
 - A repeat in Safari Private Browsing confirmed the live privacy gap: an
   anonymous visitor can read the QA church's unpublished site by adding
   `?preview=1`, while the same private window showed 404 without that
