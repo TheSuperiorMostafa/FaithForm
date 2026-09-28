@@ -53,27 +53,35 @@ export async function exchangeFacebookCode(
     })}`,
   );
 
-  if (!tokenRes.ok) {
-    throw new Error("Facebook token exchange failed");
-  }
-
-  const tokenData = (await tokenRes.json()) as {
+  const tokenData = (await tokenRes.json().catch(() => ({}))) as {
     access_token?: string;
-    error?: { message: string };
+    error?: { message?: string; code?: number; error_subcode?: number };
   };
 
-  if (!tokenData.access_token) {
-    throw new Error(tokenData.error?.message ?? "No Facebook access token");
+  if (!tokenRes.ok || !tokenData.access_token) {
+    console.error("Facebook connection: token exchange failed", {
+      status: tokenRes.status,
+      code: tokenData.error?.code,
+      subcode: tokenData.error?.error_subcode,
+    });
+    throw new Error("facebook_token_exchange_failed");
   }
 
   const longLived = await exchangeForLongLivedUserToken(tokenData.access_token);
-  const pages = await fetchFacebookPages(longLived.token);
+  let pages;
+  try {
+    pages = await fetchFacebookPages(longLived.token);
+  } catch (error) {
+    console.error("Facebook connection: page lookup failed", {
+      reason: error instanceof Error ? error.message : "Unknown response",
+    });
+    throw new Error("facebook_pages_unavailable");
+  }
 
   const page = pages[0];
   if (!page) {
-    throw new Error(
-      "No Facebook Pages found. Connect a Page to your account first.",
-    );
+    console.error("Facebook connection: no manageable Pages returned");
+    throw new Error("facebook_no_pages");
   }
 
   let liveVideoId: string | undefined;
@@ -102,21 +110,28 @@ export async function exchangeFacebookCode(
     connected_at: new Date().toISOString(),
   };
 
-  await saveIntegration(
-    {
-      churchId,
-      provider: "facebook",
-      accessToken: page.access_token,
-      // The long-lived user token is the credential that mints Page tokens, so
-      // it belongs in the refresh_token column. Metadata is readable by every
-      // church member through the status RPC; this must not go there.
-      refreshToken: longLived.token,
-      tokenExpiresAt: longLived.expiresAt,
-      metadata,
-      connectedBy: userId,
-    },
-    supabase,
-  );
+  try {
+    await saveIntegration(
+      {
+        churchId,
+        provider: "facebook",
+        accessToken: page.access_token,
+        // The long-lived user token is the credential that mints Page tokens, so
+        // it belongs in the refresh_token column. Metadata is readable by every
+        // church member through the status RPC; this must not go there.
+        refreshToken: longLived.token,
+        tokenExpiresAt: longLived.expiresAt,
+        metadata,
+        connectedBy: userId,
+      },
+      supabase,
+    );
+  } catch (error) {
+    console.error("Facebook connection: saving Page failed", {
+      reason: error instanceof Error ? error.message : "Unknown error",
+    });
+    throw new Error("facebook_save_failed");
+  }
 }
 
 export type FacebookAnnouncementPostOptions = {

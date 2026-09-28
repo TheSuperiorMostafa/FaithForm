@@ -47,8 +47,17 @@ export async function GET(request: Request) {
     }
     return redirectToApp("/dashboard/settings?facebook_connected=1");
   } catch (err) {
-    const message =
-      err instanceof Error ? err.message : "Facebook connect failed";
-    return redirectToSettings({ integration_error: message }, returnTo);
+    const reason = err instanceof Error ? err.message : "facebook_connect_failed";
+    const known = new Set([
+      "facebook_token_exchange_failed",
+      "facebook_pages_unavailable",
+      "facebook_no_pages",
+      "facebook_save_failed",
+    ]);
+    const code = known.has(reason) ? reason : "facebook_connect_failed";
+    if (code === "facebook_connect_failed") {
+      console.error("Facebook connection: unexpected callback failure", err);
+    }
+    return redirectToSettings({ integration_error: code }, returnTo);
   }
 }

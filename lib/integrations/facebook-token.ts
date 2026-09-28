@@ -47,14 +47,21 @@ export async function exchangeForLongLivedUserToken(
 ): Promise<{ token: string; expiresAt: Date | null }> {
   const { appId, appSecret } = getFacebookConfig();
 
-  const res = await fetch(
-    `${GRAPH}/oauth/access_token?${new URLSearchParams({
-      grant_type: "fb_exchange_token",
-      client_id: appId,
-      client_secret: appSecret,
-      fb_exchange_token: shortLivedToken,
-    })}`,
-  );
+  let res: Response;
+  try {
+    res = await fetch(
+      `${GRAPH}/oauth/access_token?${new URLSearchParams({
+        grant_type: "fb_exchange_token",
+        client_id: appId,
+        client_secret: appSecret,
+        fb_exchange_token: shortLivedToken,
+      })}`,
+    );
+  } catch {
+    // A temporary network failure should not discard the token Facebook just
+    // issued. The connection can still be completed with a short-lived token.
+    return { token: shortLivedToken, expiresAt: null };
+  }
 
   const data = (await res.json().catch(() => ({}))) as {
     access_token?: string;
