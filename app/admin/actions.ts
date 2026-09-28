@@ -486,6 +486,36 @@ export async function updateSupportTicket(formData: FormData) {
   }
 }
 
+/** Record an attended follow-up without representing it as email delivery. */
+export async function markSupportEmailReviewed(formData: FormData) {
+  const user = await requireSuperAdmin();
+  const ticketId = readString(formData, "ticketId");
+  const commentId = readString(formData, "commentId");
+  const kind = readString(formData, "kind");
+  if (!UUID_RE.test(ticketId) || (kind !== "ticket" && kind !== "comment") ||
+      (kind === "comment" && !UUID_RE.test(commentId))) {
+    throw new Error("Invalid support email review.");
+  }
+
+  const admin = createAdminClient();
+  const table = kind === "ticket" ? "support_tickets" : "support_ticket_comments";
+  let query = admin.from(table)
+    .update({
+      notification_email_status: "reviewed",
+      notification_email_reviewed_at: new Date().toISOString(),
+      notification_email_reviewed_by: user.id,
+    })
+    .eq("id", kind === "ticket" ? ticketId : commentId)
+    .in("notification_email_status", ["pending", "unconfirmed"]);
+  if (kind === "comment") query = query.eq("ticket_id", ticketId);
+  const { data, error } = await query.select("id").maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("This alert was already handled or could not be found. Refresh the ticket.");
+
+  revalidatePath("/admin/support");
+  revalidatePath(`/admin/support/${ticketId}`);
+}
+
 /**
  * Our reply on a church's ticket.
  *

@@ -14,10 +14,11 @@ type Response = {
 
 function clientWithResponses(responses: Record<string, Response[]>) {
   const calls: Array<{ table: string; limit: number }> = [];
+  const selects: Array<{ table: string; columns: string }> = [];
   const client = {
     from: (table: string) => {
       const builder = {
-        select: () => builder,
+        select: (columns: string) => { selects.push({ table, columns }); return builder; },
         eq: () => builder,
         in: () => builder,
         gt: () => builder,
@@ -32,7 +33,7 @@ function clientWithResponses(responses: Record<string, Response[]>) {
       return builder;
     },
   } as unknown as SupabaseClient;
-  return { client, calls };
+  return { client, calls, selects };
 }
 
 function comment(index: number, ticketId = "ticket-a") {
@@ -63,6 +64,21 @@ test("support ticket threads include replies beyond the first 1,000 rows", async
   assert.deepEqual(db.calls, Array.from({ length: 3 }, () => ({
     table: "support_ticket_comments", limit: 500,
   })));
+});
+
+test("church thread reads omit private email delivery fields", async () => {
+  const church = clientWithResponses({
+    support_ticket_comments: [{ data: [comment(0)], error: null, count: 1 }],
+  });
+  const threads = await getCommentsForTickets(church.client, ["ticket-a"]);
+  assert.equal(threads.get("ticket-a")?.[0]?.notificationEmailStatus, null);
+  assert.ok(!church.selects[0]?.columns.includes("notification_email_status"));
+
+  const admin = clientWithResponses({
+    support_ticket_comments: [{ data: [comment(0)], error: null, count: 1 }],
+  });
+  await getTicketComments(admin.client, "ticket-a");
+  assert.ok(admin.selects[0]?.columns.includes("notification_email_status"));
 });
 
 test("a church sees all tickets beyond the first page", async () => {

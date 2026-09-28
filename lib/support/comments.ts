@@ -18,7 +18,7 @@ export type SupportTicketComment = {
   authorName: string | null;
   body: string;
   createdAt: string;
-  notificationEmailStatus: "pending" | "sent" | "unconfirmed" | null;
+  notificationEmailStatus: "pending" | "sent" | "unconfirmed" | "reviewed" | null;
 };
 
 /** Long enough for a real answer, short enough that nobody pastes a log dump. */
@@ -30,7 +30,7 @@ type CommentRow = {
   author_name: string | null;
   body: string;
   created_at: string;
-  notification_email_status: SupportTicketComment["notificationEmailStatus"];
+  notification_email_status?: SupportTicketComment["notificationEmailStatus"];
 };
 
 function isMissingCommentsTable(message: string): boolean {
@@ -44,21 +44,29 @@ function mapComment(row: CommentRow): SupportTicketComment {
     authorName: row.author_name,
     body: row.body,
     createdAt: row.created_at,
-    notificationEmailStatus: row.notification_email_status,
+    notificationEmailStatus: row.notification_email_status ?? null,
   };
 }
 
 async function loadComments(
   client: SupabaseClient,
   ticketIds: string[],
+  includeEmailStatus: boolean,
 ): Promise<Array<CommentRow & { ticket_id: string }>> {
   return readAllById<CommentRow & { ticket_id: string }>(
     async (afterId, includeCount, pageSize) => {
+      const options = { count: includeCount ? "exact" as const : undefined };
+      if (includeEmailStatus) {
+        let query = client
+          .from("support_ticket_comments")
+          .select("id, ticket_id, author_role, author_name, body, created_at, notification_email_status", options)
+          .in("ticket_id", ticketIds);
+        if (afterId) query = query.gt("id", afterId);
+        return await query.order("id", { ascending: true }).limit(pageSize);
+      }
       let query = client
         .from("support_ticket_comments")
-        .select("id, ticket_id, author_role, author_name, body, created_at, notification_email_status", {
-          count: includeCount ? "exact" : undefined,
-        })
+        .select("id, ticket_id, author_role, author_name, body, created_at", options)
         .in("ticket_id", ticketIds);
       if (afterId) query = query.gt("id", afterId);
       return await query.order("id", { ascending: true }).limit(pageSize);
@@ -71,7 +79,7 @@ export async function getTicketComments(
   client: SupabaseClient,
   ticketId: string,
 ): Promise<SupportTicketComment[]> {
-  const rows = await loadComments(client, [ticketId]);
+  const rows = await loadComments(client, [ticketId], true);
   return rows
     .sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))
     .map(mapComment);
@@ -86,7 +94,7 @@ export async function getCommentsForTickets(
   if (ticketIds.length === 0) return byTicket;
 
   for (let from = 0; from < ticketIds.length; from += 100) {
-    const rows = await loadComments(client, ticketIds.slice(from, from + 100));
+    const rows = await loadComments(client, ticketIds.slice(from, from + 100), false);
     for (const row of rows) {
       const existing = byTicket.get(row.ticket_id) ?? [];
       existing.push(mapComment(row));

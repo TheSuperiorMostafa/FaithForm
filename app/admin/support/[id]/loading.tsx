@@ -9,6 +9,10 @@ export default function Loading() {
         <Skeleton className="h-9 w-64 border-l-4 border-accent" />
         <p className="mt-1 text-sm text-muted-foreground">Review the ticket, reply to the church, and set its status.</p>
       </div>
+      <div className="grid min-h-[112px] gap-4 rounded-xl border border-border bg-card p-4 text-sm sm:grid-cols-[1fr_auto] sm:items-center">
+        <div><p className="font-semibold">Email alert</p><SkeletonText lines={2} size="sm" className="mt-2 max-w-xl" /></div>
+        <Skeleton className="h-11 w-40" />
+      </div>
       <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
         <Card>
           <CardHeader><CardTitle>Ticket details</CardTitle></CardHeader>

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import {
+  markSupportEmailReviewed,
   postSupportTicketReply,
   updateSupportTicket,
 } from "@/app/admin/actions";
@@ -27,6 +28,7 @@ export default async function AdminSupportTicketPage({ params }: PageProps) {
   const { id } = await params;
   const ticket = await getAdminSupportTicket(id);
   if (!ticket) notFound();
+  const ticketEmailNeedsReview = ticket.notificationEmailStatus === "pending" || ticket.notificationEmailStatus === "unconfirmed";
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-5">
@@ -35,12 +37,27 @@ export default async function AdminSupportTicketPage({ params }: PageProps) {
         description="Review the ticket, reply to the church, and set its status."
       />
 
-      {(ticket.notificationEmailStatus === "pending" || ticket.notificationEmailStatus === "unconfirmed") && (
-        <div role="status" className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-foreground">
-          <p className="font-semibold">Support inbox email needs review</p>
-          <p className="mt-1">The ticket is saved, but the email provider has not confirmed the alert. Check the support inbox and contact the church if needed.</p>
+      <div role="status" className={`grid min-h-[112px] gap-4 rounded-xl border p-4 text-sm text-foreground sm:grid-cols-[1fr_auto] sm:items-center ${ticketEmailNeedsReview ? "border-amber-500/40 bg-amber-500/10" : "border-border bg-card"}`}>
+        <div>
+          <p className="font-semibold">Email alert</p>
+          <p className="mt-1">
+            {ticketEmailNeedsReview
+              ? "Support inbox delivery is unconfirmed. Check the inbox and contact the church if needed, then mark this alert handled."
+              : ticket.notificationEmailStatus === "sent"
+                ? "The email provider accepted the alert. Inbox delivery has not been verified."
+                : ticket.notificationEmailStatus === "reviewed"
+                  ? "The team manually handled this alert; the original email delivery remains unknown."
+                  : "Email delivery was not tracked for this older ticket."}
+          </p>
         </div>
-      )}
+        {ticketEmailNeedsReview ? (
+          <form action={markSupportEmailReviewed} className="min-w-40">
+            <input type="hidden" name="kind" value="ticket" />
+            <input type="hidden" name="ticketId" value={ticket.id} />
+            <Button type="submit" variant="outline">Mark alert handled</Button>
+          </form>
+        ) : <p className="min-w-40 text-sm text-muted-foreground">No action needed</p>}
+      </div>
 
       <div className="grid gap-5 lg:grid-cols-[1fr_320px]">
         <Card>
@@ -104,6 +121,8 @@ export default async function AdminSupportTicketPage({ params }: PageProps) {
           <TicketThread
             comments={ticket.comments}
             viewer="platform"
+            ticketId={ticket.id}
+            reviewAction={markSupportEmailReviewed}
             emptyLabel="Nothing has been said to this church yet."
           />
 

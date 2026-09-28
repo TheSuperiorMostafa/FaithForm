@@ -197,7 +197,7 @@ export type AdminTicketListRow = {
   churchName: string | null;
   priority: SupportTicketPriority;
   status: SupportTicketStatus;
-  notificationEmailStatus: "pending" | "sent" | "unconfirmed" | null;
+  notificationEmailStatus: "pending" | "sent" | "unconfirmed" | "reviewed" | null;
   needsReplyEmailReview: boolean;
   submittedBy: string | null;
   submittedByEmail: string | null;

@@ -108,7 +108,7 @@ export function SupportTicketsTable({
                 <td className="px-5 py-4 text-muted-foreground">
                   {needsEmailReview(ticket) ? (
                     <span className="font-semibold text-amber-700 dark:text-amber-300">Needs review</span>
-                  ) : ticket.notificationEmailStatus === "sent" ? "Accepted" : "Not tracked"}
+                  ) : ticket.notificationEmailStatus === "reviewed" ? "Handled" : ticket.notificationEmailStatus === "sent" ? "No review needed" : "Not tracked"}
                 </td>
                 <td className="px-5 py-4 text-muted-foreground">
                   {ticket.submittedByEmail ?? "Unknown"}

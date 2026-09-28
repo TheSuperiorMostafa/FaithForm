@@ -334,7 +334,7 @@ readiness.
   view denial. Production remains exposed until the controlled migration and
   a zero-row live retest.
 
-## Release sequence for migrations 0110 through 0125
+## Release sequence for migrations 0110 through 0126
 
 1. Capture the current deployment and database migration state. Reconcile the
    deployed schema and source migration history. Confirm a recoverable backup
@@ -352,12 +352,14 @@ readiness.
    `0122_atomic_church_profile.sql`,
    `0123_weekly_draft_claim.sql`, and
    `0124_atomic_support_reply.sql`, and
-   `0125_support_email_visibility.sql` before deploying the updated
+   `0125_support_email_visibility.sql`, and
+   `0126_support_email_review.sql` before deploying the updated
    application. The updated meeting, onboarding, child pickup, new-family,
    Undo, website publication, profile-save, weekly-draft, and support-reply
    actions call these server-only functions and cannot work until they exist.
-   The support pages also read 0125's email-status columns, so the new web
-   build must not be deployed before that migration.
+   The support pages read 0125's email-status columns and the manual review
+   action writes 0126's audit columns, so the new web build must not be
+   deployed before both migrations.
    The sermon-series page also reads the new `series_week` column; Add church
    reads and writes the request-key column.
    The currently deployed code does not call the new functions or read those
@@ -377,8 +379,9 @@ readiness.
    process. Verify their recorded checksums and inspect the resulting policies,
    column grants, view options, and aggregate function privileges. Confirm
    0114 through 0118's server-only execute grants, 0119's column and index,
-   0120's unique request-key index, and 0121 through 0125's server-only execute
-   grants. Do not edit an already applied migration.
+   0120's unique request-key index, 0121 through 0125's server-only execute
+   grants, and 0126's support-ticket write grants. Do not edit an already
+   applied migration.
 5. Repeat the same workflow checks. A staff session without Giving, Calls,
    People, or Check-in must be denied direct reads of those areas; an attendance
    session must not be able to select `members.medical_notes`. A staff session
@@ -757,6 +760,34 @@ on its own.
   Delivery of the separate internal notification to the support inbox has not
   been observed. The local 0125 status and Admin review queue were not part of
   this live test because they have not been deployed.
+- Local migration 0126 lets a platform admin mark an uncertain support alert
+  manually handled after checking the recipient inbox and following up as
+  needed. It records the reviewer and time on the ticket or reply, preserving
+  the distinction between a human follow-up and provider acceptance. The
+  database and production archive exposed older table-wide browser grants on
+  support tickets: an authenticated church account could directly select
+  private `admin_notes` for its own tickets, and the ticket table also had
+  browser write and truncate privileges. The comments table exposed internal
+  email alert fields and truncate privileges to browser roles. Migration 0126
+  removes those broad grants and allows church accounts to select only the
+  ticket and reply fields shown in Help; service-role writes remain available.
+  The migration is pinned by checksum in the baseline
+  verifier so later grant changes require another review. All 128 migrations
+  and 57 database tests passed on disposable PostgreSQL 15; a synthetic
+  backup and restore rehearsal also passed with 128 migrations.
+  The approved production archive restored into disposable PostgreSQL 17 and
+  accepted the exact planned 0114–0126 then 0110–0113 order. It retained four
+  churches, 109 members, 342 Storage metadata rows, five older tickets, and
+  one older comment. Those older alerts remain untracked; a rollback-only new
+  ticket began pending. On the restored production archive, authenticated
+  accounts can select the ticket subject and reply body but cannot select
+  `admin_notes` or internal ticket/reply email status; anonymous and
+  authenticated roles have no support-ticket truncate privilege, and the
+  service role can create tickets and update alert status. The disposable
+  database tests also confirmed an authenticated church read of its own
+  reply and denial of the private columns. Both disposable databases were
+  removed. The Admin review action is still local and has not been
+  browser-tested after rollout.
 - A successful Supabase physical-backup restore test, a provider-side Storage
   restore rehearsal, an independent encrypted location for the local database
   and Storage archives, and documented recovery time and data-loss targets.
@@ -773,7 +804,7 @@ on its own.
   See the IRS [written acknowledgment guidance](https://www.irs.gov/charities-non-profits/charitable-organizations/charitable-contributions-written-acknowledgments)
   and [church exemption guidance](https://www.irs.gov/charities-non-profits/churches-integrated-auxiliaries-and-conventions-or-associations-of-churches).
 - Final live-schema comparison, a recorded migration baseline, and safe
-  application of 0110 through 0125 in the order above. The local comparison
+  application of 0110 through 0126 in the order above. The local comparison
   exposed the active missing objects, but live production still has the access
   gap and no source migration ledger.
 - A representative controlled rollout with real accounts from all four
@@ -784,9 +815,10 @@ on its own.
 - Monitoring with an accountable recipient for application errors, provider
   delivery failures, slow requests, and database/storage capacity. Repository
   code and Vercel's recent logs alone do not prove alert delivery.
-- Staff and rehearse the Admin support email review queue. The local build now
-  persists uncertain outcomes and surfaces them, but no operator alert,
-  automatic retry, or live response-time check has been verified.
+- Staff and rehearse the Admin support email review queue. The local build
+  persists uncertain outcomes and gives staff an audited way to mark them
+  handled, but no operator alert, automatic retry, or live response-time check
+  has been verified.
 - Confirm that the support team can meet the dashboard's “same day” reply
   promise, including late Sunday submissions. The QA acknowledgment arrived
   at 11:12 PM, while the live Help page still promised a reply the same day;
