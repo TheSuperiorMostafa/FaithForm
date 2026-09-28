@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { readFileSync, readdirSync } from "node:fs";
+import { createHash } from "node:crypto";
 import pg from "pg";
 
 const manifest = JSON.parse(
@@ -141,9 +142,22 @@ try {
     }
   }
   if (migrationHistory === "faithform_source_migrations") {
-    const applied = new Set(migrations.rows.map((row) => row.filename));
-    for (const filename of localMigrations) {
-      if (!applied.has(filename)) drift.push(`migration not applied ${filename}`);
+    const applied = new Map(migrations.rows.map((row) => [row.filename, row.sha256]));
+    // A live project predating the source ledger has older Supabase migration
+    // history. Only the source files from the first recorded release onward
+    // can be checked by filename and checksum; do not invent earlier records.
+    const firstRecorded = migrations.rows[0]?.filename;
+    if (!firstRecorded) drift.push("source migration ledger is empty");
+    for (const filename of localMigrations.filter((file) => firstRecorded && file >= firstRecorded)) {
+      const recorded = applied.get(filename);
+      if (!recorded) {
+        drift.push(`migration not applied ${filename}`);
+      } else {
+        const sourceHash = createHash("sha256")
+          .update(readFileSync(`supabase/migrations/${filename}`))
+          .digest("hex");
+        if (recorded !== sourceHash) drift.push(`migration checksum differs ${filename}`);
+      }
     }
   }
 
