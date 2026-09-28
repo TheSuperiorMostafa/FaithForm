@@ -7,7 +7,7 @@ import pg from "pg";
 
 const projectRef = "wwiclymyfplsyezxyzva";
 const batches = {
-  "pre-web": Array.from({ length: 13 }, (_, index) => 114 + index),
+  "pre-web": [...Array.from({ length: 13 }, (_, index) => 114 + index), 127],
   "post-web": [110, 111, 112, 113],
 };
 const batch = process.argv.find((arg) => arg.startsWith("--batch="))?.slice(8);

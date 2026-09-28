@@ -38,6 +38,16 @@ const KNOWN_ERRORS: Record<string, string> = {
     "That sign-in took too long or was already used. Nothing was connected. Please start again from this page.",
   session_mismatch:
     "You came back signed in to FaithForm as someone else, so nothing was connected. Sign in as yourself and try again.",
+  facebook_no_pages:
+    "Facebook did not return a Page you manage. Make sure this Facebook account has full access to your church's Page, then reconnect.",
+  facebook_pages_unavailable:
+    "Facebook could not list your Pages. Check that you allowed Page access during sign-in, then try again.",
+  facebook_token_exchange_failed:
+    "Facebook could not finish authorization. Please try connecting again. If it keeps happening, FaithForm's Facebook app settings need attention.",
+  facebook_save_failed:
+    "Facebook authorized the Page, but FaithForm could not save the connection. Nothing was connected; please contact FaithForm support.",
+  facebook_setup_missing:
+    "FaithForm's Facebook connection is not configured. Please contact FaithForm support.",
 };
 
 const GENERIC_ERROR =

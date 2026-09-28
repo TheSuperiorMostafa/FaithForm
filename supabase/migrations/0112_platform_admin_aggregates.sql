@@ -2,6 +2,11 @@
 -- row responses, so summing the first page silently understates totals as the
 -- number of churches grows. These functions run with the service role's own
 -- privileges and expose only aggregate results.
+-- The current live branch introduced this reporting flag before this release.
+-- Create it here as well so a fresh sequential migration chain can define the
+-- aggregate functions; 0127 marks the existing internal workspaces.
+alter table public.churches
+  add column if not exists exclude_from_platform_metrics boolean not null default false;
 
 create or replace function public.admin_platform_totals(since_date date)
 returns table (
@@ -14,14 +19,19 @@ language sql stable security invoker
 set search_path = pg_catalog, public
 as $$
   select
-    (select coalesce(sum(time_saved_minutes), 0)::bigint from public.activity_log),
-    (select coalesce(sum(amount_cents), 0)::bigint
-       from public.giving_donations where status = 'succeeded'),
-    (select coalesce(sum(active_seconds), 0)::bigint
-       from public.dashboard_usage_daily where usage_date >= since_date),
-    (select count(distinct church_id)::bigint
-       from public.dashboard_usage_daily
-      where usage_date >= since_date and active_seconds > 0);
+    (select coalesce(sum(a.time_saved_minutes), 0)::bigint
+       from public.activity_log a join public.churches c on c.id = a.church_id
+      where not c.exclude_from_platform_metrics),
+    (select coalesce(sum(g.amount_cents), 0)::bigint
+       from public.giving_donations g join public.churches c on c.id = g.church_id
+      where g.status = 'succeeded' and not c.exclude_from_platform_metrics),
+    (select coalesce(sum(u.active_seconds), 0)::bigint
+       from public.dashboard_usage_daily u join public.churches c on c.id = u.church_id
+      where u.usage_date >= since_date and not c.exclude_from_platform_metrics),
+    (select count(distinct u.church_id)::bigint
+       from public.dashboard_usage_daily u join public.churches c on c.id = u.church_id
+      where u.usage_date >= since_date and u.active_seconds > 0
+        and not c.exclude_from_platform_metrics);
 $$;
 
 create or replace function public.admin_platform_church_metrics()
@@ -62,27 +72,31 @@ language sql stable security invoker
 set search_path = pg_catalog, public
 as $$
   select 'churches_month'::text,
-         to_char(date_trunc('month', created_at at time zone 'UTC'), 'YYYY-MM'),
+         to_char(date_trunc('month', c.created_at at time zone 'UTC'), 'YYYY-MM'),
          count(*)::numeric
-    from public.churches where created_at >= since_month
+    from public.churches c
+   where c.created_at >= since_month and not c.exclude_from_platform_metrics
    group by 2
   union all
   select 'activity_minutes_month'::text,
-         to_char(date_trunc('month', executed_at at time zone 'UTC'), 'YYYY-MM'),
-         coalesce(sum(time_saved_minutes), 0)::numeric
-    from public.activity_log where executed_at >= since_month
+         to_char(date_trunc('month', a.executed_at at time zone 'UTC'), 'YYYY-MM'),
+         coalesce(sum(a.time_saved_minutes), 0)::numeric
+    from public.activity_log a join public.churches c on c.id = a.church_id
+   where a.executed_at >= since_month and not c.exclude_from_platform_metrics
    group by 2
   union all
   select 'sermon_model'::text,
-         coalesce(nullif(model_used, ''), 'Unknown'),
+         coalesce(nullif(s.model_used, ''), 'Unknown'),
          count(*)::numeric
-    from public.sermons where created_at >= since_month
+    from public.sermons s join public.churches c on c.id = s.church_id
+   where s.created_at >= since_month and not c.exclude_from_platform_metrics
    group by 2
   union all
   select 'activity_type'::text,
-         coalesce(nullif(automation_type, ''), 'Unknown'),
+         coalesce(nullif(a.automation_type, ''), 'Unknown'),
          count(*)::numeric
-    from public.activity_log where executed_at >= since_recent
+    from public.activity_log a join public.churches c on c.id = a.church_id
+   where a.executed_at >= since_recent and not c.exclude_from_platform_metrics
    group by 2;
 $$;
 

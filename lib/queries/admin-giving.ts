@@ -32,13 +32,14 @@ export type AdminChurchGivingStatus = {
 export async function getAdminGivingOverview(): Promise<AdminGivingOverview> {
   const admin = createAdminClient();
 
-  const { data: churches } = await admin
+  const { data: churches, error: churchesError } = await admin
     .from("churches")
     .select(
-      "id, name, slug, stripe_onboarding_status, stripe_requirements_due, stripe_charges_enabled, stripe_details_submitted",
+      "id, name, slug, stripe_onboarding_status, stripe_requirements_due, stripe_charges_enabled, stripe_details_submitted, exclude_from_platform_metrics",
     );
 
-  const rows = churches ?? [];
+  if (churchesError) throw new Error(churchesError.message);
+  const rows = (churches ?? []).filter((church) => church.exclude_from_platform_metrics === false);
   const counts = {
     notStarted: 0,
     pending: 0,

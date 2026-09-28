@@ -57,12 +57,17 @@ export const getAdminPlatformTotals = cache(async (): Promise<AdminPlatformTotal
 
   // The web deploy can precede 0112. Keep its totals complete during that
   // narrow window instead of silently stopping at PostgREST's first 1,000 rows.
+  const churches = await loadAllAdminPages<{ id: string; exclude_from_platform_metrics: boolean }>(
+    "churches", (from, to) => admin.from("churches")
+      .select("id, exclude_from_platform_metrics").order("id").range(from, to),
+  );
+  const includedIds = new Set(churches.filter((row) => !row.exclude_from_platform_metrics).map((row) => row.id));
   const [activity, gifts, usage] = await Promise.all([
-    loadAllAdminPages<{ time_saved_minutes: number | null }>("activity_log", (from, to) =>
-      admin.from("activity_log").select("time_saved_minutes").order("id").range(from, to),
+    loadAllAdminPages<{ church_id: string; time_saved_minutes: number | null }>("activity_log", (from, to) =>
+      admin.from("activity_log").select("church_id, time_saved_minutes").order("id").range(from, to),
     ),
-    loadAllAdminPages<{ amount_cents: number }>("giving_donations", (from, to) =>
-      admin.from("giving_donations").select("amount_cents").eq("status", "succeeded")
+    loadAllAdminPages<{ church_id: string; amount_cents: number }>("giving_donations", (from, to) =>
+      admin.from("giving_donations").select("church_id, amount_cents").eq("status", "succeeded")
         .order("id").range(from, to),
     ),
     loadAllAdminPages<{ church_id: string; active_seconds: number }>("dashboard_usage_daily", (from, to) =>
@@ -72,9 +77,9 @@ export const getAdminPlatformTotals = cache(async (): Promise<AdminPlatformTotal
     ),
   ]);
   return {
-    minutesSaved: activity.reduce((sum, row) => sum + (row.time_saved_minutes ?? 0), 0),
-    givingCents: gifts.reduce((sum, row) => sum + row.amount_cents, 0),
-    pastorSeconds30d: usage.reduce((sum, row) => sum + (row.active_seconds ?? 0), 0),
-    activeChurches30d: new Set(usage.filter((row) => row.active_seconds > 0).map((row) => row.church_id)).size,
+    minutesSaved: activity.reduce((sum, row) => sum + (includedIds.has(row.church_id) ? row.time_saved_minutes ?? 0 : 0), 0),
+    givingCents: gifts.reduce((sum, row) => sum + (includedIds.has(row.church_id) ? row.amount_cents : 0), 0),
+    pastorSeconds30d: usage.reduce((sum, row) => sum + (includedIds.has(row.church_id) ? row.active_seconds ?? 0 : 0), 0),
+    activeChurches30d: new Set(usage.filter((row) => includedIds.has(row.church_id) && row.active_seconds > 0).map((row) => row.church_id)).size,
   };
 });

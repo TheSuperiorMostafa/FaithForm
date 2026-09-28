@@ -3,15 +3,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { readAllById } from "@/lib/queries/paged-read";
 
 export type DashboardUsageSummary = {
-  pastorSeconds7d: number;
-  pastorSeconds30d: number;
   hoursSavedMinutes30d: number;
   phoneCalls30d: number;
 };
 
 export type UserDashboardUsage = {
-  seconds7d: number;
-  seconds30d: number;
   lastSeenAt: string | null;
 };
 
@@ -74,13 +70,10 @@ export async function getChurchDashboardUsageSummary(
   churchId: string,
   admin: SupabaseClient = createAdminClient(),
 ): Promise<DashboardUsageSummary> {
-  const since7d = daysAgoDate(7);
-  const since30d = daysAgoDate(30);
   const activitySince30d = new Date();
   activitySince30d.setDate(activitySince30d.getDate() - 30);
 
-  const [usageRows, hoursSavedMinutes30d, phoneCallsRes] = await Promise.all([
-    readChurchUsage(admin, churchId, since30d),
+  const [hoursSavedMinutes30d, phoneCallsRes] = await Promise.all([
     readRecentActivityMinutes(admin, churchId, activitySince30d.toISOString()),
     admin
       .from("activity_log")
@@ -90,23 +83,11 @@ export async function getChurchDashboardUsageSummary(
       .gte("executed_at", activitySince30d.toISOString()),
   ]);
 
-  let pastorSeconds7d = 0;
-  let pastorSeconds30d = 0;
-
   if (phoneCallsRes.error || !Number.isSafeInteger(phoneCallsRes.count)) {
     throw new Error("phone call activity count unavailable");
   }
 
-  for (const row of usageRows) {
-    pastorSeconds30d += row.active_seconds ?? 0;
-    if (row.usage_date >= since7d) {
-      pastorSeconds7d += row.active_seconds ?? 0;
-    }
-  }
-
   return {
-    pastorSeconds7d,
-    pastorSeconds30d,
     hoursSavedMinutes30d,
     phoneCalls30d: phoneCallsRes.count as number,
   };
@@ -121,15 +102,12 @@ export async function getUserDashboardUsageByChurch(
   if (userIds.length === 0) return usageByUser;
   const db = admin ?? createAdminClient();
 
-  const since7d = daysAgoDate(7);
   const since30d = daysAgoDate(30);
 
   const data = await readChurchUsage(db, churchId, since30d);
 
   for (const userId of userIds) {
     usageByUser.set(userId, {
-      seconds7d: 0,
-      seconds30d: 0,
       lastSeenAt: null,
     });
   }
@@ -137,11 +115,6 @@ export async function getUserDashboardUsageByChurch(
   for (const row of data) {
     const current = usageByUser.get(row.user_id);
     if (!current) continue;
-
-    current.seconds30d += row.active_seconds ?? 0;
-    if (row.usage_date >= since7d) {
-      current.seconds7d += row.active_seconds ?? 0;
-    }
 
     if (
       !current.lastSeenAt ||
@@ -152,40 +125,4 @@ export async function getUserDashboardUsageByChurch(
   }
 
   return usageByUser;
-}
-
-export async function getPlatformDashboardUsageTotals(): Promise<{
-  pastorSeconds30d: number;
-  activeChurches30d: number;
-}> {
-  const admin = createAdminClient();
-  const since30d = daysAgoDate(30);
-
-  const { data, error } = await admin
-    .from("dashboard_usage_daily")
-    .select("church_id, active_seconds")
-    .gte("usage_date", since30d);
-
-  if (error) {
-    console.error("getPlatformDashboardUsageTotals:", error.message);
-    return { pastorSeconds30d: 0, activeChurches30d: 0 };
-  }
-
-  let pastorSeconds30d = 0;
-  const churches = new Set<string>();
-
-  for (const row of (data ?? []) as {
-    church_id: string;
-    active_seconds: number;
-  }[]) {
-    pastorSeconds30d += row.active_seconds ?? 0;
-    if ((row.active_seconds ?? 0) > 0) {
-      churches.add(row.church_id);
-    }
-  }
-
-  return {
-    pastorSeconds30d,
-    activeChurches30d: churches.size,
-  };
 }

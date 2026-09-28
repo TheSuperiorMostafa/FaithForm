@@ -68,7 +68,10 @@ export async function GET(request: Request) {
     const url = getFacebookAuthUrl(state);
     return NextResponse.redirect(url);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Facebook OAuth failed";
-    return redirectToSettings({ integration_error: message }, returnTo);
+    const code = err instanceof Error && err.message === "Facebook OAuth is not configured"
+      ? "facebook_setup_missing"
+      : "facebook_connect_failed";
+    console.error("Facebook connection: could not start", { code });
+    return redirectToSettings({ integration_error: code }, returnTo);
   }
 }
