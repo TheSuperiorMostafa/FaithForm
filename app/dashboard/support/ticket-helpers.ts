@@ -11,7 +11,7 @@ export const SUPPORT_TICKET_BODY_MAX = 10000;
 const DERIVED_SUBJECT_MAX = 80;
 
 /** How quickly we answer. Must match the public page at app/support/page.tsx. */
-export const SUPPORT_RESPONSE_TIME = "the same day";
+export const SUPPORT_RESPONSE_TIME = "after reviewing your message";
 
 export const HELP_PAGE_TITLE = "Help";
 export const HELP_PAGE_DESCRIPTION = `Ask us anything. A real person at FaithForm answers ${SUPPORT_RESPONSE_TIME}.`;
