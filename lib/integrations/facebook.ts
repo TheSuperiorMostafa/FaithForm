@@ -23,14 +23,28 @@ export {
   getFacebookPageAccessToken,
 } from "@/lib/integrations/facebook-token";
 
+const FACEBOOK_PAGE_SCOPES = [
+  "pages_show_list",
+  "pages_manage_posts",
+  "pages_read_engagement",
+] as const;
+
 export function getFacebookAuthUrl(state: string): string {
   const { appId, redirectUri } = getFacebookConfig();
   const params = new URLSearchParams({
     client_id: appId,
     redirect_uri: redirectUri,
     state,
-    scope: "pages_show_list,pages_manage_posts,pages_read_engagement",
+    scope: FACEBOOK_PAGE_SCOPES.join(","),
     response_type: "code",
+    // A prior sign-in can keep its original Page selection, including an
+    // accidental "none" choice. Re-requesting makes Facebook show the Page
+    // access step again when an admin reconnects, rather than repeating the
+    // same empty /me/accounts result indefinitely.
+    auth_type: "rerequest",
+    // Lets the callback report which Page scopes Facebook actually granted.
+    // This is diagnostic metadata only; it is never persisted.
+    return_scopes: "true",
   });
   return `https://www.facebook.com/v21.0/dialog/oauth?${params}`;
 }
@@ -40,7 +54,7 @@ export async function exchangeFacebookCode(
   churchId: string,
   userId: string,
   supabase?: SupabaseClient,
-  options?: { provisionLive?: boolean },
+  options?: { provisionLive?: boolean; grantedScopes?: string[] },
 ) {
   const { appId, appSecret, redirectUri } = getFacebookConfig();
 
@@ -78,9 +92,30 @@ export async function exchangeFacebookCode(
     throw new Error("facebook_pages_unavailable");
   }
 
-  const page = pages[0];
-  if (!page) {
-    console.error("Facebook connection: no manageable Pages returned");
+  // Page names and IDs are useful support diagnostics. Do not log Page access
+  // tokens: those can publish as the Page and must stay out of Vercel logs.
+  const pageSummaries = pages.map((candidate) => ({
+    id: candidate.id,
+    name: candidate.name,
+    hasPageAccessToken: Boolean(candidate.access_token?.trim()),
+  }));
+  console.info("Facebook connection: Pages returned", {
+    pageCount: pageSummaries.length,
+    pages: pageSummaries,
+    grantedScopes: options?.grantedScopes ?? [],
+  });
+
+  // Facebook can list a Page without issuing this app a token for it when the
+  // person omitted one of the requested Page permissions. Treat that the same
+  // as no usable Page instead of saving a broken connection.
+  const page = pages.find((candidate) => candidate.access_token?.trim());
+  const pageAccessToken = page?.access_token?.trim();
+  if (!page || !pageAccessToken) {
+    console.error("Facebook connection: no manageable Pages returned", {
+      pageCount: pageSummaries.length,
+      pages: pageSummaries,
+      grantedScopes: options?.grantedScopes ?? [],
+    });
     throw new Error("facebook_no_pages");
   }
 
@@ -89,7 +124,7 @@ export async function exchangeFacebookCode(
     const { rtmpUrl, liveVideoId: createdLiveVideoId } =
       await provisionFacebookLiveRtmpUrl(
         page.id,
-        page.access_token,
+        pageAccessToken,
         `${page.name} — FaithForm`,
       );
     liveVideoId = createdLiveVideoId;
@@ -115,7 +150,7 @@ export async function exchangeFacebookCode(
       {
         churchId,
         provider: "facebook",
-        accessToken: page.access_token,
+        accessToken: pageAccessToken,
         // The long-lived user token is the credential that mints Page tokens, so
         // it belongs in the refresh_token column. Metadata is readable by every
         // church member through the status RPC; this must not go there.

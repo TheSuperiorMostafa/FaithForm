@@ -10,7 +10,7 @@ import { absoluteAppPath } from "@/lib/site-url";
 
 export const GRAPH = "https://graph.facebook.com/v21.0";
 
-export type FacebookPage = { id: string; name: string; access_token: string };
+export type FacebookPage = { id: string; name: string; access_token?: string };
 
 export class FacebookReconnectRequiredError extends Error {
   constructor() {
@@ -87,23 +87,45 @@ export async function exchangeForLongLivedUserToken(
 export async function fetchFacebookPages(
   userToken: string,
 ): Promise<FacebookPage[]> {
-  const res = await fetch(
-    `${GRAPH}/me/accounts?${new URLSearchParams({
-      access_token: userToken,
-      fields: "id,name,access_token",
-    })}`,
-  );
-
-  const data = (await res.json().catch(() => ({}))) as {
+  type PageResponse = {
     data?: FacebookPage[];
     error?: { message: string };
+    paging?: { cursors?: { after?: string } };
   };
 
-  if (!res.ok) {
-    throw new Error(data.error?.message ?? "Could not read Facebook Pages");
+  const pages = new Map<string, FacebookPage>();
+  let after: string | undefined;
+
+  // Facebook paginates /me/accounts. A church administrator who manages many
+  // Pages must not look disconnected merely because their church's Page landed
+  // outside an implicit first response page. Bound the loop to avoid spending
+  // a serverless request indefinitely on a malformed paging cursor.
+  for (let pageNumber = 0; pageNumber < 10; pageNumber += 1) {
+    const params = new URLSearchParams({
+      access_token: userToken,
+      fields: "id,name,access_token",
+      limit: "100",
+    });
+    if (after) params.set("after", after);
+
+    const res = await fetch(`${GRAPH}/me/accounts?${params}`);
+    const data = (await res.json().catch(() => ({}))) as PageResponse;
+
+    if (!res.ok) {
+      throw new Error(data.error?.message ?? "Could not read Facebook Pages");
+    }
+
+    const batch = data.data ?? [];
+    for (const page of batch) {
+      if (page.id && page.name) pages.set(page.id, page);
+    }
+
+    const nextAfter = data.paging?.cursors?.after;
+    if (batch.length === 0 || !nextAfter || nextAfter === after) break;
+    after = nextAfter;
   }
 
-  return data.data ?? [];
+  return [...pages.values()];
 }
 
 /** Facebook error codes that mean the token is dead rather than the call bad. */

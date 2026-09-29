@@ -7,11 +7,27 @@ import { assertOAuthSessionUser } from "@/lib/integrations/assert-oauth-session"
 import { verifyOAuthState } from "@/lib/integrations/oauth-state";
 import { createClient } from "@/lib/supabase/server";
 
+const FACEBOOK_PAGE_SCOPES = new Set([
+  "pages_show_list",
+  "pages_manage_posts",
+  "pages_read_engagement",
+]);
+
+/** Keep third-party callback values out of logs unless they are known scopes. */
+function grantedFacebookPageScopes(value: string | null): string[] {
+  if (!value) return [];
+  return value
+    .split(",")
+    .map((scope) => scope.trim())
+    .filter((scope) => FACEBOOK_PAGE_SCOPES.has(scope));
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const state = searchParams.get("state");
   const error = searchParams.get("error");
+  const grantedScopes = grantedFacebookPageScopes(searchParams.get("granted_scopes"));
 
   const payload = state ? verifyOAuthState(state) : null;
   const returnTo = payload?.returnTo;
@@ -38,7 +54,7 @@ export async function GET(request: Request) {
       payload.churchId,
       payload.userId,
       supabase,
-      { provisionLive: false },
+      { provisionLive: false, grantedScopes },
     );
     if (returnTo) {
       const url = new URL(returnTo, "http://localhost");
