@@ -11,6 +11,7 @@ const FACEBOOK_PAGE_SCOPES = new Set([
   "pages_show_list",
   "pages_manage_posts",
   "pages_read_engagement",
+  "business_management",
 ]);
 
 /** Keep third-party callback values out of logs unless they are known scopes. */

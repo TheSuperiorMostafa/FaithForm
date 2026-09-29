@@ -27,6 +27,10 @@ const FACEBOOK_PAGE_SCOPES = [
   "pages_show_list",
   "pages_manage_posts",
   "pages_read_engagement",
+  // Pages owned by a Meta Business Portfolio are not reliably returned from
+  // /me/accounts without this user grant, even when the person has full Page
+  // control and selected the Page during Facebook Login.
+  "business_management",
 ] as const;
 
 export function getFacebookAuthUrl(state: string): string {

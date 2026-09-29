@@ -12,6 +12,12 @@ export const GRAPH = "https://graph.facebook.com/v21.0";
 
 export type FacebookPage = { id: string; name: string; access_token?: string };
 
+type FacebookPageResponse = {
+  data?: FacebookPage[];
+  error?: { message: string };
+  paging?: { cursors?: { after?: string } };
+};
+
 export class FacebookReconnectRequiredError extends Error {
   constructor() {
     super("Facebook access expired. Reconnect Facebook in Settings.");
@@ -84,21 +90,14 @@ export async function exchangeForLongLivedUserToken(
   };
 }
 
-export async function fetchFacebookPages(
+async function fetchFacebookPageEdge(
   userToken: string,
+  edge: "accounts" | "assigned_pages",
 ): Promise<FacebookPage[]> {
-  type PageResponse = {
-    data?: FacebookPage[];
-    error?: { message: string };
-    paging?: { cursors?: { after?: string } };
-  };
-
   const pages = new Map<string, FacebookPage>();
   let after: string | undefined;
 
-  // Facebook paginates /me/accounts. A church administrator who manages many
-  // Pages must not look disconnected merely because their church's Page landed
-  // outside an implicit first response page. Bound the loop to avoid spending
+  // Facebook paginates both User Page edges. Bound the loop to avoid spending
   // a serverless request indefinitely on a malformed paging cursor.
   for (let pageNumber = 0; pageNumber < 10; pageNumber += 1) {
     const params = new URLSearchParams({
@@ -108,8 +107,8 @@ export async function fetchFacebookPages(
     });
     if (after) params.set("after", after);
 
-    const res = await fetch(`${GRAPH}/me/accounts?${params}`);
-    const data = (await res.json().catch(() => ({}))) as PageResponse;
+    const res = await fetch(`${GRAPH}/me/${edge}?${params}`);
+    const data = (await res.json().catch(() => ({}))) as FacebookPageResponse;
 
     if (!res.ok) {
       throw new Error(data.error?.message ?? "Could not read Facebook Pages");
@@ -126,6 +125,31 @@ export async function fetchFacebookPages(
   }
 
   return [...pages.values()];
+}
+
+/**
+ * Finds Pages the person can post as, including Pages assigned through a Meta
+ * Business Portfolio. Meta returns an empty /me/accounts response for the
+ * latter in some otherwise-valid full-control setups; /me/assigned_pages is
+ * the matching Business-user edge.
+ */
+export async function fetchFacebookPages(
+  userToken: string,
+): Promise<FacebookPage[]> {
+  const managedPages = await fetchFacebookPageEdge(userToken, "accounts");
+  if (managedPages.length > 0) return managedPages;
+
+  try {
+    return await fetchFacebookPageEdge(userToken, "assigned_pages");
+  } catch (error) {
+    // /me/accounts was a valid, empty response. Keep that user-facing outcome
+    // when Business access is absent rather than replacing it with a raw Graph
+    // permission failure. The callback diagnostics still contain granted scopes.
+    console.info("Facebook connection: assigned Page lookup unavailable", {
+      reason: error instanceof Error ? error.message : "Unknown response",
+    });
+    return [];
+  }
 }
 
 /** Facebook error codes that mean the token is dead rather than the call bad. */
