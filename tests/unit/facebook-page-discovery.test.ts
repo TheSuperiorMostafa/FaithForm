@@ -32,9 +32,44 @@ test("Facebook reconnects re-request Page access and asks Facebook to return gra
     assert.equal(url.searchParams.get("return_scopes"), "true");
     assert.equal(
       url.searchParams.get("scope"),
-      "pages_show_list,pages_manage_posts,pages_read_engagement",
+      "pages_show_list,pages_manage_posts,pages_read_engagement,business_management",
     );
   });
+});
+
+test("Facebook Page discovery checks Business Portfolio assignments after an empty managed-Page list", async () => {
+  const originalFetch = globalThis.fetch;
+  const requests: URL[] = [];
+
+  globalThis.fetch = (async (input) => {
+    const url = new URL(String(input));
+    requests.push(url);
+    return new Response(
+      JSON.stringify(
+        url.pathname.endsWith("/assigned_pages")
+          ? {
+              data: [
+                { id: "somerset", name: "SFC NAZ", access_token: "page-token" },
+              ],
+            }
+          : { data: [] },
+      ),
+      { status: 200, headers: { "Content-Type": "application/json" } },
+    );
+  }) as typeof fetch;
+
+  try {
+    const pages = await fetchFacebookPages("user-token");
+    assert.deepEqual(pages, [
+      { id: "somerset", name: "SFC NAZ", access_token: "page-token" },
+    ]);
+    assert.deepEqual(
+      requests.map((url) => url.pathname),
+      ["/v21.0/me/accounts", "/v21.0/me/assigned_pages"],
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test("Facebook Page discovery collects every response page and deduplicates Pages", async () => {
