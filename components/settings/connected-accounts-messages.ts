@@ -39,7 +39,7 @@ const KNOWN_ERRORS: Record<string, string> = {
   session_mismatch:
     "You came back signed in to FaithForm as someone else, so nothing was connected. Sign in as yourself and try again.",
   facebook_no_pages:
-    "Facebook did not return a Page you manage. Make sure this Facebook account has full access to your church's Page, then reconnect.",
+    "Facebook did not return a Page FaithForm can use. Reconnect as the person with full control of the church Page, and in Facebook's Page-access step make sure that Page is selected.",
   facebook_pages_unavailable:
     "Facebook could not list your Pages. Check that you allowed Page access during sign-in, then try again.",
   facebook_token_exchange_failed:
