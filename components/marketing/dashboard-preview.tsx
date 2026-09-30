@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import Image from "next/image";
-import { ArrowRight, BookOpen, Check, ClipboardCheck, Heart, House, Megaphone, Radio, Sparkles, Users } from "lucide-react";
+import { ArrowRight, BookOpen, Check, ClipboardCheck, FileText, Heart, House, Megaphone, Radio, Sparkles, Users } from "lucide-react";
 
 const tabs = [
   { id: "home", label: "Home", icon: House },
@@ -23,10 +23,10 @@ type GivingPeriod = "This month" | "Last month";
 type Completion = { kind: Exclude<Tab, "home">; minutes: number; detail: string };
 const sampleWeekMinutes = 12 * 60 + 30;
 
-const passages: Record<Passage, { reference: string; idea: string; practice: string }> = {
-  john: { reference: "John 15:5", idea: "Abide before you produce", practice: "Make room to remain connected to Christ" },
-  micah: { reference: "Micah 6:8", idea: "Walk humbly and act justly", practice: "Turn conviction into a small act of mercy" },
-  matthew: { reference: "Matthew 11:28", idea: "Come to Jesus with your burdens", practice: "Release what you were never asked to carry" },
+const passages: Record<Passage, { reference: string; verse: string; idea: string; practice: string }> = {
+  john: { reference: "John 15:5", verse: "Abide in me, and I in you.", idea: "Abide before you produce", practice: "Make room to remain connected to Christ" },
+  micah: { reference: "Micah 6:8", verse: "Do justly, love mercy, and walk humbly with your God.", idea: "Walk humbly and act justly", practice: "Turn conviction into a small act of mercy" },
+  matthew: { reference: "Matthew 11:28", verse: "Come unto me, all ye that labour and are heavy laden.", idea: "Come to Jesus with your burdens", practice: "Release what you were never asked to carry" },
 };
 const themes: Record<Theme, { label: string; title: string; turn: string }> = {
   hope: { label: "Hope", title: "A hope that holds", turn: "Name the hope this passage offers" },
@@ -48,7 +48,7 @@ export function DashboardPreview() {
   const [theme, setTheme] = useState<Theme>("hope");
   const [outlineReady, setOutlineReady] = useState(false);
   const [slidesReady, setSlidesReady] = useState(false);
-  const [slidesSaved, setSlidesSaved] = useState(false);
+  const [lessonReady, setLessonReady] = useState(false);
   const [graphicReady, setGraphicReady] = useState(false);
   const [graphicGenerating, setGraphicGenerating] = useState(false);
   const [selectedChannels, setSelectedChannels] = useState<Channel[]>(announcementChannels);
@@ -156,17 +156,17 @@ export function DashboardPreview() {
           <section id="marketing-demo-panel-sermons" role="tabpanel" aria-labelledby="marketing-demo-tab-sermons" hidden={active !== "sermons"} tabIndex={0}>
             <div className="marketing-dashboard-kicker">SERMON BUILDER</div>
             <div className="marketing-dashboard-content-head"><h2>From passage to plan.</h2><Pill>Draft</Pill></div>
-            <p className="marketing-demo-intro">Choose a passage and focus. Build the outline, then turn it into slides.</p>
+            <p className="marketing-demo-intro">Choose a passage and focus. Build a black-background PowerPoint from its verses, then create a small-group lesson PDF.</p>
             <div className="marketing-demo-field-row">
-              <label>Passage<select value={passage} onChange={(event) => { setPassage(event.target.value as Passage); setOutlineReady(false); setSlidesReady(false); setSlidesSaved(false); }}><option value="john">John 15:5</option><option value="micah">Micah 6:8</option><option value="matthew">Matthew 11:28</option></select></label>
-              <label>Focus<select value={theme} onChange={(event) => { setTheme(event.target.value as Theme); setOutlineReady(false); setSlidesReady(false); setSlidesSaved(false); }}><option value="hope">Hope</option><option value="rest">Rest</option><option value="service">Service</option></select></label>
+              <label>Passage<select value={passage} onChange={(event) => { setPassage(event.target.value as Passage); setOutlineReady(false); setSlidesReady(false); setLessonReady(false); }}><option value="john">John 15:5</option><option value="micah">Micah 6:8</option><option value="matthew">Matthew 11:28</option></select></label>
+              <label>Focus<select value={theme} onChange={(event) => { setTheme(event.target.value as Theme); setOutlineReady(false); setSlidesReady(false); setLessonReady(false); }}><option value="hope">Hope</option><option value="rest">Rest</option><option value="service">Service</option></select></label>
             </div>
-            <button className="marketing-demo-primary" type="button" onClick={() => { setOutlineReady(true); setSlidesReady(false); setSlidesSaved(false); }}><Sparkles size={15} aria-hidden="true" /> Generate sermon <ArrowRight size={15} aria-hidden="true" /></button>
+            <button className="marketing-demo-primary" type="button" onClick={() => { setOutlineReady(true); setSlidesReady(false); setLessonReady(false); }}><Sparkles size={15} aria-hidden="true" /> Generate sermon <ArrowRight size={15} aria-hidden="true" /></button>
             <div className="marketing-demo-output" aria-live="polite">
-              {slidesReady ? <div className={`marketing-demo-slide is-${theme}`}><span>FAITHFORM / SERMON SLIDES</span><div><small>{selectedPassage.reference}</small><strong>{selectedTheme.title}</strong><p>{selectedPassage.idea}.</p></div><span className="marketing-demo-slide-count">01 / 04</span></div> : outlineReady ? <><div className="marketing-demo-output-top"><span>OUTLINE / {selectedPassage.reference}</span><Check size={15} aria-hidden="true" /></div><strong>{selectedTheme.title}</strong><ol><li>{selectedPassage.idea}.</li><li>{selectedTheme.turn}.</li><li>{selectedPassage.practice}.</li></ol></> : <div className="marketing-demo-empty"><BookOpen size={24} aria-hidden="true" /><span>Your three-point starter outline appears here.</span></div>}
+              {slidesReady ? <><div className="marketing-demo-slide"><span>POWERPOINT / VERSE SLIDE</span><div><small>{selectedPassage.reference}</small><strong>{selectedTheme.title}</strong><p>“{selectedPassage.verse}”</p></div><span className="marketing-demo-slide-count">01 / 04</span></div>{lessonReady && <div className="marketing-demo-lesson"><FileText size={19} aria-hidden="true" /><span><small>SMALL GROUP LESSON</small><strong>{selectedTheme.title}</strong><em>{selectedPassage.reference} · PDF ready to share</em></span><b>PDF</b></div>}</> : outlineReady ? <><div className="marketing-demo-output-top"><span>OUTLINE / {selectedPassage.reference}</span><Check size={15} aria-hidden="true" /></div><strong>{selectedTheme.title}</strong><ol><li>{selectedPassage.idea}.</li><li>{selectedTheme.turn}.</li><li>{selectedPassage.practice}.</li></ol></> : <div className="marketing-demo-empty"><BookOpen size={24} aria-hidden="true" /><span>Your three-point starter outline appears here.</span></div>}
             </div>
-            {outlineReady && !slidesReady && <button className="marketing-demo-primary marketing-demo-next" type="button" onClick={() => setSlidesReady(true)}>Finish presentation <ArrowRight size={15} aria-hidden="true" /></button>}
-            {slidesReady && <button className="marketing-demo-primary marketing-demo-next" type="button" disabled={slidesSaved} onClick={() => { setSlidesSaved(true); celebrate({ kind: "sermons", minutes: 25, detail: "Your themed sample presentation is saved in this preview and ready for Sunday." }); }}>{slidesSaved ? "Presentation saved" : "Save presentation"} {!slidesSaved && <ArrowRight size={15} aria-hidden="true" />}</button>}
+            {outlineReady && !slidesReady && <button className="marketing-demo-primary marketing-demo-next" type="button" onClick={() => setSlidesReady(true)}>Build PowerPoint <ArrowRight size={15} aria-hidden="true" /></button>}
+            {slidesReady && <button className="marketing-demo-primary marketing-demo-next" type="button" disabled={lessonReady} onClick={() => setLessonReady(true)}><FileText size={15} aria-hidden="true" /> {lessonReady ? "Lesson PDF created" : "Create Lesson"} {!lessonReady && <ArrowRight size={15} aria-hidden="true" />}</button>}
           </section>
 
           <section id="marketing-demo-panel-announcements" role="tabpanel" aria-labelledby="marketing-demo-tab-announcements" hidden={active !== "announcements"} tabIndex={0}>
