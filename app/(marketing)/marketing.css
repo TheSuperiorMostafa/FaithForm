@@ -43,7 +43,7 @@
 .marketing-hero-noise { position: absolute; inset: 0; opacity: .26; pointer-events: none; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.65' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.11'/%3E%3C/svg%3E"); }
 .marketing-hero-grid { position: relative; display: grid; grid-template-columns: minmax(0, 1.06fr) minmax(0, .94fr); align-items: center; min-height: min(700px, calc(100svh - 125px)); gap: 20px; }
 .marketing-hero-copy { position: relative; z-index: 3; padding: 25px 0 55px; }
-.marketing-hero-eyebrow { color: #806744; font-size: 15px; }
+.marketing-hero-eyebrow { color: #806744; font-size: 20px; }
 .marketing-eyebrow-line { display: inline-block; width: 26px; height: 2px; background: var(--gold); }
 .marketing-hero h1 { max-width: 820px; margin: 26px 0 26px; font-size: clamp(58px, 6.5vw, 112px); line-height: .99; }
 .marketing-hero h1 em { color: #a58147; white-space: nowrap; }
@@ -448,7 +448,7 @@
   .marketing-hero-grid { padding-top: 0; }
   .marketing-hero-copy { padding: 31px 0 0; }
   .marketing-eyebrow { font-size: 10px; letter-spacing: .16em; }
-  .marketing-hero-eyebrow { font-size: 13px; }
+  .marketing-hero-eyebrow { font-size: 16px; }
   .marketing-hero h1 { margin: 20px 0 22px; font-size: clamp(48px, 12.3vw, 70px); line-height: 1.02; }
   .marketing-hero h1 em { white-space: normal; }
   .marketing-hero-deck { max-width: 450px; font-size: 17px; }
