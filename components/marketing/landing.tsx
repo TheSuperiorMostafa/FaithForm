@@ -38,7 +38,7 @@ export function MarketingLanding({ hero }: { hero: ReactNode }) {
           <div className="marketing-container marketing-problem-inner">
             <span className="marketing-eyebrow">Sound familiar?</span>
             <h2 id="marketing-problem-title">Your week disappears<br /><em>one task at a time.</em></h2>
-            <p>An announcement to send. Attendance to log. A sermon to prepare. The software meant to help keeps asking for another hour.</p>
+            <p>An announcement to send. Attendance to keep track of. A sermon to prepare. The software meant to help keeps asking for another hour and more money.</p>
             <div className="marketing-problem-crossout" aria-hidden="true"><span>copy</span><span>paste</span><span>repeat</span></div>
             <p className="marketing-problem-bridge">It adds up.</p>
           </div>
@@ -47,9 +47,9 @@ export function MarketingLanding({ hero }: { hero: ReactNode }) {
         <section id="mission" className="marketing-mission" aria-labelledby="marketing-mission-title">
           <div className="marketing-container marketing-stats" aria-label="Pastoral workload statistics from FaithForm's mission statement">
             <span className="marketing-eyebrow">The weight behind a busy week</span>
-            <div className="marketing-stat marketing-stat-one"><span className="marketing-stat-number">40<span>%</span></span><div><p>pastors risk of burnout</p><small>4x higher than in 2015</small></div></div>
-            <div className="marketing-stat marketing-stat-two"><span className="marketing-stat-number">49<span>%</span></span><div><p>of pastors say they&apos;re overwhelmed by church admin</p></div></div>
-            <div className="marketing-stat marketing-stat-three"><span className="marketing-stat-number">55–75</span><div><p>Hours worked by 9 in 10 pastors</p></div></div>
+            <a className="marketing-stat marketing-stat-one" href="https://www.wnccumc.org/resourcedetail/5-shocking-realities-about-the-real-state-of-pastor-burnout-17392915" target="_blank" rel="noopener noreferrer" aria-label="Read the source for the pastor burnout-risk statistic"><span className="marketing-stat-number">40<span>%</span></span><div><p>pastors risk of burnout</p><small>4x higher than in 2015</small></div></a>
+            <a className="marketing-stat marketing-stat-two" href="https://cbn.com/news/health/there-war-study-reveals-majority-pastors-extremely-stressed-overworked" target="_blank" rel="noopener noreferrer" aria-label="Read the source for the pastor stress statistic"><span className="marketing-stat-number">75<span>%</span></span><div><p>of pastors say they&apos;re extremely stressed</p></div></a>
+            <a className="marketing-stat marketing-stat-three" href="https://cbn.com/news/health/there-war-study-reveals-majority-pastors-extremely-stressed-overworked" target="_blank" rel="noopener noreferrer" aria-label="Read the source for the pastor workload statistic"><span className="marketing-stat-number">55–75</span><div><p>Hours worked by 9 in 10 pastors</p></div></a>
           </div>
           <div className="marketing-mission-band"><div className="marketing-container marketing-mission-top"><span className="marketing-eyebrow">Our mission</span><h2 id="marketing-mission-title">We Give Pastors<br /><em>Their Time Back.</em></h2><p>Every feature exists for one reason:<br /><strong>fewer hours on admin, more hours on ministry.</strong></p></div></div>
         </section>
@@ -57,13 +57,13 @@ export function MarketingLanding({ hero }: { hero: ReactNode }) {
         <section id="how-it-works" className="marketing-product" aria-labelledby="marketing-product-title">
           <div className="marketing-container">
             <div className="marketing-section-intro">
-              <span className="marketing-eyebrow">Inside your web dashboard</span>
+              <span className="marketing-eyebrow">Inside your dashboard</span>
               <h2 id="marketing-product-title">One action.<br /><em>More off your list.</em></h2>
               <p>The dashboard gathers the weekly work in one place. Tell your church once, then let FaithForm help that update reach where it needs to go.</p>
             </div>
             <div className="marketing-product-grid">
               <div className="marketing-product-copy">
-                <div className="marketing-product-line"><span>01</span><div><h3>Stop doing the same work three times.</h3><p>Write an announcement, then choose where it belongs: in the app, the weekly email, and your church&apos;s Facebook Page.</p></div></div>
+                <div className="marketing-product-line"><span>01</span><div><h3>Stop doing the same work three times.</h3><p>Write an announcement, then choose where it belongs: in your church app, a weekly email to staff, and your church&apos;s Facebook Page or other social media’s, or into your announcement slides</p></div></div>
                 <div className="marketing-product-line"><span>02</span><div><h3>See the time coming back.</h3><p>The dashboard tracks hours saved by the work FaithForm takes off your team&apos;s plate.</p></div></div>
                 <div className="marketing-product-line"><span>03</span><div><h3>Keep the people in view.</h3><p>Attendance, follow-up, sermons, and church updates sit where your team can find them.</p></div></div>
               </div>
@@ -89,7 +89,7 @@ export function MarketingLanding({ hero }: { hero: ReactNode }) {
             <div className="marketing-member-app-copy">
               <span className="marketing-eyebrow">A little extra for your people</span>
               <h2 id="marketing-app-title">The dashboard is for you.<br /><em>The iPhone app is for them.</em></h2>
-              <p>Your churchgoers can use FaithForm Connect to see updates, join groups, watch services, and check in. You run the week from the web dashboard; they stay connected from their phones.</p>
+              <p>Your church can use FaithForm Connect to see updates, join groups, watch services, and check in. You run the week from the web dashboard; they stay connected from their phones in your own church app</p>
               <div className="marketing-member-app-actions"><a className="marketing-button marketing-button-gold" href={marketingConfig.appStore} target="_blank" rel="noopener noreferrer">FaithForm Connect on the App Store <ArrowUpRight size={18} aria-hidden="true" /></a><span>For iPhone · Android coming later</span></div>
             </div>
             <div className="marketing-member-app-art">
@@ -107,7 +107,7 @@ export function MarketingLanding({ hero }: { hero: ReactNode }) {
         </section>
 
         <section className="marketing-finale" aria-labelledby="marketing-finale-title">
-          <div className="marketing-container marketing-finale-inner"><span className="marketing-eyebrow">The reason behind all of it</span><h2 id="marketing-finale-title">Churches don&apos;t grow because they work harder.<br /><em>They grow when the systems stop getting in the way.</em></h2><p>Nothing falls through the cracks, and the hours currently lost to disconnected tools go back to people and to preparation.</p><a className="marketing-button marketing-button-gold" href={contactHref}>Let&apos;s get your time back <ArrowUpRight size={19} aria-hidden="true" /></a></div>
+          <div className="marketing-container marketing-finale-inner"><span className="marketing-eyebrow">The reason behind all of it</span><h2 id="marketing-finale-title">Churches don&apos;t grow because they work harder.<br /><em>They grow when the systems stop getting in the way.</em></h2><a className="marketing-button marketing-button-gold" href={contactHref}>Let&apos;s get your time back <ArrowUpRight size={19} aria-hidden="true" /></a></div>
         </section>
 
         <section id="contact" className="marketing-contact" aria-labelledby="marketing-contact-title">
@@ -117,7 +117,7 @@ export function MarketingLanding({ hero }: { hero: ReactNode }) {
           </div>
         </section>
       </main>
-      <footer className="marketing-footer"><div className="marketing-container marketing-footer-inner"><div className="marketing-footer-brand"><Image src="/faithform-logo.png" width={36} height={36} alt="" /><span>faithform<span>.</span></span></div><p>More time for what matters.</p><div className="marketing-footer-links"><Link href={marketingConfig.signIn}>Sign In</Link><a href={contactHref}><Mail size={15} aria-hidden="true" /> Contact</a><a href={`tel:${marketingConfig.contactPhone}`}><Smartphone size={15} aria-hidden="true" /> Call (270) 970-9414</a><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link></div><span className="marketing-copyright">© {new Date().getFullYear()} FaithForm</span></div></footer>
+      <footer className="marketing-footer"><div className="marketing-container marketing-footer-inner"><div className="marketing-footer-brand"><Image src="/faithform-logo.png" width={36} height={36} alt="" /><span>faithform</span></div><p>More time for what matters.</p><div className="marketing-footer-links"><Link href={marketingConfig.signIn}>Sign In</Link><a href={contactHref}><Mail size={15} aria-hidden="true" /> Contact</a><a href={`tel:${marketingConfig.contactPhone}`}><Smartphone size={15} aria-hidden="true" /> Call (270) 970-9414</a><Link href="/privacy">Privacy</Link><Link href="/terms">Terms</Link></div><span className="marketing-copyright">© {new Date().getFullYear()} FaithForm</span></div></footer>
     </div>
   );
 }
