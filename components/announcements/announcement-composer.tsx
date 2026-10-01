@@ -970,7 +970,7 @@ export function AnnouncementComposer({
       }}
     >
       <DialogContent
-        className="max-h-[calc(100%-2rem)] max-w-5xl"
+        className="max-h-[calc(100dvh-2rem)] max-w-5xl overflow-hidden"
         aria-labelledby="announcement-composer-title"
         // Outside click, Escape and the X all come here. The composer decides
         // itself, asking first when there is work to lose.
@@ -979,7 +979,7 @@ export function AnnouncementComposer({
           return false;
         }}
       >
-        <DialogHeader className="pr-14">
+        <DialogHeader className="shrink-0 pr-14">
           <DialogTitle id="announcement-composer-title">{outcome ? outcome.title : heading}</DialogTitle>
           {!outcome && (
             <DialogDescription className="text-base">
@@ -1036,7 +1036,9 @@ export function AnnouncementComposer({
           </div>
         ) : (
           <>
-            <div className="min-h-0 flex-1 overflow-y-auto">
+            {/* Use a content-based flex basis: Safari can collapse flex-1 to
+                zero inside an auto-height dialog capped only by max-height. */}
+            <div className="min-h-0 flex-auto overflow-y-auto">
               <div className="grid gap-8 px-6 py-6 lg:grid-cols-[minmax(0,1fr)_320px]">
                 <div className="flex min-w-0 flex-col gap-8">
                   {restoredDraft && (
@@ -1408,7 +1410,7 @@ export function AnnouncementComposer({
               </div>
             </div>
 
-            <div className="flex flex-col gap-3 border-t border-border px-6 py-4">
+            <div className="flex shrink-0 flex-col gap-3 border-t border-border px-6 py-4">
               {error && (
                 <p
                   role="alert"
