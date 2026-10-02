@@ -380,12 +380,20 @@ export type SiteThemeRow = {
   sectionDefaults: Record<string, Record<string, unknown>>;
 };
 
+/** How the public site is structured — see lib/sites/layout-mode.ts. */
+export type SiteLayoutMode = "landing" | "website";
+
 export type SiteSettingsRow = {
   themeKey: string;
   brandTokens: Record<string, string>;
   customCss: string | null;
   contactEmail: string | null;
   isPublished: boolean;
+  /**
+   * `landing` = one long page with hash menu links (default).
+   * `website` = separate pages for About, Visit, Give, etc.
+   */
+  layoutMode: SiteLayoutMode;
 };
 
 export type SiteSectionRow = {

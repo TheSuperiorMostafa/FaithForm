@@ -274,9 +274,11 @@ test("a roster read that fails is logged rather than shown as an empty room", ()
   assert.match(actions, /\[checkin\] check-in insert failed/);
 });
 
-test("the Rooms tab shows who is in each room right now", () => {
+test("the Rooms tab loads today's sessions for the live roster and activity", () => {
   assert.match(locationsPage, /getRoster\(auth\.churchId, today/);
-  assert.match(locationsPage, /occupancy=\{occupancy\}/);
+  assert.match(locationsPage, /includeClosed: true/);
+  assert.match(locationsPage, /<RosterBoard/);
+  assert.match(locationsPage, /buildActivityFeed/);
 });
 
 // ---------------------------------------------------------------------------

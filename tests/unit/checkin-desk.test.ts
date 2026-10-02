@@ -9,6 +9,7 @@ import {
   classifyPickupInput,
   defaultRoomFor,
   defaultSelection,
+  FAMILY_RESULT_LIMIT,
   formatServiceDate,
   joinNames,
   occupancyLabel,
@@ -22,7 +23,7 @@ import {
   UNDO_CHECKIN_WINDOW_MS,
   type DeskChild,
 } from "@/lib/checkin/desk";
-import type { CheckinChild } from "@/lib/checkin/roster-search";
+import { ROSTER_SEARCH_LIMIT, type CheckinChild } from "@/lib/checkin/roster-search";
 import type { CheckinSessionRow } from "@/types/checkin";
 
 const actions = readFileSync("app/dashboard/checkin/actions.ts", "utf8");
@@ -180,6 +181,30 @@ test("a child's usual room is pre-chosen, and never a closed one", () => {
   assert.equal(defaultRoomFor(ready, ["nursery", "preschool"]), "nursery");
   assert.equal(defaultRoomFor(ready, ["preschool"]), "preschool", "the only open room");
   assert.equal(defaultRoomFor(ready, ["preschool", "k"]), "", "otherwise the volunteer chooses");
+});
+
+test("family search returns a scrollable batch, not a handful cut off at five", () => {
+  assert.equal(FAMILY_RESULT_LIMIT, 50);
+  assert.equal(ROSTER_SEARCH_LIMIT, 50);
+
+  const many = Array.from({ length: 12 }, (_, index) =>
+    child(`c${index}`, "Alex", `Family${index}`, `house-${index}`, {
+      householdName: `Family${index} family`,
+      guardianNames: [`Parent Family${index}`],
+    }),
+  );
+  const index = buildRosterSearchIndex(many);
+  const { families, more } = searchFamilies(index, many, "alex", []);
+  assert.equal(families.length, 12);
+  assert.equal(more, 0);
+
+  const capped = searchFamilies(index, many, "alex", [], { limit: 5 });
+  assert.equal(capped.families.length, 5);
+  assert.equal(capped.more, 7);
+});
+
+test("the desk search results panel scrolls when many families match", () => {
+  assert.match(desk, /max-h-\[min\(70vh,48rem\)\].*overflow-y-auto/s);
 });
 
 // ---------------------------------------------------------------------------
@@ -353,6 +378,7 @@ test("deleting a room checks its history first and asks before deleting", () => 
   assert.match(rooms, /confirmLabel: "Delete room",\s*\n\s*destructive: true/);
   assert.match(rooms, /"Close room"/);
   assert.doesNotMatch(rooms, /Switch off|Cap\.|>Order</);
+  assert.match(rooms, /<AdvancedSection/);
   assert.match(actionBody("reorderLocations"), /const context = await requireAdmin\(\);/);
 });
 

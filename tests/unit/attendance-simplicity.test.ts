@@ -13,6 +13,13 @@ import {
   followUpFailureReason,
 } from "@/lib/attendance/follow-up-errors";
 import {
+  defaultPastorMessage,
+  defaultWelcomeMessage,
+  personalizeWelcomeMessage,
+  validatePastorMessage,
+  validateWelcomeMessage,
+} from "@/lib/attendance/first-time-guests";
+import {
   describeTemplateAudience,
   groupFollowUpMessages,
   personalizeFollowUpMessage,
@@ -82,6 +89,16 @@ test("the draft survives leaving the page and is cleared once saved", () => {
   const wizard = read("app/dashboard/attendance/(record)/[date]/attendance-wizard.tsx");
   assert.match(wizard, /readDraft\(storageKey\)/);
   assert.match(wizard, /writeDraft\(storageKey, draft\)/);
+  assert.match(
+    wizard,
+    /pendingAdd = \{\s*firstName: newFirstName,\s*lastName: newLastName,\s*phone: newPhone,\s*isFirstTimeGuest: newIsFirstTimeGuest,\s*\}/,
+  );
+  assert.match(wizard, /setNewFirstName\(draft\.pendingAdd\.firstName\)/);
+  assert.match(wizard, /setNewIsFirstTimeGuest\(draft\.pendingAdd\.isFirstTimeGuest === true\)/);
+  assert.match(
+    wizard,
+    /newFirstName,\s*newLastName,\s*newPhone,\s*newIsFirstTimeGuest,\s*saved,\s*storageKey/,
+  );
   assert.equal((wizard.match(/clearDraft\(storageKey\);\n\s+setSaved/g) ?? []).length, 2);
 
   assert.equal(draftKey("2026-09-20"), "faithform:attendance-draft:2026-09-20");
@@ -97,13 +114,91 @@ test("the draft survives leaving the page and is cleared once saved", () => {
     savedAt: now,
   });
   assert.deepEqual(parseDraft(good, now)?.statuses, { a: "present", b: "absent" });
+  // Older drafts without pendingAdd still parse.
+  assert.equal(parseDraft(good, now)?.pendingAdd, undefined);
   assert.equal(parseDraft("not json", now), null);
   assert.equal(parseDraft(JSON.stringify({ version: 2 }), now), null);
   // A three-week-old draft is stale.
   assert.equal(parseDraft(good, now + 1000 * 60 * 60 * 24 * 30), null);
 
+  const withAdd = JSON.stringify({
+    version: 1,
+    mode: "names",
+    statuses: {},
+    headcount: "",
+    notes: "",
+    pendingAdd: { firstName: "Ann", lastName: "Lee", phone: "+15551212" },
+    savedAt: now,
+  });
+  assert.deepEqual(parseDraft(withAdd, now)?.pendingAdd, {
+    firstName: "Ann",
+    lastName: "Lee",
+    phone: "+15551212",
+  });
+
+  const withGuest = JSON.stringify({
+    version: 1,
+    mode: "names",
+    statuses: {},
+    headcount: "",
+    notes: "",
+    pendingAdd: {
+      firstName: "Ann",
+      lastName: "Lee",
+      phone: "+15551212",
+      isFirstTimeGuest: true,
+    },
+    savedAt: now,
+  });
+  assert.deepEqual(parseDraft(withGuest, now)?.pendingAdd, {
+    firstName: "Ann",
+    lastName: "Lee",
+    phone: "+15551212",
+    isFirstTimeGuest: true,
+  });
+  // Malformed pendingAdd is dropped; the rest of the draft still loads.
+  const badPending = JSON.stringify({
+    version: 1,
+    mode: "number",
+    statuses: {},
+    headcount: "40",
+    notes: "",
+    pendingAdd: { firstName: "Ann" },
+    savedAt: now,
+  });
+  const parsedBad = parseDraft(badPending, now);
+  assert.equal(parsedBad?.headcount, "40");
+  assert.equal(parsedBad?.pendingAdd, undefined);
+
   assert.equal(draftHasWork({ statuses: {}, headcount: " ", notes: "" }), false);
   assert.equal(draftHasWork({ statuses: {}, headcount: "40", notes: "" }), true);
+  assert.equal(
+    draftHasWork({
+      statuses: {},
+      headcount: "",
+      notes: "",
+      pendingAdd: { firstName: "Ann", lastName: "", phone: "" },
+    }),
+    true,
+  );
+  assert.equal(
+    draftHasWork({
+      statuses: {},
+      headcount: "",
+      notes: "",
+      pendingAdd: { firstName: " ", lastName: "", phone: "" },
+    }),
+    false,
+  );
+  assert.equal(
+    draftHasWork({
+      statuses: {},
+      headcount: "",
+      notes: "",
+      pendingAdd: { firstName: "", lastName: "", phone: "", isFirstTimeGuest: true },
+    }),
+    true,
+  );
 });
 
 test("the draft module is safe without storage and imports nothing", () => {
@@ -197,6 +292,53 @@ test("sending texts asks first, naming how many", () => {
   assert.match(board, /destructive: true/);
 });
 
+// ---------------------------------------------------------------------------
+// First-time guests
+// ---------------------------------------------------------------------------
+
+test("adding someone can mark them as a first-time guest for this Sunday", () => {
+  const migration = read("supabase/migrations/0111_attendance_first_time_guest.sql");
+  assert.match(migration, /is_first_time_guest boolean not null default false/);
+
+  const wizard = read("app/dashboard/attendance/(record)/[date]/attendance-wizard.tsx");
+  assert.match(wizard, /First time guest/);
+  assert.match(wizard, /isFirstTimeGuest: firstTimeGuestIds\.has\(m\.id\)/);
+  assert.match(wizard, /<FirstTimeGuestPanel/);
+
+  const actions = read("app/dashboard/attendance/(record)/[date]/actions.ts");
+  assert.match(actions, /is_first_time_guest: entry\.isFirstTimeGuest === true/);
+  assert.match(actions, /export async function notifyPastorOfFirstTimeGuests/);
+  assert.match(actions, /export async function sendWelcomeTextsToGuests/);
+  // Absentee follow-up stays on its own path.
+  assert.doesNotMatch(actions, /sendAttendanceFollowUpTexts/);
+});
+
+test("pastor and welcome messages are validated in plain church language", () => {
+  assert.equal(validatePastorMessage("").ok, false);
+  assert.equal(validatePastorMessage("  Guests today  ").ok, true);
+  assert.equal(validateWelcomeMessage("Welcome!").ok, false);
+  assert.deepEqual(validateWelcomeMessage("Hi [Name], welcome!"), {
+    ok: true,
+    message: "Hi [Name], welcome!",
+  });
+  assert.equal(
+    personalizeWelcomeMessage("Hi [Name] from [Church]", "Ann", "Grace Church"),
+    "Hi Ann from Grace Church",
+  );
+  assert.match(defaultWelcomeMessage("Grace Church"), /\[Name\]/);
+  assert.match(
+    defaultPastorMessage("Sept 20", [
+      { memberId: "1", firstName: "Ann", lastName: "Lee", phone: "+1555" },
+    ]),
+    /Ann Lee/,
+  );
+
+  const panel = read("app/dashboard/attendance/(record)/[date]/first-time-guest-panel.tsx");
+  assert.match(panel, /Goes to your church phone in Settings/);
+  assert.match(panel, /confirmLabel: "Tell pastor"/);
+  assert.match(panel, /Send welcome/);
+});
+
 test("a texting failure is shown as a plain reason, never the raw response", () => {
   assert.equal(followUpFailureReason(null), null);
   assert.equal(followUpFailureReason(TEXTING_NOT_CONNECTED), "not_connected");
@@ -266,6 +408,28 @@ test("weekday services from the schedule are on Services, beneath Sunday worship
   const board = read("components/attendance/service-occurrences-board.tsx");
   assert.match(board, /Other services on your schedule/);
   assert.match(read("app/dashboard/attendance/services/page.tsx"), /other=\{board\.other\}/);
+});
+
+test("Services Recent shows weekly sheet present and absent, not only check-in counts", () => {
+  const actions = read("app/dashboard/attendance/services/actions.ts");
+  const boardFn = actions.slice(
+    actions.indexOf("export async function getServicesBoard"),
+    actions.indexOf("export async function getOccurrenceRoster"),
+  );
+  assert.match(boardFn, /getRecentSundayRecords\(/);
+  assert.match(boardFn, /weeklySheets/);
+  assert.match(boardFn, /localServiceDate/);
+
+  const page = read("app/dashboard/attendance/services/page.tsx");
+  assert.match(page, /weeklySheets=\{board\.weeklySheets\}/);
+
+  const board = read("components/attendance/service-occurrences-board.tsx");
+  assert.match(board, /weeklySheetLine/);
+  assert.match(board, /Sunday count not started/);
+  assert.match(board, /describeNameCount/);
+  assert.match(board, /Open Sunday count/);
+  assert.match(board, /Count who came/);
+  assert.match(board, /href=\{`\/dashboard\/attendance\/\$\{selected\.localServiceDate\}`\}/);
 });
 
 test("a board that fails to load says so, instead of looking empty", () => {

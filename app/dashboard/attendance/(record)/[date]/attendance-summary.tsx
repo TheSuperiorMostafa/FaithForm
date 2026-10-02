@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { AlertCircle, Check, Clock, Hash, Pencil, Send, Smartphone } from "lucide-react";
 
+import { FirstTimeGuestPanel } from "./first-time-guest-panel";
 import { ServiceDayHeader } from "@/components/attendance/service-day-header";
 import { buttonVariants } from "@/components/ui/button";
 import { describeFollowUpFailure } from "@/lib/attendance/follow-up-errors";
@@ -33,6 +34,8 @@ type AttendanceSummaryProps = {
    * came, so they count as present and are not listed as absent.
    */
   checkedInElsewhere?: CheckedInElsewhere[];
+  /** Church name for welcome text defaults. */
+  churchName?: string;
 };
 
 function getInitials(firstName: string, lastName: string) {
@@ -67,6 +70,7 @@ export function AttendanceSummary({
   serviceDate,
   canFollowUp,
   checkedInElsewhere = [],
+  churchName = "our church",
 }: AttendanceSummaryProps) {
   const { record, entries, deliveryTrackingAvailable } = data;
   const countedByNumber = entries.length === 0;
@@ -91,6 +95,14 @@ export function AttendanceSummary({
   const stillToText = absent.filter((e) => !e.follow_up_requested && e.member?.phone).length;
   const offerFollowUp = canFollowUp && !countedByNumber && stillToText > 0;
   const dayLabel = formatServiceDate(serviceDate);
+  const firstTimeGuests = entries
+    .filter((entry) => entry.is_first_time_guest && entry.member)
+    .map((entry) => ({
+      memberId: entry.member!.id,
+      firstName: entry.member!.first_name,
+      lastName: entry.member!.last_name,
+      phone: entry.member!.phone,
+    }));
 
   const editLink = (
     <Link
@@ -157,6 +169,14 @@ export function AttendanceSummary({
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_22rem] lg:items-start">
         <div className="flex min-w-0 flex-col gap-8">
+          {firstTimeGuests.length > 0 ? (
+            <FirstTimeGuestPanel
+              serviceDate={serviceDate}
+              guests={firstTimeGuests}
+              churchName={churchName}
+            />
+          ) : null}
+
           {countedByNumber ? (
             <section className="flex items-start gap-4 rounded-2xl border border-border bg-card p-6 shadow-card dark:shadow-none">
               <span

@@ -192,7 +192,7 @@ test("the kiosk search returns three fields and cannot be widened", () => {
 
   // The anti-browsing controls, all four.
   assert.match(code, /MIN_SEARCH_LENGTH = 3/);
-  assert.match(code, /MAX_SEARCH_RESULTS = 8/);
+  assert.match(code, /MAX_SEARCH_RESULTS = 50/);
   assert.match(code, /if \(query\.length < MIN_SEARCH_LENGTH\) return \{ people: \[\], truncated: false \}/);
   // Prefix, not substring: `%son%` would surface every Johnson from three
   // characters.
@@ -200,6 +200,11 @@ test("the kiosk search returns three fields and cannot be widened", () => {
   assert.match(code, /\$\{escape\(parts\[0\]\)\}%/);
   // And the LIKE metacharacters are escaped, or `%` alone matches everyone.
   assert.match(code, /replace\(\/\(\[\\\\%_\]\)\/g/);
+  // The tablet scrolls the returned batch so raising the soft cap is usable.
+  assert.match(
+    read("components/checkin/kiosk-station.tsx"),
+    /max-h-\[min\(60vh,28rem\)\].*overflow-y-auto/s,
+  );
 });
 
 test("a kiosk credential reaches one occurrence and confers no role", () => {

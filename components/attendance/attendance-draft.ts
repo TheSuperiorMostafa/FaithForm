@@ -11,6 +11,15 @@
 
 export type AttendanceDraftMode = "names" | "number";
 
+/** Mid-entry Add-person dialog fields. Absent on older drafts. */
+export type AttendanceDraftPendingAdd = {
+  firstName: string;
+  lastName: string;
+  phone: string;
+  /** Optional so drafts written before this field still parse. */
+  isFirstTimeGuest?: boolean;
+};
+
 export type AttendanceDraft = {
   version: 1;
   mode: AttendanceDraftMode;
@@ -19,6 +28,11 @@ export type AttendanceDraft = {
   headcount: string;
   notes: string;
   savedAt: number;
+  /**
+   * First/last/phone typed in Add person but not yet submitted.
+   * Optional so drafts written before this field still parse.
+   */
+  pendingAdd?: AttendanceDraftPendingAdd;
 };
 
 const PREFIX = "faithform:attendance-draft:";
@@ -35,6 +49,27 @@ function storage(): Storage | null {
   } catch {
     return null;
   }
+}
+
+function isPendingAdd(value: unknown): value is AttendanceDraftPendingAdd {
+  if (!value || typeof value !== "object") return false;
+  const pending = value as Partial<AttendanceDraftPendingAdd>;
+  return (
+    typeof pending.firstName === "string" &&
+    typeof pending.lastName === "string" &&
+    typeof pending.phone === "string"
+  );
+}
+
+function normalizePendingAdd(value: AttendanceDraftPendingAdd): AttendanceDraftPendingAdd {
+  return {
+    firstName: value.firstName,
+    lastName: value.lastName,
+    phone: value.phone,
+    ...(typeof value.isFirstTimeGuest === "boolean"
+      ? { isFirstTimeGuest: value.isFirstTimeGuest }
+      : {}),
+  };
 }
 
 function isDraft(value: unknown): value is AttendanceDraft {
@@ -61,7 +96,11 @@ export function parseDraft(raw: string | null, now = Date.now()): AttendanceDraf
     for (const [id, status] of Object.entries(value.statuses)) {
       if (status === "present" || status === "absent") statuses[id] = status;
     }
-    return { ...value, statuses };
+    // Older drafts omit pendingAdd; malformed shapes are dropped without killing the draft.
+    const pendingAdd = isPendingAdd(value.pendingAdd)
+      ? normalizePendingAdd(value.pendingAdd)
+      : undefined;
+    return { ...value, statuses, pendingAdd };
   } catch {
     return null;
   }
@@ -95,11 +134,24 @@ export function clearDraft(key: string): void {
   }
 }
 
+function pendingAddHasWork(pending: AttendanceDraftPendingAdd | undefined): boolean {
+  if (!pending) return false;
+  return (
+    pending.firstName.trim().length > 0 ||
+    pending.lastName.trim().length > 0 ||
+    pending.phone.trim().length > 0 ||
+    pending.isFirstTimeGuest === true
+  );
+}
+
 /** True when the draft holds anything worth keeping. */
-export function draftHasWork(draft: Pick<AttendanceDraft, "statuses" | "headcount" | "notes">): boolean {
+export function draftHasWork(
+  draft: Pick<AttendanceDraft, "statuses" | "headcount" | "notes" | "pendingAdd">,
+): boolean {
   return (
     Object.keys(draft.statuses).length > 0 ||
     draft.headcount.trim().length > 0 ||
-    draft.notes.trim().length > 0
+    draft.notes.trim().length > 0 ||
+    pendingAddHasWork(draft.pendingAdd)
   );
 }

@@ -450,7 +450,7 @@ export function CheckinDesk({
             }
           />
         ) : (
-          <div className="flex flex-col gap-6">
+          <div className="flex max-h-[min(70vh,48rem)] flex-col gap-6 overflow-y-auto pr-1">
             {families.map((family) => (
               <FamilyCard
                 key={family.householdId}

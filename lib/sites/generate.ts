@@ -2,6 +2,13 @@ import { z } from "zod";
 
 import { aiGenerateObject } from "@/lib/ai";
 import { formatDayAndTime } from "@/lib/sites/format";
+import {
+  buildFooterExploreLinks,
+  buildHeroActions,
+  buildSiteNavLinks,
+  buildVisitCta,
+  type SiteLayoutMode,
+} from "@/lib/sites/layout-mode";
 import type { SiteProfile } from "@/types/site";
 
 /**
@@ -229,18 +236,27 @@ function badgeFor(title: string): string {
 export async function generateSite(
   churchId: string,
   profile: SiteProfile,
+  layoutMode: SiteLayoutMode = "landing",
 ): Promise<GeneratedSite> {
   const copy = await generateCopy(churchId, profile);
-  return { ...buildSections(profile, copy), aiCopyUsed: copy !== null };
+  return {
+    ...buildSections(profile, copy, layoutMode),
+    aiCopyUsed: copy !== null,
+  };
 }
 
 /**
  * The deterministic half: which sections exist, in what order, and which start
  * hidden. Pure — no I/O — so `copy: null` is exactly the AI-unavailable path.
+ *
+ * Always returns the full landing section list. Website mode still builds that
+ * list first; `applyWebsiteLayout` (or the toggle action) moves content
+ * sections onto their own pages afterward. Fresh sites default to landing.
  */
 export function buildSections(
   profile: SiteProfile,
   copy: Copy | null,
+  layoutMode: SiteLayoutMode = "landing",
 ): Omit<GeneratedSite, "aiCopyUsed"> {
   const hasStaff = profile.staff.length > 0;
   const hasTimes = profile.serviceTimes.length > 0;
@@ -274,14 +290,21 @@ export function buildSections(
       body: time.notes ?? "",
     }));
 
-  const navLinks = [
-    { label: "About", href: "#about" },
-    ...(hasStatements ? [{ label: "Vision", href: "#vision" }] : []),
-    ...(hasStaff ? [{ label: "Staff", href: "#staff" }] : []),
-    ...(programItems.length > 0 ? [{ label: "Programs", href: "#programs" }] : []),
-    ...(profile.media.length > 0 ? [{ label: "Sermons", href: "#sermons" }] : []),
-    ...(profile.givingEnabled ? [{ label: "Give", href: "#give" }] : []),
+  // Draft visibility first so nav/footer links can mirror what will show.
+  const draftVisibility: { type: string; isVisible: boolean }[] = [
+    { type: "about_text", isVisible: true },
+    { type: "vision_mission", isVisible: hasStatements },
+    { type: "staff_grid", isVisible: hasStaff },
+    { type: "programs_grid", isVisible: programItems.length > 0 },
+    { type: "visit_cta", isVisible: true },
+    { type: "sermon_feed", isVisible: profile.media.length > 0 },
+    { type: "give_cta", isVisible: profile.givingEnabled },
   ];
+
+  const navLinks = buildSiteNavLinks(layoutMode, draftVisibility, profile);
+  const visitCta = buildVisitCta(layoutMode);
+  const heroActions = buildHeroActions(layoutMode, profile.media.length > 0);
+  const footerLinks = buildFooterExploreLinks(layoutMode, draftVisibility, profile);
 
   const sections: GeneratedSection[] = [
     {
@@ -290,7 +313,7 @@ export function buildSections(
       props: {
         anchor: "top",
         links: navLinks,
-        cta: { label: "Visit", href: "#visit", variant: "solid" },
+        cta: visitCta,
       },
     },
     {
@@ -314,12 +337,7 @@ export function buildSections(
         // shadowed by whatever the value was at build time. Only the caption
         // shown while there is no photo belongs in the config.
         image: { alt: "", placeholder: "a photo of your congregation" },
-        actions: [
-          { label: "Plan your visit", href: "#visit", variant: "solid" },
-          ...(profile.media.length > 0
-            ? [{ label: "Latest sermon", href: "#sermons", variant: "outline" }]
-            : []),
-        ],
+        actions: heroActions,
       },
     },
     {
@@ -471,14 +489,7 @@ export function buildSections(
         extraColumns: [
           {
             heading: "Explore",
-            links: [
-              { label: "About us", href: "#about" },
-              ...(profile.media.length > 0
-                ? [{ label: "Sermons", href: "#sermons" }]
-                : []),
-              ...(profile.givingEnabled ? [{ label: "Give", href: "#give" }] : []),
-              { label: "Plan a visit", href: "#visit" },
-            ],
+            links: footerLinks,
           },
         ],
       },

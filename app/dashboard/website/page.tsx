@@ -6,6 +6,7 @@ import { ActionCard, ActionGrid } from "@/components/ui/action-card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { EmptySite } from "@/components/website-admin/empty-site";
+import { LayoutModeCard } from "@/components/website-admin/layout-mode-card";
 import { PublishCard } from "@/components/website-admin/publish-card";
 import { SitePreview } from "@/components/website-admin/site-preview";
 import { domainStatusWords } from "@/components/website-admin/website-words";
@@ -13,6 +14,7 @@ import { getChurchAuth } from "@/lib/auth/church";
 import { getCanonicalSiteUrl } from "@/lib/site-url";
 import { getChurchDomains } from "@/lib/sites/domain-queries";
 import { getDomainProvider } from "@/lib/sites/domains";
+import { parseSiteLayoutMode } from "@/lib/sites/layout-mode";
 import { isPublicSitePublication } from "@/lib/sites/preview-access";
 import { countNewSubmissions, getWebsiteForChurch } from "@/lib/sites/queries";
 import { pageFeatureBlocked } from "@/lib/features/page-gate";
@@ -38,6 +40,7 @@ export default async function WebsiteOverviewPage() {
   ]);
 
   const published = isPublicSitePublication(site.page.status, site.settings?.isPublished);
+  const layoutMode = parseSiteLayoutMode(site.settings?.layoutMode);
   const previewUrl = `${getCanonicalSiteUrl()}/sites/${site.slug}?preview=1`;
 
   const rootHost = process.env.NEXT_PUBLIC_SITE_ROOT_HOST?.trim().toLowerCase();
@@ -50,6 +53,11 @@ export default async function WebsiteOverviewPage() {
   const visible = site.sections.filter((s) => s.isVisible).length;
   const automated = getDomainProvider().automated;
   const primaryStatus = primary ? domainStatusWords(primary.status, automated) : null;
+  const pageCount = site.pages.length;
+  const summary =
+    layoutMode === "website"
+      ? `${pageCount} pages · ${visible} sections on home · ${site.theme.name} look`
+      : `${visible} of ${site.sections.length} sections showing · ${site.theme.name} look`;
 
   return (
     <div className="flex w-full flex-col gap-8">
@@ -58,8 +66,10 @@ export default async function WebsiteOverviewPage() {
         previewUrl={previewUrl}
         liveUrl={liveUrl}
         canEdit={auth.isAdmin}
-        summary={`${visible} of ${site.sections.length} sections showing · ${site.theme.name} look`}
+        summary={summary}
       />
+
+      <LayoutModeCard initialMode={layoutMode} canEdit={auth.isAdmin} />
 
       <ActionGrid>
         <ActionCard

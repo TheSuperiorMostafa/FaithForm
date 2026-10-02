@@ -157,6 +157,12 @@ test("Add people uses the SearchPicker so chosen people stay visible", () => {
   assert.match(read("components/groups/people.tsx"), /addPeopleLabel\(chosen\.length\)/);
 });
 
+test("SearchPicker scrolls through matches instead of cutting off after eight", () => {
+  const picker = read("components/ui/search-picker.tsx");
+  assert.match(picker, /maxResults = 100/);
+  assert.match(picker, /max-h-72 divide-y divide-border overflow-y-auto/);
+});
+
 // ---------------------------------------------------------------------------
 // Navigation, messaging, safety
 // ---------------------------------------------------------------------------

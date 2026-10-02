@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import { parseSiteLayoutMode } from "@/lib/sites/layout-mode";
 import { isPublicSitePublication } from "@/lib/sites/preview-access";
 import type {
   SiteOverrideRow,
@@ -124,7 +125,9 @@ export async function getSiteBundle(
   ] = await Promise.all([
     supabase
       .from("site_settings")
-      .select("theme_key, brand_tokens, custom_css, contact_email, is_published, site_themes(key, name, tokens, section_defaults)")
+      .select(
+        "theme_key, brand_tokens, custom_css, contact_email, is_published, layout_mode, site_themes(key, name, tokens, section_defaults)",
+      )
       .eq("church_id", churchId)
       .maybeSingle(),
     supabase
@@ -187,6 +190,7 @@ export async function getSiteBundle(
         customCss: (settingsRow.custom_css as string | null) ?? null,
         contactEmail: (settingsRow.contact_email as string | null) ?? null,
         isPublished: Boolean(settingsRow.is_published),
+        layoutMode: parseSiteLayoutMode(settingsRow.layout_mode),
       }
     : null;
 
@@ -394,14 +398,22 @@ function mapTheme(data: {
 // resolves to. The dashboard already knows its church_id, so these skip the
 // lookup and scope directly.
 
-export type WebsiteAdminBundle = SiteBundle & { slug: string };
+export type WebsiteAdminBundle = SiteBundle & {
+  slug: string;
+  /** Every page for this church, home first. Empty only when the site is missing. */
+  pages: SitePageRow[];
+};
 
 /**
  * Everything the Website section needs, or null when this church has no site
  * yet -- which the dashboard renders as an empty state rather than an error.
+ *
+ * `path` selects which page's sections to edit. In website mode the editor
+ * passes `/about`, `/visit`, etc.; landing mode always uses `/`.
  */
 export async function getWebsiteForChurch(
   churchId: string,
+  path = "/",
 ): Promise<WebsiteAdminBundle | null> {
   const supabase = createAdminClient();
 
@@ -414,10 +426,38 @@ export async function getWebsiteForChurch(
   const slug = (data?.slug as string | null) ?? null;
   if (error || !slug) return null;
 
-  const bundle = await getSiteBundle(slug);
+  const [bundle, pages] = await Promise.all([
+    getSiteBundle(slug, path),
+    listSitePages(churchId),
+  ]);
   if (!bundle) return null;
 
-  return { ...bundle, slug };
+  return { ...bundle, slug, pages };
+}
+
+/** All pages for a church, home (`/`) first, then alphabetical by path. */
+export async function listSitePages(churchId: string): Promise<SitePageRow[]> {
+  const supabase = createAdminClient();
+
+  const { data } = await supabase
+    .from("site_pages")
+    .select("id, path, title, meta_description, status")
+    .eq("church_id", churchId)
+    .order("path", { ascending: true });
+
+  const rows = (data ?? []).map((row) => ({
+    id: row.id as string,
+    path: row.path as string,
+    title: (row.title as string | null) ?? null,
+    metaDescription: (row.meta_description as string | null) ?? null,
+    status: (row.status as "draft" | "published") ?? "draft",
+  }));
+
+  return rows.sort((a, b) => {
+    if (a.path === "/") return -1;
+    if (b.path === "/") return 1;
+    return a.path.localeCompare(b.path);
+  });
 }
 
 export type SiteDomainRow = {

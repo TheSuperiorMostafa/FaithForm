@@ -12,9 +12,9 @@ export default function WebsitePagesLoading() {
         <LiveNoteSkeleton />
 
         <p className="text-[15px] text-muted-foreground">
-          Each block below is one part of your home page, top to bottom. Choose
-          Edit to change its words and photos, move it up or down, or switch it
-          off to hide it. The preview updates after each change saves.
+          Each block below is one part of your website. Choose Edit to change
+          its words and photos, move it up or down, or switch it off to hide it.
+          The preview updates after each change saves.
         </p>
 
         <div className="flex flex-col gap-3">

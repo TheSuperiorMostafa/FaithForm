@@ -27,6 +27,15 @@ export default function WebsiteOverviewLoading() {
         </div>
       </section>
 
+      {/* Layout mode: title is static; the chosen option is data. */}
+      <section className="flex flex-col gap-4 rounded-2xl border border-border bg-card p-6 shadow-card">
+        <div className="space-y-1.5">
+          <h2 className="font-heading text-lg font-bold">How your site is laid out</h2>
+          <Skeleton className="h-5 w-full max-w-xl" />
+        </div>
+        <Skeleton className="h-12 w-72 max-w-full rounded-xl" />
+      </section>
+
       <ActionGrid>
         <ActionCard
           href="/dashboard/website/pages?edit=banner"

@@ -199,6 +199,24 @@ test("the section editor speaks plainly", () => {
   assert.doesNotMatch(form, /Emphasised words|Words after the emphasis/);
 });
 
+test("landing vs website layout uses plain words and a confirm", () => {
+  const card = read("components/website-admin/layout-mode-card.tsx");
+  assert.match(card, /One long page/);
+  assert.match(card, /Separate pages/);
+  assert.match(card, /confirmAction\(/);
+  assert.match(card, /setLayoutMode/);
+  assert.doesNotMatch(card, /layout_mode|hash|slug/);
+
+  const actions = read("app/dashboard/website/actions.ts");
+  assert.match(actions, /export async function setLayoutMode/);
+  assert.match(actions, /applySiteLayoutMode/);
+
+  assert.match(
+    read("app/sites/[slug]/[[...path]]/page.tsx"),
+    /composeWebsiteSections/,
+  );
+});
+
 test("the Church App page has no migration jargon and keeps the links contract", () => {
   const actions = read("app/dashboard/app/actions.ts");
   assert.doesNotMatch(actions, /migration 0090/);

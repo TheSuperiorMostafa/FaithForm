@@ -38,6 +38,10 @@ import {
   startKioskSession,
 } from "@/lib/attendance/v2/kiosk-session";
 import { checkinSigningStatus } from "@/lib/attendance/v2/signing";
+import {
+  getRecentSundayRecords,
+  type SundayRecordStatus,
+} from "@/lib/queries/attendance";
 
 /**
  * FaithForm's attendance administration.
@@ -122,6 +126,12 @@ export type ServicesBoardData = {
   /** Other services from the schedule (Bible study, weeknights, classes). */
   other: { upcoming: ServiceOccurrence[]; recent: ServiceOccurrence[] };
   counts: Record<string, ServiceMethodCounts>;
+  /**
+   * Weekly Sunday sheet totals keyed by local service date (`YYYY-MM-DD`).
+   * Check-in method counts (`counts`) are a different system; Recent uses this
+   * map so present/absent match the Sunday count page.
+   */
+  weeklySheets: Record<string, SundayRecordStatus>;
   /** The board could not be read. Not the same as "no services yet". */
   failed: boolean;
 };
@@ -130,6 +140,10 @@ export type ServicesBoardData = {
  * The Services board: open and upcoming services, recent ones, and for each
  * how many were counted and by which method. Counted in SQL by
  * `attendance_report`, never by loading facts.
+ *
+ * Recent also joins the weekly Sunday sheet (`attendance_records` /
+ * `attendance_entries`) by each occurrence's local service date, so present
+ * and absent match Sunday count — not only check-in roster totals.
  *
  * Services are kept in line with the schedule after every Setup change and by
  * the generation cron. If nothing is coming up at all, the board also brings
@@ -142,6 +156,7 @@ export async function getServicesBoard(): Promise<ServicesBoardData> {
     recent: [],
     other: { upcoming: [], recent: [] },
     counts: {},
+    weeklySheets: {},
     failed: false,
   };
   try {
@@ -168,18 +183,33 @@ export async function getServicesBoard(): Promise<ServicesBoardData> {
     if (all.length === 0) return { ...empty, upcoming, recent, other };
 
     const starts = all.map((occurrence) => Date.parse(occurrence.startsAtUtc));
-    const report = await getAttendanceReport({
-      churchId,
-      from: new Date(Math.min(...starts)).toISOString(),
-      // Exclusive upper bound, so one millisecond past the latest start.
-      to: new Date(Math.max(...starts) + 1).toISOString(),
-    }).catch(() => []);
+    const dates = [...new Set(all.map((occurrence) => occurrence.localServiceDate))];
+
+    const [report, sheetMap] = await Promise.all([
+      getAttendanceReport({
+        churchId,
+        from: new Date(Math.min(...starts)).toISOString(),
+        // Exclusive upper bound, so one millisecond past the latest start.
+        to: new Date(Math.max(...starts) + 1).toISOString(),
+      }).catch(() => []),
+      // Same query the Sunday count list uses — present/absent from the sheet.
+      getRecentSundayRecords(createAdminClient(), churchId, dates).catch((error) => {
+        console.error("[attendance/services] weekly sheets:", error);
+        return new Map<string, SundayRecordStatus>();
+      }),
+    ]);
 
     const counts: Record<string, ServiceMethodCounts> = {};
     for (const row of report) {
       counts[row.occurrenceId] = { counted: row.counted, bySource: row.bySource };
     }
-    return { upcoming, recent, other, counts, failed: false };
+
+    const weeklySheets: Record<string, SundayRecordStatus> = {};
+    for (const [date, status] of sheetMap) {
+      weeklySheets[date] = status;
+    }
+
+    return { upcoming, recent, other, counts, weeklySheets, failed: false };
   } catch (error) {
     console.error("[attendance/services] board:", error);
     return { ...empty, failed: true };

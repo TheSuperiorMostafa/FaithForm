@@ -143,8 +143,21 @@ export type DeskFamily = {
   children: DeskChild[];
 };
 
-/** How many family cards the desk shows before asking for more letters. */
-export const FAMILY_RESULT_LIMIT = 5;
+/**
+ * How many family cards the desk returns for one search.
+ *
+ * High enough that a common surname is scrollable rather than cut off after a
+ * handful with "type more". Soft-capped so a very short query cannot dump the
+ * whole church into the DOM.
+ */
+export const FAMILY_RESULT_LIMIT = 50;
+
+/**
+ * How many matching children to scan when building family cards. Higher than
+ * {@link FAMILY_RESULT_LIMIT} so a family with several siblings still fills
+ * the card list before the soft family cap.
+ */
+export const FAMILY_CHILD_SEARCH_LIMIT = 100;
 
 function stateFor(
   childId: string,
@@ -178,7 +191,7 @@ export function searchFamilies(
   openSessions: readonly CheckinSessionRow[],
   options: { limit?: number } = {},
 ): { families: DeskFamily[]; more: number } {
-  const result = searchRoster(index, query, { limit: 60 });
+  const result = searchRoster(index, query, { limit: FAMILY_CHILD_SEARCH_LIMIT });
   const byMember = new Map(openSessions.map((session) => [session.memberId, session]));
 
   const order: string[] = [];

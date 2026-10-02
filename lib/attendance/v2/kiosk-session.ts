@@ -63,11 +63,12 @@ export const MIN_SEARCH_LENGTH = 3;
 /**
  * And how many they may see at once.
  *
- * Small enough that a query cannot be widened into a listing, large enough that
- * a common surname still resolves. A query matching more than this returns the
- * first few and says so, rather than paginating — pagination is browsing.
+ * Soft-capped so a query cannot be widened into a full directory browse, but
+ * high enough that a common surname is scrollable rather than cut off after a
+ * handful. A query matching more than this returns the first batch and says
+ * so, rather than paginating — pagination is browsing.
  */
-export const MAX_SEARCH_RESULTS = 8;
+export const MAX_SEARCH_RESULTS = 50;
 
 export type KioskSession = {
   kioskSessionId: string;

@@ -45,6 +45,7 @@ import {
 import { getChurchAuth } from "@/lib/auth/church";
 import { isAppleEventId, isReadOnlyAppleEventId } from "@/lib/integrations/apple-calendar";
 import { listChurchCalendarEvents } from "@/lib/integrations/calendar";
+import { devSampleCalendarOn } from "@/lib/integrations/dev-sample-calendar";
 import { getIntegrationStatus } from "@/lib/integrations/tokens";
 import type { CalendarEventPreview } from "@/lib/integrations/types";
 import { getAnnouncementEmailSettings } from "@/lib/queries/announcement-email-settings";
@@ -52,6 +53,7 @@ import {
   getPublishedAnnouncements,
   type AnnouncementRow,
 } from "@/lib/queries/announcements";
+import { getChurchProfile } from "@/lib/queries/church-profile";
 import { createClient } from "@/lib/supabase/server";
 import { listEventAttendanceSettings } from "@/lib/attendance/v2/event-attendance";
 import { getChurchAttendancePolicy } from "@/lib/attendance/v2/setup";
@@ -98,22 +100,25 @@ export default async function AnnouncementsPage() {
   const week = getMondayWeekWindowInTimeZone(now, churchTimeZone);
   const { year, monthIndex, startISO, endISO } = getMonthWindowForDate(now);
 
-  const [integrationStatus, weeklyEmail, access] = await Promise.all([
+  const [integrationStatus, weeklyEmail, access, churchProfile] = await Promise.all([
     getIntegrationStatus(churchId, supabase),
     getWeeklyEmailAvailability(churchId, supabase),
     getFeatureAccess(),
+    getChurchProfile(churchId, supabase),
   ]);
   // Member App switched off for the church: every app option here is hidden.
   const appAvailable = access?.flags.member_app ?? true;
   // Announcement email switched off: Monday's email leaves the page.
   const showWeeklyEmail = !weeklyEmail.switchedOff;
   const googleConnected = integrationStatus.google.connected;
-  const appleConnected = integrationStatus.apple.connected;
+  // Local development can stand in sample events for a real calendar.
+  const appleConnected = integrationStatus.apple.connected || devSampleCalendarOn();
   const calendarConnected = googleConnected || appleConnected;
   // A calendar connected through a public iCloud link can be read, not
   // written, so it cannot take a new event.
   const canCreateEvents =
-    googleConnected || (appleConnected && !integrationStatus.apple.readOnly);
+    googleConnected ||
+    (integrationStatus.apple.connected && !integrationStatus.apple.readOnly);
   const connected = { google: googleConnected, apple: appleConnected };
 
   const settings: ComposerSettings = {
@@ -126,6 +131,11 @@ export default async function AnnouncementsPage() {
     appAvailable,
     calendarConnected,
     canCreateEvents,
+    churchName: churchProfile?.name ?? auth.churchName,
+    churchAddress: churchProfile?.address ?? null,
+    churchCity: churchProfile?.city ?? null,
+    churchState: churchProfile?.state ?? null,
+    churchZip: churchProfile?.zip ?? null,
   };
 
   // Started once and shared by the sections below, each under its own

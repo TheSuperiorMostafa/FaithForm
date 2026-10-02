@@ -278,25 +278,29 @@ export function KioskStation() {
 
           {searching ? <p className="text-slate-500">Searching…</p> : null}
 
-          {people.map((person) => {
-            const result = outcome?.memberId === person.memberId ? outcome : null;
-            return (
-              <button
-                key={person.memberId}
-                type="button"
-                onClick={() => void checkIn(person)}
-                disabled={person.alreadyCounted}
-                className="flex w-full items-center justify-between rounded-2xl border border-slate-700 bg-slate-900 px-6 py-5 text-left disabled:opacity-60"
-              >
-                <span className="text-xl">
-                  {person.firstName} {person.lastName}
-                </span>
-                <span className={result && !result.ok ? "text-amber-300" : "text-slate-400"}>
-                  {result ? result.message : person.alreadyCounted ? "Checked in" : "Check in"}
-                </span>
-              </button>
-            );
-          })}
+          {people.length > 0 ? (
+            <div className="max-h-[min(60vh,28rem)] space-y-3 overflow-y-auto">
+              {people.map((person) => {
+                const result = outcome?.memberId === person.memberId ? outcome : null;
+                return (
+                  <button
+                    key={person.memberId}
+                    type="button"
+                    onClick={() => void checkIn(person)}
+                    disabled={person.alreadyCounted}
+                    className="flex w-full items-center justify-between rounded-2xl border border-slate-700 bg-slate-900 px-6 py-5 text-left disabled:opacity-60"
+                  >
+                    <span className="text-xl">
+                      {person.firstName} {person.lastName}
+                    </span>
+                    <span className={result && !result.ok ? "text-amber-300" : "text-slate-400"}>
+                      {result ? result.message : person.alreadyCounted ? "Checked in" : "Check in"}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : null}
 
           {truncated ? (
             <p className="text-slate-400">

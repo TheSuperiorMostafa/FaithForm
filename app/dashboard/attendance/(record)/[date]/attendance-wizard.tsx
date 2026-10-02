@@ -5,7 +5,10 @@ import Link from "next/link";
 import { Check, Hash, Plus, RotateCcw, Search, Smartphone, Users } from "lucide-react";
 import { toast } from "sonner";
 
+import { Checkbox } from "@base-ui/react/checkbox";
+
 import { addMember, submitAttendance } from "./actions";
+import { FirstTimeGuestPanel } from "./first-time-guest-panel";
 import {
   clearDraft,
   draftHasWork,
@@ -31,6 +34,7 @@ import { Label } from "@/components/ui/label";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { SuccessState } from "@/components/ui/success-state";
 import { Textarea } from "@/components/ui/textarea";
+import type { FirstTimeGuest } from "@/lib/attendance/first-time-guests";
 import { describeNameCount, parseHeadcount } from "@/lib/attendance/headcount";
 import { describePresence, type PresenceMethod } from "@/lib/attendance/presence";
 import type { AttendanceMember } from "@/lib/queries/attendance";
@@ -67,6 +71,10 @@ type AttendanceWizardProps = {
   numberAllowed?: boolean;
   /** Only Follow-up holders are offered the link across. */
   canFollowUp?: boolean;
+  /** Member ids already marked as first-time guests when editing a saved Sunday. */
+  initialFirstTimeGuestIds?: string[];
+  /** Church name for welcome text defaults after save. */
+  churchName?: string;
 };
 
 type SortOption = "first-name" | "last-name" | "most-attended";
@@ -96,6 +104,8 @@ export function AttendanceWizard({
   initialHeadcount = null,
   numberAllowed = true,
   canFollowUp = false,
+  initialFirstTimeGuestIds = [],
+  churchName = "our church",
 }: AttendanceWizardProps) {
   const isCheckedIn = (memberId: string) => Boolean(checkedIn[memberId]?.length);
   const startingStatus = (memberId: string): MemberStatus =>
@@ -120,8 +130,19 @@ export function AttendanceWizard({
   const [newFirstName, setNewFirstName] = useState("");
   const [newLastName, setNewLastName] = useState("");
   const [newPhone, setNewPhone] = useState("");
+  const [newIsFirstTimeGuest, setNewIsFirstTimeGuest] = useState(false);
+  const [firstTimeGuestIds, setFirstTimeGuestIds] = useState<Set<string>>(
+    () => new Set(initialFirstTimeGuestIds),
+  );
   const [saved, setSaved] = useState<
-    { kind: "names"; present: number; absent: number } | { kind: "number"; count: number } | null
+    | {
+        kind: "names";
+        present: number;
+        absent: number;
+        firstTimeGuests: FirstTimeGuest[];
+      }
+    | { kind: "number"; count: number }
+    | null
   >(null);
 
   const [isAdding, startAddTransition] = useTransition();
@@ -141,6 +162,12 @@ export function AttendanceWizard({
           isCheckedIn(m.id) || !draft.statuses[m.id] ? m : { ...m, status: draft.statuses[m.id] },
         ),
       );
+      if (draft.pendingAdd) {
+        setNewFirstName(draft.pendingAdd.firstName);
+        setNewLastName(draft.pendingAdd.lastName);
+        setNewPhone(draft.pendingAdd.phone);
+        setNewIsFirstTimeGuest(draft.pendingAdd.isFirstTimeGuest === true);
+      }
       setRestored(true);
     }
     draftReady.current = true;
@@ -154,12 +181,29 @@ export function AttendanceWizard({
     for (const member of members) {
       if (member.status !== "unmarked" && !isCheckedIn(member.id)) statuses[member.id] = member.status;
     }
-    const draft = { mode, statuses, headcount, notes };
+    const pendingAdd = {
+      firstName: newFirstName,
+      lastName: newLastName,
+      phone: newPhone,
+      isFirstTimeGuest: newIsFirstTimeGuest,
+    };
+    const draft = { mode, statuses, headcount, notes, pendingAdd };
     if (draftHasWork(draft)) writeDraft(storageKey, draft);
     else clearDraft(storageKey);
     // `isCheckedIn` reads props that don't change while the page is open.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [members, mode, headcount, notes, saved, storageKey]);
+  }, [
+    members,
+    mode,
+    headcount,
+    notes,
+    newFirstName,
+    newLastName,
+    newPhone,
+    newIsFirstTimeGuest,
+    saved,
+    storageKey,
+  ]);
 
   const filteredMembers = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -244,6 +288,11 @@ export function AttendanceWizard({
     setMembers((prev) => prev.map((m) => ({ ...m, status: startingStatus(m.id) })));
     setHeadcount(initialHeadcount ? String(initialHeadcount) : "");
     setNotes(initialNotes);
+    setNewFirstName("");
+    setNewLastName("");
+    setNewPhone("");
+    setNewIsFirstTimeGuest(false);
+    setFirstTimeGuestIds(new Set(initialFirstTimeGuestIds));
     setRestored(false);
     clearDraft(storageKey);
   }
@@ -265,10 +314,18 @@ export function AttendanceWizard({
 
         // They came, which is why they're being added: start them as here.
         setMembers((prev) => [...prev, { ...result.member, status: "present" }]);
-        toast.success(`${result.member.first_name} added to People and marked here.`);
+        if (newIsFirstTimeGuest) {
+          setFirstTimeGuestIds((prev) => new Set(prev).add(result.member.id));
+        }
+        toast.success(
+          newIsFirstTimeGuest
+            ? `${result.member.first_name} added as a first-time guest and marked here.`
+            : `${result.member.first_name} added to People and marked here.`,
+        );
         setNewFirstName("");
         setNewLastName("");
         setNewPhone("");
+        setNewIsFirstTimeGuest(false);
         setAddOpen(false);
       } catch {
         setAddError("We couldn't add them. Check your connection and try again.");
@@ -327,6 +384,7 @@ export function AttendanceWizard({
         const entries = members.map((m) => ({
           memberId: m.id,
           status: (m.status === "present" ? "present" : "absent") as "present" | "absent",
+          isFirstTimeGuest: firstTimeGuestIds.has(m.id),
         }));
 
         const result = await submitAttendance({ serviceDate, entries, notes, editing });
@@ -336,8 +394,17 @@ export function AttendanceWizard({
           return;
         }
 
+        const firstTimeGuests: FirstTimeGuest[] = members
+          .filter((m) => firstTimeGuestIds.has(m.id))
+          .map((m) => ({
+            memberId: m.id,
+            firstName: m.first_name,
+            lastName: m.last_name,
+            phone: m.phone,
+          }));
+
         clearDraft(storageKey);
-        setSaved({ kind: "names", present, absent });
+        setSaved({ kind: "names", present, absent, firstTimeGuests });
       } catch {
         setSubmitError("We couldn't save attendance. Your marks are still on this page. Try again.");
       }
@@ -349,6 +416,7 @@ export function AttendanceWizard({
       saved.kind === "number"
         ? `${dayLabel}: ${people(saved.count)} came.`
         : `${dayLabel}: ${describeNameCount(saved.present, saved.absent)}.`;
+    const hasGuests = saved.kind === "names" && saved.firstTimeGuests.length > 0;
     return (
       <div className="flex w-full flex-col gap-8">
         <SuccessState
@@ -368,14 +436,27 @@ export function AttendanceWizard({
                 href="/dashboard/attendance"
                 className={buttonVariants({
                   size: "lg",
-                  variant: canFollowUp && saved.kind === "names" && saved.absent > 0 ? "outline" : "default",
+                  variant:
+                    canFollowUp && saved.kind === "names" && saved.absent > 0
+                      ? "outline"
+                      : hasGuests
+                        ? "outline"
+                        : "default",
                 })}
               >
                 Back to Sunday count
               </Link>
             </>
           }
-        />
+        >
+          {hasGuests ? (
+            <FirstTimeGuestPanel
+              serviceDate={serviceDate}
+              guests={saved.firstTimeGuests}
+              churchName={churchName}
+            />
+          ) : null}
+        </SuccessState>
       </div>
     );
   }
@@ -588,6 +669,8 @@ export function AttendanceWizard({
                           <Smartphone className="size-4 shrink-0" aria-hidden />
                           {describePresence(checkInMethods)}
                         </span>
+                      ) : firstTimeGuestIds.has(member.id) ? (
+                        <span className="text-sm font-medium text-accent">First time guest</span>
                       ) : member.status === "unmarked" ? (
                         <span className="text-sm text-muted-foreground">Not marked yet</span>
                       ) : null}
@@ -733,6 +816,30 @@ export function AttendanceWizard({
                 className="min-h-12 rounded-[10px] border-[1.5px] border-border bg-background px-4 text-base focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               />
             </div>
+
+            <label
+              className={cn(
+                "flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border px-4 py-3",
+                newIsFirstTimeGuest ? "border-accent bg-accent/[0.06]" : "border-border",
+              )}
+            >
+              <Checkbox.Root
+                checked={newIsFirstTimeGuest}
+                onCheckedChange={(checked) => setNewIsFirstTimeGuest(checked === true)}
+                id="new-first-time-guest"
+                className="flex size-7 shrink-0 items-center justify-center rounded-lg border-2 border-input bg-background data-[checked]:border-accent data-[checked]:bg-accent"
+              >
+                <Checkbox.Indicator className="text-accent-foreground">
+                  <Check className="size-5" strokeWidth={2} />
+                </Checkbox.Indicator>
+              </Checkbox.Root>
+              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span className="text-base font-semibold text-foreground">First time guest</span>
+                <span className="text-[15px] text-muted-foreground">
+                  So you can tell the pastor and send a welcome text after you save.
+                </span>
+              </span>
+            </label>
 
             {addError ? (
               <p className="text-base text-destructive" role="alert">

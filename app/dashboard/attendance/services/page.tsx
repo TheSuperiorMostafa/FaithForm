@@ -34,6 +34,7 @@ export default async function ServicesPage() {
           recent={board.recent}
           other={board.other}
           counts={board.counts}
+          weeklySheets={board.weeklySheets}
           isAdmin={auth.isAdmin}
           appEnabled={Boolean(access?.flags.member_app)}
         />
