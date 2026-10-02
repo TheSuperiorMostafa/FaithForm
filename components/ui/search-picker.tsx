@@ -47,7 +47,7 @@ export function SearchPicker({
   placeholder = "Start typing a name…",
   name,
   emptyText = "No one matches that name.",
-  maxResults = 8,
+  maxResults = 100,
   className,
   showAllWhenEmpty = false,
   autoFocus = false,
@@ -61,6 +61,7 @@ export function SearchPicker({
   placeholder?: string;
   name?: string;
   emptyText?: string;
+  /** Soft cap for DOM size; the list scrolls so callers can see the full batch. */
   maxResults?: number;
   className?: string;
   /** Show the first results before anything is typed. */
@@ -182,7 +183,12 @@ export function SearchPicker({
               {emptyText}
             </p>
           ) : (
-            <ul id={listId} role="listbox" aria-multiselectable={multiple} className="divide-y divide-border">
+            <ul
+              id={listId}
+              role="listbox"
+              aria-multiselectable={multiple}
+              className="max-h-72 divide-y divide-border overflow-y-auto"
+            >
               {shown.map((item, index) => {
                 const isChosen = value.includes(item.id);
                 return (

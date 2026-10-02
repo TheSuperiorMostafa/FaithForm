@@ -12,7 +12,19 @@ export const PICKUP_INPUT_LABEL = "Scan the QR code or type the 6-digit code";
 
 export const ROOMS_TITLE = "Rooms";
 export const ROOMS_DESCRIPTION =
-  "Who is in each room right now, and how many children each room can hold.";
+  "See who is in each room, move children, and watch today's check-ins and pickups.";
+
+export const ACTIVE_NOW_TITLE = "Active now";
+export const ACTIVE_NOW_DESCRIPTION =
+  "Open a room to move a child, mark someone as arrived, or undo a recent check-in.";
+
+export const ACTIVITY_TITLE = "Today's activity";
+export const ACTIVITY_DESCRIPTION =
+  "Check-ins and pickups from this service, newest first. Releases without a pickup code are highlighted.";
+
+export const ROOM_SETTINGS_TITLE = "Room settings";
+export const ROOM_SETTINGS_DESCRIPTION =
+  "Add rooms, change how many children each holds, or close a room. Most Sundays you won't need this.";
 
 export const REPORTS_TITLE = "Children in each room, week by week";
 export const REPORTS_DESCRIPTION =

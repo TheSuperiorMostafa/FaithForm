@@ -54,10 +54,13 @@ export default async function AttendanceDatePage({ params, searchParams }: PageP
     notFound();
   }
 
-  const [existing, presence] = await Promise.all([
+  const [existing, presence, churchRow] = await Promise.all([
     getRecordByDate(supabase, churchId, date),
     getPresenceOnDate(supabase, churchId, date),
+    supabase.from("churches").select("name").eq("id", churchId).maybeSingle(),
   ]);
+  const churchName =
+    ((churchRow.data?.name as string | undefined) ?? "").trim() || "our church";
 
   // Everyone the app, a code, the kiosk, the Services roster or a room already
   // counted this day. They came, whatever the sheet says or has yet to say.
@@ -89,6 +92,9 @@ export default async function AttendanceDatePage({ params, searchParams }: PageP
     // names. Saved by name: names only, so nobody's mark is lost.
     const countedByNumber = existing.entries.length === 0;
     const access = await getFeatureAccess(supabase);
+    const firstTimeGuestIds = existing.entries
+      .filter((entry) => entry.is_first_time_guest && entry.member)
+      .map((entry) => entry.member!.id);
 
     return (
       <AttendanceWizard
@@ -101,6 +107,8 @@ export default async function AttendanceDatePage({ params, searchParams }: PageP
         initialHeadcount={countedByNumber ? existing.record.total_present : null}
         numberAllowed={countedByNumber}
         canFollowUp={access?.allowed.includes("attendance_follow_up") ?? false}
+        initialFirstTimeGuestIds={firstTimeGuestIds}
+        churchName={churchName}
         editing
       />
     );
@@ -144,6 +152,7 @@ export default async function AttendanceDatePage({ params, searchParams }: PageP
         serviceDate={date}
         canFollowUp={access?.allowed.includes("attendance_follow_up") ?? false}
         checkedInElsewhere={checkedInElsewhere}
+        churchName={churchName}
       />
     );
   }
@@ -165,6 +174,7 @@ export default async function AttendanceDatePage({ params, searchParams }: PageP
       members={[...members, ...unlisted.values()]}
       checkedIn={Object.fromEntries(checkedIn)}
       canFollowUp={access?.allowed.includes("attendance_follow_up") ?? false}
+      churchName={churchName}
     />
   );
 }

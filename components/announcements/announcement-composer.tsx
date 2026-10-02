@@ -69,12 +69,14 @@ import type { TakenDownAnnouncement } from "@/lib/announcements/standalone";
 import { hasLeftAppFeed } from "@/lib/faithform/feed-window";
 import type { CalendarEventPreview } from "@/lib/integrations/types";
 import { formatDateTimeRange } from "@/lib/queries/announcements";
+import { formatAddressLine } from "@/lib/queries/giving";
 import { downscaleForUpload } from "@/lib/sites/downscale-image";
 import {
   toDateInputValue,
   toDatetimeLocalValue,
 } from "@/lib/utils/announcement-placeholders";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -94,6 +96,13 @@ export type ComposerSettings = {
   calendarConnected: boolean;
   /** A calendar FaithForm can add events to (not a read-only iCloud link). */
   canCreateEvents: boolean;
+  /** Church name for the "Add church" location fill. */
+  churchName: string | null;
+  /** Street / city / state / zip from Church info. */
+  churchAddress: string | null;
+  churchCity: string | null;
+  churchState: string | null;
+  churchZip: string | null;
 };
 
 export type ComposerMode =
@@ -498,6 +507,24 @@ export function AnnouncementComposer({
   const hasTime = Boolean(values.startTime.trim()) && dated && !calendar?.allDay;
 
   const facebookOnPage = Boolean(already?.facebook.published);
+
+  const churchAddressLine = formatAddressLine({
+    address: settings.churchAddress,
+    city: settings.churchCity,
+    state: settings.churchState,
+    zip: settings.churchZip,
+  });
+  const churchLocationFill = [settings.churchName?.trim(), churchAddressLine]
+    .filter(Boolean)
+    .join(", ");
+
+  const fillChurchLocation = () => {
+    if (!churchAddressLine) {
+      toast.error("Add your church address in Settings first, then you can put it here.");
+      return;
+    }
+    setDetail("location", churchLocationFill);
+  };
   const facebookNew = values.facebookOn && settings.facebookConnected && !facebookOnPage;
   const appAlready = Boolean(already?.app.published);
   const emailAlready = Boolean(already?.weeklyEmail.published);
@@ -970,7 +997,7 @@ export function AnnouncementComposer({
       }}
     >
       <DialogContent
-        className="max-h-[calc(100%-2rem)] max-w-5xl"
+        className="max-h-[calc(100dvh-2rem)] max-w-5xl overflow-hidden"
         aria-labelledby="announcement-composer-title"
         // Outside click, Escape and the X all come here. The composer decides
         // itself, asking first when there is work to lose.
@@ -979,7 +1006,7 @@ export function AnnouncementComposer({
           return false;
         }}
       >
-        <DialogHeader className="pr-14">
+        <DialogHeader className="shrink-0 pr-14">
           <DialogTitle id="announcement-composer-title">{outcome ? outcome.title : heading}</DialogTitle>
           {!outcome && (
             <DialogDescription className="text-base">
@@ -1036,7 +1063,9 @@ export function AnnouncementComposer({
           </div>
         ) : (
           <>
-            <div className="min-h-0 flex-1 overflow-y-auto">
+            {/* Use a content-based flex basis: Safari can collapse flex-1 to
+                zero inside an auto-height dialog capped only by max-height. */}
+            <div className="min-h-0 flex-auto overflow-y-auto">
               <div className="grid gap-8 px-6 py-6 lg:grid-cols-[minmax(0,1fr)_320px]">
                 <div className="flex min-w-0 flex-col gap-8">
                   {restoredDraft && (
@@ -1160,12 +1189,28 @@ export function AnnouncementComposer({
                           <Label htmlFor="composer-location" className="text-[15px]">
                             Where <span className="font-normal text-muted-foreground">(optional)</span>
                           </Label>
-                          <Input
-                            id="composer-location"
-                            value={values.location}
-                            onChange={(e) => setDetail("location", e.target.value)}
-                            placeholder="e.g. Fellowship Hall"
-                          />
+                          <div className="flex items-center gap-2">
+                            <Input
+                              id="composer-location"
+                              value={values.location}
+                              onChange={(e) => setDetail("location", e.target.value)}
+                              placeholder="e.g. Fellowship Hall"
+                              className="min-w-0 flex-1"
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              disabled={!churchAddressLine}
+                              onClick={fillChurchLocation}
+                              title={
+                                churchAddressLine
+                                  ? "Fill in your church name and address"
+                                  : "Add your church address in Settings first"
+                              }
+                            >
+                              Add church
+                            </Button>
+                          </div>
                         </div>
                         {mode.kind === "new" && settings.canCreateEvents && settings.isAdmin && (
                           <CheckRow
@@ -1408,7 +1453,7 @@ export function AnnouncementComposer({
               </div>
             </div>
 
-            <div className="flex flex-col gap-3 border-t border-border px-6 py-4">
+            <div className="flex shrink-0 flex-col gap-3 border-t border-border px-6 py-4">
               {error && (
                 <p
                   role="alert"

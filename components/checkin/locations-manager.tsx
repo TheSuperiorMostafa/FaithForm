@@ -12,6 +12,10 @@ import {
   setDefaultAdultLocation,
   updateLocation,
 } from "@/app/dashboard/checkin/actions";
+import {
+  ROOM_SETTINGS_DESCRIPTION,
+  ROOM_SETTINGS_TITLE,
+} from "@/components/checkin/copy";
 import { Button } from "@/components/ui/button";
 import { AdvancedSection } from "@/components/ui/advanced-section";
 import { Card } from "@/components/ui/card";
@@ -19,11 +23,8 @@ import { confirmAction } from "@/components/ui/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { SectionHeader } from "@/components/ui/page-header";
 import { Select } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { ROOMS_DESCRIPTION, ROOMS_TITLE } from "@/components/checkin/copy";
-import { joinNames, occupancyLabel } from "@/lib/checkin/desk";
 import type { ChurchLocation } from "@/types/checkin";
 
 type ActionResultLike = { ok: boolean; error?: string };
@@ -80,19 +81,15 @@ function RoomFields({
 }
 
 /**
- * Rooms, as big cards: who is in each one now, how many it holds, and plain
- * buttons to change it. Nothing is preset: "Nursery" and "Middle School
- * Overflow Room" are the same kind of thing, typed in here, and a new room
- * can be chosen at the desk the moment it is saved.
+ * Room settings only: add, edit, open/close, capacity. The live roster and
+ * activity live above this on the Rooms page — pastors should not need to
+ * open settings on a normal Sunday.
  */
 export function LocationsManager({
   locations,
-  occupancy = {},
   isAdmin,
 }: {
   locations: ChurchLocation[];
-  /** room id → the people checked in there right now. */
-  occupancy?: Record<string, string[]>;
   isAdmin: boolean;
 }) {
   const [pending, startTransition] = useTransition();
@@ -155,7 +152,6 @@ export function LocationsManager({
     }
 
     if (!check.data.canDelete) {
-      // A room with history can't be deleted; closing it is what people want.
       const close = await confirmAction({
         title: `${location.name} can't be deleted`,
         description: `It has ${check.data.sessions} check-in${check.data.sessions === 1 ? "" : "s"} on record${
@@ -184,77 +180,82 @@ export function LocationsManager({
   }
 
   const adultRoom = locations.find((location) => location.isDefaultAdultLocation);
+  // Open when there are no rooms yet so an admin is not hunting for "Add a room".
+  const forceOpen = isAdmin && locations.length === 0;
+
+  if (!isAdmin && locations.length === 0) {
+    return (
+      <EmptyState
+        title="No rooms yet"
+        description="A church admin needs to add the rooms children go to."
+      />
+    );
+  }
+
+  if (!isAdmin) return null;
 
   return (
-    <div className="flex w-full flex-col gap-6">
-      <SectionHeader
-        title={ROOMS_TITLE}
-        description={ROOMS_DESCRIPTION}
-        action={
-          isAdmin && !adding ? (
+    <AdvancedSection
+      title={ROOM_SETTINGS_TITLE}
+      description={ROOM_SETTINGS_DESCRIPTION}
+      defaultOpen={forceOpen}
+      forceOpen={forceOpen}
+    >
+      <div className="flex flex-col gap-5">
+        {!adding && (
+          <div>
             <Button type="button" size="lg" onClick={() => setAdding(true)}>
               <Plus aria-hidden />
               Add a room
             </Button>
-          ) : undefined
-        }
-      />
+          </div>
+        )}
 
-      {isAdmin && adding && (
-        <Card className="p-6">
-          <form
-            className="flex flex-col gap-5"
-            onSubmit={(event) => {
-              event.preventDefault();
-              const form = event.currentTarget;
-              const formData = new FormData(form);
-              const name = String(formData.get("name") ?? "").trim();
-              run(() => createLocation(formData), `${name || "Room"} added.`, () => {
-                form.reset();
-                setAdding(false);
-              });
-            }}
-          >
-            <h3 className="font-heading text-xl font-bold text-foreground">Add a room</h3>
-            <RoomFields idPrefix="new-room" />
-            <div className="flex flex-wrap gap-3">
-              <Button type="submit" size="lg" disabled={pending}>
-                Add room
-              </Button>
-              <Button type="button" variant="ghost" size="lg" onClick={() => setAdding(false)}>
-                Cancel
-              </Button>
-            </div>
-          </form>
-        </Card>
-      )}
+        {adding && (
+          <Card className="p-6">
+            <form
+              className="flex flex-col gap-5"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const form = event.currentTarget;
+                const formData = new FormData(form);
+                const name = String(formData.get("name") ?? "").trim();
+                run(() => createLocation(formData), `${name || "Room"} added.`, () => {
+                  form.reset();
+                  setAdding(false);
+                });
+              }}
+            >
+              <h3 className="font-heading text-xl font-bold text-foreground">Add a room</h3>
+              <RoomFields idPrefix="new-room" />
+              <div className="flex flex-wrap gap-3">
+                <Button type="submit" size="lg" disabled={pending}>
+                  Add room
+                </Button>
+                <Button type="button" variant="ghost" size="lg" onClick={() => setAdding(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </Card>
+        )}
 
-      {locations.length === 0 ? (
-        <EmptyState
-          title="No rooms yet"
-          description={
-            isAdmin
-              ? "Add the rooms children go to, like Nursery, Preschool or Elementary."
-              : "A church admin needs to add the rooms children go to."
-          }
-          action={
-            isAdmin && !adding ? (
-              <Button type="button" size="lg" onClick={() => setAdding(true)}>
-                <Plus aria-hidden />
-                Add a room
-              </Button>
-            ) : undefined
-          }
-        />
-      ) : (
-        // Three to a row and short cards, so a church with ten rooms isn't
-        // scrolling a long page. Ordering and deleting live inside Edit room.
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {locations.map((location, index) => {
-            const here = occupancy[location.id] ?? [];
-            const full = location.capacity != null && here.length >= location.capacity;
-
-            return (
+        {locations.length === 0 ? (
+          <EmptyState
+            title="No rooms yet"
+            description="Add the rooms children go to, like Nursery, Preschool or Elementary."
+            action={
+              !adding ? (
+                <Button type="button" size="lg" onClick={() => setAdding(true)}>
+                  <Plus aria-hidden />
+                  Add a room
+                </Button>
+              ) : undefined
+            }
+          />
+        ) : (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {locations.map((location, index) => (
               <Card
                 key={location.id}
                 className={
@@ -327,26 +328,21 @@ export function LocationsManager({
                         )}
                       </div>
                       {location.isActive ? (
-                        <StatusBadge tone={full ? "attention" : "ready"}>
-                          {full ? "Full" : "Open"}
-                        </StatusBadge>
+                        <StatusBadge tone="ready">Open</StatusBadge>
                       ) : (
                         <StatusBadge tone="neutral">Closed</StatusBadge>
                       )}
                     </div>
 
-                    <div>
-                      <p className="text-[15px] font-semibold text-foreground">
-                        {occupancyLabel(here.length, location.capacity)}
-                      </p>
-                      <p className="line-clamp-1 text-sm text-muted-foreground">
-                        {here.length > 0 ? joinNames(here) : "Nobody is in this room right now."}
-                      </p>
-                    </div>
+                    <p className="text-[15px] text-muted-foreground">
+                      {location.capacity != null
+                        ? `Room for ${location.capacity}`
+                        : "No capacity set"}
+                    </p>
                   </>
                 )}
 
-                {isAdmin && editing !== location.id && (
+                {editing !== location.id && (
                   <div className="mt-auto flex flex-wrap gap-2 border-t border-border pt-3">
                     <Button type="button" variant="outline" onClick={() => setEditing(location.id)}>
                       <Pencil aria-hidden />
@@ -364,17 +360,12 @@ export function LocationsManager({
                   </div>
                 )}
               </Card>
-            );
-          })}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
 
-      {isAdmin && locations.length > 0 && (
-        <AdvancedSection
-          title="More options"
-          description="Rarely needed. The order above is the order rooms appear at the desk."
-        >
-          <div className="flex flex-col gap-3">
+        {locations.length > 0 && (
+          <div className="flex flex-col gap-3 border-t border-border pt-5">
             <Label htmlFor="adult-room" className="text-[15px] font-semibold">
               Room for adults
             </Label>
@@ -407,8 +398,8 @@ export function LocationsManager({
               ))}
             </Select>
           </div>
-        </AdvancedSection>
-      )}
-    </div>
+        )}
+      </div>
+    </AdvancedSection>
   );
 }

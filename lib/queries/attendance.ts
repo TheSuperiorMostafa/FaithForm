@@ -24,6 +24,8 @@ export type AttendanceEntryWithMember = {
   follow_up_sent_at: string | null;
   follow_up_error: string | null;
   follow_up_sms_id: string | null;
+  /** Marked as a first-time guest for this Sunday (migration 0111). */
+  is_first_time_guest: boolean;
   member: AttendanceMember | null;
 };
 
@@ -210,7 +212,8 @@ export async function getRecordByDate(
       follow_up_requested,
       follow_up_sent_at,
       follow_up_error,
-      follow_up_sms_id,${MEMBER_COLUMNS}
+      follow_up_sms_id,
+      is_first_time_guest,${MEMBER_COLUMNS}
     `;
 
   // Delivery tracking arrived in migration 0014. A database that never got it
@@ -233,6 +236,18 @@ export async function getRecordByDate(
   let deliveryTrackingAvailable = true;
   let { data: entries, error: entriesError } = await loadEntries(ENTRY_COLUMNS);
 
+  if (entriesError && /is_first_time_guest/i.test(entriesError.message)) {
+    // Migration 0111 not applied yet — load without the guest flag.
+    ({ data: entries, error: entriesError } = await loadEntries(`
+      id,
+      status,
+      follow_up_requested,
+      follow_up_sent_at,
+      follow_up_error,
+      follow_up_sms_id,${MEMBER_COLUMNS}
+    `));
+  }
+
   if (entriesError && /follow_up_(sent_at|error|sms_id)/i.test(entriesError.message)) {
     console.warn(
       "getRecordByDate: follow-up delivery columns are missing — run `pnpm db:attendance-follow-up`.",
@@ -254,6 +269,7 @@ export async function getRecordByDate(
     follow_up_sent_at?: string | null;
     follow_up_error?: string | null;
     follow_up_sms_id?: string | null;
+    is_first_time_guest?: boolean | null;
     member: AttendanceMember | AttendanceMember[] | null;
   };
 
@@ -274,6 +290,7 @@ export async function getRecordByDate(
         follow_up_sent_at: entry.follow_up_sent_at ?? null,
         follow_up_error: entry.follow_up_error ?? null,
         follow_up_sms_id: entry.follow_up_sms_id ?? null,
+        is_first_time_guest: entry.is_first_time_guest === true,
         member,
       };
     },

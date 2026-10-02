@@ -15,7 +15,12 @@ import {
 import type { ChurchProfile } from "@/types/church-profile";
 import { normalizeSiteImage } from "@/lib/security/validate-image";
 import { getAspect, type ImageAspectKey } from "@/lib/sites/image-aspects";
+import { applySiteLayoutMode } from "@/lib/sites/apply-layout-mode";
 import { generateSite } from "@/lib/sites/generate";
+import {
+  isSiteLayoutMode,
+  type SiteLayoutMode,
+} from "@/lib/sites/layout-mode";
 import { SECTION_REGISTRY } from "@/lib/sites/registry";
 import {
   diffPatch,
@@ -77,6 +82,8 @@ function refresh() {
   revalidatePath("/dashboard/website/details");
   revalidatePath("/dashboard/website/sermons");
   revalidatePath("/dashboard/website/inbox");
+  // Public church sites (landing + any /about, /visit, … pages).
+  revalidatePath("/sites", "layout");
 }
 
 /** Confirms a row belongs to this church before it is written to. */
@@ -151,6 +158,7 @@ export async function createWebsite(
       church_id: auth.churchId,
       theme_key: themeKey,
       is_published: false,
+      layout_mode: "landing",
       contact_email: profile.email,
     },
     { onConflict: "church_id" },
@@ -458,6 +466,51 @@ export async function saveDesign(
 
   if (error) {
     return fail(toUserError(error, "Those design settings could not be saved."));
+  }
+
+  refresh();
+  return ok;
+}
+
+// ---------------------------------------------------------------------------
+// LAYOUT MODE  (one long page vs separate pages)
+// ---------------------------------------------------------------------------
+
+/**
+ * Switches between landing (hash scroll) and website (separate paths).
+ *
+ * Website mode seeds `/about`, `/visit`, etc. from the home page's sections and
+ * rewrites menu links to paths. Landing mode moves those sections back onto
+ * `/` and restores hash links. Existing churches stay on landing until they
+ * choose otherwise.
+ */
+export async function setLayoutMode(
+  mode: SiteLayoutMode,
+): Promise<ActionResult> {
+  const auth = await guardAdmin();
+  if (!auth.ok) return fail(auth.error);
+
+  if (!isSiteLayoutMode(mode)) {
+    return fail("That website layout is not available.");
+  }
+
+  const profile = await buildSiteProfile(auth.churchId);
+  if (!profile) return fail("Your church profile could not be loaded.");
+
+  const result = await applySiteLayoutMode({
+    supabase: createAdminClient(),
+    churchId: auth.churchId,
+    mode,
+    profile,
+  });
+
+  if (!result.ok) {
+    return fail(
+      toUserError(
+        new Error(result.error),
+        "We couldn't change how your website is laid out.",
+      ),
+    );
   }
 
   refresh();

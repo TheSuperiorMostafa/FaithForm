@@ -148,6 +148,9 @@ test("staff see how each person was counted, in words and not by colour alone", 
   // Per-service totals by method come from the SQL aggregate, not from facts.
   const actions = read("app/dashboard/attendance/services/actions.ts");
   assert.match(exported(actions, "getServicesBoard"), /getAttendanceReport\(\{/);
+  // Weekly sheet present/absent joins by local service date for Recent.
+  assert.match(exported(actions, "getServicesBoard"), /getRecentSundayRecords\(/);
+  assert.match(exported(actions, "getServicesBoard"), /weeklySheets/);
 });
 
 // ---------------------------------------------------------------------------

@@ -26,8 +26,11 @@ import {
   markRosterPresent,
   type ServiceMethodCounts,
 } from "@/app/dashboard/attendance/services/actions";
+import { describeNameCount } from "@/lib/attendance/headcount";
 import type { ServiceOccurrence } from "@/lib/attendance/v2/occurrences";
+import { isSundayDate } from "@/lib/attendance/v2/sunday-worship";
 import type { RosterEntry } from "@/lib/attendance/v2/roster";
+import type { SundayRecordStatus } from "@/lib/queries/attendance";
 import { CheckinDisplayPanel } from "@/components/attendance/checkin-display-panel";
 import { serviceStatus } from "@/components/attendance/service-status";
 import { AdvancedSection } from "@/components/ui/advanced-section";
@@ -151,11 +154,47 @@ function people(n: number) {
   return `${n} ${n === 1 ? "person" : "people"}`;
 }
 
+/** Present/absent from the weekly Sunday sheet — same wording as Sunday count. */
+function weeklySheetLine(sheet: SundayRecordStatus): string {
+  if (!sheet.byName) return `${sheet.totalPresent} here`;
+  return sheet.totalAbsent > 0
+    ? describeNameCount(sheet.totalPresent, sheet.totalAbsent)
+    : `${sheet.totalPresent} here`;
+}
+
+/**
+ * Subtitle for a service row: weekly sheet present/absent first when saved;
+ * Recent Sundays without a sheet say so plainly; check-in totals stay as a
+ * secondary hint when useful.
+ */
+function occurrenceSubtitle(
+  occurrence: ServiceOccurrence,
+  sheet: SundayRecordStatus | undefined,
+  checkinCounted: number,
+  section: "upcoming" | "recent" | "other",
+): string {
+  const when = formatWhen(occurrence);
+  const campus = occurrence.campusName ? ` · ${occurrence.campusName}` : "";
+  const checkin =
+    checkinCounted > 0 ? ` · ${checkinCounted} checked in` : "";
+
+  if (sheet) {
+    return `${when}${campus} · ${weeklySheetLine(sheet)}${checkin}`;
+  }
+
+  if (section === "recent" && isSundayDate(occurrence.localServiceDate)) {
+    return `${when}${campus} · Sunday count not started${checkin}`;
+  }
+
+  return `${when}${campus}${checkinCounted > 0 ? ` · ${checkinCounted} here` : ""}`;
+}
+
 export function ServiceOccurrencesBoard({
   upcoming,
   recent,
   other,
   counts,
+  weeklySheets,
   isAdmin,
   appEnabled,
 }: {
@@ -163,6 +202,7 @@ export function ServiceOccurrencesBoard({
   recent: ServiceOccurrence[];
   other: { upcoming: ServiceOccurrence[]; recent: ServiceOccurrence[] };
   counts: Record<string, ServiceMethodCounts>;
+  weeklySheets: Record<string, SundayRecordStatus>;
   isAdmin: boolean;
   appEnabled: boolean;
 }) {
@@ -398,10 +438,22 @@ export function ServiceOccurrencesBoard({
     });
   };
 
-  const renderRow = (occurrence: ServiceOccurrence) => {
+  const renderRow = (
+    occurrence: ServiceOccurrence,
+    section: "upcoming" | "recent" | "other",
+  ) => {
     const summary = counts[occurrence.id];
+    const sheet = weeklySheets[occurrence.localServiceDate];
     const status = serviceStatus(occurrence, now);
     const isSelected = selected?.id === occurrence.id;
+    const subtitle = occurrenceSubtitle(occurrence, sheet, summary?.counted ?? 0, section);
+    const sheetAria = sheet
+      ? `, ${weeklySheetLine(sheet)}`
+      : section === "recent" && isSundayDate(occurrence.localServiceDate)
+        ? ", Sunday count not started"
+        : summary && summary.counted > 0
+          ? `, ${summary.counted} here`
+          : "";
     return (
       <ListRow
         key={occurrence.id}
@@ -425,15 +477,9 @@ export function ServiceOccurrencesBoard({
           </span>
         }
         title={occurrence.label}
-        subtitle={
-          <>
-            {formatWhen(occurrence)}
-            {occurrence.campusName ? ` · ${occurrence.campusName}` : ""}
-            {summary && summary.counted > 0 ? ` · ${summary.counted} here` : ""}
-          </>
-        }
+        subtitle={subtitle}
         status={<StatusBadge tone={status.tone}>{status.label}</StatusBadge>}
-        aria-label={`${occurrence.label}, ${formatWhen(occurrence)}, ${status.label}${summary && summary.counted > 0 ? `, ${summary.counted} here` : ""}. Open to see who came.`}
+        aria-label={`${occurrence.label}, ${formatWhen(occurrence)}, ${status.label}${sheetAria}. Open to see who came.`}
       />
     );
   };
@@ -458,6 +504,8 @@ export function ServiceOccurrencesBoard({
 
   const selectedStatus = selected ? serviceStatus(selected, now) : null;
   const cancelled = selected?.status === "cancelled";
+  const selectedSheet = selected ? weeklySheets[selected.localServiceDate] : undefined;
+  const selectedIsSunday = selected ? isSundayDate(selected.localServiceDate) : false;
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:items-start">
@@ -467,7 +515,7 @@ export function ServiceOccurrencesBoard({
             <h2 id="services-upcoming" className="font-heading text-xl font-bold text-foreground">
               Open and coming up
             </h2>
-            <List>{upcoming.map(renderRow)}</List>
+            <List>{upcoming.map((occurrence) => renderRow(occurrence, "upcoming"))}</List>
           </section>
         )}
 
@@ -476,7 +524,7 @@ export function ServiceOccurrencesBoard({
             <h2 id="services-recent" className="font-heading text-xl font-bold text-foreground">
               Recent
             </h2>
-            <List>{recent.map(renderRow)}</List>
+            <List>{recent.map((occurrence) => renderRow(occurrence, "recent"))}</List>
           </section>
         )}
 
@@ -490,7 +538,10 @@ export function ServiceOccurrencesBoard({
                 Bible study, weeknight services and classes. Open one to mark who came.
               </p>
             </div>
-            <List>{[...other.upcoming, ...other.recent].map(renderRow)}</List>
+            <List>
+              {other.upcoming.map((occurrence) => renderRow(occurrence, "other"))}
+              {other.recent.map((occurrence) => renderRow(occurrence, "other"))}
+            </List>
           </section>
         )}
       </div>
@@ -537,6 +588,49 @@ export function ServiceOccurrencesBoard({
                 ) : null}
               </p>
             </div>
+
+            {selectedIsSunday ? (
+              <div className="flex flex-col gap-3 rounded-xl border border-border bg-muted/40 p-4">
+                {selectedSheet ? (
+                  <>
+                    <div className="flex flex-col gap-1">
+                      <p className="text-base font-semibold text-foreground">
+                        Sunday count: {weeklySheetLine(selectedSheet)}
+                      </p>
+                      <p className="text-[15px] text-muted-foreground">
+                        {selectedSheet.byName
+                          ? "From the weekly attendance sheet — names and who was not here."
+                          : "From the weekly attendance sheet — counted as a number, without names."}
+                      </p>
+                    </div>
+                    <Link
+                      href={`/dashboard/attendance/${selected.localServiceDate}`}
+                      className={buttonVariants({ variant: "outline" })}
+                    >
+                      Open Sunday count
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex flex-col gap-1">
+                      <p className="text-base font-semibold text-foreground">
+                        Sunday count not started
+                      </p>
+                      <p className="text-[15px] text-muted-foreground">
+                        Check-ins below are who already checked in. Count everyone on the Sunday
+                        sheet when you are ready.
+                      </p>
+                    </div>
+                    <Link
+                      href={`/dashboard/attendance/${selected.localServiceDate}`}
+                      className={buttonVariants({ size: "lg" })}
+                    >
+                      Count who came
+                    </Link>
+                  </>
+                )}
+              </div>
+            ) : null}
 
             <div className="flex flex-wrap gap-2">
               <Button

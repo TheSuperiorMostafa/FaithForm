@@ -60,10 +60,14 @@ export type RosterSearchResult<T extends RosterSearchChild = RosterSearchChild> 
 };
 
 /**
- * How many rows the list shows. Enough for a family of siblings, few enough to
- * read at a glance; anything past it is a count and a nudge to keep typing.
+ * How many matching children a roster search returns.
+ *
+ * High enough that volunteers can scroll through a common name instead of
+ * being cut off after a handful. Soft-capped so a short query cannot dump the
+ * whole roster into the UI; anything past it is a count and a nudge to keep
+ * typing.
  */
-export const ROSTER_SEARCH_LIMIT = 8;
+export const ROSTER_SEARCH_LIMIT = 50;
 
 // ---------------------------------------------------------------------------
 // Folding

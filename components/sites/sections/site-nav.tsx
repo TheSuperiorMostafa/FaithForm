@@ -7,10 +7,15 @@ import { Action } from "../primitives";
 import { SiteNavMenu } from "./site-nav-menu";
 
 function SiteNav({ content, ctx }: SectionComponentProps<NavContent>) {
+  // Website mode uses path links (`/about`); the masthead should take visitors
+  // home rather than to a hash on the current page.
+  const usesPages = content.links.some((link) => link.href.startsWith("/"));
+  const brandHref = usesPages ? "/" : `#${ctx.anchor}`;
+
   return (
     <nav id={ctx.anchor} className={cn("site-nav", !content.sticky && "site-nav-static")}>
       <div className="site-nav-inner">
-        <a href={`#${ctx.anchor}`} className="site-nav-brand">
+        <a href={brandHref} className="site-nav-brand">
           {content.logo?.src ? (
             // eslint-disable-next-line @next/next/no-img-element -- church-supplied URL
             <img
