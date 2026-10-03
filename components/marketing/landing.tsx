@@ -84,21 +84,6 @@ export function MarketingLanding({ hero }: { hero: ReactNode }) {
           </div>
         </section>
 
-        <section id="the-app" className="marketing-member-app" aria-labelledby="marketing-app-title">
-          <div className="marketing-container marketing-member-app-grid">
-            <div className="marketing-member-app-copy">
-              <span className="marketing-eyebrow">A little extra for your people</span>
-              <h2 id="marketing-app-title">The dashboard is for you.<br /><em>The iPhone app is for them.</em></h2>
-              <p>Your church can use FaithForm Connect to see updates, join groups, watch services, and check in. You run the week from the web dashboard; they stay connected from their phones in your own church app</p>
-              <div className="marketing-member-app-actions"><a className="marketing-button marketing-button-gold" href={marketingConfig.appStore} target="_blank" rel="noopener noreferrer">FaithForm Connect on the App Store <ArrowUpRight size={18} aria-hidden="true" /></a><span>For iPhone · Android coming later</span></div>
-            </div>
-            <div className="marketing-member-app-art">
-              <div className="marketing-member-phone" aria-hidden="true"><div className="marketing-member-phone-notch" /><Image src="/faithform-logo.png" width={84} height={84} alt="" /><strong>FaithForm<br />Connect</strong><span>For your churchgoers</span></div>
-              <div className="marketing-member-qr"><Image src={marketingConfig.appStoreQr} width={116} height={116} alt="QR code to open FaithForm Connect on the App Store" /><span>SCAN WITH IPHONE</span></div>
-            </div>
-          </div>
-        </section>
-
         <section className="marketing-team" aria-labelledby="marketing-team-title">
           <div className="marketing-container marketing-team-grid">
             <div><span className="marketing-eyebrow">Built around your church</span><h2 id="marketing-team-title">Not a platform.<br /><em>A team that builds for you.</em></h2></div>

@@ -19,7 +19,6 @@ export function MarketingNav() {
         <div className="marketing-nav-links">
           <a href="#how-it-works">The Dashboard</a>
           <a href="#mission">Our Mission</a>
-          <a href="#the-app">Your Church App</a>
         </div>
         <div className="marketing-nav-actions">
           <Link className="marketing-sign-in" href={marketingConfig.signIn}>Sign In</Link>
@@ -32,7 +31,6 @@ export function MarketingNav() {
       <div id="marketing-mobile-menu" className={`marketing-mobile-menu ${open ? "is-open" : ""}`} inert={!open}>
         <a href="#how-it-works" onClick={() => setOpen(false)}>The Dashboard</a>
         <a href="#mission" onClick={() => setOpen(false)}>Our Mission</a>
-        <a href="#the-app" onClick={() => setOpen(false)}>Your Church App</a>
         <Link href={marketingConfig.signIn} onClick={() => setOpen(false)}>Sign In</Link>
         <a className="marketing-mobile-cta" href={contactHref} onClick={() => setOpen(false)}>Let&apos;s talk <ArrowUpRight size={18} aria-hidden="true" /></a>
       </div>
