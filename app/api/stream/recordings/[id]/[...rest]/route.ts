@@ -6,6 +6,7 @@ import {
   recordingPlaylistResponse,
 } from "@/lib/stream/recording-delivery";
 import { verifyRecordingPlaybackToken } from "@/lib/stream/recording-playback";
+import { webRecordingFileResponse } from "@/lib/stream/web-recording-file";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -65,6 +66,13 @@ export async function GET(
       { error: "Unauthorized" },
       { status: 401, headers: { "Cache-Control": "no-store" } },
     );
+  }
+
+  if (media.length === 1 && media[0] === "file.mp4") {
+    if (capability.audience !== "public") {
+      return NextResponse.json({ error: "Unavailable" }, { status: 403 });
+    }
+    return webRecordingFileResponse({ request, churchId: capability.churchId, recordingId: id });
   }
 
   if (capability.audience === "public" && !(await publiclyVisible(capability.churchId, id))) {

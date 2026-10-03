@@ -1,3 +1,5 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 import { createAdminClient } from "@/lib/supabase/admin";
 import { syncChurchOccurrences } from "@/lib/attendance/v2/occurrences";
 
@@ -18,6 +20,9 @@ const GENERATION_PERIOD_MS = 10 * 60 * 1000;
 
 export type GenerationResult = {
   churchesProcessed: number;
+  churchesFailed: number;
+  churchesTimedOut: number;
+  churchesDeferred: number;
   occurrencesCreated: number;
   occurrencesSkipped: number;
   occurrencesRefreshed: number;
@@ -63,52 +68,76 @@ export function rotationSlice(
 export async function runOccurrenceGeneration(options?: {
   limit?: number;
   now?: Date;
+  client?: SupabaseClient;
+  signal?: AbortSignal;
 }): Promise<GenerationResult> {
-  const admin = createAdminClient();
+  const signal = options?.signal ?? AbortSignal.timeout(90_000);
+  const admin = options?.client ?? createAdminClient({ signal });
   const now = options?.now ?? new Date();
   const batch = Math.min(options?.limit ?? CHURCH_BATCH, 100);
 
-  const { count } = await admin
+  const { count, error: countError } = await admin
     .from("churches")
     .select("id", { count: "exact", head: true });
 
-  const slice = rotationSlice(count ?? 0, batch, now);
+  if (countError || count === null) throw new Error("Attendance church count failed");
+  const slice = rotationSlice(count, batch, now);
 
-  const { data: churches } =
+  const { data: churches, error: churchError } =
     slice.to < slice.from
-      ? { data: [] }
+      ? { data: [], error: null }
       : await admin
           .from("churches")
           .select("id")
           .order("id", { ascending: true })
           .range(slice.from, slice.to);
 
+  if (churchError || !churches) throw new Error("Attendance church list failed");
+
+  // Rotate within each batch on successive visits too. If four slow churches
+  // exhaust a run, the remaining churches must get the first slots next time.
+  const batchVisits = Math.floor(
+    Math.floor(now.getTime() / GENERATION_PERIOD_MS) / Math.max(1, Math.ceil(count / batch)),
+  );
+  const start = churches.length > 0 ? batchVisits % churches.length : 0;
+  const orderedChurches = [...churches.slice(start), ...churches.slice(0, start)];
+
   const result: GenerationResult = {
     churchesProcessed: 0,
+    churchesFailed: 0,
+    churchesTimedOut: 0,
+    churchesDeferred: 0,
     occurrencesCreated: 0,
     occurrencesSkipped: 0,
     occurrencesRefreshed: 0,
     occurrencesRetired: 0,
   };
 
-  for (const church of (churches ?? []) as { id: string }[]) {
-    try {
-      const synced = await syncChurchOccurrences(church.id, {
-        client: admin,
-        now,
-        horizonDays: HORIZON_DAYS,
-      });
-      result.occurrencesCreated += synced.created;
-      result.occurrencesSkipped += synced.skipped;
-      result.occurrencesRefreshed += synced.refreshed;
-      result.occurrencesRetired += synced.retired;
-      result.churchesProcessed += 1;
-    } catch {
-      // One church's bad schedule must not stop the rest. The failure is
-      // visible as a lower processed count rather than as a logged exception
-      // that might carry a row.
+  let next = 0;
+  // Four churches begin together; a slow church cannot consume every later
+  // church's entire invocation. The rotating batch remains the fairness bound.
+  await Promise.all(Array.from({ length: Math.min(4, churches.length) }, async () => {
+    while (next < churches.length && !signal.aborted) {
+      const church = orderedChurches[next++];
+      try {
+        const synced = await syncChurchOccurrences(church.id, {
+          client: admin,
+          now,
+          horizonDays: HORIZON_DAYS,
+        });
+        result.occurrencesCreated += synced.created;
+        result.occurrencesSkipped += synced.skipped;
+        result.occurrencesRefreshed += synced.refreshed;
+        result.occurrencesRetired += synced.retired;
+        result.churchesProcessed += 1;
+      } catch {
+        // Isolate each church, but report failures without private driver details.
+        result.churchesFailed += 1;
+        if (signal.aborted) result.churchesTimedOut += 1;
+      }
     }
-  }
+  }));
+  result.churchesDeferred = churches.length - next;
 
   return result;
 }
@@ -121,11 +150,15 @@ export type LifecycleResult = { activated: number; completed: number };
  * Separate from generation because it runs far more often and touches far fewer
  * rows. Both updates are set-based and bounded by the window index.
  */
-export async function runOccurrenceLifecycle(now = new Date()): Promise<LifecycleResult> {
-  const admin = createAdminClient();
+export async function runOccurrenceLifecycle(
+  now = new Date(),
+  client?: SupabaseClient,
+  signal = AbortSignal.timeout(90_000),
+): Promise<LifecycleResult> {
+  const admin = client ?? createAdminClient({ signal });
   const iso = now.toISOString();
 
-  const { data: activated } = await admin
+  const { data: activated, error: activationError } = await admin
     .from("service_occurrences")
     .update({ status: "active", updated_at: iso })
     .eq("status", "scheduled")
@@ -133,12 +166,14 @@ export async function runOccurrenceLifecycle(now = new Date()): Promise<Lifecycl
     .gt("checkin_closes_at_utc", iso)
     .select("id");
 
-  const { data: completed } = await admin
+  const { data: completed, error: completionError } = await admin
     .from("service_occurrences")
     .update({ status: "completed", updated_at: iso })
     .in("status", ["scheduled", "active"])
     .lte("checkin_closes_at_utc", iso)
     .select("id");
+
+  if (activationError || completionError) throw new Error("Attendance lifecycle update failed");
 
   return {
     activated: (activated ?? []).length,
@@ -166,18 +201,21 @@ export type CleanupResult = {
 export async function runAttendanceCleanup(options?: {
   now?: Date;
   limit?: number;
+  client?: SupabaseClient;
+  signal?: AbortSignal;
 }): Promise<CleanupResult> {
-  const admin = createAdminClient();
+  const admin = options?.client ?? createAdminClient({ signal: options?.signal ?? AbortSignal.timeout(45_000) });
   const iso = (options?.now ?? new Date()).toISOString();
   const limit = Math.min(options?.limit ?? 500, 2000);
 
-  const { data: expired } = await admin
+  const { data: expired, error: evidenceReadError } = await admin
     .from("attendance_attempts")
     .select("id")
     .not("precise_evidence", "is", null)
     .lte("evidence_expires_at", iso)
     .limit(limit);
 
+  if (evidenceReadError) throw new Error("Attendance evidence cleanup read failed");
   const ids = ((expired ?? []) as { id: string }[]).map((row) => row.id);
   let evidencePurged = 0;
 
@@ -186,45 +224,52 @@ export async function runAttendanceCleanup(options?: {
       .from("attendance_attempts")
       .update({ precise_evidence: null, evidence_expires_at: null })
       .in("id", ids);
-    if (!error) evidencePurged = ids.length;
+    if (error) throw new Error("Attendance evidence purge failed");
+    evidencePurged = ids.length;
   }
 
   // An attempt that stalled awaiting dwell is expired once its window closed;
   // it must not sit pending forever waiting for a confirmation that will never
   // arrive.
-  const { data: stale } = await admin
+  const { data: stale, error: staleReadError } = await admin
     .from("attendance_attempts")
     .select("id, service_occurrences!inner(checkin_closes_at_utc)")
     .eq("status", "pending_confirmation")
     .lt("service_occurrences.checkin_closes_at_utc", iso)
     .limit(limit);
 
+  if (staleReadError) throw new Error("Attendance stalled attempts read failed");
   const staleIds = ((stale ?? []) as { id: string }[]).map((row) => row.id);
   let attemptsExpired = 0;
 
   if (staleIds.length > 0) {
-    const { error } = await admin
+    const { data: expiredAttempts, error } = await admin
       .from("attendance_attempts")
       .update({ status: "expired", result_reason: "too_late" })
-      .in("id", staleIds);
-    if (!error) attemptsExpired = staleIds.length;
+      .in("id", staleIds)
+      .eq("status", "pending_confirmation")
+      .select("id");
+    if (error) throw new Error("Attendance stalled attempts expiration failed");
+    attemptsExpired = (expiredAttempts ?? []).length;
   }
 
   // Detections: the server-side record that an account arrived at a campus,
   // kept only to measure dwell. Useless once expired (two hours after opening),
   // and 0058 indexed them for a purge that nothing ran until now. The attempt
   // and the fact are the audit; the detection is not.
-  const { data: detectionsRemoved } = await admin.rpc(
+  const { data: detectionsRemoved, error: detectionError } = await admin.rpc(
     "purge_expired_attendance_detections",
     { p_now: iso, p_limit: limit * 10 },
   );
+  if (detectionError) throw new Error("Attendance detection purge failed");
 
   // Rotating codes, spent pairings and scan records past their retention. The
   // function has existed since 0059 and was never scheduled, so scan records
   // were being kept indefinitely instead of for ninety days.
-  const { data: artifacts } = await admin.rpc("purge_attendance_checkin_artifacts", {
+  const { data: artifacts, error: artifactError } = await admin.rpc("purge_attendance_checkin_artifacts", {
     p_now: iso,
   });
+  if (artifactError) throw new Error("Attendance check-in artifact purge failed");
   const artifactRow = ((artifacts ?? []) as Record<string, unknown>[])[0];
 
   return {
@@ -241,11 +286,15 @@ export async function runAttendanceCleanup(options?: {
 export type KioskCleanupResult = { revoked: number };
 
 /** Disables kiosk credentials past their expiry. */
-export async function runKioskCleanup(now = new Date()): Promise<KioskCleanupResult> {
-  const admin = createAdminClient();
+export async function runKioskCleanup(
+  now = new Date(),
+  client?: SupabaseClient,
+  signal = AbortSignal.timeout(45_000),
+): Promise<KioskCleanupResult> {
+  const admin = client ?? createAdminClient({ signal });
   const iso = now.toISOString();
 
-  const { data } = await admin
+  const { data, error } = await admin
     .from("attendance_kiosk_credentials")
     .update({
       is_enabled: false,
@@ -259,5 +308,6 @@ export async function runKioskCleanup(now = new Date()): Promise<KioskCleanupRes
     .lte("expires_at", iso)
     .select("id");
 
+  if (error) throw new Error("Attendance kiosk cleanup failed");
   return { revoked: (data ?? []).length };
 }

@@ -95,6 +95,7 @@ try {
       "tests/database/tenant-isolation.test.ts",
       "tests/database/messaging-sync-claim.test.ts",
       "tests/database/recurring-cancellation-jobs.test.ts",
+      "tests/database/announcement-takedown-atomic.test.ts",
     ],
     {
       stdio: "inherit",

@@ -6,7 +6,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { logActivity } from "@/lib/activity/log";
 import { calendarEditFor } from "@/lib/announcements/calendar-edit";
-import { omitMissingOptionalTakedownColumn } from "@/lib/announcements/takedown-fallback";
 import {
   checkFacebookScheduleTime,
   suggestFacebookSchedule,
@@ -906,47 +905,14 @@ export async function unsubmitAnnouncement(
     }
   }
 
-  const rewind = {
-    status: "pending" as const,
-    is_ready: false,
-    push_to_team: false,
-    push_to_facebook: false,
-    published_at: null,
-    last_publish_error: null,
-    // Keep the post id only when the live post survives, so the UI can still
-    // link to it and a later re-submit does not create a duplicate reference.
-    facebook_post_id: facebookStillLive ? facebookPostId : null,
-    facebook_scheduled_publish_time: null,
-    unsubmitted_at: new Date().toISOString(),
-    unsubmitted_by: ctx.user.id,
-  };
-
-  // Save the recoverable state before withdrawing the app publication. If a
-  // required column is missing, the app publication is left in place and the
-  // user gets an error.
-  // Only omit the specific optional column named by PostgREST; never omit the
-  // timestamp that makes Post again possible.
-  let patch: Partial<typeof rewind> = rewind;
-  let { data: updated, error } = await ctx.supabase
-    .from("announcements")
-    .update(patch)
-    .eq("id", id)
-    .eq("church_id", ctx.churchId)
-    .select("id")
-    .maybeSingle();
-
-  while (error) {
-    const retry = omitMissingOptionalTakedownColumn(patch, error.message);
-    if (!retry) break;
-    patch = retry;
-    ({ data: updated, error } = await ctx.supabase
-      .from("announcements")
-      .update(patch)
-      .eq("id", id)
-      .eq("church_id", ctx.churchId)
-      .select("id")
-      .maybeSingle());
-  }
+  // The queue and recoverable publication state must change in one transaction.
+  // A missing RPC or queue-delete error leaves both unchanged and fails visibly.
+  const { data: updated, error } = await createAdminClient().rpc("take_down_announcement", {
+    p_church_id: ctx.churchId,
+    p_announcement_id: id,
+    p_actor_user_id: auth.userId,
+    p_facebook_still_live: facebookStillLive,
+  });
 
   if (error) {
     return { error: toUserError(error, "We couldn't take this announcement down") };

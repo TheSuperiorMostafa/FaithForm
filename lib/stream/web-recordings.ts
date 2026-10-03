@@ -1,4 +1,5 @@
-import { STREAM_RECORDINGS_BUCKET } from "@/lib/stream/recording-storage";
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 import {
   recordingPlaylistPath,
   signRecordingPlaybackToken,
@@ -61,9 +62,10 @@ export async function listWebRecordings(slug: string, limit = 12): Promise<WebRe
 export async function getWebRecording(
   slug: string,
   recordingId: string,
+  client?: SupabaseClient,
 ): Promise<{ recording: WebRecording; playback: { kind: "hls" | "progressive"; url: string } | null } | null> {
   if (!/^[0-9a-f-]{36}$/i.test(recordingId)) return null;
-  const admin = createAdminClient();
+  const admin = client ?? createAdminClient();
   const { data, error } = await admin.rpc("web_recordings", {
     p_church_slug: slug,
     p_recording_id: recordingId,
@@ -86,12 +88,17 @@ export async function getWebRecording(
     };
   }
 
-  // A legacy single file keeps its signed URL, but only once it is published.
-  const { data: signed } = await admin.storage
-    .from(STREAM_RECORDINGS_BUCKET)
-    .createSignedUrl(row.storage_path as string, 60 * 60 * 4);
+  // Keep storage credentials inside the server. Every subsequent range request
+  // must recheck publication, including after a church takes this file down.
+  const token = signRecordingPlaybackToken({
+    churchId: recording.churchId,
+    recordingId: recording.id,
+    audience: "public",
+  });
   return {
     recording,
-    playback: signed?.signedUrl ? { kind: "progressive", url: signed.signedUrl } : null,
+    playback: token
+      ? { kind: "progressive", url: `/api/stream/recordings/${recording.id}/${token}/file.mp4` }
+      : null,
   };
 }

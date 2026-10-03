@@ -17,6 +17,7 @@ import {
  * produce the same end state.
  */
 export const dynamic = "force-dynamic";
+export const maxDuration = 120;
 
 export async function GET(request: Request) {
   const provided =
@@ -27,12 +28,22 @@ export async function GET(request: Request) {
   }
 
   const startedAt = Date.now();
-  const lifecycle = await runOccurrenceLifecycle();
-  const generation = await runOccurrenceGeneration();
+  const signal = AbortSignal.timeout(90_000);
+  const [lifecycle, generation] = await Promise.allSettled([
+    runOccurrenceLifecycle(new Date(), undefined, signal),
+    runOccurrenceGeneration({ signal }),
+  ]);
+  if (lifecycle.status === "rejected" || generation.status === "rejected") {
+    return NextResponse.json(
+      { ok: false, error: "Attendance maintenance failed. Retry the job." },
+      { status: 500, headers: { "Cache-Control": "no-store" } },
+    );
+  }
+  const failed = generation.value.churchesFailed > 0 || generation.value.churchesDeferred > 0;
 
   // Counts only. No church name, no schedule, no attendance.
   return NextResponse.json(
-    { ok: true, durationMs: Date.now() - startedAt, ...generation, ...lifecycle },
-    { headers: { "Cache-Control": "no-store" } },
+    { ok: !failed, durationMs: Date.now() - startedAt, ...generation.value, ...lifecycle.value },
+    { status: failed ? 500 : 200, headers: { "Cache-Control": "no-store" } },
   );
 }

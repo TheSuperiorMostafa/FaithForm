@@ -150,6 +150,13 @@ Reference: [Stripe Connect webhooks](https://docs.stripe.com/connect/webhooks).
    cancellation retry counts; provider failures stay queued until they succeed.
    Reverting application code must leave this queue and its pending jobs intact.
 
+   Apply `0130_atomic_announcement_takedown.sql` before deploying the updated
+   announcement action. It makes taking down an announcement and removing its
+   explicit weekly-email queue entry one transaction. The server-only function
+   verifies the actor administers the church; a missing migration or database
+   error leaves the announcement and queue unchanged. Existing mailbox drafts
+   remain snapshots and must still be checked before sending.
+
 ### Google & Facebook setup (announcements)
 
 1. **Google Cloud Console**
@@ -386,6 +393,19 @@ endpoint reports API reachability/version only; it does not query the database
 or establish worker/provider health. Minute/hour cron expressions require a
 hosting plan that supports them; see
 [Vercel cron restrictions](https://vercel.com/docs/cron-jobs/manage-cron-jobs).
+
+Attendance generation declares a 120-second function limit, starts up to four
+churches concurrently, and bounds its HTTP work to 90 seconds. Cleanup bounds
+its HTTP work to 45 seconds within a 60-second function limit. Failed or
+unfinished maintenance returns a non-success response so monitoring can detect
+it. Aborting HTTP requests does not prove the database statement was canceled;
+the idempotent next run reconciles the result.
+
+New public file-recording URLs use the application playback proxy. It rechecks
+publication and object identity for each range request, so taking down a
+recording blocks subsequent requests. Storage URLs issued by older application
+versions remain usable until their original expiry (up to four hours); already
+downloaded or buffered bytes cannot be revoked.
 
 ---
 

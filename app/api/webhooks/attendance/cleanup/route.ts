@@ -11,6 +11,7 @@ import { runAttendanceCleanup, runKioskCleanup } from "@/lib/attendance/v2/jobs"
  * exists to answer a support question and is emptied on the policy's schedule.
  */
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 export async function GET(request: Request) {
   const provided =
@@ -21,11 +22,20 @@ export async function GET(request: Request) {
   }
 
   const startedAt = Date.now();
-  const cleanup = await runAttendanceCleanup();
-  const kiosk = await runKioskCleanup();
+  const signal = AbortSignal.timeout(45_000);
+  const [cleanup, kiosk] = await Promise.allSettled([
+    runAttendanceCleanup({ signal }),
+    runKioskCleanup(new Date(), undefined, signal),
+  ]);
+  if (cleanup.status === "rejected" || kiosk.status === "rejected") {
+    return NextResponse.json(
+      { ok: false, error: "Attendance cleanup failed. Retry the job." },
+      { status: 500, headers: { "Cache-Control": "no-store" } },
+    );
+  }
 
   return NextResponse.json(
-    { ok: true, durationMs: Date.now() - startedAt, ...cleanup, kioskRevoked: kiosk.revoked },
+    { ok: true, durationMs: Date.now() - startedAt, ...cleanup.value, kioskRevoked: kiosk.value.revoked },
     { headers: { "Cache-Control": "no-store" } },
   );
 }
