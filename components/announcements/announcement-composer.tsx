@@ -69,7 +69,7 @@ import type { TakenDownAnnouncement } from "@/lib/announcements/standalone";
 import { hasLeftAppFeed } from "@/lib/faithform/feed-window";
 import type { CalendarEventPreview } from "@/lib/integrations/types";
 import { formatDateTimeRange } from "@/lib/queries/announcements";
-import { formatAddressLine } from "@/lib/queries/giving";
+import { formatAddressLine } from "@/lib/utils/address";
 import { downscaleForUpload } from "@/lib/sites/downscale-image";
 import {
   toDateInputValue,

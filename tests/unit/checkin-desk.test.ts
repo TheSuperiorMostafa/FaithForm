@@ -204,7 +204,7 @@ test("family search returns a scrollable batch, not a handful cut off at five", 
 });
 
 test("the desk search results panel scrolls when many families match", () => {
-  assert.match(desk, /max-h-\[min\(70vh,48rem\)\].*overflow-y-auto/s);
+  assert.match(desk, /max-h-\[min\(70vh,48rem\)\][\s\S]*overflow-y-auto/);
 });
 
 // ---------------------------------------------------------------------------

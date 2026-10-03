@@ -1,3 +1,5 @@
+import { formatAddressLine } from "@/lib/utils/address";
+export { formatAddressLine } from "@/lib/utils/address";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { startOfWeek } from "@/lib/giving/periods";
@@ -1066,16 +1068,4 @@ export async function getChurchAddressLine(
     state: data.state as string | null,
     zip: data.zip as string | null,
   });
-}
-
-export function formatAddressLine(parts: {
-  address?: string | null;
-  city?: string | null;
-  state?: string | null;
-  zip?: string | null;
-}): string {
-  const street = parts.address?.trim() ?? "";
-  const city = parts.city?.trim() ?? "";
-  const stateZip = [parts.state?.trim(), parts.zip?.trim()].filter(Boolean).join(" ");
-  return [street, city, stateZip].filter(Boolean).join(", ");
 }

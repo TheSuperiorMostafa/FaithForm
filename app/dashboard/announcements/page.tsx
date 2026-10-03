@@ -45,7 +45,6 @@ import {
 import { getChurchAuth } from "@/lib/auth/church";
 import { isAppleEventId, isReadOnlyAppleEventId } from "@/lib/integrations/apple-calendar";
 import { listChurchCalendarEvents } from "@/lib/integrations/calendar";
-import { devSampleCalendarOn } from "@/lib/integrations/dev-sample-calendar";
 import { getIntegrationStatus } from "@/lib/integrations/tokens";
 import type { CalendarEventPreview } from "@/lib/integrations/types";
 import { getAnnouncementEmailSettings } from "@/lib/queries/announcement-email-settings";
@@ -111,8 +110,7 @@ export default async function AnnouncementsPage() {
   // Announcement email switched off: Monday's email leaves the page.
   const showWeeklyEmail = !weeklyEmail.switchedOff;
   const googleConnected = integrationStatus.google.connected;
-  // Local development can stand in sample events for a real calendar.
-  const appleConnected = integrationStatus.apple.connected || devSampleCalendarOn();
+  const appleConnected = integrationStatus.apple.connected;
   const calendarConnected = googleConnected || appleConnected;
   // A calendar connected through a public iCloud link can be read, not
   // written, so it cannot take a new event.
