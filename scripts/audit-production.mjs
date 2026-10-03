@@ -33,10 +33,11 @@ try {
 const audit = spawnSync("pnpm", ["audit", "--prod", "--json"], {
   encoding: "utf8",
   maxBuffer: 20 * 1024 * 1024,
+  timeout: 60_000,
 });
 
-if (audit.error) {
-  console.error("Production dependency audit could not start.");
+if (audit.error || audit.signal || ![0, 1].includes(audit.status)) {
+  console.error("Production dependency audit did not complete.");
   process.exit(1);
 }
 
@@ -51,6 +52,24 @@ try {
   report = JSON.parse(audit.stdout.slice(jsonStart));
 } catch {
   console.error("Production dependency audit returned malformed JSON.");
+  process.exit(1);
+}
+
+// Registry/network errors can be valid JSON too. Missing advisory data must
+// never be interpreted as a clean dependency report.
+if (
+  report.error ||
+  !report.advisories ||
+  typeof report.advisories !== "object" ||
+  Array.isArray(report.advisories) ||
+  !report.metadata?.vulnerabilities ||
+  typeof report.metadata.vulnerabilities !== "object" ||
+  !["low", "moderate", "high", "critical"].every((severity) =>
+    Number.isInteger(report.metadata.vulnerabilities[severity]) &&
+    report.metadata.vulnerabilities[severity] >= 0,
+  )
+) {
+  console.error("Production dependency audit returned an incomplete or failed report.");
   process.exit(1);
 }
 

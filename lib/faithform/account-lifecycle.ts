@@ -1,6 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { VisitorError } from "@/lib/faithform/errors";
-import { bumpAuthorizationVersion, requireActiveAccount, getVisitorAccount } from "@/lib/faithform/account";
+import { requireActiveAccount, getVisitorAccount } from "@/lib/faithform/account";
 import { accountRequestSchema } from "@/lib/faithform/schemas";
 import { retireInstallationsForAccount } from "@/lib/faithform/push/installations";
 
@@ -45,19 +45,20 @@ function mapRequest(row: Record<string, unknown>): AccountRequest {
 export async function requestAccountAction(
   userId: string,
   input: unknown,
+  dependencies = { getVisitorAccount, createAdminClient, retireInstallationsForAccount },
 ): Promise<AccountRequest> {
   const parsed = accountRequestSchema.safeParse(input);
   if (!parsed.success) {
     throw new VisitorError("invalid_input", "Check your request.");
   }
 
-  const account = await getVisitorAccount(userId);
+  const account = await dependencies.getVisitorAccount(userId);
   if (!account) throw new VisitorError("account_missing", "No visitor account.");
   if (account.status === "deleted") {
     throw new VisitorError("account_inactive", "This account is already deleted.");
   }
 
-  const admin = createAdminClient();
+  const admin = dependencies.createAdminClient();
 
   const existing = await admin
     .from("visitor_account_requests")
@@ -67,53 +68,68 @@ export async function requestAccountAction(
     .eq("idempotency_key", parsed.data.idempotencyKey)
     .maybeSingle();
 
-  if (existing.data) return mapRequest(existing.data);
+  let request = existing.data;
 
-  const { data, error } = await admin
-    .from("visitor_account_requests")
-    .insert({
-      account_id: account.id,
-      kind: parsed.data.kind,
-      idempotency_key: parsed.data.idempotencyKey,
-      status: "pending",
-    })
-    .select(REQUEST_COLUMNS)
-    .maybeSingle();
-
-  if (error || !data) {
-    // Either the same key raced, or one of this kind is already open. Both
-    // mean "your request is already in hand", so return it rather than error.
-    const open = await admin
+  if (!request) {
+    const inserted = await admin
       .from("visitor_account_requests")
+      .insert({
+        account_id: account.id,
+        kind: parsed.data.kind,
+        idempotency_key: parsed.data.idempotencyKey,
+        status: "pending",
+      })
       .select(REQUEST_COLUMNS)
-      .eq("account_id", account.id)
-      .eq("kind", parsed.data.kind)
-      .in("status", ["pending", "processing"])
       .maybeSingle();
+    request = inserted.data;
 
-    if (open.data) return mapRequest(open.data);
-    throw new VisitorError("unavailable", "Could not record your request.");
+    if (inserted.error || !request) {
+      // Another device may have recorded this request first. Its unfinished
+      // deletion steps still need to run; returning its row alone is not enough.
+      const open = await admin
+        .from("visitor_account_requests")
+        .select(REQUEST_COLUMNS)
+        .eq("account_id", account.id)
+        .eq("kind", parsed.data.kind)
+        .in("status", ["pending", "processing"])
+        .maybeSingle();
+      if (open.error || !open.data) {
+        throw new VisitorError("unavailable", "Could not record your request.");
+      }
+      request = open.data;
+    }
   }
 
-  if (parsed.data.kind === "deletion") {
-    await admin
+  if (parsed.data.kind === "deletion" &&
+      (request.status === "pending" || request.status === "processing")) {
+    // Set status and invalidate cached authorization in one checked write.
+    // This also repairs requests whose earlier attempt stopped after insertion.
+    // Repeating the bump is safe; never overwrite an already deleted account.
+    const { data, error } = await admin
       .from("visitor_accounts")
       .update({
         status: "deletion_requested",
-        deletion_requested_at: new Date().toISOString(),
+        ...(account.status !== "deletion_requested"
+          ? { deletion_requested_at: new Date().toISOString() }
+          : {}),
+        authorization_version: account.authorizationVersion + 1,
+        updated_at: new Date().toISOString(),
       })
-      .eq("id", account.id);
-    await bumpAuthorizationVersion(account.id, admin);
+      .eq("id", account.id)
+      .neq("status", "deleted")
+      .eq("authorization_version", account.authorizationVersion)
+      .select("id")
+      .maybeSingle();
+    if (error || !data) {
+      throw new VisitorError("unavailable", "Could not finish your deletion request. Try again.");
+    }
 
-    // /account-deletion says the account stops working right away, and the
-    // deletion itself waits for the next cron run. The notification worker
-    // resolves recipients from relationships and live devices, not from
-    // account status, so without this a deleted-in-waiting account would keep
-    // receiving a church's announcements until then.
-    await retireInstallationsForAccount(account.id, "account_deleted");
+    // Notification retirement is critical too. If it fails, a retry with the
+    // same key must finish it before the app reports that deletion was accepted.
+    await dependencies.retireInstallationsForAccount(account.id, "account_deleted", admin);
   }
 
-  return mapRequest(data);
+  return mapRequest(request);
 }
 
 export type VisitorExport = {

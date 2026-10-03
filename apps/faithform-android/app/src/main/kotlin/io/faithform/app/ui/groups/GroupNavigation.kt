@@ -20,7 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
-import androidx.compose.material3.Button
+import io.faithform.app.ui.components.FaithFormButton as Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -46,6 +46,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import io.faithform.app.contract.GroupDetail
 import io.faithform.app.contract.GroupSummary
+import io.faithform.app.ui.brand.rememberReducedMotion
 import io.faithform.app.design.FaithFormTokens
 import io.faithform.app.design.LocalFaithFormTheme
 import kotlinx.coroutines.CancellationException
@@ -130,13 +131,13 @@ private fun decodeGroupRoute(value: String): GroupRoute {
 /** Slides a pushed screen in from the trailing edge, and back out on a pop. */
 @OptIn(ExperimentalAnimationApi::class)
 @Composable fun GroupStack(stack: List<GroupRoute>, popping: Boolean, content: @Composable (GroupRoute) -> Unit) {
-    val duration = LocalFaithFormTheme.current.durationMillis(FaithFormTokens.Motion.STANDARD_MS)
+    val duration = if (rememberReducedMotion()) 0 else FaithFormTokens.Motion.STANDARD_MS
     AnimatedContent(
         targetState = stack.last(),
         transitionSpec = {
             val direction = if (popping) -1 else 1
-            (slideInHorizontally(tween(duration)) { width -> direction * width } + fadeIn(tween(duration)))
-                .togetherWith(slideOutHorizontally(tween(duration)) { width -> -direction * width / 4 } + fadeOut(tween(duration)))
+            (slideInHorizontally(tween(duration)) { width -> direction * width / 10 } + fadeIn(tween(duration)))
+                .togetherWith(slideOutHorizontally(tween(duration)) { width -> -direction * width / 20 } + fadeOut(tween(duration)))
         },
         label = "group-stack",
     ) { route -> content(route) }

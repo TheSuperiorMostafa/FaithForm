@@ -10,6 +10,19 @@ const files = readdirSync(directory)
 
 const failures = [];
 const knownLegacyDuplicatePrefixes = new Set(["0003", "0010", "0011", "0019"]);
+// These collisions already exist on main. Preserve their filenames and bytes:
+// deployed ledgers may identify each migration by filename. Do not permit a
+// new migration or an edit to hide behind an existing duplicate prefix.
+const reviewedDuplicateFiles = new Map([
+  ["0111", new Map([
+    ["0111_announcement_status_view_invoker.sql", "3fe873db9c686eff73d8b54444aa4b51a17dc5e2081fe87d93e3bb72593da9de"],
+    ["0111_attendance_first_time_guest.sql", "639cfead87526c9c9a2793ee36dc942ef567bad37935fa3534470b0ed03bb34d"],
+  ])],
+  ["0112", new Map([
+    ["0112_platform_admin_aggregates.sql", "14d5799e3980827011c87665083704ca9d82089b06733c4add7ecddadd6a0c46"],
+    ["0112_site_layout_mode.sql", "dce5dd53db4b5a08e7bf115bff775f1c2342d70aa3ed226cb63c1a0db112bf27"],
+  ])],
+]);
 const grouped = new Map();
 for (const file of files) {
   const prefix = file.slice(0, 4);
@@ -17,6 +30,13 @@ for (const file of files) {
 }
 
 for (const [prefix, samePrefixFiles] of grouped) {
+  const reviewed = reviewedDuplicateFiles.get(prefix);
+  if (reviewed) {
+    if (samePrefixFiles.length !== reviewed.size || samePrefixFiles.some((file) =>
+      createHash("sha256").update(readFileSync(join(directory, file))).digest("hex") !== reviewed.get(file)
+    )) failures.push(`existing duplicate migration history changed for ${prefix}`);
+    continue;
+  }
   if (samePrefixFiles.length > 1 && !knownLegacyDuplicatePrefixes.has(prefix)) {
     failures.push(`new duplicate migration prefix ${prefix}`);
   }
@@ -225,5 +245,5 @@ console.log(
   `Verified the additive ${securityFile} after ${files.length - 1} legacy migrations.`,
 );
 console.log(
-  "Known duplicate legacy prefixes remain a deployed-state reconciliation gate: 0003, 0010, 0011, 0019.",
+  "Known duplicate prefixes remain a deployed-state reconciliation gate: 0003, 0010, 0011, 0019, 0111, 0112.",
 );

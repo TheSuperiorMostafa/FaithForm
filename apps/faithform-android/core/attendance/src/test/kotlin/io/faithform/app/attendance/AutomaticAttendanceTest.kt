@@ -410,11 +410,45 @@ class PermissionModelTest {
 // ---------------------------------------------------------------------------
 
 class ReconcilerTest {
+    @Test fun `cold registration removes stale mirrored campuses before adding current ones`() = runTest {
+        val monitor = FakeMonitor()
+        val source = ScriptedSource(GeofenceConfigurationState.Available(configuration()))
+        val reconciler = GeofenceReconciler(monitor, FakePermissions(), source)
+        reconciler.bind(PARTITION, "grace", true)
+        reconciler.reconcile(ReconcileTrigger.Foreground)
+        source.state = GeofenceConfigurationState.Available(configuration(listOf(region("faithform.campus.new"))))
+        val result = reconciler.reconcile(ReconcileTrigger.BootOrUpdate)
+        assertEquals(setOf("faithform.campus.new"), monitor.regions.map { it.identifier }.toSet())
+        assertEquals(1, result.monitoring)
+        assertEquals(listOf("faithform.campus.new"), result.added)
+    }
     private fun make(
         monitor: FakeMonitor = FakeMonitor(),
         permissions: FakePermissions = FakePermissions(),
         source: ScriptedSource = ScriptedSource(GeofenceConfigurationState.Available(configuration())),
     ) = Triple(GeofenceReconciler(monitor, permissions, source), monitor, source)
+
+    @Test
+    fun `a rejected registration never reports ready and is retried`() = runTest {
+        val delegate = FakeMonitor()
+        var reject = true
+        val monitor = object : RegionMonitoring {
+            override suspend fun monitoredRegions() = delegate.monitoredRegions()
+            override suspend fun startMonitoring(regions: List<MonitoredRegion>) { if (!reject) delegate.startMonitoring(regions) }
+            override suspend fun stopMonitoring(identifiers: List<String>) = delegate.stopMonitoring(identifiers)
+            override suspend fun stopMonitoringAll() = delegate.stopMonitoringAll()
+        }
+        val reconciler = GeofenceReconciler(monitor, FakePermissions(), ScriptedSource(GeofenceConfigurationState.Available(configuration())))
+        reconciler.bind(PARTITION, "grace", enabled = true)
+        val failed = reconciler.reconcile(ReconcileTrigger.OptIn)
+        assertEquals(0, failed.monitoring)
+        assertTrue(failed.added.isEmpty())
+        assertEquals("registration_unavailable", failed.refusal)
+        reject = false
+        val recovered = reconciler.reconcile(ReconcileTrigger.Foreground)
+        assertEquals(1, recovered.monitoring)
+        assertNull(recovered.refusal)
+    }
 
     @Test
     fun `registers exactly what the server authorizes`() = runTest {
@@ -748,6 +782,22 @@ class EvidenceTestHarness(
 }
 
 class EvidenceTest {
+    @Test fun `an offline detection retry persists the server dwell before confirming`() = runTest {
+        val h = EvidenceTestHarness().start()
+        h.submitter.answers = mutableListOf(Result.failure(TransientAttendanceFailure("offline")),
+            Result.success(pendingUntil(h.now + 120_000)), Result.success(COUNTED))
+        h.coordinator.handleRegionEntered("r")
+        h.coordinator.flushPending()
+        assertEquals(EvidencePhase.AwaitingDwell("occ-1", h.now), h.coordinator.phase)
+        assertNull(h.store.peek(PARTITION)?.queued)
+        assertEquals("detection-1", h.store.peek(PARTITION)?.detectionId)
+        h.coordinator.confirmIfDue()
+        assertEquals(2, h.submitter.sent.size)
+        h.now += 120_001
+        assertTrue(h.coordinator.confirmIfDue().isSuccess)
+        assertEquals(listOf("detected", "detected", "confirm"), h.submitter.phases())
+        assertEquals(h.submitter.keys()[0], h.submitter.keys()[1])
+    }
     @Test
     fun `a transition produces one detected attempt with server-checkable evidence`() = runTest {
         val h = EvidenceTestHarness().start()

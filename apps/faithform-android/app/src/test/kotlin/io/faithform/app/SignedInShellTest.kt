@@ -124,6 +124,24 @@ class SignedInShellTest {
     // Account deletion
     // -----------------------------------------------------------------------
 
+    @Test fun `chat notification reauthorizes its church with the server`() = runTest {
+        val model = ready(bootstrap(capabilities = listOf("account", "groups"),
+            relationships = listOf(relationship("grace"), relationship("hope").copy(groupsEnabled = true))))
+        server.on("messaging/route", HttpResponse(200, envelope("""{"kind":"group","churchSlug":"hope","groupId":"g","cid":"ff_group:grp_test"}"""), emptyMap()))
+        model.handleDeepLink("faithform://messages?cid=ff_group%3Agrp_test")
+        assertEquals("hope", model.selectedChurchSlug.value)
+        assertEquals(HostTab.GROUPS, model.selectedTab.value)
+        assertEquals(1, server.requests("messaging/route").size)
+    }
+
+    @Test fun `a revoked chat notification cannot navigate to its old church`() = runTest {
+        val model = ready(selected = "grace")
+        server.on("messaging/route", HttpResponse(404, failure("not_found"), emptyMap()))
+        model.handleDeepLink("faithform://messages?cid=ff_group%3Agrp_test")
+        assertEquals("grace", model.selectedChurchSlug.value)
+        assertEquals(HostTab.HOME, model.selectedTab.value)
+    }
+
     @Test
     fun `opening the confirmation sends nothing`() = runTest {
         val model = ready()

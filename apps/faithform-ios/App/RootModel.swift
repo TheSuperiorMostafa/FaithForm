@@ -52,6 +52,11 @@ final class RootModel {
     private(set) var authModel: AuthModel!
 
     private let dependencies: AppDependencies
+    private var loadGeneration: UInt64 = 0
+    private var isEndingSession = false
+    private var teardownTask: Task<Void, Never>?
+    private var sessionHandlerTask: Task<Void, Never>?
+    private var attendanceSyncTask: Task<Void, Never>?
 
     init(dependencies: AppDependencies) {
         self.dependencies = dependencies
@@ -72,6 +77,11 @@ final class RootModel {
         } else {
             state.apply(.signedOut)
         }
+        sessionHandlerTask = Task { [weak self, session = dependencies.session] in
+            await session.setSessionEndedHandler { [weak self] revision in
+                await self?.sessionEnded(revision: revision)
+            }
+        }
     }
 
     /// True exactly when the first-run flow should stand in front of the tabs.
@@ -84,12 +94,28 @@ final class RootModel {
     /// subsequent request from anonymous to authenticated; everything after is
     /// ordinary loading.
     func completeAuth(_ session: StoredSession, displayName: String?) async {
+        await sessionHandlerTask?.value
+        await teardownTask?.value
+        if let accountId, accountId != session.accountId { await endSession(notifyServer: false) }
+        loadGeneration &+= 1
+        let generation = loadGeneration
+        // Adoption must not reuse the previous account's ready shell or offline fallback.
+        features = nil
+        selectedChurch = nil
+        livePresentation = nil
+        lastBootstrap = nil
+        onboardingState = nil
+        state.apply(.loading)
         do {
             try await dependencies.session.adopt(session)
         } catch {
+            guard generation == loadGeneration, !isEndingSession else { return }
             state.apply(.signedOut)
             return
         }
+        let revision = await dependencies.session.sessionRevision()
+        guard await isCurrentLoad(generation, revision: revision) else { return }
+        accountId = session.accountId
 
         if let displayName {
             struct ProfileUpdate: Encodable, Sendable { let displayName: String }
@@ -104,11 +130,13 @@ final class RootModel {
             )
         }
 
+        guard await isCurrentLoad(generation, revision: revision) else { return }
         // A deep-linked invitation held across sign-in is redeemed the moment
         // it can be — before the first bootstrap, so the church it grants is
         // already there when the app first renders.
         if let token = onboarding.pendingInvitationToken {
             _ = await onboarding.acceptInvitation(token)
+            guard await isCurrentLoad(generation, revision: revision) else { return }
         }
 
         await load()
@@ -196,10 +224,18 @@ final class RootModel {
     /// replaced or removed, an accepted invitation — without collapsing the UI
     /// back to a spinner first.
     func load(quiet: Bool) async {
-        guard let session = await dependencies.session.currentSession() else {
-            state.apply(.signedOut)
+        await sessionHandlerTask?.value
+        guard !isEndingSession else { return }
+        loadGeneration &+= 1
+        let generation = loadGeneration
+        guard let snapshot = await dependencies.session.sessionSnapshot() else {
+            guard generation == loadGeneration, !isEndingSession else { return }
+            await endSession(notifyServer: false)
             return
         }
+        let session = snapshot.session
+        let revision = snapshot.revision
+        guard await isCurrentLoad(generation, revision: revision) else { return }
         accountId = session.accountId
 
         if !quiet {
@@ -232,6 +268,7 @@ final class RootModel {
                 "api/mobile/v1/account/bootstrap",
                 as: Bootstrap.self
             )
+            guard await isCurrentLoad(generation, revision: revision) else { return }
             guard let bootstrap = response.value else {
                 showOffline(previous)
                 return
@@ -242,25 +279,27 @@ final class RootModel {
             // person accepted them a moment ago, on the account screen that
             // said so. Recording is stating a fact, not deciding one.
             await onboarding.recordInitialConsent(for: bootstrap)
+            guard await isCurrentLoad(generation, revision: revision) else { return }
 
             // The server decides whether first-run stands in front of home. A
             // failure here falls back to nil — showing home to someone who
             // could be onboarding beats a dead app over a routing hint.
-            onboardingState = await onboarding.refresh()
+            let refreshedOnboarding = await onboarding.refresh()
+            guard await isCurrentLoad(generation, revision: revision) else { return }
+            onboardingState = refreshedOnboarding
 
-            if let accountId {
-                dependencies.snapshots.store(
-                    AccountSnapshot(bootstrap: bootstrap, onboarding: onboardingState),
-                    environment: dependencies.environment.key,
-                    accountId: accountId
-                )
-            }
+            dependencies.snapshots.store(
+                AccountSnapshot(bootstrap: bootstrap, onboarding: onboardingState),
+                environment: dependencies.environment.key,
+                accountId: session.accountId
+            )
 
             state.apply(.ready(bootstrap, isStale: false))
             adoptSelection(bootstrap)
             syncAttendance(bootstrap)
             await dependencies.push.synchronize()
         } catch let error as APIError {
+            guard await isCurrentLoad(generation, revision: revision) else { return }
             if error.isCancellation {
                 if !quiet, let previous { state.apply(.ready(previous, isStale: false)) }
                 return
@@ -274,7 +313,7 @@ final class RootModel {
                 // needs to sign in, and a retry button would do nothing for them.
                 // `SessionManager` only reaches this when the identity provider
                 // refused the refresh token itself.
-                state.apply(.signedOut)
+                await endSession(notifyServer: false)
             case .unavailable where error.requestId == nil:
                 // Never reached FaithForm: no network, or a refresh that could
                 // not reach the identity provider. **The session is still on the
@@ -285,6 +324,7 @@ final class RootModel {
                 state.apply(.failed(message: error.displayMessage))
             }
         } catch {
+            guard await isCurrentLoad(generation, revision: revision) else { return }
             if error.isCancellation {
                 if !quiet, let previous { state.apply(.ready(previous, isStale: false)) }
                 return
@@ -318,7 +358,12 @@ final class RootModel {
         let version = bootstrap.profile.authorizationVersion
         let consent = bootstrap.profile.autoAttendanceConsent.rawValue
         let churches = AppDependencies.attendanceChurches(in: bootstrap)
-        Task {
+        let generation = loadGeneration
+        let previous = attendanceSyncTask
+        previous?.cancel()
+        attendanceSyncTask = Task { [weak self] in
+            await previous?.value
+            guard !Task.isCancelled, let self, generation == self.loadGeneration, !self.isEndingSession else { return }
             await attendance.updateAccount(
                 accountId: accountId,
                 authorizationVersion: version,
@@ -572,39 +617,73 @@ final class RootModel {
 
     private static let log = FaithFormLog(category: "auth")
 
-    func signOut() async {
+    private func isCurrentLoad(_ generation: UInt64, revision: UInt64) async -> Bool {
+        let currentRevision = await dependencies.session.sessionRevision()
+        return generation == loadGeneration && revision == currentRevision && !isEndingSession
+    }
+
+    private func sessionEnded(revision: UInt64) async {
+        guard !isEndingSession, await dependencies.session.sessionRevision() == revision else { return }
+        // Do not await cleanup here: the rejected request may itself be the
+        // attendance task that cleanup cancels and drains.
+        _ = beginSessionTeardown(notifyServer: false)
+    }
+
+    func signOut() async { await endSession(notifyServer: true) }
+    func waitForSessionTeardown() async { await teardownTask?.value }
+
+    private func endSession(notifyServer: Bool) async {
+        await beginSessionTeardown(notifyServer: notifyServer).value
+    }
+
+    private func beginSessionTeardown(notifyServer: Bool) -> Task<Void, Never> {
+        if let teardownTask { return teardownTask }
+        isEndingSession = true
+        loadGeneration &+= 1
         groupInvitationToken = nil
-        // The server side first, best-effort: it bumps the authorization
-        // version so anything cached against the old one is unreadable
-        // everywhere, not just on this device. Then everything local, across
-        // every church and every partition — a sign-out that left one church's
-        // cache behind would show the next person who signs in on this device
-        // somebody else's church.
-        struct SignOutReply: Decodable, Sendable { let signedOut: Bool }
-        _ = try? await dependencies.api.send(
-            "api/mobile/v1/account/sign-out",
-            method: .post,
-            idempotencyKey: UUID().uuidString,
-            as: SignOutReply.self
-        )
+        // Remove the private shell immediately, before any network or teardown await.
+        features = nil
+        selectedChurch = nil
+        livePresentation = nil
+        state.apply(.signedOut)
+        let task = Task { @MainActor [self] in
+            await stopAttendance()
+            if notifyServer {
+                // Notify the server while credentials are still available; local teardown
+                // follows even if the network cannot complete the request.
+                struct SignOutReply: Decodable, Sendable { let signedOut: Bool }
+                _ = try? await dependencies.api.send(
+                    "api/mobile/v1/account/sign-out",
+                    method: .post,
+                    idempotencyKey: UUID().uuidString,
+                    as: SignOutReply.self
+                )
+                await dependencies.push.retire()
+            } else {
+                dependencies.push.clearAccountRegistration()
+            }
+            await clearLocalSession()
+            teardownTask = nil
+            isEndingSession = false
+        }
+        teardownTask = task
+        return task
+    }
 
-        // This install stops being addressable for the account signing out,
-        // before the session it needs to say so is gone. Best-effort: a failure
-        // leaves a row the server retires when its token is next rejected.
-        await dependencies.push.retire()
-
+    private func stopAttendance() async {
         // Automatic check-in stops before anything else: every region, any
         // unsent arrival, every pending notification and the stored choice. A
         // region left registered would wake the app for someone signed out.
+        attendanceSyncTask?.cancel()
+        await attendanceSyncTask?.value
+        attendanceSyncTask = nil
         await dependencies.attendance.signedOut()
         await dependencies.attendanceConfiguration.purge()
+    }
+
+    private func clearLocalSession() async {
         await dependencies.cache.purgeAll()
-        if let accountId {
-            dependencies.snapshots.purge(
-                environment: dependencies.environment.key,
-                accountId: accountId
-            )
-        }
+        dependencies.snapshots.purgeAll()
         await dependencies.session.purgeEverything()
         lastBootstrap = nil
         selectedChurch = nil

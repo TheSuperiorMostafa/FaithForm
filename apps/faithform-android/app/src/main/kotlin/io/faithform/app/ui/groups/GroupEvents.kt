@@ -8,6 +8,9 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
+import io.faithform.app.ui.components.FaithFormTextButton as TextButton
+import io.faithform.app.ui.components.FaithFormOutlinedButton as OutlinedButton
+import io.faithform.app.ui.components.FaithFormButton as Button
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier

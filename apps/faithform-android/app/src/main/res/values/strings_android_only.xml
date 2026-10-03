@@ -17,4 +17,17 @@
 <resources>
     <string name="nav_back">Back</string>
     <string name="legal_link_unavailable">No app on this phone can open that link.</string>
+    <string name="account_support">Contact support</string>
+    <string name="notification_registration_pending">Notifications are allowed. FaithForm will finish connecting this device when the network is available.</string>
+    <string name="auto_attendance_play_services_title">Google Play services are unavailable</string>
+    <string name="auto_attendance_play_services_body">Automatic check-in needs Google Play services. Update them or use a check-in code instead.</string>
+    <string name="auto_attendance_withdrawal_pending">Automatic check-in is off on this phone. FaithForm will save your consent withdrawal when the network returns.</string>
+    <string name="account_notifications">Notifications</string>
+    <string name="notification_preferences_error">Could not save or load notification preferences. Try again when the network is available.</string>
+    <!-- FCM must supply a local fallback body when a data message omits it.
+         iOS notification bodies arrive through APNs from the server. -->
+    <string name="notification_chat_body">You have a new message.</string>
+    <!-- Android chat redaction copy; iOS supplies equivalent native chat labels. -->
+    <string name="chat_blocked_message">Message hidden because you blocked this person.</string>
+    <string name="chat_blocked_quote">Quoted message hidden because you blocked this person.</string>
 </resources>

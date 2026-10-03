@@ -18,6 +18,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.ViewModel
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.faithform.app.attendance.CameraPermissionRequester
@@ -27,6 +29,7 @@ import io.faithform.app.design.FaithFormTheme
 import io.faithform.app.giving.StripePaymentSheetAdapter
 import io.faithform.app.navigation.RouteRegistry
 import io.faithform.app.session.AppContainer
+import io.faithform.app.ui.brand.rememberSystemReducedMotion
 import io.faithform.app.ui.FaithFormApp
 import io.faithform.app.ui.UnconfiguredScreen
 import io.faithform.app.ui.discovery.AndroidLocationProvider
@@ -133,6 +136,7 @@ class MainActivity : ComponentActivity() {
         }
 
         container.locationPermissions.attach(launchLocationDialog)
+        container.permissionRationale = { shouldShowRequestPermissionRationale(it) }
         // Stripe's sheet registers its own launcher and attaches itself to
         // `container.paymentSheets`; it detaches when this instance is destroyed.
         StripePaymentSheetAdapter(this, container.paymentSheets)
@@ -161,7 +165,7 @@ class MainActivity : ComponentActivity() {
         // Activity re-delivers the same intent, which is why this runs only
         // for a genuinely new launch.
         if (savedInstanceState == null) {
-            intent?.dataString?.let(viewModel::handleDeepLink)
+            io.faithform.app.notifications.notificationLink(intent)?.let(viewModel::handleDeepLink)
         }
 
         setContent {
@@ -205,7 +209,7 @@ class MainActivity : ComponentActivity() {
                     ),
                 )
             }
-            FaithFormTheme(darkTheme = isDark, churchBrand = churchBrand) {
+            FaithFormTheme(darkTheme = isDark, churchBrand = churchBrand, reduceMotion = rememberSystemReducedMotion()) {
                 FaithFormApp(
                     viewModel = viewModel,
                     container = container,
@@ -219,7 +223,15 @@ class MainActivity : ComponentActivity() {
         viewModel.start()
     }
 
+    override fun onResume() {
+        super.onResume()
+        val container = (application as FaithFormApplication).container ?: return
+        lifecycleScope.launch { runCatching { container.push.synchronize() } }
+        lifecycleScope.launch { runCatching { container.attendanceRuntime.foreground() } }
+    }
+
     override fun onDestroy() {
+        (application as FaithFormApplication).container?.permissionRationale = null
         (application as FaithFormApplication).container?.locationPermissions?.detach(launchLocationDialog)
         super.onDestroy()
     }
@@ -231,7 +243,7 @@ class MainActivity : ComponentActivity() {
      */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        intent.dataString?.let { appViewModel?.handleDeepLink(it) }
+        io.faithform.app.notifications.notificationLink(intent)?.let { appViewModel?.handleDeepLink(it) }
     }
 }
 
@@ -258,6 +270,8 @@ class AppViewModelFactory(
             registry = registry,
             sessionEnded = container.sessionEnded,
             snapshots = container.snapshots,
+            beforeSignOut = container::beforeSignOut,
+            clearBackgroundFeatures = container::clearBackgroundFeatures,
         ) as T
     }
 }

@@ -26,7 +26,7 @@ import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material.icons.outlined.WifiOff
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import io.faithform.app.ui.components.FaithFormIconButton as IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -45,6 +45,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import io.faithform.app.ui.components.motionReveal
 import io.faithform.app.R
 import io.faithform.app.contract.FeedItem
 import io.faithform.app.design.FaithFormTokens
@@ -125,7 +126,7 @@ fun HomeHostScreen(
         PullToRefreshBox(
             isRefreshing = isRefreshing,
             onRefresh = onRefresh,
-            modifier = Modifier.weight(1f).fillMaxWidth(),
+            modifier = Modifier.weight(1f).fillMaxWidth().motionReveal(section, travel = false),
         ) {
             when (section) {
                 HomeSection.FEED -> HomeFeedScreen(

@@ -98,12 +98,16 @@ class FeedModel(
                     cache.purge(partition)
                     _phase.value = FeedPhase.Blocked
                 }
-                _phase.value is FeedPhase.Loaded -> Unit // keep showing the cache
+                _phase.value is FeedPhase.Loaded -> {
+                    val loaded = _phase.value as FeedPhase.Loaded
+                    _phase.value = loaded.copy(isStale = true)
+                }
                 error.code == MobileErrorCode.UNAVAILABLE || error.retryable -> _phase.value = FeedPhase.OfflineNoCache
                 else -> _phase.value = FeedPhase.Failed(error.displayMessage)
             }
         } catch (_: Exception) {
-            if (_phase.value !is FeedPhase.Loaded) _phase.value = FeedPhase.OfflineNoCache
+            val loaded = _phase.value as? FeedPhase.Loaded
+            _phase.value = loaded?.copy(isStale = true) ?: FeedPhase.OfflineNoCache
         }
     }
 

@@ -32,6 +32,7 @@ data class MonitoredRegion(
  * The concrete implementation lives in `:app` and holds no decisions.
  */
 interface RegionMonitoring {
+    suspend fun registrationRefusal(): String? = null
     suspend fun monitoredRegions(): Set<MonitoredRegion>
     suspend fun startMonitoring(regions: List<MonitoredRegion>)
     suspend fun stopMonitoring(identifiers: List<String>)
@@ -271,6 +272,9 @@ class GeofenceReconciler(
         // addition — which is exactly right, and is why the same comparison
         // handles re-registration without a special path.
         val actual = if (trigger == ReconcileTrigger.BootOrUpdate) {
+            // The persisted mirror may describe regions the server removed
+            // while the process was gone. Replace both mirror and OS state.
+            monitor.stopMonitoringAll()
             emptySet()
         } else {
             monitor.monitoredRegions()
@@ -305,12 +309,14 @@ class GeofenceReconciler(
         // is one round trip through the system service rather than twenty.
         if (toAdd.isNotEmpty()) monitor.startMonitoring(toAdd)
 
+        val registered = monitor.monitoredRegions()
+        val registrationIncomplete = desired.any { it !in registered }
         lastOutcome = ReconcileOutcome(
-            added = added.sorted(),
+            added = added.filter { id -> registered.any { it.identifier == id } }.sorted(),
             removed = removed,
             updated = updated.sorted(),
-            monitoring = desired.size,
-            refusal = null,
+            monitoring = registered.size,
+            refusal = if (registrationIncomplete) monitor.registrationRefusal() ?: "registration_unavailable" else null,
             droppedForCapacity = dropped.sorted(),
         )
         return lastOutcome

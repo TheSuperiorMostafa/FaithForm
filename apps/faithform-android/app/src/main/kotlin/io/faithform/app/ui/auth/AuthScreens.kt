@@ -31,13 +31,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
+import io.faithform.app.ui.components.FaithFormButton as Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import io.faithform.app.ui.components.FaithFormOutlinedButton as OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import io.faithform.app.ui.components.FaithFormTextButton as TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
@@ -82,6 +82,7 @@ import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.SmartDisplay
 import io.faithform.app.ConfirmationPhase
 import io.faithform.app.PendingChurchContext
+import io.faithform.app.ui.components.motionReveal
 import io.faithform.app.R
 import io.faithform.app.design.FaithFormTokens
 import io.faithform.app.design.LocalFaithFormTheme
@@ -131,32 +132,34 @@ fun AuthFlow(
         )
     }
 
-    when (screen) {
-        AuthScreen.LANDING -> LandingScreen(
-            hasPendingInvitation = hasPendingInvitation,
-            confirmationPhase = confirmationPhase,
-            churchContext = churchContext,
-            onHaveLink = { move(AuthScreen.HAVE_LINK) },
-            onCreateAccount = { move(AuthScreen.CREATE_ACCOUNT) },
-            onSignIn = { move(AuthScreen.SIGN_IN) },
-            onClearChurchContext = onClearChurchContext,
-            playEntrance = !landingEntrancePlayed,
-            onEntrancePlayed = { landingEntrancePlayed = true }
-        )
-        AuthScreen.CREATE_ACCOUNT -> CreateAccountScreen(
-            viewModel = viewModel,
-            churchContext = churchContext,
-            onSwitchToSignIn = { move(AuthScreen.SIGN_IN) }
-        )
-        AuthScreen.SIGN_IN -> SignInScreen(
-            viewModel = viewModel,
-            onForgotPassword = { move(AuthScreen.RESET) }
-        )
-        AuthScreen.RESET -> ResetPasswordScreen(viewModel)
-        AuthScreen.HAVE_LINK -> HaveLinkEntryScreen(
-            onHoldInvitation = onHoldInvitation,
-            onHeld = { move(AuthScreen.LANDING) }
-        )
+    Box(Modifier.fillMaxSize().motionReveal(screen)) {
+        when (screen) {
+            AuthScreen.LANDING -> LandingScreen(
+                hasPendingInvitation = hasPendingInvitation,
+                confirmationPhase = confirmationPhase,
+                churchContext = churchContext,
+                onHaveLink = { move(AuthScreen.HAVE_LINK) },
+                onCreateAccount = { move(AuthScreen.CREATE_ACCOUNT) },
+                onSignIn = { move(AuthScreen.SIGN_IN) },
+                onClearChurchContext = onClearChurchContext,
+                playEntrance = !landingEntrancePlayed,
+                onEntrancePlayed = { landingEntrancePlayed = true }
+            )
+            AuthScreen.CREATE_ACCOUNT -> CreateAccountScreen(
+                viewModel = viewModel,
+                churchContext = churchContext,
+                onSwitchToSignIn = { move(AuthScreen.SIGN_IN) }
+            )
+            AuthScreen.SIGN_IN -> SignInScreen(
+                viewModel = viewModel,
+                onForgotPassword = { move(AuthScreen.RESET) }
+            )
+            AuthScreen.RESET -> ResetPasswordScreen(viewModel)
+            AuthScreen.HAVE_LINK -> HaveLinkEntryScreen(
+                onHoldInvitation = onHoldInvitation,
+                onHeld = { move(AuthScreen.LANDING) }
+            )
+        }
     }
 }
 

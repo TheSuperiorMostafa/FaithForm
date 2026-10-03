@@ -146,13 +146,16 @@ export async function searchNearby(input: unknown): Promise<DiscoveredChurchDto[
 export async function resolveRelationshipState(
   userId: string | null,
   churchSlug: string,
+  dependencies = { getVisitorAccount, createAdminClient },
 ): Promise<RelationshipState | null> {
   if (!userId) return null;
 
-  const account = await getVisitorAccount(userId);
-  if (!account) return null;
+  const account = await dependencies.getVisitorAccount(userId);
+  // Inactive accounts browse public content as an anonymous visitor. Their
+  // relationship rows remain for export/deletion, but grant no private access.
+  if (!account || account.status !== "active") return null;
 
-  const admin = createAdminClient();
+  const admin = dependencies.createAdminClient();
   const { data: church } = await admin
     .from("churches")
     .select("id")

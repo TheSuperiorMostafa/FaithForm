@@ -3,6 +3,8 @@ package io.faithform.app.session
 import android.content.SharedPreferences
 import io.faithform.app.network.SingleFlightRefresher
 import io.faithform.app.network.TokenProvider
+import io.faithform.app.network.ApiException
+import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
@@ -45,13 +47,30 @@ class AndroidSessionStore(
 
     private val json = Json { ignoreUnknownKeys = true }
     private val key = "session"
+    private var revision = 0L
 
     private val refresher = SingleFlightRefresher {
-        val current = current() ?: throw IllegalStateException("no session")
-        refresh(current.refreshToken).also { adopt(it) }
+        val (current, generation) = synchronized(this) {
+            (current() ?: throw IllegalStateException("no session")) to revision
+        }
+        val renewed = try {
+            refresh(current.refreshToken)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            synchronized(this) {
+                if (revision != generation) throw ApiException.transport()
+            }
+            throw error
+        }
+        synchronized(this) {
+            if (revision != generation) throw ApiException.transport()
+            adopt(renewed)
+        }
+        renewed
     }
 
-    override fun current(): StoredSession? {
+    @Synchronized override fun current(): StoredSession? {
         val raw = preferences.getString(key, null) ?: return null
         val session = runCatching { json.decodeFromString(StoredSession.serializer(), raw) }.getOrNull()
             ?: return null
@@ -59,10 +78,11 @@ class AndroidSessionStore(
         return session.takeIf { it.environmentKey == environmentKey }
     }
 
-    override fun adopt(session: StoredSession) {
+    @Synchronized override fun adopt(session: StoredSession) {
         require(session.environmentKey == environmentKey) {
             "session belongs to a different environment"
         }
+        revision++
         preferences.edit().putString(key, json.encodeToString(StoredSession.serializer(), session)).apply()
     }
 
@@ -73,11 +93,22 @@ class AndroidSessionStore(
     }
 
     override suspend fun invalidate() {
+        synchronized(this) {
+            revision++
+            preferences.edit().remove(key).apply()
+        }
+    }
+
+    override suspend fun invalidateIfCurrent(accessToken: String): Boolean = synchronized(this) {
+        if (current()?.accessToken != accessToken) return@synchronized false
+        revision++
         preferences.edit().remove(key).apply()
+        true
     }
 
     /** Sign-out and account removal: clears everything this store holds. */
-    override fun purgeEverything() {
+    @Synchronized override fun purgeEverything() {
+        revision++
         preferences.edit().clear().apply()
     }
 }

@@ -58,6 +58,17 @@ public actor SessionManager: TokenProviding {
     private let environmentKey: String
     private let now: @Sendable () -> Date
 
+    private var revision: UInt64 = 0
+    private var sessionEnded: (@Sendable (UInt64) async -> Void)?
+
+    public func sessionRevision() -> UInt64 { revision }
+    public func requestSessionRevision() -> UInt64? { revision }
+    public func sessionSnapshot() -> (session: StoredSession, revision: UInt64)? {
+        guard let session = currentSession() else { return nil }
+        return (session, revision)
+    }
+    public func setSessionEndedHandler(_ handler: @escaping @Sendable (UInt64) async -> Void) { sessionEnded = handler }
+
     private var cached: StoredSession?
     private var inFlightRefresh: Task<StoredSession, Error>?
 
@@ -107,6 +118,9 @@ public actor SessionManager: TokenProviding {
         guard session.environmentKey == environmentKey else {
             throw APIError(code: .forbidden, message: "Wrong environment for this session.")
         }
+        revision &+= 1
+        inFlightRefresh?.cancel()
+        inFlightRefresh = nil
         cached = session
         try store.write(try JSONEncoder().encode(session), for: storageKey)
     }
@@ -117,12 +131,15 @@ public actor SessionManager: TokenProviding {
         }
         if !session.isExpired(now: now()) { return session.accessToken }
 
+        let requestRevision = revision
         if let existing = inFlightRefresh {
             // A caller that joined someone else's refresh sees the same public
             // answer the owner does. The owner alone decides whether to
             // invalidate, so a rejection is not acted on twice.
             do {
-                return try await existing.value.accessToken
+                let refreshed = try await existing.value
+                guard revision == requestRevision else { throw CancellationError() }
+                return refreshed.accessToken
             } catch {
                 if error.isCancellation { throw CancellationError() }
                 throw Self.publicError(for: error)
@@ -134,13 +151,14 @@ public actor SessionManager: TokenProviding {
         }
         inFlightRefresh = task
 
-        defer { inFlightRefresh = nil }
+        defer { if revision == requestRevision { inFlightRefresh = nil } }
 
         let refreshed: StoredSession
         do {
             refreshed = try await task.value
         } catch {
             if error.isCancellation { throw CancellationError() }
+            guard revision == requestRevision else { throw CancellationError() }
             if Self.isDefinitiveRejection(error) {
                 // The provider refused this refresh token. That is terminal for
                 // the session: keeping a dead token would make every later call
@@ -156,7 +174,10 @@ public actor SessionManager: TokenProviding {
             throw Self.publicError(for: error)
         }
 
-        try adopt(refreshed)
+        guard revision == requestRevision, currentSession()?.refreshToken == session.refreshToken else { throw CancellationError() }
+        // Refresh retains the account lifetime; adopting a new account does not.
+        cached = refreshed
+        try store.write(try JSONEncoder().encode(refreshed), for: storageKey)
         return refreshed.accessToken
     }
 
@@ -183,17 +204,26 @@ public actor SessionManager: TokenProviding {
         return APIError.transport(error)
     }
 
+    public func invalidate(rejectedAccessToken: String) async {
+        guard currentSession()?.accessToken == rejectedAccessToken else { return }
+        await invalidate()
+    }
+
     public func invalidate() async {
+        guard currentSession() != nil else { return }
+        revision &+= 1
         cached = nil
         inFlightRefresh?.cancel()
         inFlightRefresh = nil
         try? store.delete(storageKey)
+        await sessionEnded?(revision)
     }
 
     /// Sign-out and account removal. Clears every environment's material, not
     /// just this one, so nothing survives in a bucket the app is not currently
     /// pointed at.
     public func purgeEverything() async {
+        revision &+= 1
         cached = nil
         inFlightRefresh?.cancel()
         inFlightRefresh = nil

@@ -107,6 +107,7 @@ test("the attendance client components import no server module values", () => {
     "@/lib/attendance/v2/setup-bounds",
     "@/lib/attendance/v2/setup-view",
     "@/lib/attendance/v2/sunday-worship",
+    "@/lib/attendance/headcount",
     "@/lib/utils",
   ]);
   const dir = "components/attendance";
@@ -124,6 +125,7 @@ test("the attendance client components import no server module values", () => {
   assert.doesNotMatch(read("lib/attendance/v2/setup-bounds.ts"), /^import /m);
   assert.doesNotMatch(read("lib/attendance/v2/setup-view.ts"), /^import /m);
   assert.doesNotMatch(read("lib/attendance/v2/sunday-worship.ts"), /^import /m);
+  assert.doesNotMatch(read("lib/attendance/headcount.ts"), /^import /m);
 });
 
 test("Services and Setup are reachable from the Attendance tabs", () => {

@@ -8,11 +8,6 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.google.android.gms.location.Geofence
 import com.google.android.gms.location.GeofencingEvent
-import io.faithform.app.session.AppContainer
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
@@ -27,14 +22,10 @@ import org.json.JSONObject
  * decides whether a transition means attendance happens server-side, after a
  * fresh authorization check.
  *
- * **`goAsync` and its limit.** A broadcast receiver's `onReceive` runs on the
- * main thread and must return promptly; `goAsync` buys roughly ten seconds of
- * background execution. The evidence flow — refresh configuration, resolve the
- * occurrence, take a fix, submit — will not always fit. That is not a bug to
- * paper over: when it does not fit, the attempt is left in the encrypted
- * pending queue and retried on next foreground. Holding the receiver open
- * longer is not available, and starting a foreground service to do it would be
- * exactly the continuous-location shape this feature avoids.
+ * A receiver enqueues bounded WorkManager execution and returns immediately.
+ * Only the transition and region identifier enter the work queue; coordinates
+ * remain in the encrypted, expiring attempt store. Work reauthorizes before
+ * sampling and never starts a persistent location service.
  */
 class GeofenceBroadcastReceiver : BroadcastReceiver() {
 
@@ -56,45 +47,8 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
 
         if (identifiers.isEmpty()) return
 
-        val pending = goAsync()
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-
-        scope.launch {
-            try {
-                // A transition arriving in an unconfigured build has nowhere to go.
-                val coordinator = AppContainer.from(context)?.automaticAttendance
-                    ?: return@launch
-
-                when (transition) {
-                    Geofence.GEOFENCE_TRANSITION_ENTER -> {
-                        // One call regardless of how many regions triggered:
-                        // two overlapping campuses of the same church are still
-                        // one arrival, and the coordinator is single-flight.
-                        coordinator.handleRegionEntered(identifiers.first())
-                        // An entry is also a legitimate execution opportunity
-                        // for a *previous* attempt whose dwell has since
-                        // elapsed. Cheap when there is nothing due.
-                        coordinator.confirmIfDue()
-                    }
-
-                    // **The dwell transition is the confirmation.**
-                    //
-                    // Registered only when the church's policy asks for one, and
-                    // this is what it buys: a real system callback saying the
-                    // device stayed, rather than a wait that depends on some
-                    // other wake happening to arrive. The coordinator still
-                    // refuses to confirm before the server's own instant, so a
-                    // dwell delivered early is harmless.
-                    Geofence.GEOFENCE_TRANSITION_DWELL ->
-                        coordinator.confirmIfDue()
-
-                    Geofence.GEOFENCE_TRANSITION_EXIT ->
-                        coordinator.handleRegionExited(identifiers.first())
-                }
-            } finally {
-                pending.finish()
-            }
-        }
+        // Persist just the transition and public region id. Location evidence stays encrypted.
+        AttendanceWork.enqueue(context, transition, identifiers.first())
     }
 
     companion object {
@@ -118,19 +72,12 @@ class GeofenceBroadcastReceiver : BroadcastReceiver() {
 class BootAndUpdateReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         when (intent.action) {
-            Intent.ACTION_BOOT_COMPLETED, Intent.ACTION_LOCKED_BOOT_COMPLETED -> Unit
+            Intent.ACTION_BOOT_COMPLETED -> Unit
             else -> return
         }
 
-        val pending = goAsync()
-        CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
-            try {
-                AppContainer.from(context)?.automaticAttendance
-                    ?.reconcile(ReconcileTrigger.BootOrUpdate)
-            } finally {
-                pending.finish()
-            }
-        }
+        AttendanceWork.enqueue(context)
+
     }
 }
 
@@ -149,15 +96,8 @@ class PackageReplacedReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_MY_PACKAGE_REPLACED) return
 
-        val pending = goAsync()
-        CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
-            try {
-                AppContainer.from(context)?.automaticAttendance
-                    ?.reconcile(ReconcileTrigger.BootOrUpdate)
-            } finally {
-                pending.finish()
-            }
-        }
+        AttendanceWork.enqueue(context)
+
     }
 }
 
@@ -230,6 +170,7 @@ internal class RegionMirror(private val prefs: SharedPreferences) {
                     latitude = item.getDouble("lat"),
                     longitude = item.getDouble("lon"),
                     radiusMeters = item.getDouble("r").toFloat(),
+                    loiteringDelayMillis = item.optInt("dwell", 0),
                 )
             }.toSet()
         }.getOrDefault(emptySet())
@@ -243,7 +184,8 @@ internal class RegionMirror(private val prefs: SharedPreferences) {
                     .put("id", region.identifier)
                     .put("lat", region.latitude)
                     .put("lon", region.longitude)
-                    .put("r", region.radiusMeters.toDouble()),
+                    .put("r", region.radiusMeters.toDouble())
+                    .put("dwell", region.loiteringDelayMillis),
             )
         }
         prefs.edit().putString(KEY, array.toString()).apply()

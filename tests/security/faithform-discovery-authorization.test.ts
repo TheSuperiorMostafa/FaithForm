@@ -143,7 +143,7 @@ test("sign-out and deletion both retire notification authority", () => {
   );
   assert.match(
     request,
-    /if \(parsed\.data\.kind === "deletion"\) \{[\s\S]*?retireInstallationsForAccount\(account\.id, "account_deleted"\)/,
+    /if \(parsed\.data\.kind === "deletion"[\s\S]*?retireInstallationsForAccount\(account\.id, "account_deleted", admin\)/,
   );
   // And the deletion itself removes the device rows and their tokens.
   const migration = read("supabase/migrations/0054_faithful_publication_and_push.sql");

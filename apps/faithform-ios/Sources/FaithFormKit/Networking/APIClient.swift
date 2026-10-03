@@ -17,6 +17,14 @@ public protocol TokenProviding: Actor {
     func validAccessToken() async throws -> String
     /// Called when the server rejects a token we believed was valid.
     func invalidate() async
+    /// Reject only the credential this request used; an old response cannot end a new session.
+    func invalidate(rejectedAccessToken: String) async
+    func requestSessionRevision() async -> UInt64?
+}
+
+public extension TokenProviding {
+    func invalidate(rejectedAccessToken: String) async { await invalidate() }
+    func requestSessionRevision() async -> UInt64? { nil }
 }
 
 /// The typed client for `/api/mobile/v1`.
@@ -127,11 +135,16 @@ public actor APIClient {
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         }
 
+        var requestRevision: UInt64?
+        var requestToken: String?
         if authenticated {
             guard let tokens else {
                 throw APIError(code: .unauthenticated, message: "Sign in to continue.")
             }
+            requestRevision = await tokens.requestSessionRevision()
             let token = try await tokens.validAccessToken()
+            if let requestRevision, await tokens.requestSessionRevision() != requestRevision { throw CancellationError() }
+            requestToken = token
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }
 
@@ -139,9 +152,11 @@ public actor APIClient {
         do {
             (data, http) = try await transport.perform(request)
         } catch {
+            if let requestRevision, await tokens?.requestSessionRevision() != requestRevision { throw CancellationError() }
             if error.isCancellation { throw CancellationError() }
             throw APIError.transport(error)
         }
+        if let requestRevision, await tokens?.requestSessionRevision() != requestRevision { throw CancellationError() }
 
         let requestId = http.value(forHTTPHeaderField: "X-Request-Id")
         let etag = http.value(forHTTPHeaderField: "ETag")
@@ -158,8 +173,8 @@ public actor APIClient {
         // A rejected token is worth clearing exactly once, so the next call
         // re-authenticates rather than replaying a credential we know is dead.
         let failure = Self.decodeFailure(from: data, requestId: requestId, status: http.statusCode)
-        if failure.code == .unauthenticated || failure.code == .sessionExpired {
-            await tokens?.invalidate()
+        if authenticated, let requestToken, failure.code == .unauthenticated || failure.code == .sessionExpired {
+            await tokens?.invalidate(rejectedAccessToken: requestToken)
         }
         throw failure
     }

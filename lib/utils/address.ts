@@ -1,3 +1,4 @@
+/** Pure address formatting shared by browser views and server queries. */
 export function formatAddressLine(parts: {
   address?: string | null;
   city?: string | null;

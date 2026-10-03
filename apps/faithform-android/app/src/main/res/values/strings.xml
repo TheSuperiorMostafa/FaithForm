@@ -2,7 +2,7 @@
     <!-- Localization foundation: every user-facing string is a resource from
          the start, so adding a locale is a translation task rather than a
          refactor. -->
-    <string name="app_name">FaithForm</string>
+    <string name="app_name">FaithForm Connect</string>
     <string name="loading_account">Loading your account</string>
     <string name="sign_in_title">Sign in to continue</string>
     <string name="sign_in_body">Your church\'s app — start with a link, or create an account.</string>
@@ -207,7 +207,7 @@
     <string name="auto_attendance_foreground_title">FaithForm needs to see your location</string>
     <string name="auto_attendance_foreground_body">To know when you have arrived, FaithForm needs permission to read your location. Your phone will ask you next.</string>
     <string name="auto_attendance_background_title">And to notice while the app is closed</string>
-    <string name="auto_attendance_background_body">Check-in happens while you are settling into a seat, not staring at your phone. For that, your phone needs to allow location all the time. FaithForm only ever looks at whether you have arrived at your church.</string>
+    <string name="auto_attendance_background_body">FaithForm collects location data to enable automatic check-in at your church, even when the app is closed or not in use. Your phone checks the church boundary and FaithForm takes a fresh location reading to verify arrival. Your church receives an attendance record, not your coordinates. Choose Allow all the time and keep Use precise location on in Settings. You can decline and use a check-in code instead.</string>
     <string name="auto_attendance_continue">Continue</string>
     <string name="auto_attendance_enable">Turn on automatic check-in</string>
     <string name="auto_attendance_not_now">Not now</string>
@@ -223,7 +223,7 @@
     <string name="auto_attendance_restricted_title">Location is not available</string>
     <string name="auto_attendance_restricted_body">Location is restricted on this device, so automatic check-in cannot run. You can still be checked in at the service.</string>
     <string name="auto_attendance_services_off_title">Location services are off</string>
-    <string name="auto_attendance_services_off_body">Location is switched off for every app on this device. You can turn it on in Settings.</string>
+    <string name="auto_attendance_services_off_body">Automatic check-in needs Location and Google Location Accuracy turned on. Open Location settings, then Location services to check Location Accuracy.</string>
     <string name="auto_attendance_always_title">FaithForm needs location all the time</string>
     <string name="auto_attendance_always_body">Right now FaithForm can only see your location while it is open, so it cannot notice you arriving. You can change this in Settings.</string>
     <string name="auto_attendance_accuracy_title">Precise location is off</string>
@@ -555,4 +555,14 @@
     <string name="auto_attendance_attempt_outside">Attendance has not been counted. Your phone reported a location outside the check-in area.</string>
     <string name="auto_attendance_attempt_offline">Attendance is not confirmed yet. FaithForm will retry when it can connect. Keep the app open to finish checking in.</string>
     <string name="auto_attendance_attempt_retry">Attendance is not confirmed yet. FaithForm is waiting briefly before checking again.</string>
+    <!-- Shared church discovery, welcome, support, and attendance copy. -->
+    <string name="welcome_to_church">WELCOME TO</string>
+    <string name="opening_church_home">Opening home…</string>
+    <string name="church_welcome_accessibility">Welcome to %1$s. Your church home is ready.</string>
+    <string name="discovery_welcome_home">WELCOME HOME</string>
+    <string name="discovery_community_title">Find your church community.</string>
+    <string name="discovery_community_body">Connect with your congregation, follow announcements, join groups, and worship together wherever you are.</string>
+    <string name="discovery_nearby_hint">Discover congregations active near you</string>
+    <string name="discovery_how_to_find">HOW TO FIND YOUR CHURCH</string>
+    <string name="media_time_separator">/</string>
 </resources>

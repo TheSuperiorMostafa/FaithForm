@@ -34,6 +34,11 @@ data class HttpResponse(
 interface TokenProvider {
     suspend fun validAccessToken(): String
     suspend fun invalidate()
+    /** Only the credential rejected by this response may end the session. */
+    suspend fun invalidateIfCurrent(accessToken: String): Boolean {
+        invalidate()
+        return true
+    }
 }
 
 data class ApiResult<T>(
@@ -164,8 +169,10 @@ class ApiClient(
         if (authenticated && (failure.code == MobileErrorCode.UNAUTHENTICATED ||
                 failure.code == MobileErrorCode.SESSION_EXPIRED)
         ) {
-            tokens?.invalidate()
-            onSessionEnded?.invoke()
+            val sentToken = headers["Authorization"]?.removePrefix("Bearer ")
+            if (sentToken != null && tokens?.invalidateIfCurrent(sentToken) == true) {
+                onSessionEnded?.invoke()
+            }
         }
         throw failure
     }

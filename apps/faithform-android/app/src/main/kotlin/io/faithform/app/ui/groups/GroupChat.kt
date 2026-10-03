@@ -12,16 +12,22 @@ import androidx.compose.ui.text.style.TextOverflow
 import io.faithform.app.design.LocalFaithFormTheme
 import io.getstream.chat.android.compose.ui.theme.StreamColors
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyItemScope
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AttachFile
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.*
+import io.faithform.app.ui.components.FaithFormFilledIconButton as FilledIconButton
+import io.faithform.app.ui.components.FaithFormIconButton as IconButton
+import io.faithform.app.ui.components.FaithFormTextButton as TextButton
 import androidx.compose.runtime.*
 import io.faithform.app.ui.components.FaithFormSearchField
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import io.faithform.app.R
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
@@ -37,12 +43,19 @@ import io.getstream.chat.android.compose.ui.theme.ChatTheme
 import io.getstream.chat.android.compose.ui.theme.ChatComponentFactory
 import io.getstream.chat.android.compose.state.messageoptions.MessageOptionItemState
 import io.getstream.chat.android.compose.ui.messages.MessagesScreen
+import io.getstream.chat.android.compose.ui.components.messages.factory.MessageContentFactory
+import io.getstream.chat.android.ui.common.state.messages.MessageMode
+import io.getstream.chat.android.ui.common.state.messages.composer.MessageComposerState
 import io.getstream.chat.android.compose.ui.messages.composer.MessageComposer
 import io.getstream.chat.android.compose.viewmodel.messages.MessagesViewModelFactory
 import io.getstream.chat.android.compose.viewmodel.messages.MessageComposerViewModel
 import io.getstream.chat.android.compose.viewmodel.messages.MessageListViewModel
 import io.getstream.chat.android.ui.common.state.messages.MessageAction
 import io.getstream.chat.android.ui.common.state.messages.Flag
+import io.getstream.chat.android.ui.common.state.messages.list.MessageItemState
+import io.getstream.chat.android.ui.common.state.messages.list.GiphyAction
+import io.getstream.chat.android.ui.common.state.messages.poll.PollSelectionType
+import io.getstream.chat.android.compose.state.mediagallerypreview.MediaGalleryPreviewResult
 import io.getstream.chat.android.client.api.models.QueryChannelsRequest
 import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
@@ -54,6 +67,15 @@ import java.io.File
 class GroupChatConnection {
     var client by mutableStateOf<ChatClient?>(null); private set
     var session by mutableStateOf<ChatSession?>(null); private set
+    var blockedUserIds by mutableStateOf<Set<String>>(emptySet()); private set
+    suspend fun refreshBlocks(store: GroupsStore) {
+        // Load before showing provider content: a failed read must not reveal messages.
+        check(!disposed)
+        val loaded = store.read<ChatBlockList>("${store.messagingPath}/blocks").items.map { it.chatUserId }.toSet()
+        currentCoroutineContext().ensureActive()
+        check(!disposed)
+        blockedUserIds = loaded
+    }
     private val mutex = Mutex()
     private var disposed = false
     val uploadFiles = mutableListOf<File>()
@@ -72,7 +94,7 @@ class GroupChatConnection {
             session = auth; client = chat; chat
         } catch (e: Exception) { chat.disconnect(flushPersistence = true).enqueue(); throw e }
     }
-    fun disconnect() { disposed = true; client?.disconnect(flushPersistence = true)?.enqueue(); client = null; session = null; uploadFiles.forEach { it.delete() }; uploadFiles.clear() }
+    fun disconnect() { disposed = true; client?.disconnect(flushPersistence = true)?.enqueue(); client = null; session = null; blockedUserIds = emptySet(); uploadFiles.forEach { it.delete() }; uploadFiles.clear() }
 }
 private data class SafetyTarget(val userId: String, val name: String, val messageId: String? = null)
 private class ChannelModels : ViewModelStoreOwner { override val viewModelStore = ViewModelStore() }
@@ -95,11 +117,48 @@ private class ChannelModels : ViewModelStoreOwner { override val viewModelStore 
     var safety by remember(cid) { mutableStateOf<SafetyTarget?>(null) }
     val owner = remember(cid) { ChannelModels() }
     DisposableEffect(owner) { onDispose { owner.viewModelStore.clear() } }
-    LaunchedEffect(cid, retry) { try { failed = false; connection.connect(store, context); ready = true } catch (e: CancellationException) { throw e } catch (_: Exception) { failed = true } }
-    safety?.let { target -> GroupSafety(store, cid, target.userId, target.name, target.messageId) { safety = null } }
+    LaunchedEffect(cid, retry) { try { ready = false; failed = false; connection.refreshBlocks(store); connection.connect(store, context); ready = true } catch (e: CancellationException) { throw e } catch (_: Exception) { failed = true } }
+    safety?.let { target -> GroupSafety(store, cid, target.userId, target.name, target.messageId) { safety = null; ready = false; retry++ } }
     if (ready && connection.client != null) {
         val factory = remember(cid) { MessagesViewModelFactory(context, channelId = cid) }
-        val components = remember(cid) { object : ChatComponentFactory {
+        val components = remember(cid, connection.blockedUserIds) { object : ChatComponentFactory {
+            private val defaults = object : ChatComponentFactory {}
+            @Composable override fun LazyItemScope.MessageListItemContent(
+                messageItem: MessageItemState, reactionSorting: ReactionSorting,
+                onPollUpdated: (Message, Poll) -> Unit, onCastVote: (Message, Poll, Option) -> Unit,
+                onRemoveVote: (Message, Poll, Vote) -> Unit, selectPoll: (Message, Poll, PollSelectionType) -> Unit,
+                onClosePoll: (String) -> Unit, onAddPollOption: (Poll, String) -> Unit,
+                onLongItemClick: (Message) -> Unit, onThreadClick: (Message) -> Unit,
+                onReactionsClick: (Message) -> Unit, onGiphyActionClick: (GiphyAction) -> Unit,
+                onMediaGalleryPreviewResult: (MediaGalleryPreviewResult?) -> Unit,
+                onQuotedMessageClick: (Message) -> Unit, onUserAvatarClick: ((User) -> Unit)?,
+                onMessageLinkClick: ((Message, String) -> Unit)?, onUserMentionClick: (User) -> Unit,
+                onAddAnswer: (Message, Poll, String) -> Unit, onReply: (Message) -> Unit,
+            ) {
+                if (ChatBlockPolicy.hides(messageItem.message.user.id, connection.session?.chatUserId, connection.blockedUserIds)) {
+                    Text(stringResource(R.string.chat_blocked_message), modifier = Modifier.fillMaxWidth().padding(16.dp), style = MaterialTheme.typography.bodySmall)
+                } else {
+                    with(defaults) {
+                        this@MessageListItemContent.MessageListItemContent(messageItem, reactionSorting, onPollUpdated, onCastVote, onRemoveVote, selectPoll, onClosePoll, onAddPollOption, onLongItemClick, onThreadClick, onReactionsClick, onGiphyActionClick, onMediaGalleryPreviewResult, onQuotedMessageClick, onUserAvatarClick, onMessageLinkClick, onUserMentionClick, onAddAnswer, onReply)
+                    }
+                }
+            }
+            @Composable override fun MessageQuotedContent(modifier: Modifier, message: Message, currentUser: User?, replyMessage: Message, onLongItemClick: (Message) -> Unit, onQuotedMessageClick: (Message) -> Unit) {
+                if (ChatBlockPolicy.hides(message.user.id, currentUser?.id, connection.blockedUserIds)) {
+                    Text(stringResource(R.string.chat_blocked_quote), modifier = modifier.padding(8.dp), style = MaterialTheme.typography.bodySmall)
+                } else super.MessageQuotedContent(modifier, message, currentUser, replyMessage, onLongItemClick, onQuotedMessageClick)
+            }
+            @Composable override fun RowScope.MessageListHeaderCenterContent(modifier: Modifier, channel: Channel, currentUser: User?, connectionState: ConnectionState, typingUsers: List<User>, messageMode: MessageMode, onClick: ((Channel) -> Unit)?) {
+                with(defaults) {
+                    this@MessageListHeaderCenterContent.MessageListHeaderCenterContent(modifier, channel, currentUser, connectionState,
+                        typingUsers.filterNot { ChatBlockPolicy.hides(it.id, currentUser?.id, connection.blockedUserIds) }, messageMode, onClick)
+                }
+            }
+            @Composable override fun MessageComposerQuotedMessage(modifier: Modifier, state: MessageComposerState, quotedMessage: Message) {
+                if (ChatBlockPolicy.hides(quotedMessage.user.id, connection.session?.chatUserId, connection.blockedUserIds)) {
+                    Text(stringResource(R.string.chat_blocked_quote), modifier = modifier.padding(8.dp), style = MaterialTheme.typography.bodySmall)
+                } else super.MessageComposerQuotedMessage(modifier, state, quotedMessage)
+            }
             @Composable override fun MessageMenuCenterContent(modifier: Modifier, message: Message, messageOptions: List<MessageOptionItemState>, onMessageAction: (MessageAction) -> Unit, ownCapabilities: Set<String>) {
                 Column(modifier) {
                     super.MessageMenuCenterContent(Modifier, message, messageOptions.filter { it.action !is Flag }, onMessageAction, ownCapabilities)
@@ -109,7 +168,7 @@ private class ChannelModels : ViewModelStoreOwner { override val viewModelStore 
         } }
         CompositionLocalProvider(LocalViewModelStoreOwner provides owner) {
             ChatTheme(colors = chatColors, componentFactory = components) {
-                MessagesScreen(viewModelFactory = factory, showHeader = showHeader, onBackPressed = onBack,
+                MessagesScreen(viewModelFactory = factory, messageContentFactory = MessageContentFactory.Deprecated, showHeader = showHeader, onBackPressed = onBack,
                     onUserAvatarClick = { user -> if (user.id != connection.session?.chatUserId) safety = SafetyTarget(user.id, user.name.ifBlank { "this person" }) },
                     bottomBarContent = {
                         if (readOnly || connection.session?.suspended == true) Text("This conversation is read-only.", modifier = Modifier.fillMaxWidth().padding(16.dp), style = MaterialTheme.typography.bodySmall)
@@ -169,7 +228,7 @@ private class ChannelModels : ViewModelStoreOwner { override val viewModelStore 
     if (newConversation) GroupContacts(store, onDismiss = { newConversation = false }, open = { direct = it; newConversation = false })
     LaunchedEffect(refresh) {
         try {
-            loading = true; val client = connection.connect(store, context); val auth = connection.session!!
+            loading = true; channels = emptyList(); connection.refreshBlocks(store); val client = connection.connect(store, context); val auth = connection.session!!
             val result = client.queryChannels(QueryChannelsRequest(filter = Filters.and(Filters.eq("type", "ff_dm"), Filters.eq("team", auth.churchTeam), Filters.`in`("members", listOf(auth.chatUserId))), offset = 0, limit = 30)).await()
             if (result.isSuccess) channels = result.getOrThrow() else error("Messages couldn’t load. Please try again.")
         } catch (e: CancellationException) { throw e } catch (e: Exception) { store.error = GroupsStore.message(e) } finally { loading = false }
@@ -185,7 +244,7 @@ private class ChannelModels : ViewModelStoreOwner { override val viewModelStore 
                     Surface(shape = CircleShape, color = theme.palette.surfaceSunken) { Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { Text(name.take(1).uppercase(), style = MaterialTheme.typography.titleMedium, color = theme.palette.brandAccent) } }
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(name, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.titleMedium)
-                        Text(channel.messages.lastOrNull()?.text?.take(120)?.ifBlank { "Attachment" } ?: "Say hello", maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, color = theme.palette.contentSecondary)
+                        Text(if (ChatBlockPolicy.hides(channel.messages.lastOrNull()?.user?.id, connection.session?.chatUserId, connection.blockedUserIds)) stringResource(R.string.chat_blocked_message) else channel.messages.lastOrNull()?.text?.take(120)?.ifBlank { "Attachment" } ?: "Say hello", maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, color = theme.palette.contentSecondary)
                     }
                     if ((channel.unreadCount ?: 0) > 0) Surface(shape = CircleShape, color = theme.palette.brandAccent) { Text("${channel.unreadCount}", color = theme.palette.contentOnAccent, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)) }
                 }

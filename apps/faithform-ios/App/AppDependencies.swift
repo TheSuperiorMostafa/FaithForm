@@ -70,7 +70,10 @@ final class AppDependencies {
         applePayMerchantID: String?,
         secureStore: SecureStoring,
         session: SessionManager,
-        auth: SessionAuthenticating?
+        auth: SessionAuthenticating?,
+        transport: any HTTPTransport = URLSessionTransport(),
+        storageDirectory: URL? = nil,
+        startBackgroundFeatures: Bool = true
     ) {
         self.environment = environment
         self.allowsDebugControls = allowsDebugControls
@@ -87,14 +90,14 @@ final class AppDependencies {
                 environment: environment,
                 clientBuild: clientBuild
             ),
-            transport: URLSessionTransport(),
+            transport: transport,
             tokens: session
         )
         // Every partition this app builds starts with the environment key, so a
         // build pointed somewhere new cannot read the previous environment's
         // data. The cache itself is environment-agnostic; the *keys* are not.
         // Disk-backed so a killed process still paints last night's feed.
-        let support = FileManager.default
+        let support = storageDirectory ?? FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("FaithForm", isDirectory: true)
         self.cache = PartitionedCache(
@@ -160,6 +163,7 @@ final class AppDependencies {
         self.attendanceNotificationResponder = AttendanceNotificationResponder(service: service)
         UNUserNotificationCenter.current().delegate = attendanceNotificationResponder
 
+        guard startBackgroundFeatures else { return }
         Task { [push] in
             // Reads the permission state, and takes any token APNs issued
             // during launch — for a phone that already enabled notifications,

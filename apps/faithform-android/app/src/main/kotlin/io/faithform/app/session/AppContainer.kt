@@ -46,7 +46,8 @@ class AppContainer(
     clientBuild: Int,
     val allowDebugControls: Boolean,
     supabaseUrl: String = "",
-    supabaseAnonKey: String = ""
+    supabaseAnonKey: String = "",
+    attendanceLocationSampling: io.faithform.app.attendance.LocationSampling? = null
 ) {
     /**
      * Keystore-backed. The master key is hardware-protected where the device
@@ -188,16 +189,15 @@ class AppContainer(
     val locationPermissions = ActivityResultRelay<Array<String>, Map<String, Boolean>>(unavailable = emptyMap())
     val paymentSheets = ActivityResultRelay<PaymentSheetRequest, SheetOutcome>(unavailable = SheetOutcome.FAILED)
 
-    /**
-     * Automatic attendance, or null before the app has been opened once.
-     *
-     * Built lazily and assigned by the app layer rather than in the constructor,
-     * because a broadcast receiver can wake the process before any screen has
-     * run — and constructing the whole feature eagerly for every unrelated
-     * receiver would be work the device did not need to do.
-     */
-    @Volatile
-    var automaticAttendance: AutomaticAttendanceCoordinator? = null
+    /** Activity-only rationale callback, cleared when that Activity is destroyed. */
+    var permissionRationale: ((String) -> Boolean)? = null
+    val attendanceRuntime = io.faithform.app.attendance.AutomaticAttendanceRuntime(context.applicationContext, this,
+        attendanceLocationSampling ?: io.faithform.app.attendance.PlayServicesLocationSampling(context.applicationContext))
+    val automaticAttendance: AutomaticAttendanceCoordinator get() = attendanceRuntime.coordinator
+    val push = io.faithform.app.notifications.PushRuntime(context.applicationContext, this)
+
+    suspend fun beforeSignOut() { push.beforeSignOut(); attendanceRuntime.clear() }
+    suspend fun clearBackgroundFeatures() { attendanceRuntime.clear(); push.clearLocal() }
 
     companion object {
         /**

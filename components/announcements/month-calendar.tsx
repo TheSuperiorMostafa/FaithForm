@@ -568,8 +568,9 @@ export function MonthCalendar({
           </p>
         </div>
 
-        <div ref={panelRef} className="w-full scroll-mt-4 xl:sticky xl:top-4 xl:self-start">
-          <Card>
+        {/* Wide screens: exactly as tall as the calendar; long panels scroll inside. */}
+        <div ref={panelRef} className="relative w-full scroll-mt-4">
+          <Card className="xl:absolute xl:inset-0 xl:overflow-y-auto">
             {selectedEvent ? (
               <>
                 <CardHeader className="gap-2">

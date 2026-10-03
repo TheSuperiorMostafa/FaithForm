@@ -20,6 +20,7 @@ import androidx.core.app.NotificationManagerCompat
 object NotificationChannels {
     const val ANNOUNCEMENTS = "faithform_announcements"
     const val EVENTS = "faithform_events"
+    const val GROUPS = "faithform_groups"
 
     /**
      * Created at first launch, before any permission is requested.
@@ -52,7 +53,8 @@ object NotificationChannels {
             setShowBadge(true)
         }
 
-        manager.createNotificationChannels(listOf(announcements, events))
+        manager.createNotificationChannels(listOf(announcements, events,
+            NotificationChannel(GROUPS, context.getString(io.faithform.app.R.string.tab_groups), NotificationManager.IMPORTANCE_DEFAULT)))
     }
 
     /**

@@ -15,7 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import io.faithform.app.ui.components.FaithFormIconButton as IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -28,6 +28,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import io.faithform.app.ui.components.motionReveal
 import io.faithform.app.R
 import io.faithform.app.design.FaithFormTokens
 import io.faithform.app.design.LocalFaithFormTheme
@@ -133,7 +134,7 @@ fun TabScreen(
                 actionIconContentColor = theme.palette.contentPrimary,
             ),
         )
-        content(Modifier.weight(1f))
+        content(Modifier.weight(1f).motionReveal(title to (onBack != null)))
     }
     }
 }

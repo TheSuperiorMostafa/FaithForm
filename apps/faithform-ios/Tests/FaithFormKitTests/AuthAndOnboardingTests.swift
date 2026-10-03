@@ -33,6 +33,8 @@ private final class ScriptedAuth: SessionAuthenticating, @unchecked Sendable {
     var signInResult: Result<StoredSession, Error>
     var confirmationResult: Result<StoredSession, Error>
     var resetError: Error?
+    var resendError: Error?
+    private(set) var resendRequests: [String] = []
     private(set) var resetRequests: [String] = []
     private(set) var confirmationCodes: [String] = []
     /// The display name each sign-up carried, in order.
@@ -65,6 +67,11 @@ private final class ScriptedAuth: SessionAuthenticating, @unchecked Sendable {
     func completeEmailConfirmation(code: String) async throws -> StoredSession {
         confirmationCodes.append(code)
         return try confirmationResult.get()
+    }
+
+    func resendConfirmation(email: String) async throws {
+        resendRequests.append(email)
+        if let resendError { throw resendError }
     }
 }
 
@@ -334,6 +341,44 @@ struct AuthModelTests {
         await model.createAccount()
 
         #expect(model.phase == .checkEmail)
+    }
+
+    @Test("resend failures stay on checkEmail and never claim an email was sent")
+    func resendFailuresAndRetry() async {
+        let auth = ScriptedAuth(signUp: .success(.confirmationRequired))
+        let model = AuthModel(auth: auth) { _, _ in
+            Issue.record("resending must not authenticate")
+        }
+        model.name = "Sarah"
+        model.email = " p@example.org "
+        model.password = "pw123456"
+        await model.createAccount()
+        model.email = "different@example.org"
+
+        await model.resendConfirmation()
+        #expect(model.resendNoticeVisible)
+
+        for kind in [AuthFailure.Kind.offline, .rateLimited, .other] {
+            auth.resendError = AuthFailure(kind: kind, message: "Please try again.")
+            await model.resendConfirmation()
+            #expect(model.phase == .checkEmail)
+            #expect(!model.resendNoticeVisible)
+            #expect(model.resendError == "Please try again.")
+            #expect(!model.isResending)
+        }
+
+        auth.resendError = URLError(.timedOut)
+        await model.resendConfirmation()
+        #expect(!model.resendNoticeVisible)
+        #expect(model.resendError == L.authErrorGeneric)
+        #expect(!model.isResending)
+
+        auth.resendError = nil
+        await model.resendConfirmation()
+        #expect(model.resendNoticeVisible)
+        #expect(model.resendError == nil)
+        #expect(model.phase == .checkEmail)
+        #expect(auth.resendRequests == Array(repeating: "p@example.org", count: 6))
     }
 
     @Test("the typed name goes out with the sign-up even when confirmation comes first")

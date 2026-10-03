@@ -1,6 +1,17 @@
 package io.faithform.app.ui.components
 
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.MenuBook
+import androidx.compose.material.icons.outlined.Slideshow
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import kotlinx.coroutines.delay
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -92,9 +103,13 @@ internal fun Modifier.skeletonShimmer(onDark: Boolean = false): Modifier {
 }
 
 @Composable
-private fun skeletonLabel(): Modifier {
+internal fun skeletonLabel(): Modifier {
     val label = stringResource(R.string.media_loading)
-    return Modifier.semantics { contentDescription = label }
+    val reduced = rememberReducedMotion()
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { delay(180); visible = true }
+    val alpha by animateFloatAsState(if (visible) 1f else 0f, tween(if (reduced) 0 else 200), label = "skeleton-reveal")
+    return Modifier.graphicsLayer { this.alpha = alpha }.semantics { contentDescription = label }
 }
 
 @Composable
@@ -310,11 +325,12 @@ fun SermonHubCardSkeleton(modifier: Modifier = Modifier) {
             .border(theme.borderWidth, theme.palette.border, shape),
     ) {
         Box(contentAlignment = Alignment.Center) {
-            SkeletonPoster()
+            SkeletonPoster(Modifier.skeletonShimmer())
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm),
                 modifier = Modifier
+                    .skeletonShimmer(onDark = true)
                     .fillMaxWidth()
                     .padding(horizontal = FaithFormTokens.Spacing.lg),
             ) {
@@ -334,20 +350,12 @@ fun SermonHubCardSkeleton(modifier: Modifier = Modifier) {
             modifier = Modifier.padding(FaithFormTokens.Spacing.base),
             verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm),
         ) {
-            SkeletonBone(height = 13.dp, widthFraction = 0.4f)
-            SkeletonBone(height = 17.dp, widthFraction = 0.84f)
-            SkeletonBone(height = 13.dp, widthFraction = 0.46f)
+            SkeletonBone(modifier = Modifier.skeletonShimmer(), height = 16.dp, widthFraction = 0.4f)
+            SkeletonBone(modifier = Modifier.skeletonShimmer(), height = 20.dp, widthFraction = 0.84f)
+            SkeletonBone(modifier = Modifier.skeletonShimmer(), height = 16.dp, widthFraction = 0.46f)
             Row(horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm)) {
-                SkeletonBone(
-                    modifier = Modifier.weight(1f),
-                    height = FaithFormTokens.TouchTarget.minimum - 8.dp,
-                    cornerRadius = FaithFormTokens.Radius.pill,
-                )
-                SkeletonBone(
-                    modifier = Modifier.weight(1f),
-                    height = FaithFormTokens.TouchTarget.minimum - 8.dp,
-                    cornerRadius = FaithFormTokens.Radius.pill,
-                )
+                SermonActionButton(stringResource(R.string.sermons_open_notes), Icons.AutoMirrored.Outlined.MenuBook, true, {}, Modifier.weight(1f), enabled = false)
+                SermonActionButton(stringResource(R.string.sermons_open_slides), Icons.Outlined.Slideshow, false, {}, Modifier.weight(1f), enabled = false)
             }
         }
     }
@@ -425,17 +433,23 @@ fun ChurchProfileSkeleton(modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun SermonListSkeleton(modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .then(skeletonLabel())
-            .skeletonShimmer(),
-        verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.lg),
-    ) {
-        SkeletonSearchField()
-        SkeletonBone(height = 13.dp, widthFraction = 0.3f)
-        repeat(2) { SermonHubCardSkeleton() }
+fun SermonListSkeleton(
+    modifier: Modifier = Modifier,
+    searchTerm: String = "",
+    onSearch: (String) -> Unit = {},
+    showTitle: Boolean = true,
+) {
+    val theme = LocalFaithFormTheme.current
+    Column(modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.md)) {
+        if (showTitle) Text(stringResource(R.string.sermons_title), style = MaterialTheme.typography.titleMedium, color = theme.palette.contentPrimary)
+        FaithFormSearchField(searchTerm, onSearch, stringResource(R.string.sermons_search_label), onSearch = { onSearch(searchTerm) })
+        Column(
+            modifier = Modifier.fillMaxWidth().then(skeletonLabel()),
+            verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm),
+        ) {
+            SkeletonBone(modifier = Modifier.skeletonShimmer(), height = 20.dp, widthFraction = 0.3f)
+            repeat(2) { SermonHubCardSkeleton() }
+        }
     }
 }
 

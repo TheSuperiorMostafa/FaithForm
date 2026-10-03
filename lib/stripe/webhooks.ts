@@ -340,19 +340,20 @@ async function upsertSubscription(params: {
   };
 
   if (existing?.id) {
-    await admin
+    const { error: updateError } = await admin
       .from("giving_subscriptions")
       .update(row)
       .eq("id", existing.id)
       .or(
         `stripe_event_created_at.is.null,stripe_event_created_at.lte.${params.stripeEventCreatedAt}`,
       );
+    if (updateError) throw new Error("subscription_reconciliation_failed");
   } else {
     const { error: insertError } = await admin
       .from("giving_subscriptions")
       .insert(row);
     if (insertError?.code === "23505") {
-      await admin
+      const { error: updateError } = await admin
         .from("giving_subscriptions")
         .update(row)
         .eq("church_id", params.churchId)
@@ -360,6 +361,7 @@ async function upsertSubscription(params: {
         .or(
           `stripe_event_created_at.is.null,stripe_event_created_at.lte.${params.stripeEventCreatedAt}`,
         );
+      if (updateError) throw new Error("subscription_reconciliation_failed");
     } else if (insertError) {
       throw new Error("subscription_reconciliation_failed");
     }
@@ -550,27 +552,25 @@ async function projectAttemptFromCharge(
   status: string,
   eventAt: string,
 ): Promise<void> {
-  try {
-    const admin = createAdminClient();
-    const { data } = await admin
-      .from("giving_donations")
-      .select("stripe_payment_intent_id")
-      .eq("church_id", churchId)
-      .eq("stripe_charge_id", chargeId)
-      .maybeSingle();
+  const admin = createAdminClient();
+  const { data, error: readError } = await admin
+    .from("giving_donations")
+    .select("stripe_payment_intent_id")
+    .eq("church_id", churchId)
+    .eq("stripe_charge_id", chargeId)
+    .maybeSingle();
+  if (readError) throw new Error("giving_attempt_lookup_failed");
 
-    const intentId = (data?.stripe_payment_intent_id as string | null) ?? null;
-    if (!intentId) return;
+  const intentId = (data?.stripe_payment_intent_id as string | null) ?? null;
+  if (!intentId) return;
 
-    await admin.rpc("project_giving_attempt_state", {
-      p_payment_intent_id: intentId,
-      p_status: status,
-      p_donation_id: null,
-      p_event_at: eventAt,
-    });
-  } catch {
-    /* non-fatal, as with every FaithForm projection off this path */
-  }
+  const { error: projectionError } = await admin.rpc("project_giving_attempt_state", {
+    p_payment_intent_id: intentId,
+    p_status: status,
+    p_donation_id: null,
+    p_event_at: eventAt,
+  });
+  if (projectionError) throw new Error("giving_attempt_projection_failed");
 }
 
 async function handleSubscription(
@@ -628,7 +628,7 @@ async function handleSubscription(
     fundDesignation: sub.metadata?.fund_name || sub.metadata?.fund_designation || null,
     fundId: metaFundId(sub.metadata),
     donorId: sub.metadata?.donor_id || null,
-    pausedAt: sub.status === "paused" ? pausedAt : null,
+    pausedAt,
     stripeEventCreatedAt: new Date(eventCreated * 1000).toISOString(),
   });
 }
@@ -764,6 +764,50 @@ async function handleInvoice(
   }
 }
 
+/**
+ * Apply refund/dispute state only after the payment's donation exists.
+ * Stripe may deliver those events before payment_intent.succeeded. A zero-row
+ * update must then retry, rather than acknowledge and lose the newer state.
+ * An existing row skipped by the timestamp guard is an intentional stale no-op.
+ */
+async function updateDonationState(input: {
+  churchId: string;
+  key: "stripe_payment_intent_id" | "stripe_charge_id";
+  value: string;
+  status: DonationStatus;
+  eventCreatedAt: string;
+}): Promise<boolean> {
+  const admin = createAdminClient();
+  const { data: updated, error } = await admin
+    .from("giving_donations")
+    .update({
+      status: input.status,
+      updated_at: new Date().toISOString(),
+      stripe_event_created_at: input.eventCreatedAt,
+    })
+    .eq("church_id", input.churchId)
+    .eq(input.key, input.value)
+    .or(`stripe_event_created_at.is.null,stripe_event_created_at.lte.${input.eventCreatedAt}`)
+    .select("id")
+    .maybeSingle();
+  if (error) throw new Error("donation_state_reconciliation_failed");
+  if (updated?.id) return true;
+
+  const { data: existing, error: readError } = await admin
+    .from("giving_donations")
+    .select("id, stripe_event_created_at")
+    .eq("church_id", input.churchId)
+    .eq(input.key, input.value)
+    .maybeSingle();
+  if (readError || !existing?.id) throw new Error("donation_state_not_ready");
+  // Re-check the timestamp: the row may have been inserted between the update
+  // and read. It still needs this event unless a newer state already won.
+  if (!existing.stripe_event_created_at || existing.stripe_event_created_at <= input.eventCreatedAt) {
+    throw new Error("donation_state_not_ready");
+  }
+  return false;
+}
+
 async function processStripeEventEffects(event: Stripe.Event): Promise<void> {
   const connectedAccount =
     typeof event.account === "string" ? event.account : undefined;
@@ -824,7 +868,6 @@ async function processStripeEventEffects(event: Stripe.Event): Promise<void> {
         charge.metadata?.church_id,
       );
       if (!churchId) break;
-      const admin = createAdminClient();
       const piId =
         typeof charge.payment_intent === "string"
           ? charge.payment_intent
@@ -842,30 +885,25 @@ async function processStripeEventEffects(event: Stripe.Event): Promise<void> {
         });
       } else if (piId) {
         const eventCreatedAt = new Date(event.created * 1000).toISOString();
-        const { error: refundError } = await admin
-          .from("giving_donations")
-          .update({
-            status: "refunded",
-            updated_at: new Date().toISOString(),
-            stripe_event_created_at: eventCreatedAt,
-          })
-          .eq("church_id", churchId)
-          .eq("stripe_payment_intent_id", piId)
-          .or(
-            `stripe_event_created_at.is.null,stripe_event_created_at.lte.${eventCreatedAt}`,
-          );
-        // Thrown so Stripe redelivers: a refund marked processed but never
-        // written would leave the gift on the donor's statement for good.
-        if (refundError) throw new Error("refund_reconciliation_failed");
+        const updated = await updateDonationState({
+          churchId,
+          key: "stripe_payment_intent_id",
+          value: piId,
+          status: "refunded",
+          eventCreatedAt,
+        });
+        if (!updated) break;
+        const admin = createAdminClient();
         // A refund is a state a donor must see. Only the webhook may write it,
         // there is no client path to `refunded`, which is what stops an app from
         // claiming a gift was returned when it was not.
-        await admin.rpc("project_giving_attempt_state", {
+        const { error: projectionError } = await admin.rpc("project_giving_attempt_state", {
           p_payment_intent_id: piId,
           p_status: "refunded",
           p_donation_id: null,
           p_event_at: eventCreatedAt,
         });
+        if (projectionError) throw new Error("giving_attempt_projection_failed");
       }
       break;
     }
@@ -904,20 +942,15 @@ async function processStripeEventEffects(event: Stripe.Event): Promise<void> {
       if (!chargeId) break;
       const churchId = await churchIdForStripeAccount(connectedAccount);
       if (!churchId) break;
-      const admin = createAdminClient();
       const eventCreatedAt = new Date(event.created * 1000).toISOString();
-      await admin
-        .from("giving_donations")
-        .update({
-          status: "disputed",
-          updated_at: new Date().toISOString(),
-          stripe_event_created_at: eventCreatedAt,
-        })
-        .eq("church_id", churchId)
-        .eq("stripe_charge_id", chargeId)
-        .or(
-          `stripe_event_created_at.is.null,stripe_event_created_at.lte.${eventCreatedAt}`,
-        );
+      const updated = await updateDonationState({
+        churchId,
+        key: "stripe_charge_id",
+        value: chargeId,
+        status: "disputed",
+        eventCreatedAt,
+      });
+      if (!updated) break;
       // Same reasoning as a refund: a dispute is a real state and only this path
       // may write it. The charge is the key here, so the attempt is reached
       // through the donation that carries both.
@@ -931,24 +964,18 @@ async function processStripeEventEffects(event: Stripe.Event): Promise<void> {
       if (!chargeId) break;
       const churchId = await churchIdForStripeAccount(connectedAccount);
       if (!churchId) break;
-      const admin = createAdminClient();
       // Only a lost dispute takes the money back. `won`, and `warning_closed`
       // (an inquiry closed with the church keeping the gift), leave it counted.
       const status = dispute.status === "lost" ? "refunded" : "succeeded";
       const eventCreatedAt = new Date(event.created * 1000).toISOString();
-      const { error: disputeError } = await admin
-        .from("giving_donations")
-        .update({
-          status,
-          updated_at: new Date().toISOString(),
-          stripe_event_created_at: eventCreatedAt,
-        })
-        .eq("church_id", churchId)
-        .eq("stripe_charge_id", chargeId)
-        .or(
-          `stripe_event_created_at.is.null,stripe_event_created_at.lte.${eventCreatedAt}`,
-        );
-      if (disputeError) throw new Error("dispute_reconciliation_failed");
+      const updated = await updateDonationState({
+        churchId,
+        key: "stripe_charge_id",
+        value: chargeId,
+        status,
+        eventCreatedAt,
+      });
+      if (updated) await projectAttemptFromCharge(chargeId, churchId, status, eventCreatedAt);
       break;
     }
     case "payout.failed": {

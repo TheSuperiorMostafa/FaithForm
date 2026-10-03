@@ -1,6 +1,6 @@
 # FaithForm — Production Deployment Guide
 
-FaithForm is a Next.js 14 church management app backed by Supabase. This guide walks through deploying to Vercel and configuring Supabase for production.
+FaithForm is a Next.js 15 church management app backed by Supabase. This guide walks through deploying to Vercel and configuring Supabase for production.
 
 **Stack:** Next.js (App Router) · Supabase (Postgres + Auth) · Vercel · pnpm
 
@@ -15,12 +15,12 @@ Set these in **Vercel → Project → Settings → Environment Variables** (and 
 | Variable | What it is | Where to get it |
 |----------|------------|-----------------|
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL | [Supabase Dashboard](https://supabase.com/dashboard) → your project → **Settings → API** → Project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase public (anon) key — safe to expose in the browser | Same page → **Project API keys** → `anon` / publishable key |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase public key — safe to expose in the browser; also accepts `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Same page → **Project API keys** → publishable / `anon` key |
 | `SUPABASE_SECRET_KEY` | Supabase secret key — server-only; required for reading OAuth tokens and calendar sync | Same page → **secret** key (also accepts `SUPABASE_SERVICE_ROLE_KEY`) |
 | `ANTHROPIC_API_KEY` | Claude API key for sermon builder | [console.anthropic.com](https://console.anthropic.com) → API Keys |
 | `ESV_API_KEY` | ESV Bible API key for sermon scripture lookup | [api.esv.org](https://api.esv.org) → Account → API Key |
 | `N8N_WEBHOOK_SECRET` | Shared secret for n8n webhook calls (attendance) and OAuth state signing | Generate a long random string |
-| `INTEGRATION_OAUTH_STATE_SECRET` | Signs Google/Facebook OAuth state (optional; falls back to `N8N_WEBHOOK_SECRET`) | Long random string |
+| `INTEGRATION_OAUTH_STATE_SECRET` | Signs Google/Facebook OAuth state; required in production | Separate random string of at least 32 characters |
 | `NEXT_PUBLIC_SITE_URL` | Public URL of the deployed app (no trailing slash) | `https://faithform.io` |
 | `STREAM_RELAY_HOST` | RTMP relay hostname shown in Settings | `stream.faithform.io` |
 | `NEXT_PUBLIC_STREAM_RELAY_HOST` | Optional client-facing copy of relay hostname | `stream.faithform.io` |
@@ -35,6 +35,35 @@ Set these in **Vercel → Project → Settings → Environment Variables** (and 
 | `FACEBOOK_APP_SECRET` | Meta app secret | Same as above |
 | `FACEBOOK_REDIRECT_URI` | Facebook OAuth callback | `https://faithform.io/api/integrations/facebook/callback` |
 
+The production request validator in `lib/env/production.ts` also requires:
+
+| Variable | Requirement |
+|----------|-------------|
+| `DONOR_PORTAL_SESSION_SECRET` | Donor session signing; at least 32 characters |
+| `RATE_LIMIT_KEY_SECRET` | Rate-limit key signing; at least 32 characters |
+| `STREAM_RELAY_PLAYBACK_SECRET` | Relay playback authorization; at least 32 characters |
+| `STREAM_INGEST_SIGNING_SECRET` | Browser ingest authorization; at least 32 characters |
+| `STREAM_PLAYBACK_SECRET` | Mobile playback authorization; at least 32 characters |
+| `CRON_SECRET` | Vercel worker authorization; at least 32 characters |
+| `ATTENDANCE_QR_SECRET` | QR, display, pairing and kiosk signing; at least 32 characters |
+| `STREAM_HLS_UPSTREAM_URL` | HTTPS relay HLS endpoint |
+| `STREAM_WS_INGEST_UPSTREAM_URL` | WSS or HTTPS browser ingest endpoint |
+| `STRIPE_SECRET_KEY`, `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Matching Stripe account/mode; live when accepting real gifts |
+| `STRIPE_WEBHOOK_SECRET` | Stripe destination signing secret; at least 32 characters |
+| `RESEND_API_KEY` | Transactional email provider key |
+
+`N8N_WEBHOOK_SECRET`, `INTEGRATION_OAUTH_STATE_SECRET`, and
+`STREAM_RELAY_WEBHOOK_SECRET` also need at least 32 characters. Give each of the
+application signing secrets its own value. `NEXT_PUBLIC_SITE_URL` and
+`NEXT_PUBLIC_SUPABASE_URL` must use HTTPS. `STREAM_CHAT_API_KEY` and
+`STREAM_CHAT_API_SECRET` are optional together; configuring only one is refused.
+
+Run `pnpm pilot:readiness` with the intended deployment environment available.
+It uses the same mandatory checks as production requests and checks optional
+push configuration without contacting any provider. A successful check proves
+configuration shape, not delivery, payment processing, schema parity or uptime.
+Missing required configuration causes production requests to return HTTP 503.
+
 ### Optional (automations)
 
 | Variable | What it is |
@@ -42,7 +71,6 @@ Set these in **Vercel → Project → Settings → Environment Variables** (and 
 | `SMS_MOBILE_API_KEY` | [SMSMobileAPI](https://smsmobileapi.com/doc/) key for attendance follow-up texts (sent from your connected phone) |
 | `SMS_MOBILE_API_DEVICE_SID` | Optional device ID (`sIdentifiant`) for the legacy server-wide SMSMobileAPI phone; church connections save their own device ID in the admin panel |
 | `TWILIO_ACCOUNT_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM_NUMBER` | Optional Twilio fallback if `SMS_MOBILE_API_KEY` is not set |
-| `RESEND_API_KEY` | Transactional email (onboarding invites) |
 | `INTERNAL_ALERT_EMAIL` | Planned for staff alerts |
 
 **Attendance follow-up SMS ops:** Install the SMSMobileAPI app on the church phone, keep it online, and add `SMS_MOBILE_API_KEY` to Vercel. Members need phone numbers on their profiles. Messages escalate (1st miss → template 1, … 5th+ → template 5).
@@ -106,9 +134,13 @@ Reference: [Stripe Connect webhooks](https://docs.stripe.com/connect/webhooks).
    | 4 | `supabase/migrations/0004_lockdown_helpers.sql` |
    | 5 | `supabase/migrations/0005_announcement_scheduling.sql` |
    | 6 | `supabase/migrations/0006_sermon_builder.sql` |
-   | 7+ | Any later migrations through `0010_integration_status_rpc.sql` |
+   | 7+ | Every later migration currently in `supabase/migrations/`, in full filename order (including files with shared legacy prefixes) |
 
 4. Confirm each script completes without errors before running the next.
+   For an existing environment, inspect its migration ledger and schema first;
+   do not reapply the entire chain blindly. Rehearse the complete current chain
+   and restore a backup before production rollout. The historic P12 runbook's
+   0055–0063 list is a feature-specific subset, not the current full chain.
 
 ### Google & Facebook setup (announcements)
 
@@ -178,12 +210,21 @@ Reference: [Stripe Connect webhooks](https://docs.stripe.com/connect/webhooks).
 
    If you open HLS port `8888` on the relay firewall instead, you can skip the HLS tunnel and keep only the WS ingest tunnel for browser studio.
 
-9. **Scheduled start / syndication retry** — Vercel Hobby allows only daily crons, so poll these endpoints every 2 minutes from an external cron (e.g. cron-job.org) or the relay box:
+9. **Scheduled start / syndication retry** — these endpoints are not registered
+   in `vercel.json`. Configure an external scheduler or the relay box to call
+   `GET https://faithform.io/api/stream/scheduled-start` every two minutes with
+   an `Authorization: Bearer <STREAM_CRON_SECRET>` header. The scheduled-start
+   handler also retries syndication, so one job covers both. A separate retry
+   job can call `GET https://faithform.io/api/stream/syndication/retry` with the
+   same header. Query-string secrets are not accepted.
 
-   - `GET https://faithform.io/api/stream/scheduled-start?secret=YOUR_STREAM_CRON_SECRET`
-   - `GET https://faithform.io/api/stream/syndication/retry?secret=YOUR_STREAM_CRON_SECRET`
-
-   Or upgrade to Vercel Pro and add both paths to `vercel.json` crons at `*/2 * * * *`.
+   Alternatively register `/api/stream/scheduled-start` in `vercel.json` at
+   `*/2 * * * *` on a hosting plan that supports that frequency. Vercel sends
+   `CRON_SECRET`; leave `STREAM_CRON_SECRET` unset so the handler uses that
+   fallback. If `STREAM_CRON_SECRET` is set, external callers must use that
+   value instead. Verify successful job responses and an actual scheduled start.
+   The other workers already registered in `vercel.json` also require a plan
+   supporting their configured minute/hour schedules.
 
    Or run only the sermon migration locally:
 
@@ -279,26 +320,19 @@ Production runs at `https://faithform.io`.
 
 ## GitHub Actions CI (Recommended)
 
-A workflow at `.github/workflows/ci.yml` runs `pnpm lint` and `pnpm build` on every push and pull request to `main`.
-
-### Add GitHub secrets
-
-Go to your repo → **Settings → Secrets and variables → Actions → New repository secret** and add:
-
-| Secret name | Value |
-|-------------|-------|
-| `NEXT_PUBLIC_SUPABASE_URL` | Same as Vercel |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Same as Vercel |
-| `SUPABASE_SECRET_KEY` | Same as Vercel |
-| `ANTHROPIC_API_KEY` | Same as Vercel |
-| `ESV_API_KEY` | Same as Vercel |
-| `N8N_WEBHOOK_SECRET` | Same as Vercel |
+A workflow at `.github/workflows/ci.yml` runs the complete web gate and
+dependency audit, native builds/tests, and disposable PostgreSQL migration,
+tenant-isolation and concurrency tests on pushes and pull requests to `main`.
+The compile jobs use deliberately unusable configuration fixtures. They do not
+need production credentials and their success does not prove provider delivery.
 
 ---
 
 ## Post-Deploy Verification
 
-Run through these checks after every production deploy:
+Run read-only smoke checks after every production deploy. Perform the test
+writes below in an explicitly selected staging church/environment; do not use
+customer attendance, announcements or real gifts as test fixtures.
 
 - [ ] Visit production URL — loads without error
 - [ ] Request magic link login — email arrives within 60 seconds
@@ -314,19 +348,43 @@ Run through these checks after every production deploy:
 
 ---
 
-## Known Gaps
+## Verify deployed integrations
 
-Before running the full smoke test, be aware of these items in the current codebase:
+The repository includes web and mobile sign-in and callback routes. Verify
+magic-link delivery, allowed Supabase redirect URLs, sign-in, refresh, and logout
+against the deployed environment. Confirm provider event delivery, scheduled
+jobs, schema parity, backup restoration and rollback before admitting churches.
+A local build or readiness command cannot establish those external results.
 
-1. **Login page is a placeholder** — `app/login/page.tsx` does not yet render the magic-link form. Magic-link login must be restored before the auth smoke tests pass.
-2. **No auth callback route** — `app/auth/callback` is not present. Supabase magic-link redirects require this route; add it before testing login end-to-end.
-3. **`.env.example` naming drift** — `.env.example` uses `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` and `SUPABASE_SECRET_KEY`, while runtime code expects `NEXT_PUBLIC_SUPABASE_ANON_KEY` for the public key. Use the names in the **Required** table above when configuring Vercel and local `.env.local`.
+Rehearse payment interruption, out-of-order refund/dispute delivery, pause and
+resume, and database-write retries with Stripe test-mode accounts. On both
+native apps, delay a bootstrap while signing out and switching accounts; the
+previous account must never reappear. Revoke a session inside a feature and
+confirm private views, snapshots, notification registration and automatic
+attendance state are cleared. Exercise automatic attendance with actual device
+movement, background execution and battery-saving modes.
+
+Recovery must cover database rows **and uploaded files**. Supabase database
+backups contain Storage metadata, not the objects themselves; maintain a
+separate copy of required media/images and restore it with a matching database
+backup into an isolated target. Verify recovered files are readable and retain
+the intended ownership/access rules. Record the tested application revision,
+target, backup time, restore result and rollback outcome before launch. See
+[Supabase backup limits](https://supabase.com/docs/guides/platform/backups).
+
+Confirm successful worker invocations and a way to notice failed or stalled
+payment, notification, deletion and messaging jobs. The public mobile health
+endpoint reports API reachability/version only; it does not query the database
+or establish worker/provider health. Minute/hour cron expressions require a
+hosting plan that supports them; see
+[Vercel cron restrictions](https://vercel.com/docs/cron-jobs/manage-cron-jobs).
 
 ---
 
 ## Local Development Reference
 
-Copy `.env.example` to `.env.local` and fill in values using the variable names from the **Required** table (not the publishable-key alias in `.env.example` unless you align the code).
+Copy `.env.example` to `.env.local` and fill in values. Runtime accepts the modern
+Supabase publishable/secret names and the legacy anon/service-role aliases.
 
 ```bash
 pnpm install

@@ -16,6 +16,7 @@ import {
 } from "@/lib/integrations/google-calendar";
 import { getIntegrationStatus } from "@/lib/integrations/tokens";
 import type { CalendarEventPreview } from "@/lib/integrations/types";
+import { devSampleCalendarEvents, devSampleCalendarOn } from "./dev-sample-calendar";
 
 /**
  * One church calendar, however many services it is actually spread across.
@@ -40,6 +41,13 @@ export async function listChurchCalendarEvents(
   supabase?: SupabaseClient,
   knownConnected?: { google: boolean; apple: boolean },
 ): Promise<ChurchCalendarResult> {
+  if (devSampleCalendarOn()) {
+    return {
+      events: devSampleCalendarEvents(startISO, endISO),
+      errors: [],
+      connected: { google: false, apple: true },
+    };
+  }
   const status = knownConnected
     ? null
     : await getIntegrationStatus(churchId, supabase);

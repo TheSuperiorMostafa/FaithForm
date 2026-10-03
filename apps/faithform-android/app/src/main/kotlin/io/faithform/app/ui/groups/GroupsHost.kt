@@ -1,5 +1,7 @@
 package io.faithform.app.ui.groups
 
+import io.faithform.app.ui.components.motionReveal
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -13,6 +15,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
+import io.faithform.app.ui.components.FaithFormIconButton as IconButton
+import io.faithform.app.ui.components.FaithFormTextButton as TextButton
+import io.faithform.app.ui.components.FaithFormButton as Button
 import androidx.compose.runtime.*
 import io.faithform.app.ui.components.FaithFormPillSwitcher
 import io.faithform.app.ui.components.FaithFormPillOption
@@ -68,11 +73,11 @@ import kotlinx.coroutines.launch
         showChurchAvatar = church != null,
         actions = { IconButton(onClick = { preferences = true }) { Icon(Icons.Outlined.NotificationsNone, "Messaging preferences") } },
     ) { modifier ->
-        Column(modifier) {
+        Column(modifier.motionReveal(section, travel = false)) {
             val sections = if (store.home?.directMessagesEnabled == true) listOf("My groups", "Discover", "Messages") else listOf("My groups", "Discover")
             FaithFormPillSwitcher(options = sections.map { FaithFormPillOption(it, it) }, selected = section, onSelect = { section = it }, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp))
             if (section == "Messages") GroupMessages(store, chat)
-            else LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            else LazyColumn(Modifier.fillMaxSize().motionReveal(section to store.loading, travel = false), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                 item {
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Text("LIFE TOGETHER", style = MaterialTheme.typography.labelSmall, color = theme.palette.brandAccent)

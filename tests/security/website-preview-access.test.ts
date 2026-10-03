@@ -50,7 +50,7 @@ test("draft website previews require a viewer from the same church with website 
 });
 
 test("the public site checks page and metadata access on each request", () => {
-  const page = readFileSync("app/sites/[slug]/page.tsx", "utf8");
+  const page = readFileSync("app/sites/[slug]/[[...path]]/page.tsx", "utf8");
   assert.match(page, /dynamic = "force-dynamic"/);
   assert.match(page, /generateMetadata[\s\S]*siteIsVisible\(bundle, query\.preview === "1"\)/);
   assert.match(page, /ChurchSitePage[\s\S]*siteIsVisible\(bundle, query\.preview === "1"\)/);

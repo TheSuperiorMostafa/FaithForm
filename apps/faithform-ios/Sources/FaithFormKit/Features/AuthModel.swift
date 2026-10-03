@@ -143,12 +143,8 @@ public final class AuthModel {
 
     /// Sends the confirmation email again.
     ///
-    /// The overwhelmingly common reason someone is stuck on this screen is that
-    /// the first email never arrived, so this is the one action worth putting in
-    /// front of them. A rate limit is surfaced — tapping twice and being told
-    /// nothing would read as a second email that never came — and every other
-    /// failure resolves to the notice, because from here the person can only
-    /// wait or try a different address either way.
+    /// Keep failures on this screen so the person can retry. A failed request
+    /// must never show the success notice: it does not mean an email was sent.
     public func resendConfirmation() async {
         guard let auth, !confirmationEmail.isEmpty, !isResending else { return }
 
@@ -160,13 +156,10 @@ public final class AuthModel {
         do {
             try await auth.resendConfirmation(email: confirmationEmail)
             resendNoticeVisible = true
-        } catch let failure as AuthFailure where failure.kind == .rateLimited {
+        } catch let failure as AuthFailure {
             resendError = failure.message
         } catch {
-            // Anything else resolves to the notice. From here the person can
-            // only wait or use a different address either way, and an error
-            // about a send they cannot retry differently is just noise.
-            resendNoticeVisible = true
+            resendError = L.authErrorGeneric
         }
     }
 

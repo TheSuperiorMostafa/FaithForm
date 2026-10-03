@@ -8,6 +8,7 @@ import com.google.android.gms.location.GeofencingRequest
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -180,6 +181,20 @@ class GeofencingRequestTest {
         monitor.startMonitoring(listOf(region()))
 
         assertEquals(1, monitor.monitoredRegions().size)
+    }
+
+    @Test
+    fun `disabled Google location accuracy reports a settings problem and recovers`() = runBlocking {
+        val facade = RecordingFacade()
+        facade.addResult = GeofencingFacade.TaskResult.Failure("ApiException", com.google.android.gms.location.GeofenceStatusCodes.GEOFENCE_NOT_AVAILABLE)
+        val monitor = monitoring(facade)
+        monitor.startMonitoring(listOf(region()))
+        assertTrue(monitor.monitoredRegions().isEmpty())
+        assertEquals("location_unavailable", monitor.registrationRefusal())
+        facade.addResult = GeofencingFacade.TaskResult.Success
+        monitor.startMonitoring(listOf(region()))
+        assertEquals(1, monitor.monitoredRegions().size)
+        assertNull(monitor.registrationRefusal())
     }
 
     @Test

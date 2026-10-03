@@ -233,8 +233,8 @@ export function CalendarSectionSkeleton() {
           <p className="text-sm text-muted-foreground">Not announced yet · Posted</p>
         </div>
 
-        <div className="w-full xl:sticky xl:top-4 xl:self-start">
-          <Card>
+        <div className="relative w-full">
+          <Card className="xl:absolute xl:inset-0 xl:overflow-y-auto">
             <CardHeader>
               <CardTitle>{formatDayAgendaHeading(now)}</CardTitle>
               <Skeleton className="h-5 w-48" />

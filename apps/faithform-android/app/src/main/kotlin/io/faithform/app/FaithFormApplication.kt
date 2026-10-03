@@ -43,11 +43,6 @@ class FaithFormApplication : Application() {
             supabaseAnonKey = BuildConfig.SUPABASE_ANON_KEY
         )
 
-        // No notification channels are created in v1. Push arrives in v1.1,
-        // together with POST_NOTIFICATIONS in the manifest; creating channels
-        // now would list "Announcements" and "Events" in system settings for
-        // an app that sends neither. `NotificationChannels.ensureCreated` is
-        // ready for that release and goes back here, before the first
-        // notification can arrive.
+        io.faithform.app.notifications.NotificationChannels.ensureCreated(this)
     }
 }

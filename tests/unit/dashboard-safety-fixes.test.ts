@@ -89,8 +89,11 @@ test("attendance names failing to save removes the half-saved Sunday", () => {
     /if \(entriesError\) \{\s+await supabase\.from\("attendance_records"\)\.delete\(\)\.eq\("id", record\.id\)/,
   );
   // Raw database text is not shown to the person.
-  assert.doesNotMatch(actions, /entriesError\.message/);
-  assert.doesNotMatch(actions, /recordError\?\.message/);
+  // Inspecting a missing-column error for compatibility is allowed; returning
+  // its raw message to the person is not.
+  assert.doesNotMatch(actions, /error:\s*(?:entriesError|recordError)\??\.message/);
+  assert.match(actions, /error: toUserError\(entriesError, "We couldn't save attendance/);
+  assert.match(actions, /error: toUserError\(recordError, "We couldn't save attendance/);
 });
 
 test("a saved Sunday can be edited without losing follow-up history", () => {

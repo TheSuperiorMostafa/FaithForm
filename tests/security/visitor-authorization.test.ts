@@ -477,7 +477,9 @@ test("losing access bumps the version a device compares against", () => {
     /if \(decision\.to === "blocked" \|\| decision\.to === "left"\)[\s\S]{0,120}bumpAuthorizationVersion/,
   );
   assert.match(claims, /bumpAuthorizationVersion/);
-  assert.match(lifecycle, /bumpAuthorizationVersion/);
+  // Deletion changes status and authorization version in one checked write.
+  assert.match(lifecycle, /authorization_version: account\.authorizationVersion \+ 1/);
+  assert.match(lifecycle, /\.eq\("authorization_version", account\.authorizationVersion\)/);
 });
 
 test("withdrawing attendance consent invalidates a cached decision", () => {

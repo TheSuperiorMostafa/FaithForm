@@ -25,12 +25,13 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.faithform.app.AppViewModel
+import io.faithform.app.ui.components.motionReveal
 import io.faithform.app.R
 import io.faithform.app.contract.LinkedService
 import io.faithform.app.media.toCard
 import io.faithform.app.sermons.SermonDetailPhase
 import io.faithform.app.sermons.PresentationDetailPhase
-import androidx.compose.material3.TextButton
+import io.faithform.app.ui.components.FaithFormTextButton as TextButton
 import androidx.compose.material3.Text
 import io.faithform.app.contract.Bootstrap
 import io.faithform.app.contract.ChurchRelationship
@@ -213,7 +214,7 @@ fun WatchTab(
                         partition = partition,
                         onOpenNotes = { opened = "sermon:$it" },
                         onOpenSlides = { opened = "presentation:$it" },
-                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                        modifier = Modifier.weight(1f).fillMaxWidth().motionReveal(pane),
                     )
                 }
                 showsMedia -> {
@@ -226,7 +227,7 @@ fun WatchTab(
                         onWatchLive = appViewModel::watchLive,
                         // "Today's service has ended" becomes its replay.
                         onOpenRecording = { opened = "recording:$it" },
-                        modifier = Modifier.weight(1f).fillMaxWidth(),
+                        modifier = Modifier.weight(1f).fillMaxWidth().motionReveal(pane),
                     )
                 }
             }

@@ -37,6 +37,7 @@ yarn-error.log*
 *.p8
 service-account*.json
 google-services.json
+apps/faithform-android/.release/
 
 # vercel
 .vercel
@@ -80,4 +81,3 @@ supabase/.temp/
 /.build/
 /graphify-out/
 /output/
-

@@ -228,3 +228,11 @@ test("the fake adapter records what it was asked, for deterministic tests", asyn
   assert.equal(fake.sent.length, 2);
   assert.equal(fake.sent[1].token, "t2");
 });
+
+ test("FCM notification topics select the matching Android channel", () => {
+  for (const topic of ["announcements", "events", "groups"] as const) {
+    const payload = buildFcmPayload("one-device", { title: "T", body: "B", deepLink: "faithform://church/grace/announcements", collapseKey: "one", correlationId: "c", topic }) as { message: { data: { topic: string }; android: { notification: { channel_id: string } } } };
+    assert.equal(payload.message.data.topic, topic);
+    assert.equal(payload.message.android.notification.channel_id, `faithform_${topic}`);
+  }
+});
