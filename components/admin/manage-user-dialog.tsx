@@ -89,11 +89,11 @@ export function ManageUserDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <form action={updateAction} className="flex min-h-0 flex-col">
+        <form action={updateAction} className="flex min-h-0 flex-auto flex-col">
           <input type="hidden" name="member_id" value={user.id} />
           <input type="hidden" name="role" value={role} />
 
-          <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-6 py-5">
+          <div className="flex min-h-0 flex-auto flex-col gap-5 overflow-y-auto px-6 py-5">
             <fieldset className="flex flex-col gap-2">
               <legend className="text-sm font-semibold">Role</legend>
               <div className="grid gap-2 sm:grid-cols-2">
@@ -158,7 +158,7 @@ export function ManageUserDialog({
 
         <form
           action={removeAction}
-          className="border-t border-border px-6 py-4"
+          className="shrink-0 border-t border-border px-6 py-4"
         >
           <input type="hidden" name="member_id" value={user.id} />
           <div className="flex flex-wrap items-center justify-between gap-3">

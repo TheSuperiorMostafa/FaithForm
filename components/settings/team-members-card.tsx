@@ -349,8 +349,8 @@ function InviteDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <form action={formAction} className="flex min-h-0 flex-col">
-          <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-6 py-5">
+        <form action={formAction} className="flex min-h-0 flex-auto flex-col">
+          <div className="flex min-h-0 flex-auto flex-col gap-6 overflow-y-auto px-6 py-5">
             <div className="flex flex-col gap-2">
               <Label htmlFor="invite_email" className="text-[15px]">
                 Their email address
@@ -466,10 +466,10 @@ function ChangeAccessDialog({
           <DialogDescription>{name}</DialogDescription>
         </DialogHeader>
 
-        <form action={updateAction} className="flex min-h-0 flex-col">
+        <form action={updateAction} className="flex min-h-0 flex-auto flex-col">
           <input type="hidden" name="member_id" value={member.id} />
 
-          <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-6 py-5">
+          <div className="flex min-h-0 flex-auto flex-col gap-6 overflow-y-auto px-6 py-5">
             <AccessChooser
               idPrefix={`member-${member.id}`}
               role={access.role}

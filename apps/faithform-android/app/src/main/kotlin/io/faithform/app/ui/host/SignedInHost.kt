@@ -40,6 +40,9 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.faithform.app.AppViewModel
+import io.faithform.app.ui.attendance.AutomaticAttendanceHost
+import io.faithform.app.ui.notifications.NotificationHost
+import io.faithform.app.ui.components.motionReveal
 import io.faithform.app.R
 import io.faithform.app.attendance.CameraPermissionRequester
 import io.faithform.app.contract.Bootstrap
@@ -105,6 +108,11 @@ fun SignedInHost(
 
     val church = bootstrap.relationships.firstOrNull { it.churchSlug == selectedSlug }
     val partition = viewModel.partition(selectedSlug)
+    val automaticState by container.attendanceRuntime.state.collectAsStateWithLifecycle()
+    LaunchedEffect(bootstrap, selectedSlug) {
+        container.attendanceRuntime.bind(bootstrap, selectedSlug)
+        container.push.synchronize()
+    }
     val tabStates = rememberSaveableStateHolder()
     var recordingFullScreen by remember { mutableStateOf(false) }
     val hideChrome = recordingFullScreen && current == HostTab.WATCH
@@ -164,7 +172,7 @@ fun SignedInHost(
             if (isStale && !hideChrome) StaleBanner(stringResource(R.string.offline_cached))
 
             // Keep the active tab within the shell’s available content area.
-            Box(Modifier.weight(1f).fillMaxWidth()) {
+            Box(Modifier.weight(1f).fillMaxWidth().motionReveal(current, travel = false)) {
                 tabStates.SaveableStateProvider(current.name) {
                     when (current) {
                         HostTab.HOME -> HomeTab(
@@ -190,10 +198,7 @@ fun SignedInHost(
                                     title = stringResource(R.string.auto_attendance_title),
                                     onBack = { showAutomaticCheckIn = false },
                                 ) { _ ->
-                                    AutomaticAttendanceIntroScreen(
-                                        onContinue = { showAutomaticCheckIn = false },
-                                        onNotNow = { showAutomaticCheckIn = false },
-                                    )
+                                    AutomaticAttendanceHost(container, onChanged = { viewModel.reloadQuietly() }, onClose = { showAutomaticCheckIn = false })
                                 }
                             } else {
                                 TabScreen(
@@ -209,7 +214,7 @@ fun SignedInHost(
                                         automaticCheckInContent = if (showsAutomatic) {
                                             { automaticModifier ->
                                                 AutomaticCheckInEntry(
-                                                    enabled = container.automaticAttendance?.settings?.enabled == true,
+                                                    enabled = automaticState.isReady,
                                                     onOpen = { showAutomaticCheckIn = true },
                                                     modifier = automaticModifier,
                                                 )
@@ -246,11 +251,16 @@ fun SignedInHost(
                         HostTab.ACCOUNT -> {
                             var showAutoCheckIn by rememberSaveable { mutableStateOf(false) }
                             var showChurchAppearance by rememberSaveable { mutableStateOf(false) }
+                            var showNotifications by rememberSaveable { mutableStateOf(false) }
                             val showsAuto =
                                 "attendance" in bootstrap.enabledCapabilities &&
                                     selectedSlug != null &&
                                     (church?.automaticCheckInEnabled ?: true)
-                            if (showChurchAppearance && church?.canManageBranding == true) {
+                            if (showNotifications) {
+                                TabScreen(title = stringResource(R.string.account_notifications), onBack = { showNotifications = false }) { _ ->
+                                    NotificationHost(container, selectedSlug, onClose = { showNotifications = false })
+                                }
+                            } else if (showChurchAppearance && church?.canManageBranding == true) {
                                 TabScreen(
                                     title = stringResource(R.string.church_appearance_title),
                                     onBack = { showChurchAppearance = false },
@@ -275,20 +285,18 @@ fun SignedInHost(
                                     title = stringResource(R.string.auto_attendance_title),
                                     onBack = { showAutoCheckIn = false },
                                 ) { _ ->
-                                    AutomaticAttendanceIntroScreen(
-                                        onContinue = { showAutoCheckIn = false },
-                                        onNotNow = { showAutoCheckIn = false },
-                                    )
+                                    AutomaticAttendanceHost(container, onChanged = { viewModel.reloadQuietly() }, onClose = { showAutoCheckIn = false })
                                 }
                             } else {
                                 TabScreen(title = stringResource(R.string.tab_account)) { content ->
                                     AccountTab(
                                         bootstrap = bootstrap,
                                         onSignOut = viewModel::signOut,
+                                        onOpenNotifications = { showNotifications = true },
                                         onDeleteAccount = viewModel::beginDeletion,
                                         modifier = content,
                                         showsAutomaticCheckIn = showsAuto,
-                                        automaticCheckInEnabled = container.automaticAttendance?.settings?.enabled == true,
+                                        automaticCheckInEnabled = automaticState.isReady,
                                         onOpenAutomaticCheckIn = { showAutoCheckIn = true },
                                         onOpenChurchAppearance = if (church?.canManageBranding == true) {
                                             { showChurchAppearance = true }

@@ -13,12 +13,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
+import io.faithform.app.ui.components.FaithFormButton as Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import io.faithform.app.ui.components.FaithFormOutlinedButton as OutlinedButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import io.faithform.app.ui.components.FaithFormTextButton as TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -242,6 +242,8 @@ fun AutomaticAttendanceStatusScreen(
     onSetUp: () -> Unit,
     onDisable: () -> Unit,
     onOpenSettings: () -> Unit,
+    enabled: Boolean = state.isReady,
+    onRetry: (() -> Unit)? = null,
 ) {
     val theme = LocalFaithFormTheme.current
     val fill = Modifier
@@ -330,9 +332,7 @@ fun AutomaticAttendanceStatusScreen(
                 working = true,
             )
 
-            state.isReady -> OutlinedButton(onClick = onDisable, modifier = fill) {
-                Text(stringResource(R.string.auto_attendance_disable))
-            }
+            state.isReady -> Unit
 
             state.canOpenSettings -> Button(onClick = onOpenSettings, modifier = fill) {
                 Text(stringResource(R.string.auto_attendance_open_settings))
@@ -345,6 +345,15 @@ fun AutomaticAttendanceStatusScreen(
             // enabled the feature, and a missing People link are all states the
             // person cannot fix from here, and offering a control that would do
             // nothing wastes their time.
+        }
+
+        if (!state.isWorking && (state.step as? io.faithform.app.attendance.AutomaticAttendanceStep.Blocked)?.blocker == io.faithform.app.attendance.AutomaticAttendanceBlocker.Unavailable && onRetry != null) {
+            Button(onClick = onRetry, modifier = fill) { Text(stringResource(R.string.try_again)) }
+        }
+        if (enabled) {
+            OutlinedButton(onClick = onDisable, enabled = !state.isWorking, modifier = fill) {
+                Text(stringResource(R.string.auto_attendance_disable))
+            }
         }
 
         Spacer(Modifier.size(FaithFormTokens.Spacing.xl))

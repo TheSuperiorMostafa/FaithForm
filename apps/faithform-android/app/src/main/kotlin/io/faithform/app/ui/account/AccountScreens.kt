@@ -9,6 +9,8 @@ import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import io.faithform.app.ui.components.motionPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,12 +33,13 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Badge
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.LocationOn
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Photo
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
+import io.faithform.app.ui.components.FaithFormButton as Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -46,12 +49,12 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
+import io.faithform.app.ui.components.FaithFormOutlinedButton as OutlinedButton
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import io.faithform.app.ui.components.FaithFormTextButton as TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
@@ -102,6 +105,7 @@ object LegalLinks {
     const val PRIVACY_POLICY = "https://faithform.io/privacy"
     const val TERMS = "https://faithform.io/terms"
     const val ACCOUNT_DELETION = "https://faithform.io/account-deletion"
+    const val SUPPORT = "https://faithform.io/support"
 }
 
 /**
@@ -142,6 +146,7 @@ fun AccountTab(
     onOpenChurchAppearance: (() -> Unit)? = null,
     onUpdateProfilePhoto: ((ByteArray?, (String?) -> Unit) -> Unit)? = null,
     onUpdateDisplayName: ((String, (Boolean) -> Unit) -> Unit)? = null,
+    onOpenNotifications: (() -> Unit)? = null,
 ) {
     val theme = LocalFaithFormTheme.current
     val displayName = bootstrap.profile.displayName
@@ -192,6 +197,10 @@ fun AccountTab(
 
                 GroupPanel(stringResource(R.string.preferences_section)) {
                     AppearanceChooser()
+                    onOpenNotifications?.let { open ->
+                        HorizontalDivider(color = theme.palette.divider)
+                        AccountRow(Icons.Outlined.Notifications, stringResource(R.string.account_notifications), null, null, open)
+                    }
                     if (showsAutomaticCheckIn && onOpenAutomaticCheckIn != null) {
                         HorizontalDivider(color = theme.palette.divider)
                         AccountRow(
@@ -270,11 +279,17 @@ private fun ProfileHero(
         } else {
             ProfilePhotoPicker(onUpdateProfilePhoto) { openPicker, pickerBusy, pickerFailed ->
                 val busy = pickerBusy || removing
+                val avatarInteraction = remember { MutableInteractionSource() }
                 Box {
                     Box(
                         modifier = Modifier
-                            .clip(CircleShape)
-                            .clickable(enabled = !busy) { menuOpen = true }
+                            // Only the image is circularly clipped; the corner badge must remain whole.
+                            .motionPress(avatarInteraction, enabled = !busy)
+                            .clickable(
+                                interactionSource = avatarInteraction,
+                                indication = null,
+                                enabled = !busy,
+                            ) { menuOpen = true }
                             .semantics {
                                 contentDescription =
                                     if (hasPhoto) "Profile photo. Opens choices for changing it."
@@ -774,6 +789,7 @@ fun LegalLinksSection(modifier: Modifier = Modifier) {
             R.string.privacy_policy to LegalLinks.PRIVACY_POLICY,
             R.string.terms_of_service to LegalLinks.TERMS,
             R.string.account_deletion_help to LegalLinks.ACCOUNT_DELETION,
+            R.string.account_support to LegalLinks.SUPPORT,
         )) {
             TextButton(
                 onClick = { openWebLink(context, url) },

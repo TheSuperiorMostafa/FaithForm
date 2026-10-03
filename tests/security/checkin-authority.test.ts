@@ -203,7 +203,7 @@ test("the kiosk search returns three fields and cannot be widened", () => {
   // The tablet scrolls the returned batch so raising the soft cap is usable.
   assert.match(
     read("components/checkin/kiosk-station.tsx"),
-    /max-h-\[min\(60vh,28rem\)\].*overflow-y-auto/s,
+    /max-h-\[min\(60vh,28rem\)\][\s\S]*overflow-y-auto/,
   );
 });
 

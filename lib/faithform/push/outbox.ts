@@ -526,6 +526,7 @@ export async function runNotificationWorker(options?: {
       deepLink: raw.deep_link,
       collapseKey: raw.collapse_key,
       correlationId: raw.correlation_id,
+      topic: raw.topic,
     };
 
     let anyRetryable = false;

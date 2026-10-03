@@ -53,13 +53,13 @@ import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.WarningAmber
 import androidx.compose.material.icons.outlined.WifiOff
-import androidx.compose.material3.Button
+import io.faithform.app.ui.components.FaithFormButton as Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import io.faithform.app.ui.components.FaithFormIconButton as IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedIconButton
+import io.faithform.app.ui.components.FaithFormOutlinedIconButton as OutlinedIconButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
@@ -110,6 +110,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.compose.AsyncImagePainter
 import coil.request.ImageRequest
+import io.faithform.app.ui.components.motionReveal
 import io.faithform.app.R
 import io.faithform.app.contract.FeedItem
 import io.faithform.app.design.FaithFormTokens
@@ -147,7 +148,7 @@ fun HomeFeedScreen(
 
     LazyColumn(
         modifier = modifier
-            .fillMaxSize()
+            .fillMaxSize().motionReveal(phase::class, travel = false)
             .background(theme.palette.background),
         // Padding inside the list rather than around it, so a card's shadow is
         // not cut off at the screen's edge.

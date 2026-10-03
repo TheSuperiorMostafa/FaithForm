@@ -90,6 +90,7 @@ enum class AutomaticAttendanceBlocker {
      */
     val isRecoverableInSettings: Boolean
         get() = this in setOf(
+            ForegroundDenied,
             ForegroundPermanentlyDenied,
             ApproximateLocationOnly,
             NeedsBackgroundPermission,

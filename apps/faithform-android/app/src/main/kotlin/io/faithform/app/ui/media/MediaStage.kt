@@ -38,11 +38,11 @@ import androidx.compose.material.icons.filled.Replay
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import io.faithform.app.ui.components.FaithFormIconButton as IconButton
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import io.faithform.app.ui.components.FaithFormTextButton as TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect

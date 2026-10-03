@@ -29,6 +29,7 @@ export type PushMessage = {
   deepLink: string;
   collapseKey: string;
   correlationId: string;
+  topic?: "announcements" | "events" | "groups";
 };
 
 export interface PushAdapter {
@@ -149,11 +150,11 @@ export function buildFcmPayload(
     message: {
       token,
       notification: { title: message.title, body: message.body ?? "" },
-      data: { deepLink: message.deepLink, correlationId: message.correlationId },
+      data: { deepLink: message.deepLink, correlationId: message.correlationId, topic: message.topic ?? "announcements" },
       android: {
         collapse_key: message.collapseKey,
         priority: "HIGH",
-        notification: { channel_id: "faithform_announcements" },
+        notification: { channel_id: `faithform_${message.topic ?? "announcements"}` },
       },
     },
   };

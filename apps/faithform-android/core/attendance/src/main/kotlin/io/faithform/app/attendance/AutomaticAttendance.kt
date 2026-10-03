@@ -43,6 +43,7 @@ interface AttendanceSubmitter {
      * is attending.
      */
     suspend fun eligibleOccurrenceId(churchSlug: String): String?
+    suspend fun eligibleOccurrenceId(churchSlug: String, regionId: String?): String? = eligibleOccurrenceId(churchSlug)
 
     suspend fun submit(evidence: AttendanceEvidence, idempotencyKey: String): AttendanceOutcome
 }
@@ -283,7 +284,7 @@ class AutomaticAttendanceCoordinator(
             }
 
             val occurrenceId = try {
-                submitter.eligibleOccurrenceId(settings.churchSlug.orEmpty())
+                submitter.eligibleOccurrenceId(settings.churchSlug.orEmpty(), regionId)
             } catch (_: Exception) {
                 phase = EvidencePhase.Retrying(null, 1, clock() + RetryPolicy.delayMillis(1))
                 return phase
@@ -533,7 +534,13 @@ class AutomaticAttendanceCoordinator(
                         )
                     // Dwell still not satisfied by the server's reckoning.
                     "pending_confirmation" ->
-                        phase = EvidencePhase.AwaitingDwell(occurrenceId, clock())
+                        {
+                            store.update(attempt.copy(queued = null,
+                                confirmationNotBeforeEpochMillis = result.value.confirmationNotBeforeEpochMillis
+                                    ?: (clock() + FALLBACK_DWELL_MILLIS),
+                                detectionId = result.value.detectionId ?: attempt.detectionId), currentPartition)
+                            phase = EvidencePhase.AwaitingDwell(occurrenceId, clock())
+                        }
                     else -> return fail(EvidenceRefusal.Unknown, currentPartition)
                 }
                 phase
@@ -641,6 +648,13 @@ class AutomaticAttendanceCoordinator(
                         result.value.outcome == "already_counted",
                         currentPartition,
                     )
+                }
+                if (result.value.outcome == "pending_confirmation") {
+                    store.update(attempt.copy(queued = null,
+                        confirmationNotBeforeEpochMillis = result.value.confirmationNotBeforeEpochMillis
+                            ?: (clock() + FALLBACK_DWELL_MILLIS),
+                        detectionId = result.value.detectionId ?: attempt.detectionId), currentPartition)
+                    phase = EvidencePhase.AwaitingDwell(attempt.occurrenceId, clock())
                 }
             }
             is SendOutcome.Refusal -> return fail(result.reason, currentPartition)

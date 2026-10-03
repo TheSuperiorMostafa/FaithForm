@@ -9,9 +9,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
+import io.faithform.app.ui.components.FaithFormButton as Button
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import io.faithform.app.ui.components.FaithFormOutlinedButton as OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -49,10 +49,7 @@ fun NotificationEducationScreen(
         .heightIn(min = FaithFormTokens.TouchTarget.recommended)
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(theme.palette.background)
-            .padding(FaithFormTokens.Layout.screenPaddingHorizontal),
+        modifier = Modifier.fillMaxSize().background(theme.palette.background).padding(FaithFormTokens.Layout.screenPaddingHorizontal),
         verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.lg)
     ) {
         when (status) {
@@ -130,15 +127,13 @@ fun NotificationEducationScreen(
 fun NotificationPreferencesScreen(
     preferences: List<NotificationPreference>,
     channelEnabled: (NotificationTopic) -> Boolean,
-    onToggle: (NotificationPreference, Boolean) -> Unit
+    onToggle: (NotificationPreference, Boolean) -> Unit,
+    modifier: Modifier = Modifier.fillMaxSize().padding(FaithFormTokens.Layout.screenPaddingHorizontal)
 ) {
     val theme = LocalFaithFormTheme.current
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(theme.palette.background)
-            .padding(FaithFormTokens.Layout.screenPaddingHorizontal),
+        modifier = modifier.background(theme.palette.background),
         verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.md)
     ) {
         preferences.forEach { preference ->

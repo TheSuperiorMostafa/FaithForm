@@ -111,7 +111,7 @@ function DialogContent({
     <dialog
       ref={ref}
       className={cn(
-        "fixed inset-0 z-50 m-auto max-h-[calc(100%-2rem)] w-[calc(100%-2rem)] max-w-lg rounded-2xl border border-border bg-card p-0 text-card-foreground shadow-card-hover backdrop:bg-brand-navy/50 open:flex open:flex-col",
+        "fixed inset-0 z-50 m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg rounded-2xl border border-border bg-card p-0 text-card-foreground shadow-card-hover backdrop:bg-brand-navy/50 open:flex open:flex-col",
         className,
       )}
       onClose={() => setOpen(false)}
@@ -144,7 +144,7 @@ function DialogContent({
 function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
-      className={cn("flex flex-col gap-1.5 border-b border-border px-6 py-5", className)}
+      className={cn("flex shrink-0 flex-col gap-1.5 border-b border-border px-6 py-5", className)}
       {...props}
     />
   );
@@ -166,7 +166,7 @@ function DialogFooter({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       className={cn(
-        "flex flex-col-reverse gap-2 border-t border-border px-6 py-5 sm:flex-row sm:justify-end",
+        "flex shrink-0 flex-col-reverse gap-2 border-t border-border px-6 py-5 sm:flex-row sm:justify-end",
         className,
       )}
       {...props}

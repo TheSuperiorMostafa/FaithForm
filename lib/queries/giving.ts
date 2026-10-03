@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { startOfWeek } from "@/lib/giving/periods";
 import { getGivePageUrl } from "@/lib/stripe/config";
+import { formatAddressLine } from "@/lib/utils/address";
 import type {
   ChurchGivingProfile,
   FundGivingBreakdown,
@@ -1024,14 +1025,4 @@ export async function getChurchAddressLine(churchId: string): Promise<string> {
   });
 }
 
-export function formatAddressLine(parts: {
-  address?: string | null;
-  city?: string | null;
-  state?: string | null;
-  zip?: string | null;
-}): string {
-  const street = parts.address?.trim() ?? "";
-  const city = parts.city?.trim() ?? "";
-  const stateZip = [parts.state?.trim(), parts.zip?.trim()].filter(Boolean).join(" ");
-  return [street, city, stateZip].filter(Boolean).join(", ");
-}
+export { formatAddressLine } from "@/lib/utils/address";

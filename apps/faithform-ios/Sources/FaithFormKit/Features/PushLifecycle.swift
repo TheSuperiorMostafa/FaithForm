@@ -222,8 +222,13 @@ public final class PushLifecycleModel {
 
     /// Sign-out and account removal. Retires this install server-side and drops
     /// the local copy, so a subsequent account on the same phone starts clean.
+    public func clearAccountRegistration() {
+        lastRegisteredToken = nil
+        registrationError = nil
+    }
+
     public func retire() async {
-        defer { lastRegisteredToken = nil }
+        defer { clearAccountRegistration() }
         _ = try? await api.send(
             "api/mobile/v1/devices",
             method: .delete,

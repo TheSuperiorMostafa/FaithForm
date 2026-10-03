@@ -7,6 +7,7 @@ import {
   insertChurchCalendarEvent,
   listChurchCalendarEvents,
 } from "@/lib/integrations/calendar";
+import { devSampleCalendarOn } from "@/lib/integrations/dev-sample-calendar";
 import { GoogleReconnectRequiredError } from "@/lib/integrations/google-oauth";
 import {
   getPublishedAnnouncements,
@@ -47,7 +48,8 @@ export async function GET(request: Request) {
   const denied = await featureAccessDenied("announcements", supabase);
   if (denied) return denied;
 
-  const connected = await hasAnyCalendar(auth.churchId, supabase);
+  const connected =
+    devSampleCalendarOn() || (await hasAnyCalendar(auth.churchId, supabase));
   if (!connected) {
     return NextResponse.json({
       connected: false,

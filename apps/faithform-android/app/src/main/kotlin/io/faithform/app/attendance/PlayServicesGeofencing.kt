@@ -16,6 +16,7 @@ import com.google.android.gms.location.GeofencingClient
 import com.google.android.gms.location.GeofencingRequest
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import com.google.android.gms.tasks.CancellationTokenSource
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
@@ -57,7 +58,7 @@ interface GeofencingFacade {
     sealed interface TaskResult {
         data object Success : TaskResult
         /** The task failed. The reason is never surfaced or logged. */
-        data class Failure(val kind: String) : TaskResult
+        data class Failure(val kind: String, val statusCode: Int? = null) : TaskResult
         data object Cancelled : TaskResult
     }
 }
@@ -68,8 +69,8 @@ interface GeofencingFacade {
  * The location permission is checked before this is ever reached, by the region
  * monitor that owns the permission sequence; a façade that re-checked it would
  * be a second copy of that rule. Lint cannot see across that boundary, hence
- * the suppression. Nothing reaches this class in v1 at all: automatic
- * attendance is not offered and its receivers are not registered.
+ * the suppression. Registration is only reached after explicit opt-in and both
+ * foreground and background permission checks.
  */
 @SuppressLint("MissingPermission")
 class PlayServicesGeofencingFacade(context: Context) : GeofencingFacade {
@@ -89,26 +90,29 @@ class PlayServicesGeofencingFacade(context: Context) : GeofencingFacade {
 
     private suspend fun await(
         start: () -> com.google.android.gms.tasks.Task<Void>,
-    ): GeofencingFacade.TaskResult = suspendCancellableCoroutine { continuation ->
+    ): GeofencingFacade.TaskResult = withTimeoutOrNull(20_000) {
+        suspendCancellableCoroutine { continuation ->
         try {
             start()
-                .addOnSuccessListener { continuation.resume(GeofencingFacade.TaskResult.Success) }
+                .addOnSuccessListener { if (continuation.isActive) continuation.resume(GeofencingFacade.TaskResult.Success) }
                 // The exception is never logged: a geofence failure carries the
                 // request ids, and a region id plus a failure is a location fact
-                // about this person. Only the class name travels.
+                // about this person. Only the exception class and numeric status travel.
                 .addOnFailureListener {
-                    continuation.resume(
-                        GeofencingFacade.TaskResult.Failure(it::class.java.simpleName),
+                    if (continuation.isActive) continuation.resume(
+                        GeofencingFacade.TaskResult.Failure(it::class.java.simpleName, (it as? com.google.android.gms.common.api.ApiException)?.statusCode),
                     )
                 }
                 .addOnCanceledListener {
-                    continuation.resume(GeofencingFacade.TaskResult.Cancelled)
+                    if (continuation.isActive) continuation.resume(GeofencingFacade.TaskResult.Cancelled)
                 }
         } catch (_: SecurityException) {
             // The permission was revoked between the check and the call.
-            continuation.resume(GeofencingFacade.TaskResult.Failure("SecurityException"))
+            if (continuation.isActive) continuation.resume(GeofencingFacade.TaskResult.Failure("SecurityException"))
         }
-    }
+        }
+    } ?: GeofencingFacade.TaskResult.Failure("Timeout")
+
 }
 
 /**
@@ -171,6 +175,8 @@ class PlayServicesRegionMonitoring(
         ?.let { RegionMirror(it) }
         ?: RegionMirror.encrypted(context)
 
+    private var unavailable = false
+    override suspend fun registrationRefusal(): String? = if (unavailable) "location_unavailable" else null
     override suspend fun monitoredRegions(): Set<MonitoredRegion> = mirror.load()
 
     override suspend fun startMonitoring(regions: List<MonitoredRegion>) {
@@ -181,16 +187,15 @@ class PlayServicesRegionMonitoring(
 
         val request = buildRequest(regions)
 
-        when (facade.addGeofences(request, pendingIntent())) {
-            is GeofencingFacade.TaskResult.Success -> mirror.add(regions)
+        when (val result = facade.addGeofences(request, pendingIntent())) {
+            is GeofencingFacade.TaskResult.Success -> { unavailable = false; mirror.add(regions) }
             // **The mirror is not updated on failure or cancellation.** That is
             // the whole point of it being a mirror: it records what the system
             // accepted, so the next reconciliation sees these as missing and
             // registers them again. Recording an optimistic success would make
             // a partial failure permanent and silent.
-            is GeofencingFacade.TaskResult.Failure,
-            GeofencingFacade.TaskResult.Cancelled,
-            -> Unit
+            is GeofencingFacade.TaskResult.Failure -> { unavailable = result.statusCode == com.google.android.gms.location.GeofenceStatusCodes.GEOFENCE_NOT_AVAILABLE }
+            GeofencingFacade.TaskResult.Cancelled -> { unavailable = false }
         }
     }
 
@@ -324,6 +329,8 @@ class AndroidLocationPermissions(
      * context, where nothing may be requested anyway.
      */
     private val requester: PermissionRequester? = null,
+    private val foregroundWasRequested: () -> Boolean = { false },
+    private val recordForegroundRequest: () -> Unit = {},
     /**
      * Whether Play services is usable.
      *
@@ -363,6 +370,7 @@ class AndroidLocationPermissions(
             coarse -> ForegroundLocationPermission.Coarse
             requester?.shouldShowRationale(Manifest.permission.ACCESS_FINE_LOCATION) == true ->
                 ForegroundLocationPermission.Denied
+            foregroundWasRequested() -> ForegroundLocationPermission.PermanentlyDenied
             else -> ForegroundLocationPermission.NotRequested
         }
 
@@ -385,6 +393,7 @@ class AndroidLocationPermissions(
     }
 
     override suspend fun requestForeground(): LocationPermissionState {
+        recordForegroundRequest()
         requester?.request(
             arrayOf(
                 Manifest.permission.ACCESS_FINE_LOCATION,
@@ -445,13 +454,15 @@ class PlayServicesLocationSampling(
 
         return withTimeoutOrNull(timeoutMillis) {
             suspendCancellableCoroutine { continuation ->
+                val cancellation = CancellationTokenSource()
+                continuation.invokeOnCancellation { cancellation.cancel() }
                 try {
                     val task = client.getCurrentLocation(
                         Priority.PRIORITY_HIGH_ACCURACY,
-                        null,
+                        cancellation.token,
                     )
                     task.addOnSuccessListener { location ->
-                        continuation.resume(
+                        if (continuation.isActive) continuation.resume(
                             location?.let {
                                 LocationSample(
                                     latitude = it.latitude,
@@ -472,9 +483,10 @@ class PlayServicesLocationSampling(
                         )
                     }
                     // Never logged: the failure can carry provider detail.
-                    task.addOnFailureListener { continuation.resume(null) }
+                    task.addOnFailureListener { if (continuation.isActive) continuation.resume(null) }
+                    task.addOnCanceledListener { if (continuation.isActive) continuation.resume(null) }
                 } catch (_: SecurityException) {
-                    continuation.resume(null)
+                    if (continuation.isActive) continuation.resume(null)
                 }
             }
         }

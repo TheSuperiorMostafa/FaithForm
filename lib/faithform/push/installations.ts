@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { VisitorError } from "@/lib/faithform/errors";
@@ -124,9 +125,10 @@ export async function registerInstallation(
 export async function retireInstallationsForAccount(
   accountId: string,
   reason: "signed_out" | "account_deleted",
+  client?: SupabaseClient,
 ): Promise<void> {
-  const admin = createAdminClient();
-  await admin
+  const admin = client ?? createAdminClient();
+  const { error } = await admin
     .from("visitor_device_installations")
     .update({
       is_enabled: false,
@@ -139,6 +141,9 @@ export async function retireInstallationsForAccount(
     })
     .eq("account_id", accountId)
     .eq("is_enabled", true);
+  if (error) {
+    throw new VisitorError("unavailable", "Could not disconnect notifications. Try again.");
+  }
 }
 
 /** Retires one install — used when a device signs out but others stay signed in. */

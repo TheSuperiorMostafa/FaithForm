@@ -74,15 +74,45 @@ jobs:
 
       # Deterministic resolution: the wrapper pins Gradle, the version catalog
       # pins every dependency, and --no-daemon keeps the runner reproducible.
+      # Public, deliberately unusable fixture values for compile checks only.
+      # A clean runner has no local Firebase/Supabase configuration. This does
+      # not produce a pilot-ready artifact or use production credentials.
+      - name: Configure Android compile fixtures
+        run: |
+          node --input-type=module <<'NODE'
+          import { writeFileSync } from "node:fs";
+          const projectNumber = "000000000000";
+          const packages = ["io.faithform.app", "io.faithform.app.debug", "io.faithform.app.staging"];
+          writeFileSync("apps/faithform-android/app/google-services.json", JSON.stringify({
+            project_info: {
+              project_number: projectNumber,
+              project_id: "faithform-ci-compile-only",
+              storage_bucket: "faithform-ci-compile-only.invalid",
+            },
+            client: packages.map((packageName) => ({
+              client_info: {
+                mobilesdk_app_id: `1:${projectNumber}:android:0000000000000000`,
+                android_client_info: { package_name: packageName },
+              },
+              api_key: [{ current_key: "ci-only-not-a-real-google-api-key" }],
+            })),
+            configuration_version: "1",
+          }, null, 2));
+          NODE
+
       - name: Android unit tests
         run: pnpm android:test
 
       - name: Android debug build
         run: pnpm android:build
 
-      # The pilot artefact. Unsigned, and it must still assemble.
+      # Unsigned compile gate using unusable fixture configuration.
       - name: Android staging build
-        run: pnpm android:staging
+        run: >-
+          pnpm android:staging
+          -Pfaithform.stagingOrigin=https://ci-faithform.invalid
+          -Pfaithform.supabaseUrl=https://ci-supabase.invalid
+          -Pfaithform.supabaseAnonKey=sb_publishable_ci_only_not_a_real_key
 
       - name: iOS build
         run: pnpm ios:build

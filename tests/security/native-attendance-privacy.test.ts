@@ -158,7 +158,8 @@ test("no permanent foreground service exists", () => {
     "FOREGROUND_SERVICE_LOCATION",
     "startForegroundService",
     "startForeground(",
-    "Service()",
+    ": Service()",
+    ": android.app.Service()",
     "android:foregroundServiceType",
   ]);
   assert.deepEqual(offenders, [], `foreground service: ${JSON.stringify(offenders)}`);
@@ -371,13 +372,10 @@ test("the manifest declares the permissions this app needs and no more", () => {
   // An exact list, so a permission added by anyone — including a library's
   // merged manifest — has to be argued for here rather than appearing quietly.
   //
-  // Version 1 ships without automatic check-in and without push, so background
-  // location, boot-completed and notifications are gone with them: Play reviews
-  // a declared background-location permission as a promise of a feature, and
-  // there is none behind it yet. They come back in the change that wires those
-  // features, and this list changes in the same commit.
+  // Opt-in automatic attendance and push now have reachable permission flows.
   assert.deepEqual(declared, [
-    // Churches near me, foreground only, after the education screen.
+    "ACCESS_BACKGROUND_LOCATION",
+    // Nearby churches and optional automatic attendance.
     "ACCESS_COARSE_LOCATION",
     "ACCESS_FINE_LOCATION",
     "ACCESS_NETWORK_STATE",
@@ -386,8 +384,10 @@ test("the manifest declares the permissions this app needs and no more", () => {
     // adapters can reach a permission request at all.
     "CAMERA",
     "INTERNET",
+    "POST_NOTIFICATIONS",
+    "RECEIVE_BOOT_COMPLETED",
     // Group messages: the chat SDK synchronises through WorkManager, which
-    // needs it. No wake-up of our own, and no background location with it.
+    // needs it, as do bounded background transition jobs.
     "WAKE_LOCK",
   ]);
 });

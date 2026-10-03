@@ -394,7 +394,7 @@ async function loadFirstTimeGuests(
     };
   }
 
-  let { data: entries, error: entriesError } = await supabase
+  const { data: entries, error: entriesError } = await supabase
     .from("attendance_entries")
     .select("member_id, is_first_time_guest, member:members(id, first_name, last_name, phone)")
     .eq("record_id", record.id)

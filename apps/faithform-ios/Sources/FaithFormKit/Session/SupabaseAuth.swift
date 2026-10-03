@@ -298,9 +298,8 @@ public struct SupabaseAuthClient: SessionAuthenticating {
         let (data, http) = try await post(path: "auth/v1/resend", query: query, body: body)
 
         guard (200..<300).contains(http.statusCode) else {
-            // Rate limiting is the one failure worth showing: it is the exact
-            // situation a person hits when they tap "send it again" twice, and
-            // silence would read as a second email that never comes.
+            // The screen needs to distinguish a failed request from a send
+            // accepted by the provider, including outages and rate limits.
             throw Self.failure(from: data, status: http.statusCode)
         }
     }

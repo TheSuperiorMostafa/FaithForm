@@ -207,6 +207,9 @@ class AppManifestTest {
                 "android.permission.WAKE_LOCK",
             "android.permission.CAMERA",
             "android.permission.ACCESS_FINE_LOCATION",
+            "android.permission.ACCESS_BACKGROUND_LOCATION",
+            "android.permission.RECEIVE_BOOT_COMPLETED",
+            "android.permission.POST_NOTIFICATIONS",
         )) {
             assertTrue("$required is missing", manifest.contains(required))
         }
@@ -221,11 +224,6 @@ class AppManifestTest {
             "ACTIVITY_RECOGNITION",
             "AD_ID",
             "QUERY_ALL_PACKAGES",
-            // Features that exist in source and are not in v1: automatic
-            // attendance (background location, boot re-registration) and push.
-            "ACCESS_BACKGROUND_LOCATION",
-            "RECEIVE_BOOT_COMPLETED",
-            "POST_NOTIFICATIONS",
         )) {
             val permissions = Regex("<uses-permission[^>]*>").findAll(manifest)
                 .map { it.value }.filterNot { it.contains("tools:node=\"remove\"") }.joinToString()
@@ -245,10 +243,11 @@ class AppManifestTest {
     }
 
     @Test
-    fun `no receiver can be reached by another app, because v1 registers none`() {
-        // Automatic attendance is not in v1, so nothing that could be woken by
-        // a broadcast is declared. Its receivers return with the feature.
-        assertFalse(manifest.contains("<receiver"))
+    fun `the geofence receiver is private and boot receiver is system guarded`() {
+        val receivers = Regex("<receiver\\b[^>]*>").findAll(manifest).map { it.value }.toList()
+        assertEquals(3, receivers.size)
+        assertTrue(receivers.single { it.contains("GeofenceBroadcastReceiver") }.contains("android:exported=\"false\""))
+        assertTrue(receivers.single { it.contains("BootAndUpdateReceiver") }.contains("android:permission=\"android.permission.RECEIVE_BOOT_COMPLETED\""))
     }
 
     @Test

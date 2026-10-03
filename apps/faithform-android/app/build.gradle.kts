@@ -5,7 +5,11 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.kotlin.serialization)
+    id("com.google.gms.google-services") version "4.5.0" apply false
 }
+
+val firebaseConfigured = file("google-services.json").exists()
+if (firebaseConfigured) apply(plugin = "com.google.gms.google-services")
 
 /**
  * Where a staging or release build points.
@@ -25,6 +29,9 @@ plugins {
  * with a blank or non-https origin now fails at configuration time, before a
  * line compiles, rather than producing an APK that fails closed on a phone.
  */
+val debugOrigin = ((project.findProperty("faithform.debugOrigin") as String?)
+    ?.takeIf { it.isNotBlank() } ?: "http://10.0.2.2:3000").trim()
+
 val stagingOrigin = (project.findProperty("faithform.stagingOrigin") as String?).orEmpty().trim()
 val releaseOrigin = ((project.findProperty("faithform.releaseOrigin") as String?)
     ?.takeIf { it.isNotBlank() } ?: "https://faithform.io").trim()
@@ -85,6 +92,7 @@ fun requireShippable(buildType: String, origin: String, originProperty: String) 
     val problems = buildList {
         if (origin.isBlank()) add("$originProperty is empty")
         else if (!origin.startsWith("https://")) add("$originProperty must be an https origin")
+        if (!firebaseConfigured) add("app/google-services.json is missing")
         if (supabaseUrl.isBlank()) add("faithform.supabaseUrl is empty")
         if (supabaseAnonKey.isBlank()) add("faithform.supabaseAnonKey is empty")
     }
@@ -183,7 +191,7 @@ android {
         debug {
             applicationIdSuffix = ".debug"
             // The only build type where a non-production origin is permitted.
-            buildConfigField("String", "API_ORIGIN", "\"http://10.0.2.2:3000\"")
+            buildConfigField("String", "API_ORIGIN", "\"$debugOrigin\"")
             buildConfigField("String", "ENVIRONMENT_KEY", "\"development\"")
             buildConfigField("boolean", "ALLOW_DEBUG_CONTROLS", "true")
             buildConfigField("String", "SUPABASE_URL", "\"$supabaseUrl\"")
@@ -255,6 +263,9 @@ android {
 }
 
 dependencies {
+    implementation(platform("com.google.firebase:firebase-bom:34.19.0"))
+    implementation("com.google.firebase:firebase-messaging")
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
     implementation("io.getstream:stream-chat-android-compose:6.18.0")
     implementation(project(":core:contract"))
     implementation(project(":core:network"))

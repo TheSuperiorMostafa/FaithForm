@@ -52,7 +52,14 @@ test("a partial refund leaves the gift counted; only a full one refunds it", () 
   const refund = webhooks.slice(webhooks.indexOf('case "charge.refunded"'), webhooks.indexOf('case "invoice.paid"'));
   assert.match(refund, /charge\.refunded !== true/);
   assert.ok(refund.indexOf("charge.refunded !== true") < refund.indexOf('status: "refunded"'));
-  assert.match(refund, /if \(refundError\) throw/);
+  assert.match(refund, /await updateDonationState\(\{/);
+  assert.match(refund, /key: "stripe_payment_intent_id"/);
+  const mutation = webhooks.slice(
+    webhooks.indexOf("async function updateDonationState"),
+    webhooks.indexOf("async function processStripeEventEffects"),
+  );
+  assert.match(mutation, /if \(error\) throw new Error\("donation_state_reconciliation_failed"\)/);
+  assert.match(mutation, /if \(readError \|\| !existing\?\.id\) throw new Error\("donation_state_not_ready"\)/);
 });
 
 test("only a lost dispute takes a gift off the statement", () => {

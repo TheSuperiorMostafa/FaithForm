@@ -14,10 +14,10 @@ import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
+import io.faithform.app.ui.components.FaithFormButton as Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import io.faithform.app.ui.components.FaithFormTextButton as TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
@@ -37,6 +37,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.faithform.app.AppViewModel
 import io.faithform.app.InvitationPhase
+import io.faithform.app.ui.components.motionReveal
 import io.faithform.app.R
 import io.faithform.app.contract.MobileErrorCode
 import io.faithform.app.design.FaithFormTokens
@@ -175,9 +176,9 @@ fun FindChurchFlow(
     @Composable
     fun Chrome(content: @Composable (Modifier) -> Unit) {
         if (embeddedTitle != null) {
-            TabScreen(title = embeddedTitle, onBack = goBack) { inner -> content(inner) }
+            TabScreen(title = embeddedTitle, onBack = goBack) { inner -> content(inner.motionReveal(route)) }
         } else {
-            content(Modifier.fillMaxSize())
+            content(Modifier.fillMaxSize().motionReveal(route))
         }
     }
 

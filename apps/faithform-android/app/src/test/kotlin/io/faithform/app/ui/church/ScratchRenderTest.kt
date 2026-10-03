@@ -5,7 +5,7 @@ import android.graphics.Canvas
 import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.test.core.app.ActivityScenario
+import org.robolectric.Robolectric
 import io.faithform.app.contract.ChurchProfile
 import io.faithform.app.contract.ChurchQuickLink
 import io.faithform.app.contract.ChurchSocialLink
@@ -24,7 +24,7 @@ import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
-private val OUT = File("/private/tmp/claude-501/-Users-mostafamahdi-Desktop-Dev-Projects-FaithForm/41df90e9-a626-4bda-bfa6-b0557ebe967f/scratchpad/renders")
+private val OUT = File("build/reports/church-renders")
 
 private fun sample(state: RelationshipState?, policy: JoinPolicy = JoinPolicy.OPEN) = ChurchProfile(
     slug = "grace",
@@ -77,8 +77,8 @@ class ScratchRenderTest {
 
     private fun render(name: String, dark: Boolean, phase: ChurchProfilePhase, hasOther: Boolean) {
         OUT.mkdirs()
-        val scenario = ActivityScenario.launch(ComponentActivity::class.java)
-        scenario.onActivity { activity ->
+        val scenario = Robolectric.buildActivity(ComponentActivity::class.java).setup().visible()
+        scenario.get().let { activity ->
             activity.setContent {
                 FaithFormTheme(darkTheme = dark) {
                     ChurchInfoScreen(
@@ -100,13 +100,13 @@ class ScratchRenderTest {
             }
         }
         repeat(20) { shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(100)) }
-        scenario.onActivity { activity ->
+        scenario.get().let { activity ->
             val view = activity.window.decorView
             val bitmap = Bitmap.createBitmap(view.width, view.height, Bitmap.Config.ARGB_8888)
             view.draw(Canvas(bitmap))
             FileOutputStream(File(OUT, "$name.png")).use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
         }
-        scenario.close()
+        scenario.pause().stop().destroy()
     }
 
     @Test

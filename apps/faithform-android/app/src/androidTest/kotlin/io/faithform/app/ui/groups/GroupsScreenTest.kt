@@ -24,7 +24,7 @@ class GroupsScreenTest {
     }, object : TokenProvider { override suspend fun validAccessToken() = "groups-test"; override suspend fun invalidate() {} })
 
     @Test fun notificationChoicesAreSelectableAndSaveDismissesSheet() {
-        rule.setContent { FaithFormTheme { GroupsHost(api, "grace", "preferences-test") } }
+        rule.setContent { FaithFormTheme { GroupsHost(api, "grace", "preferences-test", church = null) } }
         rule.onNodeWithContentDescription("Messaging preferences").performClick()
         rule.waitUntil(10000) { rule.onAllNodesWithText("Mentions only").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText("Mentions only").assertIsSelected()
@@ -36,7 +36,7 @@ class GroupsScreenTest {
     }
 
     @Test fun groupsShowMembershipAndDiscoveryEmptyState() {
-        rule.setContent { FaithFormTheme { GroupsHost(api, "grace", "groups-test") } }
+        rule.setContent { FaithFormTheme { GroupsHost(api, "grace", "groups-test", church = null) } }
         rule.waitUntil(10000) { rule.onAllNodesWithText("The Table").fetchSemanticsNodes().isNotEmpty() }
         rule.onNodeWithText("You belong here.").assertIsDisplayed()
         rule.onNodeWithText("The Table").assertIsDisplayed()

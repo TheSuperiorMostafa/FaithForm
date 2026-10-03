@@ -39,6 +39,19 @@ public enum L {
         t("enter_invitation_code", "Paste your invitation link")
     }
 
+    // MARK: - Church discovery and welcome
+    public static var addingChurch: String { t("adding_church", "Adding your church…") }
+    public static var welcomeToChurch: String { t("welcome_to_church", "WELCOME TO") }
+    public static var churchHomeReady: String { t("church_home_ready", "Your church home is ready.") }
+    public static var openingChurchHome: String { t("opening_church_home", "Opening home…") }
+    public static var churchWelcomeAccessibility: String { t("church_welcome_accessibility", "Welcome to %@. Your church home is ready.") }
+    public static var discoveryWelcomeHome: String { t("discovery_welcome_home", "WELCOME HOME") }
+    public static var discoveryCommunityTitle: String { t("discovery_community_title", "Find your church community.") }
+    public static var discoveryCommunityBody: String { t("discovery_community_body", "Connect with your congregation, follow announcements, join groups, and worship together wherever you are.") }
+    public static var discoveryNearbyHint: String { t("discovery_nearby_hint", "Discover congregations active near you") }
+    public static var discoveryHowToFind: String { t("discovery_how_to_find", "HOW TO FIND YOUR CHURCH") }
+    public static var mediaTimeSeparator: String { t("media_time_separator", "/") }
+
     // MARK: - Discovery
     public static var searchPlaceholder: String {
         t("search_placeholder", "Church name, city, or postal code")

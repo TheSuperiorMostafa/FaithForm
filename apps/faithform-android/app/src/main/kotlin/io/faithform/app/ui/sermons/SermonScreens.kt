@@ -1,6 +1,13 @@
 package io.faithform.app.ui.sermons
 
 import android.text.format.DateFormat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.graphics.graphicsLayer
+import io.faithform.app.ui.brand.rememberReducedMotion
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -36,7 +43,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
+import io.faithform.app.ui.components.FaithFormTextButton as TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -67,6 +74,7 @@ import io.faithform.app.sermons.SermonHubItem
 import io.faithform.app.sermons.SermonListPhase
 import io.faithform.app.sermons.SermonScreenState
 import io.faithform.app.sermons.preachedDate
+import io.faithform.app.ui.components.SermonActionButton
 import io.faithform.app.ui.components.FaithFormSearchField
 import io.faithform.app.ui.components.SermonHubCardSkeleton
 import io.faithform.app.ui.components.SermonListSkeleton
@@ -110,6 +118,7 @@ fun SermonListScreen(
         is SermonListPhase.Idle, is SermonListPhase.Loading ->
             SermonListSkeleton(
                 modifier = modifier.padding(FaithFormTokens.Spacing.lg),
+                searchTerm = state.searchTerm, onSearch = onSearch, showTitle = showTitle,
             )
 
         // The church is not available to this account. Not "removed": that is
@@ -143,7 +152,7 @@ fun SermonListScreen(
                 (presentationState.phase is PresentationListPhase.Idle ||
                     presentationState.phase is PresentationListPhase.Loading)
             if (waitingOnSlides) {
-                SermonListSkeleton(modifier = modifier.padding(FaithFormTokens.Spacing.lg))
+                SermonListSkeleton(modifier = modifier.padding(FaithFormTokens.Spacing.lg), searchTerm = state.searchTerm, onSearch = onSearch, showTitle = showTitle)
             } else {
             val sections = remember(hubs) { SermonHub.monthSections(hubs) }
             val lastId = hubs.lastOrNull()?.sermonId
@@ -241,7 +250,7 @@ fun SermonListScreen(
 
                         if (loadingMore) {
                             item(key = "loading-more") {
-                                SermonHubCardSkeleton(Modifier.skeletonShimmer())
+                                SermonHubCardSkeleton()
                             }
                         }
 
@@ -347,9 +356,20 @@ private fun SermonHubCard(
 ) {
     val theme = LocalFaithFormTheme.current
     val shape = RoundedCornerShape(FaithFormTokens.Radius.md)
+    val reducedMotion = rememberReducedMotion()
+    var entered by remember(hub.sermonId) { mutableStateOf(reducedMotion) }
+    LaunchedEffect(hub.sermonId) { entered = true }
+    val reveal by animateFloatAsState(
+        targetValue = if (entered) 1f else 0f,
+        animationSpec = tween(if (reducedMotion) 0 else 280), label = "sermon-card-reveal",
+    )
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .graphicsLayer {
+                alpha = reveal
+                translationY = (1f - reveal) * 10.dp.toPx()
+            }
             .clip(shape)
             .background(theme.palette.surface)
             .border(theme.borderWidth, theme.palette.border, shape),
@@ -499,15 +519,19 @@ private fun SermonHubCard(
             }
             Row(horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm)) {
                 if (hub.hasNotes) {
-                    SermonHubAction(
+                    SermonActionButton(
                         label = stringResource(R.string.sermons_open_notes),
+                        icon = Icons.AutoMirrored.Outlined.MenuBook,
+                        primary = true,
                         onClick = onOpenNotes,
                         modifier = Modifier.weight(1f),
                     )
                 }
                 if (hub.hasSlides) {
-                    SermonHubAction(
+                    SermonActionButton(
                         label = stringResource(R.string.sermons_open_slides),
+                        icon = Icons.Outlined.Slideshow,
+                        primary = !hub.hasNotes,
                         onClick = onOpenSlides,
                         modifier = Modifier.weight(1f),
                     )
@@ -515,29 +539,6 @@ private fun SermonHubCard(
             }
         }
     }
-}
-
-@Composable
-private fun SermonHubAction(
-    label: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val theme = LocalFaithFormTheme.current
-    val shape = RoundedCornerShape(FaithFormTokens.Radius.pill)
-    Text(
-        label,
-        style = MaterialTheme.typography.labelMedium,
-        color = theme.palette.contentPrimary,
-        textAlign = TextAlign.Center,
-        modifier = modifier
-            .clip(shape)
-            .background(theme.palette.surfaceSunken)
-            .border(theme.borderWidth, theme.palette.border, shape)
-            .clickable(role = Role.Button, onClick = onClick)
-            .padding(vertical = FaithFormTokens.Spacing.sm)
-            .heightIn(min = FaithFormTokens.TouchTarget.minimum),
-    )
 }
 
 /** Dates in the reader's locale: a row's day, a detail's day, a month heading. */

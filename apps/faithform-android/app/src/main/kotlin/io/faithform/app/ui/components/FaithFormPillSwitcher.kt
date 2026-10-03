@@ -26,6 +26,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import io.faithform.app.ui.brand.rememberReducedMotion
 import io.faithform.app.design.FaithFormTokens
 import io.faithform.app.design.LocalFaithFormTheme
 
@@ -48,6 +49,7 @@ fun <T> FaithFormPillSwitcher(
     if (options.isEmpty()) return
 
     val theme = LocalFaithFormTheme.current
+    val reduced = rememberReducedMotion()
     val selectedIndex = options.indexOfFirst { it.value == selected }.coerceAtLeast(0)
 
     BoxWithConstraints(
@@ -61,7 +63,7 @@ fun <T> FaithFormPillSwitcher(
         val indicatorOffset by animateDpAsState(
             targetValue = segmentWidth * selectedIndex,
             animationSpec = tween(
-                durationMillis = theme.durationMillis(FaithFormTokens.Motion.STANDARD_MS),
+                durationMillis = if (reduced) 0 else FaithFormTokens.Motion.STANDARD_MS,
             ),
             label = "FaithForm pill selection",
         )

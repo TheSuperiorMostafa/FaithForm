@@ -40,6 +40,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.buildJsonObject
@@ -158,6 +163,8 @@ class AppViewModel(
      */
     sessionEnded: Flow<Unit>? = null,
     private val snapshots: AccountSnapshotStore = AccountSnapshotStore(),
+    private val beforeSignOut: suspend () -> Unit = {},
+    private val clearBackgroundFeatures: suspend () -> Unit = {},
 ) : ViewModel() {
 
     private val _state = MutableStateFlow<LaunchPhase>(LaunchPhase.Loading)
@@ -254,7 +261,12 @@ class AppViewModel(
 
     private var onboardingState: OnboardingState? = null
     private var pendingDestination: Destination? = null
+    private var pendingChatCid: String? = null
+    private var chatRouteGeneration = 0
     private var lastBootstrap: Bootstrap? = null
+    private var loadGeneration = 0L
+    private var endingSession = false
+    private val sessionTransition = Mutex()
 
     init {
         when (val session = sessions.current()) {
@@ -306,20 +318,25 @@ class AppViewModel(
      */
     fun reloadQuietly(preferring: String? = null, onDone: (() -> Unit)? = null) {
         viewModelScope.launch {
+            val expectedGeneration = loadGeneration + 1
             try {
                 loadNow(quiet = true, preferring = preferring)
             } finally {
-                onDone?.invoke()
+                if (!endingSession && loadGeneration == expectedGeneration) onDone?.invoke()
             }
         }
     }
 
     private suspend fun loadNow(quiet: Boolean, preferring: String? = null) {
+        if (endingSession) return
+        val generation = ++loadGeneration
         val session = sessions.current()
         if (session == null) {
-            _state.value = LaunchPhase.SignedOut
+            clearLocal()
             return
         }
+        fun isCurrent(): Boolean = !endingSession && generation == loadGeneration &&
+            sessions.current()?.let { it.accountId == session.accountId && it.environmentKey == session.environmentKey } == true
 
         if (!quiet) {
             when (_state.value) {
@@ -342,22 +359,28 @@ class AppViewModel(
                 path = "api/mobile/v1/account/bootstrap",
                 serializer = MobileSuccess.serializer(Bootstrap.serializer())
             )
+            currentCoroutineContext().ensureActive()
+            if (!isCurrent()) return
             val bootstrap = response.value ?: run {
                 showOffline(previous)
                 return
             }
 
-            lastBootstrap = bootstrap
-
             // First authenticated use with no recorded policy versions: the
             // person accepted them a moment ago, on the account screen that
             // said so. Recording is stating a fact, not deciding one.
             recordInitialConsent(bootstrap)
+            currentCoroutineContext().ensureActive()
+            if (!isCurrent()) return
 
             // The server decides whether first-run stands in front of home. A
             // failure falls back to home — a dead app over a routing hint
             // would be the worse failure.
-            onboardingState = fetchOnboardingState()
+            val loadedOnboarding = fetchOnboardingState()
+            currentCoroutineContext().ensureActive()
+            if (!isCurrent()) return
+            lastBootstrap = bootstrap
+            onboardingState = loadedOnboarding
 
             snapshots.store(
                 AccountSnapshot(
@@ -385,8 +408,17 @@ class AppViewModel(
                 // cold start, or while signed out — is honoured now, through the
                 // same gates a tab passes.
                 consumePendingDestination()?.let { openDestination(it, bootstrap) }
+                pendingChatCid?.also { pendingChatCid = null; openChatNotification(it) }
             }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
         } catch (error: ApiException) {
+            if (endingSession || generation != loadGeneration) return
+            if (error.code == MobileErrorCode.UNAUTHENTICATED || error.code == MobileErrorCode.SESSION_EXPIRED) {
+                if (sessions.current() == null || isCurrent()) clearLocal()
+                return
+            }
+            if (!isCurrent()) return
             _state.value = when {
                 error.code == MobileErrorCode.UNAUTHENTICATED ||
                     error.code == MobileErrorCode.SESSION_EXPIRED -> LaunchPhase.SignedOut
@@ -394,6 +426,7 @@ class AppViewModel(
                 else -> LaunchPhase.Failed(error.displayMessage)
             }
         } catch (error: Exception) {
+            if (!isCurrent()) return
             _state.value = showOfflinePhase(previous)
         }
     }
@@ -462,15 +495,32 @@ class AppViewModel(
      */
     fun completeAuth(session: SupabaseSession, displayName: String?) {
         viewModelScope.launch {
-            sessions.adopt(
-                StoredSession(
-                    accessToken = session.accessToken,
-                    refreshToken = session.refreshToken,
-                    expiresAtMillis = System.currentTimeMillis() + session.expiresInSeconds * 1000,
-                    accountId = session.accountId,
-                    environmentKey = environmentKey
+            val authGeneration = sessionTransition.withLock {
+                loadGeneration++
+                endingSession = true
+                _state.value = LaunchPhase.Loading
+                _selectedChurchSlug.value = null
+                lastBootstrap = null
+                onboardingState = null
+                if (sessions.current()?.accountId?.let { it != session.accountId } == true) {
+                    clearBackgroundFeatures()
+                    cache.purgeAllPrivate()
+                    snapshots.purgeAll()
+                }
+                sessions.adopt(
+                    StoredSession(
+                        accessToken = session.accessToken,
+                        refreshToken = session.refreshToken,
+                        expiresAtMillis = System.currentTimeMillis() + session.expiresInSeconds * 1000,
+                        accountId = session.accountId,
+                        environmentKey = environmentKey
+                    )
                 )
-            )
+                endingSession = false
+                loadGeneration
+            }
+            fun isCurrentAuth() = !endingSession && loadGeneration == authGeneration &&
+                sessions.current()?.accountId == session.accountId
 
             if (!displayName.isNullOrBlank()) {
                 @Serializable
@@ -490,10 +540,16 @@ class AppViewModel(
                 }
             }
 
+            currentCoroutineContext().ensureActive()
+            if (!isCurrentAuth()) return@launch
+
             // A deep-linked invitation held across sign-in is redeemed the
             // moment it can be — before the first bootstrap, so the church it
             // grants is already there when the app first renders.
             _pendingInvitationToken.value?.let { acceptInvitationNow(it) }
+
+            currentCoroutineContext().ensureActive()
+            if (!isCurrentAuth()) return@launch
 
             loadNow(quiet = false)
         }
@@ -605,6 +661,11 @@ class AppViewModel(
     fun dismissGroupInvitation() { _groupInvitationToken.value = null }
 
     fun handleDeepLink(raw: String) {
+        io.faithform.app.navigation.ChatNotificationLink.parse(raw)?.let { cid ->
+            if (_state.value is LaunchPhase.Ready && sessions.current() != null) openChatNotification(cid)
+            else pendingChatCid = cid
+            return
+        }
         io.faithform.app.navigation.GroupInvitationLink.token(raw)?.let { _groupInvitationToken.value = it; return }
         // The email-confirmation callback. Exchanged exactly once; with a
         // session already on the device it degrades to a quiet refresh, so a
@@ -658,6 +719,21 @@ class AppViewModel(
      * `faithform://church/grace/give` opens Give *for Grace*, not for whichever
      * church happened to be selected.
      */
+    private fun openChatNotification(cid: String) {
+        val account = sessions.current()?.accountId ?: return
+        val generation = ++chatRouteGeneration
+        viewModelScope.launch {
+            try {
+                val route = api.send("api/mobile/v1/messaging/route", MobileSuccess.serializer(io.faithform.app.contract.ChatRoute.serializer()),
+                    query = mapOf("cid" to cid)).value ?: return@launch
+                if (generation != chatRouteGeneration || sessions.current()?.accountId != account) return@launch
+                val ready = _state.value as? LaunchPhase.Ready ?: return@launch
+                openDestination(Destination.Groups(route.churchSlug), ready.bootstrap)
+            } catch (cancelled: kotlinx.coroutines.CancellationException) { throw cancelled }
+            catch (_: Exception) { /* A conversation that is no longer authorized opens nothing. */ }
+        }
+    }
+
     private fun openDestination(destination: Destination, bootstrap: Bootstrap) {
         val target = HostNavigation.resolveLink(destination, bootstrap, registry) ?: return
         target.churchSlug?.let { slug ->
@@ -970,22 +1046,29 @@ class AppViewModel(
     }
 
     fun signOut() {
+        endingSession = true
+        loadGeneration++
+        _state.value = LaunchPhase.SignedOut
+        _selectedChurchSlug.value = null
         _groupInvitationToken.value = null
         viewModelScope.launch {
-            // The server side first, best-effort: it bumps the authorization
-            // version so anything cached against the old one is detectably
-            // stale everywhere, not just on this device.
-            @Serializable
-            data class SignOutReply(val signedOut: Boolean = false)
-            runCatching {
-                api.send(
-                    path = "api/mobile/v1/account/sign-out",
-                    serializer = MobileSuccess.serializer(SignOutReply.serializer()),
-                    method = "POST"
-                )
-            }
+            sessionTransition.withLock {
+                beforeSignOut()
+                // The server side first, best-effort: it bumps the authorization
+                // version so anything cached against the old one is detectably
+                // stale everywhere, not just on this device.
+                @Serializable
+                data class SignOutReply(val signedOut: Boolean = false)
+                runCatching {
+                    api.send(
+                        path = "api/mobile/v1/account/sign-out",
+                        serializer = MobileSuccess.serializer(SignOutReply.serializer()),
+                        method = "POST"
+                    )
+                }
 
-            clearLocal()
+                clearLocalState()
+            }
         }
     }
 
@@ -998,18 +1081,31 @@ class AppViewModel(
      * screen rather than on an offline state whose retry could never work.
      */
     private suspend fun handleSessionEnded() {
+        if (sessions.current() != null) return
         if (_state.value is LaunchPhase.SignedOut) return
         clearLocal()
     }
 
     /** Everything this device holds for the account, gone — in every partition. */
     private suspend fun clearLocal() {
+        endingSession = true
+        loadGeneration++
+        _state.value = LaunchPhase.SignedOut
+        sessionTransition.withLock {
+            clearLocalState()
+        }
+    }
+
+    private suspend fun clearLocalState() {
+        clearBackgroundFeatures()
         sessions.purgeEverything()
         cache.purgeAllPrivate()
         snapshots.purgeAll()
         lastBootstrap = null
         onboardingState = null
         pendingDestination = null
+        pendingChatCid = null
+        chatRouteGeneration++
         deletionKey = null
         _selectedChurchSlug.value = null
         _selectedTab.value = HostTab.HOME
