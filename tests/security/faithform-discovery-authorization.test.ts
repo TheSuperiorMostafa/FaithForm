@@ -204,9 +204,9 @@ test("an invalid token deactivates the installation", () => {
 });
 
 test("a permanent failure for one device does not re-notify everyone", () => {
-  // Only a provider's retryable answer or the time budget retries the job, and
+  // Provider/write failures retry; incomplete audience pages resume unspent, and
   // a retry reaches only devices not yet sent to (tests/unit/push-worker-resume).
-  assert.match(outbox, /const jobOutcome = anyRetryable \|\| outOfTime \? "retryable" : "sent"/);
+  assert.match(outbox, /const jobOutcome = anyRetryable \? "retryable" : "sent"/);
   assert.match(outbox, /\.in\("outcome", \["sent", "permanent"\]\)/);
 });
 

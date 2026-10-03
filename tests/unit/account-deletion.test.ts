@@ -8,6 +8,8 @@ import {
   runAccountDeletions,
   type DeletionLogger,
 } from "@/lib/faithform/account-deletion";
+import { enqueueRecurringGiftCancellationsForAccount, runRecurringGiftCancellationWorker } from "@/lib/giving/v1/recurring-cancellation-jobs";
+import type { GivingPaymentProvider } from "@/lib/giving/v1/payment-provider";
 import { BOOTSTRAP_SUPERADMIN_EMAILS } from "@/lib/auth/superadmin-emails";
 
 import {
@@ -69,6 +71,7 @@ class FakeDatabase {
   failAuthDelete: (userId: string) => DbError | null = () => null;
   /** Runs just before a write, so a test can play a second, overlapping run. */
   beforeWrite: (operation: Operation) => void = () => {};
+  clock = new Date(NOW);
   private ids = 0;
 
   rows(table: string): Row[] {
@@ -101,6 +104,17 @@ class FakeDatabase {
   client(): never {
     return {
       from: (table: string) => new FakeQuery(this, table),
+      rpc: async (name: string, input: { p_lease_token: string; p_limit: number }) => {
+        assert.equal(name, "claim_recurring_gift_cancellations");
+        const error = this.failOn({ table: "giving_recurring_cancellation_jobs", op: "select", rows: [] });
+        if (error) return { data: null, error };
+        const jobs = this.rows("giving_recurring_cancellation_jobs").filter((row) =>
+          (row.status === "pending" && String(row.next_attempt_at) <= this.clock.toISOString()) ||
+          (row.status === "processing" && String(row.lease_expires_at) <= this.clock.toISOString()),
+        ).slice(0, input.p_limit);
+        for (const row of jobs) Object.assign(row, { status: "processing", attempts: Number(row.attempts) + 1, lease_token: input.p_lease_token, lease_expires_at: new Date(this.clock.getTime() + 600_000).toISOString() });
+        return { data: jobs.map((row) => ({ ...row })), error: null };
+      },
       auth: {
         admin: {
           getUserById: async (id: string) => {
@@ -134,6 +148,8 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: DbError | null }>
   private filters: ((row: Row) => boolean)[] = [];
   private orders: { column: string; ascending: boolean; nullsFirst: boolean }[] = [];
   private max: number | null = null;
+  private offset = 0;
+  private ignoreDuplicates = false;
   private returning = false;
   private single = false;
 
@@ -158,6 +174,23 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: DbError | null }>
   insert(values: Row | Row[]) {
     this.op = "insert";
     this.values = values;
+    return this;
+  }
+  upsert(values: Row | Row[], options: { ignoreDuplicates: boolean }) {
+    this.ignoreDuplicates = options.ignoreDuplicates;
+    return this.insert(values);
+  }
+  is(column: string, value: unknown) {
+    this.filters.push((row) => value === null ? row[column] == null : row[column] === value);
+    return this;
+  }
+  gt(column: string, value: string) {
+    this.filters.push((row) => typeof row[column] === "string" && String(row[column]) > value);
+    return this;
+  }
+  range(from: number, to: number) {
+    this.offset = from;
+    this.max = to - from + 1;
     return this;
   }
   eq(column: string, value: unknown) {
@@ -206,7 +239,11 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: DbError | null }>
     if (this.op === "insert") {
       const values = Array.isArray(this.values) ? this.values : [this.values!];
       this.db.beforeWrite(operation);
-      const inserted = values.map((value) => this.db.insert(this.table, value));
+      const inserted = values.flatMap((value) => {
+        if (this.ignoreDuplicates && this.db.rows(this.table).some((row) => row.stripe_account_id === value.stripe_account_id && row.stripe_subscription_id === value.stripe_subscription_id)) return [];
+        const defaults = this.table === "giving_recurring_cancellation_jobs" ? { status: "pending", attempts: 0, next_attempt_at: this.db.clock.toISOString(), lease_token: null, lease_expires_at: null } : {};
+        return [this.db.insert(this.table, { ...defaults, ...value })];
+      });
       return { data: this.returning ? inserted : null, error: null };
     }
 
@@ -236,6 +273,7 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: DbError | null }>
         return (left < right ? -1 : 1) * (order.ascending ? 1 : -1);
       });
     }
+    if (this.offset) rows = rows.slice(this.offset);
     if (this.max !== null) rows = rows.slice(0, this.max);
     const copies = rows.map((row) => ({ ...row }));
     return { data: this.single ? (copies[0] ?? null) : copies, error: null };
@@ -708,4 +746,155 @@ test("a run is bounded, and takes never-attempted requests before retries", asyn
   assert.equal(result.due, 1);
   assert.deepEqual(db.deletedUsers, [fresh.userId]);
   assert.equal(request(db, retried.requestId).status, "pending");
+});
+
+
+// Durable recurring cancellation after account ownership has been removed.
+const JOBS = "giving_recurring_cancellation_jobs";
+function seedRecurringGift(db: FakeDatabase) {
+  const person = seedChurchgoer(db, 1);
+  db.insert("churches", { id: CHURCH, stripe_account_id: "acct_mock" });
+  db.insert("giving_subscriptions", { church_id: CHURCH, donor_id: "donor-1", stripe_subscription_id: "sub_mock", status: "active" });
+  return person;
+}
+const cancellationProvider = (cancel: GivingPaymentProvider["cancelSubscription"]) => ({ cancelSubscription: cancel }) as GivingPaymentProvider;
+const workCancellations = (db: FakeDatabase, cancel: GivingPaymentProvider["cancelSubscription"]) => runRecurringGiftCancellationWorker({ client: db.client(), provider: cancellationProvider(cancel), now: () => db.clock.getTime() });
+
+test("deletion finishes during a provider outage and its durable cancellation later succeeds", async () => {
+  const db = new FakeDatabase();
+  const person = seedRecurringGift(db);
+  const deletion = await run(db);
+  assert.equal(deletion.authUserDeleted, 1);
+  assert.equal(db.rows("giving_donor_links").length, 0);
+  assert.equal(db.rows("visitor_accounts").length, 0);
+  assert.deepEqual(Object.keys(db.rows(JOBS)[0]).sort(), ["attempts", "id", "lease_expires_at", "lease_token", "next_attempt_at", "status", "stripe_account_id", "stripe_subscription_id"].sort());
+  assert.equal(db.users.has(person.userId), false);
+  assert.equal((await workCancellations(db, async () => false)).retried, 1);
+  assert.equal(db.rows(JOBS)[0].status, "pending");
+  db.clock = new Date(NOW.getTime() + 3_600_000);
+  const calls: string[][] = [];
+  assert.equal((await workCancellations(db, async (account, subscription) => { calls.push([account, subscription]); return true; })).completed, 1);
+  assert.deepEqual(calls, [["acct_mock", "sub_mock"]]);
+  assert.equal(db.rows(JOBS)[0].status, "completed");
+  assert.equal((await workCancellations(db, async () => { throw new Error("must not recancel completed job"); })).claimed, 0);
+});
+
+for (const table of ["giving_donor_links", "giving_subscriptions", "giving_recurring_attempts", "churches", JOBS]) {
+  test(`a ${table} read or enqueue failure preserves account ownership for retry`, async () => {
+    const db = new FakeDatabase();
+    const person = seedRecurringGift(db);
+    db.failOn = (op) => op.table === table ? { code: "08006", message: "private provider payload" } : null;
+    assert.equal((await run(db)).retrying, 1);
+    assert.equal(db.users.has(person.userId), true);
+    assert.equal(db.rows("giving_donor_links").length, 1);
+    db.failOn = () => null;
+    assert.equal((await run(db)).authUserDeleted, 1);
+    assert.equal(db.rows(JOBS).length, 1);
+  });
+}
+
+test("missing Stripe configuration does not skip durable cancellation handoff", async () => {
+  const db = new FakeDatabase();
+  seedRecurringGift(db);
+  const key = process.env.STRIPE_SECRET_KEY;
+  delete process.env.STRIPE_SECRET_KEY;
+  try { assert.equal((await run(db)).authUserDeleted, 1); assert.equal(db.rows(JOBS).length, 1); }
+  finally { if (key === undefined) delete process.env.STRIPE_SECRET_KEY; else process.env.STRIPE_SECRET_KEY = key; }
+});
+
+test("attached recurring attempts are queued even before subscription webhook projection", async () => {
+  const db = new FakeDatabase();
+  const person = seedRecurringGift(db);
+  db.tables.set("giving_subscriptions", []);
+  db.insert("giving_recurring_attempts", { account_id: person.accountId, church_id: CHURCH, stripe_subscription_id: "sub_delayed" });
+  assert.equal((await run(db)).authUserDeleted, 1);
+  assert.equal(db.rows(JOBS)[0].stripe_subscription_id, "sub_delayed");
+  assert.equal(db.rows("giving_recurring_attempts").length, 0);
+});
+
+for (const field of ["stripe_account_id", "stripe_subscription_id"]) {
+  test(`missing or malformed ${field} cannot destroy cancellation ownership`, async () => {
+    for (const invalid of [null, "", "wrong-id"]) {
+      const db = new FakeDatabase();
+      const person = seedRecurringGift(db);
+      db.rows(field === "stripe_account_id" ? "churches" : "giving_subscriptions")[0][field] = invalid;
+      assert.equal((await run(db)).retrying, 1);
+      assert.equal(db.users.has(person.userId), true);
+    }
+  });
+}
+
+test("enqueue replay leaves completed cancellation rows untouched", async () => {
+  const db = new FakeDatabase();
+  const person = seedRecurringGift(db);
+  await enqueueRecurringGiftCancellationsForAccount({ accountId: person.accountId, client: db.client() });
+  await workCancellations(db, async () => true);
+  const completed = { ...db.rows(JOBS)[0] };
+  await enqueueRecurringGiftCancellationsForAccount({ accountId: person.accountId, client: db.client() });
+  assert.deepEqual(db.rows(JOBS), [completed]);
+});
+
+test("stalled cancellation leases are reclaimed and successful provider work is safe to repeat", async () => {
+  const db = new FakeDatabase();
+  seedRecurringGift(db);
+  await run(db);
+  let calls = 0;
+  db.failOn = (op) => op.table === JOBS && op.op === "update" ? { code: "08006", message: "private payload" } : null;
+  await assert.rejects(workCancellations(db, async () => { calls++; return true; }), /recurring_cancellation_result_failed/);
+  assert.equal(db.rows(JOBS)[0].status, "processing");
+  db.failOn = () => null;
+  assert.equal((await workCancellations(db, async () => { calls++; return true; })).claimed, 0);
+  db.clock = new Date(NOW.getTime() + 600_001);
+  assert.equal((await workCancellations(db, async () => { calls++; return true; })).completed, 1);
+  assert.equal(calls, 2);
+});
+
+test("a worker cannot complete a cancellation after its lease is taken by another run", async () => {
+  const db = new FakeDatabase();
+  seedRecurringGift(db);
+  await run(db);
+  const result = await workCancellations(db, async () => { db.rows(JOBS)[0].lease_token = "another-worker"; return true; });
+  assert.equal(result.leaseLost, 1);
+  assert.equal(db.rows(JOBS)[0].status, "processing");
+  assert.equal(db.rows(JOBS)[0].lease_token, "another-worker");
+});
+
+test("cancellation failures have no terminal attempt cap and never store provider messages", async () => {
+  const db = new FakeDatabase();
+  seedRecurringGift(db);
+  await run(db);
+  db.rows(JOBS)[0].attempts = 999;
+  const result = await workCancellations(db, async () => { throw new Error("private payload"); });
+  assert.equal(result.retried, 1);
+  assert.equal(db.rows(JOBS)[0].last_error, "provider_unavailable");
+  assert.equal(db.rows(JOBS)[0].next_attempt_at, new Date(NOW.getTime() + 3_600_000).toISOString());
+});
+
+
+test("a cancellation claim database failure does not masquerade as an empty queue", async () => {
+  const db = new FakeDatabase();
+  seedRecurringGift(db);
+  await run(db);
+  db.failOn = (op) => op.table === JOBS && op.op === "select" ? { code: "08006", message: "private payload" } : null;
+  await assert.rejects(workCancellations(db, async () => true), /recurring_cancellation_claim_failed/);
+  assert.equal(db.rows(JOBS)[0].status, "pending");
+});
+
+test("an exhausted worker releases untouched jobs without contacting Stripe", async () => {
+  const db = new FakeDatabase();
+  seedRecurringGift(db);
+  await run(db);
+  const result = await runRecurringGiftCancellationWorker({ client: db.client(), provider: cancellationProvider(async () => { throw new Error("must not call provider after budget"); }), now: () => db.clock.getTime(), budgetMs: 0 });
+  assert.equal(result.retried, 1);
+  assert.equal(db.rows(JOBS)[0].status, "pending");
+  assert.equal(db.rows(JOBS)[0].last_error, "worker_budget_exhausted");
+});
+
+test("all subscription pages are persisted before deletion, including incomplete gifts", async () => {
+  const db = new FakeDatabase();
+  seedRecurringGift(db);
+  db.tables.set("giving_subscriptions", []);
+  for (let n = 0; n < 1001; n++) db.insert("giving_subscriptions", { church_id: CHURCH, donor_id: "donor-1", stripe_subscription_id: `sub_mock${n}`, status: n === 1000 ? "incomplete" : "active" });
+  assert.equal((await run(db)).authUserDeleted, 1);
+  assert.equal(db.rows(JOBS).length, 1001);
 });

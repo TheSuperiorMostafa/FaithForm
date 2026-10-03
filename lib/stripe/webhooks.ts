@@ -28,11 +28,12 @@ async function churchIdForStripeAccount(
 ): Promise<string | null> {
   if (!stripeAccountId) return null;
   const admin = createAdminClient();
-  const { data } = await admin
+  const { data, error } = await admin
     .from("churches")
     .select("id")
     .eq("stripe_account_id", stripeAccountId)
     .maybeSingle();
+  if (error) throw new Error("stripe_church_lookup_failed");
   if (!data?.id) return null;
   if (metadataChurchId && metadataChurchId !== data.id) return null;
   return data.id;
@@ -478,11 +479,9 @@ async function handlePaymentIntent(
  * an SDK finished, which is not the same as money having moved, and treating it
  * as authoritative is the mistake this whole path exists to avoid.
  *
- * Deliberately last, and deliberately non-fatal. The donation projection and the
- * church's receipt email are the church's financial record; a failure to update
- * an app's view of an attempt must not fail the webhook and cause Stripe to
- * redeliver an event that already reconciled correctly. The app's next status
- * poll re-reads the donation anyway.
+ * A failed projection must retry the webhook. Status polling reads the attempt's
+ * stored donation link and cannot repair a missing projection. Replaying the
+ * event reuses the donation and the receipt's existing delivery key.
  */
 async function projectFaithFormAttempt(
   pi: Stripe.PaymentIntent,
@@ -498,16 +497,13 @@ async function projectFaithFormAttempt(
   const attemptStatus =
     status === "succeeded" ? "succeeded" : status === "failed" ? "failed" : "processing";
 
-  try {
-    await admin.rpc("project_giving_attempt_state", {
-      p_payment_intent_id: pi.id,
-      p_status: attemptStatus,
-      p_donation_id: donationId,
-      p_event_at: new Date(eventCreated * 1000).toISOString(),
-    });
-  } catch {
-    return;
-  }
+  const { error: projectionError } = await admin.rpc("project_giving_attempt_state", {
+    p_payment_intent_id: pi.id,
+    p_status: attemptStatus,
+    p_donation_id: donationId,
+    p_event_at: new Date(eventCreated * 1000).toISOString(),
+  });
+  if (projectionError) throw new Error("giving_attempt_projection_failed");
 
   // Bind the account to the church's donor, on a *succeeded* gift only.
   //

@@ -142,6 +142,14 @@ Reference: [Stripe Connect webhooks](https://docs.stripe.com/connect/webhooks).
    and restore a backup before production rollout. The historic P12 runbook's
    0055–0063 list is a feature-specific subset, not the current full chain.
 
+   Apply `0129_durable_delivery_and_gift_cancellation.sql` before deploying the
+   resumable notification worker and durable recurring-gift cancellation code.
+   It adds delivery progress, an audience index, and a server-only cancellation
+   queue that survives account deletion. The existing hourly account-deletion
+   endpoint drains this queue independently of deletion requests. Monitor its
+   cancellation retry counts; provider failures stay queued until they succeed.
+   Reverting application code must leave this queue and its pending jobs intact.
+
 ### Google & Facebook setup (announcements)
 
 1. **Google Cloud Console**

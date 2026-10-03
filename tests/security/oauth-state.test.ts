@@ -54,7 +54,10 @@ test("new OAuth states conceal onboarding invite links and reject tampering", ()
     assert.equal(Buffer.from(part, "base64url").toString("utf8").includes(token), false);
   }
   const parts = state.split(".");
-  parts[2] = `${parts[2] === "A" ? "B" : "A"}${parts[2].slice(1)}`;
+  const encrypted = Buffer.from(parts[2], "base64url");
+  encrypted[0] ^= 1;
+  parts[2] = encrypted.toString("base64url");
+  assert.notEqual(parts.join("."), state);
   assert.equal(verifyOAuthState(parts.join(".")), null);
 });
 

@@ -274,16 +274,20 @@ export const stripeGivingProvider: GivingPaymentProvider = {
 
   async cancelSubscription(stripeAccountId, subscriptionId) {
     const stripe = getStripe();
+    // Leave time for a leased worker to persist the result within its budget.
+    const options = { stripeAccount: stripeAccountId, timeout: 8000, maxNetworkRetries: 0 };
     try {
+      const subscription = await stripe.subscriptions.retrieve(subscriptionId, {}, options);
+      if (["canceled", "incomplete_expired"].includes(subscription.status)) return true;
       await stripe.subscriptions.cancel(
         subscriptionId,
         {},
-        { stripeAccount: stripeAccountId },
+        options,
       );
       return true;
-    } catch {
-      // Reported as a failure so the person is told to try again, rather than
-      // shown a gift that says "stopped" and charges them next month.
+    } catch (error) {
+      // The exact subscription is already absent from this connected account.
+      if (error && typeof error === "object" && "code" in error && error.code === "resource_missing") return true;
       return false;
     }
   },

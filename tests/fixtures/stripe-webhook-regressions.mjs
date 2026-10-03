@@ -7,6 +7,10 @@ const scenario = process.argv[2];
 const root = process.cwd();
 const completed = [];
 const projections = [];
+const eventStatuses = new Map();
+let faultActive = true;
+let donationInserts = 0;
+let attemptState = { status: "initiated", donationId: null };
 let donation = null;
 let subscriptionWrite = null;
 let subscriptionReads = 0;
@@ -31,7 +35,11 @@ const db = {
       then(onResolve, onReject) { return Promise.resolve(resolve()).then(onResolve, onReject); },
     };
     function resolve() {
-      if (table === "churches") return { data: { id: "church_mock" }, error: null };
+      if (table === "churches") {
+        if (scenario === "church-lookup-error" && faultActive) return { data: null, error: { code: "08006" } };
+        if (scenario === "unknown-church") return { data: null, error: null };
+        return { data: { id: "church_mock" }, error: null };
+      }
       if (table === "giving_subscriptions") {
         if (operation === "read") {
           subscriptionReads++;
@@ -44,6 +52,7 @@ const db = {
       }
       assert.equal(table, "giving_donations", `Unexpected table ${table}`);
       if (operation === "insert") {
+        donationInserts++;
         donation = { ...row, id: "donation_mock" };
         return { data: donation, error: null };
       }
@@ -62,6 +71,9 @@ const db = {
   async rpc(name, input) {
     assert.equal(name, "project_giving_attempt_state");
     projections.push(input.p_status);
+    if (faultActive && scenario === "payment-projection-error") return { data: null, error: { code: "08006" } };
+    if (faultActive && scenario === "payment-projection-throw") throw new Error("projection_transport_failed");
+    attemptState = { status: input.p_status, donationId: input.p_donation_id };
     return { data: [{ ok: true }], error: scenario.endsWith("rpc-error") ? { code: "08006" } : null };
   },
 };
@@ -70,8 +82,8 @@ const mocked = new Map([
   ["lib/stripe/client", { getStripe: () => { throw new Error("Provider access forbidden in regression harness"); } }],
   ["lib/stripe/receipt-delivery", { deliverDonationReceipt: async () => {} }],
   ["lib/stripe/webhook-state", {
-    claimStripeEvent: async () => ({ claimed: true, claimToken: "claim_mock", attempt: 1, status: "processing" }),
-    completeStripeEvent: async (input) => completed.push(input.status),
+    claimStripeEvent: async (id) => ({ claimed: eventStatuses.get(id) !== "processed", claimToken: "claim_mock", attempt: 1, status: eventStatuses.get(id) ?? "processing" }),
+    completeStripeEvent: async (input) => { completed.push(input.status); eventStatuses.set(input.eventId, input.status); },
     safeStripeFailure: () => ({ category: "test", code: "Error" }),
     stripeRetryAt: () => new Date().toISOString(),
   }],
@@ -81,14 +93,35 @@ Module._load = function (request) {
   return mocked.get(request.replace(/^@\//, "")) ?? originalLoad.apply(this, arguments);
 };
 const { processStripeEvent } = loadTypeScript(path.join(root, "lib/stripe/webhooks.ts"), import.meta.url);
-async function event(type, object, created = 123) {
-  return processStripeEvent({ id: `evt_mock_${completed.length}`, type, created, account: "acct_mock", data: { object } });
+async function event(type, object, created = 123, id = `evt_mock_${completed.length}`) {
+  return processStripeEvent({ id, type, created, account: "acct_mock", data: { object } });
 }
 function seedDonation(created = 123) {
   donation = { id: "donation_mock", church_id: "church_mock", stripe_payment_intent_id: "pi_mock", stripe_charge_id: "ch_mock", status: "succeeded", stripe_event_created_at: new Date(created * 1000).toISOString() };
 }
 (async () => {
-  if (scenario === "refund-order") {
+  if (["church-lookup-error", "payment-projection-error", "payment-projection-throw"].includes(scenario)) {
+    const pi = { id: "pi_mock", amount: 1000, currency: "usd", metadata: { faithform_attempt_id: "attempt_mock" }, latest_charge: null };
+    const expectedError = scenario === "church-lookup-error" ? /stripe_church_lookup_failed/ : scenario === "payment-projection-error" ? /giving_attempt_projection_failed/ : /projection_transport_failed/;
+    await assert.rejects(event("payment_intent.succeeded", pi, 123, "evt_retry"), expectedError);
+    assert.deepEqual(completed, ["retryable"]);
+    assert.deepEqual(attemptState, { status: "initiated", donationId: null });
+    if (scenario === "church-lookup-error") assert.equal(donation, null);
+    else assert.equal(donation.status, "succeeded");
+    faultActive = false;
+    await event("payment_intent.succeeded", pi, 123, "evt_retry");
+    assert.deepEqual(completed, ["retryable", "processed"]);
+    assert.equal(donationInserts, 1, "retry must reuse the same donation");
+    assert.deepEqual(attemptState, { status: "succeeded", donationId: "donation_mock" });
+    await event("payment_intent.succeeded", pi, 123, "evt_retry");
+    assert.deepEqual(completed, ["retryable", "processed"], "processed replay must be skipped");
+    assert.equal(donationInserts, 1);
+  } else if (scenario === "unknown-church" || scenario === "mismatched-church") {
+    await event("payment_intent.succeeded", { id: "pi_mock", amount: 1000, currency: "usd", metadata: scenario === "mismatched-church" ? { church_id: "other_church_mock" } : {}, latest_charge: null });
+    assert.deepEqual(completed, ["processed"]);
+    assert.equal(donation, null);
+    assert.deepEqual(projections, []);
+  } else if (scenario === "refund-order") {
     const charge = { payment_intent: "pi_mock", refunded: true, metadata: {} };
     await assert.rejects(event("charge.refunded", charge, 124), /donation_state_not_ready/);
     assert.deepEqual(completed, ["retryable"]);

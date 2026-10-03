@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { compareSecret } from "@/lib/security/compare-secret";
 import { runAccountDeletions } from "@/lib/faithform/account-deletion";
+import { runRecurringGiftCancellationWorker } from "@/lib/giving/v1/recurring-cancellation-jobs";
 
 /**
  * Finishes the account deletions people requested in the app.
@@ -44,19 +45,24 @@ export async function GET(request: Request) {
   const startedAt = Date.now();
 
   try {
-    const result = await runAccountDeletions({ limit: parseLimit(request) });
+    // Both queues run even if the other fails; cancellations outlive deleted accounts.
+    const [deletion, cancellation] = await Promise.allSettled([
+      runAccountDeletions({ limit: parseLimit(request) }),
+      runRecurringGiftCancellationWorker({ limit: parseLimit(request) }),
+    ]);
+    if (deletion.status === "rejected" || cancellation.status === "rejected") throw new Error("deletion_queue_unavailable");
+    const result = deletion.value;
+    const cancellations = cancellation.value;
 
     // Counts only. No request, account or user identifier leaves this route;
     // the per-request detail is in the function log, by request id.
     return NextResponse.json(
-      { ok: true, durationMs: Date.now() - startedAt, ...result },
+      { ok: true, durationMs: Date.now() - startedAt, ...result, cancellations },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch {
-    // Reached only when the queue itself cannot be read (a failure on one
-    // request is recorded against that request and does not end the run).
-    // Nothing was changed, and the next run starts from the same place.
-    console.error("[account-deletion] run failed before processing any request");
+    // A queue failure remains retryable; completed work in either queue is durable.
+    console.error("[account-deletion] queue processing failed");
     return NextResponse.json(
       { ok: false },
       { status: 500, headers: { "Cache-Control": "no-store" } },

@@ -3,6 +3,11 @@ import { spawnSync } from "node:child_process";
 import test from "node:test";
 
 for (const [scenario, description] of [
+  ["church-lookup-error", "church lookup failures retry without losing a donation"],
+  ["payment-projection-error", "returned payment projection errors retry and repair the mobile attempt"],
+  ["payment-projection-throw", "thrown payment projection errors retry and repair the mobile attempt"],
+  ["unknown-church", "unknown connected accounts remain acknowledged without recording a gift"],
+  ["mismatched-church", "mismatched church metadata remains acknowledged without recording a gift"],
   ["refund-order", "a refund before payment projection retries and later wins"],
   ["subscription-error", "subscription update failures remain retryable"],
   ["subscription-insert-race", "subscription insert-race update failures remain retryable"],

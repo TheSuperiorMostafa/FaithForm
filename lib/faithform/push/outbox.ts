@@ -135,6 +135,7 @@ type OutboxJob = {
   correlation_id: string;
   subject_version: number;
   attempts: number;
+  audience_after_account_id?: string | null;
 };
 
 type PushRecipient = {
@@ -203,9 +204,9 @@ async function inChunks(
 async function resolveRecipients(
   admin: SupabaseClient,
   job: OutboxJob,
-): Promise<PushRecipient[]> {
+): Promise<{ recipients: PushRecipient[]; nextCursor: string | null; hasMore: boolean }> {
   if (job.target_account_ids && job.target_account_ids.length > 0) {
-    return resolveTargetedRecipients(admin, job, job.target_account_ids);
+    return { recipients: await resolveTargetedRecipients(admin, job, job.target_account_ids), nextCursor: null, hasMore: false };
   }
 
   const states =
@@ -215,19 +216,23 @@ async function resolveRecipients(
         ? ["following", "joined"]
         : ["following", "joined"];
 
-  const relationships = await pagedRows(
-    (from, to) =>
-      admin
-        .from("visitor_church_relationships")
-        .select("account_id")
-        .eq("church_id", job.church_id)
-        .in("state", states)
-        .order("account_id")
-        .range(from, to),
-    5000,
-  );
-  const accountIds = relationships.map((row) => row.account_id as string);
-  if (accountIds.length === 0) return [];
+  // One stable account page per claim. The cursor moves only once every
+  // device on this page has a durable terminal delivery outcome.
+  let relationshipQuery = admin
+    .from("visitor_church_relationships")
+    .select("account_id")
+    .eq("church_id", job.church_id)
+    .in("state", states)
+    .order("account_id");
+  if (job.audience_after_account_id) {
+    relationshipQuery = relationshipQuery.gt("account_id", job.audience_after_account_id);
+  }
+  const { data: relationships, error: relationshipsError } = await relationshipQuery.limit(PAGE_SIZE);
+  if (relationshipsError) throw new Error("push_audience_unavailable");
+  const accountIds = (relationships ?? []).map((row) => row.account_id as string);
+  const nextCursor = accountIds.at(-1) ?? job.audience_after_account_id ?? null;
+  const hasMore = accountIds.length === PAGE_SIZE;
+  if (accountIds.length === 0) return { recipients: [], nextCursor, hasMore };
 
   // A preference row that says false removes the account. An absent row means
   // "not yet decided", which is the topic default (on). A failed read must not
@@ -244,19 +249,24 @@ async function resolveRecipients(
 
   const excluded = new Set(optedOut.map((row) => row.account_id as string));
   const eligible = accountIds.filter((id) => !excluded.has(id));
-  if (eligible.length === 0) return [];
+  if (eligible.length === 0) return { recipients: [], nextCursor, hasMore };
 
-  const installations = await inChunks(eligible, (ids) =>
-    admin
-      .from("visitor_device_installations")
-      .select("id, provider, provider_token, apns_environment")
-      .in("account_id", ids)
-      .eq("is_enabled", true)
-      .is("invalidated_at", null)
-      .limit(10000),
-  );
+  const installations = await inChunks(eligible, async (ids) => ({
+    data: await pagedRows(
+      (from, to) => admin
+        .from("visitor_device_installations")
+        .select("id, provider, provider_token, apns_environment")
+        .in("account_id", ids)
+        .eq("is_enabled", true)
+        .is("invalidated_at", null)
+        .order("id")
+        .range(from, to),
+      Number.POSITIVE_INFINITY,
+    ),
+    error: null,
+  }));
 
-  return (installations as Record<string, unknown>[])
+  const recipients = (installations as Record<string, unknown>[])
     .filter((row) => Boolean(row.provider_token))
     .map((row) => ({
       installationId: row.id as string,
@@ -264,6 +274,7 @@ async function resolveRecipients(
       token: row.provider_token as string,
       apnsEnvironment: row.apns_environment as PushRecipient["apnsEnvironment"],
     }));
+  return { recipients, nextCursor, hasMore };
 }
 
 /**
@@ -351,14 +362,15 @@ async function subjectIsStillCurrent(
   if (job.subject_type === "stream_event") {
     const { data } = await admin
       .from("stream_events")
-      .select("status, mobile_visibility, mobile_unpublished_at, mobile_revoked_at")
+      .select("status, mobile_visibility, mobile_publication_version, mobile_unpublished_at, mobile_revoked_at")
       .eq("id", job.subject_id)
       .eq("church_id", job.church_id)
       .maybeSingle();
     return Boolean(
       data &&
         data.status === "live" &&
-        data.mobile_visibility !== "none" &&
+        data.mobile_visibility === job.target_visibility &&
+        Number(data.mobile_publication_version) === job.subject_version &&
         !data.mobile_unpublished_at &&
         !data.mobile_revoked_at,
     );
@@ -369,7 +381,7 @@ async function subjectIsStillCurrent(
     const { data } = await admin
       .from("stream_recordings")
       .select(
-        "status, mobile_playable, mobile_visibility, mobile_published_at, mobile_unpublished_at, deleted_at",
+        "status, mobile_playable, mobile_visibility, mobile_publication_version, mobile_published_at, mobile_unpublished_at, deleted_at",
       )
       .eq("id", job.subject_id)
       .eq("church_id", job.church_id)
@@ -378,7 +390,8 @@ async function subjectIsStillCurrent(
       data &&
         data.status === "ready" &&
         data.mobile_playable &&
-        data.mobile_visibility !== "none" &&
+        data.mobile_visibility === job.target_visibility &&
+        Number(data.mobile_publication_version) === job.subject_version &&
         data.mobile_published_at &&
         !data.mobile_unpublished_at &&
         !data.deleted_at,
@@ -399,9 +412,6 @@ async function subjectIsStillCurrent(
   if (Number(data.publication_version) !== job.subject_version) return false;
   return true;
 }
-
-/** More than any one church's audience; the ceiling on what one job reads. */
-const MAX_DEVICES = 20_000;
 
 /**
  * Hands a claimed job back for the next pass without spending the attempt its
@@ -494,19 +504,24 @@ export async function runNotificationWorker(options?: {
     // push again, up to five times, and the end of the list never got it.
     let reached: Record<string, unknown>[];
     let recipients: PushRecipient[];
+    let nextCursor: string | null;
+    let hasMore: boolean;
     try {
-      reached = await pagedRows(
-        (from, to) =>
-          admin
+      ({ recipients, nextCursor, hasMore } = await resolveRecipients(admin, raw));
+      reached = await inChunks(recipients.map((recipient) => recipient.installationId), async (ids) => ({
+        data: await pagedRows(
+          (from, to) => admin
             .from("notification_delivery_attempts")
             .select("installation_id")
             .eq("outbox_id", raw.id)
+            .in("installation_id", ids)
             .in("outcome", ["sent", "permanent"])
             .order("installation_id")
             .range(from, to),
-        MAX_DEVICES,
-      );
-      recipients = await resolveRecipients(admin, raw);
+          Number.POSITIVE_INFINITY,
+        ),
+        error: null,
+      }));
     } catch {
       await admin.rpc("complete_notification_job", {
         p_id: raw.id,
@@ -536,7 +551,7 @@ export async function runNotificationWorker(options?: {
       const adapter = adapters[recipient.provider];
       const outcome: DeliveryResult = await adapter.send(recipient.token, message, recipient.apnsEnvironment);
 
-      await admin.from("notification_delivery_attempts").insert({
+      const { error: deliveryWriteError } = await admin.from("notification_delivery_attempts").insert({
         outbox_id: raw.id,
         installation_id: recipient.installationId,
         provider: recipient.provider,
@@ -549,7 +564,7 @@ export async function runNotificationWorker(options?: {
       if (outcome.invalidToken) {
         await invalidateToken(recipient.token, outcome.errorCategory ?? "invalid_token");
       }
-      if (outcome.outcome === "retryable") anyRetryable = true;
+      if (outcome.outcome === "retryable" || deliveryWriteError) anyRetryable = true;
     };
 
     // A few at a time: one by one, a few hundred devices outran the function.
@@ -561,26 +576,32 @@ export async function runNotificationWorker(options?: {
       await Promise.all(pending.slice(start, start + SEND_CONCURRENCY).map(sendOne));
     }
 
-    // A job is only retried when a provider asked us to, or time ran out. The
-    // retry reaches only the devices this pass did not, so a permanent failure
-    // against one device is never a reason to re-notify everyone else.
-    const jobOutcome = anyRetryable || outOfTime ? "retryable" : "sent";
-    if (outOfTime && !anyRetryable) {
-      // Progress is kept in the attempt rows, so running out of time is not a
-      // failure and must not count toward the job's five attempts: a
-      // broadcast needing six passes would otherwise end `failed` part-sent.
+    // Progress and the cursor must be durable before handing a full page back.
+    // Provider failures and interrupted pages retain their old cursor; terminal
+    // attempt rows prevent duplicate sends when that page is tried again.
+    if (!anyRetryable && !outOfTime && nextCursor !== (raw.audience_after_account_id ?? null)) {
+      const { data: advanced, error: cursorError } = await admin
+        .from("notification_outbox")
+        .update({ audience_after_account_id: nextCursor, updated_at: new Date().toISOString() })
+        .eq("id", raw.id)
+        .eq("lease_token", leaseToken)
+        .select("id");
+      if (cursorError || !advanced?.length) anyRetryable = true;
+    }
+    if (!anyRetryable && (outOfTime || hasMore)) {
       await releaseUnspent(admin, raw, leaseToken);
+      result.retried += 1;
     } else {
+      const jobOutcome = anyRetryable ? "retryable" : "sent";
       await admin.rpc("complete_notification_job", {
         p_id: raw.id,
         p_lease_token: leaseToken,
         p_outcome: jobOutcome,
-        p_error_category: anyRetryable ? "provider_retryable" : null,
+        p_error_category: anyRetryable ? "delivery_unavailable" : null,
       });
+      if (anyRetryable) result.retried += 1;
+      else result.sent += 1;
     }
-
-    if (jobOutcome === "retryable") result.retried += 1;
-    else result.sent += 1;
   }
 
   return result;

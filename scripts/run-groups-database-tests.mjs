@@ -94,6 +94,7 @@ try {
       "tests/database/group-messaging.test.ts",
       "tests/database/tenant-isolation.test.ts",
       "tests/database/messaging-sync-claim.test.ts",
+      "tests/database/recurring-cancellation-jobs.test.ts",
     ],
     {
       stdio: "inherit",

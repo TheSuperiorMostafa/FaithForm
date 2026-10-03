@@ -175,7 +175,7 @@ test("the Apple Pay button says donate", () => {
   assert.match(adapter, /buttonType: \.donate/);
 });
 
-test("deleting an account stops its recurring gifts first", () => {
+test("deleting an account durably queues recurring cancellation first", () => {
   // The one thing a foreign key cannot do. Without this, deletion removes the
   // rows that point at a gift and leaves the card being charged every month,
   // with no account left to see it from.
@@ -192,16 +192,10 @@ test("deleting an account stops its recurring gifts first", () => {
   assert.ok(stop < authDelete, "gifts must be stopped before the Auth user is deleted");
 });
 
-test("a provider outage never blocks a deletion we promised would happen", () => {
-  // Apple's guideline 5.1.1(v) and /account-deletion both promise the account
-  // goes. A church whose Stripe account is unreachable is a thing to log.
+test("provider outages cannot lose the durable handoff before deletion", () => {
   const deletion = readFileSync("lib/faithform/account-deletion.ts", "utf8");
-  const helper = deletion.slice(
-    deletion.indexOf("async function stopRecurringGifts("),
-    deletion.indexOf("async function recordLinkRevocations("),
-  );
-  assert.ok(helper.length > 0);
-  assert.match(helper, /try \{/);
-  assert.match(helper, /catch \{/);
-  assert.doesNotMatch(helper, /throw/);
+  const helper = deletion.slice(deletion.indexOf("async function stopRecurringGifts("), deletion.indexOf("async function recordLinkRevocations("));
+  assert.match(helper, /await enqueueRecurringGiftCancellationsForAccount/);
+  assert.doesNotMatch(helper, /catch/);
+  assert.doesNotMatch(helper, /cancelSubscription/);
 });

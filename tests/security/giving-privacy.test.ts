@@ -401,19 +401,12 @@ test("the existing web giving flow is untouched", () => {
   assert.match(webhooks, /claimStripeEvent|claim_stripe_webhook_event/);
 });
 
-test("the FaithForm projection off the webhook cannot fail a church's reconciliation", () => {
+test("mobile payment projection failures retry after financial reconciliation", () => {
   const webhooks = read("lib/stripe/webhooks.ts");
-  const projection = webhooks.slice(
-    webhooks.indexOf("async function projectFaithFormAttempt"),
-    webhooks.indexOf("async function handleSubscription"),
-  );
-  assert.ok(projection.length > 200, "the projection was renamed and this sweep went stale");
-  // Non-fatal on purpose: a failure to update an app's view of an attempt must
-  // not fail the webhook and make Stripe redeliver an event that already
-  // reconciled the church's financial record correctly.
-  assert.match(projection, /catch \{/);
-  assert.ok(
-    projection.indexOf("await maybeSendDonationReceipt") === -1,
-    "the projection runs before the church's own receipt",
-  );
+  const projection = webhooks.slice(webhooks.indexOf("async function projectFaithFormAttempt"), webhooks.indexOf("async function projectAttemptFromCharge"));
+  assert.match(projection, /const \{ error: projectionError \} = await admin\.rpc\("project_giving_attempt_state"/);
+  assert.match(projection, /if \(projectionError\) throw new Error\("giving_attempt_projection_failed"\)/);
+  const handler = webhooks.slice(webhooks.indexOf("async function handlePaymentIntent"), webhooks.indexOf("async function projectFaithFormAttempt"));
+  assert.ok(handler.indexOf("await upsertDonation(") < handler.indexOf("await projectFaithFormAttempt("));
+  assert.ok(handler.indexOf("await maybeSendDonationReceipt(") < handler.indexOf("await projectFaithFormAttempt("));
 });
