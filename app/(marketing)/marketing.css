@@ -368,17 +368,6 @@
 .marketing-footer-links a:hover { color: #d9bb83; }
 .marketing-copyright { grid-column: 1 / -1; margin-top: 50px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,.18); color: #aeb8c6; font-size: 11px; }
 
-/* Future walkthrough implementation, activated only when real media is configured. */
-.marketing-video-hero { min-height: 750px; display: grid; align-items: center; padding: 150px 0 100px; background: var(--paper); }
-.marketing-video-hero-grid { display: grid; grid-template-columns: .8fr 1.2fr; align-items: center; gap: 7%; }
-.marketing-video-hero h1 { font-size: clamp(53px, 5.8vw, 85px); line-height: 1.05; margin: 25px 0; }
-.marketing-video-hero p { max-width: 460px; color: #4e5b69; font-size: 20px; line-height: 1.55; }
-.marketing-video-frame { position: relative; aspect-ratio: 16/10; overflow: hidden; border-radius: 7px; background: var(--deep); box-shadow: 0 30px 70px rgba(0,29,66,.2); }
-.marketing-video-frame video { width: 100%; height: 100%; display: block; opacity: 0; }
-.marketing-video-frame video.is-visible { opacity: 1; }
-.marketing-video-poster { position: absolute; z-index: 1; inset: 0; width: 100%; display: grid; place-items: center; border: 0; background-position: center; background-size: cover; color: white; cursor: pointer; }
-.marketing-video-poster svg { box-sizing: content-box; padding: 22px; border: 1px solid white; border-radius: 50%; background: rgba(0,29,66,.65); }
-
 @media (max-width: 1100px) {
   .marketing-nav-links { gap: 18px; }
   .marketing-hero-grid { grid-template-columns: minmax(0,.94fr) minmax(0,1.06fr); }
@@ -500,10 +489,35 @@
   .marketing-footer-inner { grid-template-columns: 1fr; }
   .marketing-footer-links { grid-column: 1; grid-row: auto; justify-content: flex-start; margin-top: 24px; }
   .marketing-copyright { grid-column: 1; margin-top: 35px; }
-  .marketing-video-hero-grid { grid-template-columns: 1fr; gap: 30px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .marketing *, .marketing *::before, .marketing *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
   .marketing-flow-outputs > div, .marketing-stat-number { animation: none !important; opacity: 1 !important; transform: none !important; }
 }
+
+/* The original hero keeps its copy, layout, background, and ornaments. */
+.marketing-hero-media { width: min(100%,690px); min-width: 0; position: relative; }
+.marketing-hero-media [hidden] { display: none !important; }
+.marketing-hero-video-frame { position: relative; aspect-ratio: 16/9; overflow: hidden; border: 1px solid #cfd7df; border-radius: 17px; background: var(--paper); box-shadow: 0 34px 70px rgba(0,29,66,.22),13px 15px 0 rgba(197,160,89,.22); transform: none; }
+.marketing-hero-video-frame video { display: block; width: 100%; height: 100%; object-fit: contain; }
+.marketing-hero-video-sound,.marketing-hero-video-play { position: absolute; display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 44px; padding: 0 12px; border: 1px solid rgba(255,255,255,.35); border-radius: 7px; background: rgba(0,29,66,.9); color: white; font: 700 11px/1.3 var(--font-sans),sans-serif; cursor: pointer; }
+.marketing-hero-video-sound { top: 10px; right: 10px; }
+.marketing-hero-video-play { top: 50%; left: 50%; transform: translate(-50%,-50%); }
+.marketing-hero-video-end { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; align-content: center; padding: 20px; background: rgba(248,247,244,.95); }
+.marketing-hero-video-end p { width: 100%; margin: 0 0 10px; text-align: center; color: #41536b; font-size: 13px; }
+.marketing-hero-media-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 44px; padding: 0 13px; border: 1px solid rgba(0,45,95,.2); border-radius: 6px; background: var(--paper); color: var(--ink); font: 700 12px/1.3 var(--font-sans),sans-serif; text-decoration: none; cursor: pointer; }
+.marketing-hero-media-button.is-primary { background: var(--ink); border-color: var(--ink); color: white; }
+.marketing-hero-demo-actions { display: flex; justify-content: center; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 21px; }
+.marketing-hero-demo-actions .marketing-hero-media-button { padding: 0 10px; font-size: 11px; background: transparent; }
+@media (max-width: 700px) {
+  .marketing-hero-media { max-width: 430px; }
+  .marketing-hero-video-frame { box-shadow: 9px 12px 0 rgba(197,160,89,.22),0 20px 35px rgba(0,29,66,.17); }
+  .marketing-hero-video-sound { top: 6px; right: 6px; font-size: 10px; }
+}
+
+/* Softer concentric circles centered behind the straight video surface. */
+.marketing-hero-art:has(.marketing-hero-media)::before { width: min(104%,560px); left: 50%; top: 50%; transform: translate(-50%,-50%); background: radial-gradient(circle,rgba(223,217,204,.62) 0%,rgba(235,228,214,.42) 62%,rgba(248,247,244,0) 72%); opacity: 1; }
+.marketing-hero-art:has(.marketing-hero-media) .marketing-hero-orbit { left: 50%; top: 50%; transform: translate(-50%,-50%); border-color: rgba(167,139,95,.2); }
+.marketing-hero-art:has(.marketing-hero-media) .marketing-hero-orbit-one { width: 104%; max-width: 590px; }
+.marketing-hero-art:has(.marketing-hero-media) .marketing-hero-orbit-two { width: 86%; max-width: 490px; border-color: rgba(0,45,95,.08); }

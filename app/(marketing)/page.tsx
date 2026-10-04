@@ -2,8 +2,7 @@ import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { MarketingLanding } from "@/components/marketing/landing";
 import { CurrentHero } from "@/components/marketing/current-hero";
-import { DashboardPreview } from "@/components/marketing/dashboard-preview";
-import { FutureVideoHero } from "@/components/marketing/future-video-hero";
+import { HeroVideoPreview } from "@/components/marketing/future-video-hero";
 import { marketingConfig } from "@/components/marketing/config";
 import "./marketing.css";
 
@@ -33,8 +32,6 @@ export default async function Page({ searchParams }: PageProps) {
   }
 
   const video = marketingConfig.walkthrough;
-  const hero = video.enabled && video.src
-    ? <FutureVideoHero src={video.src} poster={video.poster} captions={video.captions} />
-    : <CurrentHero preview={<DashboardPreview />} />;
+  const hero = <CurrentHero preview={<HeroVideoPreview src={video.src} mobileSrc={video.mobileSrc} poster={video.poster} captions={video.captions} />} />;
   return <MarketingLanding hero={hero} />;
 }

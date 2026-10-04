@@ -7,10 +7,10 @@ export const marketingConfig = {
   appStoreQr: "/marketing/app-store-qr.svg",
   androidStore: null as string | null,
   walkthrough: {
-    enabled: false,
-    src: null as string | null,
-    poster: null as string | null,
-    captions: null as string | null,
+    src: "/marketing/faithform-film-v1-1080p.mp4",
+    mobileSrc: "/marketing/faithform-film-v1-720p.mp4",
+    poster: "/marketing/faithform-film-v1-poster.jpg",
+    captions: "/marketing/faithform-film-v1.vtt",
   },
 } as const;
 
