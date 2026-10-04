@@ -41,11 +41,11 @@
 /* Hero */
 .marketing-hero { position: relative; min-height: min(850px, 100svh); padding-top: 110px; background: radial-gradient(circle at 79% 48%, #fff 0, #f5f1e8 33%, #f8f7f4 69%); }
 .marketing-hero-noise { position: absolute; inset: 0; opacity: .26; pointer-events: none; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.65' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.11'/%3E%3C/svg%3E"); }
-.marketing-hero-grid { position: relative; display: grid; grid-template-columns: minmax(0, 1.06fr) minmax(0, .94fr); align-items: center; min-height: min(700px, calc(100svh - 125px)); gap: 20px; }
+.marketing-hero-grid { position: relative; display: grid; grid-template-columns: minmax(0, .43fr) minmax(0, .57fr); align-items: center; min-height: min(700px, calc(100svh - 125px)); gap: 36px; }
 .marketing-hero-copy { position: relative; z-index: 3; padding: 25px 0 55px; }
 .marketing-hero-eyebrow { color: #806744; font-size: 20px; }
 .marketing-eyebrow-line { display: inline-block; width: 26px; height: 2px; background: var(--gold); }
-.marketing-hero h1 { max-width: 820px; margin: 26px 0 26px; font-size: clamp(58px, 6.5vw, 112px); line-height: .99; }
+.marketing-hero h1 { max-width: 820px; margin: 26px 0 26px; font-size: clamp(54px, 5.2vw, 82px); line-height: .99; }
 .marketing-hero h1 em { color: #a58147; white-space: nowrap; }
 .marketing-hero-deck { max-width: 530px; margin: 0; font-size: clamp(17px, 1.6vw, 21px); line-height: 1.55; color: #41536b; }
 .marketing-hero-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 31px; margin-top: 34px; }
@@ -370,8 +370,8 @@
 
 @media (max-width: 1100px) {
   .marketing-nav-links { gap: 18px; }
-  .marketing-hero-grid { grid-template-columns: minmax(0,.94fr) minmax(0,1.06fr); }
-  .marketing-hero h1 { font-size: clamp(58px, 6.3vw, 78px); }
+  .marketing-hero-grid { grid-template-columns: minmax(0,.43fr) minmax(0,.57fr); gap: 28px; }
+  .marketing-hero h1 { font-size: clamp(42px, 4.8vw, 60px); }
   .marketing-hero-art { min-height: 500px; }
   .marketing-product-grid { gap: 50px; }
   .marketing-dashboard-frame { transform: rotate(2deg); }
@@ -497,7 +497,8 @@
 }
 
 /* The original hero keeps its copy, layout, background, and ornaments. */
-.marketing-hero-media { width: min(100%,690px); min-width: 0; position: relative; }
+.marketing-hero-media { width: min(100%,800px); min-width: 0; position: relative; }
+.marketing-hero-media .marketing-dashboard-frame { margin-inline: auto; }
 .marketing-hero-media [hidden] { display: none !important; }
 .marketing-hero-video-frame { position: relative; aspect-ratio: 16/9; overflow: hidden; border: 1px solid #cfd7df; border-radius: 17px; background: var(--paper); box-shadow: 0 34px 70px rgba(0,29,66,.22),13px 15px 0 rgba(197,160,89,.22); transform: none; }
 .marketing-hero-video-frame video { display: block; width: 100%; height: 100%; object-fit: contain; }
@@ -511,7 +512,15 @@
 .marketing-hero-demo-actions { display: flex; justify-content: center; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 21px; }
 .marketing-hero-demo-actions .marketing-hero-media-button { padding: 0 10px; font-size: 11px; background: transparent; }
 @media (max-width: 700px) {
-  .marketing-hero-media { max-width: 430px; }
+  .marketing-hero-media { max-width: none; }
+  .marketing-hero-grid { padding-top: 31px; }
+  .marketing-hero-copy { display: contents; }
+  .marketing-hero-copy > .marketing-hero-eyebrow { grid-row: 1; }
+  .marketing-hero-copy > h1 { grid-row: 2; }
+  .marketing-hero-art { grid-row: 3; margin-top: 0; margin-bottom: 30px; padding-block: 0; }
+  .marketing-hero-copy > .marketing-hero-deck { grid-row: 4; }
+  .marketing-hero-copy > .marketing-hero-actions { grid-row: 5; }
+  .marketing-hero-copy > .marketing-hero-note { grid-row: 6; margin-bottom: 60px; }
   .marketing-hero-video-frame { box-shadow: 9px 12px 0 rgba(197,160,89,.22),0 20px 35px rgba(0,29,66,.17); }
   .marketing-hero-video-sound { top: 6px; right: 6px; font-size: 10px; }
 }
