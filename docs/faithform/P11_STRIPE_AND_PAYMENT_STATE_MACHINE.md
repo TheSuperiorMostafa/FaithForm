@@ -255,3 +255,47 @@ point the status route tells them the truth, because the webhook already did.
 * The state machine, the idempotency, the isolation and the projections are all
   tested against a real PostgreSQL. Everything that needs Stripe is in the
   runbook.
+
+
+## Recurring gift scheduling rollout (migration 0131)
+
+Apply `0131_recurring_gift_schedules.sql` to a deliberately selected database
+before deploying the scheduling server/client changes. It expands recurring
+interval constraints to include `biweekly` and adds nullable attempt schedule
+columns plus `claim_giving_recurring_attempt_v2`. The original claim RPC and
+existing attempts remain available for older clients. The claim stores the
+first charge, billing days, fund, amount, and cadence once; retries reuse those
+values and the original provider idempotency key. No payment records are
+backfilled. No database was selected or migrated during local development.
+
+On the connected-account webhook endpoint, enable `setup_intent.succeeded`
+alongside the existing invoice/subscription events. Deploy that handler before
+enabling future-start forms: the signed setup event verifies the subscription,
+connected account, church, and customer before installing its payment method.
+Keep `customer.subscription.deleted` enabled so pending SetupIntents are
+cancelled when a subscription stops. Provider event delivery failure is retried
+through the existing webhook claim/lease path. Local development did not change
+provider webhook settings.
+
+A future first gift uses Stripe's trial-until-start subscription and SetupIntent,
+with proration disabled, rather than charging an invoice today. Each scheduled
+attempt starts with a fresh customer so abandoning setup cannot inherit a
+previously saved card. Missing payment methods cause cancellation at the start
+rather than a charge. Zero-value trial invoices never create a donation or
+receipt. Only a later verified paid invoice confirms money moved.
+
+Date-only scheduling follows the church timezone, around local noon (10am–2pm
+at extreme offsets so the local date and Stripe's UTC anchor date agree).
+“Start on or after” advances to the selected weekday or month day, and the form
+shows the actual first charge date before setup. Monthly dates 29–31 use the
+month's final day when necessary. Stripe renewals use its UTC anchor; daylight
+saving changes can shift the local charge hour. Biweekly means a week interval
+with `interval_count: 2`, preserved when a gift amount is changed. Android opens
+the recurring web form; approved iOS churches can use the native SetupIntent
+sheet. Existing immediate first-gift behavior is retained when no future date
+is selected.
+
+Before production, rehearse future first charges, month ends, setup
+cancellation, failed first payments, duplicates, and cancellation in Stripe's
+established test environment. The local mocks cover the application boundary;
+they do not prove live provider timing or database execution.

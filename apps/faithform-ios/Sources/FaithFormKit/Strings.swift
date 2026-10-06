@@ -1368,4 +1368,12 @@ public enum L {
     public static var churchContextNotYours: String {
         t("church_context_not_yours", "Not your church?")
     }
+    public static var givingCadenceBiweekly: String { t("giving_cadence_biweekly", "Every 2 weeks") }
+    public static func givingEveryTwoWeeksAmount(_ value: String) -> String { String(format: t("giving_every_two_weeks_amount", "%@ every 2 weeks"), value) }
+    public static var givingStartDate: String { t("giving_start_date", "Start on or after") }
+    public static var givingMonthlyDay: String { t("giving_monthly_day", "Gift date each month") }
+    public static var givingShortMonth: String { t("giving_short_month", "In shorter months, gifts run on the last day.") }
+    public static func givingScheduledConfirm(_ value: String) -> String { String(format: t("giving_scheduled_confirm", "First gift: %@. Save your payment method now; you will not be charged today. You can stop this gift from the Give screen."), value) }
+    public static var givingOpenRecurring: String { t("giving_open_recurring", "Set up recurring gifts") }
+    public static var givingScheduleOptions: String { t("giving_schedule_options", "Choose weekly, every 2 weeks, or monthly giving, and a start date on the church giving page.") }
 }

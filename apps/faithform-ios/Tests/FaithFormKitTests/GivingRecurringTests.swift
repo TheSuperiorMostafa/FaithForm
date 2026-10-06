@@ -65,6 +65,7 @@ struct RecurringAttemptTests {
         // A mapping table between these two would eventually disagree, and the
         // disagreement would be a weekly gift charged monthly.
         #expect(RecurringCadence.week.wireValue == GivingInterval.week.rawValue)
+        #expect(RecurringCadence.biweekly.wireValue == GivingInterval.biweekly.rawValue)
         #expect(RecurringCadence.month.wireValue == GivingInterval.month.rawValue)
     }
 }
@@ -171,5 +172,26 @@ struct RecurringGiftListingTests {
         #expect(!names.contains { $0.localizedCaseInsensitiveContains("stripe") })
         #expect(!names.contains { $0.localizedCaseInsensitiveContains("customer") })
         #expect(!names.contains { $0.localizedCaseInsensitiveContains("email") })
+    }
+}
+
+
+@Suite("Recurring gift scheduling")
+struct RecurringScheduleTests {
+    @Test("monthly day 31 clamps to the final day and does not precede the requested start")
+    func monthlyEnd() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let start = calendar.date(from: DateComponents(year: 2026, month: 2, day: 1))!
+        let now = calendar.date(from: DateComponents(year: 2026, month: 1, day: 1))!
+        let first = try #require(recurringFirstGiftDate(start: start, monthlyDay: 31, now: now, calendar: calendar))
+        #expect(calendar.component(.day, from: first) == 28)
+        #expect(calendar.component(.month, from: first) == 2)
+    }
+    @Test("persisted attempts retain cadence, first date and monthly billing day")
+    func retainedSchedule() throws {
+        let scheduled = RecurringAttempt(clientAttemptID: "attempt_schedule", churchSlug: "church", fundID: "fund", amountCents: 2500, cadence: .biweekly, startDate: "2026-10-20", billingDayOfMonth: nil)
+        #expect(try JSONDecoder().decode(RecurringAttempt.self, from: JSONEncoder().encode(scheduled)) == scheduled)
+        #expect(recurringIntervalTitle("biweekly") == L.givingCadenceBiweekly)
     }
 }

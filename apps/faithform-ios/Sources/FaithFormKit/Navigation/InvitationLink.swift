@@ -1,6 +1,6 @@
 import Foundation
 
-/// Recognises `faithform://invite/<token>`.
+/// Recognises custom-scheme and verified faithform.io church invitation links.
 ///
 /// Deliberately separate from `DeepLinkParser`: an invitation is a credential
 /// to redeem, not a destination to navigate to, and it is valid for a
@@ -14,11 +14,16 @@ public enum InvitationLink {
     )
 
     public static func token(from url: URL) -> String? {
-        guard url.scheme?.lowercased() == "faithform" else { return nil }
-        guard url.host?.lowercased() == "invite" else { return nil }
-
+        guard url.query == nil, url.fragment == nil, url.user == nil, url.password == nil, url.port == nil else { return nil }
         let segments = url.pathComponents.filter { $0 != "/" }
-        guard segments.count == 1, let candidate = segments.first else { return nil }
+        let candidate: String
+        if url.scheme?.lowercased() == "faithform", url.host?.lowercased() == "invite", segments.count == 1 {
+            candidate = segments[0]
+        } else if url.scheme?.lowercased() == "https", url.port == nil,
+                  ["faithform.io", "www.faithform.io"].contains(url.host?.lowercased() ?? ""),
+                  segments.count == 3, segments[0] == "faithform", segments[1] == "invite" {
+            candidate = segments[2]
+        } else { return nil }
 
         // The contract bounds tokens to 16–512 characters; anything outside
         // that or off-alphabet is refused rather than sent to the server.

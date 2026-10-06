@@ -582,7 +582,8 @@ async function handleSubscription(
 
   const item = sub.items.data[0];
   const amountCents = item?.price?.unit_amount ?? 0;
-  const interval = item?.price?.recurring?.interval ?? "month";
+  const interval = item?.price?.recurring?.interval === "week" && item.price.recurring.interval_count === 2
+    ? "biweekly" : item?.price?.recurring?.interval ?? "month";
   const customerId =
     typeof sub.customer === "string" ? sub.customer : sub.customer?.id ?? "";
 
@@ -640,6 +641,9 @@ async function handleInvoice(
     invoice.metadata?.church_id,
   );
   if (!churchId) return;
+
+  // Trial/setup invoices move no money and must never become donations or receipts.
+  if ((invoice.amount_paid || invoice.amount_due) <= 0) return;
 
   // Read from either API version's shape: the endpoint that delivered this
   // event may be pinned older or newer than the SDK. See invoice-shape.ts.
@@ -921,9 +925,42 @@ async function processStripeEventEffects(event: Stripe.Event): Promise<void> {
       );
       break;
     }
+    case "setup_intent.succeeded": {
+      const setup = event.data.object as Stripe.SetupIntent;
+      const subId = setup.metadata?.faithform_subscription_id;
+      const churchId = await churchIdForStripeAccount(connectedAccount, setup.metadata?.church_id);
+      if (!connectedAccount || !churchId || !subId || !setup.payment_method) break;
+      const stripe = getStripe();
+      const sub = await stripe.subscriptions.retrieve(subId, {}, { stripeAccount: connectedAccount });
+      const customerId = typeof sub.customer === "string" ? sub.customer : sub.customer.id;
+      const setupCustomerId = typeof setup.customer === "string" ? setup.customer : setup.customer?.id;
+      if (sub.metadata.church_id !== churchId || !sub.metadata.scheduled_start_at || customerId !== setupCustomerId || sub.status === "canceled") break;
+      const paymentMethodId = typeof setup.payment_method === "string" ? setup.payment_method : setup.payment_method.id;
+      const currentMethodId = typeof sub.default_payment_method === "string" ? sub.default_payment_method : sub.default_payment_method?.id;
+      // A delayed setup event must not replace a card changed later in the portal.
+      if (currentMethodId && currentMethodId !== paymentMethodId) break;
+      await stripe.subscriptions.update(subId, { default_payment_method: paymentMethodId }, {
+        stripeAccount: connectedAccount,
+        idempotencyKey: `${event.id}_scheduled_method`,
+      });
+      // No donation status changes here. A later paid invoice is the payment authority.
+      break;
+    }
     case "customer.subscription.created":
     case "customer.subscription.updated":
     case "customer.subscription.deleted": {
+      if (event.type === "customer.subscription.deleted" && connectedAccount) {
+        const sub = event.data.object as Stripe.Subscription;
+        const pending = sub.pending_setup_intent;
+        const pendingId = typeof pending === "string" ? pending : pending?.id;
+        if (pendingId) {
+          const stripe = getStripe();
+          const setup = await stripe.setupIntents.retrieve(pendingId, {}, { stripeAccount: connectedAccount });
+          if (setup.status !== "succeeded" && setup.status !== "canceled") {
+            await stripe.setupIntents.cancel(pendingId, {}, { stripeAccount: connectedAccount, idempotencyKey: `${event.id}_cancel_setup` });
+          }
+        }
+      }
       await handleSubscription(
         event.data.object as Stripe.Subscription,
         connectedAccount,

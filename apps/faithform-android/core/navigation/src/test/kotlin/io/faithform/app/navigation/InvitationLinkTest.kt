@@ -23,6 +23,14 @@ class InvitationLinkTest {
     }
 
     @Test
+    fun `verified website invitation links yield tokens without accepting other hosts`() {
+        assertEquals(token, InvitationLink.token("https://faithform.io/faithform/invite/$token"))
+        assertNull(InvitationLink.token("https://faithform.io.evil/faithform/invite/$token"))
+        assertNull(InvitationLink.token("https://faithform.io/faithform/invite/$token?other=1"))
+        assertNull(InvitationLink.token("http://faithform.io/faithform/invite/$token"))
+    }
+
+    @Test
     fun `everything else is refused`() {
         assertNull(InvitationLink.token("https://invite/$token"))            // wrong scheme
         assertNull(InvitationLink.token("faithform://home"))                   // wrong host

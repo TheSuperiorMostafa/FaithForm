@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { loadStripe } from "@stripe/stripe-js";
 import {
@@ -25,6 +25,8 @@ import {
 } from "@/lib/giving/fees";
 import type { GivingFundRow } from "@/types/giving";
 import { formatCents } from "@/lib/utils/currency";
+import { recurringFirstChargeAt } from "@/lib/giving/recurring-schedule";
+import { toYMD } from "@/lib/utils/dates";
 import { cn } from "@/lib/utils";
 
 const PRESETS = [2500, 5000, 10000, 25000, 50000];
@@ -56,6 +58,8 @@ type GiveFormProps = {
    * silently reset to the default.
    */
   initialAmountCents?: number;
+  initialRecurring?: boolean;
+  timeZone?: string;
 };
 
 function CheckoutForm({
@@ -63,11 +67,13 @@ function CheckoutForm({
   isPortal,
   donorEmail,
   onSuccess,
+  confirmationType = "payment",
 }: {
   slug: string;
   isPortal?: boolean;
   donorEmail?: string;
   onSuccess: () => void;
+  confirmationType?: "payment" | "setup";
 }) {
   const stripe = useStripe();
   const elements = useElements();
@@ -82,10 +88,11 @@ function CheckoutForm({
     setError(null);
 
     const thankYouUrl = donorEmail
-      ? `${window.location.origin}/give/${slug}/thank-you?email=${encodeURIComponent(donorEmail)}`
-      : `${window.location.origin}/give/${slug}/thank-you`;
+      ? `${window.location.origin}/give/${slug}/thank-you?email=${encodeURIComponent(donorEmail)}${confirmationType === "setup" ? "&scheduled=1" : ""}`
+      : `${window.location.origin}/give/${slug}/thank-you${confirmationType === "setup" ? "?scheduled=1" : ""}`;
 
-    const { error: submitError } = await stripe.confirmPayment({
+    const confirm = confirmationType === "setup" ? stripe.confirmSetup.bind(stripe) : stripe.confirmPayment.bind(stripe);
+    const { error: submitError } = await confirm({
       elements,
       confirmParams: {
         return_url: isPortal
@@ -112,7 +119,7 @@ function CheckoutForm({
       />
       {error && <p className="text-sm text-destructive">{error}</p>}
       <button type="submit" className={giveBtnCta()} disabled={!stripe || loading}>
-        {loading ? "Processing…" : "Complete gift"}
+        {loading ? "Processing…" : confirmationType === "setup" ? "Save payment method for scheduled gifts" : "Complete gift"}
       </button>
     </form>
   );
@@ -130,6 +137,8 @@ export function GiveForm({
   lockedName,
   onPaymentSuccess,
   initialAmountCents,
+  initialRecurring = false,
+  timeZone = "America/New_York",
 }: GiveFormProps) {
   const router = useRouter();
   const publishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
@@ -151,9 +160,12 @@ export function GiveForm({
   const [customAmount, setCustomAmount] = useState(
     initialAmountCents && !presetMatch ? (initialAmountCents / 100).toFixed(2) : "",
   );
-  const [giftType, setGiftType] = useState<"one_time" | "recurring">("one_time");
-  const [interval, setInterval] = useState<"week" | "month">("month");
-  const [billingDayOfMonth, setBillingDayOfMonth] = useState(1);
+  const [giftType, setGiftType] = useState<"one_time" | "recurring">(initialRecurring ? "recurring" : "one_time");
+  const [interval, setInterval] = useState<"week" | "biweekly" | "month">("month");
+  const [billingDayOfMonth, setBillingDayOfMonth] = useState(() => Number(toYMD(new Date(), timeZone).slice(-2)));
+  const [startDate, setStartDate] = useState("");
+  const [confirmationType, setConfirmationType] = useState<"payment" | "setup">("payment");
+  const recurringAttemptRef = useRef<{ fingerprint: string; id: string } | null>(null);
   const [billingDayOfWeek, setBillingDayOfWeek] = useState(() => new Date().getDay());
   const [donorName, setDonorName] = useState(lockedName ?? "");
   const [donorEmail, setDonorEmail] = useState(lockedEmail ?? "");
@@ -244,7 +256,8 @@ export function GiveForm({
             coverFees,
             interval,
             billingDayOfMonth: interval === "month" ? billingDayOfMonth : undefined,
-            billingDayOfWeek: interval === "week" ? billingDayOfWeek : undefined,
+            billingDayOfWeek: interval !== "month" ? billingDayOfWeek : undefined,
+            startDate: startDate || undefined,
             ...(isPortal
               ? { donorName: donorName.trim() }
               : {
@@ -254,6 +267,19 @@ export function GiveForm({
             fundId,
           };
 
+    try {
+    if (giftType === "recurring") {
+      const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(body)));
+      const fingerprint = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+      // Keep only a digest and attempt id, never donor details, across refreshes.
+      try {
+        const stored = sessionStorage.getItem(`giving-recurring:${slug}`);
+        if (stored) recurringAttemptRef.current = JSON.parse(stored);
+      } catch { /* Private browsing can make session storage unavailable. */ }
+      if (recurringAttemptRef.current?.fingerprint !== fingerprint) recurringAttemptRef.current = { fingerprint, id: crypto.randomUUID() };
+      try { sessionStorage.setItem(`giving-recurring:${slug}`, JSON.stringify(recurringAttemptRef.current)); } catch { /* The in-memory retry guard still applies. */ }
+      Object.assign(body, { clientAttemptId: recurringAttemptRef.current.id });
+    }
     const res = await fetch(endpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -267,11 +293,19 @@ export function GiveForm({
       return;
     }
 
+    setConfirmationType(data.confirmationType === "setup" ? "setup" : "payment");
     setClientSecret(data.clientSecret);
     setStep("pay");
+    } catch {
+      setError("Could not connect to giving. Please try again; your gift attempt will be reused.");
+    } finally { setLoading(false); }
   };
 
   const handlePaymentSuccess = () => {
+    if (giftType === "recurring") {
+      try { sessionStorage.removeItem(`giving-recurring:${slug}`); } catch { /* Storage is optional. */ }
+      recurringAttemptRef.current = null;
+    }
     if (isPortal && onPaymentSuccess) {
       setStep("amount");
       setClientSecret(null);
@@ -279,7 +313,7 @@ export function GiveForm({
       return;
     }
     router.push(
-      `/give/${slug}/thank-you?email=${encodeURIComponent(donorEmail.trim())}`,
+      `/give/${slug}/thank-you?email=${encodeURIComponent(donorEmail.trim())}${confirmationType === "setup" ? "&scheduled=1" : ""}`,
     );
   };
 
@@ -301,6 +335,7 @@ export function GiveForm({
             isPortal={isPortal}
             donorEmail={donorEmail.trim() || undefined}
             onSuccess={handlePaymentSuccess}
+            confirmationType={confirmationType}
           />
         </Elements>
         <Button variant="ghost" type="button" onClick={() => setStep("amount")}>
@@ -333,17 +368,20 @@ export function GiveForm({
 
       {giftType === "recurring" && (
         <div className="space-y-3">
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              className={cn(giveBtnPrimary(interval === "week"), "h-8 px-3 text-sm")}
+              className={cn(giveBtnPrimary(interval === "week"), "min-h-11 px-3 text-sm")}
               onClick={() => setInterval("week")}
             >
               Weekly
             </button>
+            <button type="button" className={cn(giveBtnPrimary(interval === "biweekly"), "min-h-11 px-3 text-sm")} onClick={() => setInterval("biweekly")}>
+              Every 2 weeks
+            </button>
             <button
               type="button"
-              className={cn(giveBtnPrimary(interval === "month"), "h-8 px-3 text-sm")}
+              className={cn(giveBtnPrimary(interval === "month"), "min-h-11 px-3 text-sm")}
               onClick={() => setInterval("month")}
             >
               Monthly
@@ -359,17 +397,17 @@ export function GiveForm({
                 value={billingDayOfMonth}
                 onChange={(e) => setBillingDayOfMonth(Number.parseInt(e.target.value, 10))}
               >
-                {Array.from({ length: 28 }, (_, i) => i + 1).map((day) => (
+                {Array.from({ length: 31 }, (_, i) => i + 1).map((day) => (
                   <option key={day} value={day}>
                     {day}
-                    {day === 1 ? "st" : day === 2 ? "nd" : day === 3 ? "rd" : "th"} of the month
+                    {(day % 100 >= 11 && day % 100 <= 13) ? "th" : ({ 1: "st", 2: "nd", 3: "rd" } as Record<number, string>)[day % 10] ?? "th"} of the month
                   </option>
                 ))}
               </select>
             </div>
           ) : (
             <div className="space-y-2">
-              <Label htmlFor="billing-day-week">Gift day each week</Label>
+              <Label htmlFor="billing-day-week">Gift day</Label>
               <select
                 id="billing-day-week"
                 className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
@@ -385,8 +423,19 @@ export function GiveForm({
             </div>
           )}
 
-          <p className="text-xs text-muted-foreground">
-            Your first gift processes today. Future gifts run on this schedule.
+          <div className="space-y-2">
+            <Label htmlFor="giving-start-date">Start on or after</Label>
+            <Input id="giving-start-date" type="date" min={toYMD(new Date(), timeZone)} value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+          </div>
+          <p className="text-sm text-muted-foreground">
+            {(() => {
+              try {
+                const date = recurringFirstChargeAt({ interval, timeZone, startDate: startDate || undefined, billingDayOfMonth, billingDayOfWeek });
+                return date ? `Your first gift is scheduled for ${new Date(date).toLocaleDateString(undefined, { timeZone })}. Save your payment method now; you won't be charged today.` : "Your first gift processes today. Future gifts run on this schedule.";
+              } catch { return "Choose a start date within the next year."; }
+            })()}
+             All dates follow the church’s time zone ({timeZone}).
+            {interval === "month" && billingDayOfMonth > 28 ? " In shorter months, gifts run on the last day." : ""}
           </p>
         </div>
       )}

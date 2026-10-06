@@ -98,6 +98,7 @@ export default async function AttendanceDatePage({ params, searchParams }: PageP
 
     return (
       <AttendanceWizard
+        draftScope={`${churchId}:${user.id}`}
         serviceDate={date}
         members={[...active, ...others, ...unlisted.values()]}
         checkedIn={Object.fromEntries(checkedIn)}
@@ -170,6 +171,7 @@ export default async function AttendanceDatePage({ params, searchParams }: PageP
 
   return (
     <AttendanceWizard
+      draftScope={`${churchId}:${user.id}`}
       serviceDate={date}
       members={[...members, ...unlisted.values()]}
       checkedIn={Object.fromEntries(checkedIn)}

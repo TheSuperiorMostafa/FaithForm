@@ -39,6 +39,7 @@ struct DiscoverySearchView: View {
             onOpenChurch: { opened = OpenedChurch(slug: $0) },
             onNearby: { Task { await beginNearby() } }
         )
+        .task { await discovery.prepare() }
         .sheet(isPresented: $educationShown) {
             LocationEducationView(
                 onContinue: {

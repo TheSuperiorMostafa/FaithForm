@@ -127,7 +127,7 @@ export function MonthCalendar({
   timeZone,
 }: MonthCalendarProps) {
   const router = useRouter();
-  const { openComposer } = useAnnouncementComposer();
+  const { openComposer, setSelectedDate } = useAnnouncementComposer();
   const [year, setYear] = useState(initialYear);
   const [monthIndex, setMonthIndex] = useState(initialMonthIndex);
   const [events, setEvents] = useState(initialEvents);
@@ -147,6 +147,12 @@ export function MonthCalendar({
   const [error, setError] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [selectedDay, setSelectedDay] = useState<Date>(() => startOfDay(new Date()));
+  useEffect(() => {
+    const year = selectedDay.getFullYear();
+    const month = String(selectedDay.getMonth() + 1).padStart(2, "0");
+    const day = String(selectedDay.getDate()).padStart(2, "0");
+    setSelectedDate(`${year}-${month}-${day}`);
+  }, [selectedDay, setSelectedDate]);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const shownMonth = useRef({ year: initialYear, monthIndex: initialMonthIndex });

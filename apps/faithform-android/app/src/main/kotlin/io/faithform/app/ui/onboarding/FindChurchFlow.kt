@@ -206,6 +206,7 @@ fun FindChurchFlow(
         }
 
         FindChurchRoute.Search -> Chrome { inner ->
+            LaunchedEffect(discovery) { discovery.prepare() }
             val phase by discovery.phase.collectAsStateWithLifecycle()
             val query by discovery.query.collectAsStateWithLifecycle()
 
@@ -301,6 +302,8 @@ fun InvitationEntryScreen(appViewModel: AppViewModel, onAccepted: (() -> Unit)? 
             style = MaterialTheme.typography.bodyLarge,
             color = theme.palette.contentSecondary
         )
+
+        InvitationQrButton { raw = it; appViewModel.clearInvitationError() }
 
         Column(verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.xs)) {
             Text(

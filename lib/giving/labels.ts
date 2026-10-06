@@ -101,6 +101,7 @@ export function recurringStatus(
   status: SubscriptionStatus | string | null | undefined,
   pausedAt?: string | null,
 ): PlainStatus {
+  if (status === "trialing") return { label: "Scheduled", tone: "working" };
   switch (recurringState(status, pausedAt)) {
     case "cancelled":
       return { label: "Cancelled", tone: "neutral" };
@@ -122,6 +123,8 @@ export function intervalLabel(interval: string | null | undefined): string {
       return "Every day";
     case "week":
       return "Every week";
+    case "biweekly":
+      return "Every 2 weeks";
     case "month":
       return "Every month";
     case "year":

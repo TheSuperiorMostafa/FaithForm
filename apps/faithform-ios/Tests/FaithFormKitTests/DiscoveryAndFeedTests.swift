@@ -79,6 +79,25 @@ private func client(
 @MainActor
 struct DiscoveryTests {
 
+    @Test("opening discovery reuses the prepared public list without location permission")
+    func preparedSearch() async {
+        let location = ScriptedLocation()
+        let model = DiscoveryModel(api: client([
+            .init(status: 200, body: envelope(oneChurch)),
+        ], authenticated: false), location: location)
+        await model.prepare()
+        await model.prepare()
+        guard case let .results(items, usedLocation) = model.phase else {
+            Issue.record("Prepared results were not retained")
+            return
+        }
+        #expect(items.first?.slug == "grace")
+        #expect(!usedLocation)
+        #expect(await location.requests() == 0)
+        #expect(await location.fixes() == 0)
+    }
+
+
     @Test("manual search never asks for location permission")
     func manualSearchNeedsNoPermission() async {
         let location = ScriptedLocation()

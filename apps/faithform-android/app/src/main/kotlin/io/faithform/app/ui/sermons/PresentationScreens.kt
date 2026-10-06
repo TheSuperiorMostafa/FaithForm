@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -401,7 +402,7 @@ fun PresentationDetailScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PresentationPager(detail: PresentationDetail, modifier: Modifier = Modifier) {
-    val pages = detail.pages
+    val pages = remember(detail.pages) { io.faithform.app.sermons.PresentationReadingPages.expand(detail.pages) }
     if (pages.isEmpty()) {
         PresentationMessage(
             title = stringResource(R.string.presentations_empty),
@@ -412,15 +413,6 @@ private fun PresentationPager(detail: PresentationDetail, modifier: Modifier = M
     }
 
     val pagerState = rememberPagerState(pageCount = { pages.size })
-    val context = LocalContext.current
-    val prefs = remember { context.getSharedPreferences(TEXT_SCALE_PREFS, Context.MODE_PRIVATE) }
-    var textScale by remember {
-        mutableFloatStateOf(
-            prefs.getFloat(TEXT_SCALE_KEY, TEXT_SCALE_DEFAULT).coerceIn(TEXT_SCALE_MIN, TEXT_SCALE_MAX),
-        )
-    }
-
-    var showTextSize by remember { mutableStateOf(false) }
 
     Box(modifier.fillMaxSize()) {
         HorizontalPager(
@@ -432,98 +424,7 @@ private fun PresentationPager(detail: PresentationDetail, modifier: Modifier = M
                 theme = detail.theme,
                 index = index,
                 total = pages.size,
-                textScale = textScale,
                 modifier = Modifier.fillMaxSize().clipToBounds(),
-            )
-        }
-        IconButton(
-            onClick = { showTextSize = true },
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .padding(FaithFormTokens.Spacing.sm)
-                .background(Color.Black.copy(alpha = 0.4f), CircleShape),
-        ) {
-            Icon(
-                Icons.Outlined.FormatSize,
-                contentDescription = stringResource(R.string.presentations_text_size),
-                tint = Color.White,
-            )
-        }
-        if (showTextSize) {
-            ModalBottomSheet(onDismissRequest = { showTextSize = false }) {
-                SlideTextSizeBar(
-                    scale = textScale,
-                    onScaleChange = { next ->
-                        textScale = next
-                        prefs.edit().putFloat(TEXT_SCALE_KEY, next).apply()
-                    },
-                    modifier = Modifier.padding(
-                        start = FaithFormTokens.Spacing.lg,
-                        end = FaithFormTokens.Spacing.lg,
-                        top = FaithFormTokens.Spacing.md,
-                        bottom = FaithFormTokens.Spacing.xxl,
-                    ),
-                )
-            }
-        }
-    }
-}
-
-private const val TEXT_SCALE_PREFS = "faithform_ui"
-private const val TEXT_SCALE_KEY = "presentation_text_scale"
-private const val TEXT_SCALE_MIN = 0.7f
-private const val TEXT_SCALE_MAX = 1.8f
-private const val TEXT_SCALE_DEFAULT = 1f
-
-@Composable
-private fun SlideTextSizeBar(
-    scale: Float,
-    onScaleChange: (Float) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val theme = LocalFaithFormTheme.current
-    val sample = stringResource(R.string.presentations_text_size_sample)
-    val label = stringResource(R.string.presentations_text_size)
-    Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.md),
-    ) {
-        Text(
-            label,
-            style = MaterialTheme.typography.titleMedium,
-            color = theme.palette.contentPrimary,
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.sm),
-        ) {
-            Text(
-                sample,
-                color = theme.palette.contentPrimary,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.clearAndSetSemantics {},
-            )
-            Slider(
-                value = scale,
-                onValueChange = onScaleChange,
-                valueRange = TEXT_SCALE_MIN..TEXT_SCALE_MAX,
-                colors = SliderDefaults.colors(
-                    thumbColor = theme.palette.brandAccent,
-                    activeTrackColor = theme.palette.brandAccent,
-                    inactiveTrackColor = theme.palette.border,
-                ),
-                modifier = Modifier
-                    .weight(1f)
-                    .semantics { contentDescription = label },
-            )
-            Text(
-                sample,
-                color = theme.palette.contentPrimary,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.clearAndSetSemantics {},
             )
         }
     }
@@ -558,7 +459,6 @@ private fun SlidePage(
     theme: PresentationTheme?,
     index: Int,
     total: Int,
-    textScale: Float,
     modifier: Modifier = Modifier,
 ) {
     val textColor = parseThemeColor(theme?.text) ?: Color.White
@@ -585,13 +485,28 @@ private fun SlidePage(
         }
         .joinToString(". ")
 
-    val userScale = textScale.coerceIn(TEXT_SCALE_MIN, TEXT_SCALE_MAX)
-    val titleSize = (36f * userScale).sp
-    val scriptureSize = (24f * userScale).sp
-    val bodySize = (22f * userScale).sp
-    val bodyLineHeight = (22f * userScale * 1.35f).sp
-
-    Box(modifier.fillMaxSize().clipToBounds()) {
+    val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    BoxWithConstraints(modifier.fillMaxSize().clipToBounds()) {
+        val width = with(density) { (maxWidth - FaithFormTokens.Spacing.xxl * 2).roundToPx().coerceAtLeast(1) }
+        val height = with(density) { (maxHeight - FaithFormTokens.Spacing.xl * 2 - 28.dp).toPx().coerceAtLeast(1f) }
+        val parts = listOfNotNull(page.title?.takeIf { it.isNotBlank() }?.let { Triple(it, 36f, FontWeight.SemiBold) },
+            page.scripture?.takeIf { it.isNotBlank() }?.let { Triple(it, 24f, FontWeight.Medium) },
+            page.body?.takeIf { it.isNotBlank() }?.let { Triple(it, 22f, FontWeight.Normal) })
+        val userScale = remember(page, width, height, density.fontScale) {
+            (20 downTo 4).map { it / 10f }.firstOrNull { scale ->
+                val gap = with(density) { FaithFormTokens.Spacing.lg.toPx() } * (parts.size - 1).coerceAtLeast(0)
+                gap + parts.sumOf { (text, size, weight) ->
+                    measurer.measure(text, style = TextStyle(fontSize = (size * scale).sp, fontWeight = weight,
+                        lineHeight = (size * scale * 1.35f).sp),
+                        constraints = androidx.compose.ui.unit.Constraints(maxWidth = width)).size.height.toDouble()
+                } <= height
+            } ?: 0.4f
+        }
+        val titleSize = (36f * userScale).sp
+        val scriptureSize = (24f * userScale).sp
+        val bodySize = (22f * userScale).sp
+        val bodyLineHeight = (22f * userScale * 1.35f).sp
         SlideDeckBackground(theme, Modifier.fillMaxSize())
         Column(
             modifier = Modifier

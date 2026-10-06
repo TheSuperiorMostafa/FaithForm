@@ -7,26 +7,26 @@ import FaithFormKit
 
 @MainActor @Suite("Groups screens", .serialized)
 struct GroupsScreensTests {
-    @Test func joinedGroupsOpenChatAndVisitorsSeeOverview() {
+    @Test func allGroupsOpenOverviewBeforeChat() {
         let chat = GroupChatInfo(cid: "ff_group:table", channelType: "ff_group", channelId: "table", state: "ready", postingPolicy: "members")
         func group(membership: String, chat: GroupChatInfo?) -> GroupSummary {
             GroupSummary(id: "table", name: "The Table", memberCount: 14, enrollment: "open", visibility: "discoverable", status: "active", meetingDays: [], membershipState: membership, joinAction: "join", chat: chat, isYouth: false, version: 1)
         }
-        #expect(GroupRoute.opening(group(membership: "member", chat: chat)) == .chat(group(membership: "member", chat: chat)))
+        #expect(GroupRoute.opening(group(membership: "member", chat: chat)) == .info(groupId: "table", fromChat: false))
         #expect(GroupRoute.opening(group(membership: "member", chat: nil)) == .info(groupId: "table", fromChat: false))
         #expect(GroupRoute.opening(group(membership: "none", chat: chat)) == .info(groupId: "table", fromChat: false))
         #expect(GroupRoute.opening(group(membership: "requested", chat: nil)) == .info(groupId: "table", fromChat: false))
     }
 
-    @Test func openingJoinedChatDoesNotRequestOverview() async throws {
+    @Test func openingJoinedGroupRequestsOverviewBeforeMessaging() async throws {
         let group = GroupSummary(id: "00000000-0000-4000-8000-000000000001", name: "The Table", memberCount: 14, enrollment: "open", visibility: "discoverable", status: "active", meetingDays: [], membershipState: "member", groupRole: "member", joinAction: "leave", chat: .init(cid: "ff_group:table", channelType: "ff_group", channelId: "table", state: "ready", postingPolicy: "everyone"), isYouth: false, version: 1)
         let transport = StubTransport([])
-        let api = APIClient(configuration: .init(environment: APIEnvironment(key: "chat-first", baseURL: URL(string: "https://example.invalid")!), clientBuild: 1), transport: transport, tokens: GroupTestTokens())
+        let api = APIClient(configuration: .init(environment: APIEnvironment(key: "group-first", baseURL: URL(string: "https://example.invalid")!), clientBuild: 1), transport: transport, tokens: GroupTestTokens())
         let model = GroupsModel(api: api, churchSlug: "grace")
         let scene = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let window = UIWindow(windowScene: scene); window.frame = scene.screen.bounds
         window.rootViewController = UIHostingController(rootView: NavigationStack {
-            GroupChatScreen(model: model, group: group)
+            groupDestination(GroupRoute.opening(group), model: model)
         }.environmentObject(GroupChatSession()).faithformTheme())
         window.makeKeyAndVisible()
         defer { window.isHidden = true }
@@ -35,7 +35,7 @@ struct GroupsScreensTests {
             try await Task.sleep(for: .milliseconds(50))
         }
         let paths = await transport.received.compactMap { $0.url?.path }
-        #expect(paths == ["/api/mobile/v1/messaging/grace/session"])
+        #expect(paths == ["/api/mobile/v1/groups/grace/\(group.id)"])
     }
 
     @Test func eventsAndMembersUseThemedScreens() async throws {

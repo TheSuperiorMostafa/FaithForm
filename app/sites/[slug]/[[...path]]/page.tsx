@@ -9,6 +9,7 @@ import {
   composeWebsiteSections,
   normalizeSitePath,
   parseSiteLayoutMode,
+  rewritePreviewLinks,
 } from "@/lib/sites/layout-mode";
 import { canPreviewDraftSite, isPublicSitePublication } from "@/lib/sites/preview-access";
 import { getSiteBundle } from "@/lib/sites/queries";
@@ -125,6 +126,7 @@ export default async function ChurchSitePage({ params, searchParams }: PageProps
   if (!loaded) notFound();
 
   const { bundle, sections } = loaded;
+  const isPreview = query.preview === "1";
 
   if (!(await siteIsVisible(bundle, query.preview === "1"))) notFound();
 
@@ -138,5 +140,20 @@ export default async function ChurchSitePage({ params, searchParams }: PageProps
     registry: SECTION_REGISTRY,
   });
 
-  return <PageRenderer page={page} />;
+  if (isPreview) {
+    page.sections = page.sections.map((section) => ({
+      ...section,
+      content: {
+        ...rewritePreviewLinks(section.content, slug) as Record<string, unknown>,
+        ...(section.type === "site_nav" ? { homeHref: `/sites/${encodeURIComponent(slug)}?preview=1` } : {}),
+      },
+    }));
+  }
+
+  return <PageRenderer page={page} website={loaded.layoutMode === "website" ? {
+    path,
+    churchName: bundle.profile.name,
+    coverImageUrl: bundle.profile.coverImageUrl,
+    previewSlug: isPreview ? slug : undefined,
+  } : undefined} />;
 }

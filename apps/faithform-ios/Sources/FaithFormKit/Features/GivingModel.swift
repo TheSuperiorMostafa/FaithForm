@@ -64,6 +64,14 @@ public final class GivingModel {
     /// that is what most regular giving is, and a default nobody changes should
     /// be the common case rather than the first alphabetically.
     public var cadence: RecurringCadence = .month
+    public var recurringStartDate: Date = Date()
+    public var recurringMonthlyDay: Int = Calendar.current.component(.day, from: Date())
+    public var recurringTimeZone: TimeZone { TimeZone(identifier: listPhase.home?.timeZone ?? "America/New_York") ?? .current }
+    public var recurringFirstChargeDate: Date? {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = recurringTimeZone
+        return recurringFirstGiftDate(start: recurringStartDate, monthlyDay: cadence == .month ? recurringMonthlyDay : nil, now: now(), calendar: calendar)
+    }
 
     private let client: GivingClient
     private let sheet: any PaymentSheetFacade
@@ -330,24 +338,40 @@ public final class GivingModel {
 
         recurring = .preparing
 
-        let attempt = RecurringAttempt(
+        let proposed = RecurringAttempt(
             clientAttemptID: RecurringAttempt.newAttemptID(),
             churchSlug: churchSlug,
             fundID: fund.fundId,
             amountCents: cents,
-            cadence: cadence
+            cadence: cadence,
+            startDate: recurringFirstChargeDate.map { recurringDateOnly($0, timeZone: recurringTimeZone) },
+            billingDayOfMonth: cadence == .month ? recurringMonthlyDay : nil
         )
+        let pending = await recurringStore.load()
+        let attempt: RecurringAttempt
+        if let pending {
+            guard pending.churchSlug == proposed.churchSlug,
+                  pending.fundID == proposed.fundID,
+                  pending.amountCents == proposed.amountCents,
+                  pending.cadence == proposed.cadence,
+                  pending.startDate == proposed.startDate,
+                  pending.billingDayOfMonth == proposed.billingDayOfMonth else {
+                recurring = .failed(.unavailable, pending)
+                await loadRecurring()
+                return
+            }
+            attempt = pending
+        } else { attempt = proposed }
         await recurringStore.save(attempt)
 
         let session: RecurringGiftSession
         do {
             session = try await client.startRecurringGift(attempt)
         } catch let error as APIError {
-            await recurringStore.clear()
+            // Keep the logical attempt for a safe retry after an ambiguous failure.
             recurring = .failed(recurringFailure(for: error), attempt)
             return
         } catch {
-            await recurringStore.clear()
             recurring = .failed(.network, attempt)
             return
         }
@@ -377,12 +401,15 @@ public final class GivingModel {
                 stripeAccountID: session.stripeAccountId,
                 merchantName: session.merchantName,
                 allowApplePay: allowApplePay,
-                appleMerchantID: applePayMerchantID
+                appleMerchantID: applePayMerchantID,
+                isSetupIntent: session.confirmationType == "setup"
             )
         )
 
         recurring = advanceRecurringAfterSheet(outcome, attempt: attempt)
-        await recurringStore.clear()
+        // An ambiguous SDK failure can still have reached the provider. Retry
+        // the saved logical attempt instead of creating a second recurring gift.
+        if outcome != .failed { await recurringStore.clear() }
 
         if case .completed = outcome {
             // The subscription exists either way; the list is where its real
@@ -399,7 +426,6 @@ public final class GivingModel {
     public func resumeInterruptedRecurring() async {
         guard let pending = await recurringStore.load() else { return }
         guard pending.churchSlug == churchSlug else { return }
-        await recurringStore.clear()
         await loadRecurring()
     }
 

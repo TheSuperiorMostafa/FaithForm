@@ -97,7 +97,7 @@ export function PagesWorkspace({
         <p className="text-[15px] text-muted-foreground">
           {isWebsite
             ? currentPath === "/"
-              ? "Your home page stays short: welcome, service times, and ways to reach you. Use the buttons above to edit About, Visit, and other pages."
+              ? "Your home page welcomes visitors with service times and a guide to your other pages. Use the buttons above to edit About, Visit, and other pages."
               : `Editing the ${pageLabel} page. Changes here only affect this page.`
             : "Each block below is one part of your home page, top to bottom. Choose Edit to change its words and photos, move it up or down, or switch it off to hide it. The preview updates after each change saves."}
         </p>

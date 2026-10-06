@@ -22,6 +22,7 @@ import type {
 } from "@/types/giving";
 
 type ChurchStripeRow = {
+  timezone?: string;
   id: string;
   name: string;
   slug: string;
@@ -40,7 +41,7 @@ type ChurchStripeRow = {
 };
 
 const CHURCH_GIVING_SELECT_BASE =
-  "id, name, slug, stripe_account_id, stripe_charges_enabled, stripe_payouts_enabled, stripe_details_submitted, stripe_onboarding_status, stripe_requirements_due, giving_enabled_at, logo_url, ein, statement_address";
+  "id, name, slug, timezone, stripe_account_id, stripe_charges_enabled, stripe_payouts_enabled, stripe_details_submitted, stripe_onboarding_status, stripe_requirements_due, giving_enabled_at, logo_url, ein, statement_address";
 
 const CHURCH_GIVING_SELECT = `${CHURCH_GIVING_SELECT_BASE}, giving_primary_color, giving_accent_color`;
 
@@ -68,6 +69,7 @@ const DONATION_SELECT = `
 function mapChurchProfile(row: ChurchStripeRow): ChurchGivingProfile {
   return {
     churchId: row.id,
+    timeZone: row.timezone ?? "America/New_York",
     churchName: row.name,
     slug: row.slug,
     stripeAccountId: row.stripe_account_id,

@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+    <key>com.apple.developer.associated-domains</key>
+    <array><string>applinks:faithform.io</string></array>
     <!--
         Push notifications (Prompt 5).
 
@@ -36,11 +38,6 @@
 
             Any change here must be made in FaithForm-ApplePay.entitlements too.
 
-        `com.apple.developer.associated-domains`
-            App Links need a verified apple-app-site-association file served
-            from a domain this repository does not establish. The custom
-            `faithform://` scheme works today; https links do not, and declaring
-            the entitlement would not change that.
 
         Nothing else. A capability is added when a feature needs it, not
         because it might be useful later.

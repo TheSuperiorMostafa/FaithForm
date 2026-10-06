@@ -104,15 +104,21 @@
             <!--
                 Custom-scheme links. Every one is parsed and authorized before
                 any state changes; an unknown or unauthorized link is refused.
-                App Links over https need a verified Digital Asset Links file on
-                a domain this repository does not yet establish, so they are
-                deliberately not declared here - see the external setup runbook.
+                Verified https links below are limited to church invitations.
+                The website serves Digital Asset Links from the configured Play
+                signing fingerprints; every invitation is still parsed before use.
             -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="faithform" />
+            </intent-filter>
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="faithform.io" android:pathPrefix="/faithform/invite/" />
             </intent-filter>
         </activity>
 

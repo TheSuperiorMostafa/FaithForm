@@ -42,12 +42,12 @@ const ADMIN_TABS = visibleSettingsTabs({ isAdmin: true, allowedFeatures: ALL });
 // Settings sections and deep links
 // ---------------------------------------------------------------------------
 
-test("settings has five plain sections, in the order a church thinks about them", () => {
+test("settings has six plain sections, in the order a church thinks about them", () => {
   assert.deepEqual(
     SETTINGS_TABS.map((tab) => tab.label),
-    ["Church info", "Your Team", "Connected accounts", "Messages & email", "Member App"],
+    ["Church info", "Your Team", "Connected accounts", "Messages & email", "Documents", "Member App"],
   );
-  assert.deepEqual(ADMIN_TABS, ["church", "team", "accounts", "messages", "app"]);
+  assert.deepEqual(ADMIN_TABS, ["church", "team", "accounts", "messages", "documents", "app"]);
 });
 
 test("the Advanced section is gone and its old link goes to Settings home", () => {
@@ -140,7 +140,7 @@ test("an OAuth or Stripe round trip opens the section that shows its result", ()
 
 test("non-admins only see sections they can use", () => {
   const tabs = visibleSettingsTabs({ isAdmin: false, allowedFeatures: ALL });
-  assert.deepEqual(tabs, ["church", "team"]);
+  assert.deepEqual(tabs, ["church", "team", "documents"]);
   assert.equal(resolveSettingsTab(params("tab=integrations"), tabs), "church");
   assert.equal(resolveSettingsTab(params("google_connected=1"), tabs), "church");
   // Messages needs Announcements or Attendance, even for an admin.

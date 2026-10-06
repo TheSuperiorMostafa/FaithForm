@@ -425,6 +425,8 @@ export const onboardingStateSchema = z
 export const feedItemSchema = z
   .object({
     id: z.string(),
+    /** Present for calendar entries backed by a service occurrence. */
+    serviceOccurrenceId: z.string().uuid().optional(),
     title: z.string(),
     body: z.string(),
     startAt: instant,
@@ -1304,6 +1306,7 @@ export const givingHomeSchema = z
      * gift", and the app used it to point at a web page. It is a capability
      * now, and the app acts on it.
      */
+    timeZone: z.string().max(100).optional(),
     recurringAvailable: z.boolean(),
     givingVersion: z.number().int(),
     /**
@@ -1422,12 +1425,10 @@ export const givingReceiptSchema = z
 /**
  * How often a recurring gift is charged.
  *
- * The three cadences `giving_subscriptions.interval` already allows, so a phone
- * can never start one the church's dashboard cannot render. The app offers
- * weekly and monthly; `year` exists because the column does and because a gift
- * started on the web can be annual and must still be listable.
+ * Recurring cadences shared by the mobile clients, church dashboard, and Stripe.
+ * Biweekly is a two-week Stripe price interval.
  */
-export const givingIntervalSchema = z.enum(["week", "month", "year"]);
+export const givingIntervalSchema = z.enum(["week", "biweekly", "month", "year"]);
 
 /**
  * The state of a recurring gift, as the **webhook** last recorded it.
@@ -1447,10 +1448,9 @@ export const recurringGiftStatusSchema = z.enum([
 /**
  * What a client sends to start, or resume starting, a recurring gift.
  *
- * The same four facts a one-time gift sends, plus a cadence. No billing anchor:
- * the day a recurring gift renews is the day it started, which Stripe derives
- * itself and handles correctly at month ends. A client that could choose an
- * anchor could also choose the 31st.
+ * The same facts a one-time gift sends, plus cadence and optional scheduling.
+ * The server validates dates in the church timezone and persists the schedule
+ * with the logical attempt before any provider call.
  */
 export const startRecurringGiftRequestSchema = z
   .object({
@@ -1458,6 +1458,9 @@ export const startRecurringGiftRequestSchema = z
     fundId: z.string().max(64),
     amountCents: z.number().int(),
     interval: givingIntervalSchema,
+    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    billingDayOfMonth: z.number().int().min(1).max(31).optional(),
+    billingDayOfWeek: z.number().int().min(0).max(6).optional(),
     /**
      * The client's id for this logical attempt.
      *
@@ -1487,6 +1490,8 @@ export const recurringGiftSessionSchema = z
      * different mistakes and only one of them should be representable.
      */
     clientSecret: z.string().max(512).nullable(),
+    confirmationType: z.enum(["payment", "setup"]).optional(),
+    firstChargeAt: z.string().max(40).nullable().optional(),
     publishableKey: z.string().max(255),
     stripeAccountId: z.string().max(64),
     merchantName: z.string().max(200),
@@ -2247,7 +2252,7 @@ export const CONTRACT_ENUMS = {
     "failed", "cancelled", "refunded", "disputed",
   ],
   GiftType: ["one_time", "recurring"],
-  GivingInterval: ["week", "month", "year"],
+  GivingInterval: ["week", "biweekly", "month", "year"],
   RecurringGiftStatus: ["active", "trialing", "past_due", "paused", "unpaid"],
   GroupRole: ["member", "leader", "manager"],
   GroupMembershipState: ["member", "requested", "invited", "not_member", "banned"],

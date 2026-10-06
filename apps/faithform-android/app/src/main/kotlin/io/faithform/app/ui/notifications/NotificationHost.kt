@@ -3,6 +3,8 @@ package io.faithform.app.ui.notifications
 import android.content.Intent
 import android.provider.Settings
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.ui.semantics.semantics
@@ -57,12 +59,21 @@ fun NotificationHost(container: AppContainer, churchSlug: String?, onClose: () -
         NotificationEducationScreen(authorization,
             onEnable = { scope.launch { container.push.request() } }, onOpenSettings = ::settings, onSkip = onClose)
     } else {
-        Column(Modifier.fillMaxSize().padding(FaithFormTokens.Layout.screenPaddingHorizontal), verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.md)) {
+        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(FaithFormTokens.Layout.screenPaddingHorizontal), verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.md)) {
             Text(stringResource(R.string.notifications_on), style = MaterialTheme.typography.titleLarge)
             Text(stringResource(R.string.notification_education_body), style = MaterialTheme.typography.bodyMedium)
             deliveryError?.let { Text(it) }
             error?.let { Text(it) }
             FaithFormOutlinedButton(onClick = ::settings, modifier = Modifier.fillMaxWidth()) { Text(stringResource(R.string.notification_settings_hint)) }
+            Text("For pop-up alerts, turn on your phone’s pop-up setting for each notification category. Your current sound and mute choices are kept.", style = MaterialTheme.typography.bodySmall)
+            listOf("Church announcements" to NotificationChannels.ANNOUNCEMENTS,
+                "Church events and live services" to NotificationChannels.EVENTS, "Group messages" to NotificationChannels.GROUPS).forEach { (label, channel) ->
+                FaithFormOutlinedButton(onClick = {
+                    context.startActivity(Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+                        .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                        .putExtra(Settings.EXTRA_CHANNEL_ID, channel))
+                }, modifier = Modifier.fillMaxWidth()) { Text(label) }
+            }
             val rows = preferences
             if (rows != null) {
                 NotificationPreferencesScreen(rows, modifier = Modifier.fillMaxWidth(), channelEnabled = { topic ->

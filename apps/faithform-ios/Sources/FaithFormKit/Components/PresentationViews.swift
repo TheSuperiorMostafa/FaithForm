@@ -209,8 +209,6 @@ struct PresentationCard: View {
 /// Full-screen horizontal slide pager over semantic pages.
 public struct PresentationViewer: View {
     let model: PresentationDetailModel
-    @AppStorage("faithform.presentation.textScale") private var textScale = SlideTextScale.default
-    @State private var showTextSize = false
 
     public init(model: PresentationDetailModel) {
         self.model = model
@@ -250,7 +248,8 @@ public struct PresentationViewer: View {
                 .padding(FaithFormTokens.Spacing.xl)
 
             case let .loaded(detail):
-                if detail.pages.isEmpty {
+                let pages = PresentationReadingPages.expand(detail.pages)
+                if pages.isEmpty {
                     SermonMessage(
                         title: L.presentationsEmpty,
                         message: ""
@@ -258,15 +257,14 @@ public struct PresentationViewer: View {
                     .padding(FaithFormTokens.Spacing.xl)
                 } else {
                     TabView {
-                        ForEach(Array(detail.pages.enumerated()), id: \.element.id) { index, page in
+                        ForEach(Array(pages.enumerated()), id: \.element.id) { index, page in
                             Color.clear
                                 .overlay {
                                     SlidePageView(
                                         page: page,
                                         theme: detail.theme,
                                         index: index,
-                                        total: detail.pages.count,
-                                        textScale: textScale
+                                        total: pages.count
                                     )
                                 }
                                 .clipShape(Rectangle())
@@ -280,21 +278,6 @@ public struct PresentationViewer: View {
                     .navigationTitle(detail.title)
                     #if os(iOS)
                     .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .topBarTrailing) {
-                            Button {
-                                showTextSize = true
-                            } label: {
-                                Image(systemName: "textformat.size")
-                            }
-                            .accessibilityLabel(L.presentationsTextSize)
-                        }
-                    }
-                    .sheet(isPresented: $showTextSize) {
-                        SlideTextSizeSheet(scale: $textScale)
-                            .presentationDetents([.height(200)])
-                            .presentationDragIndicator(.visible)
-                    }
                     #endif
                 }
             }
@@ -348,47 +331,12 @@ struct SlideDeckBackground: View {
     }
 }
 
-private enum SlideTextScale {
-    static let `default`: Double = 1
-    static let range: ClosedRange<Double> = 0.7...1.8
-}
-
-/// Text size lives in a sheet so a horizontal slider never fights paging.
-private struct SlideTextSizeSheet: View {
-    @Environment(\.faithformTheme) private var theme
-    @Binding var scale: Double
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.md) {
-            Text(L.presentationsTextSize)
-                .font(theme.font(FaithFormTokens.Text.titleMedium))
-                .foregroundStyle(theme.palette.contentPrimary)
-            HStack(spacing: FaithFormTokens.Spacing.sm) {
-                Text(L.presentationsTextSizeSample)
-                    .font(.system(size: 12, weight: .semibold))
-                    .accessibilityHidden(true)
-                Slider(value: $scale, in: SlideTextScale.range)
-                    .tint(theme.palette.brandAccent)
-                    .accessibilityLabel(L.presentationsTextSize)
-                Text(L.presentationsTextSizeSample)
-                    .font(.system(size: 20, weight: .semibold))
-                    .accessibilityHidden(true)
-            }
-            .foregroundStyle(theme.palette.contentPrimary)
-        }
-        .padding(FaithFormTokens.Spacing.xl)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background(theme.palette.background)
-    }
-}
-
 private struct SlidePageView: View {
     @Environment(\.faithformTheme) private var faithTheme
     let page: PresentationPage
     let theme: PresentationTheme?
     let index: Int
     let total: Int
-    let textScale: Double
 
     var body: some View {
         let textColor = Color(hex: theme?.text) ?? .white
@@ -404,40 +352,13 @@ private struct SlidePageView: View {
             VStack(spacing: 0) {
                 Spacer(minLength: FaithFormTokens.Spacing.xxl)
 
-                VStack(spacing: FaithFormTokens.Spacing.lg) {
-                    if let title = page.title, !title.isEmpty {
-                        Text(title)
-                            .font(.system(size: titleSize, weight: .semibold))
-                            .foregroundStyle(textColor)
-                            .shadow(color: textShadow, radius: 3, y: 1)
-                            .multilineTextAlignment(.center)
+                ViewThatFits(in: .vertical) {
+                    ForEach(Array(stride(from: 2.0, through: 0.4, by: -0.1)), id: \.self) { scale in
+                        slideText(scale: CGFloat(scale), textColor: textColor, accent: accent,
+                                  italicScripture: italicScripture, textShadow: textShadow)
                             .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    if let scripture = page.scripture, !scripture.isEmpty {
-                        Text(scripture)
-                            .font(
-                                italicScripture
-                                    ? .system(size: scriptureSize, weight: .medium).italic()
-                                    : .system(size: scriptureSize, weight: .medium)
-                            )
-                            .foregroundStyle(accent)
-                            .shadow(color: textShadow, radius: 3, y: 1)
-                            .multilineTextAlignment(.center)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    if let body = page.body, !body.isEmpty {
-                        Text(body)
-                            .font(.system(size: bodySize, weight: .regular))
-                            .foregroundStyle(textColor.opacity(0.94))
-                            .lineSpacing(6)
-                            .shadow(color: textShadow, radius: 3, y: 1)
-                            .multilineTextAlignment(.center)
-                            .minimumScaleFactor(0.75)
                     }
                 }
-                .frame(maxWidth: .infinity)
 
                 Spacer(minLength: FaithFormTokens.Spacing.xl)
 
@@ -458,12 +379,44 @@ private struct SlidePageView: View {
         .accessibilityLabel(accessibilityReading)
     }
 
-    private var userScale: CGFloat {
-        CGFloat(min(max(textScale, SlideTextScale.range.lowerBound), SlideTextScale.range.upperBound))
+    private func slideText(scale: CGFloat, textColor: Color, accent: Color,
+                           italicScripture: Bool, textShadow: Color) -> some View {
+        VStack(spacing: FaithFormTokens.Spacing.lg * scale) {
+                    if let title = page.title, !title.isEmpty {
+                        Text(title)
+                            .font(.system(size: 36 * scale, weight: .semibold))
+                            .foregroundStyle(textColor)
+                            .shadow(color: textShadow, radius: 3, y: 1)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    if let scripture = page.scripture, !scripture.isEmpty {
+                        Text(scripture)
+                            .font(
+                                italicScripture
+                                    ? .system(size: 24 * scale, weight: .medium).italic()
+                                    : .system(size: 24 * scale, weight: .medium)
+                            )
+                            .foregroundStyle(accent)
+                            .shadow(color: textShadow, radius: 3, y: 1)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    if let body = page.body, !body.isEmpty {
+                        Text(body)
+                            .font(.system(size: 22 * scale, weight: .regular))
+                            .foregroundStyle(textColor.opacity(0.94))
+                            .lineSpacing(6 * scale)
+                            .shadow(color: textShadow, radius: 3, y: 1)
+                            .multilineTextAlignment(.center)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .frame(maxWidth: .infinity)
+
     }
-    private var titleSize: CGFloat { 36 * userScale }
-    private var scriptureSize: CGFloat { 24 * userScale }
-    private var bodySize: CGFloat { 22 * userScale }
 
     private var accessibilityReading: String {
         let ordered = page.readingOrder.compactMap { key -> String? in

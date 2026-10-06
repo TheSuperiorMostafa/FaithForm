@@ -25,6 +25,7 @@ export type SubscriptionStatus =
   | "unpaid";
 
 export type ChurchGivingProfile = {
+  timeZone?: string;
   churchId: string;
   churchName: string;
   slug: string;

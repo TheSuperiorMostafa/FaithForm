@@ -57,7 +57,7 @@ import kotlinx.coroutines.CancellationException
  * Sections used to swap inside one screen, so opening a group changed its
  * content with no transition and "back" meant whichever section happened to be
  * showing. A stack gives each screen a slide transition and a back arrow that
- * returns where the person came from: list → chat → group info → events or
+ * returns where the person came from: list → group info → chat, events or
  * members.
  */
 sealed interface GroupRoute {
@@ -69,13 +69,8 @@ sealed interface GroupRoute {
     data class Members(override val groupId: String) : GroupRoute
 
     companion object {
-        /**
-         * A joined group opens straight into its conversation, because that is
-         * what people come back for. Everyone else meets the group first.
-         */
-        fun opening(group: GroupSummary): GroupRoute =
-            if (group.membershipState == "member" && group.chat != null) Chat(group.id)
-            else Info(group.id, fromChat = false)
+        /** Meet the group before opening its conversation. */
+        fun opening(group: GroupSummary): GroupRoute = Info(group.id, fromChat = false)
     }
 }
 

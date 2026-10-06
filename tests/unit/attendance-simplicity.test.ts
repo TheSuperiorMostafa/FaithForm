@@ -509,3 +509,15 @@ test("every attendance route has a loading skeleton at the shell's width", () =>
   }
   assert.doesNotMatch(read("app/dashboard/attendance/layout.tsx"), /max-w-3xl/);
 });
+
+
+test("refresh preserves guest flags and isolates drafts by church and account", () => {
+  const now = Date.now();
+  const draft = parseDraft(JSON.stringify({ version: 1, mode: "names", statuses: { guest: "present" },
+    headcount: "", notes: "", savedAt: now, firstTimeGuestIds: ["guest", 42] }), now);
+  assert.deepEqual(draft?.firstTimeGuestIds, ["guest"]);
+  assert.notEqual(draftKey("2026-09-20", false, "church-a:user"), draftKey("2026-09-20", false, "church-b:user"));
+  assert.notEqual(draftKey("2026-09-20", false, "church:user-a"), draftKey("2026-09-20", false, "church:user-b"));
+  const wizard = readFileSync("app/dashboard/attendance/(record)/[date]/attendance-wizard.tsx", "utf8");
+  assert.match(wizard, /if \(!draftReady \|\| saved\) return/);
+});

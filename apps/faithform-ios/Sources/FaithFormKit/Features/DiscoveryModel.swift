@@ -86,9 +86,18 @@ public final class DiscoveryModel {
         self.location = location
     }
 
+    /// Warm the public default list without asking for location. The retained
+    /// model keeps this result when the search page is opened again.
+    public func prepare() async {
+        guard query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              phase == .idle else { return }
+        await performSearch(immediate: true)
+    }
+
     /// Called as the person types. Debounces and cancels in-flight requests so
     /// results appear while searching without hammering the API.
     public func queryDidChange() {
+        searchGeneration &+= 1
         liveSearchTask?.cancel()
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty {

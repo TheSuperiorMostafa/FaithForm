@@ -61,6 +61,7 @@ const client = givingClient;
 export type GivingAvailability = "available" | "not_accepting" | "not_found";
 
 export type GivingChurch = {
+  timeZone?: string;
   churchId: string;
   slug: string;
   name: string;
@@ -79,7 +80,7 @@ export async function resolveGivingChurch(
   let { data, error } = await db
     .from("churches")
     .select(
-      "id, name, slug, stripe_account_id, stripe_charges_enabled, apple_pay_donations_approved",
+      "id, name, slug, timezone, stripe_account_id, stripe_charges_enabled, apple_pay_donations_approved",
     )
     .eq("slug", slug)
     .maybeSingle();
@@ -91,7 +92,7 @@ export async function resolveGivingChurch(
   if (error && /apple_pay_donations_approved/i.test(error.message)) {
     ({ data, error } = await db
       .from("churches")
-      .select("id, name, slug, stripe_account_id, stripe_charges_enabled")
+      .select("id, name, slug, timezone, stripe_account_id, stripe_charges_enabled")
       .eq("slug", slug)
       .maybeSingle());
   }
@@ -114,6 +115,7 @@ export async function resolveGivingChurch(
     ok: true,
     church: {
       churchId: data.id as string,
+      timeZone: (data.timezone as string | undefined) ?? "America/New_York",
       slug: data.slug as string,
       name: data.name as string,
       stripeAccountId,
@@ -141,6 +143,7 @@ export type GivingFundDto = {
 };
 
 export type GivingHomeDto = {
+  timeZone?: string;
   availability: GivingAvailability;
   churchName: string | null;
   funds: GivingFundDto[];
@@ -218,6 +221,7 @@ export async function getGivingHome(input: {
     // recurring gift", which is what this meant before migration 0100: that
     // made the first recurring giver at every church impossible.
     recurringAvailable: funds.length > 0,
+    timeZone: resolved.church.timeZone,
     // A single validator over every published fund: any edit to any of them
     // moves it, and a phone's cached giving screen revalidates.
     givingVersion: funds.reduce((total, fund) => total + fund.publicationVersion, funds.length),

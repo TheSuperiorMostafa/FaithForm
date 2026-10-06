@@ -1,12 +1,12 @@
 import type Stripe from "stripe";
 import { isChurchFeatureEmailEnabled } from "@/lib/features/access";
-import { nextWeekdayAnchorUnix } from "@/lib/giving/branding";
+import { recurringFirstChargeAt, recurringSubscriptionSchedule, stripeRecurringPrice, type GivingInterval } from "@/lib/giving/recurring-schedule";
+import { prepareRecurringConfirmation } from "@/lib/stripe/recurring-confirmation";
 import { chargeCentsWithFeeCoverage } from "@/lib/giving/fees";
 import { applicationFeeAmount } from "@/lib/stripe/config";
 import { getStripe } from "@/lib/stripe/client";
 import {
   fetchInvoicePaymentIntentId,
-  invoiceClientSecret,
   invoicePaymentIntentId,
 } from "@/lib/stripe/invoice-shape";
 
@@ -115,7 +115,10 @@ export type CreateSubscriptionInput = {
   amountCents: number;
   intendedAmountCents: number;
   coverFees: boolean;
-  interval: "week" | "month" | "year";
+  interval: GivingInterval;
+  startDate?: string;
+  timeZone?: string;
+  idempotencyKey?: string;
   donorEmail: string;
   donorName: string;
   donorId: string;
@@ -133,6 +136,8 @@ export async function createConnectedSubscription(
   subscription: Stripe.Subscription;
   clientSecret: string | null;
   customerId: string;
+  confirmationType: "payment" | "setup";
+  firstChargeAt: string | null;
 }> {
   const stripe = getStripe();
   const chargeAmount = input.coverFees
@@ -156,7 +161,10 @@ export async function createConnectedSubscription(
     coverFees: input.coverFees,
   });
 
-  let customerId = input.stripeCustomerId ?? null;
+  const firstChargeAt = recurringFirstChargeAt(input);
+  // A future gift must not inherit a previously saved card if its setup is
+  // abandoned. This attempt gets a fresh customer with no payment method.
+  let customerId = firstChargeAt ? null : input.stripeCustomerId ?? null;
 
   if (!customerId) {
     const customer = await stripe.customers.create(
@@ -168,7 +176,7 @@ export async function createConnectedSubscription(
           donor_id: input.donorId,
         },
       },
-      { stripeAccount: input.stripeAccountId },
+      { stripeAccount: input.stripeAccountId, ...(input.idempotencyKey ? { idempotencyKey: `${input.idempotencyKey}_cus` } : {}) },
     );
     customerId = customer.id;
   }
@@ -177,16 +185,17 @@ export async function createConnectedSubscription(
     {
       unit_amount: chargeAmount,
       currency: "usd",
-      recurring: { interval: input.interval },
+      recurring: stripeRecurringPrice(input.interval),
       product_data: {
         name: `Recurring gift — ${input.fundName}`,
       },
     },
-    { stripeAccount: input.stripeAccountId },
+    { stripeAccount: input.stripeAccountId, ...(input.idempotencyKey ? { idempotencyKey: `${input.idempotencyKey}_price` } : {}) },
   );
 
   const subscriptionMetadata: Record<string, string> = {
     ...metadata,
+    ...(firstChargeAt ? { scheduled_start_at: firstChargeAt } : {}),
   };
   if (input.billingDayOfMonth) {
     subscriptionMetadata.billing_day_of_month = String(input.billingDayOfMonth);
@@ -205,20 +214,14 @@ export async function createConnectedSubscription(
     // The client secret for the first payment. `latest_invoice.payment_intent`
     // can't be expanded from API version 2025-03-31.basil on, and this SDK pins
     // a later version, so asking for it fails the whole request.
-    expand: ["latest_invoice.confirmation_secret"],
+    expand: ["latest_invoice.confirmation_secret", "pending_setup_intent"],
+    ...recurringSubscriptionSchedule({ ...input, firstChargeAt }),
     metadata: subscriptionMetadata,
   };
 
-  if (input.interval === "month" && input.billingDayOfMonth) {
-    subscriptionParams.billing_cycle_anchor_config = {
-      day_of_month: input.billingDayOfMonth,
-    };
-  } else if (input.interval === "week" && input.billingDayOfWeek !== undefined) {
-    subscriptionParams.billing_cycle_anchor = nextWeekdayAnchorUnix(input.billingDayOfWeek);
-  }
-
   const subscription = await stripe.subscriptions.create(subscriptionParams, {
     stripeAccount: input.stripeAccountId,
+    ...(input.idempotencyKey ? { idempotencyKey: input.idempotencyKey } : {}),
   });
 
   const invoice =
@@ -235,7 +238,8 @@ export async function createConnectedSubscription(
     );
   }
 
-  return { subscription, clientSecret: invoiceClientSecret(invoice), customerId };
+  const confirmation = await prepareRecurringConfirmation(stripe, subscription, input.stripeAccountId, input.idempotencyKey);
+  return { subscription, ...confirmation, customerId, firstChargeAt };
 }
 
 /**
@@ -322,6 +326,7 @@ export async function updateSubscriptionAmount(
       currency: sub.currency,
       recurring: {
         interval: sub.items.data[0]?.price?.recurring?.interval ?? "month",
+        interval_count: sub.items.data[0]?.price?.recurring?.interval_count ?? 1,
       },
       product_data: { name: `Recurring gift — ${fundName}` },
     },

@@ -695,6 +695,7 @@ public struct InvitationEntryView: View {
     @Environment(\.faithformTheme) private var theme
     @Bindable private var model: OnboardingModel
     @State private var raw: String
+    @State private var scanningInvitation = false
     private let onAccepted: @MainActor () -> Void
 
     public init(model: OnboardingModel, onAccepted: @escaping @MainActor () -> Void) {
@@ -711,6 +712,12 @@ public struct InvitationEntryView: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             AuthField(label: L.invitationFieldLabel, text: $raw)
+            #if os(iOS)
+            Button { scanningInvitation = true } label: { Label("Scan invitation QR code", systemImage: "qrcode.viewfinder") }
+                .buttonStyle(FaithFormButtonStyle(kind: .secondary, theme: theme))
+                .sheet(isPresented: $scanningInvitation) { InvitationScannerView { raw = $0 } }
+            #endif
+
 
             if case let .failed(message) = model.invitationPhase {
                 AuthErrorText(message: message)

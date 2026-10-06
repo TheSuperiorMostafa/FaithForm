@@ -2563,6 +2563,11 @@
         "id": {
           "type": "string"
         },
+        "serviceOccurrenceId": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+        },
         "title": {
           "type": "string"
         },
@@ -2720,6 +2725,11 @@
             "id": {
               "type": "string"
             },
+            "serviceOccurrenceId": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
+            },
             "title": {
               "type": "string"
             },
@@ -2867,6 +2877,11 @@
           "properties": {
             "id": {
               "type": "string"
+            },
+            "serviceOccurrenceId": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$"
             },
             "title": {
               "type": "string"
@@ -6657,6 +6672,10 @@
             "$ref": "#/$defs/GivingFund"
           }
         },
+        "timeZone": {
+          "type": "string",
+          "maxLength": 100
+        },
         "recurringAvailable": {
           "type": "boolean"
         },
@@ -7057,9 +7076,24 @@
           "type": "string",
           "enum": [
             "week",
+            "biweekly",
             "month",
             "year"
           ]
+        },
+        "startDate": {
+          "type": "string",
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+        },
+        "billingDayOfMonth": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 31
+        },
+        "billingDayOfWeek": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 6
         },
         "clientAttemptId": {
           "type": "string",
@@ -7095,6 +7129,24 @@
             }
           ]
         },
+        "confirmationType": {
+          "type": "string",
+          "enum": [
+            "payment",
+            "setup"
+          ]
+        },
+        "firstChargeAt": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 40
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "publishableKey": {
           "type": "string",
           "maxLength": 255
@@ -7120,6 +7172,7 @@
           "type": "string",
           "enum": [
             "week",
+            "biweekly",
             "month",
             "year"
           ]
@@ -7167,6 +7220,7 @@
           "type": "string",
           "enum": [
             "week",
+            "biweekly",
             "month",
             "year"
           ]
@@ -7237,6 +7291,7 @@
               "type": "string",
               "enum": [
                 "week",
+                "biweekly",
                 "month",
                 "year"
               ]

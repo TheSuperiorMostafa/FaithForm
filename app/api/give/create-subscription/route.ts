@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { recurringFirstChargeAt } from "@/lib/giving/recurring-schedule";
 import { NextResponse } from "next/server";
 import { isChurchFeatureEnabled } from "@/lib/features/access";
 import { z } from "zod";
@@ -18,8 +20,10 @@ const bodySchema = z
     amountCents: z.number().int().min(100),
     intendedAmountCents: z.number().int().min(100).optional(),
     coverFees: z.boolean().optional(),
-    interval: z.enum(["week", "month", "year"]),
-    billingDayOfMonth: z.number().int().min(1).max(28).optional(),
+    interval: z.enum(["week", "biweekly", "month", "year"]),
+    startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    clientAttemptId: z.string().min(8).max(64).regex(/^[a-zA-Z0-9-]+$/).optional(),
+    billingDayOfMonth: z.number().int().min(1).max(31).optional(),
     billingDayOfWeek: z.number().int().min(0).max(6).optional(),
     donorEmail: z.string().email(),
     donorName: z.string().min(1).max(200),
@@ -33,7 +37,7 @@ const bodySchema = z
         path: ["billingDayOfMonth"],
       });
     }
-    if (data.interval === "week" && data.billingDayOfWeek == null) {
+    if ((data.interval === "week" || data.interval === "biweekly") && data.billingDayOfWeek == null) {
       ctx.addIssue({
         code: "custom",
         message: "billingDayOfWeek is required for weekly gifts",
@@ -80,6 +84,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Giving not available" }, { status: 404 });
   }
 
+  try { recurringFirstChargeAt({ ...parsed.data, timeZone: church.timeZone }); }
+  catch { return NextResponse.json({ error: "Choose a start date within the next year." }, { status: 400 }); }
+
   const fund = await getFundById(parsed.data.fundId, church.churchId);
   if (!fund) {
     return NextResponse.json({ error: "Invalid fund" }, { status: 400 });
@@ -94,7 +101,7 @@ export async function POST(request: Request) {
     name: parsed.data.donorName,
   });
 
-  const { subscription, clientSecret, customerId } =
+  const { subscription, clientSecret, customerId, confirmationType, firstChargeAt } =
     await createConnectedSubscription({
       stripeAccountId: church.stripeAccountId,
       churchId: church.churchId,
@@ -102,6 +109,9 @@ export async function POST(request: Request) {
       intendedAmountCents,
       coverFees: parsed.data.coverFees ?? false,
       interval: parsed.data.interval,
+      startDate: parsed.data.startDate,
+      timeZone: church.timeZone,
+      idempotencyKey: parsed.data.clientAttemptId ? `ffweb_${createHash("sha256").update(`${church.churchId}:${donorId}:${parsed.data.clientAttemptId}`).digest("hex")}` : undefined,
       billingDayOfMonth: parsed.data.billingDayOfMonth,
       billingDayOfWeek: parsed.data.billingDayOfWeek,
       donorEmail: parsed.data.donorEmail,
@@ -118,5 +128,7 @@ export async function POST(request: Request) {
   return NextResponse.json({
     subscriptionId: subscription.id,
     clientSecret,
+    confirmationType,
+    firstChargeAt,
   });
 }

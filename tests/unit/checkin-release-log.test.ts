@@ -70,7 +70,7 @@ test("team member names are looked up per person, never by paging every login", 
 test("the log covers the same weeks as the numbers and sits under them", () => {
   assert.match(page, /pageFeatureBlocked\("checkin"\)/);
   assert.match(page, /recentServiceWeeks\(endWeekStart, weeks\)\[0\]/);
-  assert.match(page, /listNoCodeReleases\(auth\.churchId, \{ sinceServiceDate \}/);
+  assert.match(page, /listNoCodeReleases\(auth\.churchId, \{ sinceServiceDate, limit, offset \}/);
   assert.ok(page.indexOf("<LocationStatsTable") < page.indexOf("<NoCodeReleaseLog"));
   assert.match(page, /timeZone=\{auth\.churchTimezone\}/);
 });

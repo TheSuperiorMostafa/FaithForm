@@ -852,7 +852,7 @@ async function staffLabelsFor(userIds: string[]): Promise<Map<string, string>> {
  */
 export async function listNoCodeReleases(
   churchId: string,
-  options: { sinceServiceDate: string; limit?: number; strict?: boolean },
+  options: { sinceServiceDate: string; limit?: number; offset?: number; strict?: boolean },
   supabase?: SupabaseClient,
 ): Promise<{ releases: NoCodeRelease[]; total: number; failed: boolean }> {
   const client = supabase ?? db();
@@ -871,7 +871,7 @@ export async function listNoCodeReleases(
     .eq("checkout_method", "override")
     .gte("local_service_date", options.sinceServiceDate)
     .order("checked_out_at", { ascending: false })
-    .limit(options.limit ?? NO_CODE_RELEASE_LIMIT);
+    .range(options.offset ?? 0, (options.offset ?? 0) + (options.limit ?? NO_CODE_RELEASE_LIMIT) - 1);
 
   if (error) {
     console.error("[checkin] no-code release read failed:", error.message);

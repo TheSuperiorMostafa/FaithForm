@@ -12,7 +12,7 @@ import {
 import { featureAccessDenied } from "@/lib/features/guard";
 import { requireChurchContext } from "@/lib/reports/auth";
 import { createClient } from "@/lib/supabase/server";
-import { parseMonthParam } from "@/lib/utils/reports";
+import { parseAttendancePeriod } from "@/lib/utils/reports";
 
 export const runtime = "nodejs";
 
@@ -26,7 +26,7 @@ export async function GET(
   { params }: { params: Promise<{ month: string }> },
 ) {
   const { month } = await params;
-  const parsed = parseMonthParam(month);
+  const parsed = parseAttendancePeriod(month);
   if (!parsed) {
     return NextResponse.json({ error: "Invalid month" }, { status: 400 });
   }
@@ -124,6 +124,8 @@ export async function GET(
       weeks,
       metrics,
       reportDate,
+      annual: parsed.kind === "year",
+      periodAverage: parsed.kind === "month" ? undefined : (weeks.length ? weeks.reduce((sum, row) => sum + (row.morningWorship ?? 0), 0) / weeks.length : null),
     }) as ReactElement<DocumentProps>,
   );
 

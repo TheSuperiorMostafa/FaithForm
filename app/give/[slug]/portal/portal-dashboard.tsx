@@ -7,6 +7,7 @@ import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-
 import { GiveForm } from "@/app/give/[slug]/give-form";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { intervalLabel, recurringStatus } from "@/lib/giving/labels";
 import type { GivingFundRow } from "@/types/giving";
 import { formatCents } from "@/lib/utils/currency";
 
@@ -88,6 +89,7 @@ export function PortalDashboard({
   subscriptions,
   gifts,
   yearGiftCount,
+  timeZone,
   donorId,
   year,
 }: {
@@ -102,6 +104,7 @@ export function PortalDashboard({
   subscriptions: Subscription[];
   gifts: Gift[];
   yearGiftCount: number;
+  timeZone?: string;
   donorId: string;
   year: number;
 }) {
@@ -181,6 +184,7 @@ export function PortalDashboard({
         <section id="give-now" className="space-y-3">
           <h2 className="font-heading text-lg font-semibold">Give now</h2>
           <GiveForm
+            timeZone={timeZone}
             mode="portal"
             slug={slug}
             churchName={churchName}
@@ -243,10 +247,10 @@ export function PortalDashboard({
                 className="rounded-lg border border-border p-4 text-sm"
               >
                 <p className="font-medium">
-                  {formatCents(s.amountCents, s.currency)} / {s.interval} ·{" "}
+                  {formatCents(s.amountCents, s.currency)} · {intervalLabel(s.interval)} ·{" "}
                   {s.fundName}
                 </p>
-                <p className="capitalize text-muted-foreground">{s.status}</p>
+                <p className="capitalize text-muted-foreground">{recurringStatus(s.status, s.pausedAt).label}</p>
                 {s.status !== "canceled" && (
                   <div className="mt-3 flex flex-wrap gap-2">
                     <div className="flex items-center gap-2">

@@ -133,7 +133,11 @@ struct GroupsTabView: View {
             .onChange(of: model.home?.directMessagesEnabled) { _, enabled in if enabled != true && section == "Messages" { section = "My groups" } }
         }.environmentObject(chat).onDisappear { chat.disconnect() }
     }
-    private var displayed: [GroupSummary] { section == "Discover" ? model.discovered : model.home?.items ?? [] }
+    private var displayed: [GroupSummary] {
+        var seen = Set<String>()
+        return (section == "Discover" ? model.discovered : model.home?.items ?? [])
+            .filter { seen.insert($0.id).inserted }
+    }
     private func refresh() async { await model.load(); if section == "Discover" { await model.discover(query: query, type: category) } }
     private func groupFilter(_ title: String, id: String) -> some View { Button(title) { category = id }.font(.caption.weight(.semibold)).padding(.horizontal, 14).frame(minHeight: 44).background(category == id ? theme.palette.brandAccent : theme.palette.surfaceSunken, in: Capsule()).foregroundStyle(category == id ? theme.palette.contentOnAccent : theme.palette.contentSecondary).accessibilityAddTraits(category == id ? .isSelected : []) }
 }
@@ -281,7 +285,7 @@ struct GroupConversationRow: View {
     private var subtitle: String {
         var parts = ["\(group.memberCount) members"]
         if let schedule = group.scheduleText { parts.append(schedule) }
-        else if group.chat != nil { parts.append("Tap to chat") }
+        else { parts.append("View group") }
         return parts.joined(separator: " · ")
     }
     var body: some View {
@@ -293,9 +297,9 @@ struct GroupConversationRow: View {
                     .font(.subheadline).foregroundStyle(theme.palette.contentSecondary).lineLimit(2)
             }
             Spacer(minLength: 0)
-            Image(systemName: group.chat == nil ? "chevron.right" : "bubble.left.and.bubble.right.fill")
+            Image(systemName: "chevron.right")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(group.chat == nil ? theme.palette.contentSecondary : theme.palette.brandAccent)
+                .foregroundStyle(theme.palette.contentSecondary)
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)

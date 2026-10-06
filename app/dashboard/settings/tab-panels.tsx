@@ -1,3 +1,4 @@
+import { DocumentsPanel } from "@/components/settings/documents-panel";
 import Link from "next/link";
 import { ArrowRight, Heart, Mail } from "lucide-react";
 
@@ -46,6 +47,8 @@ export async function SettingsTabPanel({
 }) {
   try {
     switch (tab) {
+      case "documents":
+        return <DocumentsPanel churchId={context.auth.churchId} attendance={context.allowedFeatures.includes("attendance")} timeSaved={context.allowedFeatures.includes("library")} />;
       case "church":
         return await ChurchInfoPanel(context);
       case "team":

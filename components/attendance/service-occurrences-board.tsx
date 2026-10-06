@@ -25,6 +25,7 @@ import {
   markMemberPresent,
   markRosterPresent,
   type ServiceMethodCounts,
+  type ServiceRosterEntry,
 } from "@/app/dashboard/attendance/services/actions";
 import { describeNameCount } from "@/lib/attendance/headcount";
 import type { ServiceOccurrence } from "@/lib/attendance/v2/occurrences";
@@ -190,7 +191,6 @@ function occurrenceSubtitle(
 }
 
 export function ServiceOccurrencesBoard({
-  upcoming,
   recent,
   other,
   counts,
@@ -209,7 +209,7 @@ export function ServiceOccurrencesBoard({
   const [pending, startTransition] = useTransition();
   const [selected, setSelected] = useState<ServiceOccurrence | null>(null);
   // null: not loaded yet, or it failed (see `rosterFailed`).
-  const [roster, setRoster] = useState<RosterEntry[] | null>(null);
+  const [roster, setRoster] = useState<ServiceRosterEntry[] | null>(null);
   const [rosterFailed, setRosterFailed] = useState(false);
   const [search, setSearch] = useState("");
   // Read once per render of the list; the badge is a hint, and the server
@@ -484,8 +484,8 @@ export function ServiceOccurrencesBoard({
     );
   };
 
-  const otherCount = other.upcoming.length + other.recent.length;
-  const nothing = upcoming.length === 0 && recent.length === 0 && otherCount === 0;
+  const otherCount = other.recent.length;
+  const nothing = recent.length === 0 && otherCount === 0;
 
   if (nothing) {
     return (
@@ -510,15 +510,6 @@ export function ServiceOccurrencesBoard({
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:items-start">
       <div ref={listRef} className="flex min-w-0 scroll-mt-6 flex-col gap-8">
-        {upcoming.length > 0 && (
-          <section className="flex flex-col gap-3" aria-labelledby="services-upcoming">
-            <h2 id="services-upcoming" className="font-heading text-xl font-bold text-foreground">
-              Open and coming up
-            </h2>
-            <List>{upcoming.map((occurrence) => renderRow(occurrence, "upcoming"))}</List>
-          </section>
-        )}
-
         {recent.length > 0 && (
           <section className="flex flex-col gap-3" aria-labelledby="services-recent">
             <h2 id="services-recent" className="font-heading text-xl font-bold text-foreground">
@@ -539,7 +530,6 @@ export function ServiceOccurrencesBoard({
               </p>
             </div>
             <List>
-              {other.upcoming.map((occurrence) => renderRow(occurrence, "other"))}
               {other.recent.map((occurrence) => renderRow(occurrence, "other"))}
             </List>
           </section>
@@ -579,8 +569,8 @@ export function ServiceOccurrencesBoard({
                 {selected.campusName ? ` · ${selected.campusName}` : ""}
               </p>
               <p className="text-base font-semibold text-foreground">
-                {roster === null ? " " : `${presentCount} here`}
-                {presentCount > 0 && methodSummary(rosterBySource) ? (
+                {roster === null ? " " : selectedSheet ? weeklySheetLine(selectedSheet) : `${presentCount} here`}
+                {!selectedSheet && presentCount > 0 && methodSummary(rosterBySource) ? (
                   <span className="font-normal text-muted-foreground">
                     {" "}
                     · {methodSummary(rosterBySource)}
@@ -636,7 +626,7 @@ export function ServiceOccurrencesBoard({
               <Button
                 variant="outline"
                 onClick={() => void markAll(selected)}
-                disabled={pending || cancelled || roster === null}
+                disabled={pending || cancelled || roster === null || selectedSheet?.byName}
               >
                 <UserCheck aria-hidden />
                 Mark everyone here
@@ -727,7 +717,9 @@ export function ServiceOccurrencesBoard({
                       <span className="text-base font-medium text-foreground">
                         {entry.firstName} {entry.lastName}
                       </span>
-                      {entry.status === "reversed" ? (
+                      {entry.weeklyStatus ? (
+                        <span className="text-sm text-muted-foreground">{entry.weeklyStatus === "present" ? "Present" : "Absent"} · Weekly attendance</span>
+                      ) : entry.status === "reversed" ? (
                         <span className="text-sm text-muted-foreground">Removed by an admin</span>
                       ) : entry.status === "active" ? (
                         <MethodBadge source={entry.source} />
@@ -735,7 +727,7 @@ export function ServiceOccurrencesBoard({
                     </div>
 
                     <div className="flex gap-2">
-                      {entry.status !== "active" && (
+                      {!selectedSheet?.byName && entry.status !== "active" && (
                         <Button
                           variant="outline"
                           disabled={pending || cancelled}
@@ -744,7 +736,7 @@ export function ServiceOccurrencesBoard({
                           {entry.status === "reversed" ? "Mark here again" : "Mark here"}
                         </Button>
                       )}
-                      {isAdmin && entry.factId && entry.status === "active" && (
+                      {!selectedSheet?.byName && isAdmin && entry.factId && entry.status === "active" && (
                         <Button
                           variant="outline"
                           disabled={pending}
@@ -753,7 +745,7 @@ export function ServiceOccurrencesBoard({
                           Remove
                         </Button>
                       )}
-                      {isAdmin && entry.factId && entry.status === "reversed" && (
+                      {!selectedSheet?.byName && isAdmin && entry.factId && entry.status === "reversed" && (
                         <Button
                           variant="outline"
                           disabled={pending}

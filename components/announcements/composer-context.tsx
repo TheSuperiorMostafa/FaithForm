@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 
 type ComposerContextValue = {
   settings: ComposerSettings;
+  setSelectedDate: (date: string) => void;
   openComposer: (mode: ComposerMode) => void;
 };
 
@@ -52,14 +53,15 @@ export function AnnouncementsComposerProvider({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const [selectedDate, setSelectedDate] = useState("");
   const [mode, setMode] = useState<ComposerMode | null>(null);
   // Bumped for every open, so reopening always starts from the mode given.
   const [session, setSession] = useState(0);
 
   const openComposer = useCallback((next: ComposerMode) => {
-    setMode(next);
+    setMode(next.kind === "new" ? { ...next, date: next.date ?? selectedDate } : next);
     setSession((n) => n + 1);
-  }, []);
+  }, [selectedDate]);
 
   useEffect(() => {
     if (searchParams.get("compose") !== "1") return;
@@ -70,7 +72,7 @@ export function AnnouncementsComposerProvider({
     router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
   }, [searchParams, pathname, router, openComposer]);
 
-  const value = useMemo(() => ({ settings, openComposer }), [settings, openComposer]);
+  const value = useMemo(() => ({ settings, openComposer, setSelectedDate }), [settings, openComposer]);
 
   return (
     <ComposerContext.Provider value={value}>

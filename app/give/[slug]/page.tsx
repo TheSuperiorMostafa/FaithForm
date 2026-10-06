@@ -6,7 +6,7 @@ import { getChurchBySlug } from "@/lib/queries/giving";
 
 type PageProps = {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ amount?: string }>;
+  searchParams: Promise<{ amount?: string; recurring?: string }>;
 };
 
 /**
@@ -62,7 +62,9 @@ export default async function GivePage({ params, searchParams }: PageProps) {
       logoUrl={church.logoUrl}
       givingPrimaryColor={church.givingPrimaryColor}
       funds={funds}
+      timeZone={church.timeZone}
       initialAmountCents={parseAmountCents(query.amount)}
+      initialRecurring={query.recurring === "1"}
     />
   );
 }

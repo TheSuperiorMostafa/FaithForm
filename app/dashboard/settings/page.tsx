@@ -95,7 +95,7 @@ export default async function SettingsPage({ searchParams }: PageProps) {
       )}
 
       {/* Keyed on the section so switching shows that section's skeleton. */}
-      <Suspense key={tab} fallback={<SettingsTabSkeleton tab={tab} />}>
+      <Suspense key={tab} fallback={<SettingsTabSkeleton tab={tab} documentsAccess={{ attendance: allowedFeatures.includes("attendance"), timeSaved: allowedFeatures.includes("library") }} />}>
         <SettingsTabPanel
           tab={tab}
           context={{ auth, flags, allowedFeatures }}

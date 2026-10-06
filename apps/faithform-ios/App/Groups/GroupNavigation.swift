@@ -7,7 +7,7 @@ import FaithFormKit
 /// its content with no transition and the system back button pointed at
 /// whichever section happened to be showing. Routing them gives each screen
 /// the standard slide animation and a back button that goes where the person
-/// actually came from: list → chat → group info → events or members.
+/// actually came from: list → group info → chat, events or members.
 enum GroupRoute: Hashable {
     case chat(GroupSummary)
     case info(groupId: String, fromChat: Bool)
@@ -15,12 +15,9 @@ enum GroupRoute: Hashable {
     case members(GroupDetail)
     case requests(String)
 
-    /// A joined group opens straight into its conversation, because that is
-    /// what people come back for. Everyone else meets the group first.
+    /// Meet the group before opening its conversation.
     static func opening(_ group: GroupSummary) -> GroupRoute {
-        group.membershipState == "member" && group.chat != nil
-            ? .chat(group)
-            : .info(groupId: group.id, fromChat: false)
+        .info(groupId: group.id, fromChat: false)
     }
 }
 
