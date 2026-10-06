@@ -1,17 +1,15 @@
-import { Suspense } from "react";
+"use client";
+
 import { Clock, TrendingDown, TrendingUp } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { RangePicker } from "@/components/dashboard/range-picker";
-import { createClient } from "@/lib/supabase/server";
-import {
-  getHoursSavedBreakdown,
-  type DashboardRange,
-} from "@/lib/queries/dashboard";
+import type { DashboardRange, HoursSavedResult } from "@/lib/queries/dashboard";
 import type { AutomationCategory } from "@/lib/automation-catalog";
 import { cn } from "@/lib/utils";
 
 type HeroHoursSavedProps = {
-  churchId: string;
+  data: HoursSavedResult;
+  onRangeChange: (range: DashboardRange) => void;
   range: DashboardRange;
 };
 
@@ -31,9 +29,7 @@ function formatDelta(delta: number | null, range: DashboardRange) {
   return { up, text: `${up ? "+" : ""}${delta}% vs ${period}`.trim() };
 }
 
-export async function HeroHoursSaved({ churchId, range }: HeroHoursSavedProps) {
-  const supabase = createClient();
-  const data = await getHoursSavedBreakdown(supabase, churchId, range);
+export function HeroHoursSaved({ data, range, onRangeChange }: HeroHoursSavedProps) {
   const delta = formatDelta(data.deltaPercent, range);
 
   const activeCategories = categoryLabels.filter(
@@ -48,9 +44,7 @@ export async function HeroHoursSaved({ churchId, range }: HeroHoursSavedProps) {
             <Clock className="size-5 text-accent" strokeWidth={1.75} aria-hidden />
             <span>Hours saved</span>
           </div>
-          <Suspense fallback={null}>
-            <RangePicker value={range} />
-          </Suspense>
+          <RangePicker value={range} onChange={onRangeChange} />
         </div>
 
         <p className="mt-4 font-heading text-5xl font-bold tabular-nums tracking-tight text-foreground md:text-6xl">
