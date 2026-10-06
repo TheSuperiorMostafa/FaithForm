@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
 import { cn } from "@/lib/utils";
 import type { DashboardRange } from "@/lib/queries/dashboard";
 
@@ -13,23 +12,10 @@ const ranges: { value: DashboardRange; label: string }[] = [
 type RangePickerProps = {
   value: DashboardRange;
   className?: string;
+  onChange: (range: DashboardRange) => void;
 };
 
-export function RangePicker({ value, className }: RangePickerProps) {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-
-  const setRange = (next: DashboardRange) => {
-    const params = new URLSearchParams(searchParams.toString());
-    if (next === "week") {
-      params.delete("range");
-    } else {
-      params.set("range", next);
-    }
-    const qs = params.toString();
-    router.replace(qs ? `?${qs}` : "/dashboard", { scroll: false });
-  };
-
+export function RangePicker({ value, className, onChange }: RangePickerProps) {
   return (
     <div
       className={cn(
@@ -43,9 +29,9 @@ export function RangePicker({ value, className }: RangePickerProps) {
         <button
           key={v}
           type="button"
-          onClick={() => setRange(v)}
+          onClick={() => onChange(v)}
           className={cn(
-            "rounded-full px-3 py-1.5 text-xs font-semibold transition-all",
+            "min-h-11 min-w-11 rounded-full px-3 py-1.5 text-xs font-semibold transition-all",
             value === v
               ? "bg-accent text-accent-foreground shadow-sm"
               : "text-muted-foreground hover:text-foreground",

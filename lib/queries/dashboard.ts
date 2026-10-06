@@ -3,6 +3,9 @@ import { getPresenceByDate } from "@/lib/attendance/presence";
 import { createAdminClientOrNull } from "@/lib/supabase/admin";
 import {
   computeHoursSaved,
+  computeHoursSavedFromSources,
+  loadHoursSavedSources,
+  type HoursSavedSources,
   type CategoryBreakdown,
   toHoursSaved,
 } from "@/lib/reports/hours-saved";
@@ -68,12 +71,7 @@ export type AttendanceTrendResult = {
   vsFourWeekAvgPercent: number | null;
 };
 
-export function parseDashboardRange(
-  value: string | string[] | undefined,
-): DashboardRange {
-  if (value === "month" || value === "all") return value;
-  return "week";
-}
+export { parseDashboardRange } from "@/lib/dashboard-range";
 
 type DateWindow = {
   currentStart: Date | null;
@@ -82,8 +80,7 @@ type DateWindow = {
   priorEnd: Date | null;
 };
 
-function getDateWindow(range: DashboardRange): DateWindow {
-  const now = new Date();
+function getDateWindow(range: DashboardRange, now = new Date()): DateWindow {
   const currentEnd = now;
 
   if (range === "all") {
@@ -254,10 +251,10 @@ function buildSparkline(
   return counts;
 }
 
-async function countInRanges<T extends { at: string }>(
+function countInRanges<T extends { at: string }>(
   rows: T[],
   window: DateWindow,
-): Promise<{ current: number; prior: number; dates: string[] }> {
+): { current: number; prior: number; dates: string[] } {
   const currentDates: string[] = [];
   let current = 0;
   let prior = 0;
@@ -322,29 +319,41 @@ export async function getStatRow(
     assetsQuery,
   ]);
 
-  const phoneRows = (phoneRes.data ?? []).map((r) => ({
+  return statRowFromSources({
+    phoneCalls: (phoneRes.data ?? []) as PhoneCallRow[],
+    announcements: (annRes.data ?? []) as AnnouncementRow[],
+    assets: (assetsRes.data ?? []) as SermonAssetRow[],
+  }, window, range);
+}
+
+function statRowFromSources(
+  sources: { phoneCalls: PhoneCallRow[]; announcements: AnnouncementRow[]; assets: SermonAssetRow[] },
+  window: DateWindow,
+  range: DashboardRange,
+): StatRowResult {
+  const phoneRows = sources.phoneCalls.map((r) => ({
     at: (r as PhoneCallRow).called_at ?? "",
   }));
   const smRows: { at: string }[] = [];
-  for (const a of (annRes.data ?? []) as AnnouncementRow[]) {
+  for (const a of sources.announcements) {
     if (a.push_to_facebook) smRows.push({ at: a.created_at });
   }
-  for (const asset of (assetsRes.data ?? []) as SermonAssetRow[]) {
+  for (const asset of sources.assets) {
     if (asset.kind === "social_snippet") {
       smRows.push({ at: asset.created_at });
     }
   }
 
   const pptxRows: { at: string }[] = [];
-  for (const asset of (assetsRes.data ?? []) as SermonAssetRow[]) {
+  for (const asset of sources.assets) {
     if (asset.kind === "pptx" || asset.kind === "slides") {
       pptxRows.push({ at: asset.created_at });
     }
   }
 
-  const phone = await countInRanges(phoneRows.filter((r) => r.at), window);
-  const sm = await countInRanges(smRows, window);
-  const pptx = await countInRanges(pptxRows, window);
+  const phone = countInRanges(phoneRows.filter((r) => r.at), window);
+  const sm = countInRanges(smRows, window);
+  const pptx = countInRanges(pptxRows, window);
 
   const makeMetric = (
     current: number,
@@ -362,6 +371,34 @@ export async function getStatRow(
     smPosts: makeMetric(sm.current, sm.prior, sm.dates),
     pptxCreated: makeMetric(pptx.current, pptx.prior, pptx.dates),
   };
+}
+
+export type DashboardMetrics = Record<DashboardRange, { hours: HoursSavedResult; stats: StatRowResult }>;
+
+export function dashboardMetricsFromSources(sources: HoursSavedSources, now = new Date()): DashboardMetrics {
+  return Object.fromEntries((["week", "month", "all"] as const).map((range) => {
+    const window = getDateWindow(range, now);
+    const current = computeHoursSavedFromSources(sources, { start: window.currentStart, end: now });
+    const prior = window.priorStart && window.priorEnd
+      ? computeHoursSavedFromSources(sources, { start: window.priorStart, end: window.priorEnd })
+      : null;
+    return [range, {
+      hours: {
+        totalMinutes: current.minutes,
+        totalHours: toHoursSaved(current.minutes),
+        taskCount: current.tasks,
+        deltaPercent: prior ? percentDelta(current.minutes, prior.minutes) : null,
+        byCategory: current.byCategory,
+      },
+      stats: statRowFromSources(sources, window, range),
+    }];
+  })) as DashboardMetrics;
+}
+
+export async function getDashboardMetrics(supabase: SupabaseClient, churchId: string, phoneClient: SupabaseClient = supabase): Promise<DashboardMetrics> {
+  const now = new Date();
+  const sources = await loadHoursSavedSources(supabase, churchId, { start: null, end: now }, true, phoneClient);
+  return dashboardMetricsFromSources(sources, now);
 }
 
 export async function getAttendanceTrend(

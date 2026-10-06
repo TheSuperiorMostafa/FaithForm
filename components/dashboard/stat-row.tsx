@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import {
   Phone,
@@ -8,17 +10,15 @@ import {
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { StatSparkline } from "@/components/dashboard/stat-sparkline";
-import { createClient } from "@/lib/supabase/server";
-import { createAdminClientOrNull } from "@/lib/supabase/admin";
-import {
-  getStatRow,
-  type DashboardRange,
-  type StatMetric,
+import type {
+  StatRowResult,
+  DashboardRange,
+  StatMetric,
 } from "@/lib/queries/dashboard";
 import { cn } from "@/lib/utils";
 
 type StatRowProps = {
-  churchId: string;
+  stats: StatRowResult;
   range: DashboardRange;
 };
 
@@ -96,14 +96,7 @@ function StatCard({
   return card;
 }
 
-export async function StatRow({ churchId, range }: StatRowProps) {
-  const supabase = createClient();
-  const stats = await getStatRow(
-    supabase,
-    churchId,
-    range,
-    createAdminClientOrNull() ?? supabase,
-  );
+export function StatRow({ stats, range }: StatRowProps) {
 
   return (
     <div className="grid gap-4 sm:grid-cols-3">

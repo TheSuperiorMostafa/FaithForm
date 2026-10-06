@@ -6,28 +6,20 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 import { AttendanceChartSection } from "@/components/dashboard/attendance-chart-section";
-import { HeroHoursSaved } from "@/components/dashboard/hero-hours-saved";
+import { DashboardMetricsSection } from "@/components/dashboard/dashboard-metrics";
 import {
   QuickActionsSection,
   hasQuickActions,
 } from "@/components/dashboard/quick-actions-section";
 import {
   ChartSkeleton,
-  HeroSkeleton,
-  StatRowSkeleton,
+  MetricsSkeleton,
 } from "@/components/dashboard/skeletons";
-import { StatRow } from "@/components/dashboard/stat-row";
 import { getChurchAuth } from "@/lib/auth/church";
 import { getFeatureAccess } from "@/lib/features/access";
-import { parseDashboardRange } from "@/lib/queries/dashboard";
 
-type PageProps = {
-  searchParams: Promise<{ range?: string }>;
-};
-
-export default async function DashboardPage({ searchParams }: PageProps) {
-  const [query, auth, featureAccess] = await Promise.all([
-    searchParams,
+export default async function DashboardPage() {
+  const [auth, featureAccess] = await Promise.all([
     getChurchAuth(),
     getFeatureAccess(),
   ]);
@@ -37,7 +29,6 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   }
 
   const churchId = auth.churchId;
-  const range = parseDashboardRange(query.range);
   const allowedFeatures = featureAccess?.allowed ?? [];
 
   if (!churchId) {
@@ -64,12 +55,8 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-5">
       <LiveAttendanceRefresh />
-      <Suspense fallback={<HeroSkeleton />}>
-        <HeroHoursSaved churchId={churchId} range={range} />
-      </Suspense>
-
-      <Suspense fallback={<StatRowSkeleton />}>
-        <StatRow churchId={churchId} range={range} />
+      <Suspense fallback={<MetricsSkeleton />}>
+        <DashboardMetricsSection churchId={churchId} />
       </Suspense>
 
       {hasQuickActions(allowedFeatures) && (

@@ -143,17 +143,23 @@ function creditCatalogEntry(
   return totalMinutes;
 }
 
-export async function computeHoursSaved(
+export type HoursSavedSources = {
+  phoneCalls: PhoneCallRow[];
+  announcements: AnnouncementRow[];
+  attendance: AttendanceRow[];
+  assets: SermonAssetRow[];
+  sermons: SermonRow[];
+  activities: ActivityRow[];
+};
+
+export async function loadHoursSavedSources(
   supabase: SupabaseClient,
   churchId: string,
   window: HoursSavedWindow,
+  paginate = false,
   phoneClient: SupabaseClient = supabase,
-): Promise<HoursSavedComputation> {
+): Promise<HoursSavedSources> {
   const { start, end } = window;
-  const automationMinutes = new Map<string, number>();
-  const byCategory = emptyBreakdown();
-  let minutes = 0;
-  let tasks = 0;
   const startIso = start?.toISOString();
   const endIso = end.toISOString();
 
@@ -185,25 +191,72 @@ export async function computeHoursSaved(
     activityQuery.gte("executed_at", startIso);
   }
 
+  // The dashboard needs every range from this snapshot, including records beyond
+  // PostgREST's row cap. Other reports retain their existing bounded query path.
+  type RowsResult = { data: unknown[] | null; error: unknown };
+  type SourceQuery = PromiseLike<RowsResult> & {
+    order(column: string): unknown;
+    range(start: number, end: number): PromiseLike<RowsResult>;
+  };
+  const read = async (query: SourceQuery) => {
+    if (!paginate) return await query;
+    const rows: unknown[] = [];
+    const pageSize = 1000;
+    query.order("id");
+    for (let offset = 0; ; offset += pageSize) {
+      const result = await query.range(offset, offset + pageSize - 1);
+      if (result.error) throw result.error;
+      rows.push(...(result.data ?? []));
+      if (!result.data || result.data.length < pageSize) return { data: rows };
+    }
+  };
   const [phoneRes, annRes, attRes, assetsRes, sermonsRes, activityRes] =
     await Promise.all([
-      phoneQuery,
-      announcementQuery,
-      supabase
+      read(phoneQuery),
+      read(announcementQuery),
+      read(supabase
         .from("attendance_records")
         .select("service_date, submitted_at")
-        .eq("church_id", churchId),
-      assetQuery,
-      supabase
+        .eq("church_id", churchId)),
+      read(assetQuery),
+      read(supabase
         .from("sermons")
         .select(
           "created_at, outline_generated_at, content_generated_at, published_at, status",
         )
-        .eq("church_id", churchId),
-      activityQuery,
+        .eq("church_id", churchId)),
+      read(activityQuery),
     ]);
 
-  const phoneCalls = (phoneRes.data ?? []) as PhoneCallRow[];
+  return {
+    phoneCalls: (phoneRes.data ?? []) as PhoneCallRow[],
+    announcements: (annRes.data ?? []) as AnnouncementRow[],
+    attendance: (attRes.data ?? []) as AttendanceRow[],
+    assets: (assetsRes.data ?? []) as SermonAssetRow[],
+    sermons: (sermonsRes.data ?? []) as SermonRow[],
+    activities: (activityRes.data ?? []) as ActivityRow[],
+  };
+}
+
+export async function computeHoursSaved(
+  supabase: SupabaseClient,
+  churchId: string,
+  window: HoursSavedWindow,
+  phoneClient: SupabaseClient = supabase,
+): Promise<HoursSavedComputation> {
+  return computeHoursSavedFromSources(await loadHoursSavedSources(supabase, churchId, window, false, phoneClient), window);
+}
+
+/** Reuse one authorized snapshot for different reporting windows. */
+export function computeHoursSavedFromSources(
+  sources: HoursSavedSources,
+  { start, end }: HoursSavedWindow,
+): HoursSavedComputation {
+  const automationMinutes = new Map<string, number>();
+  const byCategory = emptyBreakdown();
+  let minutes = 0;
+  let tasks = 0;
+  const { phoneCalls, announcements, attendance, assets, sermons, activities } = sources;
   const phoneCallsInWindow = phoneCalls.filter((r) =>
     inHoursSavedWindow(r.called_at, start, end),
   );
@@ -223,7 +276,6 @@ export async function computeHoursSaved(
     addToCategory(byCategory, "Phone", phoneMinutes);
   }
 
-  const announcements = (annRes.data ?? []) as AnnouncementRow[];
   for (const a of announcements) {
     if (!inHoursSavedWindow(a.created_at, start, end)) continue;
     if (a.push_to_facebook) {
@@ -246,7 +298,6 @@ export async function computeHoursSaved(
     }
   }
 
-  const attendance = (attRes.data ?? []) as AttendanceRow[];
   const inRangeAttendance = attendance.filter((r) =>
     inHoursSavedWindow(
       r.submitted_at ?? `${r.service_date}T12:00:00Z`,
@@ -289,7 +340,6 @@ export async function computeHoursSaved(
     export_pptx: "Sermon PPTX Exported",
   };
 
-  const assets = (assetsRes.data ?? []) as SermonAssetRow[];
   for (const asset of assets) {
     if (!inHoursSavedWindow(asset.created_at, start, end)) continue;
     const automationType = assetTypeByKind[asset.kind];
@@ -299,7 +349,6 @@ export async function computeHoursSaved(
     tasks += 1;
   }
 
-  const sermons = (sermonsRes.data ?? []) as SermonRow[];
   for (const sermon of sermons) {
     if (inHoursSavedWindow(sermon.created_at, start, end)) {
       const m = creditCatalogEntry(
@@ -349,7 +398,6 @@ export async function computeHoursSaved(
     }
   }
 
-  const activities = (activityRes.data ?? []) as ActivityRow[];
   for (const row of activities) {
     if (!inHoursSavedWindow(row.executed_at, start, end)) continue;
     if (DERIVED_AUTOMATION_TYPES.has(row.automation_type)) continue;
