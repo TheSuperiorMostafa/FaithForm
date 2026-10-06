@@ -324,10 +324,11 @@ export function HouseholdDetail({
             required
           />
           <div className="flex flex-wrap gap-2">
-            <Button type="submit" disabled={pending}>
+            <Button size="sm" type="submit" disabled={pending}>
               Save name
             </Button>
             <Button
+              size="sm"
               type="button"
               variant="ghost"
               disabled={pending}
@@ -346,7 +347,7 @@ export function HouseholdDetail({
           description={household.notes?.trim() ? household.notes : familySummary(household)}
           secondary={
             isAdmin ? (
-              <Button type="button" variant="outline" onClick={() => setRenaming(true)}>
+              <Button size="sm" type="button" variant="outline" onClick={() => setRenaming(true)}>
                 <Pencil aria-hidden />
                 Rename family
               </Button>
@@ -423,6 +424,7 @@ export function HouseholdDetail({
                             ))}
                           </Select>
                           <Button
+                            size="sm"
                             type="button"
                             variant="outline"
                             disabled={pending}
@@ -509,7 +511,7 @@ export function HouseholdDetail({
                   </li>
                 ))}
               </ul>
-              <Button type="submit" className="self-start" disabled={pending}>
+              <Button size="sm" type="submit" className="self-start" disabled={pending}>
                 Add to family
               </Button>
             </form>
@@ -552,6 +554,7 @@ export function HouseholdDetail({
                   </div>
                   {isAdmin ? (
                     <Button
+                      size="sm"
                       type="button"
                       variant="outline"
                       disabled={pending}
@@ -608,7 +611,7 @@ export function HouseholdDetail({
                   placeholder="Grandmother"
                 />
               </div>
-              <Button type="submit" className="self-start" disabled={pending}>
+              <Button size="sm" type="submit" className="self-start" disabled={pending}>
                 Allow to pick up
               </Button>
             </form>
@@ -642,6 +645,7 @@ export function HouseholdDetail({
           <div className="flex flex-wrap gap-2">
             {!credentials ? (
               <Button
+                size="sm"
                 type="button"
                 variant="outline"
                 disabled={pending}
@@ -653,6 +657,7 @@ export function HouseholdDetail({
             ) : null}
             {isAdmin ? (
               <Button
+                size="sm"
                 type="button"
                 variant="ghost"
                 disabled={pending}
@@ -687,6 +692,7 @@ export function HouseholdDetail({
             )}
             {!deleteBlocked ? (
               <Button
+                size="sm"
                 type="button"
                 variant="destructive"
                 className="self-start"

@@ -1,4 +1,6 @@
 import type { ResolvedPage } from "@/lib/sites/contract";
+import { WebsitePageExplore, WebsitePageIntro, type WebsitePageFrame } from "./website-page-frame";
+import { Fragment } from "react";
 import { SECTION_REGISTRY } from "@/lib/sites/registry";
 
 /**
@@ -9,7 +11,7 @@ import { SECTION_REGISTRY } from "@/lib/sites/registry";
  * whose palette it is. Same mechanism as [data-give-branded] on the giving
  * pages, one level larger.
  */
-export function PageRenderer({ page }: { page: ResolvedPage }) {
+export function PageRenderer({ page, website }: { page: ResolvedPage; website?: WebsitePageFrame }) {
   return (
     // The outer element carries the tokens too, so the letterboxing either side
     // of the 1280px column is the church's own ink rather than whatever the app
@@ -26,17 +28,20 @@ export function PageRenderer({ page }: { page: ResolvedPage }) {
           <style dangerouslySetInnerHTML={{ __html: page.customCss }} />
         ) : null}
 
-        {page.sections.map((section) => {
+        {page.sections.map((section, index) => {
           const master = SECTION_REGISTRY[section.type];
           if (!master) return null;
 
           const { Component } = master;
           return (
-            <Component
-              key={section.ctx.id}
-              content={section.content}
-              ctx={section.ctx}
-            />
+            <Fragment key={section.ctx.id}>
+              {website && website.path !== "/" && (index === 0 && section.type !== "site_nav" || index === 1 && page.sections[0]?.type === "site_nav") ? <WebsitePageIntro website={website} /> : null}
+              {website && (section.type === "contact_band" || section.type === "footer_map" && !page.sections.some((item) => item.type === "contact_band")) ? <WebsitePageExplore page={page} website={website} /> : null}
+              <Component
+                content={section.type === "footer_map" && page.themeKey === "light" ? { ...section.content, surface: "canvas-alt" } : section.content}
+                ctx={section.ctx}
+              />
+            </Fragment>
           );
         })}
       </div>

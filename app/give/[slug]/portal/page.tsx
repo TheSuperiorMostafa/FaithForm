@@ -102,6 +102,7 @@ export default async function PortalPage({ params, searchParams }: PageProps) {
 
   return (
     <PortalDashboard
+      timeZone={church.timeZone}
       slug={slug}
       churchName={church.churchName}
       stripeAccountId={church.stripeAccountId ?? ""}

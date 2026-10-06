@@ -58,3 +58,25 @@ export function formatShortDate(iso: string): string {
     year: "numeric",
   }).format(new Date(iso));
 }
+
+/** Attendance downloads accept a month, quarter, or calendar year. */
+export function parseAttendancePeriod(param: string): (ParsedMonth & { kind: "month" | "quarter" | "year" }) | null {
+  const monthly = parseMonthParam(param);
+  if (monthly) return { ...monthly, kind: "month" };
+  const match = /^(\d{4})(?:-Q([1-4]))?$/.exec(param);
+  if (!match) return null;
+  const year = Number(match[1]);
+  if (year < 1900 || year > 9998) return null;
+  const quarter = match[2] ? Number(match[2]) : null;
+  const month = quarter ? (quarter - 1) * 3 + 1 : 1;
+  const lastMonth = quarter ? month + 2 : 12;
+  const start = new Date(year, month - 1, 1);
+  const end = new Date(year, lastMonth, 1);
+  return {
+    year, month: lastMonth, start, end,
+    kind: quarter ? "quarter" : "year",
+    label: quarter ? `Quarter ${quarter}, ${year}` : String(year),
+    startDateIso: `${monthSlug(year, month)}-01`,
+    endDateIso: `${monthSlug(end.getFullYear(), end.getMonth() + 1)}-01`,
+  };
+}

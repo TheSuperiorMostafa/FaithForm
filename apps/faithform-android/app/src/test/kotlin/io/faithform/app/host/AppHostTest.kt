@@ -232,14 +232,15 @@ class AppManifestTest {
     }
 
     @Test
-    fun `deep links are custom-scheme only and fail closed`() {
-        // An https App Link needs a verified Digital Asset Links file on a
-        // domain this repository does not establish. Declaring one anyway would
-        // claim a domain the app cannot prove it owns — and Android would hand
-        // it a link it could not verify.
+    fun `https app links verify only the invitation path on FaithForm`() {
         assertTrue(manifest.contains("android:scheme=\"faithform\""))
-        assertFalse("an unverified https App Link is declared", manifest.contains("android:scheme=\"https\""))
-        assertFalse(manifest.contains("android:autoVerify=\"true\""))
+        val filters = Regex("<intent-filter[\\s\\S]*?</intent-filter>").findAll(manifest).map { it.value }.toList()
+        val verified = filters.single { it.contains("android:scheme=\"https\"") }
+        assertTrue(verified.contains("android:autoVerify=\"true\""))
+        assertTrue(verified.contains("android:host=\"faithform.io\""))
+        assertTrue(verified.contains("android:pathPrefix=\"/faithform/invite/\""))
+        assertEquals(1, Regex("<data\\b").findAll(verified).count())
+        assertFalse(verified.contains("android:pathPrefix=\"/\""))
     }
 
     @Test

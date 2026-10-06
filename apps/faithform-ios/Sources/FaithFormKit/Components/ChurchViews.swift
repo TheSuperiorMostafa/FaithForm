@@ -950,11 +950,24 @@ private struct ChurchSocialRow: View {
         .padding(.horizontal, -FaithFormTokens.Layout.screenPaddingHorizontal)
     }
 
+    @ViewBuilder
+    private func socialIcon(_ style: ChurchInfo.SocialStyle) -> some View {
+        if let asset = style.brandAsset {
+            Image(asset, bundle: .module)
+                .renderingMode(.template)
+                .resizable()
+                .scaledToFit()
+                .frame(width: 24, height: 24)
+        } else {
+            Image(systemName: style.symbol)
+        }
+    }
+
     private func button(_ item: ChurchInfo.SocialItem) -> some View {
         let color = item.style.colorHex.flatMap { Color(hex: $0) } ?? theme.palette.brandAccent
         let dark = colorScheme == .dark
         return VStack(spacing: FaithFormTokens.Spacing.sm) {
-            Image(systemName: item.style.symbol)
+            socialIcon(item.style)
                 .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: ChurchInfoMetrics.socialSize, height: ChurchInfoMetrics.socialSize)

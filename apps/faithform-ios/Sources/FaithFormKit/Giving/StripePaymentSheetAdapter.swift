@@ -99,10 +99,9 @@ public actor StripePaymentSheetAdapter: PaymentSheetFacade {
                     )
                 }
 
-                let sheet = PaymentSheet(
-                    paymentIntentClientSecret: request.clientSecret,
-                    configuration: configuration
-                )
+                let sheet = request.isSetupIntent
+                    ? PaymentSheet(setupIntentClientSecret: request.clientSecret, configuration: configuration)
+                    : PaymentSheet(paymentIntentClientSecret: request.clientSecret, configuration: configuration)
 
                 sheet.present(from: controller) { result in
                     let outcome: SheetOutcome

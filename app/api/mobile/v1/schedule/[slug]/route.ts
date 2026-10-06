@@ -32,7 +32,7 @@ export const GET = optionalAuthRoute(
 
     const etag = computeEtag({
       version: page.scheduleVersion,
-      ids: page.items.map((item) => `${item.id}:${item.publicationVersion}`),
+      ids: page.items.map((item) => JSON.stringify([item.id, item.publicationVersion, item.startAt, item.endAt, item.title, item.location])),
       scope: `${userId ? "member" : "anonymous"}:${from}:${to}`,
     });
 

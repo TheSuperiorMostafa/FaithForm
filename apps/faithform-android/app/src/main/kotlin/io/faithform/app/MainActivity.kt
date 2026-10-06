@@ -210,12 +210,16 @@ class MainActivity : ComponentActivity() {
                 )
             }
             FaithFormTheme(darkTheme = isDark, churchBrand = churchBrand, reduceMotion = rememberSystemReducedMotion()) {
-                FaithFormApp(
-                    viewModel = viewModel,
-                    container = container,
-                    locationProvider = locationProvider,
-                    cameraPermission = cameraPermission
-                )
+                androidx.compose.runtime.CompositionLocalProvider(
+                    io.faithform.app.attendance.LocalCameraPermissionRequester provides cameraPermission,
+                ) {
+                    FaithFormApp(
+                        viewModel = viewModel,
+                        container = container,
+                        locationProvider = locationProvider,
+                        cameraPermission = cameraPermission
+                    )
+                }
             }
         }
 

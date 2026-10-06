@@ -46,6 +46,9 @@ export const POST = authenticatedRoute(
       fundId: parsed.data.fundId,
       amountCents: parsed.data.amountCents,
       interval: parsed.data.interval,
+      startDate: parsed.data.startDate,
+      billingDayOfMonth: parsed.data.billingDayOfMonth,
+      billingDayOfWeek: parsed.data.billingDayOfWeek,
       clientAttemptId: parsed.data.clientAttemptId,
     });
 
@@ -63,6 +66,8 @@ export const POST = authenticatedRoute(
             "conflict",
             "This church isn't accepting gifts in the app right now.",
           );
+        case "invalid_schedule":
+          throw new MobileError("invalid_request", "Choose a future start date within the next year.");
         case "amount_out_of_range":
           throw new MobileError("invalid_request", "Choose a different amount.", {
             fields: [{ field: "amountCents", issue: "out_of_range" }],

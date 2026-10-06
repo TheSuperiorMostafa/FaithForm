@@ -339,10 +339,20 @@ enum ChurchInfo {
 
     struct SocialStyle: Equatable {
         let title: String
-        /// A system glyph — never a trademarked logo asset.
+        /// System fallback for generic links and podcast feeds.
         let symbol: String
         /// The platform's colour; nil means the church's own accent.
         let colorHex: String?
+        var brandAsset: String? {
+            switch symbol {
+            case "camera": "SocialInstagram"
+            case "person.2.fill": "SocialFacebook"
+            case "play.rectangle.fill": "SocialYoutube"
+            case "music.note": "SocialTiktok"
+            case "at": "SocialX"
+            default: nil
+            }
+        }
     }
 
     static func socialStyle(_ platform: String) -> SocialStyle {

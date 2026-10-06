@@ -216,3 +216,8 @@ class CameraPermissionRequester(private val activity: ComponentActivity) {
         launcher.launch(Manifest.permission.CAMERA)
     }
 }
+
+/** The Activity registers one camera permission launcher before START. */
+val LocalCameraPermissionRequester = androidx.compose.runtime.staticCompositionLocalOf<CameraPermissionRequester> {
+    error("Camera permission requester must be provided by the Activity")
+}

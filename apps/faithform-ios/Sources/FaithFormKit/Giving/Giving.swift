@@ -247,6 +247,7 @@ public struct PaymentSheetRequest: Equatable, Sendable {
     public let allowApplePay: Bool
     /// Apple's own merchant identifier, from the app's entitlement.
     public let appleMerchantID: String?
+    public let isSetupIntent: Bool
 
     public init(
         clientSecret: String,
@@ -254,7 +255,8 @@ public struct PaymentSheetRequest: Equatable, Sendable {
         stripeAccountID: String,
         merchantName: String,
         allowApplePay: Bool,
-        appleMerchantID: String?
+        appleMerchantID: String?,
+        isSetupIntent: Bool = false
     ) {
         self.clientSecret = clientSecret
         self.publishableKey = publishableKey
@@ -262,6 +264,7 @@ public struct PaymentSheetRequest: Equatable, Sendable {
         self.merchantName = merchantName
         self.allowApplePay = allowApplePay
         self.appleMerchantID = appleMerchantID
+        self.isSetupIntent = isSetupIntent
     }
 }
 

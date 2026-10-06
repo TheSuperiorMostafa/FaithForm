@@ -486,6 +486,15 @@ struct InvitationLinkTests {
         #expect(InvitationLink.token(from: url) == token)
     }
 
+    @Test("website invitations only accept the verified host and exact invitation path")
+    func websiteInvitation() throws {
+        let token = String(repeating: "a", count: 32)
+        #expect(InvitationLink.token(from: try #require(URL(string: "https://faithform.io/faithform/invite/\(token)"))) == token)
+        for value in ["https://faithform.io.evil/faithform/invite/\(token)", "https://faithform.io/faithform/invite/\(token)?x=1", "http://faithform.io/faithform/invite/\(token)"] {
+            #expect(InvitationLink.token(from: try #require(URL(string: value))) == nil)
+        }
+    }
+
     @Test("everything else is refused", arguments: [
         "https://invite/aaaaaaaaaaaaaaaaaaaaaaaa",       // wrong scheme
         "faithform://home",                                // wrong host

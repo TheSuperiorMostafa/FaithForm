@@ -36,9 +36,8 @@ object NotificationChannels {
         val announcements = NotificationChannel(
             ANNOUNCEMENTS,
             context.getString(io.faithform.app.R.string.topic_announcements),
-            // Default, not high: a church notice is worth seeing, not worth
-            // interrupting someone's evening with a heads-up display.
-            NotificationManager.IMPORTANCE_DEFAULT
+            // Heads-up alerts remain subject to the person’s system preferences.
+            NotificationManager.IMPORTANCE_HIGH
         ).apply {
             description = context.getString(io.faithform.app.R.string.channel_announcements_description)
             setShowBadge(true)
@@ -47,14 +46,14 @@ object NotificationChannels {
         val events = NotificationChannel(
             EVENTS,
             context.getString(io.faithform.app.R.string.topic_events),
-            NotificationManager.IMPORTANCE_DEFAULT
+            NotificationManager.IMPORTANCE_HIGH
         ).apply {
             description = context.getString(io.faithform.app.R.string.channel_events_description)
             setShowBadge(true)
         }
 
         manager.createNotificationChannels(listOf(announcements, events,
-            NotificationChannel(GROUPS, context.getString(io.faithform.app.R.string.tab_groups), NotificationManager.IMPORTANCE_DEFAULT)))
+            NotificationChannel(GROUPS, context.getString(io.faithform.app.R.string.tab_groups), NotificationManager.IMPORTANCE_HIGH)))
     }
 
     /**

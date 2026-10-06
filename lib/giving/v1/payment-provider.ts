@@ -2,6 +2,8 @@ import type Stripe from "stripe";
 
 import { applicationFeeAmount } from "@/lib/stripe/config";
 import { getStripe, isStripeConfigured } from "@/lib/stripe/client";
+import { recurringSubscriptionSchedule, stripeRecurringPrice, type GivingInterval } from "@/lib/giving/recurring-schedule";
+import { prepareRecurringConfirmation } from "@/lib/stripe/recurring-confirmation";
 import { invoiceClientSecret } from "@/lib/stripe/invoice-shape";
 
 /**
@@ -44,7 +46,10 @@ export type MobileSubscriptionRequest = {
   customerId: string;
   amountCents: number;
   currency: string;
-  interval: "week" | "month" | "year";
+  interval: GivingInterval;
+  firstChargeAt?: string | null;
+  billingDayOfMonth?: number | null;
+  billingDayOfWeek?: number | null;
   /** Shown on the church's own Stripe dashboard and on the donor's statement. */
   productName: string;
   /** Derived server-side from the attempt row. Never a client value. */
@@ -54,8 +59,9 @@ export type MobileSubscriptionRequest = {
 
 export type MobileSubscription = {
   id: string;
+  confirmationType?: "payment" | "setup";
   /**
-   * The first invoice's secret, which the payment sheet confirms.
+   * The first invoice or pending SetupIntent secret, which the sheet confirms.
    *
    * Null once the subscription needs no payment — an already-paid first invoice
    * on a resumed attempt, most often. A caller that gets null has a live
@@ -220,7 +226,7 @@ export const stripeGivingProvider: GivingPaymentProvider = {
       {
         unit_amount: request.amountCents,
         currency: request.currency,
-        recurring: { interval: request.interval },
+        recurring: stripeRecurringPrice(request.interval),
         product_data: { name: request.productName },
       },
       {
@@ -242,7 +248,8 @@ export const stripeGivingProvider: GivingPaymentProvider = {
         // `latest_invoice.payment_intent` cannot be expanded from API version
         // 2025-03-31.basil on, and this SDK pins a later one, so asking for it
         // fails the whole request. The web flow learned this first.
-        expand: ["latest_invoice.confirmation_secret"],
+        expand: ["latest_invoice.confirmation_secret", "pending_setup_intent"],
+        ...recurringSubscriptionSchedule(request),
         metadata: request.metadata,
       },
       {
@@ -255,7 +262,8 @@ export const stripeGivingProvider: GivingPaymentProvider = {
       },
     );
 
-    return toMobileSubscription(subscription);
+    const confirmation = await prepareRecurringConfirmation(stripe, subscription, request.stripeAccountId, request.idempotencyKey);
+    return { ...toMobileSubscription(subscription), ...confirmation };
   },
 
   async retrieveSubscription(stripeAccountId, subscriptionId) {
@@ -263,10 +271,11 @@ export const stripeGivingProvider: GivingPaymentProvider = {
     try {
       const subscription = await stripe.subscriptions.retrieve(
         subscriptionId,
-        { expand: ["latest_invoice.confirmation_secret"] },
+        { expand: ["latest_invoice.confirmation_secret", "pending_setup_intent"] },
         { stripeAccount: stripeAccountId },
       );
-      return toMobileSubscription(subscription);
+      const confirmation = await prepareRecurringConfirmation(stripe, subscription, stripeAccountId);
+      return { ...toMobileSubscription(subscription), ...confirmation };
     } catch {
       return null;
     }

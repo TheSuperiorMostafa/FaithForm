@@ -478,7 +478,7 @@ struct ChurchInfoRuleTests {
         #expect(ChurchInfo.emailURL("a@b.example?bcc=x@y.example") == nil)
     }
 
-    @Test("social profiles map to a name, a system glyph and a colour; the rest are links")
+    @Test("social profiles map to a name, brand asset and colour; other destinations stay generic")
     func socialStyles() {
         let expected: [(String, String, String, String?)] = [
             ("instagram", "Instagram", "camera", "#E1306C"),
@@ -496,6 +496,13 @@ struct ChurchInfoRuleTests {
             #expect(style.symbol == symbol, "\(platform)")
             #expect(style.colorHex == color, "\(platform)")
         }
+
+        #expect(ChurchInfo.socialStyle("instagram").brandAsset == "SocialInstagram")
+        #expect(ChurchInfo.socialStyle("facebook").brandAsset == "SocialFacebook")
+        #expect(ChurchInfo.socialStyle("youtube").brandAsset == "SocialYoutube")
+        #expect(ChurchInfo.socialStyle("tiktok").brandAsset == "SocialTiktok")
+        #expect(ChurchInfo.socialStyle("x").brandAsset == "SocialX")
+        #expect(ChurchInfo.socialStyle("podcast").brandAsset == nil)
 
         let items = ChurchInfo.socialItems(info(social: [
             ChurchSocialLink(platform: "youtube", url: "https://youtube.com/@grace"),

@@ -40,6 +40,7 @@ import {
 import { checkinSigningStatus } from "@/lib/attendance/v2/signing";
 import {
   getRecentSundayRecords,
+  getRecordByDate,
   type SundayRecordStatus,
 } from "@/lib/queries/attendance";
 
@@ -221,12 +222,37 @@ export async function getServicesBoard(): Promise<ServicesBoardData> {
  * Null when it could not be read, so the page never says "nobody here" about
  * a roster it failed to load.
  */
+export type ServiceRosterEntry = RosterEntry & { weeklyStatus?: "present" | "absent" };
+
 export async function getOccurrenceRoster(
   occurrenceId: string,
-): Promise<RosterEntry[] | null> {
+): Promise<ServiceRosterEntry[] | null> {
   const auth = await getChurchAuth();
   if (!auth) return null;
-  return getRoster(auth.churchId, occurrenceId).catch(() => null);
+  try {
+    await requireAttendanceStaff();
+    const admin = createAdminClient();
+    const { data: occurrence, error } = await admin.from("service_occurrences")
+      .select("local_service_date").eq("id", occurrenceId).eq("church_id", auth.churchId).maybeSingle();
+    if (error || !occurrence) return null;
+    const [roster, sheet] = await Promise.all([
+      getRoster(auth.churchId, occurrenceId),
+      getRecordByDate(admin, auth.churchId, occurrence.local_service_date),
+    ]);
+    const byMember = new Map<string, ServiceRosterEntry>(roster.map((entry) => [entry.memberId, entry]));
+    for (const entry of sheet?.entries ?? []) {
+      if (!entry.member) continue;
+      const existing = byMember.get(entry.member.id);
+      byMember.set(entry.member.id, {
+        ...(existing ?? { memberId: entry.member.id, firstName: entry.member.first_name,
+          lastName: entry.member.last_name, factId: null, status: null, source: null, countedAt: null }),
+        weeklyStatus: existing?.status === "active" ? "present" : entry.status,
+      });
+    }
+    return [...byMember.values()];
+  } catch {
+    return null;
+  }
 }
 
 /** One person, through the same command a geofence attempt uses. */

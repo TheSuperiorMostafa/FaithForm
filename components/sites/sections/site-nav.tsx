@@ -6,11 +6,11 @@ import type { NavContent } from "@/types/site";
 import { Action } from "../primitives";
 import { SiteNavMenu } from "./site-nav-menu";
 
-function SiteNav({ content, ctx }: SectionComponentProps<NavContent>) {
+function SiteNav({ content, ctx }: SectionComponentProps<NavContent & { homeHref?: string }>) {
   // Website mode uses path links (`/about`); the masthead should take visitors
   // home rather than to a hash on the current page.
   const usesPages = content.links.some((link) => link.href.startsWith("/"));
-  const brandHref = usesPages ? "/" : `#${ctx.anchor}`;
+  const brandHref = content.homeHref ?? (usesPages ? "/" : `#${ctx.anchor}`);
 
   return (
     <nav id={ctx.anchor} className={cn("site-nav", !content.sticky && "site-nav-static")}>

@@ -768,6 +768,7 @@ public enum GiftType: RawRepresentable, Codable, Hashable, Sendable {
 /// released build.
 public enum GivingInterval: RawRepresentable, Codable, Hashable, Sendable {
     case week
+    case biweekly
     case month
     case year
     case unknown(String)
@@ -775,6 +776,7 @@ public enum GivingInterval: RawRepresentable, Codable, Hashable, Sendable {
     public init(rawValue: String) {
         switch rawValue {
         case "week": self = .week
+        case "biweekly": self = .biweekly
         case "month": self = .month
         case "year": self = .year
         default: self = .unknown(rawValue)
@@ -784,6 +786,7 @@ public enum GivingInterval: RawRepresentable, Codable, Hashable, Sendable {
     public var rawValue: String {
         switch self {
         case .week: return "week"
+        case .biweekly: return "biweekly"
         case .month: return "month"
         case .year: return "year"
         case let .unknown(value): return value
@@ -2098,6 +2101,7 @@ public struct OnboardingState: Codable, Hashable, Sendable {
 /// released client keep working when the server adds one.
 public struct FeedItem: Codable, Hashable, Sendable {
     public let id: String
+    public let serviceOccurrenceId: String?
     public let title: String
     public let body: String
     public let startAt: String
@@ -2117,6 +2121,7 @@ public struct FeedItem: Codable, Hashable, Sendable {
 
     public init(
         id: String,
+        serviceOccurrenceId: String? = nil,
         title: String,
         body: String,
         startAt: String,
@@ -2135,6 +2140,7 @@ public struct FeedItem: Codable, Hashable, Sendable {
         churchTimezone: String
     ) {
         self.id = id
+        self.serviceOccurrenceId = serviceOccurrenceId
         self.title = title
         self.body = body
         self.startAt = startAt
@@ -3450,6 +3456,7 @@ public struct GivingHome: Codable, Hashable, Sendable {
     public let availability: String
     public let churchName: String?
     public let funds: [GivingFund]
+    public let timeZone: String?
     public let recurringAvailable: Bool
     public let givingVersion: Int
     public let applePayApproved: Bool
@@ -3459,6 +3466,7 @@ public struct GivingHome: Codable, Hashable, Sendable {
         availability: String,
         churchName: String? = nil,
         funds: [GivingFund],
+        timeZone: String? = nil,
         recurringAvailable: Bool,
         givingVersion: Int,
         applePayApproved: Bool,
@@ -3467,6 +3475,7 @@ public struct GivingHome: Codable, Hashable, Sendable {
         self.availability = availability
         self.churchName = churchName
         self.funds = funds
+        self.timeZone = timeZone
         self.recurringAvailable = recurringAvailable
         self.givingVersion = givingVersion
         self.applePayApproved = applePayApproved
@@ -3613,6 +3622,9 @@ public struct StartRecurringGiftRequest: Codable, Hashable, Sendable {
     public let fundId: String
     public let amountCents: Int
     public let interval: String
+    public let startDate: String?
+    public let billingDayOfMonth: Int?
+    public let billingDayOfWeek: Int?
     public let clientAttemptId: String
 
     public init(
@@ -3620,12 +3632,18 @@ public struct StartRecurringGiftRequest: Codable, Hashable, Sendable {
         fundId: String,
         amountCents: Int,
         interval: String,
+        startDate: String? = nil,
+        billingDayOfMonth: Int? = nil,
+        billingDayOfWeek: Int? = nil,
         clientAttemptId: String
     ) {
         self.churchSlug = churchSlug
         self.fundId = fundId
         self.amountCents = amountCents
         self.interval = interval
+        self.startDate = startDate
+        self.billingDayOfMonth = billingDayOfMonth
+        self.billingDayOfWeek = billingDayOfWeek
         self.clientAttemptId = clientAttemptId
     }
 }
@@ -3635,6 +3653,8 @@ public struct StartRecurringGiftRequest: Codable, Hashable, Sendable {
 public struct RecurringGiftSession: Codable, Hashable, Sendable {
     public let attemptId: String
     public let clientSecret: String?
+    public let confirmationType: String?
+    public let firstChargeAt: String?
     public let publishableKey: String
     public let stripeAccountId: String
     public let merchantName: String
@@ -3646,6 +3666,8 @@ public struct RecurringGiftSession: Codable, Hashable, Sendable {
     public init(
         attemptId: String,
         clientSecret: String? = nil,
+        confirmationType: String? = nil,
+        firstChargeAt: String? = nil,
         publishableKey: String,
         stripeAccountId: String,
         merchantName: String,
@@ -3656,6 +3678,8 @@ public struct RecurringGiftSession: Codable, Hashable, Sendable {
     ) {
         self.attemptId = attemptId
         self.clientSecret = clientSecret
+        self.confirmationType = confirmationType
+        self.firstChargeAt = firstChargeAt
         self.publishableKey = publishableKey
         self.stripeAccountId = stripeAccountId
         self.merchantName = merchantName

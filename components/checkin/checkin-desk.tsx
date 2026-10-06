@@ -641,7 +641,7 @@ function FamilyCard({
                 {child.state.kind === "on_the_way" && (
                   <Button
                     type="button"
-                    size="lg"
+                    size="sm"
                     variant="outline"
                     className="sm:self-end"
                     disabled={pending || !roomId}
@@ -665,8 +665,8 @@ function FamilyCard({
       ) : (
         <Button
           type="button"
-          size="lg"
-          className="min-h-14 w-full text-lg"
+          size="sm"
+          className="self-start"
           disabled={pending || count === 0}
           onClick={() => onCheckIn()}
         >

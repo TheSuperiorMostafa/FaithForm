@@ -112,7 +112,8 @@ function createMockSupabase(existingRow: Record<string, unknown> | null) {
   };
 }
 
-test("syncing calendar edits shifts the check-in window proportionally with the new start time", async () => {
+test("syncing calendar edits shifts the check-in window proportionally with the new start time", async (t) => {
+  t.mock.method(Date, "now", () => Date.parse("2026-10-01T12:00:00.000Z"));
   // Existing event starts in future at 22:00 UTC, check-in opens 30m before (21:30), closes 60m after (23:00)
   const existing = {
     id: "occ-1",

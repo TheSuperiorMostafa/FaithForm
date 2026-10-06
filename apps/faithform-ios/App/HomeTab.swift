@@ -39,6 +39,7 @@ struct HomeTabView: View {
 
     @State private var path: [Route] = []
     @State private var presentedChurchSlug: String?
+    @State private var findChurchAfterDismissal = false
     @State private var section: HomeSection = .feed
     /// Shared by the cards and the detail, so a tapped card zooms into it.
     @Namespace private var announcementTransition
@@ -52,6 +53,9 @@ struct HomeTabView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(theme.palette.background)
+            .task {
+                if root.isAllowed(.churchDiscovery) { await discovery.prepare() }
+            }
             .environment(\.announcementTransitionNamespace, announcementTransition)
             .navigationTitle(root.selectedChurch?.churchName ?? L.homeTitle)
             .navigationBarTitleDisplayMode(.inline)
@@ -81,7 +85,12 @@ struct HomeTabView: View {
             .sheet(isPresented: Binding(
                 get: { presentedChurchSlug != nil },
                 set: { if !$0 { presentedChurchSlug = nil } }
-            )) {
+            ), onDismiss: {
+                if findChurchAfterDismissal {
+                    findChurchAfterDismissal = false
+                    path.append(.search)
+                }
+            }) {
                 if let slug = presentedChurchSlug {
                     NavigationStack {
                         ChurchProfileHostView(
@@ -151,7 +160,14 @@ struct HomeTabView: View {
     /// capability is not a button that fails.
     private var changeChurch: (@MainActor () -> Void)? {
         guard root.isAllowed(.churchDiscovery) else { return nil }
-        return { @MainActor in path.append(.search) }
+        return { @MainActor in
+            if presentedChurchSlug != nil {
+                findChurchAfterDismissal = true
+                presentedChurchSlug = nil
+            } else {
+                path.append(.search)
+            }
+        }
     }
 
     @ViewBuilder

@@ -150,7 +150,7 @@ public struct GivingCadencePicker: View {
 ///
 /// Says the cadence in the same breath as the amount — "$25 every month" — so
 /// nobody can read the number without the cadence attached. It also says, in
-/// plain words, that the first gift is today and that stopping is one tap from
+/// plain words, when the first gift will run and that stopping is one tap from
 /// this screen. Somebody about to set up a repeating charge deserves to know
 /// how to end it **before** they start it, not afterwards.
 public struct GivingRecurringConfirmView: View {
@@ -160,6 +160,8 @@ public struct GivingRecurringConfirmView: View {
     private let amountCents: Int
     private let currency: String
     private let cadence: RecurringCadence
+    private let firstChargeDate: Date?
+    private let timeZone: TimeZone
     private let onStart: @MainActor () -> Void
 
     public init(
@@ -168,6 +170,8 @@ public struct GivingRecurringConfirmView: View {
         amountCents: Int,
         currency: String,
         cadence: RecurringCadence,
+        firstChargeDate: Date? = nil,
+        timeZone: TimeZone = .current,
         onStart: @escaping @MainActor () -> Void
     ) {
         self.churchName = churchName
@@ -175,6 +179,8 @@ public struct GivingRecurringConfirmView: View {
         self.amountCents = amountCents
         self.currency = currency
         self.cadence = cadence
+        self.firstChargeDate = firstChargeDate
+        self.timeZone = timeZone
         self.onStart = onStart
     }
 
@@ -204,7 +210,7 @@ public struct GivingRecurringConfirmView: View {
                 }
             }
 
-            Text(L.givingRecurringConfirmBody)
+            Text(firstChargeDate.map { L.givingScheduledConfirm(firstChargeDateLabel($0)) } ?? L.givingRecurringConfirmBody)
                 .font(theme.font(FaithFormTokens.Text.bodySmall))
                 .foregroundStyle(theme.palette.contentSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -212,6 +218,14 @@ public struct GivingRecurringConfirmView: View {
             Button(L.givingStartRecurring, action: onStart)
                 .buttonStyle(FaithFormButtonStyle(kind: .primary, theme: theme))
         }
+    }
+
+    private func firstChargeDateLabel(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .long
+        formatter.timeStyle = .none
+        formatter.timeZone = timeZone
+        return formatter.string(from: date)
     }
 
     private func row(_ label: String, _ value: String) -> some View {
@@ -390,6 +404,7 @@ public struct RecurringGiftCard: View {
         let amount = formatGivingAmount(cents: gift.amountCents, currency: gift.currency)
         switch GivingInterval(rawValue: gift.interval) {
         case .week: return L.givingEveryWeekAmount(amount)
+        case .biweekly: return L.givingEveryTwoWeeksAmount(amount)
         case .month: return L.givingEveryMonthAmount(amount)
         default: return "\(amount) · \(recurringIntervalTitle(gift.interval))"
         }

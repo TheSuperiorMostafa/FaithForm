@@ -232,6 +232,14 @@ struct GiveTabView: View {
                     VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
                         if mode == .recurring {
                             GivingCadencePicker(cadence: Bindable(model).cadence)
+                            DatePicker(L.givingStartDate, selection: Bindable(model).recurringStartDate, in: Date()...Calendar.current.date(byAdding: .year, value: 1, to: Date())!, displayedComponents: .date)
+                                .environment(\.timeZone, model.recurringTimeZone)
+                            if model.cadence == .month {
+                                Picker(L.givingMonthlyDay, selection: Bindable(model).recurringMonthlyDay) {
+                                    ForEach(1...31, id: \.self) { day in Text(day.formatted()).tag(day) }
+                                }
+                                Text(L.givingShortMonth).font(.footnote)
+                            }
                         }
                         GivingAmountView(
                             fund: fund,
@@ -310,6 +318,8 @@ struct GiveTabView: View {
                         amountCents: cents,
                         currency: fund.currency,
                         cadence: model.cadence,
+                        firstChargeDate: model.recurringFirstChargeDate,
+                        timeZone: model.recurringTimeZone,
                         onStart: {
                             path.append(.recurringOutcome)
                             Task { await model.startRecurring() }
@@ -369,6 +379,7 @@ struct GiveTabView: View {
         let amount = formatGivingAmount(cents: gift.amountCents, currency: gift.currency)
         switch GivingInterval(rawValue: gift.interval) {
         case .week: return L.givingEveryWeekAmount(amount)
+        case .biweekly: return L.givingEveryTwoWeeksAmount(amount)
         case .month: return L.givingEveryMonthAmount(amount)
         default: return "\(amount) · \(recurringIntervalTitle(gift.interval))"
         }

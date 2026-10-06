@@ -1,3 +1,6 @@
+import Link from "next/link";
+import { buttonVariants } from "@/components/ui/button";
+
 import { ShieldCheck } from "lucide-react";
 
 import { NO_CODE_LOG_DESCRIPTION, NO_CODE_LOG_TITLE } from "@/components/checkin/copy";
@@ -21,12 +24,16 @@ export function NoCodeReleaseLog({
   failed = false,
   weekCount,
   timeZone,
+  viewAllHref,
+  offset = 0,
 }: {
   releases: NoCodeRelease[];
   total: number;
   failed?: boolean;
   weekCount: number;
   timeZone: string;
+  viewAllHref?: string;
+  offset?: number;
 }) {
   return (
     <section aria-labelledby="no-code-releases" className="flex w-full flex-col gap-4">
@@ -39,7 +46,9 @@ export function NoCodeReleaseLog({
             {!failed && (
               <p className="mt-1 font-semibold text-foreground">
                 {noCodeReleaseSummary(total, weekCount)}
-                {total > releases.length && ` Showing the newest ${releases.length}.`}
+                {total > releases.length && (offset > 0
+                  ? ` Showing releases ${offset + 1}–${offset + releases.length}.`
+                  : ` Showing the newest ${releases.length}.`)}
               </p>
             )}
           </>
@@ -95,6 +104,11 @@ export function NoCodeReleaseLog({
           ))}
         </List>
       )}
+      {!failed && viewAllHref && total > releases.length ? (
+        <Link href={viewAllHref} className={buttonVariants({ variant: "outline", className: "self-start" })}>
+          See all releases without a code
+        </Link>
+      ) : null}
     </section>
   );
 }

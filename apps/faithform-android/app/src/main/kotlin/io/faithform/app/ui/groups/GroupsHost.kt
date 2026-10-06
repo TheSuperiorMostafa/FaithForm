@@ -51,7 +51,7 @@ import kotlinx.coroutines.launch
     LaunchedEffect(store) { store.load() }
     if (preferences) GroupPreferences(store, onDismiss = { preferences = false })
     if (stack.isNotEmpty()) {
-        val pop: () -> Unit = { popping = true; stack.removeAt(stack.lastIndex) }
+        val pop: () -> Unit = { if (stack.isNotEmpty()) { popping = true; stack.removeAt(stack.lastIndex) } }
         val push: (GroupRoute) -> Unit = { popping = false; stack.add(it) }
         BackHandler(onBack = pop)
         GroupStack(stack, popping) { route ->
@@ -92,7 +92,7 @@ import kotlinx.coroutines.launch
                 item { GroupFeedback(store) }
                 if (store.loading) item { Row(Modifier.fillMaxWidth().padding(32.dp), horizontalArrangement = Arrangement.Center) { CircularProgressIndicator() } }
                 else {
-                    val groups = if (section == "Discover") store.discovered else store.home?.items.orEmpty()
+                    val groups = if (section == "Discover") store.discovered else store.home?.items.orEmpty().distinctBy { it.id }
                     if (groups.isEmpty()) item {
                         Surface(
                             color = theme.palette.surface,
@@ -186,7 +186,7 @@ import kotlinx.coroutines.launch
     val theme = LocalFaithFormTheme.current
     val subtitle = buildList {
         add("${group.memberCount} members")
-        group.scheduleText?.let { add(it) } ?: if (group.chat != null) add("Tap to chat") else Unit
+        group.scheduleText?.let { add(it) } ?: add("View group")
     }.joinToString(" · ")
     Surface(color = theme.palette.surface, shape = RoundedCornerShape(22.dp), tonalElevation = 1.dp, onClick = open, modifier = Modifier.fillMaxWidth()) {
         Row(Modifier.padding(14.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -196,9 +196,9 @@ import kotlinx.coroutines.launch
                 Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = theme.palette.contentSecondary, maxLines = 2)
             }
             Icon(
-                if (group.chat == null) Icons.AutoMirrored.Outlined.KeyboardArrowRight else Icons.Outlined.ChatBubbleOutline,
+                Icons.AutoMirrored.Outlined.KeyboardArrowRight,
                 null,
-                tint = if (group.chat == null) theme.palette.contentSecondary else theme.palette.brandAccent,
+                tint = theme.palette.contentSecondary,
             )
         }
     }

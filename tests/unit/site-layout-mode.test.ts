@@ -11,6 +11,7 @@ import {
   normalizeSitePath,
   parseSiteLayoutMode,
   rewriteKnownHrefs,
+  rewritePreviewLinks,
   sortSectionsForLanding,
   websitePageDefForPath,
   websitePageDefForType,
@@ -215,4 +216,39 @@ test("footer explore links follow the layout mode", () => {
   assert.ok(website.some((l) => l.href === "/sermons"));
   assert.ok(website.some((l) => l.href === "/give"));
   assert.ok(website.some((l) => l.href === "/visit"));
+});
+
+
+test("preview page links preserve the church, draft mode, query and fragment", () => {
+  assert.deepEqual(rewritePreviewLinks({
+    links: [
+      { href: "/about#story" },
+      { href: "/visit?from=home" },
+      { href: "/" },
+      { href: "/give/grace" },
+      { href: "https://example.org/about" },
+      { href: "#times" },
+    ],
+    body: "/about",
+  }, "grace"), {
+    links: [
+      { href: "/sites/grace/about?preview=1#story" },
+      { href: "/sites/grace/visit?from=home&preview=1" },
+      { href: "/sites/grace?preview=1" },
+      { href: "/give/grace" },
+      { href: "https://example.org/about" },
+      { href: "#times" },
+    ],
+    body: "/about",
+  });
+});
+
+test("Visit includes service times and composed order survives resolution sorting", () => {
+  const row = (type: string, sortOrder: number): SiteSectionRow => ({ id: type, type, sortOrder, isVisible: true, props: {} });
+  const composed = composeWebsiteSections({
+    path: "/visit",
+    homeSections: [row("site_nav", 0), row("service_times", 20), row("footer_map", 5)],
+    pageSections: [row("visit_cta", 80)],
+  });
+  assert.deepEqual(composed.slice().sort((a, b) => a.sortOrder - b.sortOrder).map((s) => s.type), ["site_nav", "visit_cta", "service_times", "footer_map"]);
 });

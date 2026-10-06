@@ -729,7 +729,7 @@ public struct AutomaticAttendanceFlowView: View {
                     onResumeSetup: { Task { await model.resumeSetup() } },
                     onConfirm: { Task { await model.confirmCheckIn() } },
                     onRequestConfirmation: onRequestConfirmation.map { request in
-                        { Task { confirmationMessage = await request() } }
+                        { @MainActor @Sendable in confirmationMessage = await request() }
                     },
                     onDisable: { Task { await model.disable() } },
                     onOpenSettings: onOpenSettings

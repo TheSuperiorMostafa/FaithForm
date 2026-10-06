@@ -107,7 +107,7 @@ export type ComposerSettings = {
 
 export type ComposerMode =
   /** A brand-new announcement. */
-  | { kind: "new" }
+  | { kind: "new"; date?: string }
   /** Announce an event from the church calendar, prefilled from it. */
   | { kind: "calendar"; event: CalendarEventPreview; announcementId?: string | null }
   /** Change something that is already posted, or share it in more places. */
@@ -280,8 +280,8 @@ function initialState(mode: ComposerMode, settings: ComposerSettings) {
   const base: Values = {
     title: "",
     details: "",
-    dated: false,
-    date: "",
+    dated: mode.kind === "new" && Boolean(mode.date),
+    date: mode.kind === "new" ? mode.date ?? "" : "",
     startTime: "",
     endTime: "",
     location: "",

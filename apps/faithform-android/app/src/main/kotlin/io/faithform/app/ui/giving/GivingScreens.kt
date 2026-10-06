@@ -21,6 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -122,6 +123,7 @@ private fun Loaded(
     modifier: Modifier = Modifier,
 ) {
     val theme = LocalFaithFormTheme.current
+    val uriHandler = LocalUriHandler.current
     // Three genuinely different empties, said differently. A church with no funds
     // has not opened any; a church that cannot charge has not finished setting
     // up. Telling a person "nothing here" for both would make one of them look
@@ -263,9 +265,14 @@ private fun Loaded(
         if (state.showsRecurringNote) {
             item {
                 Text(
-                    stringResource(R.string.giving_recurring_elsewhere),
+                    stringResource(R.string.giving_schedule_options),
                     style = MaterialTheme.typography.bodySmall,
                 )
+                state.home?.webGiveUrl?.takeIf { it.startsWith("https://") }?.let { url ->
+                    OutlinedButton(onClick = { uriHandler.openUri(url + if (url.contains("?")) "&recurring=1" else "?recurring=1") }, modifier = Modifier.fillMaxWidth()) {
+                        Text(stringResource(R.string.giving_open_recurring))
+                    }
+                }
             }
         }
 

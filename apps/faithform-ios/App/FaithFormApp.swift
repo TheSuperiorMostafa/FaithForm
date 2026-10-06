@@ -54,6 +54,11 @@ private struct FaithFormWindowContent: View {
                             userInfo: ["url": url]
                         )
                     }
+                    .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+                        if let url = activity.webpageURL {
+                            NotificationCenter.default.post(name: .faithformDeepLink, object: nil, userInfo: ["url": url])
+                        }
+                    }
 
             case let .unconfigured(reason):
                 // **The fail-closed state.** A build with no origin does not

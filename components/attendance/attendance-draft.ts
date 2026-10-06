@@ -33,14 +33,15 @@ export type AttendanceDraft = {
    * Optional so drafts written before this field still parse.
    */
   pendingAdd?: AttendanceDraftPendingAdd;
+  firstTimeGuestIds?: string[];
 };
 
 const PREFIX = "faithform:attendance-draft:";
 /** A draft older than this is stale, not helpful. */
 const MAX_AGE_MS = 1000 * 60 * 60 * 24 * 21;
 
-export function draftKey(serviceDate: string, editing = false): string {
-  return `${PREFIX}${serviceDate}${editing ? ":edit" : ""}`;
+export function draftKey(serviceDate: string, editing = false, scope?: string): string {
+  return `${PREFIX}${scope ? `${scope}:` : ""}${serviceDate}${editing ? ":edit" : ""}`;
 }
 
 function storage(): Storage | null {
@@ -100,7 +101,9 @@ export function parseDraft(raw: string | null, now = Date.now()): AttendanceDraf
     const pendingAdd = isPendingAdd(value.pendingAdd)
       ? normalizePendingAdd(value.pendingAdd)
       : undefined;
-    return { ...value, statuses, pendingAdd };
+    return { ...value, statuses, pendingAdd, firstTimeGuestIds: Array.isArray(value.firstTimeGuestIds)
+      ? value.firstTimeGuestIds.filter((id): id is string => typeof id === "string")
+      : undefined };
   } catch {
     return null;
   }

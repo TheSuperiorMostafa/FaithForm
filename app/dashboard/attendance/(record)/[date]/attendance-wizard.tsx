@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useState, useTransition, type KeyboardEvent } from "react";
 import Link from "next/link";
 import { Check, Hash, Plus, RotateCcw, Search, Smartphone, Users } from "lucide-react";
 import { toast } from "sonner";
@@ -49,6 +49,7 @@ type WizardMember = AttendanceMember & {
 
 type AttendanceWizardProps = {
   serviceDate: string;
+  draftScope: string;
   members: AttendanceMember[];
   /**
    * Already counted today by the app, a code, the kiosk, the Services roster
@@ -95,6 +96,7 @@ function people(n: number) {
 
 export function AttendanceWizard({
   serviceDate,
+  draftScope,
   members: initialMembers,
   checkedIn = {},
   initialStatuses,
@@ -112,7 +114,7 @@ export function AttendanceWizard({
     isCheckedIn(memberId) ? "present" : (initialStatuses?.[memberId] ?? "unmarked");
   const checkedInCount = initialMembers.filter((m) => isCheckedIn(m.id)).length;
   const dayLabel = formatServiceDate(serviceDate);
-  const storageKey = draftKey(serviceDate, editing);
+  const storageKey = draftKey(serviceDate, editing, draftScope);
 
   const [mode, setMode] = useState<AttendanceDraftMode>(numberAllowed ? initialMode : "names");
   const [headcount, setHeadcount] = useState(initialHeadcount ? String(initialHeadcount) : "");
@@ -149,7 +151,7 @@ export function AttendanceWizard({
   const [isSubmitting, startSubmitTransition] = useTransition();
 
   // ── Draft: bring back unsaved work, then keep it as it changes ────────────
-  const draftReady = useRef(false);
+  const [draftReady, setDraftReady] = useState(false);
 
   useEffect(() => {
     const draft = readDraft(storageKey);
@@ -162,6 +164,7 @@ export function AttendanceWizard({
           isCheckedIn(m.id) || !draft.statuses[m.id] ? m : { ...m, status: draft.statuses[m.id] },
         ),
       );
+      if (draft.firstTimeGuestIds) setFirstTimeGuestIds(new Set(draft.firstTimeGuestIds));
       if (draft.pendingAdd) {
         setNewFirstName(draft.pendingAdd.firstName);
         setNewLastName(draft.pendingAdd.lastName);
@@ -170,13 +173,13 @@ export function AttendanceWizard({
       }
       setRestored(true);
     }
-    draftReady.current = true;
+    setDraftReady(true);
     // Once, on opening. Reading the draft again on every render would undo marks.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    if (!draftReady.current || saved) return;
+    if (!draftReady || saved) return;
     const statuses: Record<string, "present" | "absent"> = {};
     for (const member of members) {
       if (member.status !== "unmarked" && !isCheckedIn(member.id)) statuses[member.id] = member.status;
@@ -187,12 +190,14 @@ export function AttendanceWizard({
       phone: newPhone,
       isFirstTimeGuest: newIsFirstTimeGuest,
     };
-    const draft = { mode, statuses, headcount, notes, pendingAdd };
+    const draft = { mode, statuses, headcount, notes, pendingAdd, firstTimeGuestIds: [...firstTimeGuestIds] };
     if (draftHasWork(draft)) writeDraft(storageKey, draft);
     else clearDraft(storageKey);
     // `isCheckedIn` reads props that don't change while the page is open.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
+    draftReady,
+    firstTimeGuestIds,
     members,
     mode,
     headcount,

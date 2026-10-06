@@ -270,5 +270,34 @@ export function composeWebsiteSections(args: {
       ? content
       : pageSections.filter((s) => s.type !== "site_nav" && s.type !== "footer_map");
 
-  return [...nav, ...body, ...contact, ...footer];
+  const serviceTimes = path === "/visit"
+    ? homeSections.filter((s) => s.type === "service_times")
+    : [];
+
+  // resolvePage sorts by sortOrder again. Borrowed home rows retain their old
+  // positions, so explicitly number the composition rather than relying on
+  // array order (a footer can otherwise appear before the page's body).
+  return [...nav, ...body, ...serviceTimes, ...contact, ...footer].map((section, index) => ({
+    ...section,
+    sortOrder: index * 10,
+  }));
+}
+
+
+/** Keep draft navigation inside the church's preview, including on subpages. */
+export function rewritePreviewLinks(value: unknown, slug: string): unknown {
+  if (Array.isArray(value)) return value.map((entry) => rewritePreviewLinks(entry, slug));
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, entry]) => {
+    if (key === "href" && typeof entry === "string") {
+      const [path] = entry.split(/[?#]/);
+      if (path === "/" || websitePageDefForPath(path)) {
+        const url = new URL(entry, "https://preview.invalid");
+        url.pathname = `/sites/${encodeURIComponent(slug)}${url.pathname === "/" ? "" : url.pathname}`;
+        url.searchParams.set("preview", "1");
+        return [key, `${url.pathname}${url.search}${url.hash}`];
+      }
+    }
+    return [key, rewritePreviewLinks(entry, slug)];
+  }));
 }

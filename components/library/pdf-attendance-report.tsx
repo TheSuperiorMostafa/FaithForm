@@ -20,6 +20,8 @@ export type AttendancePdfProps = {
   weeks: AttendanceWeekRow[];
   metrics: AttendanceComparisonMetrics;
   reportDate: string;
+  periodAverage?: number | null;
+  annual?: boolean;
 };
 
 const styles = StyleSheet.create({
@@ -155,8 +157,25 @@ export function AttendancePdfDocument({
   weeks,
   metrics,
   reportDate,
+  periodAverage,
+  annual = false,
 }: AttendancePdfProps) {
-  const chartPoints = weeks
+  const monthly = new Map<string, { total: number; count: number }>();
+  if (annual) for (const row of weeks) {
+    if (row.morningWorship == null) continue;
+    const key = row.serviceDate.slice(0, 7);
+    const bucket = monthly.get(key) ?? { total: 0, count: 0 };
+    bucket.total += row.morningWorship;
+    bucket.count += 1;
+    monthly.set(key, bucket);
+  }
+  const displayRows = annual ? [...monthly.entries()].map(([month, bucket]) => ({
+    serviceDate: `${month}-01`,
+    dateLabel: new Intl.DateTimeFormat("en-US", { month: "long", timeZone: "UTC" }).format(new Date(`${month}-01T12:00:00Z`)),
+    sundaySchool: null,
+    morningWorship: Math.round(bucket.total / bucket.count * 100) / 100,
+  })) : weeks;
+  const chartPoints = displayRows
     .filter((w) => w.morningWorship != null)
     .map((w) => ({
       label: w.dateLabel.replace(/,?\s*\d{4}$/, "").slice(0, 12),
@@ -174,18 +193,18 @@ export function AttendancePdfDocument({
 
         <View style={styles.table}>
           <View style={styles.tableHeader}>
-            <Text style={[styles.tableHeaderCell, styles.colDate]}>Date</Text>
+            <Text style={[styles.tableHeaderCell, styles.colDate]}>{annual ? "Month" : "Date"}</Text>
             <Text style={[styles.tableHeaderCell, styles.colSchool]}>
               Sunday School
             </Text>
             <Text style={[styles.tableHeaderCell, styles.colWorship]}>
-              Morning Worship
+              {annual ? "Average attendance" : "Morning Worship"}
             </Text>
           </View>
-          {weeks.length === 0 ? (
-            <Text style={styles.empty}>No attendance records for this month.</Text>
+          {displayRows.length === 0 ? (
+            <Text style={styles.empty}>No attendance records for this period.</Text>
           ) : (
-            weeks.map((week, index) => (
+            displayRows.map((week, index) => (
               <View
                 key={week.serviceDate}
                 style={[styles.tableRow, index % 2 === 1 ? styles.tableRowAlt : {}]}
@@ -209,7 +228,11 @@ export function AttendancePdfDocument({
         <SectionTitle>{`Morning Worship Attendance – ${monthLabel}`}</SectionTitle>
         <MiniLineChart points={chartPoints} />
 
-        <View style={styles.metricsRow}>
+        {periodAverage !== undefined ? (
+          <View style={styles.metricsRow}>
+            <Text style={styles.metricLabel}>Period average: {formatAverage(periodAverage)}</Text>
+          </View>
+        ) : <View style={styles.metricsRow}>
           <View style={styles.metricsCol}>
             <View style={styles.metricLine}>
               <Text style={styles.metricLabel}>Monthly Average</Text>
@@ -266,9 +289,10 @@ export function AttendancePdfDocument({
               <GrowthBadge value={metrics.sixMonthChangePct} />
             </View>
           </View>
-        </View>
+        </View>}
 
         <Text style={styles.note}>
+          {annual ? "Monthly averages include each recorded Sunday. " : ""}
           Morning Worship uses headcount from weekly attendance. Sunday School
           counts can be added when that service is tracked separately.
         </Text>

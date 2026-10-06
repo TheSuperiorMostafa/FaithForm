@@ -6,7 +6,7 @@ import { ThankYouPortalCta } from "./thank-you-portal-cta";
 
 type PageProps = {
   params: Promise<{ slug: string }>;
-  searchParams: Promise<{ email?: string }>;
+  searchParams: Promise<{ email?: string; scheduled?: string }>;
 };
 
 export default async function ThankYouPage({ params, searchParams }: PageProps) {
@@ -28,7 +28,9 @@ export default async function ThankYouPage({ params, searchParams }: PageProps) 
       </div>
       <h1 className="font-heading text-2xl font-bold">Thank you!</h1>
       <p className="text-sm text-muted-foreground">
-        Your gift was received. A receipt is on its way to your email.
+        {query.scheduled === "1"
+          ? "Your payment method was submitted for your scheduled gifts. You will receive a receipt after each payment is confirmed."
+          : "Your payment was submitted. We will email a receipt after it is confirmed."}
       </p>
       {church && <ThankYouPortalCta slug={church.slug} email={email} />}
       {church && (

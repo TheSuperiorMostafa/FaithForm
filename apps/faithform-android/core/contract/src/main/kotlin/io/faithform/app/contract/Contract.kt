@@ -514,6 +514,7 @@ enum class GiftType {
 @Serializable
 enum class GivingInterval {
     @SerialName("week") WEEK,
+    @SerialName("biweekly") BIWEEKLY,
     @SerialName("month") MONTH,
     @SerialName("year") YEAR,
     UNKNOWN;
@@ -526,6 +527,7 @@ enum class GivingInterval {
     val wire: String
         get() = when (this) {
             WEEK -> "week"
+            BIWEEKLY -> "biweekly"
             MONTH -> "month"
             YEAR -> "year"
             UNKNOWN -> "unknown"
@@ -1314,6 +1316,7 @@ data class OnboardingState(
 @Serializable
 data class FeedItem(
     val id: String,
+    val serviceOccurrenceId: String? = null,
     val title: String,
     val body: String,
     val startAt: String,
@@ -2006,6 +2009,7 @@ data class GivingHome(
     val availability: String,
     val churchName: String? = null,
     val funds: List<GivingFund>,
+    val timeZone: String? = null,
     val recurringAvailable: Boolean,
     val givingVersion: Int,
     val applePayApproved: Boolean,
@@ -2091,6 +2095,9 @@ data class StartRecurringGiftRequest(
     val fundId: String,
     val amountCents: Int,
     val interval: String,
+    val startDate: String? = null,
+    val billingDayOfMonth: Int? = null,
+    val billingDayOfWeek: Int? = null,
     val clientAttemptId: String
 )
 
@@ -2102,6 +2109,8 @@ data class StartRecurringGiftRequest(
 data class RecurringGiftSession(
     val attemptId: String,
     val clientSecret: String? = null,
+    val confirmationType: String? = null,
+    val firstChargeAt: String? = null,
     val publishableKey: String,
     val stripeAccountId: String,
     val merchantName: String,

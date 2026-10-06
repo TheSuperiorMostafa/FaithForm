@@ -31,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.faithform.app.AppViewModel
 import io.faithform.app.R
@@ -46,6 +47,7 @@ import io.faithform.app.ui.feed.AnnouncementDetailScreen
 import io.faithform.app.ui.feed.FeedModel
 import io.faithform.app.ui.feed.FeedPhase
 import io.faithform.app.ui.media.PollLiveStatus
+import io.faithform.app.ui.discovery.DiscoveryViewModel
 import io.faithform.app.ui.onboarding.FindChurchFlow
 import io.faithform.app.ui.schedule.HomeHostScreen
 import io.faithform.app.ui.schedule.ScheduleModel
@@ -78,6 +80,10 @@ fun HomeTab(
     modifier: Modifier = Modifier,
     onOpenAccount: (() -> Unit)? = null,
 ) {
+    val discovery: DiscoveryViewModel = viewModel(key = "find-church-discovery") {
+        DiscoveryViewModel(container.apiClient, locationProvider)
+    }
+    LaunchedEffect(discovery) { discovery.prepare() }
     var route by rememberSaveable { mutableStateOf(HomeRoute.FEED) }
     // Back from the search returns to whichever page opened it.
     var findReturnsTo by rememberSaveable { mutableStateOf(HomeRoute.FEED) }

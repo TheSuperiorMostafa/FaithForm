@@ -49,10 +49,13 @@ import {
  * exists is whatever the webhook last reconciled.
  */
 
+import { recurringFirstChargeAt, type GivingInterval } from "@/lib/giving/recurring-schedule";
+export type { GivingInterval } from "@/lib/giving/recurring-schedule";
+
 const CURRENCY = "usd";
 
 /** The cadences `giving_subscriptions.interval` already allows. */
-export type GivingInterval = "week" | "month" | "year";
+
 
 export type StartRecurringGiftInput = {
   userId: string;
@@ -60,6 +63,9 @@ export type StartRecurringGiftInput = {
   fundId: string;
   amountCents: number;
   interval: GivingInterval;
+  startDate?: string;
+  billingDayOfMonth?: number;
+  billingDayOfWeek?: number;
   clientAttemptId: string;
   supabase?: SupabaseClient;
   provider?: GivingPaymentProvider;
@@ -76,6 +82,8 @@ export type StartRecurringGiftResult =
        * paid — the gift is live and there is nothing left to confirm.
        */
       clientSecret: string | null;
+      confirmationType?: "payment" | "setup";
+      firstChargeAt?: string | null;
       publishableKey: string;
       stripeAccountId: string;
       merchantName: string;
@@ -95,6 +103,7 @@ export type StartRecurringGiftResult =
         | "amount_out_of_range"
         | "attempt_church_mismatch"
         | "no_email"
+        | "invalid_schedule"
         | "unavailable";
     };
 
@@ -155,8 +164,12 @@ export async function startRecurringGift(
     return { ok: false, reason: "amount_out_of_range" };
   }
 
+  let requestedFirstChargeAt: string | null;
+  try { requestedFirstChargeAt = recurringFirstChargeAt({ ...input, timeZone: resolved.church.timeZone }, new Date(), true); }
+  catch { return { ok: false, reason: "invalid_schedule" }; }
+
   const { data: claimData, error: claimError } = await db.rpc(
-    "claim_giving_recurring_attempt",
+    "claim_giving_recurring_attempt_v2",
     {
       p_account_id: account.id,
       p_church_id: resolved.church.churchId,
@@ -165,6 +178,9 @@ export async function startRecurringGift(
       p_amount_cents: input.amountCents,
       p_interval: input.interval,
       p_currency: resolved.church.currency,
+      p_first_charge_at: requestedFirstChargeAt,
+      p_billing_day_of_month: input.billingDayOfMonth ?? null,
+      p_billing_day_of_week: input.billingDayOfWeek ?? null,
     },
   );
 
@@ -178,6 +194,7 @@ export async function startRecurringGift(
       case "fund_not_published":
       case "amount_out_of_range":
       case "attempt_church_mismatch":
+      case "invalid_schedule":
         return { ok: false, reason };
       default:
         return { ok: false, reason: "unavailable" };
@@ -190,7 +207,11 @@ export async function startRecurringGift(
   const interval = (claim.interval as GivingInterval) ?? input.interval;
   const existingSubscriptionId = (claim.stripe_subscription_id as string | null) ?? null;
 
-  const fundTitle = await readFundTitle(resolved.church.churchId, input.fundId, db);
+  const effectiveFundId = (claim.fund_id as string | undefined) ?? input.fundId;
+  const firstChargeAt = (claim.first_charge_at as string | null) ?? null;
+  const billingDayOfMonth = (claim.billing_day_of_month as number | null) ?? null;
+  const billingDayOfWeek = (claim.billing_day_of_week as number | null) ?? null;
+  const fundTitle = await readFundTitle(resolved.church.churchId, effectiveFundId, db);
 
   // ---------------------------------------------------------------------
   // Resume.
@@ -211,6 +232,8 @@ export async function startRecurringGift(
       ok: true,
       attemptId,
       clientSecret: existing.clientSecret,
+      confirmationType: existing.confirmationType,
+      firstChargeAt,
       publishableKey,
       stripeAccountId: resolved.church.stripeAccountId,
       merchantName: resolved.church.name,
@@ -244,7 +267,7 @@ export async function startRecurringGift(
   try {
     customerId = await provider.ensureCustomer({
       stripeAccountId: resolved.church.stripeAccountId,
-      existingCustomerId: donor.customerId,
+      existingCustomerId: firstChargeAt ? null : donor.customerId,
       email: donor.email,
       name: donor.name,
       metadata: {
@@ -260,6 +283,9 @@ export async function startRecurringGift(
       amountCents,
       currency,
       interval,
+      firstChargeAt,
+      billingDayOfMonth,
+      billingDayOfWeek,
       productName: `Recurring gift — ${fundTitle}`,
       idempotencyKey: claim.stripe_idempotency_key as string,
       // What the webhook needs to reconcile this onto `giving_subscriptions`.
@@ -271,13 +297,14 @@ export async function startRecurringGift(
         donor_id: effectiveDonorId,
         donor_email: donor.email,
         donor_name: donor.name ?? "",
-        fund_id: input.fundId,
+        fund_id: effectiveFundId,
         fund_name: fundTitle,
         fund_designation: fundTitle,
         gift_type: "recurring",
         intended_amount_cents: String(amountCents),
         cover_fees: "false",
         source: "faithform_mobile",
+        ...(firstChargeAt ? { scheduled_start_at: firstChargeAt } : {}),
         faithform_attempt_id: attemptId,
         faithform_account_id: account.id,
       },
@@ -311,6 +338,8 @@ export async function startRecurringGift(
     ok: true,
     attemptId,
     clientSecret: subscription.clientSecret,
+    confirmationType: subscription.confirmationType,
+    firstChargeAt,
     publishableKey,
     stripeAccountId: resolved.church.stripeAccountId,
     merchantName: resolved.church.name,

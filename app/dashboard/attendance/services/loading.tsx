@@ -29,14 +29,6 @@ export default function ServicesLoading() {
       <div className="grid gap-6 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:items-start">
         <div className="flex min-w-0 flex-col gap-8">
           <div className="flex flex-col gap-3">
-            <p className="font-heading text-xl font-bold text-foreground">Open and coming up</p>
-            <div className="divide-y divide-border rounded-3xl border border-border bg-card p-2 shadow-sm">
-              {Array.from({ length: 2 }).map((_, index) => (
-                <RowSkeleton key={index} />
-              ))}
-            </div>
-          </div>
-          <div className="flex flex-col gap-3">
             <p className="font-heading text-xl font-bold text-foreground">Recent</p>
             <div className="divide-y divide-border rounded-3xl border border-border bg-card p-2 shadow-sm">
               {Array.from({ length: 4 }).map((_, index) => (

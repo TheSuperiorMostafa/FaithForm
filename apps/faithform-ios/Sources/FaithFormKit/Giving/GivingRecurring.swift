@@ -9,7 +9,7 @@ import Foundation
 /// ## The rule this file exists to enforce
 ///
 /// **A payment sheet completing is not a gift that renews.** The sheet reports
-/// that an SDK finished confirming the first invoice. Only the server, told by
+/// that an SDK finished confirming a payment or future payment setup. Only the server, told by
 /// a verified Stripe webhook, knows the subscription became active — so
 /// ``RecurringPhase`` has a state for "started, not yet confirmed" and the
 /// wording for it never claims more than that.
@@ -28,13 +28,14 @@ import Foundation
 
 /// How often a recurring gift is charged, as this app offers it.
 ///
-/// Weekly and monthly only. `GivingInterval` — the wire enum — also carries
+/// Weekly, every two weeks, and monthly. `GivingInterval` — the wire enum — also carries
 /// `year`, because a gift started on the church's web page can be annual and
 /// must still be listable; it is simply not something the app offers to start.
 /// A person wanting to give yearly is better served by the church's own page
 /// than by a picker with a rarely-right third option on it.
 public enum RecurringCadence: String, CaseIterable, Equatable, Sendable, Codable {
     case week
+    case biweekly
     case month
 
     /// The wire value. Deliberately the same strings the contract's
@@ -44,6 +45,7 @@ public enum RecurringCadence: String, CaseIterable, Equatable, Sendable, Codable
     public var title: String {
         switch self {
         case .week: return L.givingCadenceWeekly
+        case .biweekly: return L.givingCadenceBiweekly
         case .month: return L.givingCadenceMonthly
         }
     }
@@ -52,6 +54,7 @@ public enum RecurringCadence: String, CaseIterable, Equatable, Sendable, Codable
     public func amountPhrase(_ formattedAmount: String) -> String {
         switch self {
         case .week: return L.givingEveryWeekAmount(formattedAmount)
+        case .biweekly: return L.givingEveryTwoWeeksAmount(formattedAmount)
         case .month: return L.givingEveryMonthAmount(formattedAmount)
         }
     }
@@ -67,6 +70,7 @@ public enum RecurringCadence: String, CaseIterable, Equatable, Sendable, Codable
 public func recurringIntervalTitle(_ raw: String) -> String {
     switch GivingInterval(rawValue: raw) {
     case .week: return L.givingCadenceWeekly
+    case .biweekly: return L.givingCadenceBiweekly
     case .month: return L.givingCadenceMonthly
     case .year: return L.givingCadenceYearly
     case let .unknown(value): return value
@@ -89,19 +93,25 @@ public struct RecurringAttempt: Equatable, Sendable, Codable {
     public let fundID: String
     public let amountCents: Int
     public let cadence: RecurringCadence
+    public let startDate: String?
+    public let billingDayOfMonth: Int?
 
     public init(
         clientAttemptID: String,
         churchSlug: String,
         fundID: String,
         amountCents: Int,
-        cadence: RecurringCadence
+        cadence: RecurringCadence,
+        startDate: String? = nil,
+        billingDayOfMonth: Int? = nil
     ) {
         self.clientAttemptID = clientAttemptID
         self.churchSlug = churchSlug
         self.fundID = fundID
         self.amountCents = amountCents
         self.cadence = cadence
+        self.startDate = startDate
+        self.billingDayOfMonth = billingDayOfMonth
     }
 
     /// A fresh id, long enough that two are never the same and short enough for
@@ -128,9 +138,8 @@ public enum RecurringPhase: Equatable, Sendable {
     /// The sheet finished. The gift is started and the server has not confirmed
     /// the first payment — the wording must never say "active".
     case started(RecurringAttempt)
-    /// The person dismissed the sheet. Nothing was charged and nothing renews:
-    /// a subscription whose first invoice is unpaid is `incomplete`, and Stripe
-    /// expires it rather than charging later.
+    /// The person dismissed the sheet. An immediate unpaid subscription expires;
+    /// a future subscription without a saved method cancels at its start date.
     case cancelled(RecurringAttempt)
     case failed(RecurringFailure, RecurringAttempt?)
 }
@@ -192,4 +201,28 @@ public func recurringGiftNotice(_ raw: String) -> String? {
     case .paused: return L.givingRecurringPaused
     case .unknown: return nil
     }
+}
+
+
+/// First scheduled charge, matching the server's month-end clamping.
+public func recurringFirstGiftDate(start: Date, monthlyDay: Int?, now: Date = Date(), calendar: Calendar = .current) -> Date? {
+    let earliest = calendar.startOfDay(for: start)
+    guard earliest > calendar.startOfDay(for: now) else { return nil }
+    guard let day = monthlyDay else { return earliest }
+    let parts = calendar.dateComponents([.year, .month], from: earliest)
+    guard let monthStart = calendar.date(from: parts) else { return nil }
+    func candidate(_ month: Date) -> Date {
+        let lastDay = calendar.range(of: .day, in: .month, for: month)!.count
+        return calendar.date(byAdding: .day, value: min(day, lastDay) - 1, to: month)!
+    }
+    let first = candidate(monthStart)
+    return first >= earliest ? first : candidate(calendar.date(byAdding: .month, value: 1, to: monthStart)!)
+}
+
+public func recurringDateOnly(_ date: Date, timeZone: TimeZone = .current) -> String {
+    let formatter = DateFormatter()
+    formatter.locale = Locale(identifier: "en_US_POSIX")
+    formatter.dateFormat = "yyyy-MM-dd"
+    formatter.timeZone = timeZone
+    return formatter.string(from: date)
 }

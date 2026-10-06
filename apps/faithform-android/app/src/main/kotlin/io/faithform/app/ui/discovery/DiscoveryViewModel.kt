@@ -56,6 +56,7 @@ class DiscoveryViewModel(
     }
 
     fun updateQuery(value: String) {
+        searchGeneration.incrementAndGet()
         _query.value = value
         typedQueries.tryEmit(value)
     }
@@ -78,6 +79,14 @@ class DiscoveryViewModel(
             delay(SEARCH_DEBOUNCE_MILLIS)
             searchNow(trimmed, allowEmpty = false)
         }
+    }
+
+    /** Warm the public default list without requesting device location. */
+    fun prepare() {
+        if (_query.value.isNotBlank() || _phase.value != DiscoveryPhase.Idle) return
+        // Change phase before launching so simultaneous hosts cannot duplicate it.
+        _phase.value = DiscoveryPhase.Searching
+        viewModelScope.launch { searchNow("", allowEmpty = true) }
     }
 
     /** Manual search (IME submit). Requires no location permission at all. */

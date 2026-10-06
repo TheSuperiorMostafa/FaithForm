@@ -133,6 +133,8 @@ public actor GivingClient {
                 fundId: attempt.fundID,
                 amountCents: attempt.amountCents,
                 interval: attempt.cadence.wireValue,
+                startDate: attempt.startDate,
+                billingDayOfMonth: attempt.billingDayOfMonth,
                 clientAttemptId: attempt.clientAttemptID
             ),
             as: RecurringGiftSession.self

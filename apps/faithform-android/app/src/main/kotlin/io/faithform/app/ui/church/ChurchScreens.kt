@@ -111,6 +111,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
@@ -1273,7 +1274,12 @@ private fun SocialButton(platform: SocialPlatform, onClick: () -> Unit) {
                 .border(1.dp, theme.palette.border, CircleShape),
             contentAlignment = Alignment.Center,
         ) {
-            Icon(platform.glyph, contentDescription = null, tint = Color.White, modifier = Modifier.size(26.dp))
+            val brandIcon = platform.brandIcon
+            if (brandIcon != null) {
+                Icon(painterResource(brandIcon), contentDescription = null, tint = Color.White, modifier = Modifier.size(26.dp))
+            } else {
+                Icon(platform.glyph, contentDescription = null, tint = Color.White, modifier = Modifier.size(26.dp))
+            }
         }
         Text(
             name,
@@ -1295,7 +1301,17 @@ private val SocialPlatform.nameRes: Int
         SocialPlatform.LINK -> R.string.social_link
     }
 
-/** System glyphs only — no trademarked logos. */
+/** Simple Icons brand marks; generic feeds and links keep system glyphs. */
+private val SocialPlatform.brandIcon: Int?
+    get() = when (this) {
+        SocialPlatform.INSTAGRAM -> R.drawable.social_instagram
+        SocialPlatform.FACEBOOK -> R.drawable.social_facebook
+        SocialPlatform.YOUTUBE -> R.drawable.social_youtube
+        SocialPlatform.TIKTOK -> R.drawable.social_tiktok
+        SocialPlatform.X -> R.drawable.social_x
+        else -> null
+    }
+
 private val SocialPlatform.glyph: ImageVector
     get() = when (this) {
         SocialPlatform.INSTAGRAM -> Icons.Outlined.CameraAlt
