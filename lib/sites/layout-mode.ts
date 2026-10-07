@@ -214,6 +214,22 @@ function rewriteOneHref(href: string, mode: SiteLayoutMode): string {
   return href;
 }
 
+/** Apply page navigation after theme defaults and manual edits have been merged. */
+export function normalizeWebsiteHrefs(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(normalizeWebsiteHrefs);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, entry]) => {
+    if (key === "href" && typeof entry === "string") {
+      const hash = entry.trim().startsWith("#") ? entry.trim().slice(1) : null;
+      const def = hash ? WEBSITE_PAGE_DEFS.find((page) =>
+        page.hash === hash || page.type === hash || page.type.replace(/_/g, "-") === hash,
+      ) : null;
+      return [key, def ? def.path : rewriteOneHref(entry, "website")];
+    }
+    return [key, normalizeWebsiteHrefs(entry)];
+  }));
+}
+
 /** Landing scroll order used when collapsing website pages back onto `/`. */
 export const LANDING_SECTION_ORDER = [
   "site_nav",

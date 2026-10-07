@@ -1,3 +1,4 @@
+import { normalizeWebsiteHrefs, parseSiteLayoutMode } from "@/lib/sites/layout-mode";
 import type {
   ErasedSectionMaster,
   ResolvedPage,
@@ -470,6 +471,13 @@ export function resolvePage(input: {
       page.metaDescription?.trim() || profile.tagline || profile.description || null,
     tokens: resolveTokens(theme, settings, index.church),
     customCss: sanitizeCustomCss(settings?.customCss),
-    sections: resolved,
+    // Layout mode governs navigation after the full cascade. Older overrides
+    // can retain landing anchors even when the stored page config uses paths.
+    sections: parseSiteLayoutMode(settings?.layoutMode) === "website"
+      ? resolved.map((section) => ({
+          ...section,
+          content: normalizeWebsiteHrefs(section.content) as Record<string, unknown>,
+        }))
+      : resolved,
   };
 }

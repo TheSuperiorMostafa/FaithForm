@@ -252,3 +252,70 @@ test("Visit includes service times and composed order survives resolution sortin
   });
   assert.deepEqual(composed.slice().sort((a, b) => a.sortOrder - b.sortOrder).map((s) => s.type), ["site_nav", "visit_cta", "service_times", "footer_map"]);
 });
+
+// A manually edited menu is merged after generated page props; normalize the
+// final content so an old landing anchor cannot undo separate-page navigation.
+test("resolved website links convert old manual and theme anchors without changing copy", async () => {
+  const { normalizeWebsiteHrefs } = await import("@/lib/sites/layout-mode");
+  const input = {
+    title: "#about",
+    links: [
+      { label: "About", href: "#about" },
+      { label: "Programs", href: "#programs-grid" },
+      { label: "Custom section", href: "#our-story" },
+      { label: "External", href: "https://example.com/#about" },
+    ],
+    cta: { label: "Visit", href: "#visit" },
+  };
+  const normalized = normalizeWebsiteHrefs(input);
+  assert.deepEqual(normalized, {
+    ...input,
+    links: [
+      { label: "About", href: "/about" },
+      { label: "Programs", href: "/programs" },
+      { label: "Custom section", href: "#our-story" },
+      { label: "External", href: "https://example.com/#about" },
+    ],
+    cta: { label: "Visit", href: "/visit" },
+  });
+  assert.equal(input.links[0].href, "#about");
+  assert.deepEqual(rewritePreviewLinks(normalized, "grace"), {
+    ...normalized as Record<string, unknown>,
+    links: [
+      { label: "About", href: "/sites/grace/about?preview=1" },
+      { label: "Programs", href: "/sites/grace/programs?preview=1" },
+      { label: "Custom section", href: "#our-story" },
+      { label: "External", href: "https://example.com/#about" },
+    ],
+    cta: { label: "Visit", href: "/sites/grace/visit?preview=1" },
+  });
+});
+
+test("separate-page navigation wins after the final override cascade, while landing still scrolls", async () => {
+  const { resolvePage } = await import("@/lib/sites/resolve");
+  const { defineSection } = await import("@/lib/sites/contract");
+  const nav = defineSection({
+    type: "site_nav", defaults: { links: [] }, Component: () => null,
+  });
+  const input = {
+    page: { id: "home", path: "/", title: null, metaDescription: null, status: "published" as const },
+    theme: { key: "test", name: "Test", tokens: {}, sectionDefaults: {
+      site_nav: { links: [{ label: "About", href: "#about" }] },
+    } },
+    profile,
+    sections: [{ id: "nav", type: "site_nav", sortOrder: 0, isVisible: true,
+      props: { links: [{ label: "About", href: "/about" }] } }],
+    overrides: [{ scope: "section" as const, pageId: null, sectionId: "nav",
+      patch: { links: [{ label: "About", href: "#about" }, { label: "Programs", href: "#programs" }] } }],
+    registry: { site_nav: nav },
+  };
+  const settings = { themeKey: "test", brandTokens: {}, customCss: null, contactEmail: null, isPublished: true };
+  const website = resolvePage({ ...input, settings: { ...settings, layoutMode: "website" } });
+  assert.deepEqual(website.sections[0].content.links, [
+    { label: "About", href: "/about" }, { label: "Programs", href: "/programs" },
+  ]);
+  const landing = resolvePage({ ...input, settings: { ...settings, layoutMode: "landing" } });
+  assert.deepEqual(landing.sections[0].content.links, input.overrides[0].patch.links);
+  const themed = resolvePage({ ...input, overrides: [], sections: [{ ...input.sections[0], props: {} }], settings: { ...settings, layoutMode: "website" } });
+  assert.deepEqual(themed.sections[0].content.links, [{ label: "About", href: "/about" }]);
+});
