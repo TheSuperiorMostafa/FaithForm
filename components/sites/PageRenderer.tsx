@@ -19,6 +19,7 @@ export function PageRenderer({ page, website }: { page: ResolvedPage; website?: 
     <div
       className="site-page"
       data-theme={page.themeKey}
+      data-layout={website ? "website" : "landing"}
       style={page.tokens as React.CSSProperties}
     >
       <div data-site={page.slug}>
@@ -35,7 +36,7 @@ export function PageRenderer({ page, website }: { page: ResolvedPage; website?: 
           const { Component } = master;
           return (
             <Fragment key={section.ctx.id}>
-              {website && website.path !== "/" && (index === 0 && section.type !== "site_nav" || index === 1 && page.sections[0]?.type === "site_nav") ? <WebsitePageIntro website={website} /> : null}
+              {website && website.path !== "/" && (index === 0 && section.type !== "site_nav" || index === 1 && page.sections[0]?.type === "site_nav") ? <WebsitePageIntro website={website} page={page} /> : null}
               {website && (section.type === "contact_band" || section.type === "footer_map" && !page.sections.some((item) => item.type === "contact_band")) ? <WebsitePageExplore page={page} website={website} /> : null}
               <Component
                 content={section.type === "footer_map" && page.themeKey === "light" ? { ...section.content, surface: "canvas-alt" } : section.content}

@@ -28,7 +28,7 @@ export default async function CheckinStatsPage({
   const page = Number.isFinite(requestedPage) ? Math.max(1, Math.min(10000, Math.floor(requestedPage))) : 1;
   const limit = showAll ? 50 : 10;
   const offset = showAll ? (page - 1) * limit : 0;
-  const weeks = Math.min(Math.max(Number(weeksParam) || 8, 4), 26);
+  const weeks = Math.floor(Math.min(Math.max(Number(weeksParam) || 8, 4), 26));
 
   const supabase = createClient();
   const endWeekStart = serviceWeekStart(auth.churchTimezone);
@@ -40,6 +40,11 @@ export default async function CheckinStatsPage({
     // Not strict: if only the log fails, the numbers still show.
     listNoCodeReleases(auth.churchId, { sinceServiceDate, limit, offset }, supabase),
   ]);
+
+  // A stale page link must not claim that no children were released without a code.
+  if (showAll && !noCode.failed && page > Math.max(1, Math.ceil(noCode.total / limit))) {
+    redirect(`/dashboard/checkin/stats?weeks=${weeks}&releases=all&page=${Math.max(1, Math.ceil(noCode.total / limit))}`);
+  }
 
   return (
     <div className="flex w-full flex-col gap-8">

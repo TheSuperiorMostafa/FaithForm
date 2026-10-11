@@ -1,3 +1,4 @@
+import { isReportPeriodComplete, parseMonthParam, monthSlug } from "@/lib/utils/reports";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { computeHoursSaved, inHoursSavedWindow } from "@/lib/reports/hours-saved";
 
@@ -56,6 +57,14 @@ export async function getChurchName(
   return data.name;
 }
 
+export async function getReportTimeZone(supabase: SupabaseClient, churchId: string): Promise<string> {
+  const { data, error } = await supabase.from("churches").select("timezone").eq("id", churchId).maybeSingle();
+  if (error || !data) throw new Error("Unable to load the report calendar.");
+  const zone = data?.timezone || "America/New_York";
+  new Intl.DateTimeFormat("en-US", { timeZone: zone });
+  return zone;
+}
+
 function monthKeyFromDate(date: Date): string {
   return `${date.getFullYear()}-${date.getMonth() + 1}`;
 }
@@ -75,6 +84,8 @@ export async function getAttendanceReportMonths(
     return [];
   }
 
+  const timeZone = await getReportTimeZone(supabase, churchId);
+  const now = new Date();
   const buckets = new Map<
     string,
     { year: number; month: number; presentSum: number; count: number }
@@ -98,6 +109,7 @@ export async function getAttendanceReportMonths(
   }
 
   return Array.from(buckets.values())
+    .filter(b => isReportPeriodComplete(parseMonthParam(monthSlug(b.year, b.month))!, now, timeZone))
     .map((b) => ({
       year: b.year,
       month: b.month,
@@ -182,11 +194,14 @@ export async function getMonthlyReportMonths(
     addMonthKey(monthKeys, row.created_at as string);
   }
 
+  const timeZone = await getReportTimeZone(supabase, churchId);
+  const now = new Date();
   const months = Array.from(monthKeys)
     .map((key) => {
       const [year, month] = key.split("-").map(Number);
       return { year, month };
     })
+    .filter(m => isReportPeriodComplete(parseMonthParam(monthSlug(m.year, m.month))!, now, timeZone))
     .sort((a, b) => b.year - a.year || b.month - a.month);
 
   const results: MonthlyReportMonth[] = [];

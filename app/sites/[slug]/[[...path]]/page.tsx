@@ -8,7 +8,10 @@ import {
   normalizeSitePath,
   parseSiteLayoutMode,
   rewritePreviewLinks,
+  websiteSupportingPaths,
+  websitePageDefForPath,
 } from "@/lib/sites/layout-mode";
+import { formatCityLine, formatServiceTime } from "@/lib/sites/format";
 import { getSiteBundle } from "@/lib/sites/queries";
 import { SECTION_REGISTRY } from "@/lib/sites/registry";
 import { resolvePage } from "@/lib/sites/resolve";
@@ -141,6 +144,28 @@ export default async function ChurchSitePage({ params, searchParams }: PageProps
     registry: SECTION_REGISTRY,
   });
 
+  if (loaded.layoutMode === "website") {
+    // Resolve each page in its own override context so churches' hand edits
+    // survive when that content also supports another page.
+    const supporting = await Promise.all(websiteSupportingPaths(path).map(async (relatedPath) => {
+      const related = await getSiteBundle(slug, relatedPath);
+      if (!related || (related.page.status !== "published" && !isPreview)) return [];
+      return resolvePage({
+        page: related.page,
+        theme: related.theme,
+        settings: related.settings,
+        sections: related.sections,
+        overrides: related.overrides,
+        profile: related.profile,
+        registry: SECTION_REGISTRY,
+      }).sections.filter((section) => section.type === websitePageDefForPath(relatedPath)?.type);
+    }));
+    const present = new Set(page.sections.map((section) => section.type));
+    const extra = supporting.flat().filter((section) => !present.has(section.type));
+    const footerIndex = page.sections.findIndex((section) => section.type === "contact_band" || section.type === "footer_map");
+    page.sections.splice(footerIndex < 0 ? page.sections.length : footerIndex, 0, ...extra);
+  }
+
   if (isPreview) {
     page.sections = page.sections.map((section) => ({
       ...section,
@@ -155,6 +180,11 @@ export default async function ChurchSitePage({ params, searchParams }: PageProps
     path,
     churchName: bundle.profile.name,
     coverImageUrl: bundle.profile.coverImageUrl,
+    location: [bundle.profile.address, formatCityLine(bundle.profile.city, bundle.profile.state, bundle.profile.zip)].filter(Boolean).join(", "),
+    serviceTimes: bundle.profile.serviceTimes.flatMap((time) => {
+      const clock = formatServiceTime(time.startTime);
+      return clock ? [`${time.label} · ${clock}`] : [];
+    }),
     previewSlug: isPreview ? slug : undefined,
   } : undefined} />;
 }

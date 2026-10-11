@@ -1,3 +1,4 @@
+import { getReportTimeZone } from "@/lib/queries/library";
 import { renderToBuffer, type DocumentProps } from "@react-pdf/renderer";
 import { NextResponse } from "next/server";
 import { createElement, type ReactElement } from "react";
@@ -7,12 +8,13 @@ import { getPresenceByDate, isSundayIsoDate } from "@/lib/attendance/presence";
 import { getChurchName } from "@/lib/queries/library";
 import {
   buildAttendanceComparisonMetrics,
+  buildAttendancePeriodGrowth,
   formatAttendanceTableDate,
 } from "@/lib/reports/attendance-metrics";
 import { featureAccessDenied } from "@/lib/features/guard";
 import { requireChurchContext } from "@/lib/reports/auth";
 import { createClient } from "@/lib/supabase/server";
-import { parseAttendancePeriod } from "@/lib/utils/reports";
+import { parseAttendancePeriod, isReportPeriodComplete } from "@/lib/utils/reports";
 
 export const runtime = "nodejs";
 
@@ -39,6 +41,10 @@ export async function GET(
 
   const denied = await featureAccessDenied("attendance", supabase);
   if (denied) return denied;
+  const timeZone = await getReportTimeZone(supabase, ctx.churchId);
+  if (!isReportPeriodComplete(parsed, new Date(), timeZone)) {
+    return NextResponse.json({ error: "This report is available after the period ends." }, { status: 409 });
+  }
 
   const { churchId } = ctx;
 
@@ -111,6 +117,7 @@ export async function GET(
     parsed.month,
   );
 
+  const periodComparison = buildAttendancePeriodGrowth(allRows, parsed.start, parsed.end);
   const reportDate = new Intl.DateTimeFormat("en-US", {
     month: "short",
     day: "2-digit",
@@ -125,7 +132,10 @@ export async function GET(
       metrics,
       reportDate,
       annual: parsed.kind === "year",
-      periodAverage: parsed.kind === "month" ? undefined : (weeks.length ? weeks.reduce((sum, row) => sum + (row.morningWorship ?? 0), 0) / weeks.length : null),
+      periodAverage: parsed.kind === "month" ? undefined : periodComparison.average,
+      previousPeriodAverage: periodComparison.previousAverage,
+      periodGrowthPct: periodComparison.growthPct,
+      comparisonLabel: parsed.kind === "year" ? "Previous year" : parsed.kind === "quarter" ? "Previous quarter" : "Previous month",
     }) as ReactElement<DocumentProps>,
   );
 

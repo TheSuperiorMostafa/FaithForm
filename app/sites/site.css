@@ -1630,7 +1630,7 @@
   gap: 48px;
   border-bottom: 1px solid var(--site-rule);
 }
-.site-page-intro:not(:has(.site-page-intro-photo)) { grid-template-columns: 1fr; }
+.site-page-intro:not(:has(.site-page-intro-photo, .site-page-visit-details)) { grid-template-columns: 1fr; }
 .site-page-breadcrumb { display: inline-flex; min-height: 44px; align-items: center; margin-bottom: 24px; }
 .site-page-intro-copy { max-width: 44ch; color: var(--site-fg-soft); font-size: 20px; line-height: 1.6; margin: 24px 0 0; }
 .site-page-intro-photo { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--site-radius-panel); }
@@ -1650,3 +1650,37 @@
   .site-page-card { transition: none; }
   .site-page-card:hover { transform: none; }
 }
+
+/* Page navigation sits alongside the introduction, with comfortable tap targets. */
+.site-page-contents { display: flex; flex-wrap: wrap; gap: 8px 12px; margin-top: 32px; }
+.site-page-contents-label { width: 100%; font-size: 12px; text-transform: uppercase; letter-spacing: .12em; color: var(--site-fg-faint); }
+.site-page-contents-link { display: inline-flex; align-items: center; gap: 16px; min-height: 44px; padding: 10px 16px; border: 1px solid var(--site-rule); border-radius: var(--site-radius-btn); color: var(--site-fg); text-decoration: none; font-size: 14px; }
+.site-page-contents-link:hover { background: var(--site-canvas-alt); }
+.site-page-contents-link:focus-visible { outline: 2px solid var(--site-gold); outline-offset: 3px; }
+[data-layout="website"] .site-section { scroll-margin-top: 100px; }
+.site-footer-body { border-top: 1px solid var(--site-rule); }
+.site-surface-canvas-alt .site-footer-sub,
+.site-surface-canvas-alt .site-footer-col-head { color: var(--site-eyebrow); }
+.site-footer-grid:not(:has(.site-map)) { grid-template-columns: 1fr; }
+.site-page-intro > div, .site-page-card { min-width: 0; overflow-wrap: anywhere; }
+@media (min-width: 761px) and (max-width: 1024px) {
+  .site-page-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.site-page-visit-details { padding: 36px; border: 1px solid var(--site-rule); border-radius: var(--site-radius-panel); background: var(--site-canvas-alt); }
+.site-page-visit-details ul { list-style: none; padding: 0; margin: 28px 0; }
+.site-page-visit-details li { padding: 12px 0; border-bottom: 1px solid var(--site-rule); }
+.site-page-visit-details p { color: var(--site-fg-soft); line-height: 1.7; margin-bottom: 28px; }
+.site-page-intro[data-page="/vision"] { grid-template-columns: 1fr; text-align: center; }
+.site-page-intro[data-page="/vision"] .site-page-intro-copy { margin-left: auto; margin-right: auto; }
+.site-page-intro[data-page="/vision"] .site-page-contents { justify-content: center; }
+.site-page-intro[data-page="/vision"] .site-page-intro-photo { max-height: 360px; aspect-ratio: 16 / 6; }
+@media (max-width: 560px) { .site-page-visit-details { padding: 24px; } }
+
+/* Separate pages begin on a light canvas, so the photo-overlay nav needs ink. */
+[data-layout="website"][data-theme="light"] .site-nav { background: color-mix(in srgb, var(--site-canvas) 96%, transparent); border-bottom-color: var(--site-rule); }
+[data-layout="website"][data-theme="light"] .site-nav-title,
+[data-layout="website"][data-theme="light"] .site-nav-links,
+[data-layout="website"][data-theme="light"] .site-nav-menu-btn { color: var(--site-ink); }
+[data-layout="website"][data-theme="light"] .site-nav-sub { color: var(--site-gold); }
+[data-layout="website"][data-theme="light"] .site-nav-menu-btn { border-color: color-mix(in srgb, var(--site-ink) 20%, transparent); }

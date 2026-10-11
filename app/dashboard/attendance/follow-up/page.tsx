@@ -48,7 +48,7 @@ export default async function AttendanceFollowUpPage({ searchParams }: PageProps
         <EmptyState
           icon={CalendarCheck}
           title="No Sundays counted yet"
-          description="Once a Sunday is counted by name, the people who missed it show up here."
+          description="Once a Sunday is counted by name, welcome its first-time guests or text the people who missed."
         />
       ) : (
         <section className="flex min-w-0 flex-col gap-3" aria-label="Counted Sundays">

@@ -317,3 +317,19 @@ export function rewritePreviewLinks(value: unknown, slug: string): unknown {
     return [key, rewritePreviewLinks(entry, slug)];
   }));
 }
+
+/** Related content gives each separate page a complete, purposeful reading flow. */
+export function websiteSupportingPaths(path: string): string[] {
+  const paths: Record<string, string[]> = {
+    "/": ["/about", "/events"],
+    "/about": ["/vision", "/staff"],
+    "/vision": ["/programs"],
+    "/staff": ["/vision"],
+    "/programs": ["/events"],
+    "/visit": ["/programs"],
+    "/sermons": ["/visit"],
+    "/give": ["/vision"],
+    "/events": ["/programs"],
+  };
+  return paths[normalizeSitePath(path)] ?? [];
+}

@@ -18,7 +18,7 @@ export default function AttendanceFollowUpDateLoading() {
         </span>
         <PageHeader
           title={<Skeleton className="h-9 w-72 max-w-full sm:h-10" />}
-          description="Send a friendly text to people who missed. Nothing is sent until you choose."
+          description="Welcome first-time guests or text people who missed. Nothing is sent until you choose."
           secondary={
             <span aria-hidden className={buttonVariants({ variant: "outline" })}>
               <History aria-hidden />
@@ -27,6 +27,27 @@ export default function AttendanceFollowUpDateLoading() {
           }
         />
       </div>
+
+      <section className="flex w-full flex-col gap-4 rounded-2xl border border-border bg-card p-5 text-left shadow-card dark:shadow-none">
+        <div className="flex flex-col gap-1">
+          <Skeleton className="h-7 w-48" />
+          <p className="text-[15px] text-muted-foreground">
+            Tell the pastor, or send a welcome text to guests who left a phone number.
+          </p>
+        </div>
+        <div className="flex flex-col gap-2">
+          {Array.from({ length: 2 }).map((_, index) => (
+            <div key={index} className="flex min-h-12 items-center justify-between gap-3 rounded-xl border border-border bg-background px-4 py-2">
+              <Skeleton className="h-6 w-40 max-w-full" />
+              <Skeleton className="h-5 w-28" />
+            </div>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <span aria-hidden className={buttonVariants({ size: "lg" })}>Tell pastor</span>
+          <span aria-hidden className={buttonVariants({ size: "lg", variant: "outline" })}>Send welcome</span>
+        </div>
+      </section>
 
       <div className="flex w-full flex-col gap-6">
         <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_24rem] lg:items-start">
