@@ -303,12 +303,14 @@ test("adding someone can mark them as a first-time guest for this Sunday", () =>
   const wizard = read("app/dashboard/attendance/(record)/[date]/attendance-wizard.tsx");
   assert.match(wizard, /First time guest/);
   assert.match(wizard, /isFirstTimeGuest: firstTimeGuestIds\.has\(m\.id\)/);
-  assert.match(wizard, /<FirstTimeGuestPanel/);
+  assert.doesNotMatch(wizard, /<FirstTimeGuestPanel/);
+  assert.match(wizard, /Open Follow-up/);
 
   const actions = read("app/dashboard/attendance/(record)/[date]/actions.ts");
   assert.match(actions, /is_first_time_guest: entry\.isFirstTimeGuest === true/);
-  assert.match(actions, /export async function notifyPastorOfFirstTimeGuests/);
-  assert.match(actions, /export async function sendWelcomeTextsToGuests/);
+  const guestActions = read("app/dashboard/attendance/follow-up/guest-actions.ts");
+  assert.match(guestActions, /export async function notifyPastorOfFirstTimeGuests/);
+  assert.match(guestActions, /export async function sendWelcomeTextsToGuests/);
   // Absentee follow-up stays on its own path.
   assert.doesNotMatch(actions, /sendAttendanceFollowUpTexts/);
 });
@@ -333,7 +335,7 @@ test("pastor and welcome messages are validated in plain church language", () =>
     /Ann Lee/,
   );
 
-  const panel = read("app/dashboard/attendance/(record)/[date]/first-time-guest-panel.tsx");
+  const panel = read("app/dashboard/attendance/follow-up/[date]/first-time-guest-panel.tsx");
   assert.match(panel, /Goes to your church phone in Settings/);
   assert.match(panel, /confirmLabel: "Tell pastor"/);
   assert.match(panel, /Send welcome/);
@@ -520,4 +522,37 @@ test("refresh preserves guest flags and isolates drafts by church and account", 
   assert.notEqual(draftKey("2026-09-20", false, "church:user-a"), draftKey("2026-09-20", false, "church:user-b"));
   const wizard = readFileSync("app/dashboard/attendance/(record)/[date]/attendance-wizard.tsx", "utf8");
   assert.match(wizard, /if \(!draftReady \|\| saved\) return/);
+});
+
+
+test("guest messaging belongs to Follow-up, including Sundays with no absentees", () => {
+  const summary = read("app/dashboard/attendance/(record)/[date]/attendance-summary.tsx");
+  const wizard = read("app/dashboard/attendance/(record)/[date]/attendance-wizard.tsx");
+  const followUp = read("app/dashboard/attendance/follow-up/[date]/page.tsx");
+  assert.doesNotMatch(summary, /FirstTimeGuestPanel/);
+  assert.doesNotMatch(wizard, /FirstTimeGuestPanel/);
+  assert.match(summary, /stillToText > 0 \|\| hasGuests/);
+  assert.match(wizard, /saved.absent > 0 \|\| hasGuests/);
+  assert.match(followUp, /<FirstTimeGuestPanel/);
+  assert.match(followUp, /entry.is_first_time_guest && entry.member/);
+});
+
+test("guest sends require Follow-up access and only load this church's saved guests", () => {
+  const actions = read("app/dashboard/attendance/follow-up/guest-actions.ts");
+  assert.match(actions, /featureActionError\("attendance_follow_up", supabase\)/);
+  assert.match(actions, /getChurchAuth\(supabase\)/);
+  assert.match(actions, /churchId: auth.churchId/);
+  for (const name of ["notifyPastorOfFirstTimeGuests", "sendWelcomeTextsToGuests"]) {
+    const start = actions.indexOf(`export async function ${name}`);
+    const end = actions.indexOf("\nexport async function", start + 1);
+    const body = actions.slice(start, end === -1 ? undefined : end);
+    assert.match(body, /const context = await resolveGuestContext\(\)/);
+    assert.match(body, /if \(!context.ok\) return/);
+    assert.match(body, /loadFirstTimeGuests\(\s*context.supabase,\s*context.churchId,/);
+  }
+  const loader = actions.slice(actions.indexOf("async function loadFirstTimeGuests"));
+  assert.equal((loader.match(/\.eq\("church_id", churchId\)/g) ?? []).length, 2);
+  assert.match(loader, /\.eq\("record_id", record.id\)/);
+  assert.match(loader, /\.in\("member_id", memberIds\)/);
+  assert.match(loader, /if \(!row.is_first_time_guest \|\| !row.member_id\) continue/);
 });

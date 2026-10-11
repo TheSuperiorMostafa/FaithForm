@@ -1,6 +1,8 @@
 import "@/app/sites/site.css";
 import "@/app/sites/themes/wood.css";
 import "@/app/sites/themes/light.css";
+import { getSiteBundle } from "@/lib/sites/queries";
+import { resolveTokens } from "@/lib/sites/resolve";
 import { SITE_FONTS_HREF } from "@/lib/sites/fonts";
 
 /**
@@ -13,13 +15,16 @@ import { SITE_FONTS_HREF } from "@/lib/sites/fonts";
  * deploy. Pinning them at build time would move that decision back into code.
  * `SITE_FONTS_HREF` is the union of the shipped themes' faces.
  */
-export default function SiteLayout({ children }: { children: React.ReactNode }) {
+export default async function SiteLayout({ children, params }: { children: React.ReactNode; params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const bundle = await getSiteBundle(slug, "/");
+  const tokens = bundle ? resolveTokens(bundle.theme, bundle.settings, bundle.overrides.find((row) => row.scope === "church") ?? null) : {};
   return (
     <>
       <link rel="preconnect" href="https://fonts.googleapis.com" />
       <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
       <link rel="stylesheet" href={SITE_FONTS_HREF} />
-      {children}
+      <div className="site-loading-context" data-theme={bundle?.theme.key} style={tokens as React.CSSProperties}>{children}</div>
     </>
   );
 }

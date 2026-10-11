@@ -8,7 +8,6 @@ import { toast } from "sonner";
 import { Checkbox } from "@base-ui/react/checkbox";
 
 import { addMember, submitAttendance } from "./actions";
-import { FirstTimeGuestPanel } from "./first-time-guest-panel";
 import {
   clearDraft,
   draftHasWork,
@@ -34,7 +33,6 @@ import { Label } from "@/components/ui/label";
 import { PhoneInput } from "@/components/ui/phone-input";
 import { SuccessState } from "@/components/ui/success-state";
 import { Textarea } from "@/components/ui/textarea";
-import type { FirstTimeGuest } from "@/lib/attendance/first-time-guests";
 import { describeNameCount, parseHeadcount } from "@/lib/attendance/headcount";
 import { describePresence, type PresenceMethod } from "@/lib/attendance/presence";
 import type { AttendanceMember } from "@/lib/queries/attendance";
@@ -74,8 +72,6 @@ type AttendanceWizardProps = {
   canFollowUp?: boolean;
   /** Member ids already marked as first-time guests when editing a saved Sunday. */
   initialFirstTimeGuestIds?: string[];
-  /** Church name for welcome text defaults after save. */
-  churchName?: string;
 };
 
 type SortOption = "first-name" | "last-name" | "most-attended";
@@ -107,7 +103,6 @@ export function AttendanceWizard({
   numberAllowed = true,
   canFollowUp = false,
   initialFirstTimeGuestIds = [],
-  churchName = "our church",
 }: AttendanceWizardProps) {
   const isCheckedIn = (memberId: string) => Boolean(checkedIn[memberId]?.length);
   const startingStatus = (memberId: string): MemberStatus =>
@@ -141,7 +136,7 @@ export function AttendanceWizard({
         kind: "names";
         present: number;
         absent: number;
-        firstTimeGuests: FirstTimeGuest[];
+        firstTimeGuestCount: number;
       }
     | { kind: "number"; count: number }
     | null
@@ -399,17 +394,10 @@ export function AttendanceWizard({
           return;
         }
 
-        const firstTimeGuests: FirstTimeGuest[] = members
-          .filter((m) => firstTimeGuestIds.has(m.id))
-          .map((m) => ({
-            memberId: m.id,
-            firstName: m.first_name,
-            lastName: m.last_name,
-            phone: m.phone,
-          }));
+        const firstTimeGuestCount = members.filter((m) => firstTimeGuestIds.has(m.id)).length;
 
         clearDraft(storageKey);
-        setSaved({ kind: "names", present, absent, firstTimeGuests });
+        setSaved({ kind: "names", present, absent, firstTimeGuestCount });
       } catch {
         setSubmitError("We couldn't save attendance. Your marks are still on this page. Try again.");
       }
@@ -421,7 +409,7 @@ export function AttendanceWizard({
       saved.kind === "number"
         ? `${dayLabel}: ${people(saved.count)} came.`
         : `${dayLabel}: ${describeNameCount(saved.present, saved.absent)}.`;
-    const hasGuests = saved.kind === "names" && saved.firstTimeGuests.length > 0;
+    const hasGuests = saved.kind === "names" && saved.firstTimeGuestCount > 0;
     return (
       <div className="flex w-full flex-col gap-8">
         <SuccessState
@@ -429,12 +417,12 @@ export function AttendanceWizard({
           description={summary}
           actions={
             <>
-              {canFollowUp && saved.kind === "names" && saved.absent > 0 ? (
+              {canFollowUp && saved.kind === "names" && (saved.absent > 0 || hasGuests) ? (
                 <Link
                   href={`/dashboard/attendance/follow-up/${serviceDate}`}
                   className={buttonVariants({ size: "lg" })}
                 >
-                  Text people who missed
+                  {hasGuests ? "Open Follow-up" : "Text people who missed"}
                 </Link>
               ) : null}
               <Link
@@ -442,26 +430,16 @@ export function AttendanceWizard({
                 className={buttonVariants({
                   size: "lg",
                   variant:
-                    canFollowUp && saved.kind === "names" && saved.absent > 0
+                    canFollowUp && saved.kind === "names" && (saved.absent > 0 || hasGuests)
                       ? "outline"
-                      : hasGuests
-                        ? "outline"
-                        : "default",
+                      : "default",
                 })}
               >
                 Back to Sunday count
               </Link>
             </>
           }
-        >
-          {hasGuests ? (
-            <FirstTimeGuestPanel
-              serviceDate={serviceDate}
-              guests={saved.firstTimeGuests}
-              churchName={churchName}
-            />
-          ) : null}
-        </SuccessState>
+        />
       </div>
     );
   }
@@ -841,7 +819,7 @@ export function AttendanceWizard({
               <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className="text-base font-semibold text-foreground">First time guest</span>
                 <span className="text-[15px] text-muted-foreground">
-                  So you can tell the pastor and send a welcome text after you save.
+                  Tell the pastor or send a welcome text from Follow-up after you save.
                 </span>
               </span>
             </label>

@@ -167,3 +167,20 @@ export function formatAverage(value: number | null): string {
 }
 
 export { monthKey };
+
+/** Compare equal calendar periods using every recorded count, including zero. */
+export function buildAttendancePeriodGrowth(
+  rows: { serviceDate: string; morningWorship: number | null }[],
+  start: Date,
+  end: Date,
+): { average: number | null; previousAverage: number | null; growthPct: number | null } {
+  const durationMonths = (end.getFullYear() - start.getFullYear()) * 12 + end.getMonth() - start.getMonth();
+  const previousStart = new Date(start.getFullYear(), start.getMonth() - durationMonths, 1);
+  const values = (from: Date, to: Date) => rows.filter(row => row.morningWorship != null && withinRange(row.serviceDate,
+    { year: from.getFullYear(), month: from.getMonth() + 1 },
+    { year: to.getFullYear(), month: to.getMonth() + 1 },
+  )).map(row => row.morningWorship!);
+  const current = average(values(start, end));
+  const previous = average(values(previousStart, start));
+  return { average: current, previousAverage: previous, growthPct: growthPct(current, previous) };
+}

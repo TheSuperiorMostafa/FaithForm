@@ -25,7 +25,7 @@ export function parseMonthParam(param: string): ParsedMonth | null {
 
   const year = Number.parseInt(match[1], 10);
   const month = Number.parseInt(match[2], 10);
-  if (month < 1 || month > 12) return null;
+  if (year < 1900 || year > 9998 || month < 1 || month > 12) return null;
 
   const start = new Date(year, month - 1, 1);
   const end = new Date(year, month, 1);
@@ -79,4 +79,20 @@ export function parseAttendancePeriod(param: string): (ParsedMonth & { kind: "mo
     startDateIso: `${monthSlug(year, month)}-01`,
     endDateIso: `${monthSlug(end.getFullYear(), end.getMonth() + 1)}-01`,
   };
+}
+
+/** A calendar report becomes available at midnight after its last day. */
+export function isReportPeriodComplete(period: Pick<ParsedMonth, "endDateIso">, now = new Date(), timeZone = "America/New_York"): boolean {
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(now);
+  const part = (type: string) => parts.find(p => p.type === type)?.value;
+  const today = `${part("year")}-${part("month")}-${part("day")}`;
+  return period.endDateIso <= today;
+}
+
+export function formatHoursComparison(current: number, previous: number): string {
+  const baseline = `${previous.toFixed(2)} hours last month`;
+  if (previous === 0) return `Last month: ${baseline}. Growth percentage is unavailable with a zero baseline.`;
+  const pct = ((current - previous) / previous) * 100;
+  if (pct === 0) return `Unchanged from ${baseline} (0.00%).`;
+  return `${pct > 0 ? "Up" : "Down"} from ${baseline} (${pct > 0 ? "+" : ""}${pct.toFixed(2)}%).`;
 }

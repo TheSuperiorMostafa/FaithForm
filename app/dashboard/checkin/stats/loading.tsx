@@ -59,7 +59,7 @@ export default function CheckinStatsLoading() {
           }
         />
         <ul className="divide-y divide-border rounded-3xl border border-border bg-card p-2 shadow-sm">
-          {Array.from({ length: 3 }).map((_, row) => (
+          {Array.from({ length: 10 }).map((_, row) => (
             <li key={row} className="flex min-h-[52px] items-center gap-3 px-3 py-2">
               <Skeleton className="size-9 shrink-0 rounded-full" />
               <div className="min-w-0 flex-1 space-y-1.5">

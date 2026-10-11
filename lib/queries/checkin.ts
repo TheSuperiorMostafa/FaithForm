@@ -796,8 +796,8 @@ export async function getLocationStats(
 // RELEASES WITHOUT A PICKUP CODE
 // ---------------------------------------------------------------------------
 
-/** The most the Reports log lists at once; the count above it is still exact. */
-export const NO_CODE_RELEASE_LIMIT = 200;
+/** The recent log stays compact; the full log requests its own page size. */
+export const NO_CODE_RELEASE_LIMIT = 10;
 
 type NoCodeReleaseJoin = {
   id: string;
@@ -871,6 +871,7 @@ export async function listNoCodeReleases(
     .eq("checkout_method", "override")
     .gte("local_service_date", options.sinceServiceDate)
     .order("checked_out_at", { ascending: false })
+    .order("id", { ascending: false })
     .range(options.offset ?? 0, (options.offset ?? 0) + (options.limit ?? NO_CODE_RELEASE_LIMIT) - 1);
 
   if (error) {

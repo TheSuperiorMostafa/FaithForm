@@ -392,26 +392,27 @@ type HeroMetricProps = {
   value: string;
   label: string;
   subtitle?: string;
+  color?: string;
 };
 
-export function HeroMetric({ value, label, subtitle }: HeroMetricProps) {
+export function HeroMetric({ value, label, subtitle, color }: HeroMetricProps) {
   return (
     <View style={styles.heroBlock}>
-      <Text style={styles.heroValue}>{value}</Text>
+      <Text style={[styles.heroValue, color ? { color } : {}]}>{value}</Text>
       <Text style={styles.heroLabel}>{label}</Text>
       {subtitle ? <Text style={styles.heroSubtitle}>{subtitle}</Text> : null}
     </View>
   );
 }
 
-type KpiItem = { value: string; label: string };
+type KpiItem = { value: string; label: string; color?: string };
 
 export function KpiGrid({ items }: { items: KpiItem[] }) {
   return (
     <View style={styles.kpiGrid}>
       {items.map((item) => (
         <View key={item.label} style={styles.kpiCard}>
-          <Text style={styles.kpiValue}>{item.value}</Text>
+          <Text style={[styles.kpiValue, item.color ? { color: item.color } : {}]}>{item.value}</Text>
           <Text style={styles.kpiLabel}>{item.label}</Text>
         </View>
       ))}
@@ -625,14 +626,14 @@ export function BodyColumns({
   );
 }
 
-type LifetimeStat = { value: string; label: string };
+type LifetimeStat = { value: string; label: string; color?: string };
 
 export function LifetimeStatsCard({ stats }: { stats: LifetimeStat[] }) {
   return (
     <View style={styles.lifetimeCard}>
       {stats.map((stat) => (
         <View key={stat.label} style={styles.lifetimeRow}>
-          <Text style={styles.lifetimeValue}>{stat.value}</Text>
+          <Text style={[styles.lifetimeValue, stat.color ? { color: stat.color } : {}]}>{stat.value}</Text>
           <Text style={styles.lifetimeLabel}>{stat.label}</Text>
         </View>
       ))}

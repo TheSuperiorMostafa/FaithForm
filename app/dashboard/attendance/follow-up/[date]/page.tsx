@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { FollowUpBoard, type FollowUpCandidate } from "./follow-up-board";
+import { FirstTimeGuestPanel } from "./first-time-guest-panel";
 import { LogLink } from "../log-link";
 import { ServiceDayHeader } from "@/components/attendance/service-day-header";
 import { sortFollowUpCandidates } from "@/lib/attendance/follow-up-order";
@@ -83,10 +84,22 @@ export default async function AttendanceFollowUpDatePage({ params }: PageProps) 
     <div className="flex w-full flex-col gap-8">
       <ServiceDayHeader
         title={formatServiceDate(selectedDate)}
-        description="Send a friendly text to people who missed. Nothing is sent until you choose."
+        description="Welcome first-time guests or text people who missed. Nothing is sent until you choose."
         backHref="/dashboard/attendance/follow-up"
         backLabel="Back to Follow-up"
         secondary={<LogLink />}
+      />
+      <FirstTimeGuestPanel
+        serviceDate={selectedDate}
+        churchName={auth.churchName?.trim() || "our church"}
+        guests={record.entries
+          .filter((entry) => entry.is_first_time_guest && entry.member)
+          .map((entry) => ({
+            memberId: entry.member!.id,
+            firstName: entry.member!.first_name,
+            lastName: entry.member!.last_name,
+            phone: entry.member!.phone,
+          }))}
       />
       <FollowUpBoard
         selectedDate={selectedDate}

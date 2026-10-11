@@ -425,13 +425,13 @@ export function SettingsPageHeader() {
 
 function DocumentsSkeleton({ attendance = true, timeSaved = true }: { attendance?: boolean; timeSaved?: boolean }) {
   return <div className="flex flex-col gap-6">
-    {attendance && <Card><CardHeader><CardTitle>Attendance reports</CardTitle><CardDescription>Choose a period and download a PDF.</CardDescription></CardHeader>
+    {attendance && <Card><CardHeader><CardTitle>Attendance reports</CardTitle><CardDescription>Completed periods appear here. Choose one to download a PDF.</CardDescription></CardHeader>
       <CardContent className="flex flex-col gap-6">{["Monthly", "Quarterly", "Annual"].map(title => <section key={title} className="space-y-3">
         <h3 className="font-semibold">{title}</h3>
         <div className="flex flex-wrap gap-3">{[0, 1, 2].map(i => <Skeleton key={i} className="h-11 w-40 rounded-[10px]" />)}</div>
       </section>)}</CardContent>
     </Card>}
-    {timeSaved && <Card><CardHeader><CardTitle>Time saved reports</CardTitle><CardDescription>Choose a period and download a PDF.</CardDescription></CardHeader>
+    {timeSaved && <Card><CardHeader><CardTitle>Time saved reports</CardTitle><CardDescription>Completed periods appear here. Choose one to download a PDF.</CardDescription></CardHeader>
       <CardContent className="flex flex-wrap gap-3">{[0, 1, 2].map(i => <Skeleton key={i} className="h-11 w-40 rounded-[10px]" />)}</CardContent>
     </Card>}
   </div>;

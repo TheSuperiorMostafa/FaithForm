@@ -1,3 +1,5 @@
+import { cache } from "react";
+
 import { createAdminClient } from "@/lib/supabase/admin";
 import { parseSiteLayoutMode } from "@/lib/sites/layout-mode";
 import { isPublicSitePublication } from "@/lib/sites/preview-access";
@@ -97,7 +99,7 @@ export async function resolveChurchIdByHostname(
  * a church site is the slowest-loading thing in the product and each extra
  * serial round trip is felt directly.
  */
-export async function getSiteBundle(
+async function loadSiteBundle(
   slug: string,
   path = "/",
 ): Promise<SiteBundle | null> {
@@ -238,6 +240,10 @@ export async function getSiteBundle(
     contactEmail: settings?.contactEmail ?? profile.email,
   };
 }
+
+/** Deduplicate page, metadata, and loading-layout reads within one render. */
+export const getSiteBundle = cache(loadSiteBundle);
+
 
 type ProfileChildren = {
   serviceTimes: Record<string, unknown>[] | null;

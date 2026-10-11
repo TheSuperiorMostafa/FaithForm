@@ -23,6 +23,7 @@ export type MonthlyPdfProps = {
   churchName: string;
   monthLabel: string;
   hoursSavedThisMonth: number;
+  hoursComparison?: string;
   tasksCompletedThisMonth: number;
   callsHandledThisMonth: number;
   lifetimeHoursSaved: number;
@@ -37,6 +38,7 @@ export function MonthlyPdfDocument({
   churchName,
   monthLabel,
   hoursSavedThisMonth,
+  hoursComparison,
   tasksCompletedThisMonth,
   callsHandledThisMonth,
   lifetimeHoursSaved,
@@ -63,8 +65,11 @@ export function MonthlyPdfDocument({
         <HeroMetric
           value={hoursSavedThisMonth.toFixed(2)}
           label="HOURS SAVED THIS MONTH"
+          color="#15803D"
           subtitle="Your automation system ran quietly in the background handling tasks, calls, and communications so you could focus more on your ministry."
         />
+
+        {hoursComparison && <Text style={{ fontSize: 10, color: "#15803D", textAlign: "center", marginBottom: 16 }}>{hoursComparison}</Text>}
 
         <KpiGrid
           items={[
@@ -79,6 +84,7 @@ export function MonthlyPdfDocument({
             {
               value: `${lifetimeHoursSaved.toFixed(2)} hrs`,
               label: "Total hours returned",
+              color: "#15803D",
             },
           ]}
         />
@@ -116,6 +122,7 @@ export function MonthlyPdfDocument({
                   {
                     value: `${lifetimeHoursSaved.toFixed(2)} hrs`,
                     label: "Lifetime Hours Saved",
+                    color: "#15803D",
                   },
                   {
                     value: String(lifetimeRentalsBooked),

@@ -1,3 +1,4 @@
+import { getReportTimeZone } from "@/lib/queries/library";
 import { renderToBuffer, type DocumentProps } from "@react-pdf/renderer";
 import { NextResponse } from "next/server";
 import { createElement, type ReactElement } from "react";
@@ -7,7 +8,7 @@ import { getMonthlyReportData } from "@/lib/reports/monthly-data";
 import { requireChurchContext } from "@/lib/reports/auth";
 import { createAdminClientOrNull } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
-import { parseMonthParam } from "@/lib/utils/reports";
+import { parseMonthParam, isReportPeriodComplete } from "@/lib/utils/reports";
 import { featureAccessDenied } from "@/lib/features/guard";
 
 export const runtime = "nodejs";
@@ -32,6 +33,10 @@ export async function GET(
   // it cannot fetch the report by address.
   const denied = await featureAccessDenied("library", supabase);
   if (denied) return denied;
+  const timeZone = await getReportTimeZone(supabase, ctx.churchId);
+  if (!isReportPeriodComplete(parsed, new Date(), timeZone)) {
+    return NextResponse.json({ error: "This report is available after the period ends." }, { status: 409 });
+  }
 
   try {
     const data = await getMonthlyReportData(

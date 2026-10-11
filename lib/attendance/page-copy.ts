@@ -11,7 +11,7 @@ export const ATTENDANCE_COPY = {
   },
   followUp: {
     title: "Follow-up",
-    description: "Send a friendly text to people who missed a Sunday. Nothing is sent until you choose.",
+    description: "Welcome first-time guests or text people who missed a Sunday. Nothing is sent until you choose.",
   },
   followUpLog: {
     title: "Message log",

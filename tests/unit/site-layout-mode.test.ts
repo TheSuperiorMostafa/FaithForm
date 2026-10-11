@@ -15,6 +15,7 @@ import {
   sortSectionsForLanding,
   websitePageDefForPath,
   websitePageDefForType,
+  websiteSupportingPaths,
   WEBSITE_HOME_SECTION_TYPES,
   WEBSITE_PAGE_DEFS,
 } from "@/lib/sites/layout-mode";
@@ -318,4 +319,15 @@ test("separate-page navigation wins after the final override cascade, while land
   assert.deepEqual(landing.sections[0].content.links, input.overrides[0].patch.links);
   const themed = resolvePage({ ...input, overrides: [], sections: [{ ...input.sections[0], props: {} }], settings: { ...settings, layoutMode: "website" } });
   assert.deepEqual(themed.sections[0].content.links, [{ label: "About", href: "/about" }]);
+});
+
+test("separate pages compose purposeful related content without circular self-inclusion", () => {
+  assert.deepEqual(websiteSupportingPaths("/about"), ["/vision", "/staff"]);
+  assert.deepEqual(websiteSupportingPaths("/visit"), ["/programs"]);
+  assert.deepEqual(websiteSupportingPaths("/"), ["/about", "/events"]);
+  assert.deepEqual(websiteSupportingPaths("/custom"), []);
+  for (const page of WEBSITE_PAGE_DEFS) {
+    assert.ok(!websiteSupportingPaths(page.path).includes(page.path));
+    assert.ok(websiteSupportingPaths(page.path).every((path) => websitePageDefForPath(path)));
+  }
 });

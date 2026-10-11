@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import {
   notifyPastorOfFirstTimeGuests,
   sendWelcomeTextsToGuests,
-} from "./actions";
+} from "../guest-actions";
 import { Button } from "@/components/ui/button";
 import { confirmAction } from "@/components/ui/confirm-dialog";
 import { Label } from "@/components/ui/label";
@@ -43,7 +43,7 @@ function texts(n: number) {
 }
 
 /**
- * After a Sunday is saved (or on the summary), list first-time guests and
+ * On Follow-up, list first-time guests saved for a Sunday and
  * offer "Tell pastor" / "Send welcome" using the church's own texting phone.
  */
 export function FirstTimeGuestPanel({
@@ -171,7 +171,7 @@ export function FirstTimeGuestPanel({
 
   return (
     <section
-      className="flex w-full max-w-xl flex-col gap-4 rounded-2xl border border-border bg-card p-5 text-left shadow-card dark:shadow-none"
+      className="flex w-full flex-col gap-4 rounded-2xl border border-border bg-card p-5 text-left shadow-card dark:shadow-none"
       aria-labelledby="first-time-guests-heading"
     >
       <div className="flex flex-col gap-1">

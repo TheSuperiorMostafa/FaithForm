@@ -54,6 +54,8 @@ test("the public site checks page and metadata access on each request", () => {
   assert.match(page, /dynamic = "force-dynamic"/);
   assert.match(page, /generateMetadata[\s\S]*siteIsVisible\(bundle, query\.preview === "1"\)/);
   assert.match(page, /ChurchSitePage[\s\S]*siteIsVisible\(bundle, query\.preview === "1"\)/);
+  // An anonymous preview query on a public page cannot reveal related draft pages.
+  assert.match(page, /if \(!related \|\| !\(await siteIsVisible\(related, isPreview\)\)\) return \[\]/);
   const contact = readFileSync("app/api/sites/contact/route.ts", "utf8");
   assert.match(contact, /!target\.isPublished[\s\S]*canPreviewDraftSite\(target\.churchId, await getChurchAuth\(\)\)/);
 });

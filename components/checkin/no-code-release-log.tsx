@@ -15,8 +15,8 @@ import {
 } from "@/lib/checkin/release-log";
 
 /**
- * Beneath the weekly numbers: every child handed over without the family's
- * pickup code, newest first, with who released them, when, and why.
+ * Beneath the weekly numbers: recent releases without the family's pickup
+ * code, newest first, with who released them, when, and why, plus the full log.
  */
 export function NoCodeReleaseLog({
   releases,

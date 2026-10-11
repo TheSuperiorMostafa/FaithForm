@@ -88,3 +88,18 @@ test("the loading skeleton mirrors the log with a real heading", () => {
   assert.match(loading, /NO_CODE_LOG_DESCRIPTION/);
   assert.match(loading, /SkeletonContainer/);
 });
+
+
+test("reports show the newest ten with a paginated full log", () => {
+  assert.match(page, /const limit = showAll \? 50 : 10/);
+  assert.match(page, /const offset = showAll \? \(page - 1\) \* limit : 0/);
+  assert.match(page, /viewAllHref=\{showAll \? undefined :/);
+  assert.match(page, /Show latest 10/);
+  assert.match(page, /Newer releases/);
+  assert.match(page, /Older releases/);
+  assert.match(log, /See all releases without a code/);
+  assert.match(queryBody("listNoCodeReleases"), /\.range\(options.offset \?\? 0,/);
+  assert.match(queryBody("listNoCodeReleases"), /\.order\("id", \{ ascending: false \}\)/);
+  assert.match(page, /page > Math.max\(1, Math.ceil\(noCode.total \/ limit\)\)/);
+  assert.match(loading, /Array.from\(\{ length: 10 \}\)/);
+});

@@ -22,6 +22,9 @@ export type AttendancePdfProps = {
   reportDate: string;
   periodAverage?: number | null;
   annual?: boolean;
+  previousPeriodAverage?: number | null;
+  periodGrowthPct?: number | null;
+  comparisonLabel?: string;
 };
 
 const styles = StyleSheet.create({
@@ -158,6 +161,9 @@ export function AttendancePdfDocument({
   metrics,
   reportDate,
   periodAverage,
+  previousPeriodAverage,
+  periodGrowthPct,
+  comparisonLabel = "Previous period",
   annual = false,
 }: AttendancePdfProps) {
   const monthly = new Map<string, { total: number; count: number }>();
@@ -230,7 +236,13 @@ export function AttendancePdfDocument({
 
         {periodAverage !== undefined ? (
           <View style={styles.metricsRow}>
-            <Text style={styles.metricLabel}>Period average: {formatAverage(periodAverage)}</Text>
+            <View style={styles.metricsCol}>
+              <Text style={styles.metricLabel}>Period average: {formatAverage(periodAverage)}</Text>
+              <Text style={styles.metricLabel}>{comparisonLabel} average: {formatAverage(previousPeriodAverage ?? null)}</Text>
+              <Text style={styles.metricLabel}>Growth compared with {comparisonLabel.toLowerCase()}</Text>
+              <GrowthBadge value={periodGrowthPct ?? null} />
+              {periodGrowthPct == null && <Text style={styles.note}>Growth percentage needs a previous period with attendance above zero.</Text>}
+            </View>
           </View>
         ) : <View style={styles.metricsRow}>
           <View style={styles.metricsCol}>

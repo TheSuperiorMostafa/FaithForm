@@ -7,12 +7,13 @@ import {
   topAutomationsFromMap,
 } from "@/lib/reports/hours-saved";
 import { getChurchName } from "@/lib/queries/library";
-import { formatMonthLabel } from "@/lib/utils/reports";
+import { formatMonthLabel, formatHoursComparison } from "@/lib/utils/reports";
 
 export type MonthlyReportData = {
   churchName: string;
   monthLabel: string;
   hoursSavedThisMonth: number;
+  hoursComparison: string;
   tasksCompletedThisMonth: number;
   callsHandledThisMonth: number;
   lifetimeHoursSaved: number;
@@ -88,7 +89,7 @@ export async function getMonthlyReportData(
   const monthEnd = new Date(year, month, 1);
   const now = new Date();
 
-  const [churchName, monthStats, lifetimeStats, callsThisMonth, rentals] =
+  const [churchName, monthStats, lifetimeStats, callsThisMonth, rentals, previousStats] =
     await Promise.all([
       getChurchName(supabase, churchId),
       computeHoursSaved(supabase, churchId, {
@@ -101,6 +102,7 @@ export async function getMonthlyReportData(
       }, phoneClient),
       countPhoneCallsInWindow(phoneClient, churchId, monthStart, monthEnd),
       countLifetimeRentals(phoneClient, churchId),
+      computeHoursSaved(supabase, churchId, { start: new Date(year, month - 2, 1), end: monthStart }, phoneClient),
     ]);
 
   const hoursSavedThisMonth = toHoursSaved(monthStats.minutes);
@@ -126,6 +128,7 @@ export async function getMonthlyReportData(
     churchName,
     monthLabel,
     hoursSavedThisMonth,
+    hoursComparison: formatHoursComparison(hoursSavedThisMonth, toHoursSaved(previousStats.minutes)),
     tasksCompletedThisMonth: monthStats.tasks,
     callsHandledThisMonth: callsThisMonth,
     lifetimeHoursSaved,
