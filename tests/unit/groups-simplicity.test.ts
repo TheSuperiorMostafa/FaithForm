@@ -12,6 +12,7 @@ import {
   enrollmentLabel,
   NEW_GROUP_DEFAULTS,
   reachSentence,
+  roleLabel,
   reportReasonLabel,
   VISIBILITY_LABELS,
   visibilityLabel,
@@ -194,9 +195,17 @@ test("the Messages inbox leaves out groups with no chat and labels read-only one
   assert.match(chat, /no chat and/);
 });
 
+test("group roles show Member and Leader without a separate Manager option", () => {
+  assert.equal(roleLabel("member"), "Member");
+  assert.equal(roleLabel("leader"), "Leader");
+  assert.equal(roleLabel("manager"), "Leader");
+  const people = read("components/groups/people.tsx");
+  assert.doesNotMatch(people, />Manager<|Make manager|Make .* a manager/);
+  assert.match(people, /m\.role === "manager" \? "manager" : "leader"/);
+});
+
 test("risky changes ask first; long forms don't lose work", () => {
   assert.match(read("components/groups/people.tsx"), /confirmAction\(\{ title: "Turn off this invite link\?"/);
-  assert.match(read("components/groups/people.tsx"), /role === "manager" && !\(await confirmAction/);
   assert.match(read("components/groups/settings.tsx"), /confirmAction\(\{ title: `Delete/);
   const shared = read("components/groups/shared.tsx");
   assert.match(shared, /title: "Discard changes\?"/);
