@@ -22,13 +22,13 @@ export const ENROLLMENT_LABELS = {
 export const ROLE_LABELS = {
   member: "Member",
   leader: "Leader",
-  manager: "Manager",
+  manager: "Leader",
 } as const;
 
 export const ROLE_HINTS = {
   member: "Takes part in the group",
   leader: "Leads meetings, takes attendance and looks after the chat",
-  manager: "Everything a leader can do, plus the group's settings and leaders",
+  manager: "Leads meetings, takes attendance, looks after the chat and manages group settings",
 } as const;
 
 export const REPORT_REASON_LABELS: Record<string, string> = {
