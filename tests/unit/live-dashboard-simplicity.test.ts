@@ -200,12 +200,11 @@ test("Upcoming's Recent list shows the last five past services, with a View all 
   assert.match(loading, /rows=\{RECENT_SERVICES_LIMIT\}/, "skeleton draws five Recent rows");
 });
 
-test("the ready-to-publish prompt is persistent: Later folds it for the session, never removes it", () => {
-  const source = read("components/live-streaming/broadcast/ready-to-publish-card.tsx");
-  assert.match(source, /sessionStorage/);
-  assert.doesNotMatch(source, /localStorage/);
-  assert.match(source, /if \(folded\)/, "a folded card still renders a line");
-  assert.match(read("app/dashboard/live-streaming/page.tsx"), /ready_to_publish/);
+test("Go live leaves recording review on the Recordings tab", () => {
+  const source = read("components/live-streaming/broadcast/control-center.tsx");
+  assert.doesNotMatch(source, /ReadyToPublishCard|readyCard|readyRecordings/);
+  assert.doesNotMatch(read("app/dashboard/live-streaming/page.tsx"), /listStaffRecordings|readyRecordings/);
+  assert.match(source, /PostLivePanel/);
 });
 
 test("the review page publishes to the app in one button, and deletes only from a labelled danger section", () => {

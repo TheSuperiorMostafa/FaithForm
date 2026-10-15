@@ -20,6 +20,7 @@ export function PageRenderer({ page, website }: { page: ResolvedPage; website?: 
       className="site-page"
       data-theme={page.themeKey}
       data-layout={website ? "website" : "landing"}
+      data-page={website?.path}
       style={page.tokens as React.CSSProperties}
     >
       <div data-site={page.slug}>
@@ -34,12 +35,19 @@ export function PageRenderer({ page, website }: { page: ResolvedPage; website?: 
           if (!master) return null;
 
           const { Component } = master;
+          const content = {
+            ...section.content,
+            ...(section.type === "service_times" && website?.path === "/visit" ? { surface: "canvas-alt" } : {}),
+            ...(section.type === "site_nav" && website ? { websitePath: website.path, websiteBasePath: website.basePath ?? "" } : {}),
+            ...(section.type === "footer_map" && page.themeKey === "light" ? { surface: "canvas-alt" } : {}),
+            ...(section.type === "footer_map" && website && !["/", "/visit"].includes(website.path) ? { map: null } : {}),
+          };
           return (
             <Fragment key={section.ctx.id}>
               {website && website.path !== "/" && (index === 0 && section.type !== "site_nav" || index === 1 && page.sections[0]?.type === "site_nav") ? <WebsitePageIntro website={website} page={page} /> : null}
               {website && (section.type === "contact_band" || section.type === "footer_map" && !page.sections.some((item) => item.type === "contact_band")) ? <WebsitePageExplore page={page} website={website} /> : null}
               <Component
-                content={section.type === "footer_map" && page.themeKey === "light" ? { ...section.content, surface: "canvas-alt" } : section.content}
+                content={content}
                 ctx={section.ctx}
               />
             </Fragment>

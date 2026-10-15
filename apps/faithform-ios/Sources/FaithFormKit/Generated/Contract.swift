@@ -1310,6 +1310,84 @@ public enum ChatCardKind: RawRepresentable, Codable, Hashable, Sendable {
 
 /// Unknown additive fields are ignored by Codable, which is what lets a
 /// released client keep working when the server adds one.
+public struct KidsCheckInChild: Codable, Hashable, Sendable {
+    public let id: String
+    public let name: String
+    public let roomName: String
+    public let checkedInAt: String
+
+    public init(
+        id: String,
+        name: String,
+        roomName: String,
+        checkedInAt: String
+    ) {
+        self.id = id
+        self.name = name
+        self.roomName = roomName
+        self.checkedInAt = checkedInAt
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct KidsCheckInAlert: Codable, Hashable, Sendable {
+    public let id: String
+    public let childName: String
+    public let roomName: String
+    public let createdAt: String
+
+    public init(
+        id: String,
+        childName: String,
+        roomName: String,
+        createdAt: String
+    ) {
+        self.id = id
+        self.childName = childName
+        self.roomName = roomName
+        self.createdAt = createdAt
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct KidsCheckInHousehold: Codable, Hashable, Sendable {
+    public let id: String
+    public let label: String
+    public let pickupCode: String
+    public let children: [KidsCheckInChild]
+    public let alerts: [KidsCheckInAlert]
+
+    public init(
+        id: String,
+        label: String,
+        pickupCode: String,
+        children: [KidsCheckInChild],
+        alerts: [KidsCheckInAlert]
+    ) {
+        self.id = id
+        self.label = label
+        self.pickupCode = pickupCode
+        self.children = children
+        self.alerts = alerts
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
+public struct KidsCheckInData: Codable, Hashable, Sendable {
+    public let households: [KidsCheckInHousehold]
+
+    public init(
+        households: [KidsCheckInHousehold]
+    ) {
+        self.households = households
+    }
+}
+
+/// Unknown additive fields are ignored by Codable, which is what lets a
+/// released client keep working when the server adds one.
 public struct Deprecation: Codable, Hashable, Sendable {
     public let sunsetOn: String
     public let replacement: String

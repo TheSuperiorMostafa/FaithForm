@@ -147,6 +147,7 @@ fun AccountTab(
     onUpdateProfilePhoto: ((ByteArray?, (String?) -> Unit) -> Unit)? = null,
     onUpdateDisplayName: ((String, (Boolean) -> Unit) -> Unit)? = null,
     onOpenNotifications: (() -> Unit)? = null,
+    householdContent: (@Composable () -> Unit)? = null,
 ) {
     val theme = LocalFaithFormTheme.current
     val displayName = bootstrap.profile.displayName
@@ -183,6 +184,7 @@ fun AccountTab(
                     .padding(horizontal = FaithFormTokens.Layout.screenPaddingHorizontal),
                 verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.lg),
             ) {
+                householdContent?.invoke()
                 if (onUpdateDisplayName != null) {
                     GroupPanel("Your details") {
                         AccountRow(

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { isCurrentSiteLink } from "@/lib/sites/active-link";
 import { cn } from "@/lib/utils";
 import type { SiteAction, SiteLink } from "@/types/site";
 
@@ -23,9 +24,13 @@ const ACTION_CLASS = {
 export function SiteNavMenu({
   links,
   cta,
+  websitePath,
+  websiteBasePath,
 }: {
   links: SiteLink[];
   cta: SiteAction | null;
+  websitePath?: string;
+  websiteBasePath?: string;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -96,6 +101,7 @@ export function SiteNavMenu({
                 key={link.href + link.label}
                 href={link.href}
                 className="site-nav-drawer-link"
+                aria-current={isCurrentSiteLink(link.href, websitePath, websiteBasePath) ? "page" : undefined}
                 onClick={() => setOpen(false)}
               >
                 {link.label}
@@ -104,6 +110,7 @@ export function SiteNavMenu({
             {cta?.label ? (
               <a
                 href={cta.href || "#"}
+                aria-current={isCurrentSiteLink(cta.href, websitePath, websiteBasePath) ? "page" : undefined}
                 className={cn("site-btn", ctaVariant, "site-nav-drawer-cta")}
                 onClick={() => setOpen(false)}
               >

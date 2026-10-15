@@ -5,6 +5,7 @@ import { ChevronDown, ChevronUp } from "lucide-react";
 import { toast } from "sonner";
 
 import {
+  alertGuardians,
   checkInChildren,
   moveSession,
   undoCheckin,
@@ -142,6 +143,29 @@ export function RosterBoard({
     });
   }
 
+  async function alert(session: CheckinSessionRow) {
+    const confirmed = await confirmAction({
+      title: `Alert ${session.firstName}'s guardians?`,
+      description: "Ask every verified guardian in this household to come to the child's room. They will receive an app notification if notifications are enabled.",
+      confirmLabel: "Send alert",
+      destructive: true,
+    });
+    if (!confirmed) return;
+    startTransition(async () => {
+      const result = await alertGuardians(session.id);
+      if (!result.ok) { toast.error(result.error); return; }
+      if (!result.data.guardianCount) {
+        toast.error("No verified guardians are linked to the app for this household. Contact the guardian directly.");
+        return;
+      }
+      if (result.data.queued) {
+        toast.success("Guardian alert queued. Guardians can also see it in Kids check-in.");
+      } else {
+        toast.info("No new alert queued. Wait a minute, refresh the room, and try again.");
+      }
+    });
+  }
+
   function canUndo(session: CheckinSessionRow): boolean {
     if (session.status !== "checked_in" || !session.checkedInAt) return false;
     if (session.checkedInBy !== currentUserId) return false;
@@ -245,6 +269,13 @@ export function RosterBoard({
                       </div>
 
                       <div className="flex flex-wrap items-center gap-2">
+                        {session.status === "checked_in" && (
+                          <Button type="button" variant="destructive" className="min-h-12 min-w-28 text-base font-bold"
+                            disabled={pending} onClick={() => void alert(session)}
+                            aria-label={`Alert guardians for ${session.firstName} ${session.lastName}`}>
+                            ALERT
+                          </Button>
+                        )}
                         {session.status === "pre_checked_in" && (
                           <Button
                             type="button"

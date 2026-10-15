@@ -203,7 +203,10 @@ object HostNavigation {
                 ?: return null
         }
         if (destination is Destination.Groups && church?.groupsEnabled != true) return null
-        if (destination is Destination.CheckIn && church?.offersCheckIn == false) return null
+        if (destination is Destination.CheckIn && church?.offersCheckIn == false) {
+            if (registry.resolve(destination, snapshot(bootstrap)) !is RouteResolution.Allowed) return null
+            return LinkTarget(tab = HostTab.ACCOUNT, churchSlug = church.churchSlug, destination = Destination.Account)
+        }
         if (registry.resolve(destination, snapshot(bootstrap)) !is RouteResolution.Allowed) return null
         val tab = tabFor(destination) ?: return null
         return LinkTarget(tab = tab, churchSlug = church?.churchSlug, destination = destination)

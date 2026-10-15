@@ -94,6 +94,7 @@ fun CheckInScannerScreen(
     modifier: Modifier = Modifier,
     preview: @Composable () -> Unit = {},
     footer: @Composable () -> Unit = {},
+    headerContent: @Composable () -> Unit = {},
 ) {
     val theme = LocalFaithFormTheme.current
     var selectedMode by remember { mutableStateOf(CheckInMode.SCAN) }
@@ -109,6 +110,7 @@ fun CheckInScannerScreen(
             .padding(FaithFormTokens.Spacing.lg),
         verticalArrangement = Arrangement.spacedBy(FaithFormTokens.Spacing.lg),
     ) {
+        headerContent()
         // Modern Hero Header with Shield/Check Icon
         Row(
             verticalAlignment = Alignment.CenterVertically,

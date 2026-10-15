@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { requireChurchAuth } from "@/lib/auth/church";
 import {
@@ -5,6 +6,7 @@ import {
   type SimpleSermonSaveBody,
 } from "@/lib/sermon-builder/simple-sermon-save";
 import { createSermon } from "@/lib/queries/sermons";
+import { isValidSeriesWeek } from "@/lib/sermon-builder/series-week";
 import { featureAccessDenied } from "@/lib/features/guard";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { SeriesPlan } from "@/types/sermon";
@@ -32,9 +34,7 @@ async function ownSeriesWeek(
   if (error) return { error: "We couldn't check this sermon series. Please try again.", status: 503 };
   if (!data) return { error: "This sermon series isn't available. Go back and choose it again.", status: 400 };
   if (seriesWeek == null) return { seriesId: data.id, seriesWeek: null };
-  const weeks = ((data.plan as SeriesPlan | null)?.weeks ?? []);
-  if (typeof seriesWeek !== "number" || !Number.isInteger(seriesWeek) ||
-      !weeks.some((week) => week.week === seriesWeek)) {
+  if (!isValidSeriesWeek(seriesWeek, data.plan as SeriesPlan | null)) {
     return { error: "That week isn't in this sermon series. Go back and choose a week again.", status: 400 };
   }
   return { seriesId: data.id, seriesWeek };
@@ -79,6 +79,7 @@ export async function POST(request: Request) {
       series_week: series.seriesWeek,
     });
 
+    if (sermon.series_id) revalidatePath(`/dashboard/sermon-builder/series/${sermon.series_id}`);
     return NextResponse.json({ sermon: { id: sermon.id } });
   } catch (e) {
     const unauthorized = e instanceof Error && e.message === "Unauthorized";

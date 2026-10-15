@@ -5,6 +5,7 @@ import { Monitor, RefreshCw, Smartphone, SquareArrowOutUpRight } from "lucide-re
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { sitePreviewHref, sitePreviewPath } from "@/lib/sites/preview-navigation";
 
 /**
  * Live preview of the church's own site, framed inside the dashboard.
@@ -28,12 +29,19 @@ export function SitePreview({
   /** Bumping this from a parent re-loads the frame after a save. */
   refreshToken,
   sticky = false,
+  onNavigate,
 }: {
   previewUrl: string;
   className?: string;
   refreshToken?: unknown;
   sticky?: boolean;
+  /** Church-local path, so the page editor can follow preview navigation. */
+  onNavigate?: (path: string) => void;
 }) {
+  const localPreviewUrl = sitePreviewHref(previewUrl);
+  const [frameUrl, setFrameUrl] = useState(localPreviewUrl);
+  const [currentUrl, setCurrentUrl] = useState(localPreviewUrl);
+  const currentUrlRef = useRef(localPreviewUrl);
   const [device, setDevice] = useState<Device>("desktop");
   const [loading, setLoading] = useState(true);
   const [nonce, setNonce] = useState(0);
@@ -60,9 +68,39 @@ export function SitePreview({
   }, []);
 
   const reload = useCallback(() => {
+    setFrameUrl(currentUrlRef.current);
     setLoading(true);
     setNonce((n) => n + 1);
   }, []);
+
+  // Selecting an editor page intentionally changes the destination. The local
+  // route uses this deployment's renderer and signed-in preview permissions.
+  useEffect(() => {
+    if (currentUrlRef.current === localPreviewUrl) return;
+    currentUrlRef.current = localPreviewUrl;
+    setCurrentUrl(localPreviewUrl);
+    setFrameUrl(localPreviewUrl);
+    setLoading(true);
+  }, [localPreviewUrl]);
+
+  const handleLoad = useCallback(() => {
+    setLoading(false);
+    try {
+      const href = frameRef.current?.contentWindow?.location.href;
+      if (href) {
+        const path = sitePreviewPath(localPreviewUrl, href, window.location.origin);
+        if (path !== null) {
+          const next = sitePreviewHref(href);
+          currentUrlRef.current = next;
+          setCurrentUrl(next);
+          onNavigate?.(path);
+        }
+      }
+      wakeImages();
+    } catch {
+      // A church's external link can leave our origin. Never read its content.
+    }
+  }, [localPreviewUrl, onNavigate, wakeImages]);
 
   // A save in the parent invalidates what's on screen. Skip the first run so
   // the frame isn't reloaded the moment it mounts.
@@ -106,7 +144,12 @@ export function SitePreview({
             <button
               key={key}
               type="button"
-              onClick={() => setDevice(key)}
+              onClick={() => {
+                if (device === key) return;
+                setFrameUrl(currentUrlRef.current);
+                setLoading(true);
+                setDevice(key);
+              }}
               aria-pressed={device === key}
               className={cn(
                 "inline-flex min-h-11 items-center gap-1.5 rounded-md px-4 text-sm font-semibold transition-colors",
@@ -129,7 +172,7 @@ export function SitePreview({
             />
             Refresh
           </Button>
-          <a href={previewUrl} target="_blank" rel="noopener noreferrer">
+          <a href={currentUrl} target="_blank" rel="noopener noreferrer">
             <Button type="button" variant="ghost">
               <SquareArrowOutUpRight className="size-4" aria-hidden />
               Open in new tab
@@ -153,15 +196,12 @@ export function SitePreview({
           ref={frameRef}
           key={`${device}-${nonce}`}
           title="Website preview"
-          src={previewUrl}
-          onLoad={() => {
-            setLoading(false);
-            wakeImages();
-          }}
+          src={frameUrl}
+          onLoad={handleLoad}
           // The preview is our own page on our own origin, but it can carry
           // church-authored custom CSS and embeds — sandbox it so a bad embed
           // can't reach the dashboard around it.
-          sandbox="allow-scripts allow-same-origin allow-popups"
+          sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
           style={{
             width,
             height: 620 / scale,

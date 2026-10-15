@@ -130,7 +130,7 @@ export function CallDetailView({
       {isStaff && (
         <AdvancedSection
           title="Assistant quality"
-          description="How the assistant handled this call. Churches don't see this section."
+          description="How the assistant handled this call."
         >
           <StaffCallQuality call={call} isAdmin={isAdmin} score={score} />
         </AdvancedSection>

@@ -32,7 +32,7 @@ export async function queueSimulatedPlayout(input: {
   }
 
   await admin.from("stream_events").update({
-    artwork_url: data.signedUrl,
+    simulated_playout_url: data.signedUrl,
   }).eq("id", input.eventId);
 }
 
@@ -42,10 +42,10 @@ export async function listPendingSimulatedPlayoutJobs(): Promise<
   const admin = createAdminClient();
   const { data: events } = await admin
     .from("stream_events")
-    .select("id, church_id, artwork_url, simulated, status")
+    .select("id, church_id, simulated_playout_url, simulated, status")
     .eq("status", "live")
     .eq("simulated", true)
-    .not("artwork_url", "is", null)
+    .not("simulated_playout_url", "is", null)
     .limit(10);
 
   if (!events?.length) return [];
@@ -66,7 +66,7 @@ export async function listPendingSimulatedPlayoutJobs(): Promise<
     jobs.push({
       eventId: event.id as string,
       churchId,
-      sourceUrl: event.artwork_url as string,
+      sourceUrl: event.simulated_playout_url as string,
       ingestUrl: settings.ingestServerUrl,
       streamName: buildCapabilityStreamName(
         churchId,
@@ -82,6 +82,6 @@ export async function clearSimulatedPlayoutSource(eventId: string) {
   const admin = createAdminClient();
   await admin
     .from("stream_events")
-    .update({ artwork_url: null })
+    .update({ simulated_playout_url: null })
     .eq("id", eventId);
 }

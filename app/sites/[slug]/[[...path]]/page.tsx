@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { cache } from "react";
+import { headers } from "next/headers";
+import { getCanonicalSiteUrl } from "@/lib/site-url";
+import { canViewChurchSitePage, churchSiteBasePath, rewriteSiteNavigation } from "@/lib/sites/public-navigation";
 
 import { PageRenderer } from "@/components/sites/PageRenderer";
 import { getChurchAuth } from "@/lib/auth/church";
@@ -9,7 +12,6 @@ import {
   composeWebsiteSections,
   normalizeSitePath,
   parseSiteLayoutMode,
-  rewritePreviewLinks,
   websiteSupportingPaths,
   websitePageDefForPath,
 } from "@/lib/sites/layout-mode";
@@ -52,7 +54,7 @@ const loadPage = cache(async function loadPage(slug: string, path: string) {
   }
 
   if (path === "/") {
-    return { bundle: home, sections: home.sections, layoutMode };
+    return { bundle: home, sections: home.sections, layoutMode, homeStatus: home.page.status };
   }
 
   const page = await getSiteBundle(slug, path);
@@ -66,6 +68,7 @@ const loadPage = cache(async function loadPage(slug: string, path: string) {
       pageSections: page.sections,
     }),
     layoutMode,
+    homeStatus: home.page.status,
   };
 });
 
@@ -79,13 +82,29 @@ const siteIsVisible = cache(async function siteIsVisible(
   return canPreviewDraftSite(bundle.churchId, await getChurchAuth());
 });
 
+async function canReadPage(loaded: NonNullable<Awaited<ReturnType<typeof loadPage>>>, previewRequested: boolean) {
+  let previewAuthorized = false;
+  if (previewRequested) {
+    const auth = await getChurchAuth();
+    previewAuthorized = canPreviewDraftSite(loaded.bundle.churchId, auth);
+  }
+  if (!(await siteIsVisible(loaded.bundle, previewRequested))) return false;
+  return canViewChurchSitePage({
+    previewRequested, previewAuthorized,
+    published: loaded.bundle.settings?.isPublished === true,
+    homeStatus: loaded.homeStatus, pageStatus: loaded.bundle.page.status,
+  });
+}
+
 export async function generateMetadata({ params, searchParams }: PageProps): Promise<Metadata> {
-  const [{ slug, path: pathSegments }, query] = await Promise.all([params, searchParams]);
+  const { slug, path: pathSegments } = await params;
   const path = normalizeSitePath(pathSegments);
   const loaded = await loadPage(slug, path);
   if (!loaded) return { title: "Not found" };
 
   const { bundle } = loaded;
+  const query = await searchParams;
+  if (!(await canReadPage(loaded, query.preview === "1"))) return { title: "Not found", robots: { index: false, follow: false } };
 
   // Match the page guard so draft content cannot leak through titles, previews,
   // or Open Graph metadata when a visitor adds ?preview=1.
@@ -130,8 +149,7 @@ export default async function ChurchSitePage({ params, searchParams }: PageProps
 
   const { bundle, sections } = loaded;
   const isPreview = query.preview === "1";
-
-  if (!(await siteIsVisible(bundle, query.preview === "1"))) notFound();
+  if (!(await canReadPage(loaded, isPreview))) notFound();
 
   const page = resolvePage({
     page: bundle.page,
@@ -165,18 +183,25 @@ export default async function ChurchSitePage({ params, searchParams }: PageProps
     page.sections.splice(footerIndex < 0 ? page.sections.length : footerIndex, 0, ...extra);
   }
 
-  if (isPreview) {
-    page.sections = page.sections.map((section) => ({
-      ...section,
-      content: {
-        ...rewritePreviewLinks(section.content, slug) as Record<string, unknown>,
-        ...(section.type === "site_nav" ? { homeHref: `/sites/${encodeURIComponent(slug)}?preview=1` } : {}),
-      },
-    }));
-  }
+  const requestHeaders = await headers();
+  const host = requestHeaders.get("host") ?? new URL(getCanonicalSiteUrl()).host;
+  const basePath = churchSiteBasePath(slug, host, [
+    new URL(getCanonicalSiteUrl()).hostname,
+    "faithform.io", "www.faithform.io",
+    process.env.NEXT_PUBLIC_SITE_ROOT_HOST ?? "",
+    process.env.VERCEL_URL ?? "", process.env.VERCEL_PROJECT_PRODUCTION_URL ?? "",
+  ]);
+  page.sections = page.sections.map((section) => ({
+    ...section,
+    content: {
+      ...rewriteSiteNavigation(section.content, { slug, basePath, preview: isPreview }) as Record<string, unknown>,
+      ...(section.type === "site_nav" ? { homeHref: `${basePath || "/"}${isPreview ? "?preview=1" : ""}` } : {}),
+    },
+  }));
 
   return <PageRenderer page={page} website={loaded.layoutMode === "website" ? {
     path,
+    basePath,
     churchName: bundle.profile.name,
     coverImageUrl: bundle.profile.coverImageUrl,
     location: [bundle.profile.address, formatCityLine(bundle.profile.city, bundle.profile.state, bundle.profile.zip)].filter(Boolean).join(", "),

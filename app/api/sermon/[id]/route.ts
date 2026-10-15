@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { requireChurchAuth } from "@/lib/auth/church";
 import {
@@ -31,6 +32,7 @@ export async function PATCH(
       return NextResponse.json({ error: parsed.error }, { status: 400 });
     }
     const updated = await updateSermon(id, parsed.patch);
+    if (sermon.series_id) revalidatePath(`/dashboard/sermon-builder/series/${sermon.series_id}`);
     return NextResponse.json({ sermon: updated });
   } catch (e) {
     return sermonRouteError(e, "We couldn't save your change to this sermon.");

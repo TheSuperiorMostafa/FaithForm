@@ -209,6 +209,7 @@ fun SignedInHost(
                                 ) { content ->
                                     CheckInTab(
                                         api = container.apiClient,
+                                        churchSlug = selectedSlug,
                                         cameraPermission = cameraPermission,
                                         showsCodeCheckIn = showsCode,
                                         automaticCheckInContent = if (showsAutomatic) {
@@ -293,6 +294,9 @@ fun SignedInHost(
                                         bootstrap = bootstrap,
                                         onSignOut = viewModel::signOut,
                                         onOpenNotifications = { showNotifications = true },
+                                        householdContent = if (selectedSlug != null) {
+                                            { io.faithform.app.ui.attendance.HouseholdPickupSection(container.apiClient, selectedSlug!!) }
+                                        } else null,
                                         onDeleteAccount = viewModel::beginDeletion,
                                         modifier = content,
                                         showsAutomaticCheckIn = showsAuto,

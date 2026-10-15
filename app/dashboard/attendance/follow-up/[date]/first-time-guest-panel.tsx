@@ -2,11 +2,10 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { Checkbox } from "@base-ui/react/checkbox";
-import { Check, MessageSquare, Send } from "lucide-react";
+import { Check, Send } from "lucide-react";
 import { toast } from "sonner";
 
 import {
-  notifyPastorOfFirstTimeGuests,
   sendWelcomeTextsToGuests,
 } from "../guest-actions";
 import { Button } from "@/components/ui/button";
@@ -14,15 +13,12 @@ import { confirmAction } from "@/components/ui/confirm-dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  defaultPastorMessage,
   defaultWelcomeMessage,
   guestDisplayName,
   personalizeWelcomeMessage,
-  validatePastorMessage,
   validateWelcomeMessage,
   type FirstTimeGuest,
 } from "@/lib/attendance/first-time-guests";
-import { formatServiceDate } from "@/lib/utils/dates";
 import { cn } from "@/lib/utils";
 
 type FirstTimeGuestPanelProps = {
@@ -32,7 +28,7 @@ type FirstTimeGuestPanelProps = {
   churchName: string;
 };
 
-type Mode = "idle" | "pastor" | "welcome";
+type Mode = "idle" | "welcome";
 
 function people(n: number) {
   return `${n} ${n === 1 ? "person" : "people"}`;
@@ -44,23 +40,19 @@ function texts(n: number) {
 
 /**
  * On Follow-up, list first-time guests saved for a Sunday and
- * offer "Tell pastor" / "Send welcome" using the church's own texting phone.
+ * offer welcome texts using the church's own texting phone.
  */
 export function FirstTimeGuestPanel({
   serviceDate,
   guests,
   churchName,
 }: FirstTimeGuestPanelProps) {
-  const dayLabel = formatServiceDate(serviceDate);
   const withPhone = useMemo(
     () => guests.filter((guest) => Boolean(guest.phone?.trim())),
     [guests],
   );
 
   const [mode, setMode] = useState<Mode>("idle");
-  const [pastorMessage, setPastorMessage] = useState(() =>
-    defaultPastorMessage(dayLabel, guests),
-  );
   const [welcomeMessage, setWelcomeMessage] = useState(() =>
     defaultWelcomeMessage(churchName),
   );
@@ -72,7 +64,6 @@ export function FirstTimeGuestPanel({
 
   if (guests.length === 0) return null;
 
-  const pastorCheck = validatePastorMessage(pastorMessage);
   const welcomeCheck = validateWelcomeMessage(welcomeMessage);
   const chosenWelcome = withPhone.filter((guest) => selected.has(guest.memberId));
   const sample = chosenWelcome[0] ?? withPhone[0] ?? null;
@@ -83,44 +74,6 @@ export function FirstTimeGuestPanel({
       if (next.has(memberId)) next.delete(memberId);
       else next.add(memberId);
       return next;
-    });
-  }
-
-  async function sendPastor() {
-    setError(null);
-    if (!pastorCheck.ok) {
-      setError(pastorCheck.error);
-      return;
-    }
-    const ok = await confirmAction({
-      title: "Text the pastor now?",
-      description:
-        "Sends one text to your church phone (the number in Settings), or to your church's texting phone if Settings has no number. A text can't be taken back once it's sent.",
-      confirmLabel: "Tell pastor",
-      destructive: true,
-    });
-    if (!ok) return;
-
-    startSending(async () => {
-      try {
-        const result = await notifyPastorOfFirstTimeGuests({
-          serviceDate,
-          memberIds: guests.map((guest) => guest.memberId),
-          message: pastorCheck.message,
-        });
-        if (!result.ok) {
-          setError(result.error);
-          return;
-        }
-        const where =
-          result.pastorDestination === "texting_phone"
-            ? "your church's texting phone"
-            : "your church phone";
-        toast.success(`Told the pastor about ${people(guests.length)} at ${where}.`);
-        setMode("idle");
-      } catch {
-        setError("We couldn't send the text. Check your connection and try again.");
-      }
     });
   }
 
@@ -182,7 +135,7 @@ export function FirstTimeGuestPanel({
           {guests.length === 1 ? "1 first-time guest" : `${guests.length} first-time guests`}
         </h3>
         <p className="text-[15px] text-muted-foreground">
-          Tell the pastor, or send a welcome text to guests who left a phone number.
+          Send a welcome text to guests who left a phone number.
         </p>
       </div>
 
@@ -204,64 +157,12 @@ export function FirstTimeGuestPanel({
 
       {mode === "idle" ? (
         <div className="flex flex-wrap gap-3">
-          <Button type="button" size="lg" onClick={() => setMode("pastor")}>
-            <MessageSquare aria-hidden />
-            Tell pastor
-          </Button>
           {withPhone.length > 0 ? (
-            <Button type="button" size="lg" variant="outline" onClick={() => setMode("welcome")}>
+            <Button type="button" size="lg" onClick={() => setMode("welcome")}>
               <Send aria-hidden />
               Send welcome
             </Button>
           ) : null}
-        </div>
-      ) : null}
-
-      {mode === "pastor" ? (
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="pastor-guest-message" className="text-base font-semibold">
-              Message to the pastor
-            </Label>
-            <p className="text-[15px] text-muted-foreground">
-              Goes to your church phone in Settings. If that&apos;s empty, it goes to
-              your church&apos;s texting phone instead.
-            </p>
-            <Textarea
-              id="pastor-guest-message"
-              value={pastorMessage}
-              onChange={(event) => setPastorMessage(event.target.value)}
-              rows={6}
-              className="resize-y text-base"
-            />
-          </div>
-          {error ? (
-            <p className="text-base text-destructive" role="alert">
-              {error}
-            </p>
-          ) : null}
-          <div className="flex flex-wrap gap-3">
-            <Button
-              type="button"
-              size="lg"
-              disabled={isSending || !pastorCheck.ok}
-              onClick={() => void sendPastor()}
-            >
-              {isSending ? "Sending…" : "Tell pastor"}
-            </Button>
-            <Button
-              type="button"
-              size="lg"
-              variant="outline"
-              disabled={isSending}
-              onClick={() => {
-                setError(null);
-                setMode("idle");
-              }}
-            >
-              Cancel
-            </Button>
-          </div>
         </div>
       ) : null}
 

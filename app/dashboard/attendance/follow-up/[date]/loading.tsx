@@ -32,7 +32,7 @@ export default function AttendanceFollowUpDateLoading() {
         <div className="flex flex-col gap-1">
           <Skeleton className="h-7 w-48" />
           <p className="text-[15px] text-muted-foreground">
-            Tell the pastor, or send a welcome text to guests who left a phone number.
+            Send a welcome text to guests who left a phone number.
           </p>
         </div>
         <div className="flex flex-col gap-2">
@@ -44,8 +44,7 @@ export default function AttendanceFollowUpDateLoading() {
           ))}
         </div>
         <div className="flex flex-wrap gap-3">
-          <span aria-hidden className={buttonVariants({ size: "lg" })}>Tell pastor</span>
-          <span aria-hidden className={buttonVariants({ size: "lg", variant: "outline" })}>Send welcome</span>
+          <span aria-hidden className={buttonVariants({ size: "lg" })}>Send welcome</span>
         </div>
       </section>
 

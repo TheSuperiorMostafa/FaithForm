@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { PageRenderer } from "@/components/sites/PageRenderer";
 import { DEV_PREVIEW_PROFILE } from "@/lib/sites/dev-preview-profile";
 import { buildSections } from "@/lib/sites/generate";
-import { composeWebsiteSections, normalizeSitePath, websitePageDefForType, websiteSupportingPaths } from "@/lib/sites/layout-mode";
+import { composeWebsiteSections, normalizeSitePath, websitePageDefForPath, websitePageDefForType, websiteSupportingPaths } from "@/lib/sites/layout-mode";
 import { formatCityLine, formatServiceTime } from "@/lib/sites/format";
 import { SECTION_REGISTRY } from "@/lib/sites/registry";
 import { resolvePage } from "@/lib/sites/resolve";
@@ -55,15 +55,36 @@ export default async function DevSitePreviewPage({ params, searchParams }: PageP
       status: "published",
     },
     theme,
-    settings: null,
+    settings: { themeKey: key, brandTokens: {}, customCss: null, contactEmail: null, isPublished: true, layoutMode: website ? "website" : "landing" },
     sections,
     overrides: [],
     profile: DEV_PREVIEW_PROFILE,
     registry: SECTION_REGISTRY,
   });
 
+  if (website) {
+    const scope = (value: unknown): unknown => {
+      if (Array.isArray(value)) return value.map(scope);
+      if (!value || typeof value !== "object") return value;
+      return Object.fromEntries(Object.entries(value).map(([field, entry]) => {
+        if (field === "href" && typeof entry === "string") {
+          const [destination] = entry.split(/[?#]/);
+          if (destination === "/" || websitePageDefForPath(destination)) {
+            const url = new URL(entry, "https://sample.invalid");
+            return [field, `/dev-site-preview/${encodeURIComponent(key)}?mode=website&path=${encodeURIComponent(url.pathname)}${url.hash}`];
+          }
+        }
+        return [field, scope(entry)];
+      }));
+    };
+    page.sections = page.sections.map(section => ({ ...section, content: {
+      ...scope(section.content) as Record<string, unknown>,
+      ...(section.type === "site_nav" ? { homeHref: `/dev-site-preview/${encodeURIComponent(key)}?mode=website` } : {}),
+    } }));
+  }
+
   return <PageRenderer page={page} website={website ? {
-    path, churchName: DEV_PREVIEW_PROFILE.name, coverImageUrl: DEV_PREVIEW_PROFILE.coverImageUrl,
+    path, basePath: `/dev-site-preview/${encodeURIComponent(key)}?mode=website`, churchName: DEV_PREVIEW_PROFILE.name, coverImageUrl: DEV_PREVIEW_PROFILE.coverImageUrl,
     location: [DEV_PREVIEW_PROFILE.address, formatCityLine(DEV_PREVIEW_PROFILE.city, DEV_PREVIEW_PROFILE.state, DEV_PREVIEW_PROFILE.zip)].filter(Boolean).join(", "),
     serviceTimes: DEV_PREVIEW_PROFILE.serviceTimes.flatMap((time) => {
       const clock = formatServiceTime(time.startTime);

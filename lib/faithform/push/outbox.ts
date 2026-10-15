@@ -10,6 +10,8 @@ import {
   type PushAdapter,
   type PushMessage,
 } from "@/lib/faithform/push/adapters";
+import { guardianAccountIds } from "@/lib/checkin/guardian-service";
+import { serviceWeekStart } from "@/lib/checkin/service-week";
 import { invalidateToken } from "@/lib/faithform/push/installations";
 
 /**
@@ -114,6 +116,7 @@ export async function cancelNotificationsForSubject(
 
 type OutboxJob = {
   id: string;
+  created_at?: string;
   church_id: string;
   /** `announcement` unless a livestream or recording enqueued it (P15), or a group (P14). */
   subject_type?:
@@ -121,13 +124,15 @@ type OutboxJob = {
     | "stream_event"
     | "stream_recording"
     | "group_join_request"
-    | "group_event";
+    | "group_event"
+    | "household"
+    | "checkin_session";
   kind?: string;
   subject_id: string;
   target_visibility: "public" | "followers" | "members";
   /** Named recipients (P14 group notifications); null for a broadcast. */
   target_account_ids?: string[] | null;
-  topic: "announcements" | "events" | "groups";
+  topic: "announcements" | "events" | "groups" | "checkin";
   title: string;
   body: string | null;
   deep_link: string;
@@ -205,6 +210,10 @@ async function resolveRecipients(
   admin: SupabaseClient,
   job: OutboxJob,
 ): Promise<{ recipients: PushRecipient[]; nextCursor: string | null; hasMore: boolean }> {
+  // Private child notifications must never fall through to a church broadcast.
+  if (job.topic === "checkin" || job.subject_type === "household" || job.subject_type === "checkin_session") {
+    return { recipients: await resolveGuardianRecipients(admin, job), nextCursor: null, hasMore: false };
+  }
   if (job.target_account_ids && job.target_account_ids.length > 0) {
     return { recipients: await resolveTargetedRecipients(admin, job, job.target_account_ids), nextCursor: null, hasMore: false };
   }
@@ -329,11 +338,49 @@ async function resolveTargetedRecipients(
     }));
 }
 
+/** Resolve guardian authority afresh, including revoked People links and custody changes. */
+async function resolveGuardianRecipients(admin: SupabaseClient, job: OutboxJob): Promise<PushRecipient[]> {
+  if (job.topic !== "checkin" || !job.target_account_ids?.length) return [];
+  let householdId: string;
+  if (job.subject_type === "household" && job.kind === "household_code_ready") {
+    householdId = job.subject_id;
+  } else if (job.subject_type === "checkin_session" && job.kind === "checkin_guardian_alert") {
+    const { data, error } = await admin.from("checkin_sessions").select("household_id, member_id").eq("church_id", job.church_id).eq("id", job.subject_id).eq("status", "checked_in").maybeSingle();
+    if (error) throw new Error("push_audience_unavailable");
+    if (!data?.household_id) return [];
+    const dependent = await admin.from("household_members").select("id").eq("church_id", job.church_id).eq("household_id", data.household_id).eq("member_id", data.member_id).eq("relationship", "dependent").maybeSingle();
+    if (dependent.error) throw new Error("push_audience_unavailable");
+    if (!dependent.data) return [];
+    householdId = data.household_id;
+  } else return [];
+  const current = await guardianAccountIds(job.church_id, householdId, admin);
+  const eligible = current.filter(id => job.target_account_ids!.includes(id));
+  if (!eligible.length) return [];
+  const { data, error } = await admin.from("visitor_device_installations").select("id, provider, provider_token, apns_environment").in("account_id", eligible).eq("is_enabled", true).is("invalidated_at", null).limit(1000);
+  if (error) throw new Error("push_audience_unavailable");
+  return (data ?? []).filter(row => Boolean(row.provider_token)).map(row => ({ installationId: row.id as string, provider: row.provider as "apns" | "fcm", token: row.provider_token as string, apnsEnvironment: row.apns_environment as PushRecipient["apnsEnvironment"] }));
+}
+
 /** True when the subject is still publishable at the version we enqueued. */
 async function subjectIsStillCurrent(
   admin: SupabaseClient,
   job: OutboxJob,
 ): Promise<boolean> {
+  if (job.topic === "checkin") {
+    if (job.subject_type === "checkin_session" && job.kind === "checkin_guardian_alert") {
+      const { data, error } = await admin.from("checkin_sessions").select("id").eq("id", job.subject_id).eq("church_id", job.church_id).eq("status", "checked_in").maybeSingle();
+      return !error && Boolean(data);
+    }
+    if (job.subject_type === "household" && job.kind === "household_code_ready") {
+      const { data: household } = await admin.from("households").select("code_rotation").eq("id", job.subject_id).eq("church_id", job.church_id).maybeSingle();
+      const { data: church } = await admin.from("churches").select("timezone").eq("id", job.church_id).maybeSingle();
+      if (!household || !church || Number(household.code_rotation ?? 0) !== job.subject_version) return false;
+      if (!job.created_at || serviceWeekStart(church.timezone ?? "America/New_York", new Date(job.created_at)) !== serviceWeekStart(church.timezone ?? "America/New_York")) return false;
+      const { data: code } = await admin.from("household_checkout_codes").select("id").eq("church_id", job.church_id).eq("household_id", job.subject_id).eq("week_start", serviceWeekStart(church.timezone ?? "America/New_York")).is("revoked_at", null).maybeSingle();
+      return Boolean(code);
+    }
+    return false;
+  }
   // "Maria asked to join…" only while the request is still waiting; "you're
   // in" only once it was approved.
   if (job.subject_type === "group_join_request") {

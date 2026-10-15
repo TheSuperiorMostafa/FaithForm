@@ -26,10 +26,6 @@ import {
 } from "@/app/dashboard/live-streaming/actions";
 import { LivePreview } from "@/components/live-streaming/broadcast/live-preview";
 import { PostLivePanel } from "@/components/live-streaming/broadcast/post-live-panel";
-import {
-  ReadyToPublishCard,
-  type ReadyRecording,
-} from "@/components/live-streaming/broadcast/ready-to-publish-card";
 import { STREAMING_TOOL_KEY } from "@/components/live-streaming/encoder-docs-card";
 import { StreamShareLinksPanel } from "@/components/live-streaming/stream-share-links-panel";
 import { StudioSourceControls } from "@/components/live-streaming/studio-source-controls";
@@ -79,12 +75,6 @@ type Props = {
   settings: RecordingSettings;
   platforms: { youtube: boolean; facebook: boolean };
   branding: StudioBranding;
-  /**
-   * Recordings still waiting to be published, for the persistent "ready to
-   * publish" card. It sits above the state card when nothing is on air, and
-   * below it during a service so it never pushes End service out of reach.
-   */
-  readyRecordings: ReadyRecording[];
 };
 
 /** How often the screen asks the server what is true. */
@@ -119,7 +109,6 @@ export function BroadcastControlCenter({
   settings,
   platforms,
   branding,
-  readyRecordings,
 }: Props) {
   const router = useRouter();
   const [status, setStatus] = useState(initialStatus);
@@ -255,11 +244,6 @@ export function BroadcastControlCenter({
     }
   }, [phase, overview.recordingIndicator.label, overview.recording?.phase.label]);
 
-  const onAir = phase === "live" || phase === "waiting_for_video";
-  const postLiveRecordingId = phase === "post_live" ? (overview.recording?.id ?? null) : null;
-  const readyCard = (
-    <ReadyToPublishCard recordings={readyRecordings} hideRecordingId={postLiveRecordingId} isAdmin={isAdmin} />
-  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -267,7 +251,6 @@ export function BroadcastControlCenter({
         {announcement}
       </p>
 
-      {!onAir ? readyCard : null}
 
       <section
         aria-label="Your service"
@@ -338,7 +321,6 @@ export function BroadcastControlCenter({
         )}
       </section>
 
-      {onAir ? readyCard : null}
 
       {isAdmin && studioSupported && phase !== "post_live" ? (
         <section className="rounded-2xl border border-border bg-card shadow-card dark:shadow-none">

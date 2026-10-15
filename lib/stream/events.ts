@@ -14,6 +14,10 @@ export type StreamEvent = {
   syndicateFacebook: boolean;
   youtubePrivacy: "public" | "unlisted" | "private";
   artworkUrl: string | null;
+  seriesId?: string | null;
+  artworkPosterUrl?: string | null;
+  artworkWideUrl?: string | null;
+  artworkBannerUrl?: string | null;
   chatEnabled: boolean;
   countdownEnabled: boolean;
   publicAccess: boolean;
@@ -37,6 +41,10 @@ type EventRow = {
   syndicate_facebook: boolean;
   youtube_privacy: "public" | "unlisted" | "private";
   artwork_url: string | null;
+  series_id?: string | null;
+  artwork_poster_url?: string | null;
+  artwork_wide_url?: string | null;
+  artwork_banner_url?: string | null;
   chat_enabled: boolean;
   countdown_enabled: boolean;
   public_access?: boolean;
@@ -61,6 +69,10 @@ function mapEvent(row: EventRow): StreamEvent {
     syndicateFacebook: row.syndicate_facebook,
     youtubePrivacy: row.youtube_privacy,
     artworkUrl: row.artwork_url,
+    seriesId: row.series_id ?? null,
+    artworkPosterUrl: row.artwork_poster_url ?? null,
+    artworkWideUrl: row.artwork_wide_url ?? null,
+    artworkBannerUrl: row.artwork_banner_url ?? null,
     chatEnabled: row.chat_enabled,
     countdownEnabled: row.countdown_enabled,
     publicAccess: row.public_access !== false,
@@ -173,6 +185,11 @@ export async function createStreamEvent(
     churchId: string;
     title: string;
     startsAt: string;
+    seriesId?: string | null;
+    artworkUrl?: string | null;
+    artworkPosterUrl?: string | null;
+    artworkWideUrl?: string | null;
+    artworkBannerUrl?: string | null;
     recurrenceRule?: string | null;
     syndicateYoutube?: boolean;
     syndicateFacebook?: boolean;
@@ -193,6 +210,11 @@ export async function createStreamEvent(
       church_id: input.churchId,
       title: input.title.trim(),
       starts_at: input.startsAt,
+      series_id: input.seriesId ?? null,
+      artwork_url: input.artworkUrl ?? null,
+      artwork_poster_url: input.artworkPosterUrl ?? null,
+      artwork_wide_url: input.artworkWideUrl ?? null,
+      artwork_banner_url: input.artworkBannerUrl ?? null,
       recurrence_rule: input.recurrenceRule ?? null,
       syndicate_youtube: input.syndicateYoutube ?? true,
       syndicate_facebook: input.syndicateFacebook ?? true,
@@ -223,8 +245,14 @@ export async function updateStreamEvent(
     syndicationRetryUntil: string | null;
     title: string;
     startsAt: string;
+    seriesId: string | null;
+    artworkUrl: string | null;
+    artworkPosterUrl: string | null;
+    artworkWideUrl: string | null;
+    artworkBannerUrl: string | null;
   }>,
   supabase?: SupabaseClient,
+  requiredStatus?: StreamEventStatus,
 ): Promise<StreamEvent> {
   const client = getClient(supabase);
   const updates: Record<string, unknown> = {};
@@ -238,11 +266,16 @@ export async function updateStreamEvent(
   if (patch.title !== undefined) updates.title = patch.title;
   if (patch.startsAt !== undefined) updates.starts_at = patch.startsAt;
 
-  const { data, error } = await client
-    .from("stream_events")
-    .update(updates)
-    .eq("id", eventId)
-    .eq("church_id", churchId)
+  if (patch.seriesId !== undefined) updates.series_id = patch.seriesId;
+  if (patch.artworkUrl !== undefined) updates.artwork_url = patch.artworkUrl;
+  if (patch.artworkPosterUrl !== undefined) updates.artwork_poster_url = patch.artworkPosterUrl;
+  if (patch.artworkWideUrl !== undefined) updates.artwork_wide_url = patch.artworkWideUrl;
+  if (patch.artworkBannerUrl !== undefined) updates.artwork_banner_url = patch.artworkBannerUrl;
+
+  let query = client.from("stream_events").update(updates)
+    .eq("id", eventId).eq("church_id", churchId);
+  if (requiredStatus) query = query.eq("status", requiredStatus);
+  const { data, error } = await query
     .select("*")
     .single();
 

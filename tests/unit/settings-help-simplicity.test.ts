@@ -369,7 +369,10 @@ test("the Help page promises the same response time as the public support page",
   assert.match(read("app/support/page.tsx"), new RegExp(SUPPORT_RESPONSE_TIME.replace("within ", "")));
   const page = read("app/dashboard/support/page.tsx");
   assert.doesNotMatch(page, /one business day/);
-  assert.doesNotMatch(page, /tel:/, "no invented phone number");
+  assert.match(page, /href="tel:\+15026508301"/);
+  assert.match(page, /description="\(502\) 650-8301"/);
+  assert.match(page, /title="Call us"[\s\S]*?tone="primary"/);
+  assert.match(read("app/dashboard/support/loading.tsx"), /title: "Call us"[\s\S]*?primary: true/);
   assert.match(SUPPORT_RESPONSE_TIME, /same day/);
   assert.doesNotMatch(read("app/support/page.tsx"), /business day/);
 });

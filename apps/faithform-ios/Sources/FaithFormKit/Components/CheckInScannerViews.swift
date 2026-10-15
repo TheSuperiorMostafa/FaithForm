@@ -28,6 +28,7 @@ public struct CheckInScannerScreen: View {
     private let onOpenSettings: @MainActor () -> Void
     private let onDone: @MainActor () -> Void
     private let footer: AnyView?
+    private let headerContent: AnyView?
     /// What the code field shows. Kept in step with `model.typedCode` both ways.
     @State private var codeText = ""
     @State private var selectedMode: Mode = .scan
@@ -39,17 +40,20 @@ public struct CheckInScannerScreen: View {
         model: CheckInScannerModel,
         onOpenSettings: @escaping @MainActor () -> Void,
         onDone: @escaping @MainActor () -> Void,
-        footer: AnyView? = nil
+        footer: AnyView? = nil,
+        headerContent: AnyView? = nil
     ) {
         self.model = model
         self.onOpenSettings = onOpenSettings
         self.onDone = onDone
         self.footer = footer
+        self.headerContent = headerContent
     }
 
     public var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: FaithFormTokens.Spacing.lg) {
+                if let headerContent { headerContent }
                 header
 
                 // Mode switcher between Scan and Code entry

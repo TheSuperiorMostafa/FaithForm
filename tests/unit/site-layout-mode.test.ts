@@ -251,7 +251,7 @@ test("Visit includes service times and composed order survives resolution sortin
     homeSections: [row("site_nav", 0), row("service_times", 20), row("footer_map", 5)],
     pageSections: [row("visit_cta", 80)],
   });
-  assert.deepEqual(composed.slice().sort((a, b) => a.sortOrder - b.sortOrder).map((s) => s.type), ["site_nav", "visit_cta", "service_times", "footer_map"]);
+  assert.deepEqual(composed.slice().sort((a, b) => a.sortOrder - b.sortOrder).map((s) => s.type), ["site_nav", "service_times", "visit_cta", "footer_map"]);
 });
 
 // A manually edited menu is merged after generated page props; normalize the
@@ -323,11 +323,23 @@ test("separate-page navigation wins after the final override cascade, while land
 
 test("separate pages compose purposeful related content without circular self-inclusion", () => {
   assert.deepEqual(websiteSupportingPaths("/about"), ["/vision", "/staff"]);
-  assert.deepEqual(websiteSupportingPaths("/visit"), ["/programs"]);
+  for (const path of ["/give", "/sermons", "/staff", "/vision", "/programs", "/visit"]) {
+    assert.deepEqual(websiteSupportingPaths(path), [], `${path} should focus on its own content`);
+  }
   assert.deepEqual(websiteSupportingPaths("/"), ["/about", "/events"]);
   assert.deepEqual(websiteSupportingPaths("/custom"), []);
   for (const page of WEBSITE_PAGE_DEFS) {
     assert.ok(!websiteSupportingPaths(page.path).includes(page.path));
     assert.ok(websiteSupportingPaths(page.path).every((path) => websitePageDefForPath(path)));
   }
+});
+
+
+test("task pages omit the repeated contact band while connection pages keep it", () => {
+  const row = (type: string): SiteSectionRow => ({ id: type, type, sortOrder: 0, isVisible: true, props: {} });
+  const homeSections = [row("site_nav"), row("contact_band"), row("footer_map")];
+  for (const [path, type] of [["/give", "give_cta"], ["/sermons", "sermon_feed"], ["/vision", "vision_mission"]]) {
+    assert.deepEqual(composeWebsiteSections({ path, homeSections, pageSections: [row(type)] }).map((section) => section.type), ["site_nav", type, "footer_map"]);
+  }
+  assert.deepEqual(composeWebsiteSections({ path: "/staff", homeSections, pageSections: [row("staff_grid")] }).map((section) => section.type), ["site_nav", "staff_grid", "contact_band", "footer_map"]);
 });

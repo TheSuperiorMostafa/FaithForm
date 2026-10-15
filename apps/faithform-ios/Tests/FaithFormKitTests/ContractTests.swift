@@ -5,6 +5,15 @@ import Testing
 @Suite("Contract decoding")
 struct ContractTests {
 
+    @Test("guardian pickup code preserves leading zero and room alert")
+    func kidsCheckIn() throws {
+        let decoded = try JSONDecoder.faithform.decode(MobileSuccess<KidsCheckInData>.self, from: Fixtures.data("kids-checkin-household"))
+        let household = try #require(decoded.data.households.first)
+        #expect(household.pickupCode == "012345")
+        #expect(household.children.first?.roomName == "Nursery")
+        #expect(household.alerts.first?.childName == "Example Child")
+    }
+
     @Test("every bootstrap fixture decodes")
     func bootstrapFixtures() throws {
         for name in [

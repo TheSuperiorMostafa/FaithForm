@@ -3,19 +3,22 @@ import type { SectionComponentProps } from "@/lib/sites/contract";
 import { cn } from "@/lib/utils";
 import type { NavContent } from "@/types/site";
 
-import { Action } from "../primitives";
+import { isCurrentSiteLink } from "@/lib/sites/active-link";
 import { SiteNavMenu } from "./site-nav-menu";
 
-function SiteNav({ content, ctx }: SectionComponentProps<NavContent & { homeHref?: string }>) {
+function SiteNav({ content, ctx }: SectionComponentProps<NavContent & { homeHref?: string; websitePath?: string; websiteBasePath?: string }>) {
   // Website mode uses path links (`/about`); the masthead should take visitors
   // home rather than to a hash on the current page.
   const usesPages = content.links.some((link) => link.href.startsWith("/"));
   const brandHref = content.homeHref ?? (usesPages ? "/" : `#${ctx.anchor}`);
 
+  const current = (href: string) => isCurrentSiteLink(href, content.websitePath, content.websiteBasePath) ? "page" as const : undefined;
+  const ctaVariant = { solid: "site-btn-solid", outline: "site-btn-outline", quiet: "site-btn-quiet" }[content.cta?.variant ?? "solid"];
+
   return (
     <nav id={ctx.anchor} className={cn("site-nav", !content.sticky && "site-nav-static")}>
       <div className="site-nav-inner">
-        <a href={brandHref} className="site-nav-brand">
+        <a href={brandHref} className="site-nav-brand" aria-current={current(brandHref)}>
           {content.logo?.src ? (
             // eslint-disable-next-line @next/next/no-img-element -- church-supplied URL
             <img
@@ -34,14 +37,23 @@ function SiteNav({ content, ctx }: SectionComponentProps<NavContent & { homeHref
 
         <div className="site-nav-links">
           {content.links.map((link) => (
-            <a key={link.href + link.label} href={link.href} className="site-link">
+            <a key={link.href + link.label} href={link.href} className="site-link" aria-current={current(link.href)}>
               {link.label}
             </a>
           ))}
-          <Action action={content.cta} />
+          {content.cta?.label ? (
+            <a
+              href={content.cta.href || "#"}
+              className={cn("site-btn", ctaVariant)}
+              aria-current={current(content.cta.href)}
+              {...(/^https?:\/\//i.test(content.cta.href) ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+            >
+              {content.cta.label}
+            </a>
+          ) : null}
         </div>
 
-        <SiteNavMenu links={content.links} cta={content.cta} />
+        <SiteNavMenu links={content.links} cta={content.cta} websitePath={content.websitePath} websiteBasePath={content.websiteBasePath} />
       </div>
     </nav>
   );

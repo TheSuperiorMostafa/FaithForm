@@ -119,6 +119,7 @@ struct CheckInTabView: View {
             VStack(spacing: 0) {
                 if isStale { OfflineBanner(message: L.offlineCached) }
                 ScrollView {
+                    HouseholdPickupSection(api: dependencies.api, churchSlug: features.churchSlug).id(features.churchSlug)
                     AutomaticCheckInSection(
                         model: attendance,
                         onSetUp: {
@@ -167,7 +168,8 @@ struct CheckInTabView: View {
                     Task { await model.reset() }
                     root.select(.home)
                 },
-                footer: showsAutomaticCheckIn ? AnyView(automaticCheckInSection) : nil
+                footer: showsAutomaticCheckIn ? AnyView(automaticCheckInSection) : nil,
+                headerContent: AnyView(HouseholdPickupSection(api: dependencies.api, churchSlug: features.churchSlug).id(features.churchSlug))
             )
         }
         // A scanned code is handled by the coordinator on the camera's own
@@ -246,5 +248,82 @@ struct AutomaticCheckInSection: View {
             )
         }
         .padding(.top, FaithFormTokens.Spacing.md)
+    }
+}
+
+
+/// Pickup credentials remain in this authenticated view only, never in a cache or push payload.
+struct HouseholdPickupSection: View {
+    @Environment(\.faithformTheme) private var theme
+    @Environment(\.scenePhase) private var scenePhase
+    let api: APIClient
+    let churchSlug: String
+    @State private var data: KidsCheckInData?
+    @State private var loading = true
+    @State private var failed = false
+
+    var body: some View {
+        GroupPanelView("Kids check-in") {
+            VStack(alignment: .leading, spacing: 16) {
+                if loading {
+                    ProgressView("Loading household pickup codes…")
+                        .frame(maxWidth: .infinity, minHeight: 100)
+                } else if failed {
+                    Text("We couldn’t load your pickup codes. Connect to the internet and try again.")
+                        .foregroundStyle(theme.palette.contentSecondary)
+                } else if let data, data.households.isEmpty {
+                    Text("No household is linked to your account. Ask the check-in team to confirm your guardian access.")
+                        .foregroundStyle(theme.palette.contentSecondary)
+                } else if let data {
+                    ForEach(data.households, id: \.id) { household in
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text(household.label).font(.headline)
+                            Text("Household pickup code").font(.subheadline)
+                            Text(household.pickupCode)
+                                .font(.system(size: 34, weight: .bold, design: .monospaced))
+                                .textSelection(.enabled)
+                                .accessibilityLabel("Household pickup code \(household.pickupCode.map(String.init).joined(separator: " "))")
+                            Text("Show this code to the check-in team at pickup. Keep it private.")
+                                .font(.caption).foregroundStyle(theme.palette.contentSecondary)
+                            ForEach(household.children, id: \.id) { child in
+                                HStack { Text(child.name); Spacer(); Text(child.roomName).foregroundStyle(theme.palette.contentSecondary) }
+                            }
+                            ForEach(household.alerts, id: \.id) { alert in
+                                Label("Please return to \(alert.roomName) for \(alert.childName).", systemImage: "exclamationmark.triangle.fill")
+                                    .font(.headline).foregroundStyle(.red)
+                                    .padding(12).frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(Color.red.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+                            }
+                        }
+                    }
+                }
+                Button("Refresh pickup codes", systemImage: "arrow.clockwise") { Task { await load() } }
+                    .buttonStyle(FaithFormButtonStyle(kind: .secondary, theme: theme))
+                    .disabled(loading)
+            }
+        }
+        .task(id: "\(churchSlug)-\(scenePhase)") {
+            guard scenePhase == .active else { data = nil; return }
+            while !Task.isCancelled {
+                await load()
+                do { try await Task.sleep(for: .seconds(30)) } catch { return }
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .faithformDeepLink)) { _ in
+            guard scenePhase == .active else { return }
+            Task { await load() }
+        }
+        .onDisappear { data = nil }
+    }
+
+    @MainActor private func load() async {
+        loading = data == nil; failed = false
+        defer { loading = false }
+        do {
+            let response = try await api.send("api/mobile/v1/checkin/\(churchSlug)/household", as: KidsCheckInData.self)
+            guard !Task.isCancelled, scenePhase == .active else { return }
+            guard let value = response.value else { failed = true; return }
+            data = value
+        } catch is CancellationError {} catch { data = nil; failed = true }
     }
 }

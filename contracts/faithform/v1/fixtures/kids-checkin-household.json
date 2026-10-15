@@ -1,0 +1,34 @@
+{
+  "ok": true,
+  "data": {
+    "households": [
+      {
+        "id": "household-fixture",
+        "label": "Example household",
+        "pickupCode": "012345",
+        "children": [
+          {
+            "id": "child-fixture",
+            "name": "Example Child",
+            "roomName": "Nursery",
+            "checkedInAt": "2026-10-11T14:00:00Z"
+          }
+        ],
+        "alerts": [
+          {
+            "id": "alert-fixture",
+            "childName": "Example Child",
+            "roomName": "Nursery",
+            "createdAt": "2026-10-11T14:30:00Z"
+          }
+        ]
+      }
+    ]
+  },
+  "meta": {
+    "apiVersion": "2026-08-24",
+    "apiMajor": 1,
+    "requestId": "kids-fixture",
+    "minimumSupportedClientBuild": 1
+  }
+}

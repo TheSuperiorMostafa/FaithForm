@@ -2072,7 +2072,26 @@ export const chatCardSchema = z
   })
   .meta({ id: "ChatCard" });
 
+// Private guardian data. Returned only after a live verified household link.
+export const kidsCheckInChildSchema = z.object({
+  id: z.string(), name: z.string(), roomName: z.string(), checkedInAt: instant,
+}).meta({ id: "KidsCheckInChild" });
+export const kidsCheckInAlertSchema = z.object({
+  id: z.string(), childName: z.string(), roomName: z.string(), createdAt: instant,
+}).meta({ id: "KidsCheckInAlert" });
+export const kidsCheckInHouseholdSchema = z.object({
+  id: z.string(), label: z.string(), pickupCode: z.string(),
+  children: z.array(kidsCheckInChildSchema), alerts: z.array(kidsCheckInAlertSchema),
+}).meta({ id: "KidsCheckInHousehold" });
+export const kidsCheckInDataSchema = z.object({
+  households: z.array(kidsCheckInHouseholdSchema),
+}).meta({ id: "KidsCheckInData" });
+
 export const CONTRACT_SCHEMAS = {
+  KidsCheckInChild: kidsCheckInChildSchema,
+  KidsCheckInAlert: kidsCheckInAlertSchema,
+  KidsCheckInHousehold: kidsCheckInHouseholdSchema,
+  KidsCheckInData: kidsCheckInDataSchema,
   Deprecation: deprecationSchema,
   FieldIssue: fieldIssueSchema,
   Meta: metaSchema,

@@ -29,7 +29,7 @@ export type PushMessage = {
   deepLink: string;
   collapseKey: string;
   correlationId: string;
-  topic?: "announcements" | "events" | "groups";
+  topic?: "announcements" | "events" | "groups" | "checkin";
 };
 
 export interface PushAdapter {

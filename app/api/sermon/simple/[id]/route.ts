@@ -1,3 +1,4 @@
+import { revalidatePath } from "next/cache";
 import { NextResponse } from "next/server";
 import { requireChurchAuth } from "@/lib/auth/church";
 import { validateSimpleSermonBody } from "@/lib/sermon-builder/simple-sermon-save";
@@ -48,6 +49,7 @@ export async function PATCH(
       scripture_refs: validated.scripture_refs,
     });
 
+    if (sermon.series_id) revalidatePath(`/dashboard/sermon-builder/series/${sermon.series_id}`);
     return NextResponse.json({ sermon: updated });
   } catch (e) {
     return sermonRouteError(e, "We couldn't save your changes. Your work is still on the page.");

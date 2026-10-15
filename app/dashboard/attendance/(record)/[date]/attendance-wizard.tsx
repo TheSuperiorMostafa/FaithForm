@@ -819,7 +819,7 @@ export function AttendanceWizard({
               <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className="text-base font-semibold text-foreground">First time guest</span>
                 <span className="text-[15px] text-muted-foreground">
-                  Tell the pastor or send a welcome text from Follow-up after you save.
+                  Send a welcome text from Follow-up after you save.
                 </span>
               </span>
             </label>

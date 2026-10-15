@@ -23,6 +23,7 @@ const FORBIDDEN = {
   updated_at: "2020-01-01T00:00:00Z",
   kind: "simple",
   series_id: "66666666-6666-4666-8666-666666666666",
+  series_week: 2,
   published_at: "2020-01-01T00:00:00Z",
   outline_generated_at: "2020-01-01T00:00:00Z",
   content_generated_at: "2020-01-01T00:00:00Z",

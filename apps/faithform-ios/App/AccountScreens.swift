@@ -169,6 +169,9 @@ struct AccountView: View {
 
                 VStack(spacing: 22) {
                     detailsPanel
+                    if let slug = root.selectedChurch?.churchSlug {
+                        HouseholdPickupSection(api: dependencies.api, churchSlug: slug).id(slug)
+                    }
                     preferencesPanel
                     if root.selectedChurch?.canManageBranding == true { churchToolsPanel }
                     legalPanel

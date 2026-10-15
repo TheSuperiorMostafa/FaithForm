@@ -1,4 +1,4 @@
-import { BookOpen, ChevronRight, Mail, MessageSquareText } from "lucide-react";
+import { BookOpen, ChevronRight, Mail, Phone } from "lucide-react";
 
 import {
   HELP_PAGE_DESCRIPTION,
@@ -19,9 +19,9 @@ import { SUPPORT_EMAIL } from "@/lib/legal/policy-versions";
 export default function SupportLoading() {
   const cards = [
     {
-      icon: MessageSquareText,
-      title: "Send us a message",
-      description: "Write to us here and follow our reply on this page.",
+      icon: Phone,
+      title: "Call us",
+      description: "(502) 650-8301",
       primary: true,
     },
     { icon: Mail, title: "Email us", description: SUPPORT_EMAIL, primary: false },

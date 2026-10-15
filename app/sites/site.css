@@ -1684,3 +1684,51 @@
 [data-layout="website"][data-theme="light"] .site-nav-menu-btn { color: var(--site-ink); }
 [data-layout="website"][data-theme="light"] .site-nav-sub { color: var(--site-gold); }
 [data-layout="website"][data-theme="light"] .site-nav-menu-btn { border-color: color-mix(in srgb, var(--site-ink) 20%, transparent); }
+
+/* Task pages lead to their content instead of repeating the home-page hero. */
+[data-layout="website"] .site-page-intro:not([data-page="/about"]) {
+  padding-block: clamp(28px, 4vw, 48px);
+}
+[data-layout="website"] .site-page-intro .site-page-breadcrumb { margin-bottom: 12px; }
+[data-layout="website"] .site-page-intro .site-page-intro-copy { margin-top: 16px; }
+[data-layout="website"] .site-page-intro:not([data-page="/about"]) .site-display-lg {
+  font-size: clamp(30px, 3.5vw, 48px);
+}
+
+.site-nav-links > .site-link[aria-current="page"],
+.site-nav-drawer-link[aria-current="page"] {
+  font-weight: 700;
+  text-decoration: underline;
+  text-decoration-color: var(--site-gold);
+  text-underline-offset: .4em;
+  text-decoration-thickness: 2px;
+}
+
+/* Visit uses the home data as a readable timetable, without a floating hero card. */
+[data-layout="website"][data-page="/visit"] .site-strip {
+  position: relative; transform: none; z-index: auto; display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  width: auto; max-width: none; margin: 0; padding: 16px var(--site-section-x);
+  border-radius: 0; background: var(--site-canvas-alt); color: var(--site-ink);
+  box-shadow: none; backdrop-filter: none;
+}
+[data-layout="website"][data-page="/visit"] .site-strip-cell {
+  flex-direction: column; align-items: flex-start; justify-content: center;
+  padding: 20px; gap: 8px; border: 0;
+}
+[data-layout="website"][data-page="/visit"] .site-strip-value,
+[data-layout="website"][data-page="/visit"] .site-strip-lines { color: inherit; }
+
+/* Inner pages need a header in document flow, unlike Light's photo overlay. */
+[data-layout="website"][data-theme="light"] .site-nav { position: sticky; }
+[data-layout="website"] .site-nav.site-nav-static { position: relative; }
+[data-layout="website"] .site-nav-brand { min-width: 0; }
+[data-layout="website"] .site-nav-title { overflow-wrap: anywhere; }
+[data-layout="website"] .site-nav-menu { flex: none; }
+/* Wood's gold label was designed for its dark home strip. Visit uses canvas. */
+[data-layout="website"][data-page="/visit"] .site-strip-label { color: var(--site-gold); }
+/* A full website can have eight destinations; switch before they squeeze the name. */
+@media (max-width: 1100px) {
+  [data-layout="website"] .site-nav-links { display: none; }
+  [data-layout="website"] .site-nav-menu { display: block; }
+}

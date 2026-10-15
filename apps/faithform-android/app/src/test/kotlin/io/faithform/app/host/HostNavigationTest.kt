@@ -147,13 +147,12 @@ class HostTabsTest {
             ),
         )
         assertFalse(HostTab.CHECK_IN in HostNavigation.availableTabs(neither, "grace", shippedRegistry))
-        assertNull(
-            HostNavigation.resolveLink(
-                Destination.CheckIn("grace"),
-                neither,
-                shippedRegistry,
-            ),
-        )
+        val target = HostNavigation.resolveLink(Destination.CheckIn("grace"), neither, shippedRegistry)
+        assertEquals(HostTab.ACCOUNT, target?.tab)
+        assertEquals("grace", target?.churchSlug)
+        // Fallback preserves the same relationship/capability authorization.
+        assertNull(HostNavigation.resolveLink(Destination.CheckIn("other"), neither, shippedRegistry))
+        assertNull(HostNavigation.resolveLink(Destination.CheckIn("grace"), neither.copy(enabledCapabilities = neither.enabledCapabilities - "attendance"), shippedRegistry))
     }
 
     @Test

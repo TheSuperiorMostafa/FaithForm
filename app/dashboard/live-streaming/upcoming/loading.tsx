@@ -14,7 +14,7 @@ export default function UpcomingServicesLoading() {
           <div className="space-y-1">
             <h2 className="font-heading text-xl font-bold text-foreground">Upcoming services</h2>
             <p className="text-[15px] text-muted-foreground">
-              Schedule a service so Go live is ready with its name, and your watch page shows a countdown.
+              Plan the title, artwork and series before your service. They carry over to its recording.
             </p>
           </div>
           <Skeleton className="min-h-12 w-52 rounded-[10px]" />
@@ -51,7 +51,7 @@ function ServiceRowsSkeleton({ rows, withAction = false }: { rows: number; withA
       {Array.from({ length: rows }).map((_, index) => (
         <li
           key={index}
-          className="flex min-h-[72px] flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+          className="flex min-h-[72px] flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:justify-between"
         >
           <div className="flex min-w-0 items-center gap-4">
             <Skeleton className="size-11 shrink-0 rounded-xl" />
@@ -60,9 +60,9 @@ function ServiceRowsSkeleton({ rows, withAction = false }: { rows: number; withA
               <Skeleton className="h-4 w-64 max-w-full" />
             </div>
           </div>
-          <div className="flex shrink-0 items-center gap-3">
+          <div className="flex shrink-0 flex-wrap items-center gap-3">
             <Skeleton className="h-8 w-24 rounded-full" />
-            {withAction ? <Skeleton className="min-h-11 w-40 rounded-[10px]" /> : null}
+            {withAction ? <><Skeleton className="min-h-11 w-32 rounded-[10px]" /><Skeleton className="min-h-11 w-40 rounded-[10px]" /></> : null}
           </div>
         </li>
       ))}

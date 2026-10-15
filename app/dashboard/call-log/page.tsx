@@ -74,7 +74,7 @@ export default async function CallLogPage() {
       {isStaff && (
         <AdvancedSection
           title="Assistant quality"
-          description="Scores, re-scoring and importing calls. Churches don't see this section."
+          description="Scores, re-scoring and importing calls."
         >
           <RecentCallsBlock
             calls={calls}

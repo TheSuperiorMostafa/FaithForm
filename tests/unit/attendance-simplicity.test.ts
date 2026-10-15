@@ -336,8 +336,8 @@ test("pastor and welcome messages are validated in plain church language", () =>
   );
 
   const panel = read("app/dashboard/attendance/follow-up/[date]/first-time-guest-panel.tsx");
-  assert.match(panel, /Goes to your church phone in Settings/);
-  assert.match(panel, /confirmLabel: "Tell pastor"/);
+  assert.doesNotMatch(panel, /Tell pastor|Tell the pastor|notifyPastorOfFirstTimeGuests/);
+  assert.doesNotMatch(read("app/dashboard/attendance/follow-up/[date]/loading.tsx"), /Tell pastor|Tell the pastor/);
   assert.match(panel, /Send welcome/);
 });
 

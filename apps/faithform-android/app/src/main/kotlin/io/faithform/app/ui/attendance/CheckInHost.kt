@@ -4,6 +4,7 @@ import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
 import androidx.camera.view.PreviewView
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -49,13 +50,17 @@ import kotlinx.coroutines.launch
 @Composable
 fun CheckInTab(
     api: ApiClient,
+    churchSlug: String?,
     cameraPermission: CameraPermissionRequester,
     showsCodeCheckIn: Boolean,
     automaticCheckInContent: (@Composable (Modifier) -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     if (!showsCodeCheckIn) {
-        automaticCheckInContent?.invoke(modifier)
+        androidx.compose.foundation.layout.Column(modifier.verticalScroll(androidx.compose.foundation.rememberScrollState())) {
+            churchSlug?.let { HouseholdPickupSection(api, it) }
+            automaticCheckInContent?.invoke(Modifier)
+        }
         return
     }
 
@@ -127,5 +132,6 @@ fun CheckInTab(
             )
         },
         footer = { automaticCheckInContent?.invoke(Modifier) },
+        headerContent = { churchSlug?.let { HouseholdPickupSection(api, it) } },
     )
 }

@@ -111,7 +111,10 @@ export default async function SermonDetailPage({
 
   return (
     <div className="flex w-full flex-col gap-8">
-      <SermonBackLink href="/dashboard/sermon-builder" label="Back to Sermons" />
+      <SermonBackLink
+        href={sermon.series_id ? `/dashboard/sermon-builder/series/${sermon.series_id}` : "/dashboard/sermon-builder"}
+        label={sermon.series_id ? "Back to the series" : "Back to Sermons"}
+      />
 
       <div className="flex flex-col gap-4">
         <PageHeader

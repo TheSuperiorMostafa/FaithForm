@@ -578,7 +578,13 @@ final class RootModel {
                   match.canReadPublishedContent
             else { return }
             if case .groups = destination, match.groupsEnabled != true { return }
-            if case .checkIn = destination, !Self.offersCheckIn(match) { return }
+            if case .checkIn = destination, !Self.offersCheckIn(match) {
+                guard case .allowed = dependencies.registry(for: bootstrap).resolve(destination, session: Self.snapshot(bootstrap)) else { return }
+                selectedChurch = match
+                refreshFeatures()
+                selectedTab = .account
+                return
+            }
             selectedChurch = match
             refreshFeatures()
         }

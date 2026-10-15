@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Layers, Plus } from "lucide-react";
+import { Layers, Pencil, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -34,13 +34,14 @@ export function SeriesTimeline({
     <ol className="grid gap-4 md:grid-cols-2">
       {plan.weeks.map((week) => {
         const saved = grouped?.byWeek.get(week.week) ?? [];
+        const current = saved[0];
         return (
           <li key={week.week}>
             <Card className="h-full">
               <CardHeader>
                 <p className="text-sm font-semibold text-muted-foreground">Week {week.week}</p>
-                <CardTitle className="text-lg">{week.title}</CardTitle>
-                <p className="text-[15px] text-muted-foreground">{week.scripture}</p>
+                <CardTitle className="text-lg">{current?.title ?? week.title}</CardTitle>
+                <p className="text-[15px] text-muted-foreground">{current ? current.scripture_refs.join("; ") : week.scripture}</p>
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
                 <ul className="list-disc space-y-1 pl-5 text-[15px]">
@@ -65,9 +66,10 @@ export function SeriesTimeline({
                           className="h-auto max-w-full whitespace-normal text-left break-words"
                           variant="outline"
                           nativeButton={false}
-                          render={<Link href={`/dashboard/sermon-builder/${sermon.id}`} />}
+                          render={<Link href={`/dashboard/sermon-builder/${sermon.id}${sermon.kind === "simple" ? "/edit" : ""}`} />}
                         >
-                          Open {sermon.title}
+                          <Pencil aria-hidden className="size-5" />
+                          {saved.length === 1 ? "Edit this week’s sermon" : `Edit ${sermon.title}`}
                         </Button>
                       ))}
                     </>
@@ -113,7 +115,7 @@ export function SeriesTimeline({
                 <Button
                   variant="outline"
                   nativeButton={false}
-                  render={<Link href={`/dashboard/sermon-builder/${sermon.id}`} />}
+                  render={<Link href={`/dashboard/sermon-builder/${sermon.id}${sermon.kind === "simple" ? "/edit" : ""}`} />}
                 >
                   Open {sermon.title}
                 </Button>

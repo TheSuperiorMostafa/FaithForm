@@ -43,7 +43,7 @@ export default function PeopleLoading() {
 
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap gap-2">
-            {["Everyone", "No phone", "Inactive"].map((label) => (
+            {["Everyone", "No phone", "Inactive", "Potential duplicates"].map((label) => (
               <span
                 key={label}
                 className="inline-flex min-h-11 items-center gap-2 rounded-full border border-border bg-card px-5 text-[15px] font-semibold text-foreground/80"

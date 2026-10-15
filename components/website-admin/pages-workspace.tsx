@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -55,6 +55,12 @@ export function PagesWorkspace({
     router.refresh();
   }
 
+  const onPreviewNavigate = useCallback((path: string) => {
+    if (path === currentPath || !pages.some(page => page.path === path)) return;
+    const href = path === "/" ? "/dashboard/website/pages" : `/dashboard/website/pages?path=${encodeURIComponent(path)}`;
+    router.replace(href, { scroll: false });
+  }, [currentPath, pages, router]);
+
   const isWebsite = pages.length > 1;
   const pageLabel =
     pages.find((p) => p.path === currentPath)?.label ??
@@ -80,6 +86,8 @@ export function PagesWorkspace({
                 <Link
                   key={page.path}
                   href={href}
+                  aria-current={selected ? "page" : undefined}
+                  scroll={false}
                   className={cn(
                     "inline-flex min-h-11 items-center rounded-xl border px-4 text-[15px] font-semibold transition-colors",
                     selected
@@ -98,7 +106,7 @@ export function PagesWorkspace({
           {isWebsite
             ? currentPath === "/"
               ? "Your home page welcomes visitors with service times and a guide to your other pages. Use the buttons above to edit About, Visit, and other pages."
-              : `Editing the ${pageLabel} page. Changes here only affect this page.`
+              : `Editing the ${pageLabel} page. The menu and footer are shared across your website; edit them on Home.`
             : "Each block below is one part of your home page, top to bottom. Choose Edit to change its words and photos, move it up or down, or switch it off to hide it. The preview updates after each change saves."}
         </p>
 
@@ -118,7 +126,7 @@ export function PagesWorkspace({
         )}
       </div>
 
-      <SitePreview previewUrl={previewUrl} refreshToken={savedAt} sticky />
+      <SitePreview previewUrl={previewUrl} refreshToken={savedAt} onNavigate={onPreviewNavigate} sticky />
     </div>
   );
 }

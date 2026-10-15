@@ -1,5 +1,7 @@
 "use server";
 
+import { ScheduledDetailsError } from "@/lib/stream/scheduled-details-input";
+import { scheduledDetailsPatch } from "@/lib/stream/scheduled-details";
 import { revalidatePath } from "next/cache";
 import { logAdminAction } from "@/lib/activity/admin-log";
 import { getChurchAuth, type ChurchAuth } from "@/lib/auth/church";
@@ -355,6 +357,7 @@ export async function createScheduledStream(
   }
 
   try {
+    const metadata = await scheduledDetailsPatch(formData, auth.churchId, createAdminClient());
     const simulatedFile = formData.get("simulated_video");
     let simulatedSourcePath: string | null = null;
 
@@ -377,7 +380,7 @@ export async function createScheduledStream(
 
     await createStreamEvent({
       churchId: auth.churchId,
-      title,
+      ...metadata,
       startsAt: startsAt.toISOString(),
       recurrenceRule: formData.get("recurrence_weekly") ? "weekly" : null,
       syndicateYoutube: formData.get("syndicate_youtube") === "on",
@@ -394,8 +397,37 @@ export async function createScheduledStream(
   } catch (error) {
     return {
       ok: false,
-      error: humanizeStreamError(error, "We couldn't schedule that service."),
+      error: error instanceof ScheduledDetailsError ? error.message : humanizeStreamError(error, "We couldn't schedule that service."),
     };
+  }
+}
+
+export async function updateScheduledStream(
+  formData: FormData,
+): Promise<StreamRelayActionState> {
+  const gate = await requireStreamAccess();
+  if (!gate.ok) return { ok: false, error: gate.error };
+  const auth = gate.auth;
+  if (!auth.isAdmin) return { ok: false, error: "Only church admins can edit scheduled services." };
+
+  const eventId = formData.get("event_id")?.toString() ?? "";
+  if (!/^[0-9a-f-]{36}$/i.test(eventId)) return { ok: false, error: "Choose an upcoming service." };
+  try {
+    const db = createAdminClient();
+    const event = await getStreamEvent(eventId, db);
+    if (!event || event.churchId !== auth.churchId || event.status !== "scheduled") {
+      return { ok: false, error: "This service is no longer upcoming. Refresh the page and try again." };
+    }
+    const metadata = await scheduledDetailsPatch(formData, auth.churchId, db);
+    // Repeat the status condition in the write to avoid changing a service that just started.
+    await updateStreamEvent(eventId, auth.churchId, metadata, db, "scheduled");
+    await logAdminAction({ churchId: auth.churchId, taskName: "Updated upcoming service details", triggerSource: "Live Streaming" });
+    revalidateLiveStreaming();
+    revalidatePath("/dashboard/live-streaming/upcoming");
+    revalidatePath("/dashboard/live-streaming/recordings");
+    return { ok: true, message: "Service details saved." };
+  } catch (error) {
+    return { ok: false, error: error instanceof ScheduledDetailsError ? error.message : humanizeStreamError(error, "We couldn't save those service details.") };
   }
 }
 

@@ -21,6 +21,7 @@ object NotificationChannels {
     const val ANNOUNCEMENTS = "faithform_announcements"
     const val EVENTS = "faithform_events"
     const val GROUPS = "faithform_groups"
+    const val CHECKIN = "faithform_checkin"
 
     /**
      * Created at first launch, before any permission is requested.
@@ -52,7 +53,12 @@ object NotificationChannels {
             setShowBadge(true)
         }
 
-        manager.createNotificationChannels(listOf(announcements, events,
+        val checkIn = NotificationChannel(CHECKIN, "Kids check-in", NotificationManager.IMPORTANCE_HIGH).apply {
+            description = "Pickup codes and alerts from your child’s room."
+            setShowBadge(true)
+        }
+
+        manager.createNotificationChannels(listOf(announcements, events, checkIn,
             NotificationChannel(GROUPS, context.getString(io.faithform.app.R.string.tab_groups), NotificationManager.IMPORTANCE_HIGH)))
     }
 

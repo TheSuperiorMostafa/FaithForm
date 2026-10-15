@@ -37,6 +37,15 @@ private data class SuccessOf<T>(val ok: Boolean, val data: T, val meta: Meta)
 private data class FailureOf(val ok: Boolean, val error: ErrorBody, val meta: Meta)
 
 class ContractTest {
+    @Test
+    fun `guardian code preserves leading zero and room alert`() {
+        val decoded = json.decodeFromString(SuccessOf.serializer(KidsCheckInData.serializer()), fixture("kids-checkin-household"))
+        val household = decoded.data.households.single()
+        assertEquals("012345", household.pickupCode)
+        assertEquals("Nursery", household.children.single().roomName)
+        assertEquals("Example Child", household.alerts.single().childName)
+    }
+
 
     @Test
     fun `fixture directory resolves`() {

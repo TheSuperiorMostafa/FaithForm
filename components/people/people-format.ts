@@ -91,7 +91,7 @@ export type PersonLike = {
   is_active: boolean;
 };
 
-export type PeopleFilter = "all" | "on-app" | "missing-phone" | "inactive";
+export type PeopleFilter = "all" | "on-app" | "missing-phone" | "inactive" | "duplicates";
 export type PeopleSort = "last-name" | "first-name";
 
 export function fullName(person: { first_name: string; last_name: string }): string {
@@ -123,6 +123,65 @@ export function personStatus(
   return null;
 }
 
+/** Possible matches only: a shared contact may belong to a family. */
+export function potentialDuplicateIds(members: PersonLike[]): Set<string> {
+  const matches = new Set<string>();
+  const contacts = new Map<string, string[]>();
+  const surnames = new Map<string, { id: string; first: string }[]>();
+  const normalize = (value: string) => value.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+
+  for (const member of members) {
+    if (!member.is_active) continue;
+    let phone = (member.phone ?? "").replace(/\D/g, "");
+    if (phone.length === 11 && phone.startsWith("1")) phone = phone.slice(1);
+    const email = (member.email ?? "").trim().toLowerCase();
+    const keys = [phone.length >= 7 ? `phone:${phone}` : "", email.includes("@") ? `email:${email}` : ""].filter(Boolean);
+    for (const key of keys) {
+      const ids = contacts.get(key) ?? [];
+      ids.push(member.id);
+      contacts.set(key, ids);
+    }
+    const first = normalize(member.first_name);
+    const last = normalize(member.last_name);
+    if (first && last) {
+      const people = surnames.get(last) ?? [];
+      people.push({ id: member.id, first });
+      surnames.set(last, people);
+    }
+  }
+  for (const ids of contacts.values()) {
+    if (ids.length > 1) for (const id of ids) matches.add(id);
+  }
+  for (const people of surnames.values()) {
+    for (let i = 0; i < people.length; i++) {
+      for (let j = i + 1; j < people.length; j++) {
+        const a = people[i];
+        const b = people[j];
+        if (a.first === b.first || (Math.min(a.first.length, b.first.length) >= 3 && oneLetterApart(a.first, b.first))) {
+          matches.add(a.id);
+          matches.add(b.id);
+        }
+      }
+    }
+  }
+  return matches;
+}
+
+/** One inserted, removed or replaced letter, e.g. John / Jon. */
+function oneLetterApart(a: string, b: string): boolean {
+  if (Math.abs(a.length - b.length) > 1) return false;
+  let i = 0;
+  let j = 0;
+  let differences = 0;
+  while (i < a.length && j < b.length) {
+    if (a[i] === b[j]) { i++; j++; continue; }
+    if (++differences > 1) return false;
+    if (a.length >= b.length) i++;
+    if (b.length >= a.length) j++;
+  }
+  return differences + (a.length - i) + (b.length - j) <= 1;
+}
+
 export function countPeople(
   members: PersonLike[],
   isOnApp: (id: string) => boolean,
@@ -140,7 +199,7 @@ export function countPeople(
     if (isOnApp(member.id)) onApp += 1;
     if (!member.phone?.trim()) missingPhone += 1;
   }
-  return { all, "on-app": onApp, "missing-phone": missingPhone, inactive };
+  return { all, "on-app": onApp, "missing-phone": missingPhone, inactive, duplicates: potentialDuplicateIds(members).size };
 }
 
 export function filterPeople<T extends PersonLike>(
@@ -158,10 +217,12 @@ export function filterPeople<T extends PersonLike>(
   },
 ): T[] {
   const query = search.trim().toLowerCase();
+  const duplicates = filter === "duplicates" ? potentialDuplicateIds(members) : null;
 
   let list = members.filter((member) => {
     if (filter === "inactive") return !member.is_active;
     if (!member.is_active) return false;
+    if (filter === "duplicates") return duplicates!.has(member.id);
     if (filter === "missing-phone") return !member.phone?.trim();
     if (filter === "on-app") return isOnApp(member.id);
     return true;

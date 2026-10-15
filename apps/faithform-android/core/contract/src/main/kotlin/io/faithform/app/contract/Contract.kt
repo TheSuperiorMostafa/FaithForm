@@ -871,6 +871,52 @@ enum class ChatCardKind {
  * which is what lets a released client keep working when the server adds one.
  */
 @Serializable
+data class KidsCheckInChild(
+    val id: String,
+    val name: String,
+    val roomName: String,
+    val checkedInAt: String
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class KidsCheckInAlert(
+    val id: String,
+    val childName: String,
+    val roomName: String,
+    val createdAt: String
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class KidsCheckInHousehold(
+    val id: String,
+    val label: String,
+    val pickupCode: String,
+    val children: List<KidsCheckInChild>,
+    val alerts: List<KidsCheckInAlert>
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
+data class KidsCheckInData(
+    val households: List<KidsCheckInHousehold>
+)
+
+/**
+ * Unknown additive fields are ignored by the configured Json instance,
+ * which is what lets a released client keep working when the server adds one.
+ */
+@Serializable
 data class Deprecation(
     val sunsetOn: String,
     val replacement: String

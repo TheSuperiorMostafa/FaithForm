@@ -216,6 +216,7 @@ export function PeopleManager({
     ...(showAppStatus ? [{ value: "on-app" as const, label: "On the app" }] : []),
     { value: "missing-phone", label: "No phone" },
     { value: "inactive", label: "Inactive" },
+    { value: "duplicates", label: "Potential duplicates" },
   ];
 
   const openId = panelOpen && panelMode === "edit" ? selectedMember?.id : null;
@@ -305,6 +306,13 @@ export function PeopleManager({
           </label>
         </div>
 
+        {filter === "duplicates" ? (
+          <p className="text-[15px] text-muted-foreground">
+            These people have matching or similar names, or share a phone number or email.
+            Open a name to check their details. Shared family contact details may be correct.
+          </p>
+        ) : null}
+
         {!isAdmin ? (
           <p className="text-[15px] text-muted-foreground">
             Only church admins can add people or change their details.
@@ -329,7 +337,7 @@ export function PeopleManager({
           <EmptyState
             compact
             icon={Search}
-            title={search.trim() ? `No one matches “${search.trim()}”` : "No one here"}
+            title={search.trim() ? `No one matches “${search.trim()}”` : filter === "duplicates" ? "No potential duplicates" : "No one here"}
             description={
               search.trim()
                 ? "Check the spelling, or search by phone number or email."

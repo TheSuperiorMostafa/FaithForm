@@ -13,6 +13,7 @@ import {
   formatWeekOf,
   personContext,
   personStatus,
+  potentialDuplicateIds,
   suggestedFamilyName,
 } from "@/components/people/people-format";
 
@@ -98,6 +99,7 @@ test("search finds people by name, any phone format, or email; filters and count
     "on-app": 1,
     "missing-phone": 1,
     inactive: 1,
+    duplicates: 0,
   });
 });
 
@@ -233,4 +235,28 @@ test("People actions never hand raw database text to the page", () => {
   const claims = read("app/dashboard/people/claim-actions.ts");
   assert.match(claims, /toStaffResult\(error, /);
   assert.doesNotMatch(claims, /\n\s+return toVisitorResult\(error\);/);
+});
+
+test("potential duplicates match names and normalized contacts, excluding inactive people", () => {
+  const members = [
+    person("1", "John", "Doe"),
+    person("2", "Jon", "Doe"),
+    person("3", "Julie", "Doe"),
+    person("4", "James", "Harden", { phone: "+15025551234" }),
+    person("5", "Emory", "Hatton", { phone: "(502) 555-1234" }),
+    person("6", "Ann", "Lee", { email: " ANN@example.org " }),
+    person("7", "Anne", "Jones", { email: "ann@example.org" }),
+    person("8", "John", "Doe", { is_active: false }),
+    person("9", "Wyatt", ""),
+    person("10", "Wyatt", ""),
+    person("11", "JOSÉ", "García"),
+    person("12", "Jose", "Garcia"),
+  ];
+  const expected = ["1", "2", "4", "5", "6", "7", "11", "12"];
+  assert.deepEqual(potentialDuplicateIds(members), new Set(expected));
+  assert.equal(countPeople(members, () => false).duplicates, expected.length);
+  const options = { filter: "duplicates" as const, search: "", sortBy: "last-name" as const, isOnApp: () => false };
+  assert.deepEqual(new Set(filterPeople(members, options).map(m => m.id)), new Set(expected));
+  assert.deepEqual(filterPeople(members, { ...options, search: "Jon" }).map(m => m.id), ["2", "7"]);
+  assert.equal(potentialDuplicateIds([person("a", "Ann", "Lee"), person("b", "Julie", "Lee")]).size, 0);
 });

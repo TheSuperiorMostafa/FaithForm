@@ -296,6 +296,7 @@ export function buildSections(
     { type: "vision_mission", isVisible: hasStatements },
     { type: "staff_grid", isVisible: hasStaff },
     { type: "programs_grid", isVisible: programItems.length > 0 },
+    { type: "events_list", isVisible: profile.events.length > 0 },
     { type: "visit_cta", isVisible: true },
     { type: "sermon_feed", isVisible: profile.media.length > 0 },
     { type: "give_cta", isVisible: profile.givingEnabled },
@@ -423,6 +424,11 @@ export function buildSections(
             }
           : {}),
       },
+    },
+    {
+      type: "events_list",
+      isVisible: profile.events.length > 0,
+      props: { anchor: "events" },
     },
     {
       type: "visit_cta",

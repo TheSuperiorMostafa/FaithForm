@@ -6,7 +6,7 @@ import { getFeatureAccess } from "@/lib/features/access";
 import { getBroadcastOverview } from "@/lib/stream/broadcast-overview";
 import { listStreamEvents } from "@/lib/stream/events";
 import { getLiveBroadcastStatus } from "@/lib/stream/go-live";
-import { getRecordingSettings, listStaffRecordings } from "@/lib/stream/recording-publication";
+import { getRecordingSettings } from "@/lib/stream/recording-publication";
 import { createClient } from "@/lib/supabase/server";
 import { pageFeatureBlocked } from "@/lib/features/page-gate";
 
@@ -28,7 +28,7 @@ export default async function LiveStreamingPage() {
   const auth = await getChurchAuth();
   if (!auth) redirect("/login");
 
-  const [broadcastStatus, overview, events, churchRow, settings, recordings, access] = await Promise.all([
+  const [broadcastStatus, overview, events, churchRow, settings, access] = await Promise.all([
     getLiveBroadcastStatus(auth.churchId, supabase),
     getBroadcastOverview(auth.churchId, { includePreview: auth.isAdmin }),
     listStreamEvents(auth.churchId, { limit: 10, supabase }),
@@ -38,8 +38,6 @@ export default async function LiveStreamingPage() {
       .eq("id", auth.churchId)
       .maybeSingle(),
     getRecordingSettings(auth.churchId),
-    // A reminder, not the page's job: if it can't load, Go live still works.
-    listStaffRecordings(auth.churchId, { limit: 30 }).catch(() => []),
     getFeatureAccess(),
   ]);
 
@@ -52,10 +50,6 @@ export default async function LiveStreamingPage() {
         Date.parse(event.startsAt) < now + NEXT_SERVICE_WINDOW_MS,
     )
     .sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt))[0];
-
-  const readyRecordings = recordings
-    .filter((recording) => recording.phase.phase === "ready_to_publish")
-    .map((recording) => ({ id: recording.id, title: recording.title, recordedAt: recording.recordedAt }));
 
   return (
     <BroadcastControlCenter
@@ -78,7 +72,6 @@ export default async function LiveStreamingPage() {
         churchName: (churchRow.data?.name as string) ?? "",
         primaryColor: (churchRow.data?.giving_primary_color as string | null) ?? "#002D5F",
       }}
-      readyRecordings={readyRecordings}
     />
   );
 }

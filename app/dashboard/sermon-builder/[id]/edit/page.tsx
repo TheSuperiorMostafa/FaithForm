@@ -55,7 +55,10 @@ export default async function EditSimpleSermonPage({
 
   return (
     <div className="flex w-full flex-col gap-8">
-      <SermonBackLink href={`/dashboard/sermon-builder/${sermon.id}`} label="Back to the sermon" />
+      <SermonBackLink
+        href={sermon.series_id ? `/dashboard/sermon-builder/series/${sermon.series_id}` : `/dashboard/sermon-builder/${sermon.id}`}
+        label={sermon.series_id ? "Back to the series" : "Back to the sermon"}
+      />
       <PageHeader title={EDIT_SERMON_TITLE} description={sermon.title} />
       <SimpleSermonBuilder
         translationOptions={translationOptions}

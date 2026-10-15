@@ -44,9 +44,8 @@ const AUDIENCE: Record<RecordingSettings["defaultVisibility"], string> = {
  *
  * One screen that moves on by itself — Processing → Ready to publish →
  * Published — with one obvious action at each step. The church may leave at
- * any point; the recording keeps being prepared without this page, and the
- * "ready to publish" card on the Go live tab keeps pointing at it until it is
- * handled. With the church's app switched off, publishing goes to the
+ * any point; the recording keeps being prepared without this page and can
+ * be opened from Recordings later. With the church's app switched off, publishing goes to the
  * website only and the app is never mentioned.
  */
 export function PostLivePanel({

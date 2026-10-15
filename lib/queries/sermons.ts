@@ -396,7 +396,7 @@ export async function getSeries(id: string): Promise<SermonSeries | null> {
 
 export type SeriesSermonItem = Pick<
   Sermon,
-  "id" | "title" | "scripture_refs" | "created_at"
+  "id" | "title" | "scripture_refs" | "created_at" | "kind"
 > & { series_week: number | null };
 
 export async function listSeriesSermons(
@@ -407,7 +407,7 @@ export async function listSeriesSermons(
   return readAllById<SeriesSermonItem>(async (afterId, includeCount, pageSize) => {
     let query = supabase
       .from("sermons")
-      .select("id, title, scripture_refs, created_at, series_week", includeCount ? { count: "exact" } : {})
+      .select("id, title, scripture_refs, created_at, series_week, kind", includeCount ? { count: "exact" } : {})
       .eq("church_id", churchId)
       .eq("series_id", seriesId)
       .order("id", { ascending: true })

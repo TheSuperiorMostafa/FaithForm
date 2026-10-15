@@ -27,6 +27,7 @@ class FaithFormMessagingService : FirebaseMessagingService() {
         val channel = when (topic) {
             "events" -> NotificationChannels.EVENTS
             "groups" -> NotificationChannels.GROUPS
+            "checkin" -> NotificationChannels.CHECKIN
             else -> NotificationChannels.ANNOUNCEMENTS
         }
         if (!NotificationChannels.isChannelEnabled(this, channel)) return
@@ -39,6 +40,7 @@ class FaithFormMessagingService : FirebaseMessagingService() {
         val pending = PendingIntent.getActivity(this, id, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val notice = NotificationCompat.Builder(this, channel)
             .setSmallIcon(R.drawable.ic_notification)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentTitle(message.notification?.title ?: message.data["title"] ?: getString(R.string.app_name))
             .setContentText(message.notification?.body ?: message.data["body"] ?: if (isChat) getString(R.string.notification_chat_body) else null)
             .setContentIntent(pending).setAutoCancel(true).setVisibility(NotificationCompat.VISIBILITY_PRIVATE)

@@ -5,6 +5,7 @@ import { ServicePresentationLinker } from "@/components/live-streaming/service-p
 import { AdvancedSection } from "@/components/ui/advanced-section";
 import { getChurchAuth } from "@/lib/auth/church";
 import { canAccessFeature, getFeatureAccess } from "@/lib/features/access";
+import { listMediaSeries } from "@/lib/stream/media-library";
 import { listStreamEvents } from "@/lib/stream/events";
 import { getLiveBroadcastStatus } from "@/lib/stream/go-live";
 import { createClient } from "@/lib/supabase/server";
@@ -31,10 +32,11 @@ export default async function UpcomingServicesPage({
   // the full history.
   const showAllRecent = (Array.isArray(query.recent) ? query.recent[0] : query.recent) === "all";
 
-  const [events, status, access] = await Promise.all([
+  const [events, status, access, series] = await Promise.all([
     listStreamEvents(auth.churchId, { limit: showAllRecent ? 500 : 20, supabase }),
     getLiveBroadcastStatus(auth.churchId, supabase),
     getFeatureAccess(),
+    listMediaSeries(auth.churchId),
   ]);
   // Linked slides are the ones shared in the app, so linking needs Sermons and
   // the app switched on (the link route refuses otherwise).
@@ -46,6 +48,7 @@ export default async function UpcomingServicesPage({
       <ScheduleCard
         isAdmin={auth.isAdmin}
         events={events}
+        series={series.map(item => ({ id: item.id, name: item.name }))}
         youtubeConnected={status.platforms.youtube.connected}
         facebookConnected={status.platforms.facebook.connected}
         timeZone={auth.churchTimezone ?? "America/New_York"}

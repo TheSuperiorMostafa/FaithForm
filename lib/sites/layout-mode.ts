@@ -276,7 +276,9 @@ export function composeWebsiteSections(args: {
 
   const nav = homeSections.filter((s) => s.type === "site_nav");
   const content = pageSections.filter((s) => !isWebsiteHomeSectionType(s.type));
-  const contact = homeSections.filter((s) => s.type === "contact_band");
+  const contact = ["/about", "/staff", "/programs", "/visit"].includes(path)
+    ? homeSections.filter((s) => s.type === "contact_band")
+    : [];
   const footer = homeSections.filter((s) => s.type === "footer_map");
 
   // Prefer content from the page; if somehow empty, fall back to any
@@ -293,7 +295,7 @@ export function composeWebsiteSections(args: {
   // resolvePage sorts by sortOrder again. Borrowed home rows retain their old
   // positions, so explicitly number the composition rather than relying on
   // array order (a footer can otherwise appear before the page's body).
-  return [...nav, ...body, ...serviceTimes, ...contact, ...footer].map((section, index) => ({
+  return [...nav, ...serviceTimes, ...body, ...contact, ...footer].map((section, index) => ({
     ...section,
     sortOrder: index * 10,
   }));
@@ -323,13 +325,13 @@ export function websiteSupportingPaths(path: string): string[] {
   const paths: Record<string, string[]> = {
     "/": ["/about", "/events"],
     "/about": ["/vision", "/staff"],
-    "/vision": ["/programs"],
-    "/staff": ["/vision"],
-    "/programs": ["/events"],
-    "/visit": ["/programs"],
-    "/sermons": ["/visit"],
-    "/give": ["/vision"],
-    "/events": ["/programs"],
+    "/vision": [],
+    "/staff": [],
+    "/programs": [],
+    "/visit": [],
+    "/sermons": [],
+    "/give": [],
+    "/events": [],
   };
   return paths[normalizeSitePath(path)] ?? [];
 }

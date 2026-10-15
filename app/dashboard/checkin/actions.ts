@@ -38,6 +38,7 @@ import type {
   HouseholdRelationship,
 } from "@/types/checkin";
 import { mintReleaseTicket, verifyReleaseTicket } from "@/lib/checkin/checkout-ticket";
+import { notifyHouseholdCode, queueGuardianAlert } from "@/lib/checkin/guardian-service";
 import { isChurchLocation } from "@/lib/checkin/owned-location";
 
 export type ActionResult<T = undefined> =
@@ -754,8 +755,23 @@ export async function checkInMember(
   });
   if (!result.ok) return result;
 
+  if (result.householdId) await weeklyCodeFor(context, result.householdId);
   revalidateCheckin();
   return { ok: true, data: { sessionId: result.sessionId } };
+}
+
+/** Station-only: the service rechecks the child and verified guardians. */
+export async function alertGuardians(sessionId: string): Promise<ActionResult<{ queued: boolean; guardianCount: number }>> {
+  const context = await requireStation();
+  if (!isContext(context)) return context;
+  if (typeof sessionId !== "string" || !sessionId) return fail("Choose a child to alert their guardians.");
+  try {
+    const data = await queueGuardianAlert(context.auth.churchId, sessionId, context.auth.userId);
+    revalidateCheckin();
+    return { ok: true, data };
+  } catch (error) {
+    return fail(toUserError(error, "We couldn't queue the guardian alert. Please try again."));
+  }
 }
 
 export type ChildCheckinResult =
@@ -1422,6 +1438,12 @@ async function weeklyCodeFor(
 
   if (!code) return fail("We couldn't get a pickup code for this family. Please try again.");
 
+  try {
+    await notifyHouseholdCode(context.auth.churchId, householdId);
+  } catch {
+    // The code remains available in the guardian app; a later read retries enqueue.
+  }
+
   return {
     ok: true,
     code,
@@ -1482,6 +1504,7 @@ export async function rotateCredentials(
   const rotated = await rotateHouseholdCredentials(householdId, context.admin);
   if (!rotated) return fail("We couldn't replace this family's pickup code. Please try again.");
 
+  await weeklyCodeFor(context, householdId);
   revalidateCheckin(householdId);
   return { ok: true };
 }
