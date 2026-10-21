@@ -276,6 +276,7 @@ export function SectionFieldsForm({
                     <div key={i} className="flex gap-2">
                       <Textarea
                         rows={3}
+                        aria-label={`${field.label} ${i + 1}`}
                         value={paragraph}
                         onChange={(e) => {
                           const next = [...paragraphs];

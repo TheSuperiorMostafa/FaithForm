@@ -230,6 +230,30 @@ export function normalizeWebsiteHrefs(value: unknown): unknown {
   }));
 }
 
+/** Manual page links must return to anchors after collapsing to one page.
+ * Only href fields pointing at this church's known pages change; arbitrary
+ * copy, other churches, downloads and external destinations stay untouched.
+ */
+export function normalizeLandingHrefs(value: unknown, slug: string): unknown {
+  if (Array.isArray(value)) return value.map(entry => normalizeLandingHrefs(entry, slug));
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(Object.entries(value as Record<string, unknown>).map(([key, entry]) => {
+    if (key === "href" && typeof entry === "string") {
+      const href = entry.trim();
+      if (href.startsWith("/") && !href.startsWith("//")) {
+        const url = new URL(href, "https://navigation.invalid");
+        if (url.origin !== "https://navigation.invalid") return [key, entry];
+        const prefix = `/sites/${encodeURIComponent(slug)}`;
+        const localPath = url.pathname.startsWith(`${prefix}/`)
+          ? url.pathname.slice(prefix.length) : url.pathname;
+        const def = websitePageDefForPath(localPath);
+        if (def) return [key, `${url.search}${url.hash || `#${def.hash}`}`];
+      }
+    }
+    return [key, normalizeLandingHrefs(entry, slug)];
+  }));
+}
+
 /** Landing scroll order used when collapsing website pages back onto `/`. */
 export const LANDING_SECTION_ORDER = [
   "site_nav",

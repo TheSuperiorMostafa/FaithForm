@@ -180,6 +180,13 @@ async function loadSiteBundle(
   if (settingsResult.error || pageResult.error) {
     throw new Error("Website publication state unavailable");
   }
+  // Missing content and a failed read are different. In particular, treating
+  // failed override reads as [] would let the editor overwrite existing hand
+  // edits using an incomplete baseline on its next save.
+  if ([overridesResult, serviceTimesResult, staffResult, eventsResult, mediaResult]
+    .some(result => result.error)) {
+    throw new Error("Website content could not be loaded. Please try again.");
+  }
   const page = pageResult.data;
   if (!page) return null;
 
@@ -359,6 +366,9 @@ export async function buildSiteProfile(
       .limit(12),
   ]);
 
+  if ([serviceTimes, staff, events, media].some(result => result.error)) {
+    throw new Error("Your church website details could not be loaded. Please try again.");
+  }
   return mapProfile(churchRow as ChurchRow, {
     serviceTimes: serviceTimes.data,
     staff: staff.data,

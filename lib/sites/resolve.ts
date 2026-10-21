@@ -1,4 +1,4 @@
-import { normalizeWebsiteHrefs, parseSiteLayoutMode, websitePageDefForType } from "@/lib/sites/layout-mode";
+import { normalizeLandingHrefs, normalizeWebsiteHrefs, parseSiteLayoutMode, websitePageDefForType } from "@/lib/sites/layout-mode";
 import { websitePageIntroDefaults } from "@/lib/sites/page-intro";
 import type {
   ErasedSectionMaster,
@@ -482,11 +482,11 @@ export function resolvePage(input: {
     customCss: sanitizeCustomCss(settings?.customCss),
     // Layout mode governs navigation after the full cascade. Older overrides
     // can retain landing anchors even when the stored page config uses paths.
-    sections: parseSiteLayoutMode(settings?.layoutMode) === "website"
-      ? resolved.map((section) => ({
-          ...section,
-          content: normalizeWebsiteHrefs(section.content) as Record<string, unknown>,
-        }))
-      : resolved,
+    sections: resolved.map((section) => ({
+      ...section,
+      content: (parseSiteLayoutMode(settings?.layoutMode) === "website"
+        ? normalizeWebsiteHrefs(section.content)
+        : normalizeLandingHrefs(section.content, profile.slug)) as Record<string, unknown>,
+    })),
   };
 }

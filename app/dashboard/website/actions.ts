@@ -4,6 +4,8 @@ import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
+import { isPlatformAdminUserId } from "@/lib/auth/superadmin";
+import { customCssWrite } from "@/lib/sites/design-write";
 import { requireChurchAuth } from "@/lib/auth/church";
 import { toUserError } from "@/lib/errors/user-error";
 import { featureActionError } from "@/lib/features/guard";
@@ -25,7 +27,6 @@ import { SECTION_REGISTRY } from "@/lib/sites/registry";
 import {
   diffPatch,
   resolveSectionBaseline,
-  sanitizeCustomCss,
   sanitizeTokens,
 } from "@/lib/sites/resolve";
 import { buildSiteProfile, getSiteBundle } from "@/lib/sites/queries";
@@ -53,7 +54,7 @@ const ok: ActionResult = { ok: true };
 const fail = (error: string): { ok: false; error: string } => ({ ok: false, error });
 
 type Guard =
-  | { ok: true; churchId: string; isAdmin: boolean }
+  | { ok: true; churchId: string; userId: string; isAdmin: boolean }
   | { ok: false; error: string };
 
 async function guard(): Promise<Guard> {
@@ -63,7 +64,7 @@ async function guard(): Promise<Guard> {
   const featureError = await featureActionError("website");
   if (featureError) return { ok: false, error: featureError };
 
-  return { ok: true, churchId: auth.churchId, isAdmin: auth.isAdmin };
+  return { ok: true, churchId: auth.churchId, userId: auth.userId, isAdmin: auth.isAdmin };
 }
 
 /** Church admins only — content edits are not open to view-only members. */
@@ -153,7 +154,7 @@ export async function createWebsite(
 
   const draft = await generateSite(auth.churchId, profile);
 
-  await supabase.from("site_settings").upsert(
+  const { error: settingsError } = await supabase.from("site_settings").upsert(
     {
       church_id: auth.churchId,
       theme_key: themeKey,
@@ -163,6 +164,7 @@ export async function createWebsite(
     },
     { onConflict: "church_id" },
   );
+  if (settingsError) return fail(toUserError(settingsError, "We couldn't save your website settings."));
 
   const { data: page, error: pageError } = await supabase
     .from("site_pages")
@@ -451,14 +453,27 @@ export async function saveDesign(
 
   if (!theme) return fail("That theme is not available.");
 
-  // Sanitised on the way in as well as at render time. Storing something the
-  // renderer would strip anyway just leaves a confusing row behind.
+  const platformAdmin = parsed.data.customCss !== undefined
+    ? await isPlatformAdminUserId(auth.userId)
+    : false;
+  let currentCss: string | null = null;
+  if (parsed.data.customCss !== undefined && !platformAdmin) {
+    const { data: settings, error: readError } = await supabase.from("site_settings")
+      .select("custom_css").eq("church_id", auth.churchId).maybeSingle();
+    if (readError) return fail(toUserError(readError, "Those design settings could not be saved."));
+    currentCss = (settings?.custom_css as string | null) ?? null;
+  }
+  const css = customCssWrite({ requested: parsed.data.customCss, current: currentCss, platformAdmin });
+  if (!css.ok) return fail("Only FaithForm platform admins can change custom CSS.");
+
+  // Structured colours are church-editable. Privileged CSS is omitted from
+  // ordinary saves so hidden existing CSS cannot be cleared or overwritten.
   const { error } = await supabase.from("site_settings").upsert(
     {
       church_id: auth.churchId,
       theme_key: parsed.data.themeKey,
       brand_tokens: sanitizeTokens(parsed.data.brandTokens),
-      custom_css: sanitizeCustomCss(parsed.data.customCss ?? null),
+      ...css.patch,
     },
     { onConflict: "church_id" },
   );

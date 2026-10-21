@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { cloneElement, useEffect, useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, Trash2 } from "lucide-react";
 
@@ -497,18 +497,20 @@ function Field({
   label: string;
   help?: string;
   required?: boolean;
-  children: React.ReactNode;
+  children: React.ReactElement<{ id?: string }>;
 }) {
+  const generatedId = useId();
+  const controlId = children.props.id ?? generatedId;
   return (
     <div className="flex flex-col gap-1.5">
-      <Label className="text-sm font-semibold">
+      <Label htmlFor={controlId} className="text-sm font-semibold">
         {label}
         {required ? <span className="text-destructive"> *</span> : null}
       </Label>
       {/* Help sits below the control, not between label and control. Above it,
        * a field with help pushes its input down and stops lining up with the
        * field beside it in the same row. */}
-      {children}
+      {cloneElement(children, { id: controlId })}
       {help ? <p className="text-sm text-muted-foreground">{help}</p> : null}
     </div>
   );
