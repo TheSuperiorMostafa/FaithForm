@@ -8,6 +8,7 @@
  *
  * Ratios come from the rendered layout at the 1280px column width:
  *   banner   .site-hero-media   1280 x 220
+ *   background Light's hero    16:9 source, cropped to fill on narrow screens
  *   feature  .site-figure       the split-grid photo column
  *   portrait .site-staff-photo  staff card, near-square
  *   video    .site-sermon-stage featured sermon player
@@ -15,7 +16,7 @@
  *   cover    the church cover   16:9 in the apps, the site hero crops a band
  */
 
-export type ImageAspectKey = "banner" | "feature" | "portrait" | "video" | "logo" | "cover" | "free";
+export type ImageAspectKey = "banner" | "background" | "feature" | "portrait" | "video" | "logo" | "cover" | "free";
 
 export type ImageAspect = {
   key: ImageAspectKey;
@@ -37,6 +38,13 @@ export const IMAGE_ASPECTS: Record<ImageAspectKey, ImageAspect> = {
     ratio: 1280 / 220,
     output: { width: 2400, height: 413 },
     hint: "A wide strip across the top of your page.",
+  },
+  background: {
+    key: "background",
+    label: "Background photo",
+    ratio: 16 / 9,
+    output: { width: 1600, height: 900 },
+    hint: "Fills the area behind your welcome text. Phone screens show a narrower part of the photo.",
   },
   feature: {
     key: "feature",

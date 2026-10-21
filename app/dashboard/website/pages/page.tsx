@@ -91,6 +91,14 @@ export default async function WebsitePagesPage({
       const content = contentById.get(row.id);
       if (!master || !content) return [];
 
+      // Light uses this photo behind the hero, rather than as a thin strip.
+      // A banner crop would discard most of the photo before it is enlarged.
+      const fields = master.fields?.map((field) =>
+        row.type === "hero" && site.theme.key === "light" && field.type === "image" && field.key === "image"
+          ? { ...field, aspect: "background" as const, help: "Fills the background behind your welcome text. Phone screens show a narrower part of the photo." }
+          : field,
+      ) ?? null;
+
       return [
         {
           id: row.id,
@@ -100,9 +108,9 @@ export default async function WebsitePagesPage({
           hasOverride: overriddenIds.has(row.id),
           content,
           // No descriptor means FaithForm manages the section (text blocks).
-          fields: master.fields && layoutMode === "website" && websitePageDefForPath(currentPath)?.type === row.type
-            ? [websitePageIntroField(currentPath), ...master.fields]
-            : master.fields ?? null,
+          fields: fields && layoutMode === "website" && websitePageDefForPath(currentPath)?.type === row.type
+            ? [websitePageIntroField(currentPath), ...fields]
+            : fields,
         },
       ];
     });

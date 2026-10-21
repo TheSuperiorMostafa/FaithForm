@@ -528,7 +528,9 @@
  * comp inset this by 12px; edge-to-edge reads as intentional where the inset
  * read as a misaligned bar. */
 .site-hero-media {
-  height: 220px;
+  /* Preserve the wide crop at phone widths as well as the 1280px preview. */
+  height: auto;
+  aspect-ratio: 1280 / 220;
   margin: 0;
   overflow: hidden;
 }

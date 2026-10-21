@@ -15,7 +15,9 @@
 }
 
 [data-theme="wood"] .site-nav {
-  background: linear-gradient(176deg, #2b1a0c, #170d06);
+  background: linear-gradient(176deg,
+    color-mix(in srgb, var(--site-ink) 80%, #000),
+    color-mix(in srgb, var(--site-ink) 50%, #000));
   border-bottom-color: color-mix(in srgb, var(--site-accent) 35%, transparent);
   color: #f6e7c4;
 }
@@ -38,8 +40,12 @@
   position: relative;
   isolation: isolate;
   background:
-    radial-gradient(50% 48% at 50% 2%, rgba(255, 222, 166, 0.38), transparent 72%),
-    linear-gradient(176deg, #7a5028 0%, #54341a 34%, #331e0e 66%, #170d06 100%);
+    radial-gradient(50% 48% at 50% 2%, color-mix(in srgb, var(--site-accent) 38%, transparent), transparent 72%),
+    linear-gradient(176deg,
+      color-mix(in srgb, var(--site-ink) 50%, var(--site-accent)) 0%,
+      color-mix(in srgb, var(--site-ink) 85%, var(--site-accent)) 34%,
+      var(--site-ink) 66%,
+      color-mix(in srgb, var(--site-ink) 50%, #000) 100%);
 }
 
 [data-theme="wood"] .site-hero-body {
@@ -48,7 +54,7 @@
 }
 
 [data-theme="wood"] .site-hero-media {
-  height: 0;
+  height: auto;
   margin: 0;
   overflow: hidden;
 }
@@ -101,10 +107,6 @@
   font-weight: 600;
 }
 
-[data-theme="wood"] .site-accent-text {
-  color: #e9cf92;
-}
-
 [data-theme="wood"] .site-btn {
   letter-spacing: 0.14em;
   text-transform: uppercase;
@@ -118,6 +120,12 @@
 }
 
 [data-theme="wood"] .site-card {
+  /* These cards use a light canvas even inside a dark section. */
+  --site-fg: var(--site-ink);
+  --site-fg-soft: var(--site-body);
+  --site-fg-faint: var(--site-muted);
+  --site-eyebrow: var(--site-gold);
+  color: var(--site-ink);
   border-top: 3px solid var(--site-accent);
   border-left: 0;
   border-right: 0;
@@ -132,19 +140,17 @@
 
 [data-theme="wood"] .site-strip {
   margin-top: 26px;
-  background: linear-gradient(176deg, rgba(12, 7, 3, 0.82), rgba(12, 7, 3, 0.94));
   border-top-color: color-mix(in srgb, var(--site-accent) 32%, transparent);
-  color: #f8ecd2;
 }
 
 [data-theme="wood"] .site-strip-label,
 [data-theme="wood"] .site-strip-value,
 [data-theme="wood"] .site-strip-lines {
-  color: rgba(248, 236, 210, 0.82);
+  color: var(--site-fg);
 }
 
 [data-theme="wood"] .site-strip-label {
-  color: var(--site-accent);
+  color: var(--site-eyebrow);
 }
 
 [data-theme="wood"] .site-section {
@@ -212,12 +218,15 @@
 }
 
 [data-theme="wood"] .site-badge {
-  width: 30px;
-  height: 2px;
+  width: fit-content;
+  min-width: 30px;
+  height: auto;
+  min-height: 30px;
   border-radius: 0;
-  background: var(--site-accent);
-  color: transparent;
-  font-size: 0;
+  border-bottom: 2px solid var(--site-accent);
+  background: transparent;
+  color: var(--site-eyebrow);
+  font-size: 16px;
 }
 
 [data-theme="wood"] .site-staff-card {
@@ -279,7 +288,9 @@
 
 [data-theme="wood"] .site-surface-ink,
 [data-theme="wood"] .site-surface-ink-strong {
-  background-image: linear-gradient(176deg, #2b1a0c, #170d06);
+  background-image: linear-gradient(176deg,
+    color-mix(in srgb, var(--site-ink) 80%, #000),
+    color-mix(in srgb, var(--site-ink) 50%, #000));
 }
 
 [data-theme="wood"] .site-strip {
