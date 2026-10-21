@@ -95,7 +95,7 @@ export default async function WebsitePagesPage({
       // A banner crop would discard most of the photo before it is enlarged.
       const fields = master.fields?.map((field) =>
         row.type === "hero" && site.theme.key === "light" && field.type === "image" && field.key === "image"
-          ? { ...field, aspect: "background" as const, help: "Fills the background behind your welcome text. Phone screens show a narrower part of the photo." }
+          ? { ...field, label: "Background photo", aspect: "background" as const, help: undefined }
           : field,
       ) ?? null;
 
