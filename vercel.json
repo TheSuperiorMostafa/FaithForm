@@ -41,6 +41,15 @@
     },
     "app/api/webhooks/groups/maintenance/route.ts": {
       "maxDuration": 120
+    },
+    "app/api/webhooks/staff-notifications/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/webhooks/attendance-follow-up-status/route.ts": {
+      "maxDuration": 60
+    },
+    "app/api/webhooks/retell/reconcile/route.ts": {
+      "maxDuration": 60
     }
   },
   "crons": [
@@ -83,6 +92,18 @@
     {
       "path": "/api/webhooks/groups/maintenance",
       "schedule": "30 5 * * *"
+    },
+    {
+      "path": "/api/webhooks/attendance-follow-up-status",
+      "schedule": "*/2 * * * *"
+    },
+    {
+      "path": "/api/webhooks/staff-notifications",
+      "schedule": "*/2 * * * *"
+    },
+    {
+      "path": "/api/webhooks/retell/reconcile",
+      "schedule": "*/2 * * * *"
     }
   ]
 }

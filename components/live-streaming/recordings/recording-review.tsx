@@ -38,7 +38,7 @@ import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { SuccessState } from "@/components/ui/success-state";
-import { Textarea } from "@/components/ui/textarea";
+import { RecordingPrimaryFields, RecordingExtraFields } from "@/components/media/recording-details-fields";
 import { formatClock, parseClock } from "@/lib/stream/format";
 import type { RecordingSettings } from "@/lib/stream/recording-repo";
 import type { StaffRecording, ThumbnailChoice } from "@/lib/stream/recording-publication";
@@ -563,30 +563,8 @@ export function RecordingReview({
 
             <fieldset disabled={!canEdit || pending} className="flex min-w-0 flex-col gap-5">
               <legend className="sr-only">Recording details</legend>
-              <Field id="rec-title" label="Title">
-                <Input id="rec-title" value={title} onChange={(event) => setTitle(event.target.value)} maxLength={200} />
-              </Field>
-              <Field id="rec-series" label="Series" optional>
-                <Select id="rec-series" value={seriesChoice} onChange={(event) => setSeriesChoice(event.target.value)}>
-                  <option value="">No series</option>
-                  {series.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.name}
-                    </option>
-                  ))}
-                  <option value={NEW_SERIES}>New series…</option>
-                </Select>
-                {seriesChoice === NEW_SERIES ? (
-                  <Input
-                    className="mt-2"
-                    value={newSeries}
-                    onChange={(event) => setNewSeries(event.target.value)}
-                    placeholder="Series name"
-                    aria-label="New series name"
-                    maxLength={120}
-                  />
-                ) : null}
-              </Field>
+              <RecordingPrimaryFields title={title} onTitleChange={setTitle} seriesId={seriesChoice} onSeriesChange={setSeriesChoice}
+                newSeries={newSeries} onNewSeriesChange={setNewSeries} series={series} />
               <Check
                 checked={toWebsite}
                 onChange={setToWebsite}
@@ -645,42 +623,8 @@ export function RecordingReview({
                     />
                   </>
                 ) : null}
-                <Field id="rec-speaker" label="Speaker" optional>
-                  <Input
-                    id="rec-speaker"
-                    value={speaker}
-                    onChange={(event) => setSpeaker(event.target.value)}
-                    placeholder="Pastor John"
-                    maxLength={120}
-                  />
-                </Field>
-                <Field id="rec-description" label="Description" optional>
-                  <Textarea
-                    id="rec-description"
-                    placeholder="What was this service about?"
-                    className="min-h-28 resize-y"
-                    value={description}
-                    onChange={(event) => setDescription(event.target.value)}
-                    rows={3}
-                    maxLength={2000}
-                  />
-                </Field>
-                <Field id="rec-chapters" label="Scripture" optional>
-                  <Input
-                    id="rec-chapters"
-                    value={chapters}
-                    onChange={(event) => setChapters(event.target.value)}
-                    placeholder="John 3, Romans 8"
-                  />
-                </Field>
-                <Field id="rec-topics" label="Topics" optional>
-                  <Input
-                    id="rec-topics"
-                    value={topics}
-                    onChange={(event) => setTopics(event.target.value)}
-                    placeholder="Grace, Prayer"
-                  />
-                </Field>
+                <RecordingExtraFields speaker={speaker} onSpeakerChange={setSpeaker} description={description} onDescriptionChange={setDescription}
+                  chapters={chapters} onChaptersChange={setChapters} topics={topics} onTopicsChange={setTopics} />
               </fieldset>
             </AdvancedSection>
 

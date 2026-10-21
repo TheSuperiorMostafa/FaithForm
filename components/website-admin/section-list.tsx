@@ -83,6 +83,12 @@ export function SectionList({
   const [openId, setOpenId] = useState<string | null>(initialOpenId);
   const [pending, startTransition] = useTransition();
 
+  // Server refreshes carry updated headings, override badges and reset state.
+  // Rows retain their drafts by id; changing pages remounts the list itself.
+  useEffect(() => {
+    setOrder(sections);
+  }, [sections]);
+
   function move(index: number, direction: -1 | 1) {
     const target = index + direction;
     if (target < 0 || target >= order.length) return;

@@ -38,6 +38,7 @@ import type {
   HouseholdRelationship,
 } from "@/types/checkin";
 import { mintReleaseTicket, verifyReleaseTicket } from "@/lib/checkin/checkout-ticket";
+import { tryQueueStaffNotification } from "@/lib/notifications/staff";
 import { notifyHouseholdCode, queueGuardianAlert } from "@/lib/checkin/guardian-service";
 import { isChurchLocation } from "@/lib/checkin/owned-location";
 
@@ -767,6 +768,7 @@ export async function alertGuardians(sessionId: string): Promise<ActionResult<{ 
   if (typeof sessionId !== "string" || !sessionId) return fail("Choose a child to alert their guardians.");
   try {
     const data = await queueGuardianAlert(context.auth.churchId, sessionId, context.auth.userId);
+    if (data.queued) await tryQueueStaffNotification({ churchId: context.auth.churchId, event: "kids_alerts", eventKey: `${sessionId}:${Math.floor(Date.now() / 60_000)}`, href: "/dashboard/checkin" });
     revalidateCheckin();
     return { ok: true, data };
   } catch (error) {

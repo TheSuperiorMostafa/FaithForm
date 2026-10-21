@@ -10,6 +10,7 @@ export const SETTINGS_TABS = [
   { id: "team", label: "Your Team" },
   { id: "accounts", label: "Connected accounts" },
   { id: "messages", label: "Messages & email" },
+  { id: "notifications", label: "Notifications" },
   { id: "documents", label: "Documents" },
   { id: "app", label: "Member App" },
 ] as const;
@@ -67,6 +68,7 @@ export type SettingsViewer = {
 export function visibleSettingsTabs(viewer: SettingsViewer): SettingsTabId[] {
   const allowed = new Set(viewer.allowedFeatures);
   return SETTINGS_TABS.map((tab) => tab.id).filter((id) => {
+    if (id === "notifications") return allowed.has("attendance") || allowed.has("checkin");
     if (id === "documents") return allowed.has("attendance") || allowed.has("library");
     if (id === "accounts") return viewer.isAdmin;
     if (id === "messages") {

@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 /** Mirrors `SitePreview`: toolbar (real labels), 620px frame, caption. */
 export function SitePreviewSkeleton({ sticky = false }: { sticky?: boolean }) {
   return (
-    <div className={cn("flex flex-col gap-3", sticky && "lg:sticky lg:top-4")}>
+    <div className={cn("flex min-w-0 flex-col gap-3", sticky && "lg:sticky lg:top-4")}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex gap-1 rounded-lg border border-border bg-muted/40 p-1">
           <span className="inline-flex min-h-11 items-center gap-1.5 rounded-md bg-background px-4 text-sm font-semibold text-foreground shadow-sm">

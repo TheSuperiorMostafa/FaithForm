@@ -6,6 +6,7 @@ import {
   CALL_LOG_TITLE,
   toCallListItem,
 } from "@/app/dashboard/call-log/call-view";
+import { LiveCallsRefresh } from "@/components/voice-assistant/live-calls-refresh";
 import { CallsList } from "@/components/voice-assistant/calls-list";
 import { RecentCallsBlock } from "@/components/voice-assistant/recent-calls-block";
 import { ScoringExplainer } from "@/components/voice-assistant/scoring-explainer";
@@ -50,6 +51,7 @@ export default async function CallLogPage() {
 
   return (
     <div className="flex w-full flex-col gap-8">
+      <LiveCallsRefresh />
       <PageHeader
         title={CALL_LOG_TITLE}
         description={CALL_LOG_DESCRIPTION}

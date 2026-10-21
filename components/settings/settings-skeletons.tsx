@@ -1,3 +1,4 @@
+import { STAFF_NOTIFICATION_EVENTS } from "@/lib/notifications/staff-preferences";
 import { Apple, Calendar, Clock, Mail, MapPin, Play, Plus, Share2 } from "lucide-react";
 
 import {
@@ -379,14 +380,18 @@ export function SettingsTabSkeleton({
   tab,
   bare = false,
   documentsAccess,
+  notificationFeatures = ["attendance", "checkin"],
 }: {
   tab: ResolvedSettingsTab;
   /** Set when an outer SkeletonContainer already announces the loading state. */
   bare?: boolean;
   documentsAccess?: { attendance: boolean; timeSaved: boolean };
+  notificationFeatures?: readonly string[];
 }) {
   const body = (() => {
     switch (tab) {
+      case "notifications":
+        return <Card><CardHeader><CardTitle>Your notifications</CardTitle><CardDescription>Choose the emails and text messages you receive for this church. These choices affect your account.</CardDescription></CardHeader><CardContent className="flex flex-col gap-6"><Skeleton className="h-6 w-64" /><InputSkeleton label="Your mobile number" />{STAFF_NOTIFICATION_EVENTS.filter(event => notificationFeatures.includes(event.feature)).map(event => <fieldset key={event.id} className="rounded-2xl border border-border p-5"><legend className="px-1 font-semibold">{event.label}</legend><p className="text-[15px] text-muted-foreground">{event.description}</p><div className="mt-3 flex min-h-11 items-center gap-6"><Skeleton className="size-5" /><span>Email</span><Skeleton className="size-5" /><span>Phone (text message)</span></div></fieldset>)}<p className="text-sm text-muted-foreground">Text messages use your church&apos;s connected texting phone. Guardian app alerts remain available to guardians.</p><span className="inline-flex min-h-11 items-center self-start rounded-[10px] bg-primary px-6 font-semibold text-primary-foreground">Save notification choices</span></CardContent></Card>;
       case "documents":
         return <DocumentsSkeleton {...documentsAccess} />;
       case "church":

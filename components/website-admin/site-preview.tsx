@@ -132,7 +132,7 @@ export function SitePreview({
   const width = WIDTHS[device];
 
   return (
-    <div className={cn("flex flex-col gap-3", sticky && "lg:sticky lg:top-4", className)}>
+    <div className={cn("flex min-w-0 flex-col gap-3", sticky && "lg:sticky lg:top-4", className)}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex gap-1 rounded-lg border border-border bg-muted/40 p-1">
           {(

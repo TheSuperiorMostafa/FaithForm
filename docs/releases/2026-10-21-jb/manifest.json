@@ -1,0 +1,26 @@
+{
+  "target_project": "wwiclymyfplsyezxyzva",
+  "base_commit": "237fd21dfb5cb2843626d965e31a942beed9f44a",
+  "migrations": [
+    {
+      "filename": "0135_upcoming_service_recording_details.sql",
+      "sha256": "21bb580647d84eb99826be29c7aaa75f7af25f5007c41dce21f5db3dba14422d"
+    },
+    {
+      "filename": "0136_attendance_sms_tracking.sql",
+      "sha256": "297ed6bc88525b7697696da584fc924fb7d9a0373504461c7ede853a64bc1c5e"
+    },
+    {
+      "filename": "0137_retell_call_lifecycle.sql",
+      "sha256": "db8b0c99a8166f3b1a0a7494267c87b4c2d7ca30dda637919fac2fbae1686761"
+    },
+    {
+      "filename": "0138_staff_notifications.sql",
+      "sha256": "6c521ec7abb66ddb7a7cad488c280398c856ce04832282354d302d2c13889768"
+    },
+    {
+      "filename": "0139_church_health.sql",
+      "sha256": "d11c60ab5ede469c18540986a02811d2d1016b51033029c87be97c9056f8c0a9"
+    }
+  ]
+}

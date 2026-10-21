@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { Checkbox } from "@base-ui/react/checkbox";
 import { Check, Send } from "lucide-react";
 import { toast } from "sonner";
@@ -47,6 +48,7 @@ export function FirstTimeGuestPanel({
   guests,
   churchName,
 }: FirstTimeGuestPanelProps) {
+  const router = useRouter();
   const withPhone = useMemo(
     () => guests.filter((guest) => Boolean(guest.phone?.trim())),
     [guests],
@@ -91,7 +93,7 @@ export function FirstTimeGuestPanel({
     const ok = await confirmAction({
       title: `Send welcome to ${people(count)}?`,
       description:
-        "Each guest gets the message shown, with their own first name. A text can't be taken back once it's sent.",
+        "Each guest gets the message shown. Names are optional. A text can't be taken back once it's sent.",
       confirmLabel: `Send ${texts(count)}`,
       destructive: true,
     });
@@ -106,6 +108,10 @@ export function FirstTimeGuestPanel({
         });
         if (!result.ok) {
           setError(result.error);
+          return;
+        }
+        if (result.requiresAppCheck) {
+          router.push(`/dashboard/attendance/follow-up/${serviceDate}/check-texts`);
           return;
         }
         if (result.failed > 0) {
@@ -206,7 +212,7 @@ export function FirstTimeGuestPanel({
               Welcome message
             </Label>
             <p className="text-[15px] text-muted-foreground">
-              Include [Name] where each first name goes. You can also use [Church].
+              Optionally use [Name] for each first name or [Church] for your church name.
             </p>
             <Textarea
               id="welcome-guest-message"

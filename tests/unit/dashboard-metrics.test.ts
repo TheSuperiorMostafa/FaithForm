@@ -7,7 +7,7 @@ import { computeHoursSaved, type HoursSavedSources } from "../../lib/reports/hou
 const now = new Date("2026-10-06T12:00:00Z");
 const sources: HoursSavedSources = {
   phoneCalls: ["2026-10-05", "2026-09-25", "2026-09-10", "2026-08-01"].map((day) => ({
-    called_at: `${day}T12:00:00Z`, duration_seconds: 60, call_type: "inbound",
+    called_at: `${day}T12:00:00Z`, duration_seconds: 60, call_type: "inbound", caller_number: "+15025550123",
   })),
   announcements: [{ created_at: "2026-10-04T12:00:00Z", push_to_facebook: true, push_to_team: true }],
   attendance: [{ service_date: "2026-10-04", submitted_at: "2026-10-04T12:00:00Z" }],

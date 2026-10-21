@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { reconcileAttendanceTexts } from "@/lib/attendance/sms-delivery";
 
 import { compareSecret } from "@/lib/security/compare-secret";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -72,4 +73,26 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ ok: true, updated });
+}
+
+
+/** Scheduled reference-based status reconciliation; no phone/message data leaves this endpoint. */
+export async function GET(request: Request) {
+  const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? null;
+  if (!compareSecret(token, process.env.CRON_SECRET)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const admin = createAdminClient();
+  const { data, error } = await admin.from("attendance_follow_up_log").select("church_id")
+    .eq("status", "queued").not("sms_id", "is", null)
+    .order("delivery_checked_at", { ascending: true, nullsFirst: true }).limit(100);
+  if (error) return NextResponse.json({ error: "Text delivery tracking unavailable" }, { status: 503 });
+  const churchIds = Array.from(new Set((data ?? []).map((row) => row.church_id as string))).slice(0, 4);
+  const results = await Promise.allSettled(churchIds.map((id) => reconcileAttendanceTexts(admin, id)));
+  return NextResponse.json({
+    ok: true,
+    checked: results.reduce((sum, result) => sum + (result.status === "fulfilled" ? result.value.checked : 0), 0),
+    confirmed: results.reduce((sum, result) => sum + (result.status === "fulfilled" ? result.value.confirmed : 0), 0),
+    failed: results.filter((result) => result.status === "rejected").length,
+  }, { headers: { "Cache-Control": "no-store" } });
 }

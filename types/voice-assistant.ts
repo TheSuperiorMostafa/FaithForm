@@ -133,6 +133,8 @@ export type PhoneCallScoreBreakdown = {
 };
 
 export type PhoneCallRow = {
+  provider_call_type?: "phone_call" | "web_call" | null;
+  call_status?: "ongoing" | "ended" | "analyzed" | null;
   id: string;
   caller_number: string | null;
   duration_seconds: number | null;

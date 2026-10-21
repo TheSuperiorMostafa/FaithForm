@@ -1,4 +1,6 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
+import { isRealRetellPhoneCall } from "@/lib/integrations/retell-call-model";
+import { scorePhoneCallIfNeeded } from "@/lib/integrations/score-phone-call";
 import { resolveRetellApiKey } from "@/lib/integrations/retell-client";
 import {
   resolveChurchIdFromRetellCall,
@@ -41,12 +43,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  if (body.event !== "call_ended" && body.event !== "call_analyzed") {
+  if (body.event !== "call_started" && body.event !== "call_ended" && body.event !== "call_analyzed") {
+    return NextResponse.json({ ok: true, ignored: true });
+  }
+
+  if (!isRealRetellPhoneCall(body.call)) {
     return NextResponse.json({ ok: true, ignored: true });
   }
 
   try {
-    const result = await upsertPhoneCallFromRetell(body.call, admin);
+    const result = await upsertPhoneCallFromRetell(body.call, admin, { event: body.event, score: false });
 
     if (!result) {
       console.error(
@@ -55,6 +61,14 @@ export async function POST(request: Request) {
         body.call.agent_id,
       );
       return NextResponse.json({ ok: true, unmatched: true });
+    }
+
+    // Persist first, then score outside Retell's 10-second acknowledgement window.
+    if (body.event !== "call_started" && body.call.transcript) {
+      after(async () => {
+        try { await scorePhoneCallIfNeeded(result.phoneCallId, { admin }); }
+        catch (error) { console.error("[retell webhook] call scoring failed", error); }
+      });
     }
 
     return NextResponse.json({

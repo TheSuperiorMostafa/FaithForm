@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ArrowUpDown, MoreHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { resendInvite } from "@/app/onboarding/actions";
+import { ChurchHealthControl } from "@/components/admin/church-health-control";
 import { ConnectedBadge } from "@/components/admin/badges";
 import { formatDate, formatRelativeTime } from "@/components/admin/format";
 import { Button } from "@/components/ui/button";
@@ -101,6 +102,7 @@ export function ChurchesTable({ churches }: { churches: AdminChurchListRow[] }) 
               <th className="px-5 py-4 text-left">
                 <SortButton onClick={() => toggleSort("name")}>Church</SortButton>
               </th>
+              <th className="px-5 py-4 text-left">Health status</th>
               <th className="px-5 py-4 text-left">Onboarding</th>
               <th className="px-5 py-4 text-left">
                 <SortButton onClick={() => toggleSort("usersCount")}>Users</SortButton>
@@ -127,6 +129,9 @@ export function ChurchesTable({ churches }: { churches: AdminChurchListRow[] }) 
                   <Link href={`/admin/churches/${church.id}`} className="hover:text-accent">
                     {church.name}
                   </Link>
+                </td>
+                <td className="px-5 py-4">
+                  <ChurchHealthControl churchId={church.id} health={church.health} />
                 </td>
                 <td className="px-5 py-4">
                   <OnboardingBadge completedAt={church.onboardingCompletedAt} />

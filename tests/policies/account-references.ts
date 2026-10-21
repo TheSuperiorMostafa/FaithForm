@@ -95,6 +95,9 @@ export const AUTH_USER_CASCADES: readonly Reference[] = [
  * forgets them too.
  */
 export const AUTH_USER_OWNED: readonly Reference[] = [
+  // Personal delivery choices and queued notices are removed with the user.
+  { table: "staff_notification_preferences", column: "user_id", action: "cascade" },
+  { table: "staff_notification_jobs", column: "user_id", action: "cascade" },
   { table: "messaging_user_bindings", column: "user_id", action: "cascade" },
   { table: "messaging_dm_channels", column: "user_low", action: "cascade" },
   { table: "messaging_dm_channels", column: "user_high", action: "cascade" },

@@ -37,6 +37,7 @@ export function PagesWorkspace({
   previewUrl,
   pages = [],
   currentPath = "/",
+  relatedPages = [],
 }: {
   sections: EditableSection[];
   canEdit: boolean;
@@ -46,6 +47,7 @@ export function PagesWorkspace({
   previewUrl: string;
   pages?: PageTab[];
   currentPath?: string;
+  relatedPages?: PageTab[];
 }) {
   const [savedAt, setSavedAt] = useState(0);
   const router = useRouter();
@@ -67,7 +69,7 @@ export function PagesWorkspace({
     (currentPath === "/" ? "Home" : currentPath);
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,520px)]">
+    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,520px)]">
       <div className="flex min-w-0 flex-col gap-4">
         <LiveEditsNote isLive={isLive} />
 
@@ -110,12 +112,22 @@ export function PagesWorkspace({
             : "Each block below is one part of your home page, top to bottom. Choose Edit to change its words and photos, move it up or down, or switch it off to hide it. The preview updates after each change saves."}
         </p>
 
+        {relatedPages.length > 0 ? (
+          <aside className="rounded-2xl border border-border bg-muted/30 p-4 text-[15px]">
+            <p>This page also shows content from these pages. Edit it at its source:</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {relatedPages.map(page => <Link key={page.path} scroll={false} href={`/dashboard/website/pages?path=${encodeURIComponent(page.path)}`} className="inline-flex min-h-11 items-center rounded-lg px-3 font-semibold text-accent underline underline-offset-4">Edit {page.label}</Link>)}
+            </div>
+          </aside>
+        ) : null}
+
         {sections.length === 0 ? (
           <p className="rounded-2xl border border-dashed border-border bg-card p-8 text-center text-[15px] text-muted-foreground">
             This page has no sections yet.
           </p>
         ) : (
           <SectionList
+            key={currentPath}
             sections={sections}
             canEdit={canEdit}
             isLive={isLive}

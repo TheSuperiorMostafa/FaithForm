@@ -1,3 +1,4 @@
+import { isCompletedPhoneCall } from "@/lib/integrations/retell-call-model";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { automationDisplayLabel } from "@/lib/reports/automation-labels";
 import {
@@ -24,7 +25,7 @@ export type MonthlyReportData = {
   reportDate: string;
 };
 
-type PhoneCallRow = { called_at: string | null; call_type: string | null };
+type PhoneCallRow = { called_at: string | null; call_type: string | null; caller_number?: string | null; provider_call_type?: string | null; call_status?: string | null };
 
 async function countPhoneCallsInWindow(
   supabase: SupabaseClient,
@@ -34,11 +35,11 @@ async function countPhoneCallsInWindow(
 ): Promise<number> {
   const { data } = await supabase
     .from("phone_calls")
-    .select("called_at, call_type")
+    .select("called_at, call_type, caller_number, provider_call_type, call_status")
     .eq("church_id", churchId);
 
   return ((data ?? []) as PhoneCallRow[]).filter((r) =>
-    inHoursSavedWindow(r.called_at, start, end),
+    isCompletedPhoneCall(r) && inHoursSavedWindow(r.called_at, start, end),
   ).length;
 }
 

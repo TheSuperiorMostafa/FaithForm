@@ -14,7 +14,7 @@ export default function UpcomingServicesLoading() {
           <div className="space-y-1">
             <h2 className="font-heading text-xl font-bold text-foreground">Upcoming services</h2>
             <p className="text-[15px] text-muted-foreground">
-              Plan the title, artwork and series before your service. They carry over to its recording.
+              Plan the title, artwork, series and speaker before your service. These details carry over to its recording.
             </p>
           </div>
           <Skeleton className="min-h-12 w-52 rounded-[10px]" />

@@ -122,6 +122,15 @@ export function ChurchVoiceAgentPanel({
 
           {mode === "linked" ? (
             <div className="grid gap-4 sm:grid-cols-2">
+              <div className="rounded-lg border border-border bg-muted/40 p-3 text-sm sm:col-span-2">
+                <p className="font-medium">Automatic call logging</p>
+                <p className="mt-1 text-muted-foreground">
+                  In Retell, set this agent’s webhook URL to{" "}
+                  <code className="break-all">{(process.env.NEXT_PUBLIC_SITE_URL ?? "https://faithform.io").replace(/\/$/, "")}/api/webhooks/retell</code>{" "}
+                  and enable call_started, call_ended, and call_analyzed. Use the API key marked for webhook verification.
+                  Calls then appear automatically; importing is only for recovering older calls.
+                </p>
+              </div>
               <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="retell_agent_id">Retell agent</Label>
                 {manualEntry ? (

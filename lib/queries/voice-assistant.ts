@@ -1,3 +1,4 @@
+import { isVisiblePhoneCall } from "@/lib/integrations/retell-call-model";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { listChurchCalendarEvents } from "@/lib/integrations/calendar";
 import {
@@ -347,7 +348,7 @@ export async function getVoiceAssistantContext(
 const PHONE_CALL_SELECT_LEGACY =
   "id, caller_number, duration_seconds, outcome, sentiment, transcript, called_at, ai_score, recording_url, call_successful, score_breakdown, notes, scored_at";
 
-const PHONE_CALL_SELECT = `${PHONE_CALL_SELECT_LEGACY}, call_classification, notify_pastor, urgency`;
+const PHONE_CALL_SELECT = `${PHONE_CALL_SELECT_LEGACY}, call_classification, notify_pastor, urgency, provider_call_type, call_status`;
 
 type ReadError = { code?: string | null; message: string };
 
@@ -360,7 +361,7 @@ function throwReadError(table: string, error: ReadError): never {
 function isMissingScoringColumns(error: ReadError): boolean {
   return (
     (error.code === "42703" || error.code === "PGRST204") &&
-    /call_classification|notify_pastor|urgency/i.test(error.message)
+    /call_classification|notify_pastor|urgency|provider_call_type|call_status/i.test(error.message)
   );
 }
 
@@ -405,11 +406,11 @@ export async function getRecentPhoneCalls(
   if (error && isMissingScoringColumns(error)) {
     const legacy = await query(PHONE_CALL_SELECT_LEGACY);
     if (legacy.error) throwReadError("phone calls", legacy.error);
-    return withScoringDefaults(legacy.data ?? []);
+    return withScoringDefaults(legacy.data ?? []).filter(isVisiblePhoneCall);
   }
 
   if (error) throwReadError("phone calls", error);
-  return withScoringDefaults(data ?? []);
+  return withScoringDefaults(data ?? []).filter(isVisiblePhoneCall);
 }
 
 export async function getPhoneCallById(
@@ -431,11 +432,13 @@ export async function getPhoneCallById(
   if (error && isMissingScoringColumns(error)) {
     const legacy = await query(PHONE_CALL_SELECT_LEGACY);
     if (legacy.error) throwReadError("phone call", legacy.error);
-    return legacy.data ? withScoringDefaults([legacy.data])[0] : null;
+    const legacyCall = legacy.data ? withScoringDefaults([legacy.data])[0] : null;
+    return legacyCall && isVisiblePhoneCall(legacyCall) ? legacyCall : null;
   }
 
   if (error) throwReadError("phone call", error);
-  return data ? withScoringDefaults([data])[0] : null;
+  const call = data ? withScoringDefaults([data])[0] : null;
+  return call && isVisiblePhoneCall(call) ? call : null;
 }
 
 export async function getVoiceAgentSyncStatus(

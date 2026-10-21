@@ -1,3 +1,4 @@
+import { isCompletedPhoneCall } from "@/lib/integrations/retell-call-model";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getPresenceByDate } from "@/lib/attendance/presence";
 import { createAdminClientOrNull } from "@/lib/supabase/admin";
@@ -128,6 +129,9 @@ type AnnouncementRow = {
 };
 
 type PhoneCallRow = {
+  caller_number?: string | null;
+  provider_call_type?: string | null;
+  call_status?: string | null;
   called_at: string | null;
 };
 
@@ -288,10 +292,10 @@ export async function getStatRow(
   const phoneQuery = earliestIso
     ? phoneClient
         .from("phone_calls")
-        .select("called_at")
+        .select("called_at, caller_number, provider_call_type, call_status")
         .eq("church_id", churchId)
         .gte("called_at", earliestIso)
-    : phoneClient.from("phone_calls").select("called_at").eq("church_id", churchId);
+    : phoneClient.from("phone_calls").select("called_at, caller_number, provider_call_type, call_status").eq("church_id", churchId);
   const announcementsQuery = earliestIso
     ? supabase
         .from("announcements")
@@ -331,7 +335,7 @@ function statRowFromSources(
   window: DateWindow,
   range: DashboardRange,
 ): StatRowResult {
-  const phoneRows = sources.phoneCalls.map((r) => ({
+  const phoneRows = sources.phoneCalls.filter(isCompletedPhoneCall).map((r) => ({
     at: (r as PhoneCallRow).called_at ?? "",
   }));
   const smRows: { at: string }[] = [];

@@ -248,7 +248,7 @@ function buildAgentPayload(
     end_call_after_silence_ms:
       CHURCH_RECEPTIONIST_SPEECH.end_call_after_silence_ms,
     webhook_url: webhookUrl,
-    webhook_events: webhookUrl ? ["call_ended", "call_analyzed"] : undefined,
+    webhook_events: webhookUrl ? ["call_started", "call_ended", "call_analyzed"] : undefined,
   };
 }
 

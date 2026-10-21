@@ -12,7 +12,7 @@ import {
  * row someone has missed. For one send the pastor can write a single message
  * instead; it goes to everyone picked, with `[Name]` replaced by each person's
  * first name. It is checked by the same rules as the saved messages (not
- * empty, not too long, has `[Name]`) and is never saved over them.
+ * empty, not too long; `[Name]` is optional) and is never saved over them.
  *
  * Pure, so the page previews exactly what the server will send.
  */

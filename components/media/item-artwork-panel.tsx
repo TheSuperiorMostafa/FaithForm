@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
+import type { ArtworkTarget } from "@/app/dashboard/live-streaming/media/actions";
 import { ArtworkField } from "@/components/media/artwork-field";
 import { Card, CardContent } from "@/components/ui/card";
 import { ARTWORK_CROPS, type ArtworkSet } from "@/lib/media/artwork";
@@ -18,17 +19,17 @@ import { ARTWORK_CROPS, type ArtworkSet } from "@/lib/media/artwork";
  */
 export function ItemArtworkPanel({
   recordingId,
+  target,
   artwork,
   seriesArtwork,
   seriesName,
   seriesSlug,
 }: {
-  recordingId: string;
   artwork: ArtworkSet;
   seriesArtwork: ArtworkSet;
   seriesName: string | null;
   seriesSlug: string | null;
-}) {
+} & ({ recordingId: string; target?: never } | { recordingId?: never; target: ArtworkTarget })) {
   const router = useRouter();
 
   return (
@@ -58,7 +59,7 @@ export function ItemArtworkPanel({
           {ARTWORK_CROPS.map((crop) => (
             <ArtworkField
               key={crop}
-              target={{ kind: "item", id: recordingId }}
+              target={target ?? { kind: "item", id: recordingId! }}
               crop={crop}
               value={artwork[crop]}
               inherited={seriesArtwork[crop]}

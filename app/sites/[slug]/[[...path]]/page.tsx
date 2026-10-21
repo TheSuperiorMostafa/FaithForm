@@ -69,6 +69,7 @@ const loadPage = cache(async function loadPage(slug: string, path: string) {
     }),
     layoutMode,
     homeStatus: home.page.status,
+    sectionPageIds: Object.fromEntries(home.sections.map(section => [section.id, home.page.id])),
   };
 });
 
@@ -159,6 +160,7 @@ export default async function ChurchSitePage({ params, searchParams }: PageProps
     overrides: bundle.overrides,
     profile: bundle.profile,
     registry: SECTION_REGISTRY,
+    sectionPageIds: "sectionPageIds" in loaded ? loaded.sectionPageIds : undefined,
   });
 
   if (loaded.layoutMode === "website") {

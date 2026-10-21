@@ -80,6 +80,7 @@ try {
       "tsx",
       "--test",
       "--test-concurrency=1",
+      "tests/database/staff-notifications.test.ts",
       "tests/database/groups.test.ts",
       "tests/database/admin-church-create-request.test.ts",
       "tests/database/group-gathering-atomic.test.ts",

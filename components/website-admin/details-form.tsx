@@ -152,7 +152,7 @@ export function DetailsForm({
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,480px)]">
+    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,480px)]">
       <div className="flex min-w-0 flex-col gap-6">
         <LiveEditsNote isLive={isLive} />
 

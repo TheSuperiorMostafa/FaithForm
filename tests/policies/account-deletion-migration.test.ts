@@ -162,8 +162,8 @@ test("deleting an Auth user removes the app account, and only staff access and c
   for (const owned of AUTH_USER_OWNED) {
     assert.ok(!keepers.has(`${owned.table}.${owned.column}`), `${owned.table} is in both lists`);
     assert.ok(
-      owned.table.startsWith("messaging_") || owned.table === "group_staff_reads",
-      `${owned.table} is not messaging data; decide whether it keeps a sign-in alive`,
+      owned.table.startsWith("messaging_") || owned.table.startsWith("staff_notification_") || owned.table === "group_staff_reads",
+      `${owned.table} is not personal messaging or notification data; decide whether it keeps a sign-in alive`,
     );
   }
 });

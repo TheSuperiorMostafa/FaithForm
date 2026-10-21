@@ -23,6 +23,7 @@ export type GuestTextActionResult =
       skipped: number;
       failed: number;
       notConnected: boolean;
+      requiresAppCheck?: boolean;
       /** Where the pastor text went, for the toast. */
       pastorDestination?: "church_phone" | "texting_phone";
     }
@@ -34,7 +35,7 @@ async function resolveGuestContext() {
   if (denied) return { ok: false as const, error: denied };
   const auth = await getChurchAuth(supabase);
   if (!auth) return { ok: false as const, error: "You must be signed in." };
-  return { ok: true as const, supabase, churchId: auth.churchId };
+  return { ok: true as const, supabase, churchId: auth.churchId, userId: auth.userId };
 }
 
 /**
@@ -163,6 +164,8 @@ export async function sendWelcomeTextsToGuests(input: {
       churchName,
       guests: withPhone,
       messageTemplate: checked.message,
+      serviceDate: input.serviceDate,
+      senderUserId: context.userId,
     });
   } catch (err) {
     console.error("sendWelcomeTextsToGuests:", err);
@@ -187,6 +190,7 @@ export async function sendWelcomeTextsToGuests(input: {
     skipped: summary.skipped,
     failed: summary.failed,
     notConnected: false,
+    requiresAppCheck: summary.requiresAppCheck,
   };
 }
 

@@ -303,7 +303,7 @@ export async function endLiveBroadcast(
   // lingered for the next service to close by mistake. Fall back to the newest
   // live event only for sessions predating stream_event_id.
   const eventColumns =
-    "id, recurrence_rule, starts_at, title, syndicate_youtube, syndicate_facebook, youtube_privacy, chat_enabled, countdown_enabled, public_access, created_by, series_id, artwork_url, artwork_poster_url, artwork_wide_url, artwork_banner_url";
+    "id, recurrence_rule, starts_at, title, syndicate_youtube, syndicate_facebook, youtube_privacy, chat_enabled, countdown_enabled, public_access, created_by, speaker_tags, description, chapter_tags, topic_tags, series_id, artwork_url, artwork_poster_url, artwork_wide_url, artwork_banner_url";
 
   const { data: events } = session.streamEventId
     ? await client
@@ -353,6 +353,10 @@ export async function endLiveBroadcast(
         {
           churchId,
           title: liveEvent.title,
+          speaker: liveEvent.speaker_tags?.[0] ?? null,
+          description: liveEvent.description,
+          chapters: liveEvent.chapter_tags ?? [],
+          topics: liveEvent.topic_tags ?? [],
           seriesId: liveEvent.series_id,
           artworkUrl: liveEvent.artwork_url,
           artworkPosterUrl: liveEvent.artwork_poster_url,

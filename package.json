@@ -116,7 +116,7 @@
     "react-easy-crop": "^6.2.3",
     "recharts": "^3.8.1",
     "resend": "^6.12.4",
-    "sharp": "^0.35.4",
+    "sharp": "0.35.5",
     "sonner": "^2.0.7",
     "stream-chat": "9.53.0",
     "stream-chat-react": "14.12.0",
@@ -146,7 +146,9 @@
       "nanoid": "3.3.18",
       "postcss": "8.5.26",
       "qs": "6.16.0",
-      "sharp": "0.35.4"
+      "sharp": "0.35.5",
+      "source-map-js": "1.2.2",
+      "follow-redirects": "1.16.1"
     },
     "patchedDependencies": {
       "image-size@1.2.1": "patches/image-size@1.2.1.patch"

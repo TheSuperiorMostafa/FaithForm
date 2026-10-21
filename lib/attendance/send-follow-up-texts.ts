@@ -29,6 +29,7 @@ export type FollowUpSendSummary = {
   skipped: number;
   /** True when the church has no texting phone of its own, so nothing was sent. */
   notConnected: boolean;
+  requiresAppCheck: boolean;
 };
 
 export type FollowUpSendOptions = {
@@ -109,6 +110,7 @@ export async function sendAttendanceFollowUpTexts(
     failed: 0,
     skipped: 0,
     notConnected: false,
+    requiresAppCheck: false,
   };
   if (members.length === 0) return summary;
 
@@ -152,6 +154,11 @@ export async function sendAttendanceFollowUpTexts(
     return summary;
   }
 
+  if (smsSender.gateway === "smsmobileapi") {
+    const { error } = await admin.from("attendance_follow_up_log").select("delivery_confirmed_at").limit(0);
+    if (error) throw new Error("Text delivery tracking needs a database update before sending.");
+  }
+
   for (const member of members) {
     if (!member.entryId) continue;
 
@@ -184,11 +191,12 @@ export async function sendAttendanceFollowUpTexts(
       await recordOutcome(admin, member.entryId, sentUpdate);
       await logAttempt(admin, {
         ...logBase(member, message),
-        status: "sent",
+        status: smsSender.gateway === "smsmobileapi" ? "queued" : "sent",
         sms_id: result.messageId,
         sender_phone: result.from ?? smsSender.fromNumber,
       });
       summary.sent += 1;
+      summary.requiresAppCheck ||= smsSender.gateway === "smsmobileapi";
     } else {
       await recordOutcome(admin, member.entryId, {
         follow_up_error: result.error,

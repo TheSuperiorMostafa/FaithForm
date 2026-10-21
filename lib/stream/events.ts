@@ -14,6 +14,10 @@ export type StreamEvent = {
   syndicateFacebook: boolean;
   youtubePrivacy: "public" | "unlisted" | "private";
   artworkUrl: string | null;
+  speaker?: string | null;
+  description?: string | null;
+  chapters?: string[];
+  topics?: string[];
   seriesId?: string | null;
   artworkPosterUrl?: string | null;
   artworkWideUrl?: string | null;
@@ -41,6 +45,10 @@ type EventRow = {
   syndicate_facebook: boolean;
   youtube_privacy: "public" | "unlisted" | "private";
   artwork_url: string | null;
+  speaker_tags?: string[] | null;
+  description?: string | null;
+  chapter_tags?: string[] | null;
+  topic_tags?: string[] | null;
   series_id?: string | null;
   artwork_poster_url?: string | null;
   artwork_wide_url?: string | null;
@@ -69,6 +77,10 @@ function mapEvent(row: EventRow): StreamEvent {
     syndicateFacebook: row.syndicate_facebook,
     youtubePrivacy: row.youtube_privacy,
     artworkUrl: row.artwork_url,
+    speaker: row.speaker_tags?.[0] ?? null,
+    description: row.description ?? null,
+    chapters: row.chapter_tags ?? [],
+    topics: row.topic_tags ?? [],
     seriesId: row.series_id ?? null,
     artworkPosterUrl: row.artwork_poster_url ?? null,
     artworkWideUrl: row.artwork_wide_url ?? null,
@@ -185,6 +197,10 @@ export async function createStreamEvent(
     churchId: string;
     title: string;
     startsAt: string;
+    speaker?: string | null;
+    description?: string | null;
+    chapters?: string[];
+    topics?: string[];
     seriesId?: string | null;
     artworkUrl?: string | null;
     artworkPosterUrl?: string | null;
@@ -210,6 +226,10 @@ export async function createStreamEvent(
       church_id: input.churchId,
       title: input.title.trim(),
       starts_at: input.startsAt,
+      speaker_tags: input.speaker ? [input.speaker] : [],
+      description: input.description ?? null,
+      chapter_tags: input.chapters ?? [],
+      topic_tags: input.topics ?? [],
       series_id: input.seriesId ?? null,
       artwork_url: input.artworkUrl ?? null,
       artwork_poster_url: input.artworkPosterUrl ?? null,
@@ -245,6 +265,10 @@ export async function updateStreamEvent(
     syndicationRetryUntil: string | null;
     title: string;
     startsAt: string;
+    speaker: string | null;
+    description: string | null;
+    chapters: string[];
+    topics: string[];
     seriesId: string | null;
     artworkUrl: string | null;
     artworkPosterUrl: string | null;
@@ -266,6 +290,10 @@ export async function updateStreamEvent(
   if (patch.title !== undefined) updates.title = patch.title;
   if (patch.startsAt !== undefined) updates.starts_at = patch.startsAt;
 
+  if (patch.speaker !== undefined) updates.speaker_tags = patch.speaker ? [patch.speaker] : [];
+  if (patch.description !== undefined) updates.description = patch.description;
+  if (patch.chapters !== undefined) updates.chapter_tags = patch.chapters;
+  if (patch.topics !== undefined) updates.topic_tags = patch.topics;
   if (patch.seriesId !== undefined) updates.series_id = patch.seriesId;
   if (patch.artworkUrl !== undefined) updates.artwork_url = patch.artworkUrl;
   if (patch.artworkPosterUrl !== undefined) updates.artwork_poster_url = patch.artworkPosterUrl;

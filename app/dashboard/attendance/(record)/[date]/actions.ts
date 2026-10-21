@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { tryQueueStaffNotification } from "@/lib/notifications/staff";
 
 import { logActivity } from "@/lib/activity/log";
 import { createMemberDuringAttendance } from "@/app/dashboard/people/actions";
@@ -181,6 +182,8 @@ export async function submitAttendance(input: {
     });
   }
 
+  if (!existing) await tryQueueStaffNotification({ churchId, event: "attendance_completed", eventKey: serviceDate, href: `/dashboard/attendance/${serviceDate}` });
+
   revalidatePath("/dashboard/attendance");
   revalidatePath(`/dashboard/attendance/${serviceDate}`);
   revalidatePath("/dashboard/attendance/follow-up");
@@ -271,6 +274,8 @@ async function saveHeadcount(
       triggerSource: "attendance_module",
     });
   }
+
+  if (!existing) await tryQueueStaffNotification({ churchId, event: "attendance_completed", eventKey: serviceDate, href: `/dashboard/attendance/${serviceDate}` });
 
   revalidatePath("/dashboard/attendance");
   revalidatePath(`/dashboard/attendance/${serviceDate}`);

@@ -5,7 +5,7 @@ import { LiveNoteSkeleton, SitePreviewSkeleton } from "@/components/website-admi
 export default function WebsitePagesLoading() {
   return (
     <SkeletonContainer
-      className="grid w-full gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,520px)]"
+      className="grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,520px)]"
       label="website pages"
     >
       <div className="flex min-w-0 flex-col gap-4">

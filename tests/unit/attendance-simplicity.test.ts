@@ -250,8 +250,8 @@ test("the pastor sees the exact text, and may reword it for one send", () => {
     message: "Hi [Name], we missed you!",
   });
   const missingName = validateFollowUpOverride("We missed you!");
-  assert.equal(missingName.ok, false);
-  assert.ok(!missingName.ok && /^Include \[Name\]/.test(missingName.error), JSON.stringify(missingName));
+  assert.deepEqual(missingName, { ok: true, message: "We missed you!" });
+  assert.equal(personalizeFollowUpMessage("We missed you!", "Maria"), "We missed you!");
   assert.equal(validateFollowUpOverride("").ok, false);
   assert.equal(validateFollowUpOverride(`[Name] ${"x".repeat(500)}`).ok, false);
 
@@ -318,7 +318,7 @@ test("adding someone can mark them as a first-time guest for this Sunday", () =>
 test("pastor and welcome messages are validated in plain church language", () => {
   assert.equal(validatePastorMessage("").ok, false);
   assert.equal(validatePastorMessage("  Guests today  ").ok, true);
-  assert.equal(validateWelcomeMessage("Welcome!").ok, false);
+  assert.deepEqual(validateWelcomeMessage("Welcome!"), { ok: true, message: "Welcome!" });
   assert.deepEqual(validateWelcomeMessage("Hi [Name], welcome!"), {
     ok: true,
     message: "Hi [Name], welcome!",

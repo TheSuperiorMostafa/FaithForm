@@ -1,3 +1,5 @@
+import { NotificationPreferencesForm } from "@/components/settings/notification-preferences-form";
+import { emptyStaffPreferences, staffPreferencesSchema } from "@/lib/notifications/staff-preferences";
 import { DocumentsPanel } from "@/components/settings/documents-panel";
 import Link from "next/link";
 import { ArrowRight, Heart, Mail } from "lucide-react";
@@ -47,6 +49,8 @@ export async function SettingsTabPanel({
 }) {
   try {
     switch (tab) {
+      case "notifications":
+        return await NotificationsPanel(context);
       case "documents":
         return <DocumentsPanel churchId={context.auth.churchId} attendance={context.allowedFeatures.includes("attendance")} timeSaved={context.allowedFeatures.includes("library")} />;
       case "church":
@@ -233,4 +237,14 @@ async function GivingPanel() {
       </CardContent>
     </Card>
   );
+}
+
+
+async function NotificationsPanel({ auth, allowedFeatures }: SettingsPanelContext) {
+  if (auth.impersonation) return <Card><CardHeader><CardTitle>Your notifications</CardTitle><CardDescription>Sign in with your church account to manage personal notification choices.</CardDescription></CardHeader></Card>;
+  const { data, error } = await createClient().from("staff_notification_preferences").select("phone, events").eq("church_id", auth.churchId).eq("user_id", auth.userId).maybeSingle();
+  if (error) throw new Error("notification_preferences_unavailable");
+  const initial = data ? staffPreferencesSchema.safeParse({ phone: data.phone, events: { ...emptyStaffPreferences().events, ...data.events } }) : null;
+  if (initial && !initial.success) throw new Error("notification_preferences_invalid");
+  return <NotificationPreferencesForm initial={initial?.success ? initial.data : emptyStaffPreferences()} email={auth.userEmail} allowedFeatures={allowedFeatures} />;
 }

@@ -16,10 +16,11 @@ export type SendFollowUpsResult =
   | {
       ok: true;
       requested: number;
-      /** Texts that actually went out. */
+      /** Text requests accepted by the gateway; handset confirmation is separate. */
       sent: number;
       /** The church has no texting phone of its own, so nothing was sent. */
       notConnected: boolean;
+      requiresAppCheck: boolean;
     }
   | { ok: false; error: string };
 
@@ -222,5 +223,6 @@ export async function sendFollowUps(input: {
     requested: eligible.length,
     sent: summary.sent,
     notConnected: summary.notConnected,
+    requiresAppCheck: summary.requiresAppCheck,
   };
 }

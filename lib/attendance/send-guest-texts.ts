@@ -15,6 +15,7 @@ export type GuestTextSendSummary = {
   failed: number;
   skipped: number;
   notConnected: boolean;
+  requiresAppCheck: boolean;
 };
 
 /**
@@ -72,12 +73,15 @@ export async function sendWelcomeGuestTexts(input: {
   churchName: string;
   guests: FirstTimeGuest[];
   messageTemplate: string;
+  serviceDate: string;
+  senderUserId: string;
 }): Promise<GuestTextSendSummary> {
   const summary: GuestTextSendSummary = {
     sent: 0,
     failed: 0,
     skipped: 0,
     notConnected: false,
+    requiresAppCheck: false,
   };
   if (input.guests.length === 0) return summary;
 
@@ -87,6 +91,11 @@ export async function sendWelcomeGuestTexts(input: {
     summary.notConnected = true;
     summary.skipped = input.guests.length;
     return summary;
+  }
+
+  if (smsSender.gateway === "smsmobileapi") {
+    const { error } = await admin.from("attendance_follow_up_log").select("delivery_confirmed_at").limit(0);
+    if (error) throw new Error("Text delivery tracking needs a database update before sending.");
   }
 
   for (const guest of input.guests) {
@@ -100,8 +109,24 @@ export async function sendWelcomeGuestTexts(input: {
       input.churchName,
     );
     const result = await sendSms(smsSender, guest.phone, message);
-    if (result.ok) summary.sent += 1;
-    else summary.failed += 1;
+    const { error: logError } = await admin.from("attendance_follow_up_log").insert({
+      church_id: input.churchId,
+      service_date: input.serviceDate,
+      member_id: guest.memberId,
+      recipient_name: `${guest.firstName} ${guest.lastName ?? ""}`.trim(),
+      recipient_phone: guest.phone,
+      message,
+      status: result.ok ? (smsSender.gateway === "smsmobileapi" ? "queued" : "sent") : "failed",
+      sms_id: result.ok ? result.messageId : null,
+      error: result.ok ? null : result.error,
+      sender_phone: result.from,
+      sender_user_id: input.senderUserId,
+    });
+    if (logError) console.error("[attendance-welcome] could not record text request");
+    if (result.ok) {
+      summary.sent += 1;
+      summary.requiresAppCheck ||= smsSender.gateway === "smsmobileapi";
+    } else summary.failed += 1;
   }
 
   return summary;

@@ -14,6 +14,7 @@ export type AutomationEntry = {
 };
 
 export const AUTOMATION_CATALOG = {
+  "Attendance Follow-up Text": { category: "Communication", taskId: "OUT", minutes: 2 },
   "Church App Updated": {
     category: "Calendar",
     taskId: "CAL",

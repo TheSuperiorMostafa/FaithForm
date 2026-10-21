@@ -290,28 +290,26 @@ export async function saveSectionContent(
 
   const patch = diffPatch(baseline.content, content);
 
-  // Delete-then-insert rather than upsert: the uniqueness guarantee for
-  // section-scope overrides is a *partial* index (`where scope = 'section'`),
-  // and PostgREST cannot infer a partial index for ON CONFLICT. Two writers on
-  // the same section is not a real scenario, and last-write-wins is what an
-  // editor should do anyway.
-  await supabase
-    .from("site_overrides")
-    .delete()
-    .eq("church_id", auth.churchId)
-    .eq("scope", "section")
-    .eq("section_id", sectionId);
-
-  // An empty patch means nothing differs from the inherited value, so the row
-  // would be pure noise — the delete above is the whole save.
-  if (Object.keys(patch).length > 0) {
-    const { error } = await supabase.from("site_overrides").insert({
+  // Keep the previous edit intact when a write fails. Delete-then-insert
+  // discarded it before the replacement was accepted. The partial unique
+  // index cannot be targeted by PostgREST upsert, so update existing rows.
+  if (Object.keys(patch).length === 0) {
+    const { error } = await supabase.from("site_overrides").delete()
+      .eq("church_id", auth.churchId).eq("scope", "section").eq("section_id", sectionId);
+    if (error) return fail(toUserError(error, "That change could not be saved."));
+  } else {
+    const { data: existing, error: readError } = await supabase.from("site_overrides")
+      .select("section_id").eq("church_id", auth.churchId).eq("scope", "section").eq("section_id", sectionId).maybeSingle();
+    if (readError) return fail(toUserError(readError, "That change could not be saved."));
+    const write = existing
+      ? supabase.from("site_overrides").update({ patch }).eq("church_id", auth.churchId).eq("scope", "section").eq("section_id", sectionId)
+      : supabase.from("site_overrides").insert({
       church_id: auth.churchId,
       scope: "section",
       section_id: sectionId,
       patch,
     });
-
+    const { error } = await write;
     if (error) {
       return fail(toUserError(error, "That change could not be saved."));
     }
@@ -343,12 +341,13 @@ export async function resetSection(
     return fail("That section does not belong to your church.");
   }
 
-  await createAdminClient()
+  const { error } = await createAdminClient()
     .from("site_overrides")
     .delete()
     .eq("church_id", auth.churchId)
     .eq("scope", "section")
     .eq("section_id", sectionId);
+  if (error) return fail(toUserError(error, "That section could not be reset."));
 
   const baseline = await sectionBaseline(sectionId, auth.churchId);
   if (!baseline.ok) return fail(baseline.error);

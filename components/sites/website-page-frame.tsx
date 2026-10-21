@@ -3,17 +3,7 @@ import React from "react";
 import type { ResolvedPage } from "@/lib/sites/contract";
 import { websitePageDefForPath, websitePageDefForType } from "@/lib/sites/layout-mode";
 import type { SiteLink } from "@/types/site";
-
-const PAGE_COPY: Record<string, { title: string; description: string }> = {
-  "/about": { title: "Get to know us", description: "Discover our story and the community you'll find here." },
-  "/vision": { title: "Vision", description: "Our mission, our hopes, and the faith we share." },
-  "/staff": { title: "Our staff", description: "Get to know the people who lead and care for our church." },
-  "/programs": { title: "Programs", description: "Explore ways to connect, grow, and serve together." },
-  "/visit": { title: "Plan your visit", description: "Find a service time and everything you need to plan your first visit." },
-  "/sermons": { title: "Sermons", description: "Listen, reflect, and keep growing wherever you are." },
-  "/give": { title: "Give", description: "Take part in the work and life of our church." },
-  "/events": { title: "Events", description: "See what's coming up and find your next opportunity to connect." },
-};
+import { WEBSITE_PAGE_COPY, websitePageIntroDefaults, type WebsitePageIntroContent } from "@/lib/sites/page-intro";
 
 export type WebsitePageFrame = {
   path: string;
@@ -27,7 +17,9 @@ export type WebsitePageFrame = {
 };
 
 export function WebsitePageIntro({ website, page }: { website: WebsitePageFrame; page: ResolvedPage }) {
-  const copy = PAGE_COPY[website.path];
+  const primaryType = websitePageDefForPath(website.path)?.type;
+  const sectionIntro = page.sections.find(section => section.type === primaryType)?.content.pageIntro;
+  const copy = (sectionIntro && typeof sectionIntro === "object" ? sectionIntro : websitePageIntroDefaults(website.path, website.coverImageUrl)) as WebsitePageIntroContent | null;
   if (!copy) return null;
   const basePath = website.basePath ?? (website.previewSlug ? `/sites/${encodeURIComponent(website.previewSlug)}` : "");
   const homeHref = `${basePath || "/"}${website.previewSlug ? "?preview=1" : ""}`;
@@ -44,7 +36,7 @@ export function WebsitePageIntro({ website, page }: { website: WebsitePageFrame;
         <a className="site-link site-page-breadcrumb" href={homeHref}>Home</a>
         <div className="site-eyebrow">{website.churchName} · {websitePageDefForPath(website.path)?.title}</div>
         <h1 className="site-display site-display-lg">{copy.title}</h1>
-        <p className="site-page-intro-copy">{copy.description}</p>
+        {copy.description ? <p className="site-page-intro-copy">{copy.description}</p> : null}
         {contents.length >= 3 ? (
           <nav className="site-page-contents" aria-label="On this page">
             <span className="site-page-contents-label">On this page</span>
@@ -59,9 +51,9 @@ export function WebsitePageIntro({ website, page }: { website: WebsitePageFrame;
           {website.location ? <p>{website.location}</p> : null}
           <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(website.location)}`} className="site-btn site-btn-solid" target="_blank" rel="noopener noreferrer">Get directions <span aria-hidden>↗</span></a>
         </aside>
-      ) : website.path === "/about" && website.coverImageUrl ? (
+      ) : website.path === "/about" && copy.image?.src ? (
         // eslint-disable-next-line @next/next/no-img-element -- church-supplied photo
-        <img src={website.coverImageUrl} alt="" className="site-page-intro-photo" />
+        <img src={copy.image.src} alt={copy.image.alt} className="site-page-intro-photo" />
       ) : null}
     </header>
   );
@@ -80,9 +72,9 @@ export function WebsitePageExplore({ page, website }: { page: ResolvedPage; webs
   const preferredPaths = ["/visit", "/programs", "/sermons", "/about", "/events"];
   const cards = links.flatMap((link) => {
     const path = sitePathForHref(link.href, prefix);
-    if (!path || path === website.path || !PAGE_COPY[path] || seen.has(path)) return [];
+    if (!path || path === website.path || !WEBSITE_PAGE_COPY[path] || seen.has(path)) return [];
     seen.add(path);
-    return [{ ...link, path, description: PAGE_COPY[path].description }];
+    return [{ ...link, path, description: WEBSITE_PAGE_COPY[path].description }];
   }).filter((card) => preferredPaths.includes(card.path))
     .sort((a, b) => preferredPaths.indexOf(a.path) - preferredPaths.indexOf(b.path))
     .slice(0, 3);

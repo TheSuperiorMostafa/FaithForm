@@ -9,7 +9,9 @@ import {
   normalizeSitePath,
   parseSiteLayoutMode,
   websitePageDefForPath,
+  websiteSupportingPaths,
 } from "@/lib/sites/layout-mode";
+import { websitePageIntroField } from "@/lib/sites/page-intro";
 import { isPublicSitePublication } from "@/lib/sites/preview-access";
 import { SECTION_REGISTRY } from "@/lib/sites/registry";
 import { getWebsiteForChurch } from "@/lib/sites/queries";
@@ -98,7 +100,9 @@ export default async function WebsitePagesPage({
           hasOverride: overriddenIds.has(row.id),
           content,
           // No descriptor means FaithForm manages the section (text blocks).
-          fields: master.fields ?? null,
+          fields: master.fields && layoutMode === "website" && websitePageDefForPath(currentPath)?.type === row.type
+            ? [websitePageIntroField(currentPath), ...master.fields]
+            : master.fields ?? null,
         },
       ];
     });
@@ -155,6 +159,7 @@ export default async function WebsitePagesPage({
       previewUrl={previewUrl}
       pages={pageTabs}
       currentPath={currentPath}
+      relatedPages={layoutMode === "website" ? websiteSupportingPaths(currentPath).filter(path => homeSite.pages.some(page => page.path === path)).map(path => ({ path, label: pageTabLabel(path, null) })) : []}
     />
   );
 }

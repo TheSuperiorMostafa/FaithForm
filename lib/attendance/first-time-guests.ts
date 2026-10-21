@@ -30,7 +30,7 @@ export function defaultWelcomeMessage(churchName: string): string {
   return `Hi ${GUEST_NAME_PLACEHOLDER}, welcome to ${church}! We're glad you joined us today. We hope to see you again soon.`;
 }
 
-/** One editable welcome message: must include [Name], may include [Church]. */
+/** One editable welcome message; [Name] and [Church] are optional. */
 export function validateWelcomeMessage(message: string): GuestMessageResult {
   const trimmed = message.trim();
   if (!trimmed) {
@@ -38,12 +38,6 @@ export function validateWelcomeMessage(message: string): GuestMessageResult {
   }
   if (trimmed.length > MAX_MESSAGE_LENGTH) {
     return { ok: false, error: `Keep messages under ${MAX_MESSAGE_LENGTH} characters.` };
-  }
-  if (!trimmed.includes(GUEST_NAME_PLACEHOLDER)) {
-    return {
-      ok: false,
-      error: `Include ${GUEST_NAME_PLACEHOLDER} where each guest's first name should appear.`,
-    };
   }
   return { ok: true, message: trimmed };
 }

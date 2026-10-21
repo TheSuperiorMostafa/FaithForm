@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   AUTOMATION_CATALOG,
   type AutomationType,
@@ -24,17 +25,18 @@ export async function logPhoneCallActivity(input: {
   durationSeconds: number | null;
   executedAt: string;
   timeSavedMinutes: number;
-}): Promise<void> {
+}, client?: SupabaseClient): Promise<void> {
   const triggerSource = `phone_call:${input.retailAiCallId}`;
 
   try {
-    const admin = createAdminClientOrNull();
+    const admin = client ?? createAdminClientOrNull();
     if (!admin) return;
 
     const { data: existing } = await admin
       .from("activity_log")
       .select("id")
       .eq("trigger_source", triggerSource)
+      .eq("church_id", input.churchId)
       .maybeSingle();
 
     if (existing?.id) return;
@@ -47,21 +49,22 @@ export async function logPhoneCallActivity(input: {
       timeSavedMinutes: input.timeSavedMinutes,
       triggerSource,
       executedAt: input.executedAt,
-    });
+    }, admin);
   } catch (activityError) {
     console.error("phone call activity_log failed:", activityError);
   }
 }
 
-export async function logActivity(input: LogActivityInput): Promise<void> {
+export async function logActivity(input: LogActivityInput, client?: SupabaseClient): Promise<void> {
   try {
-    const admin = createAdminClientOrNull();
+    const admin = client ?? createAdminClientOrNull();
     if (!admin) return;
 
     const { data: existing } = await admin
       .from("activity_log")
       .select("id")
       .eq("trigger_source", input.triggerSource)
+      .eq("church_id", input.churchId)
       .maybeSingle();
 
     if (existing?.id) return;

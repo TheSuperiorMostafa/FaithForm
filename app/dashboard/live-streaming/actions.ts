@@ -331,7 +331,7 @@ export async function renameLiveService(
 
 export async function createScheduledStream(
   formData: FormData,
-): Promise<StreamRelayActionState> {
+): Promise<StreamRelayActionState & { eventId?: string }> {
   const gate = await requireStreamAccess();
   if (!gate.ok) return { ok: false, error: gate.error };
   const auth = gate.auth;
@@ -378,7 +378,7 @@ export async function createScheduledStream(
       simulatedSourcePath = storagePath;
     }
 
-    await createStreamEvent({
+    const event = await createStreamEvent({
       churchId: auth.churchId,
       ...metadata,
       startsAt: startsAt.toISOString(),
@@ -393,7 +393,7 @@ export async function createScheduledStream(
     });
 
     revalidateLiveStreaming();
-    return { ok: true, message: "Service scheduled." };
+    return { ok: true, eventId: event.id, message: "Service scheduled." };
   } catch (error) {
     return {
       ok: false,
@@ -424,6 +424,7 @@ export async function updateScheduledStream(
     await logAdminAction({ churchId: auth.churchId, taskName: "Updated upcoming service details", triggerSource: "Live Streaming" });
     revalidateLiveStreaming();
     revalidatePath("/dashboard/live-streaming/upcoming");
+    revalidatePath(`/dashboard/live-streaming/upcoming/${eventId}`);
     revalidatePath("/dashboard/live-streaming/recordings");
     return { ok: true, message: "Service details saved." };
   } catch (error) {

@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClientOrNull } from "@/lib/supabase/admin";
 
-export type FollowUpLogStatus = "sent" | "failed" | "skipped";
+export type FollowUpLogStatus = "queued" | "sent" | "failed" | "skipped";
 
 export type FollowUpLogEntry = {
   id: string;
@@ -37,7 +37,7 @@ type LogRow = {
 };
 
 function toStatus(value: string): FollowUpLogStatus {
-  return value === "failed" || value === "skipped" ? value : "sent";
+  return value === "failed" || value === "skipped" || value === "queued" ? value : "sent";
 }
 
 /**
@@ -131,6 +131,6 @@ function summarizeSundays(bySunday: Map<string, FollowUpLogEntry[]>): FollowUpLo
       serviceDate,
       entries,
       sentCount: entries.filter((e) => e.status === "sent").length,
-      failedCount: entries.filter((e) => e.status !== "sent").length,
+      failedCount: entries.filter((e) => e.status === "failed" || e.status === "skipped").length,
     }));
 }

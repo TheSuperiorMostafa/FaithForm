@@ -1,4 +1,5 @@
-import { normalizeWebsiteHrefs, parseSiteLayoutMode } from "@/lib/sites/layout-mode";
+import { normalizeWebsiteHrefs, parseSiteLayoutMode, websitePageDefForType } from "@/lib/sites/layout-mode";
+import { websitePageIntroDefaults } from "@/lib/sites/page-intro";
 import type {
   ErasedSectionMaster,
   ResolvedPage,
@@ -354,6 +355,10 @@ function runCascade(input: {
   if (master.derive) {
     merged = deepMerge(merged, master.derive(profile));
   }
+  const pageDefinition = websitePageDefForType(row.type);
+  if (pageDefinition) {
+    merged = deepMerge(merged, { pageIntro: websitePageIntroDefaults(pageDefinition.path, profile.coverImageUrl) });
+  }
 
   // 4. the page config
   merged = deepMerge(merged, asRecord(withoutNullImageSrc(row.props)));
@@ -427,6 +432,8 @@ export function resolvePage(input: {
   overrides: SiteOverrideRow[];
   profile: SiteProfile;
   registry: Record<string, ErasedSectionMaster>;
+  /** Shared menu/footer rows retain the page-level edits from their source. */
+  sectionPageIds?: Record<string, string>;
 }): ResolvedPage {
   const { page, theme, settings, sections, overrides, profile, registry } = input;
 
@@ -456,7 +463,9 @@ export function resolvePage(input: {
         master,
         theme,
         profile,
-        overrides: index,
+        overrides: input.sectionPageIds?.[row.id]
+          ? indexOverrides(overrides, input.sectionPageIds[row.id])
+          : index,
         index: position,
       }),
     );

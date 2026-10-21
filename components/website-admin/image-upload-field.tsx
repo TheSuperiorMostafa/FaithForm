@@ -55,6 +55,10 @@ export function ImageUploadField({
 }) {
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement | null>(null);
+  // An upload can finish after the rest of this section has been edited.
+  // Use the latest callback so its new URL cannot restore an older form draft.
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [showUrl, setShowUrl] = useState(false);
@@ -86,7 +90,7 @@ export function ImageUploadField({
         setError(result.error);
         return;
       }
-      onChange(result.url);
+      onChangeRef.current(result.url);
     });
   }
 

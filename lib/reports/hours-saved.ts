@@ -1,3 +1,4 @@
+import { isCompletedPhoneCall } from "@/lib/integrations/retell-call-model";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   AUTOMATION_CATALOG,
@@ -102,6 +103,9 @@ type AnnouncementRow = {
 };
 
 type PhoneCallRow = {
+  caller_number?: string | null;
+  provider_call_type?: string | null;
+  call_status?: string | null;
   called_at: string | null;
   duration_seconds: number | null;
   call_type: string | null;
@@ -165,7 +169,7 @@ export async function loadHoursSavedSources(
 
   const phoneQuery = phoneClient
     .from("phone_calls")
-    .select("called_at, duration_seconds, call_type")
+    .select("called_at, duration_seconds, call_type, caller_number, provider_call_type, call_status")
     .eq("church_id", churchId)
     .lte("called_at", endIso);
   const announcementQuery = supabase
@@ -258,7 +262,7 @@ export function computeHoursSavedFromSources(
   let tasks = 0;
   const { phoneCalls, announcements, attendance, assets, sermons, activities } = sources;
   const phoneCallsInWindow = phoneCalls.filter((r) =>
-    inHoursSavedWindow(r.called_at, start, end),
+    isCompletedPhoneCall(r) && inHoursSavedWindow(r.called_at, start, end),
   );
   if (phoneCallsInWindow.length > 0) {
     let phoneMinutes = 0;

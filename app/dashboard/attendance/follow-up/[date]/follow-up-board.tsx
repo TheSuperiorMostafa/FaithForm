@@ -35,6 +35,7 @@ export type FollowUpCandidate = {
   /** Raw text from the texting service. Never shown; mapped to a plain reason. */
   error: string | null;
   requested: boolean;
+  deliveryStatus?: "queued" | "sent";
 };
 
 type FollowUpBoardProps = {
@@ -119,7 +120,7 @@ export function FollowUpBoard({
     const ok = await confirmAction({
       title: `Text ${people(count)} now?`,
       description: textingConnected
-        ? `Each person gets the message shown, with their own first name. A text can't be taken back once it's sent.`
+        ? `Each person gets the message shown. Names are added only where you include [Name]. A text can't be taken back once it's sent.`
         : `Your church's texting phone isn't connected yet, so they'll be marked for follow-up but no texts will go out.`,
       confirmLabel: `Send ${texts(count)}`,
       destructive: true,
@@ -140,6 +141,10 @@ export function FollowUpBoard({
         }
 
         setSelected(new Set());
+        if (result.requiresAppCheck) {
+          router.push(`/dashboard/attendance/follow-up/${selectedDate}/check-texts`);
+          return;
+        }
         if (result.notConnected) {
           setError(
             `Saved ${people(result.requested)} for follow-up, but no texts went out: your church's texting phone isn't connected yet.`,
@@ -282,7 +287,7 @@ export function FollowUpBoard({
             {alreadySent.length > 0 ? (
               <section className="flex flex-col gap-3" aria-labelledby="sent-heading">
                 <h2 id="sent-heading" className="font-heading text-xl font-bold text-foreground">
-                  Already texted ({alreadySent.length})
+                  Text requests ({alreadySent.length})
                 </h2>
                 <ul className="flex flex-col gap-2">
                   {alreadySent.map((candidate) => (
@@ -293,7 +298,7 @@ export function FollowUpBoard({
                       <span className="min-w-0 flex-1 text-base font-medium text-foreground">
                         {candidate.name}
                       </span>
-                      <StatusBadge tone="done">Text sent</StatusBadge>
+                      <StatusBadge tone={candidate.deliveryStatus === "queued" ? "working" : "done"}>{candidate.deliveryStatus === "queued" ? "Waiting for phone" : "Text sent"}</StatusBadge>
                     </li>
                   ))}
                 </ul>
@@ -308,7 +313,7 @@ export function FollowUpBoard({
                 <p className="text-[15px] text-muted-foreground">
                   {chosen.length === 0
                     ? "Choose people on the list to see exactly what each one gets."
-                    : `Shown as ${sample?.firstName ?? "they"} will read it. Everyone gets their own first name.`}
+                    : `Shown as ${sample?.firstName ?? "they"} will read it. Names are optional.`}
                 </p>
               </div>
 
@@ -356,7 +361,7 @@ export function FollowUpBoard({
                     className="text-base"
                   />
                   <p id="follow-up-message-help" className="text-sm text-muted-foreground">
-                    Put {NAME_PLACEHOLDER} where each person&apos;s first name goes. Everyone you
+                    Optionally put {NAME_PLACEHOLDER} where each person&apos;s first name goes. Everyone you
                     chose gets this one message. Your saved messages in Settings don&apos;t change.
                   </p>
                   {customCheck && !customCheck.ok ? (

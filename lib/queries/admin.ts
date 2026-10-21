@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { churchHealth, type ChurchHealth, type ChurchHealthSignals } from "@/lib/admin/church-health";
 import { parseFeatureKeys, type FeatureKey } from "@/lib/features/catalog";
 import {
   getTicketComments,
@@ -50,6 +51,7 @@ export type AdminChurchSummary = {
 };
 
 export type AdminChurchListRow = {
+  health: ChurchHealth;
   id: string;
   name: string;
   usersCount: number;
@@ -542,7 +544,7 @@ export async function getAdminOverview(): Promise<AdminOverview> {
 
 export async function getAdminChurches(): Promise<AdminChurchListRow[]> {
   const admin = createAdminClient();
-  const [churchesRes, metricsRes, integrationsRes, invitesRes] =
+  const [churchesRes, metricsRes, integrationsRes, invitesRes, healthRes] =
     await Promise.all([
       admin
         .from("churches")
@@ -557,6 +559,7 @@ export async function getAdminChurches(): Promise<AdminChurchListRow[]> {
         .select("church_id, email, accepted_at, created_at")
         .is("accepted_at", null)
         .order("created_at", { ascending: false }),
+      admin.rpc("admin_church_health_signals"),
     ]);
 
   if (churchesRes.error) throw new Error(`admin churches: ${churchesRes.error.message}`);
@@ -566,6 +569,7 @@ export async function getAdminChurches(): Promise<AdminChurchListRow[]> {
   if (metricsRes.error && !isMissingAdminAggregate(metricsRes.error.message)) {
     throw new Error(`admin_platform_church_metrics: ${metricsRes.error.message}`);
   }
+  const healthByChurch = new Map<string, ChurchHealthSignals>((healthRes.data ?? []).map((row: ChurchHealthSignals & { church_id: string }) => [row.church_id, row]));
   const usersByChurch = new Map<string, number>();
   const sermonsByChurch = new Map<string, number>();
   const googleChurches = new Set<string>();
@@ -638,6 +642,7 @@ export async function getAdminChurches(): Promise<AdminChurchListRow[]> {
     stripeChargesEnabled: Boolean(church.stripe_charges_enabled),
     onboardingCompletedAt: church.onboarding_completed_at ?? null,
     pendingInviteEmail: pendingInviteByChurch.get(church.id) ?? null,
+    health: churchHealth(healthByChurch.get(church.id) ?? null, church.created_at),
     lastActiveAt: lastActiveByChurch.get(church.id) ?? null,
     createdAt: church.created_at,
   }));

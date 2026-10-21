@@ -1,6 +1,44 @@
 const SMS_MOBILE_API_URL = "https://api.smsmobileapi.com/sendsms/";
 const SMS_MOBILE_LIST_URL = "https://api.smsmobileapi.com/gateway/mobile/list/";
 
+export type SmsDeliveryStatus = "queued" | "sent" | "failed";
+
+/** Only handset confirmation counts as sent; HTTP/API acceptance is queued. */
+export function parseSmsMobileDelivery(row: Record<string, unknown>): SmsDeliveryStatus {
+  if (String(row.send_from_mobile) === "1") return "sent";
+  if ([row.error_api, row.send_from_mobile_erreur].some((value) =>
+    value != null && !["", "0", "false"].includes(String(value).trim().toLowerCase()),
+  )) return "failed";
+  return "queued";
+}
+
+export async function getSmsMobileDelivery(input: {
+  apiKey: string;
+  messageId: string;
+  deviceSid?: string | null;
+}): Promise<SmsDeliveryStatus | null> {
+  const url = new URL("https://api.smsmobileapi.com/log/sent/sms/");
+  url.searchParams.set("apikey", input.apiKey);
+  url.searchParams.set("guid_message", input.messageId);
+  const response = await fetch(url, {
+    method: "GET",
+    cache: "no-store",
+    signal: AbortSignal.timeout(5_000),
+  });
+  if (!response.ok) throw new Error("Text delivery status is unavailable.");
+  const payload = await response.json() as {
+    result?: { error?: unknown; sms?: Record<string, unknown>[] };
+  };
+  if (!["", "0"].includes(String(payload.result?.error ?? ""))) {
+    throw new Error("Text delivery status is unavailable.");
+  }
+  const row = payload.result?.sms?.find((item) => String(item.guid_message) === input.messageId);
+  if (!row) return null;
+  // A connected account can contain multiple handsets. Match the one used.
+  if (input.deviceSid && String(row.sIdentifiantPhone) !== input.deviceSid) return null;
+  return parseSmsMobileDelivery(row);
+}
+
 type SmsMobileApiResponse = {
   result?: {
     error?: number | string;
@@ -22,6 +60,8 @@ export type SmsMobileDevice = {
 };
 
 type SmsMobileDeviceResponse = {
+  success?: boolean | number | string;
+  items?: Array<Record<string, unknown>>;
   result?: {
     error?: number | string;
     mobiles?: Array<Record<string, unknown>>;
@@ -136,9 +176,9 @@ export async function listSmsMobileDevices(
   url.searchParams.set("apikey", key);
   let response: Response;
   try {
-    response = await fetch(url, { method: "GET" });
-  } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : "Network error" };
+    response = await fetch(url, { method: "GET", cache: "no-store", signal: AbortSignal.timeout(5_000) });
+  } catch {
+    return { ok: false, error: "We couldn't reach the texting phone service." };
   }
 
   let payload: SmsMobileDeviceResponse;
@@ -148,29 +188,41 @@ export async function listSmsMobileDevices(
     return { ok: false, error: "Invalid SMS gateway response" };
   }
 
+  if (!payload || typeof payload !== "object") {
+    return { ok: false, error: "Invalid SMS gateway response" };
+  }
   const result = payload.result;
   const errorCode = String(result?.error ?? "0");
-  if (!response.ok || (errorCode !== "0" && errorCode !== "")) {
+  const explicitFailure = payload.success !== undefined && ![true, 1, "1", "true"].includes(payload.success);
+  if (!response.ok || explicitFailure || (errorCode !== "0" && errorCode !== "")) {
     return { ok: false, error: parseApiError(result) };
   }
 
-  const rows = result?.mobiles ?? result?.mobile ?? [];
+  // Current responses use success/items. Keep older result.mobile(s) accounts
+  // working, and never describe an unrecognized response as an empty fleet.
+  const rows = payload.items ?? result?.mobiles ?? result?.mobile;
+  if (!Array.isArray(rows)) return { ok: false, error: "Invalid SMS gateway response" };
   return {
     ok: true,
     devices: rows
       .map((row) => {
+        if (!row || typeof row !== "object") return null;
         const sid = String(row.sIdentifiant ?? row.sIdentifiantPhone ?? row.sid ?? "").trim();
         if (!sid) return null;
         const onlineValue = row.online ?? row.connected ?? row.status;
         return {
           sid,
-          label: String(row.label ?? row.name ?? row.phone ?? "").trim() || null,
+          label: String(row.label ?? row.name ?? row.phone_number ?? row.phone ?? "").trim() || null,
           online:
             typeof onlineValue === "boolean"
               ? onlineValue
               : onlineValue == null
                 ? null
-                : /online|connected|1|true/i.test(String(onlineValue)),
+                : /^(online|connected|active|1|true)$/i.test(String(onlineValue).trim())
+                  ? true
+                  : /^(offline|disconnected|not connected|inactive|0|false)$/i.test(String(onlineValue).trim())
+                    ? false
+                    : null,
           raw: row,
         };
       })

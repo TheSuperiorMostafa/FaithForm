@@ -42,12 +42,12 @@ const ADMIN_TABS = visibleSettingsTabs({ isAdmin: true, allowedFeatures: ALL });
 // Settings sections and deep links
 // ---------------------------------------------------------------------------
 
-test("settings has six plain sections, in the order a church thinks about them", () => {
+test("settings has seven plain sections, in the order a church thinks about them", () => {
   assert.deepEqual(
     SETTINGS_TABS.map((tab) => tab.label),
-    ["Church info", "Your Team", "Connected accounts", "Messages & email", "Documents", "Member App"],
+    ["Church info", "Your Team", "Connected accounts", "Messages & email", "Notifications", "Documents", "Member App"],
   );
-  assert.deepEqual(ADMIN_TABS, ["church", "team", "accounts", "messages", "documents", "app"]);
+  assert.deepEqual(ADMIN_TABS, ["church", "team", "accounts", "messages", "notifications", "documents", "app"]);
 });
 
 test("the Advanced section is gone and its old link goes to Settings home", () => {
@@ -104,12 +104,13 @@ test("church info: service times come before the address, the small logo is last
   assert.ok(church.indexOf("Street address") < church.indexOf("Logo and cover photo"));
 });
 
-test("each follow-up message adds [Name] from a small button in its header", () => {
+test("each follow-up message can optionally add a name from its header", () => {
   const form = read("components/settings/follow-up-messages-form.tsx");
   assert.doesNotMatch(form, /PlaceholderChips|Tap to add it:/);
   assert.match(form, /insertPlaceholder\(id, NAME_TOKEN\)/);
   assert.match(form, /aria-label=\{`Add their first name/);
-  assert.match(form, /\{!hasName && \(/);
+  assert.match(form, /Adding their name is optional/);
+  assert.doesNotMatch(form, /Must include their name|aria-invalid=\{!hasName/);
 });
 
 test("old ?tab= links keep landing on the section that now holds them", () => {
@@ -140,7 +141,7 @@ test("an OAuth or Stripe round trip opens the section that shows its result", ()
 
 test("non-admins only see sections they can use", () => {
   const tabs = visibleSettingsTabs({ isAdmin: false, allowedFeatures: ALL });
-  assert.deepEqual(tabs, ["church", "team", "documents"]);
+  assert.deepEqual(tabs, ["church", "team", "notifications", "documents"]);
   assert.equal(resolveSettingsTab(params("tab=integrations"), tabs), "church");
   assert.equal(resolveSettingsTab(params("google_connected=1"), tabs), "church");
   // Messages needs Announcements or Attendance, even for an admin.

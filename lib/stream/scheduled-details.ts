@@ -53,5 +53,6 @@ export async function scheduledDetailsPatch(form: FormData, churchId: string, db
     if (!series) throw new ScheduledDetailsError("We couldn't create that series. Please try again.");
     seriesId = series.id;
   }
-  return { title: details.title, seriesId, ...artwork };
+  return { title: details.title, seriesId, speaker: details.speaker,
+    description: details.description, chapters: details.chapters, topics: details.topics, ...artwork };
 }

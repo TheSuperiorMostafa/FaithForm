@@ -1,3 +1,4 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { getRetellApiKeyForChurch } from "@/lib/integrations/retell-key";
 
 const RETELL_API_BASE = "https://api.retellai.com";
@@ -12,6 +13,8 @@ type RetellRequestOptions = {
    * `RETELL_API_KEY`. Omit for platform-level calls that have no church.
    */
   churchId?: string | null;
+  signal?: AbortSignal;
+  admin?: SupabaseClient;
 };
 
 export class RetellApiError extends Error {
@@ -34,9 +37,10 @@ export class RetellApiError extends Error {
  */
 export async function resolveRetellApiKey(
   churchId?: string | null,
+  admin?: SupabaseClient,
 ): Promise<string | undefined> {
   if (churchId) {
-    const churchKey = await getRetellApiKeyForChurch(churchId);
+    const churchKey = await getRetellApiKeyForChurch(churchId, admin);
     if (churchKey) return churchKey;
   }
   return process.env.RETELL_API_KEY;
@@ -47,14 +51,17 @@ export async function retellRequest<T>({
   path,
   body,
   churchId,
+  signal,
+  admin,
 }: RetellRequestOptions): Promise<T> {
-  const apiKey = await resolveRetellApiKey(churchId);
+  const apiKey = await resolveRetellApiKey(churchId, admin);
   if (!apiKey) {
     throw new Error("RETELL_API_KEY is not configured");
   }
 
   const response = await fetch(`${RETELL_API_BASE}${path}`, {
     method,
+    signal,
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",

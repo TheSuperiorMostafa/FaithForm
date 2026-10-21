@@ -4,6 +4,7 @@ import { FollowUpBoard, type FollowUpCandidate } from "./follow-up-board";
 import { FirstTimeGuestPanel } from "./first-time-guest-panel";
 import { LogLink } from "../log-link";
 import { ServiceDayHeader } from "@/components/attendance/service-day-header";
+import { hasUncheckedAttendanceTexts } from "@/lib/attendance/sms-delivery";
 import { sortFollowUpCandidates } from "@/lib/attendance/follow-up-order";
 import { checkedInOtherwise, getPresenceOnDate } from "@/lib/attendance/presence";
 import { getChurchAuth } from "@/lib/auth/church";
@@ -40,6 +41,9 @@ export default async function AttendanceFollowUpDatePage({ params }: PageProps) 
     getFollowUpMessageTemplates(auth.churchId, createAdminClient()),
   ]);
   if (!record) redirect("/dashboard/attendance/follow-up");
+  if (await hasUncheckedAttendanceTexts(createAdminClient(), auth.churchId, selectedDate)) {
+    redirect(`/dashboard/attendance/follow-up/${selectedDate}/check-texts`);
+  }
   // Marked absent, but checked in by the app, a code, the kiosk or a room:
   // they were there, and a "we missed you" text would be wrong.
   const cameAnyway = (memberId: string) =>
@@ -63,6 +67,13 @@ export default async function AttendanceFollowUpDatePage({ params }: PageProps) 
 
   // Phone numbers first (those are the people a text can reach), then the
   // longest streak, then name.
+  const { data: textLogs } = await createAdminClient().from("attendance_follow_up_log")
+    .select("entry_id, status").eq("church_id", auth.churchId).eq("service_date", selectedDate)
+    .order("created_at", { ascending: false }).limit(1000);
+  const textStatus = new Map<string, string>();
+  for (const row of textLogs ?? []) {
+    if (row.entry_id && !textStatus.has(row.entry_id)) textStatus.set(row.entry_id, row.status);
+  }
   const candidates: FollowUpCandidate[] = sortFollowUpCandidates(
     absentEntries.map((entry) => ({
       memberId: entry.member!.id,
@@ -77,6 +88,7 @@ export default async function AttendanceFollowUpDatePage({ params }: PageProps) 
       // Raw text from the texting service stays in the database.
       error: entry.follow_up_error,
       requested: entry.follow_up_requested,
+      deliveryStatus: textStatus.get(entry.id) === "queued" ? "queued" as const : "sent" as const,
     })),
   );
 

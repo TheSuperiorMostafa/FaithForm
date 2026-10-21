@@ -28,9 +28,7 @@ export function pickFollowUpMessage(
   const index = Math.min(Math.max(consecutiveAbsent, 1), normalized.length) - 1;
   const template = normalized[index];
   const name = firstName.trim() || "there";
-  return template.includes(NAME_PLACEHOLDER)
-    ? template.replaceAll(NAME_PLACEHOLDER, name)
-    : `${template} ${name}`.trim();
+  return template.replaceAll(NAME_PLACEHOLDER, name);
 }
 
 export function normalizeFollowUpTemplates(
@@ -71,13 +69,6 @@ export function validateFollowUpTemplates(
       return {
         ok: false,
         error: `${label}: keep messages under ${MAX_MESSAGE_LENGTH} characters.`,
-      };
-    }
-
-    if (!message.includes(NAME_PLACEHOLDER)) {
-      return {
-        ok: false,
-        error: `${label}: include ${NAME_PLACEHOLDER} where the member's first name should appear.`,
       };
     }
 

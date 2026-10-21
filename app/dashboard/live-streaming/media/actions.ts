@@ -20,6 +20,7 @@ import {
 } from "@/lib/stream/media-library";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { requireScheduledArtworkTarget, setScheduledArtwork } from "@/lib/stream/scheduled-artwork";
 
 export type MediaActionResult = { ok: true } | { ok: false; error: string };
 
@@ -57,7 +58,8 @@ const MAX_ARTWORK_BYTES = 12 * 1024 * 1024;
 
 export type ArtworkTarget =
   | { kind: "item"; id: string }
-  | { kind: "series"; id: string };
+  | { kind: "series"; id: string }
+  | { kind: "service"; id: string };
 
 export type ArtworkUploadResult =
   | { ok: true; url: string }
@@ -88,11 +90,20 @@ export async function uploadMediaArtwork(
   const targetKind = formData.get("targetKind");
   const targetId = formData.get("targetId");
   if (
-    (targetKind !== "item" && targetKind !== "series") ||
+    (targetKind !== "item" && targetKind !== "series" && targetKind !== "service") ||
     typeof targetId !== "string" ||
     !targetId
   ) {
     return { ok: false, error: "Nothing to attach that image to." };
+  }
+
+  const admin = createAdminClient();
+  if (targetKind === "service") {
+    try {
+      await requireScheduledArtworkTarget(guard.churchId, targetId, admin);
+    } catch (error) {
+      return { ok: false, error: toUserError(error, "We couldn't check that upcoming service.") };
+    }
   }
 
   const file = formData.get("file");
@@ -135,7 +146,6 @@ export async function uploadMediaArtwork(
 
   const name = `${Date.now().toString(36)}-${randomUUID().slice(0, 8)}.${normalized.ext}`;
   const path = artworkStoragePath(guard.churchId, spec.key, name);
-  const admin = createAdminClient();
 
   const { error: uploadError } = await admin.storage
     .from(ARTWORK_BUCKET)
@@ -153,7 +163,9 @@ export async function uploadMediaArtwork(
   const url = data.publicUrl;
 
   const written =
-    targetKind === "series"
+    targetKind === "service"
+      ? await setScheduledArtwork(guard.churchId, targetId, spec.key, url, admin)
+      : targetKind === "series"
       ? await setMediaSeriesArtwork(guard.churchId, targetId, spec.column, url)
       : await updateMediaItem(guard.churchId, targetId, {
           artwork: { column: spec.column, url },
@@ -164,6 +176,7 @@ export async function uploadMediaArtwork(
   }
 
   revalidate(targetKind === "item" ? targetId : undefined);
+  if (targetKind === "service") revalidateUpcomingArtwork(targetId);
   return { ok: true, url };
 }
 
@@ -179,7 +192,9 @@ export async function clearMediaArtwork(input: {
   if (!spec) return { ok: false, error: "Choose one of the artwork shapes shown." };
 
   const written =
-    input.target.kind === "series"
+    input.target.kind === "service"
+      ? await setScheduledArtwork(guard.churchId, input.target.id, spec.key, null, createAdminClient())
+      : input.target.kind === "series"
       ? await setMediaSeriesArtwork(guard.churchId, input.target.id, spec.column, null)
       : await updateMediaItem(guard.churchId, input.target.id, {
           artwork: { column: spec.column, url: null },
@@ -188,7 +203,13 @@ export async function clearMediaArtwork(input: {
   if (!written.ok) return { ok: false, error: toUserError(written.error, "We couldn't remove that image.") };
 
   revalidate(input.target.kind === "item" ? input.target.id : undefined);
+  if (input.target.kind === "service") revalidateUpcomingArtwork(input.target.id);
   return { ok: true };
+}
+
+function revalidateUpcomingArtwork(eventId: string) {
+  revalidatePath("/dashboard/live-streaming/upcoming");
+  revalidatePath(`/dashboard/live-streaming/upcoming/${eventId}`);
 }
 
 export type ApplySeriesArtworkResult =

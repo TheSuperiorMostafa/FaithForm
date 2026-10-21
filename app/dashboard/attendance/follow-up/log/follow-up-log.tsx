@@ -14,6 +14,7 @@ import type {
 import { cn } from "@/lib/utils";
 
 const STATUS_LABEL: Record<FollowUpLogStatus, string> = {
+  queued: "Waiting for phone",
   sent: "Sent",
   failed: "Not delivered",
   skipped: "Not sent",
@@ -136,7 +137,7 @@ export function FollowUpLog({ sundays }: { sundays: FollowUpLogSunday[] }) {
                     ) : null}
 
                     <p className="text-sm text-muted-foreground">
-                      Sent by {entry.senderName ?? "your church"}
+                      Requested by {entry.senderName ?? "your church"}
                       {entry.senderPhone
                         ? ` from ${formatPhoneDisplay(entry.senderPhone) ?? entry.senderPhone}`
                         : ""}{" "}

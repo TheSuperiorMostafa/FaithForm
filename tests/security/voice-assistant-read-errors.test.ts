@@ -51,7 +51,7 @@ test("call and settings reads fail visibly instead of showing empty defaults", a
 
 test("only a missing scoring column uses the legacy call query", async () => {
   const missing = { data: null, error: { code: "42703", message: "column call_classification does not exist" } };
-  const row = { id: "call-a", called_at: "2026-09-27T12:00:00Z" };
+  const row = { id: "call-a", caller_number: "+12025550123", called_at: "2026-09-27T12:00:00Z" };
 
   const list = clientWith(missing, { data: [row], error: null });
   const calls = await getRecentPhoneCalls("church-a", 100, list.client);

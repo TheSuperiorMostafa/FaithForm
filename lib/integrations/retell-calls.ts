@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { revalidatePath } from "next/cache";
 import { logPhoneCallActivity } from "@/lib/activity/log";
 import { retellRequest } from "@/lib/integrations/retell-client";
+import { isRealRetellPhoneCall, type RetellCallEvent } from "@/lib/integrations/retell-call-model";
 import { scorePhoneCallIfNeeded } from "@/lib/integrations/score-phone-call";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { phoneCallMinutesSaved } from "@/lib/utils/phone-call-time-saved";
@@ -9,6 +10,9 @@ import { phoneCallMinutesSaved } from "@/lib/utils/phone-call-time-saved";
 export type RetellCallPayload = {
   call_id: string;
   agent_id?: string;
+  call_type?: "phone_call" | "web_call";
+  direction?: "inbound" | "outbound";
+  call_status?: string;
   from_number?: string;
   to_number?: string;
   start_timestamp?: number;
@@ -28,6 +32,7 @@ export type RetellCallPayload = {
 export type UpsertRetellCallResult = {
   churchId: string;
   created: boolean;
+  phoneCallId: string;
 };
 
 function readChurchIdFromCall(_call: RetellCallPayload): string | null {
@@ -59,9 +64,9 @@ function formatOutcome(call: RetellCallPayload): string | null {
   return call.disconnection_reason ?? null;
 }
 
-export function buildPhoneCallRow(churchId: string, call: RetellCallPayload) {
+export function buildPhoneCallRow(churchId: string, call: RetellCallPayload, event: RetellCallEvent = "call_ended") {
   const durationSeconds =
-    call.start_timestamp && call.end_timestamp
+    call.start_timestamp != null && call.end_timestamp != null
       ? Math.max(
           0,
           Math.round((call.end_timestamp - call.start_timestamp) / 1000),
@@ -71,20 +76,21 @@ export function buildPhoneCallRow(churchId: string, call: RetellCallPayload) {
   return {
     church_id: churchId,
     retail_ai_call_id: call.call_id,
-    caller_number: call.from_number ?? null,
-    duration_seconds: durationSeconds,
-    outcome: formatOutcome(call),
-    sentiment: call.call_analysis?.user_sentiment ?? null,
-    transcript: call.transcript ?? null,
-    recording_url: call.recording_url ?? null,
-    call_successful:
-      typeof call.call_analysis?.call_successful === "boolean"
-        ? call.call_analysis.call_successful
-        : null,
-    notes: call.call_analysis?.call_summary ?? null,
-    call_type: "inbound",
-    called_at: call.end_timestamp
-      ? new Date(call.end_timestamp).toISOString()
+    caller_number: (call.direction === "outbound" ? call.to_number : call.from_number) ?? null,
+    ...(durationSeconds != null ? { duration_seconds: durationSeconds } : {}),
+    ...(formatOutcome(call) ? { outcome: formatOutcome(call) } : {}),
+    ...(call.call_analysis?.user_sentiment ? { sentiment: call.call_analysis.user_sentiment } : {}),
+    ...(call.transcript ? { transcript: call.transcript } : {}),
+    ...(call.recording_url ? { recording_url: call.recording_url } : {}),
+    ...(typeof call.call_analysis?.call_successful === "boolean"
+      ? { call_successful: call.call_analysis.call_successful } : {}),
+    ...(call.call_analysis?.call_summary ? { notes: call.call_analysis.call_summary } : {}),
+    call_type: call.direction ?? "inbound",
+    provider_call_type: call.call_type,
+    call_status: event === "call_started" ? "ongoing" : event === "call_analyzed" ? "analyzed" : "ended",
+    called_at: call.start_timestamp != null
+      ? new Date(call.start_timestamp).toISOString()
+      : call.end_timestamp != null ? new Date(call.end_timestamp).toISOString()
       : new Date().toISOString(),
   };
 }
@@ -92,12 +98,15 @@ export function buildPhoneCallRow(churchId: string, call: RetellCallPayload) {
 export async function upsertPhoneCallFromRetell(
   call: RetellCallPayload,
   admin?: SupabaseClient,
+  options: { event?: RetellCallEvent; score?: boolean } = {},
 ): Promise<UpsertRetellCallResult | null> {
+  if (!isRealRetellPhoneCall(call)) return null;
   const client = admin ?? createAdminClient();
   const churchId = await resolveChurchIdFromRetellCall(call, client);
   if (!churchId) return null;
 
-  const row = buildPhoneCallRow(churchId, call);
+  const event = options.event ?? (call.call_analysis ? "call_analyzed" : "call_ended");
+  const row = buildPhoneCallRow(churchId, call, event);
 
   // Looked up inside the church the call was verified for. Found across all
   // churches, a church holding its own Retell key could sign a payload naming
@@ -116,7 +125,8 @@ export async function upsertPhoneCallFromRetell(
   let phoneCallId = existing?.id as string | undefined;
 
   if (phoneCallId) {
-    await client.from("phone_calls").update(row).eq("id", phoneCallId).eq("church_id", churchId);
+    const { error } = await client.from("phone_calls").update(row).eq("id", phoneCallId).eq("church_id", churchId);
+    if (error) throw error;
   } else {
     const { data: inserted, error } = await client
       .from("phone_calls")
@@ -124,34 +134,43 @@ export async function upsertPhoneCallFromRetell(
       .select("id")
       .single();
 
-    if (error) throw error;
-    phoneCallId = inserted.id as string;
+    if (error?.code === "23505") {
+      // A simultaneous lifecycle webhook inserted first. Never move a call
+      // from another tenant when retrying a provider-wide unique call id.
+      const { data: raced } = await client.from("phone_calls").select("id")
+        .eq("retail_ai_call_id", call.call_id).eq("church_id", churchId).maybeSingle();
+      if (!raced?.id) throw error;
+      phoneCallId = raced.id as string;
+      const updated = await client.from("phone_calls").update(row).eq("id", phoneCallId).eq("church_id", churchId);
+      if (updated.error) throw updated.error;
+    } else {
+      if (error) throw error;
+      phoneCallId = inserted.id as string;
+    }
   }
 
-  await logPhoneCallActivity({
+  if (event !== "call_started") await logPhoneCallActivity({
     churchId,
     phoneCallId,
     retailAiCallId: call.call_id,
-    callerNumber: call.from_number ?? null,
-    durationSeconds: row.duration_seconds,
+    callerNumber: row.caller_number,
+    durationSeconds: row.duration_seconds ?? null,
     executedAt,
     timeSavedMinutes: minutesSaved,
-  });
+  }, client);
 
-  if (phoneCallId && row.transcript) {
+  if (options.score !== false && event !== "call_started" && phoneCallId && row.transcript) {
     await scorePhoneCallIfNeeded(phoneCallId, { admin: client });
   }
 
   revalidatePath("/dashboard");
   revalidatePath("/dashboard/voice-assistant");
   revalidatePath("/dashboard/call-log");
-  revalidatePath("/dashboard/call-log");
   if (phoneCallId) {
-    revalidatePath(`/dashboard/call-log/${phoneCallId}`);
     revalidatePath(`/dashboard/call-log/${phoneCallId}`);
   }
 
-  return { churchId, created: !existing?.id };
+  return { churchId, phoneCallId, created: !existing?.id };
 }
 
 type RetellListCallsResponse = {
@@ -166,8 +185,9 @@ const RETELL_CALL_PAGE_CAP = 20;
 export async function importRetellCallsForChurch(
   churchId: string,
   limit = 50,
+  options: { admin?: SupabaseClient; score?: boolean; signal?: AbortSignal } = {},
 ): Promise<{ imported: number; skipped: number }> {
-  const admin = createAdminClient();
+  const admin = options.admin ?? createAdminClient();
   const { data: settings } = await admin
     .from("voice_assistant_settings")
     .select("retail_ai_agent_id")
@@ -189,6 +209,7 @@ export async function importRetellCallsForChurch(
     page += 1
   ) {
     const pageLimit = Math.min(remaining, RETELL_CALL_PAGE_LIMIT);
+    options.signal?.throwIfAborted();
     const response = await retellRequest<RetellListCallsResponse>({
       method: "POST",
       path: "/v3/list-calls",
@@ -204,9 +225,12 @@ export async function importRetellCallsForChurch(
       // are listed with their key when one is saved, falling back to
       // FaithForm's shared key.
       churchId,
+      admin,
+      signal: options.signal,
     });
 
-    const pageItems = Array.isArray(response?.items) ? response.items : [];
+    if (!Array.isArray(response?.items)) throw new Error("Retell returned an invalid call list.");
+    const pageItems = response.items;
     calls.push(...pageItems);
     remaining -= pageItems.length;
 
@@ -218,8 +242,14 @@ export async function importRetellCallsForChurch(
   let skipped = 0;
 
   for (const call of calls ?? []) {
-    if (!call.call_id) continue;
-    const result = await upsertPhoneCallFromRetell(call, admin);
+    options.signal?.throwIfAborted();
+    if (!call.call_id || !isRealRetellPhoneCall(call)) { skipped += 1; continue; }
+    const detail = await retellRequest<RetellCallPayload>({ method: "GET", path: `/v2/get-call/${encodeURIComponent(call.call_id)}`, churchId, admin, signal: options.signal });
+    if (detail.agent_id !== agentId) throw new Error("Retell returned a call for another agent.");
+    const result = await upsertPhoneCallFromRetell(detail, admin, {
+      event: detail.call_status === "ongoing" ? "call_started" : detail.call_analysis ? "call_analyzed" : "call_ended",
+      score: options.score,
+    });
     if (!result) {
       skipped += 1;
       continue;
