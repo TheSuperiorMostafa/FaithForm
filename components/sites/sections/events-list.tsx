@@ -60,7 +60,7 @@ export const eventsListSection = defineSection<EventsListContent>({
       type: "list",
       addLabel: "Add event",
       titleKey: "title",
-      help: "Left empty, this shows your approved announcements with an upcoming date.",
+      help: "Starts with your upcoming approved announcements. Removing all events shows the empty message. Reset this section to original to follow your announcements again.",
       itemFields: [
         { key: "title", label: "Title", type: "text" },
         { key: "date", label: "Date", type: "text" },

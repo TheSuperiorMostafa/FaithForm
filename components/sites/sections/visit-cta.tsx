@@ -62,6 +62,15 @@ export const visitCtaSection = defineSection<VisitCtaContent>({
     { key: "eyebrow", label: "Small heading above", type: "text" },
     { key: "headline", label: "Headline", type: "headline" },
     { key: "body", label: "Intro paragraph", type: "textarea" },
+    {
+      key: "action",
+      label: "Visit button",
+      type: "group",
+      fields: [
+        { key: "label", label: "Button label", type: "text", help: "Leave blank to hide this button." },
+        { key: "href", label: "Link", type: "url", help: "Leave blank to scroll to your visit form." },
+      ],
+    },
     { key: "panelHeading", label: "Panel heading", type: "text" },
     {
       key: "facts",

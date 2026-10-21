@@ -46,3 +46,22 @@ test("shared rows keep Home page overrides while the page body keeps its own", (
   assert.equal(resolved.sections[0].content.title, "Our shared menu");
   assert.equal(resolved.sections[1].content.eyebrow, "About this church");
 });
+
+test("the Visit button can be renamed, linked, and hidden independently of its form in every style", () => {
+  const master = SECTION_REGISTRY.visit_cta;
+  const visitRow = { ...row, id: "visit", type: "visit_cta" };
+  const visitPage = { ...page, id: "visit-page", path: "/visit" };
+  for (const theme of Object.values(CODE_SITE_THEMES)) {
+    const baseline = resolveSectionBaseline({ row: visitRow, master, theme, profile, overrides: [], pageId: visitPage.id });
+    const edited = { ...baseline, action: { label: "Meet our team", href: "/staff", variant: "solid" } };
+    const patch = diffPatch(baseline, edited);
+    const render = (patch: Record<string, unknown>) => {
+      const resolved = resolvePage({ page: visitPage, theme, profile, settings: { ...settings, themeKey: theme.key }, sections: [visitRow], overrides: [{ scope: "section", sectionId: visitRow.id, pageId: null, patch }], registry: SECTION_REGISTRY });
+      return renderToStaticMarkup(createElement(master.Component, { content: resolved.sections[0].content, ctx: resolved.sections[0].ctx }));
+    };
+    assert.match(render(patch), /href="\/staff"[^>]*>Meet our team/);
+    const hidden = render(diffPatch(baseline, { ...edited, action: { ...edited.action, label: "" } }));
+    assert.doesNotMatch(hidden, /Meet our team|Plan your visit/);
+    assert.match(hidden, /<form/);
+  }
+});
