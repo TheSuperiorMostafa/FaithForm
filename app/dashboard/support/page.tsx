@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowRight, BookOpen, Mail, Phone } from "lucide-react";
+import { ArrowRight, BookOpen, Mail, MessageSquareText, Phone } from "lucide-react";
 
 import {
   HELP_PAGE_DESCRIPTION,
@@ -57,6 +57,12 @@ export default async function SupportPage({ searchParams }: PageProps) {
           title="Call us"
           description="(502) 650-8301"
           tone="primary"
+        />
+        <ActionCard
+          href="sms:+15026508301"
+          icon={MessageSquareText}
+          title="Text us"
+          description="(502) 650-8301"
         />
         <ActionCard
           href={`mailto:${SUPPORT_EMAIL}`}

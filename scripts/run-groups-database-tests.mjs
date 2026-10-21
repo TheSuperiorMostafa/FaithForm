@@ -88,6 +88,7 @@ try {
       "tests/database/church-profile-atomic.test.ts",
       "tests/database/weekly-draft-claim.test.ts",
       "tests/database/support-reply-atomic.test.ts",
+      "tests/database/support-notion-outbox.test.ts",
       "tests/database/onboarding-finalize-atomic.test.ts",
       "tests/database/child-checkout-atomic.test.ts",
       "tests/database/checkin-family-atomic.test.ts",

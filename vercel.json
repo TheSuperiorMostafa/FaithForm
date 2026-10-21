@@ -3,6 +3,9 @@
   "buildCommand": "pnpm build",
   "installCommand": "pnpm install",
   "functions": {
+    "app/api/support/notion/retry/route.ts": {
+      "maxDuration": 60
+    },
     "app/api/**/route.ts": {
       "maxDuration": 30
     },
@@ -104,6 +107,10 @@
     {
       "path": "/api/webhooks/retell/reconcile",
       "schedule": "*/2 * * * *"
+    },
+    {
+      "path": "/api/support/notion/retry",
+      "schedule": "*/5 * * * *"
     }
   ]
 }

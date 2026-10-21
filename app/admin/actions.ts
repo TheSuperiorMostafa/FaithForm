@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { requireSuperAdmin } from "@/lib/auth/superadmin";
 import { sendInviteEmail } from "@/lib/email/invite";
@@ -20,6 +21,7 @@ import {
 } from "@/lib/support/comments";
 import { recordSupportEmailStatus } from "@/lib/support/email-status";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { deliverSupportTicketToNotion } from "@/lib/support/notion-delivery";
 import { generateChurchSlug } from "@/lib/churches/slug";
 
 function readString(formData: FormData, key: string): string {
@@ -471,6 +473,10 @@ export async function createSupportTicket(formData: FormData) {
     console.error("createSupportTicket notify:", notifyError);
   }
   await recordSupportEmailStatus(admin, "support_tickets", data.id as string, notificationConfirmed);
+
+  after(async () => {
+    await deliverSupportTicketToNotion(data.id as string, admin);
+  });
 
   revalidatePath("/admin");
   revalidatePath("/admin/support");

@@ -1,4 +1,4 @@
-import { BookOpen, ChevronRight, Mail, Phone } from "lucide-react";
+import { BookOpen, Mail, MessageSquareText, Phone } from "lucide-react";
 
 import {
   HELP_PAGE_DESCRIPTION,
@@ -7,6 +7,7 @@ import {
   SUPPORT_TICKET_BODY_MAX,
 } from "@/app/dashboard/support/ticket-helpers";
 import { Card, CardContent } from "@/components/ui/card";
+import { ActionCard, ActionGrid } from "@/components/ui/action-card";
 import { PageHeader, SectionHeader } from "@/components/ui/page-header";
 import { Skeleton, SkeletonContainer } from "@/components/ui/skeleton";
 import { SUPPORT_EMAIL } from "@/lib/legal/policy-versions";
@@ -20,13 +21,22 @@ export default function SupportLoading() {
   const cards = [
     {
       icon: Phone,
+      href: "tel:+15026508301",
       title: "Call us",
       description: "(502) 650-8301",
       primary: true,
     },
-    { icon: Mail, title: "Email us", description: SUPPORT_EMAIL, primary: false },
+    {
+      icon: MessageSquareText,
+      href: "sms:+15026508301",
+      title: "Text us",
+      description: "(502) 650-8301",
+      primary: false,
+    },
+    { icon: Mail, href: `mailto:${SUPPORT_EMAIL}`, title: "Email us", description: SUPPORT_EMAIL, primary: false },
     {
       icon: BookOpen,
+      href: "#answers",
       title: "Common questions",
       description: "Quick answers to the things churches ask most.",
       primary: false,
@@ -37,42 +47,18 @@ export default function SupportLoading() {
     <SkeletonContainer className="flex w-full flex-col gap-8" label="help">
       <PageHeader title={HELP_PAGE_TITLE} description={HELP_PAGE_DESCRIPTION} />
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {cards.map(({ icon: Icon, title, description, primary }) => (
-          <div
+      <ActionGrid>
+        {cards.map(({ icon, href, title, description, primary }) => (
+          <ActionCard
             key={title}
-            className={
-              primary
-                ? "flex min-h-[112px] items-center gap-4 rounded-2xl border border-transparent bg-primary p-5 text-primary-foreground shadow-sm dark:bg-card dark:text-foreground dark:ring-1 dark:ring-accent/40"
-                : "flex min-h-[112px] items-center gap-4 rounded-2xl border border-border bg-card p-5 text-card-foreground shadow-sm"
-            }
-          >
-            <span
-              aria-hidden
-              className={
-                primary
-                  ? "flex size-14 shrink-0 items-center justify-center rounded-2xl bg-white/12 text-accent dark:bg-accent/15"
-                  : "flex size-14 shrink-0 items-center justify-center rounded-2xl bg-primary/[0.07] text-primary dark:bg-accent/15 dark:text-accent"
-              }
-            >
-              <Icon className="size-7" strokeWidth={1.75} />
-            </span>
-            <span className="min-w-0 flex-1 space-y-1">
-              <span className="block font-heading text-lg font-bold leading-snug">{title}</span>
-              <span
-                className={
-                  primary
-                    ? "block text-[15px] leading-snug text-primary-foreground/80 dark:text-muted-foreground"
-                    : "block text-[15px] leading-snug text-muted-foreground"
-                }
-              >
-                {description}
-              </span>
-            </span>
-            <ChevronRight aria-hidden className="size-5 shrink-0 opacity-70" />
-          </div>
+            href={href}
+            icon={icon}
+            title={title}
+            description={description}
+            tone={primary ? "primary" : "default"}
+          />
         ))}
-      </div>
+      </ActionGrid>
 
       <section className="flex flex-col gap-4">
         <SectionHeader

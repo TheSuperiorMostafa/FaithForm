@@ -2,6 +2,7 @@
 
 import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { requireChurchAuth } from "@/lib/auth/church";
 import {
   sendSupportTicketAck,
@@ -11,6 +12,7 @@ import { absoluteAppPath } from "@/lib/site-url";
 import { SUPPORT_COMMENT_MAX_LENGTH } from "@/lib/support/comments";
 import { recordSupportEmailStatus } from "@/lib/support/email-status";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { deliverSupportTicketToNotion } from "@/lib/support/notion-delivery";
 import { createClient } from "@/lib/supabase/server";
 import { toUserError } from "@/lib/errors/user-error";
 import {
@@ -106,6 +108,10 @@ export async function submitSupportTicket(params: {
     console.error("submitSupportTicket notify:", notifyError);
   }
   await recordSupportEmailStatus(admin, "support_tickets", ticket.id as string, notificationConfirmed);
+
+  after(async () => {
+    await deliverSupportTicketToNotion(ticket.id as string, admin);
+  });
 
   revalidatePath("/dashboard/support");
   revalidatePath("/admin/support");
