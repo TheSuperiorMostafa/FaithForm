@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { cloneElement, useId, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -724,12 +724,14 @@ function Field({
 }: {
   label: string;
   hint?: string;
-  children: React.ReactNode;
+  children: React.ReactElement<{ id?: string }>;
 }) {
+  const generatedId = useId();
+  const controlId = children.props.id ?? generatedId;
   return (
     <div className="flex flex-col gap-1.5">
-      <Label className="text-[15px] font-semibold">{label}</Label>
-      {children}
+      <Label htmlFor={controlId} className="text-[15px] font-semibold">{label}</Label>
+      {cloneElement(children, { id: controlId })}
       {hint ? <p className="text-sm text-muted-foreground">{hint}</p> : null}
     </div>
   );
