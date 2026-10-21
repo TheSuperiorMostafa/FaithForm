@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { cloneElement, useId, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -293,17 +293,19 @@ function Field({
   label: string;
   help?: string;
   required?: boolean;
-  children: React.ReactNode;
+  children: React.ReactElement<{ id?: string }>;
 }) {
+  const generatedId = useId();
+  const controlId = children.props.id ?? generatedId;
   return (
     <div className="flex flex-col gap-1.5">
-      <Label className="text-[15px] font-semibold">
+      <Label htmlFor={controlId} className="text-[15px] font-semibold">
         {label}
         {required ? <span className="text-destructive"> *</span> : null}
       </Label>
       {/* Below the control, so a field with help still lines up with one
        * without it when they share a row. */}
-      {children}
+      {cloneElement(children, { id: controlId })}
       {help ? <p className="text-sm text-muted-foreground">{help}</p> : null}
     </div>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState, useTransition } from "react";
+import { useEffect, useId, useRef, useState, useTransition } from "react";
 import { ImageUp, Link2, Loader2, Trash2 } from "lucide-react";
 
 import type { Area } from "react-easy-crop";
@@ -13,6 +13,19 @@ import { Label } from "@/components/ui/label";
 import { downscaleForUpload, UPLOAD_BUDGET_BYTES } from "@/lib/sites/downscale-image";
 import { getAspect, type ImageAspectKey } from "@/lib/sites/image-aspects";
 import { cn } from "@/lib/utils";
+
+/** Ignore async work belonging to a removed field or an abandoned image choice. */
+export function createImageUploadGuard() {
+  let mounted = true;
+  let revision = 0;
+  return {
+    start: () => ++revision,
+    isCurrent: (operation: number) => mounted && operation === revision,
+    invalidate: () => { revision += 1; },
+    mount: () => { mounted = true; },
+    unmount: () => { mounted = false; revision += 1; },
+  };
+}
 
 /**
  * Pick an image from the device, or paste a URL.
@@ -59,11 +72,15 @@ export function ImageUploadField({
   // Use the latest callback so its new URL cannot restore an older form draft.
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+  const guardRef = useRef<ReturnType<typeof createImageUploadGuard> | null>(null);
+  if (!guardRef.current) guardRef.current = createImageUploadGuard();
+  const guard = guardRef.current;
+  useEffect(() => { guard.mount(); return guard.unmount; }, [guard]);
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [showUrl, setShowUrl] = useState(false);
   const [dragging, setDragging] = useState(false);
-  const [cropping, setCropping] = useState<File | null>(null);
+  const [cropping, setCropping] = useState<{ file: File; operation: number } | null>(null);
   // Shrinking a 12MP photo takes a beat, and it happens before the upload
   // starts, so it needs its own flag to hold the spinner open.
   const [preparing, setPreparing] = useState(false);
@@ -71,7 +88,8 @@ export function ImageUploadField({
   const preset = getAspect(aspect);
   const busy = pending || preparing;
 
-  function upload(file: File, crop?: Area) {
+  function upload(file: File, operation: number, crop?: Area) {
+    if (!guard.isCurrent(operation)) return;
     setError(null);
     const data = new FormData();
     data.set("file", file);
@@ -85,12 +103,17 @@ export function ImageUploadField({
     }
 
     startTransition(async () => {
-      const result = await uploadAction(data);
-      if (!result.ok) {
-        setError(result.error);
-        return;
+      try {
+        const result = await uploadAction(data);
+        if (!guard.isCurrent(operation)) return;
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        onChangeRef.current(result.url);
+      } catch {
+        if (guard.isCurrent(operation)) setError("We couldn't upload that photo. Try again.");
       }
-      onChangeRef.current(result.url);
     });
   }
 
@@ -102,15 +125,20 @@ export function ImageUploadField({
    * would leave those coordinates pointing at an image that no longer exists.
    */
   async function accept(file: File) {
+    const operation = guard.start();
     setError(null);
     setPreparing(true);
 
     let ready: File;
     try {
       ready = await downscaleForUpload(file);
+    } catch {
+      if (guard.isCurrent(operation)) setError("We couldn't prepare that photo. Try another image.");
+      return;
     } finally {
-      setPreparing(false);
+      if (guard.isCurrent(operation)) setPreparing(false);
     }
+    if (!guard.isCurrent(operation)) return;
 
     // Only a file the browser could not decode, a HEIC outside Safari being
     // the realistic case, arrives here still oversized. Saying so beats
@@ -124,10 +152,10 @@ export function ImageUploadField({
     }
 
     if (preset.ratio === null) {
-      upload(ready);
+      upload(ready, operation);
       return;
     }
-    setCropping(ready);
+    setCropping({ file: ready, operation });
   }
 
   function onDrop(event: React.DragEvent) {
@@ -200,8 +228,9 @@ export function ImageUploadField({
               size="sm"
               disabled={disabled || busy}
               onClick={() => {
+                guard.invalidate();
                 setError(null);
-                onChange("");
+                onChangeRef.current("");
               }}
             >
               <Trash2 className="mr-1 size-4" />
@@ -268,13 +297,13 @@ export function ImageUploadField({
 
       {cropping ? (
         <ImageCropper
-          file={cropping}
+          file={cropping.file}
           aspectKey={preset.key}
-          onCancel={() => setCropping(null)}
+          onCancel={() => { guard.invalidate(); setCropping(null); }}
           onConfirm={(crop) => {
-            const file = cropping;
+            const { file, operation } = cropping;
             setCropping(null);
-            upload(file, crop);
+            upload(file, operation, crop);
           }}
         />
       ) : null}
@@ -284,7 +313,12 @@ export function ImageUploadField({
           placeholder="https://…"
           value={value}
           disabled={disabled}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => {
+            guard.invalidate();
+            setPreparing(false);
+            setCropping(null);
+            onChangeRef.current(e.target.value);
+          }}
         />
       ) : null}
 

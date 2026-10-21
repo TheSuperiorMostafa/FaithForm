@@ -48,7 +48,12 @@ export function useAutosave<T>(
   value: T,
   save: (value: T) => Promise<SaveResult>,
   options: { delay?: number; enabled?: boolean } = {},
-): { status: AutosaveStatus; saveNow: () => void } {
+): {
+  status: AutosaveStatus;
+  saveNow: () => void;
+  acceptSavedValue: (next: T) => void;
+  runExclusive: <R extends SaveResult>(action: () => Promise<R>) => Promise<R>;
+} {
   const { delay = 900, enabled = true } = options;
 
   const [status, setStatus] = useState<AutosaveStatus>({ kind: "idle" });
@@ -58,6 +63,9 @@ export function useAutosave<T>(
 
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inFlight = useRef(false);
+  const idleWaiters = useRef<(() => void)[]>([]);
+  const exclusiveDepth = useRef(0);
+  const exclusiveTail = useRef<Promise<void>>(Promise.resolve());
 
   /**
    * The edit waiting to be written, captured when it was made rather than read
@@ -89,7 +97,7 @@ export function useAutosave<T>(
 
   const run = useCallback(async () => {
     // Already saving: the finally block below picks the queued edit up.
-    if (inFlight.current) return;
+    if (inFlight.current || exclusiveDepth.current > 0) return;
 
     const entry = queued.current;
     if (!entry) return;
@@ -116,7 +124,11 @@ export function useAutosave<T>(
 
       const failure = describeSaveFailure(error);
 
-      if (queued.current) {
+      if (exclusiveDepth.current > 0) {
+        // Reset/Undo deliberately replaces this edit after the request settles.
+        // Never schedule an older failed write behind that replacement.
+        setStatus({ kind: "error", message: failure.message });
+      } else if (queued.current) {
         // A newer edit is already waiting and carries this one inside it.
         // Sending that is the retry.
         setStatus({ kind: "retrying", message: failure.message });
@@ -144,9 +156,47 @@ export function useAutosave<T>(
       }
     } finally {
       inFlight.current = false;
-      if (queued.current && !retryScheduled) void run();
+      idleWaiters.current.splice(0).forEach(resolve => resolve());
+      if (queued.current && !retryScheduled && exclusiveDepth.current === 0) void run();
     }
   }, []);
+
+  /** Adopt a server-confirmed replacement without treating it as a new edit. */
+  const acceptSavedValue = useCallback((next: T) => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+    queued.current = null;
+    lastSeen.current = next;
+    attempts.current = 0;
+    setStatus({ kind: "saved" });
+  }, []);
+
+  /** Reset/Undo shares the autosave write order, including after navigation. */
+  const runExclusive = useCallback(async <R extends SaveResult>(action: () => Promise<R>): Promise<R> => {
+    const previous = exclusiveTail.current;
+    let release!: () => void;
+    exclusiveTail.current = new Promise<void>(resolve => { release = resolve; });
+    exclusiveDepth.current += 1;
+    const displaced = queued.current ?? (inFlight.current ? { value: lastSeen.current } : null);
+    queued.current = null;
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = null;
+    attempts.current = 0;
+    let accepted = false;
+    try {
+      await previous;
+      if (inFlight.current) await new Promise<void>(resolve => idleWaiters.current.push(resolve));
+      const result = await action();
+      accepted = result.ok;
+      return result;
+    } finally {
+      // A rejected reset must not discard the user's unsaved draft.
+      if (!accepted && !queued.current && displaced) queued.current = displaced;
+      exclusiveDepth.current -= 1;
+      release();
+      if (exclusiveDepth.current === 0 && queued.current) void run();
+    }
+  }, [run]);
 
   const flush = useCallback(() => {
     if (timer.current) {
@@ -182,7 +232,7 @@ export function useAutosave<T>(
     attempts.current = 0;
     setStatus({ kind: "pending" });
     if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(() => void run(), delay);
+    if (exclusiveDepth.current === 0) timer.current = setTimeout(() => void run(), delay);
   }, [value, delay, enabled, run, flush]);
 
   // Navigating away mid-debounce saves rather than drops.
@@ -220,5 +270,5 @@ export function useAutosave<T>(
     return () => window.removeEventListener("beforeunload", warn);
   }, [status.kind]);
 
-  return { status, saveNow: flush };
+  return { status, saveNow: flush, acceptSavedValue, runExclusive };
 }

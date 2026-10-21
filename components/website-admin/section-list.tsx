@@ -204,7 +204,7 @@ function SectionRow({
   // Only autosave while the editor is actually open. A closed section keeps its
   // draft in state, and saving it in the background would write content the
   // church is not looking at.
-  const { status } = useAutosave(
+  const { status, acceptSavedValue, runExclusive } = useAutosave(
     draft,
     async (content) => {
       const result = await saveSectionContent({ sectionId: section.id, content });
@@ -229,30 +229,46 @@ function SectionRow({
     const previous = draft;
 
     startSaving(async () => {
-      const result = await resetSection(section.id);
-      if (!result.ok) {
-        toast.error(result.error);
-        return;
-      }
-      // Adopt what the server restored, so the fields show the default the
-      // church just asked for instead of the edits it threw away. Without this
-      // autosave would write the old edits straight back.
-      setDraft(result.content);
-      onSaved?.();
+      try {
+        const result = await runExclusive(async () => {
+          const restored = await resetSection(section.id);
+          if (restored.ok) {
+            acceptSavedValue(restored.content);
+            setDraft(restored.content);
+          }
+          return restored;
+        });
+        if (!result.ok) {
+          toast.error(result.error);
+          return;
+        }
+        onSaved?.();
 
-      undoToast(
-        `${section.label} is back to how it started.`,
-        async () => {
-          const restored = await saveSectionContent({
-            sectionId: section.id,
-            content: previous,
-          });
-          if (!restored.ok) return restored.error;
-          setDraft(previous);
-          onSaved?.();
-        },
-        { undoneMessage: `Your changes to ${section.label} are back.` },
-      );
+        undoToast(
+          `${section.label} is back to how it started.`,
+          async () => {
+            const undo = runExclusive(async () => {
+              const restored = await saveSectionContent({ sectionId: section.id, content: previous });
+              if (restored.ok) {
+                acceptSavedValue(previous);
+                setDraft(previous);
+                onSaved?.();
+              }
+              return restored;
+            });
+            startSaving(async () => { await undo; });
+            try {
+              const restored = await undo;
+              if (!restored.ok) return restored.error;
+            } catch {
+              return "We couldn't restore those changes. Please try again.";
+            }
+          },
+          { undoneMessage: `Your changes to ${section.label} are back.` },
+        );
+      } catch {
+        toast.error("We couldn't reset this section. Please try again.");
+      }
     });
   }
 
@@ -345,13 +361,15 @@ function SectionRow({
 
       {open && section.fields ? (
         <div className="border-t border-border p-4 sm:p-6">
-          <SectionFieldsForm
-            fields={section.fields}
-            value={draft}
-            onChange={setDraft}
-            idPrefix={section.id}
-            linkTargets={linkTargets}
-          />
+          <fieldset disabled={saving || !canEdit} className="min-w-0">
+            <SectionFieldsForm
+              fields={section.fields}
+              value={draft}
+              onChange={setDraft}
+              idPrefix={section.id}
+              linkTargets={linkTargets}
+            />
+          </fieldset>
 
           <div className="mt-6 flex flex-wrap items-center justify-between gap-3">
             <SaveStatus status={status} />

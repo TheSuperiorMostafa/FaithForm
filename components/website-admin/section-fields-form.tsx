@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 
 import {
@@ -50,6 +50,28 @@ function asRecord(value: Value): Bag {
 
 function asArray(value: Value): Bag[] {
   return Array.isArray(value) ? (value as Bag[]) : [];
+}
+
+/** Editor-only identities: never add bookkeeping fields to saved site content. */
+export function createListItemRegistry() {
+  const keys = new WeakMap<Bag, string>();
+  let sequence = 0;
+  return {
+    keyFor(item: Bag): string {
+      let key = keys.get(item);
+      if (!key) { key = `row-${++sequence}`; keys.set(item, key); }
+      return key;
+    },
+    replace(items: Bag[], key: string, next: Bag): Bag[] | null {
+      const index = items.findIndex((item) => keys.get(item) === key);
+      // An upload finishing after removal must not recreate the deleted row.
+      if (index < 0) return null;
+      keys.set(next, key);
+      const copy = [...items];
+      copy[index] = next;
+      return copy;
+    },
+  };
 }
 
 /** A blank item shaped by the list's own field descriptors. */
@@ -107,7 +129,12 @@ export function SectionFieldsForm({
   /** Sections a link can jump to; turns "Link" fields into a picker. */
   linkTargets?: LinkTarget[];
 }) {
-  const set = (key: string, next: Value) => onChange({ ...value, [key]: next });
+  const latest = useRef({ value, onChange });
+  latest.current = { value, onChange };
+  const registryRef = useRef<ReturnType<typeof createListItemRegistry> | null>(null);
+  if (!registryRef.current) registryRef.current = createListItemRegistry();
+  const registry = registryRef.current;
+  const set = (key: string, next: Value) => latest.current.onChange({ ...latest.current.value, [key]: next });
 
   return (
     <div className={cn("flex flex-col gap-5", depth > 0 && "gap-4")}>
@@ -334,9 +361,11 @@ export function SectionFieldsForm({
             return (
               <FieldShell key={id} label={field.label} help={field.help}>
                 <div className="flex flex-col gap-3">
-                  {items.map((item, i) => (
+                  {items.map((item, i) => {
+                    const itemKey = registry.keyFor(item);
+                    return (
                     <div
-                      key={i}
+                      key={itemKey}
                       className="rounded-lg border border-border bg-muted/30 p-3"
                     >
                       <div className="mb-2 flex items-center justify-between gap-2">
@@ -365,16 +394,16 @@ export function SectionFieldsForm({
                         fields={field.itemFields}
                         value={item}
                         onChange={(next) => {
-                          const copy = [...items];
-                          copy[i] = next;
-                          set(field.key, copy);
+                          const copy = registry.replace(asArray(latest.current.value[field.key]), itemKey, next);
+                          if (copy) set(field.key, copy);
                         }}
-                        idPrefix={`${id}-${i}`}
+                        idPrefix={`${id}-${itemKey}`}
                         depth={depth + 1}
                         linkTargets={linkTargets}
                       />
                     </div>
-                  ))}
+                    );
+                  })}
                   <Button
                     type="button"
                     variant="outline"

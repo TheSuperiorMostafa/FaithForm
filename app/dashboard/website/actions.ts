@@ -343,6 +343,11 @@ export async function resetSection(
     return fail("That section does not belong to your church.");
   }
 
+  // Resolve first: a failed profile/content read must leave the existing edit
+  // intact. The baseline already excludes this section's hand edits.
+  const baseline = await sectionBaseline(sectionId, auth.churchId);
+  if (!baseline.ok) return fail(baseline.error);
+
   const { error } = await createAdminClient()
     .from("site_overrides")
     .delete()
@@ -350,9 +355,6 @@ export async function resetSection(
     .eq("scope", "section")
     .eq("section_id", sectionId);
   if (error) return fail(toUserError(error, "That section could not be reset."));
-
-  const baseline = await sectionBaseline(sectionId, auth.churchId);
-  if (!baseline.ok) return fail(baseline.error);
 
   refresh();
   return { ok: true, content: baseline.content };
