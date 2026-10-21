@@ -142,7 +142,7 @@ export default async function WebsiteOverviewPage() {
         </ul>
       </section>
 
-      <SitePreview previewUrl={previewUrl} />
+      <SitePreview key={layoutMode} previewUrl={previewUrl} />
     </div>
   );
 }
