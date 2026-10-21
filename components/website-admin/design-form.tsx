@@ -1,11 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Check } from "lucide-react";
 
 import { saveDesign } from "@/app/dashboard/website/actions";
 import { SaveStatus } from "@/components/website-admin/save-status";
 import { useAutosave } from "@/components/website-admin/use-autosave";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { normalizeHexColor } from "@/lib/giving/branding";
 import { ColorPickerField } from "@/components/ui/color-picker-field";
 import { confirmAction } from "@/components/ui/confirm-dialog";
 import { Label } from "@/components/ui/label";
@@ -187,7 +190,7 @@ export function DesignForm({
       <section className="rounded-2xl border border-border bg-card p-6 shadow-card">
         <h3 className="font-heading text-lg font-bold">Your colours</h3>
         <p className="text-[15px] text-muted-foreground">
-          Leave a colour blank to use the style&apos;s own.
+          Choose your own colours, or use the style defaults.
         </p>
 
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -204,6 +207,15 @@ export function DesignForm({
                   setTokens((current) => ({ ...current, [token.key]: value }))
                 }
                 disabled={!canEdit}
+              />
+              <ColourValue
+                label={token.label}
+                value={tokens[token.key] ?? ""}
+                defaultColor={themeDefaults[token.key] ?? "#000000"}
+                disabled={!canEdit}
+                onChange={(value) =>
+                  setTokens((current) => ({ ...current, [token.key]: value }))
+                }
               />
               <p className="text-sm text-muted-foreground">{token.help}</p>
             </div>
@@ -239,6 +251,46 @@ export function DesignForm({
           Only church admins can change the look.
         </p>
       ) : null}
+    </div>
+  );
+}
+
+function ColourValue({ label, value, defaultColor, disabled, onChange }: {
+  label: string;
+  value: string;
+  defaultColor: string;
+  disabled: boolean;
+  onChange: (value: string) => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  const [invalid, setInvalid] = useState(false);
+  useEffect(() => { setDraft(value); setInvalid(false); }, [value]);
+
+  function apply() {
+    const next = draft.trim() ? normalizeHexColor(draft) : "";
+    if (next === null) { setInvalid(true); return; }
+    setInvalid(false);
+    onChange(next.toUpperCase());
+  }
+
+  return (
+    <div className="space-y-2">
+      <Input
+        aria-label={`${label} hex value`}
+        aria-invalid={invalid}
+        value={draft}
+        placeholder={defaultColor}
+        disabled={disabled}
+        onChange={(event) => { setDraft(event.target.value); setInvalid(false); }}
+        onBlur={apply}
+        onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); apply(); } }}
+      />
+      {invalid ? <p role="alert" className="text-sm text-destructive">Enter a colour such as #2E2B46, or leave it blank for the style default.</p> : null}
+      {value ? (
+        <Button type="button" variant="outline" disabled={disabled} aria-label={`Use style default for ${label.toLowerCase()}`} onClick={() => { setDraft(""); setInvalid(false); onChange(""); }}>
+          Use style default
+        </Button>
+      ) : <p className="text-sm text-muted-foreground">Using style default</p>}
     </div>
   );
 }
